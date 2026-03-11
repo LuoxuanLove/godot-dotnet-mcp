@@ -32,6 +32,14 @@ size_flags_horizontal = 3
 [node name="AddProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow"]
 unique_name_in_owner = true
 
+[node name="RenameProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow"]
+unique_name_in_owner = true
+disabled = true
+
+[node name="DeleteProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow"]
+unique_name_in_owner = true
+disabled = true
+
 [node name="ToolProfileDescription" type="Label" parent="HeaderMargin/HeaderContent"]
 unique_name_in_owner = true
 autowrap_mode = 3
@@ -133,3 +141,14 @@ autowrap_mode = 3
 
 [node name="ProfileNameEdit" type="LineEdit" parent="SaveProfileDialog/DialogContent"]
 unique_name_in_owner = true
+
+[node name="DeleteProfileDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+min_size = Vector2i(320, 0)
+
+[node name="DialogContent" type="VBoxContainer" parent="DeleteProfileDialog"]
+theme_override_constants/separation = 8
+
+[node name="DeleteProfileDescription" type="Label" parent="DeleteProfileDialog/DialogContent"]
+unique_name_in_owner = true
+autowrap_mode = 3

@@ -95,6 +95,29 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "rename_profile",
+			"description": "PLUGIN DEVELOPER RENAME PROFILE: Rename a saved custom tool preset.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"profile_id": {"type": "string"},
+					"profile_name": {"type": "string"}
+				},
+				"required": ["profile_id", "profile_name"]
+			}
+		},
+		{
+			"name": "delete_profile",
+			"description": "PLUGIN DEVELOPER DELETE PROFILE: Delete a saved custom tool preset.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"profile_id": {"type": "string"}
+				},
+				"required": ["profile_id"]
+			}
+		},
+		{
 			"name": "usage_guide",
 			"description": "PLUGIN DEVELOPER USAGE GUIDE: Return the recommended usage flow, reload policy and development/debug loop for this plugin.",
 			"inputSchema": {
@@ -123,6 +146,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _call_plugin_method("apply_profile_from_tools", [str(args.get("profile_id", ""))], "Plugin developer bridge is unavailable")
 		"save_profile":
 			return _call_plugin_method("save_profile_from_tools", [str(args.get("profile_name", ""))], "Plugin developer bridge is unavailable")
+		"rename_profile":
+			return _call_plugin_method(
+				"rename_profile_from_tools",
+				[str(args.get("profile_id", "")), str(args.get("profile_name", ""))],
+				"Plugin developer bridge is unavailable"
+			)
+		"delete_profile":
+			return _call_plugin_method("delete_profile_from_tools", [str(args.get("profile_id", ""))], "Plugin developer bridge is unavailable")
 		"usage_guide":
 			return _call_plugin_method("get_usage_guide_from_tools", [], "Plugin developer bridge is unavailable")
 		_:

@@ -168,6 +168,23 @@ func get_performance_summary() -> Dictionary:
 	}
 
 
+func get_tool_usage_stats() -> Array[Dictionary]:
+	var stats: Array[Dictionary] = []
+	for tool_name in _performance.get("tool_calls", {}).keys():
+		var metric: Dictionary = _performance["tool_calls"][tool_name]
+		stats.append({
+			"tool_name": str(metric.get("tool_name", tool_name)),
+			"category": str(metric.get("category", "")),
+			"call_count": int(metric.get("count", 0)),
+			"last_called_at_unix": int(metric.get("last_called_at_unix", 0)),
+			"total_ms": float(metric.get("total_ms", 0.0)),
+			"avg_ms": float(metric.get("avg_ms", 0.0)),
+			"last_ms": float(metric.get("last_ms", 0.0))
+		})
+	stats.sort_custom(Callable(self, "_sort_tool_usage_stats"))
+	return stats
+
+
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	if not _is_category_executable(category):
 		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
@@ -350,7 +367,7 @@ func _ensure_tool_definitions(category: String) -> Array:
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
 	var executor = runtime.get("instance", null)
 	if executor == null:
-		var instantiate_result = _instantiate_executor(category, false, "definitions")
+		var instantiate_result = _instantiate_executor(category, true, "definitions")
 		if not instantiate_result.get("success", false):
 			_record_load_error(category, str(_entries_by_category.get(category, {}).get("path", "")), str(instantiate_result.get("error", "Failed to load tool definitions")))
 			_tool_definitions_by_category[category] = []
@@ -367,7 +384,7 @@ func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
 	if runtime.get("instance", null) != null:
 		return {"success": true, "runtime": runtime}
 
-	var instantiate_result = _instantiate_executor(category, false, reason)
+	var instantiate_result = _instantiate_executor(category, true, reason)
 	if not instantiate_result.get("success", false):
 		return _failure("tool_load_failed", category, "", str(instantiate_result.get("error", "Failed to load tool runtime")))
 
@@ -438,8 +455,29 @@ func _load_script_resource(path: String, force_reload: bool) -> Resource:
 		cache_mode = ResourceLoader.CACHE_MODE_IGNORE
 	var script_resource = ResourceLoader.load(path, "", cache_mode)
 	if script_resource is Script and force_reload:
-		script_resource.reload()
+		_reload_script_dependency_chain(script_resource as Script, {})
 	return script_resource
+
+
+func _reload_script_dependency_chain(script_resource: Script, visited: Dictionary) -> void:
+	if script_resource == null:
+		return
+
+	var script_path = str(script_resource.resource_path)
+	if not script_path.is_empty():
+		if visited.has(script_path):
+			return
+		visited[script_path] = true
+
+	var base_script = script_resource.get_base_script()
+	if base_script is Script:
+		_reload_script_dependency_chain(base_script as Script, visited)
+
+	for constant_value in script_resource.get_script_constant_map().values():
+		if constant_value is Script:
+			_reload_script_dependency_chain(constant_value as Script, visited)
+
+	script_resource.reload()
 
 
 func _extract_tool_definitions(category: String, executor) -> Array:
@@ -494,11 +532,13 @@ func _record_tool_call_metric(full_name: String, category: String, elapsed_ms: f
 		"count": 0,
 		"total_ms": 0.0,
 		"avg_ms": 0.0,
-		"last_ms": 0.0
+		"last_ms": 0.0,
+		"last_called_at_unix": 0
 	})
 	metric["count"] = int(metric.get("count", 0)) + 1
 	metric["total_ms"] = float(metric.get("total_ms", 0.0)) + elapsed_ms
 	metric["last_ms"] = elapsed_ms
+	metric["last_called_at_unix"] = int(Time.get_unix_time_from_system())
 	metric["avg_ms"] = metric["total_ms"] / float(metric["count"])
 	per_tool[full_name] = metric
 	_performance["tool_calls"] = per_tool
@@ -542,6 +582,20 @@ func _elapsed_ms(started_usec: int) -> float:
 
 
 func _sort_tool_metric(a: Dictionary, b: Dictionary) -> bool:
+	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
+
+
+func _sort_tool_usage_stats(a: Dictionary, b: Dictionary) -> bool:
+	var left_count = int(a.get("call_count", 0))
+	var right_count = int(b.get("call_count", 0))
+	if left_count != right_count:
+		return left_count > right_count
+
+	var left_time = int(a.get("last_called_at_unix", 0))
+	var right_time = int(b.get("last_called_at_unix", 0))
+	if left_time != right_time:
+		return left_time > right_time
+
 	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
 
 

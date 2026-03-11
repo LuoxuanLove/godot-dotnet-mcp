@@ -32,6 +32,7 @@ var _editor_debugger_bridge: EditorDebuggerPlugin
 
 
 func _enter_tree() -> void:
+	_refresh_service_instances()
 	_load_state()
 	_validate_permission_configuration()
 	LocalizationService.reset_instance()
@@ -225,6 +226,8 @@ func _wire_dock_signals() -> void:
 	_dock.full_reload_requested.connect(_on_full_reload_requested)
 	_dock.profile_selected.connect(_on_profile_selected)
 	_dock.save_profile_requested.connect(_on_save_profile_requested)
+	_dock.rename_profile_requested.connect(_on_rename_profile_requested)
+	_dock.delete_profile_requested.connect(_on_delete_profile_requested)
 	_dock.show_user_tools_toggled.connect(_on_show_user_tools_toggled)
 	_dock.delete_user_tool_requested.connect(_on_delete_user_tool_requested)
 	_dock.tool_toggled.connect(_on_tool_toggled)
@@ -525,6 +528,24 @@ func _on_save_profile_requested(profile_name: String) -> void:
 	_refresh_dock()
 
 
+func _on_rename_profile_requested(profile_id: String, profile_name: String) -> void:
+	var result = _rename_custom_profile(profile_id, profile_name)
+	if not bool(result.get("success", false)):
+		_show_message(str(result.get("error", _localization.get_text("tool_profile_rename_failed"))))
+		return
+	_show_message(str(result.get("message", "")))
+	_refresh_dock()
+
+
+func _on_delete_profile_requested(profile_id: String) -> void:
+	var result = _delete_custom_profile(profile_id)
+	if not bool(result.get("success", false)):
+		_show_message(str(result.get("error", _localization.get_text("tool_profile_delete_failed"))))
+		return
+	_show_message(str(result.get("message", "")))
+	_refresh_dock()
+
+
 func _save_custom_profile(profile_name: String) -> Dictionary:
 	if profile_name.is_empty():
 		return {
@@ -551,6 +572,76 @@ func _save_custom_profile(profile_name: String) -> Dictionary:
 		"profile_id": str(_state.settings.get("tool_profile_id", "")),
 		"message": _localization.get_text("tool_profile_saved") % profile_name
 	}
+
+
+func _rename_custom_profile(profile_id: String, profile_name: String) -> Dictionary:
+	if _is_builtin_profile_id(profile_id):
+		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
+
+	var result = _settings_store.rename_custom_profile(
+		PluginRuntimeState.TOOL_PROFILE_DIR,
+		profile_id,
+		profile_name
+	)
+	if not bool(result.get("success", false)):
+		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "rename_failed")))}
+
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
+		_state.settings["tool_profile_id"] = str(result.get("profile_id", profile_id))
+	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
+	_save_settings()
+	return {
+		"success": true,
+		"profile_id": str(result.get("profile_id", profile_id)),
+		"message": _localization.get_text("tool_profile_renamed") % str(result.get("profile_name", profile_name.strip_edges()))
+	}
+
+
+func _delete_custom_profile(profile_id: String) -> Dictionary:
+	if _is_builtin_profile_id(profile_id):
+		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
+
+	var result = _settings_store.delete_custom_profile(PluginRuntimeState.TOOL_PROFILE_DIR, profile_id)
+	if not bool(result.get("success", false)):
+		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "delete_failed")))}
+
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
+		var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
+		_state.settings["tool_profile_id"] = "default"
+		_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
+			"default",
+			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			_state.custom_tool_profiles,
+			tool_names,
+			_state.settings.get("disabled_tools", [])
+		)
+	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
+	_save_settings()
+	return {
+		"success": true,
+		"profile_id": "default" if str(_state.settings.get("tool_profile_id", "")) == "default" else profile_id,
+		"message": _localization.get_text("tool_profile_deleted")
+	}
+
+
+func _is_builtin_profile_id(profile_id: String) -> bool:
+	return not profile_id.begins_with("custom:")
+
+
+func _get_custom_profile_error_text(error_code: String) -> String:
+	match error_code:
+		"empty_profile_name":
+			return _localization.get_text("tool_profile_name_required")
+		"profile_name_conflict":
+			return _localization.get_text("tool_profile_name_conflict")
+		"profile_not_found", "invalid_profile_id":
+			return _localization.get_text("tool_profile_not_found")
+		_:
+			if error_code.begins_with("rename"):
+				return _localization.get_text("tool_profile_rename_failed")
+			return _localization.get_text("tool_profile_delete_failed")
 
 
 func _on_show_user_tools_toggled(enabled: bool) -> void:
@@ -754,21 +845,33 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 		str(args.get("agent_hint", ""))
 	)
 	if bool(result.get("success", false)):
-		_server_controller.reload_all_domains()
-		_cleanup_disabled_tools()
-		_save_settings()
-		_refresh_dock()
+		_schedule_user_tool_catalog_refresh()
 	return result
 
 
 func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_server_controller.reload_all_domains()
-		_cleanup_disabled_tools()
-		_save_settings()
-		_refresh_dock()
+		_schedule_user_tool_catalog_refresh()
 	return result
+
+
+func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
+	var result = _user_tool_service.restore_latest_backup(authorized, agent_hint)
+	if bool(result.get("success", false)):
+		_schedule_user_tool_catalog_refresh()
+	return result
+
+
+func _schedule_user_tool_catalog_refresh() -> void:
+	call_deferred("_apply_user_tool_catalog_refresh")
+
+
+func _apply_user_tool_catalog_refresh() -> void:
+	_server_controller.reload_all_domains()
+	_cleanup_disabled_tools()
+	_save_settings()
+	_refresh_dock()
 
 
 func get_user_tool_audit(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
@@ -790,6 +893,7 @@ func runtime_restart_server() -> Dictionary:
 
 func runtime_soft_reload() -> Dictionary:
 	var was_running = _server_controller.is_running()
+	_refresh_service_instances()
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
@@ -907,6 +1011,20 @@ func save_profile_from_tools(profile_name: String) -> Dictionary:
 	return result
 
 
+func rename_profile_from_tools(profile_id: String, profile_name: String) -> Dictionary:
+	var result = _rename_custom_profile(profile_id, profile_name)
+	if bool(result.get("success", false)):
+		_refresh_dock()
+	return result
+
+
+func delete_profile_from_tools(profile_id: String) -> Dictionary:
+	var result = _delete_custom_profile(profile_id)
+	if bool(result.get("success", false)):
+		_refresh_dock()
+	return result
+
+
 func get_runtime_usage_guide_from_tools() -> Dictionary:
 	return {
 		"success": true,
@@ -942,21 +1060,21 @@ func get_evolution_usage_guide_from_tools() -> Dictionary:
 		"data": {
 			"summary": [
 				"Self-evolution only manages User-category tools and never writes into builtin categories.",
-				"Create and delete actions must pass explicit authorization; otherwise they return preview-only results.",
+				"Create, delete and restore actions must pass explicit authorization; otherwise they return preview-only results.",
 				"Audit entries should be checked after every authorized change.",
 				"Use debug_runtime_bridge if a new User tool is expected to affect the running project and you need to inspect the latest session or lifecycle result."
 			],
 			"recommended_flow": [
 				{"step": 1, "name": "Inspect current User tools", "tools": ["plugin_evolution_list_user_tools"], "purpose": "Read existing User tools before adding or removing scripts."},
-				{"step": 2, "name": "Preview scaffold or deletion", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool"], "purpose": "Run without authorization first to inspect the pending change."},
-				{"step": 3, "name": "Authorize and apply", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool"], "purpose": "Repeat the action with explicit authorization only after user approval."},
+				{"step": 2, "name": "Preview scaffold or deletion", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool", "plugin_evolution_restore_user_tool"], "purpose": "Run without authorization first to inspect the pending change or the latest restorable backup."},
+				{"step": 3, "name": "Authorize and apply", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool", "plugin_evolution_restore_user_tool"], "purpose": "Repeat the action with explicit authorization only after user approval."},
 				{"step": 4, "name": "Reload and verify", "tools": ["plugin_runtime_reload", "plugin_runtime_state"], "purpose": "Refresh tool domains and verify the updated User tool inventory."},
 				{"step": 5, "name": "Audit", "tools": ["plugin_evolution_user_tool_audit"], "purpose": "Confirm that the authorized change has been recorded."}
 			],
 			"warnings": [
 				"Stable mode hides and denies the entire plugin_evolution category.",
 				"User tools must stay inside the User category even when generated through MCP.",
-				"Deletion requests should be previewed before authorization to avoid removing the wrong script."
+				"Deletion and restore requests should be previewed before authorization to avoid mutating the wrong script."
 			]
 		},
 		"message": "Plugin evolution usage guide fetched"
@@ -1110,3 +1228,10 @@ func _cleanup_disabled_tools() -> void:
 			filtered.append(str(tool_name))
 	_state.settings["disabled_tools"] = filtered
 	_server_controller.set_disabled_tools(filtered)
+
+
+func _refresh_service_instances() -> void:
+	_settings_store = SettingsStore.new()
+	_tool_catalog = ToolCatalogService.new()
+	_config_service = ClientConfigService.new()
+	_user_tool_service = UserToolService.new()

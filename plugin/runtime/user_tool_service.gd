@@ -3,7 +3,9 @@ extends RefCounted
 class_name UserToolService
 
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
+const BACKUP_DIR := "res://addons/godot_dotnet_mcp/custom_tools/.backup"
 const AUDIT_LOG_PATH := "user://godot_dotnet_mcp_user_tool_audit.log"
+const LATEST_DELETED_META_PATH := "%s/latest_deleted.json" % BACKUP_DIR
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
 const MAX_AUDIT_ENTRIES := 500
@@ -86,6 +88,13 @@ func delete_tool(script_path: String, authorized: bool, agent_hint: String = "")
 		_append_audit("delete_user_tool", true, false, preview, "missing_script", agent_hint)
 		return {"success": false, "error": "User tool script does not exist", "data": preview}
 
+	var backup_result = _backup_user_tool(normalized_path)
+	if not bool(backup_result.get("success", false)):
+		preview["backup_failed"] = true
+		_append_audit("delete_user_tool", true, false, preview, "backup_failed", agent_hint)
+		return backup_result
+	preview.merge(backup_result.get("data", {}), true)
+
 	var remove_error = DirAccess.remove_absolute(ProjectSettings.globalize_path(normalized_path))
 	if remove_error != OK:
 		_append_audit("delete_user_tool", true, false, preview, "remove_failed", agent_hint)
@@ -96,6 +105,41 @@ func delete_tool(script_path: String, authorized: bool, agent_hint: String = "")
 
 	_append_audit("delete_user_tool", true, true, preview, "", agent_hint)
 	return {"success": true, "message": "User tool deleted", "data": preview}
+
+
+func restore_latest_backup(authorized: bool, agent_hint: String = "") -> Dictionary:
+	var preview = _get_latest_deleted_backup()
+	if preview.is_empty():
+		return {"success": false, "error": "No deleted user tool backup is available"}
+
+	if not authorized:
+		_append_audit("restore_user_tool", false, false, preview, "", agent_hint)
+		return _authorization_required("restore_user_tool", preview)
+
+	var script_path = str(preview.get("script_path", ""))
+	if script_path.is_empty():
+		_append_audit("restore_user_tool", true, false, preview, "missing_script_path", agent_hint)
+		return {"success": false, "error": "Backup metadata is missing the original script path", "data": preview}
+	if FileAccess.file_exists(script_path):
+		_append_audit("restore_user_tool", true, false, preview, "script_exists", agent_hint)
+		return {"success": false, "error": "User tool script already exists", "data": preview}
+
+	var ensure_result = _ensure_custom_tools_dir()
+	if not bool(ensure_result.get("success", false)):
+		_append_audit("restore_user_tool", true, false, preview, "mkdir_failed", agent_hint)
+		return ensure_result
+
+	var restore_result = _restore_backup_payload(preview)
+	if not bool(restore_result.get("success", false)):
+		_append_audit("restore_user_tool", true, false, preview, str(restore_result.get("data", {}).get("error_code", "restore_failed")), agent_hint)
+		return restore_result
+
+	_append_audit("restore_user_tool", true, true, preview, "", agent_hint)
+	return {
+		"success": true,
+		"message": "User tool restored",
+		"data": preview
+	}
 
 
 func get_audit_entries(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
@@ -208,6 +252,21 @@ func _ensure_custom_tools_dir() -> Dictionary:
 			"success": false,
 			"error": "Failed to create custom tools directory",
 			"data": {"path": CUSTOM_TOOLS_DIR, "error_code": error}
+	}
+	return {"success": true}
+
+
+func _ensure_backup_dir() -> Dictionary:
+	var global_path = ProjectSettings.globalize_path(BACKUP_DIR)
+	if DirAccess.dir_exists_absolute(global_path):
+		return {"success": true}
+
+	var error = DirAccess.make_dir_recursive_absolute(global_path)
+	if error != OK:
+		return {
+			"success": false,
+			"error": "Failed to create backup directory",
+			"data": {"path": BACKUP_DIR, "error_code": error}
 		}
 	return {"success": true}
 
@@ -344,6 +403,161 @@ func _read_script_content(script_path: String) -> String:
 	var content = file.get_as_text()
 	file.close()
 	return content
+
+
+func _backup_user_tool(script_path: String) -> Dictionary:
+	var ensure_result = _ensure_backup_dir()
+	if not bool(ensure_result.get("success", false)):
+		return ensure_result
+
+	var timestamp := Time.get_datetime_string_from_system(false, true).replace(":", "").replace("-", "").replace("T", "_")
+	var file_name = script_path.get_file()
+	var backup_base = "%s/%s_%s" % [BACKUP_DIR, file_name.get_basename(), timestamp]
+	var backup_path = "%s.gd.bak" % backup_base
+	var uid_path = "%s.uid" % script_path
+	var backup_uid_path = "%s.gd.uid.bak" % backup_base
+
+	_clear_existing_backups(file_name.get_basename())
+
+	var copy_result = _copy_file(script_path, backup_path)
+	if not bool(copy_result.get("success", false)):
+		return copy_result
+
+	var backup_data = {
+		"script_path": script_path,
+		"backup_path": backup_path,
+		"deleted_at_unix": int(Time.get_unix_time_from_system())
+	}
+
+	if FileAccess.file_exists(uid_path):
+		var copy_uid_result = _copy_file(uid_path, backup_uid_path)
+		if not bool(copy_uid_result.get("success", false)):
+			return copy_uid_result
+		backup_data["uid_path"] = uid_path
+		backup_data["backup_uid_path"] = backup_uid_path
+
+	var metadata_result = _write_json_file(LATEST_DELETED_META_PATH, backup_data)
+	if not bool(metadata_result.get("success", false)):
+		return metadata_result
+
+	return {"success": true, "data": backup_data}
+
+
+func _restore_backup_payload(backup_data: Dictionary) -> Dictionary:
+	var backup_path = str(backup_data.get("backup_path", ""))
+	var script_path = str(backup_data.get("script_path", ""))
+	if backup_path.is_empty() or script_path.is_empty():
+		return {
+			"success": false,
+			"error": "Backup metadata is incomplete",
+			"data": {"error_code": "incomplete_backup_metadata"}
+		}
+	if not FileAccess.file_exists(backup_path):
+		return {
+			"success": false,
+			"error": "Backup file does not exist",
+			"data": {"error_code": "missing_backup_file", "backup_path": backup_path}
+		}
+
+	var copy_result = _copy_file(backup_path, script_path)
+	if not bool(copy_result.get("success", false)):
+		return copy_result
+
+	var uid_path = str(backup_data.get("uid_path", ""))
+	var backup_uid_path = str(backup_data.get("backup_uid_path", ""))
+	if not uid_path.is_empty() and not backup_uid_path.is_empty() and FileAccess.file_exists(backup_uid_path):
+		var copy_uid_result = _copy_file(backup_uid_path, uid_path)
+		if not bool(copy_uid_result.get("success", false)):
+			return copy_uid_result
+
+	return {"success": true}
+
+
+func _get_latest_deleted_backup() -> Dictionary:
+	var read_result = _read_json_file(LATEST_DELETED_META_PATH)
+	if not bool(read_result.get("success", false)):
+		return {}
+	var data = read_result.get("data", {})
+	if not (data is Dictionary):
+		return {}
+	if not FileAccess.file_exists(str(data.get("backup_path", ""))):
+		return {}
+	return data.duplicate(true)
+
+
+func _clear_existing_backups(tool_slug: String) -> void:
+	var dir = DirAccess.open(BACKUP_DIR)
+	if dir == null:
+		return
+
+	var prefix = "%s_" % tool_slug
+	dir.list_dir_begin()
+	while true:
+		var entry = dir.get_next()
+		if entry.is_empty():
+			break
+		if entry.begins_with("."):
+			continue
+		if entry == "latest_deleted.json":
+			continue
+		if not entry.begins_with(prefix):
+			continue
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("%s/%s" % [BACKUP_DIR, entry]))
+	dir.list_dir_end()
+
+
+func _copy_file(source_path: String, target_path: String) -> Dictionary:
+	var content = _read_script_content(source_path)
+	if content.is_empty() and not FileAccess.file_exists(source_path):
+		return {
+			"success": false,
+			"error": "Source file does not exist",
+			"data": {"error_code": "missing_source_file", "source_path": source_path}
+		}
+
+	var dir_path = target_path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
+
+	var file = FileAccess.open(target_path, FileAccess.WRITE)
+	if file == null:
+		return {
+			"success": false,
+			"error": "Failed to write file",
+			"data": {"error_code": "write_failed", "target_path": target_path}
+		}
+	file.store_string(content)
+	file.close()
+	return {"success": true}
+
+
+func _read_json_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "File does not exist"}
+
+	var file = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"success": false, "error": "Failed to open file"}
+
+	var content = file.get_as_text()
+	file.close()
+	var json = JSON.new()
+	if json.parse(content) != OK:
+		return {"success": false, "error": "Failed to parse JSON"}
+	return {"success": true, "data": json.get_data()}
+
+
+func _write_json_file(path: String, data: Dictionary) -> Dictionary:
+	var dir_path = path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
+
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return {"success": false, "error": "Failed to write JSON file"}
+	file.store_string(JSON.stringify(data))
+	file.close()
+	return {"success": true}
 
 
 func _extract_scaffold_version(content: String) -> String:

@@ -49,6 +49,17 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "restore_user_tool",
+			"description": "PLUGIN EVOLUTION RESTORE: Preview or restore the most recently deleted User-category tool script.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"authorized": {"type": "boolean"},
+					"agent_hint": {"type": "string"}
+				}
+			}
+		},
+		{
 			"name": "user_tool_audit",
 			"description": "PLUGIN EVOLUTION AUDIT: Read recent user tool audit entries.",
 			"inputSchema": {
@@ -93,6 +104,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"delete_user_tool_from_tools",
 				[str(args.get("script_path", "")), bool(args.get("authorized", false)), str(args.get("agent_hint", ""))],
 				"Plugin evolution bridge is unavailable"
+			)
+		"restore_user_tool":
+			return _call_plugin_method(
+				"restore_user_tool_from_tools",
+				[bool(args.get("authorized", false)), str(args.get("agent_hint", ""))],
+				"Plugin evolution restore bridge is unavailable"
 			)
 		"user_tool_audit":
 			var plugin = _get_plugin()

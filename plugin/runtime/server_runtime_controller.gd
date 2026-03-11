@@ -24,7 +24,12 @@ func detach() -> void:
 
 
 func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
-	_ensure_server_node(settings)
+	var force_reload_server = reason == "tool_soft_reload"
+	if force_reload_server:
+		stop()
+		_dispose_server_node()
+
+	_ensure_server_node(settings, force_reload_server)
 	if _server == null:
 		return false
 
@@ -148,14 +153,20 @@ func set_disabled_tools(disabled_tools: Array) -> void:
 		_server.set_disabled_tools(disabled_tools)
 
 
-func _ensure_server_node(settings: Dictionary) -> void:
-	if _server != null and is_instance_valid(_server):
+func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> void:
+	if not force_reload and _server != null and is_instance_valid(_server):
 		return
 
 	if _plugin == null:
 		return
 
-	var script = load(SERVER_SCRIPT_PATH)
+	var script = ResourceLoader.load(
+		SERVER_SCRIPT_PATH,
+		"",
+		ResourceLoader.CACHE_MODE_IGNORE if force_reload else ResourceLoader.CACHE_MODE_REUSE
+	)
+	if script is Script and force_reload:
+		_reload_script_dependency_chain(script as Script, {})
 	if script == null:
 		return
 
@@ -183,6 +194,27 @@ func _dispose_server_node() -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.queue_free()
 	_server = null
+
+
+func _reload_script_dependency_chain(script_resource: Script, visited: Dictionary) -> void:
+	if script_resource == null:
+		return
+
+	var script_path = str(script_resource.resource_path)
+	if not script_path.is_empty():
+		if visited.has(script_path):
+			return
+		visited[script_path] = true
+
+	var base_script = script_resource.get_base_script()
+	if base_script is Script:
+		_reload_script_dependency_chain(base_script as Script, visited)
+
+	for constant_value in script_resource.get_script_constant_map().values():
+		if constant_value is Script:
+			_reload_script_dependency_chain(constant_value as Script, visited)
+
+	script_resource.reload()
 
 
 func _connect_server_signals() -> void:

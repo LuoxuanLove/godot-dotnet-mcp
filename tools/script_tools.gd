@@ -1029,7 +1029,12 @@ func _append_csharp_member(path: String, member_code: String) -> Dictionary:
 		return read_result
 
 	var content = str(read_result.get("data", {}).get("content", ""))
-	var class_close_index = _find_primary_csharp_class_close(content)
+	var metadata = _parse_csharp_metadata(path, content)
+	var expected_class_name = str(metadata.get("class_name", "")).strip_edges()
+	if expected_class_name.is_empty():
+		expected_class_name = path.get_file().trim_suffix(".cs")
+
+	var class_close_index = _find_primary_csharp_class_close(content, expected_class_name)
 	if class_close_index == -1:
 		return _error("Failed to locate primary C# class body")
 
@@ -1041,16 +1046,173 @@ func _append_csharp_member(path: String, member_code: String) -> Dictionary:
 	return _write_csharp_script(path, new_content)
 
 
-func _find_primary_csharp_class_close(content: String) -> int:
-	var class_index = content.find("class ")
-	if class_index == -1:
-		return -1
-
-	var open_brace_index = content.find("{", class_index)
+func _find_primary_csharp_class_close(content: String, expected_class_name: String = "") -> int:
+	var masked_content = _mask_csharp_non_code(content)
+	var open_brace_index = _find_csharp_class_open_brace(masked_content, expected_class_name)
+	if open_brace_index == -1 and not expected_class_name.is_empty():
+		open_brace_index = _find_csharp_class_open_brace(masked_content)
 	if open_brace_index == -1:
 		return -1
 
-	return _find_matching_brace(content, open_brace_index)
+	return _find_matching_brace(masked_content, open_brace_index)
+
+
+func _find_csharp_class_open_brace(masked_content: String, expected_class_name: String = "") -> int:
+	var regex = RegEx.new()
+	var pattern = "(?m)^\\s*(?:public|internal|private|protected)?\\s*(?:(?:partial|static|abstract|sealed|new)\\s+)*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b"
+	if not expected_class_name.is_empty():
+		pattern = "(?m)^\\s*(?:public|internal|private|protected)?\\s*(?:(?:partial|static|abstract|sealed|new)\\s+)*class\\s+%s\\b" % expected_class_name
+	var error = regex.compile(pattern)
+	if error != OK:
+		return -1
+
+	var match = regex.search(masked_content)
+	if match == null:
+		return -1
+	return _find_next_non_code_brace(masked_content, match.get_end(0))
+
+
+func _find_next_non_code_brace(masked_content: String, start_index: int) -> int:
+	for index in range(start_index, masked_content.length()):
+		if masked_content.substr(index, 1) == "{":
+			return index
+	return -1
+
+
+func _mask_csharp_non_code(content: String) -> String:
+	var masked := ""
+	var index := 0
+	while index < content.length():
+		var current = content.substr(index, 1)
+		var next = content.substr(index + 1, 1) if index + 1 < content.length() else ""
+		var next_two = content.substr(index + 2, 1) if index + 2 < content.length() else ""
+
+		if current == "/" and next == "/":
+			masked += "  "
+			index += 2
+			while index < content.length():
+				var comment_char = content.substr(index, 1)
+				if comment_char == "\n":
+					masked += "\n"
+					index += 1
+					break
+				masked += " " if comment_char != "\r" else "\r"
+				index += 1
+			continue
+
+		if current == "/" and next == "*":
+			masked += "  "
+			index += 2
+			while index < content.length():
+				var block_char = content.substr(index, 1)
+				var block_next = content.substr(index + 1, 1) if index + 1 < content.length() else ""
+				if block_char == "*" and block_next == "/":
+					masked += "  "
+					index += 2
+					break
+				masked += block_char if block_char == "\n" or block_char == "\r" else " "
+				index += 1
+			continue
+
+		if current == "@" and next == "\"":
+			var verbatim_result = _mask_csharp_verbatim_string(content, index, 2)
+			masked += str(verbatim_result.get("masked", ""))
+			index = int(verbatim_result.get("next_index", index + 2))
+			continue
+
+		if current == "$" and next == "@":
+			if next_two == "\"":
+				var interpolated_verbatim_result = _mask_csharp_verbatim_string(content, index, 3)
+				masked += str(interpolated_verbatim_result.get("masked", ""))
+				index = int(interpolated_verbatim_result.get("next_index", index + 3))
+				continue
+		elif current == "@" and next == "$":
+			if next_two == "\"":
+				var alternate_interpolated_result = _mask_csharp_verbatim_string(content, index, 3)
+				masked += str(alternate_interpolated_result.get("masked", ""))
+				index = int(alternate_interpolated_result.get("next_index", index + 3))
+				continue
+
+		if current == "$" and next == "\"":
+			var interpolated_string_result = _mask_csharp_quoted_string(content, index, 2)
+			masked += str(interpolated_string_result.get("masked", ""))
+			index = int(interpolated_string_result.get("next_index", index + 2))
+			continue
+
+		if current == "\"":
+			var string_result = _mask_csharp_quoted_string(content, index, 1)
+			masked += str(string_result.get("masked", ""))
+			index = int(string_result.get("next_index", index + 1))
+			continue
+
+		if current == "'":
+			var char_result = _mask_csharp_char_literal(content, index)
+			masked += str(char_result.get("masked", ""))
+			index = int(char_result.get("next_index", index + 1))
+			continue
+
+		masked += current
+		index += 1
+
+	return masked
+
+
+func _mask_csharp_quoted_string(content: String, start_index: int, prefix_length: int) -> Dictionary:
+	var masked = " ".repeat(prefix_length)
+	var index = start_index + prefix_length
+	while index < content.length():
+		var current = content.substr(index, 1)
+		if current == "\\" and index + 1 < content.length():
+			masked += "  "
+			index += 2
+			continue
+		masked += current if current == "\n" or current == "\r" else " "
+		index += 1
+		if current == "\"":
+			break
+	return {
+		"masked": masked,
+		"next_index": index
+	}
+
+
+func _mask_csharp_verbatim_string(content: String, start_index: int, prefix_length: int) -> Dictionary:
+	var masked = " ".repeat(prefix_length)
+	var index = start_index + prefix_length
+	while index < content.length():
+		var current = content.substr(index, 1)
+		var next = content.substr(index + 1, 1) if index + 1 < content.length() else ""
+		if current == "\"" and next == "\"":
+			masked += "  "
+			index += 2
+			continue
+		masked += current if current == "\n" or current == "\r" else " "
+		index += 1
+		if current == "\"":
+			break
+	return {
+		"masked": masked,
+		"next_index": index
+	}
+
+
+func _mask_csharp_char_literal(content: String, start_index: int) -> Dictionary:
+	var masked = " "
+	var index = start_index + 1
+	while index < content.length():
+		var current = content.substr(index, 1)
+		if current == "\\" and index + 1 < content.length():
+			masked += "  "
+			index += 2
+			continue
+		masked += current if current == "\n" or current == "\r" else " "
+		index += 1
+		if current == "'":
+			break
+	return {
+		"masked": masked,
+		"next_index": index
+	}
 
 
 func _find_matching_brace(content: String, open_brace_index: int) -> int:

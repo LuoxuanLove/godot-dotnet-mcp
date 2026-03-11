@@ -14,13 +14,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "state",
-			"description": "PLUGIN RUNTIME STATE: Read loaded domains and the latest reload summary.",
+			"description": "PLUGIN RUNTIME STATE: Read loaded domains, usage stats and the latest reload summary.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_loaded_domains", "get_reload_status"]
+						"enum": ["list_loaded_domains", "get_reload_status", "get_tool_usage_stats"]
 					}
 				},
 				"required": ["action"]
@@ -103,6 +103,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 					}, "Loaded domains listed")
 				"get_reload_status":
 					return _success(loader.get_reload_status(), "Reload status fetched")
+				"get_tool_usage_stats":
+					var stats = loader.get_tool_usage_stats()
+					return _success({
+						"count": stats.size(),
+						"tool_usage_stats": stats
+					}, "Tool usage stats fetched")
 				_:
 					return _error("Unknown action: %s" % str(args.get("action", "")))
 		"reload":

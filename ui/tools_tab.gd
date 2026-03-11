@@ -3,6 +3,8 @@ extends VBoxContainer
 
 signal profile_selected(profile_id: String)
 signal save_profile_requested(profile_name: String)
+signal rename_profile_requested(profile_id: String, profile_name: String)
+signal delete_profile_requested(profile_id: String)
 signal show_user_tools_toggled(enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
@@ -45,6 +47,8 @@ const CATEGORY_LABEL_KEYS := {
 @onready var _profile_label: Label = %ToolProfileLabel
 @onready var _profile_option: OptionButton = %ToolProfileOption
 @onready var _add_profile_button: Button = %AddProfileButton
+@onready var _rename_profile_button: Button = %RenameProfileButton
+@onready var _delete_profile_button: Button = %DeleteProfileButton
 @onready var _profile_desc_label: Label = %ToolProfileDescription
 @onready var _show_user_tools_check: CheckBox = %ShowUserToolsCheck
 @onready var _expand_all_button: Button = %ExpandAllButton
@@ -55,22 +59,32 @@ const CATEGORY_LABEL_KEYS := {
 @onready var _save_dialog: ConfirmationDialog = %SaveProfileDialog
 @onready var _profile_name_edit: LineEdit = %ProfileNameEdit
 @onready var _save_dialog_desc: Label = %SaveProfileDescription
+@onready var _delete_profile_dialog: ConfirmationDialog = %DeleteProfileDialog
+@onready var _delete_profile_desc: Label = %DeleteProfileDescription
 
 var _profile_option_syncing := false
 var _tree_syncing := false
 var _current_scale := -1.0
 var _selected_user_script_path := ""
+var _selected_profile_id := "default"
+var _selected_profile_name := ""
+var _selected_profile_is_custom := false
+var _profile_dialog_mode := "save"
+var _localization = null
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_profile_option.item_selected.connect(_on_profile_option_selected)
 	_add_profile_button.pressed.connect(_on_add_profile_button_pressed)
+	_rename_profile_button.pressed.connect(_on_rename_profile_button_pressed)
+	_delete_profile_button.pressed.connect(_on_delete_profile_button_pressed)
 	_show_user_tools_check.toggled.connect(_on_show_user_tools_check_toggled)
 	_expand_all_button.pressed.connect(_on_expand_all_button_pressed)
 	_collapse_all_button.pressed.connect(_on_collapse_all_button_pressed)
 	_delete_user_tool_button.pressed.connect(_on_delete_user_tool_button_pressed)
 	_save_dialog.confirmed.connect(_on_save_dialog_confirmed)
+	_delete_profile_dialog.confirmed.connect(_on_delete_profile_dialog_confirmed)
 	_tool_tree.item_edited.connect(_on_tree_item_edited)
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.item_selected.connect(_on_tree_item_selected)
@@ -80,6 +94,7 @@ func _ready() -> void:
 
 func apply_model(model: Dictionary) -> void:
 	var localization = model.get("localization")
+	_localization = localization
 	var settings: Dictionary = model.get("settings", {})
 	var builtin_profiles: Array = model.get("builtin_profiles", [])
 	var custom_profiles: Dictionary = model.get("custom_profiles", {})
@@ -92,6 +107,8 @@ func apply_model(model: Dictionary) -> void:
 	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
 	_profile_label.text = localization.get_text("tool_profile")
 	_add_profile_button.text = localization.get_text("btn_add_profile")
+	_rename_profile_button.text = localization.get_text("btn_rename_profile")
+	_delete_profile_button.text = localization.get_text("btn_delete_profile")
 	_show_user_tools_check.text = localization.get_text("show_user_tools")
 	_expand_all_button.text = localization.get_text("btn_expand_all")
 	_collapse_all_button.text = localization.get_text("btn_collapse_all")
@@ -109,7 +126,11 @@ func apply_model(model: Dictionary) -> void:
 	var index = 0
 	for profile in builtin_profiles:
 		_profile_option.add_item(localization.get_text(str(profile.get("name_key", ""))), index)
-		_profile_option.set_item_metadata(index, str(profile.get("id", "")))
+		_profile_option.set_item_metadata(index, {
+			"profile_id": str(profile.get("id", "")),
+			"profile_name": localization.get_text(str(profile.get("name_key", ""))),
+			"is_custom": false
+		})
 		if str(profile.get("id", "")) == selected_profile_id:
 			_profile_option.select(index)
 		index += 1
@@ -119,11 +140,17 @@ func apply_model(model: Dictionary) -> void:
 	for profile_id in custom_ids:
 		var custom_profile = custom_profiles[profile_id]
 		_profile_option.add_item(str(custom_profile.get("name", profile_id)), index)
-		_profile_option.set_item_metadata(index, str(profile_id))
+		_profile_option.set_item_metadata(index, {
+			"profile_id": str(profile_id),
+			"profile_name": str(custom_profile.get("name", profile_id)),
+			"is_custom": true
+		})
 		if str(profile_id) == selected_profile_id:
 			_profile_option.select(index)
 		index += 1
 	_profile_option_syncing = false
+	_sync_profile_selection_from_option()
+	_sync_profile_buttons()
 
 	_selected_user_script_path = ""
 	_render_tool_tree(model)
@@ -313,17 +340,48 @@ func _humanize_identifier(value: String) -> String:
 func _on_profile_option_selected(index: int) -> void:
 	if _profile_option_syncing:
 		return
-	profile_selected.emit(str(_profile_option.get_item_metadata(index)))
+	_sync_profile_selection_from_option(index)
+	_sync_profile_buttons()
+	profile_selected.emit(_selected_profile_id)
 
 
 func _on_add_profile_button_pressed() -> void:
+	_profile_dialog_mode = "save"
 	_profile_name_edit.text = ""
+	_refresh_profile_dialog_copy()
+	_save_dialog.popup_centered()
+	_profile_name_edit.grab_focus()
+
+
+func _on_rename_profile_button_pressed() -> void:
+	if not _selected_profile_is_custom:
+		return
+	_profile_dialog_mode = "rename"
+	_profile_name_edit.text = _selected_profile_name
+	_refresh_profile_dialog_copy()
 	_save_dialog.popup_centered()
 	_profile_name_edit.grab_focus()
 
 
 func _on_save_dialog_confirmed() -> void:
-	save_profile_requested.emit(_profile_name_edit.text.strip_edges())
+	var profile_name = _profile_name_edit.text.strip_edges()
+	if _profile_dialog_mode == "rename":
+		rename_profile_requested.emit(_selected_profile_id, profile_name)
+		return
+	save_profile_requested.emit(profile_name)
+
+
+func _on_delete_profile_button_pressed() -> void:
+	if not _selected_profile_is_custom:
+		return
+	_refresh_delete_profile_dialog_copy()
+	_delete_profile_dialog.popup_centered()
+
+
+func _on_delete_profile_dialog_confirmed() -> void:
+	if not _selected_profile_is_custom:
+		return
+	delete_profile_requested.emit(_selected_profile_id)
 
 
 func _on_show_user_tools_check_toggled(pressed: bool) -> void:
@@ -472,10 +530,58 @@ func _apply_editor_scale(scale: float) -> void:
 	_top_shadow.custom_minimum_size.y = 18.0 * scale
 	_top_shadow.offset_bottom = 18.0 * scale
 	_save_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
+	_delete_profile_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
 
-	for control in [_profile_option, _add_profile_button, _show_user_tools_check, _expand_all_button, _collapse_all_button, _delete_user_tool_button]:
+	for control in [_profile_option, _add_profile_button, _rename_profile_button, _delete_profile_button, _show_user_tools_check, _expand_all_button, _collapse_all_button, _delete_user_tool_button]:
 		control.custom_minimum_size.y = 30.0 * scale
 
 
 func _sync_delete_button() -> void:
 	_delete_user_tool_button.disabled = _selected_user_script_path.is_empty()
+
+
+func _sync_profile_selection_from_option(index: int = -1) -> void:
+	var selected_index = index if index >= 0 else _profile_option.get_selected()
+	if selected_index < 0:
+		_selected_profile_id = "default"
+		_selected_profile_name = ""
+		_selected_profile_is_custom = false
+		return
+
+	var metadata = _profile_option.get_item_metadata(selected_index)
+	if not (metadata is Dictionary):
+		_selected_profile_id = "default"
+		_selected_profile_name = ""
+		_selected_profile_is_custom = false
+		return
+
+	_selected_profile_id = str(metadata.get("profile_id", "default"))
+	_selected_profile_name = str(metadata.get("profile_name", _selected_profile_id))
+	_selected_profile_is_custom = bool(metadata.get("is_custom", false))
+
+
+func _sync_profile_buttons() -> void:
+	_rename_profile_button.disabled = not _selected_profile_is_custom
+	_delete_profile_button.disabled = not _selected_profile_is_custom
+	_refresh_profile_dialog_copy()
+	_refresh_delete_profile_dialog_copy()
+
+
+func _refresh_profile_dialog_copy() -> void:
+	if _localization == null:
+		return
+	if _profile_dialog_mode == "rename":
+		_save_dialog.title = _localization.get_text("tool_profile_rename_title")
+		_save_dialog_desc.text = _localization.get_text("tool_profile_rename_desc")
+	else:
+		_save_dialog.title = _localization.get_text("tool_profile_save_title")
+		_save_dialog_desc.text = _localization.get_text("tool_profile_save_desc")
+	_save_dialog.get_ok_button().text = _localization.get_text("btn_save_profile")
+	_profile_name_edit.placeholder_text = _localization.get_text("tool_profile_name_placeholder")
+
+
+func _refresh_delete_profile_dialog_copy() -> void:
+	if _localization == null:
+		return
+	_delete_profile_dialog.title = _localization.get_text("tool_profile_delete_title")
+	_delete_profile_desc.text = _localization.get_text("tool_profile_delete_desc") % [_selected_profile_name]
