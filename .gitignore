@@ -1,0 +1,8 @@
+.godot/
+.import/
+.mono/
+bin/
+obj/
+*.tmp
+*.log
+agent_workflow/

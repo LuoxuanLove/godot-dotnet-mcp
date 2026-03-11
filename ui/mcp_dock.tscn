@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/mcp_dock.gd" id="1"]
+
+[node name="MCPDock" type="VBoxContainer"]
+script = ExtResource("1")
+custom_minimum_size = Vector2(280, 400)
+
+[node name="Header" type="HBoxContainer" parent="."]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="HeaderMargin" type="MarginContainer" parent="Header"]
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="HeaderContent" type="HBoxContainer" parent="Header/HeaderMargin"]
+theme_override_constants/separation = 10
+
+[node name="StatusIndicator" type="ColorRect" parent="Header/HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(12, 12)
+
+[node name="TitleLabel" type="Label" parent="Header/HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="Header/HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+
+[node name="TabContainer" type="TabContainer" parent="."]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3

@@ -1,0 +1,84 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/config_tab.gd" id="1"]
+
+[node name="ConfigTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="Scroll/Margin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="ConfigHeader" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="ConfigDescription" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="PlatformRow" type="HBoxContainer" parent="Scroll/Margin/Content"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PlatformLabel" type="Label" parent="Scroll/Margin/Content/PlatformRow"]
+unique_name_in_owner = true
+
+[node name="PlatformOption" type="OptionButton" parent="Scroll/Margin/Content/PlatformRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DesktopHeader" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="DesktopDescription" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="DesktopClients" type="VBoxContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Separator" type="HSeparator" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="CliHeader" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="CliDescription" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="ScopeRow" type="HBoxContainer" parent="Scroll/Margin/Content"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="ScopeLabel" type="Label" parent="Scroll/Margin/Content/ScopeRow"]
+unique_name_in_owner = true
+
+[node name="ScopeOption" type="OptionButton" parent="Scroll/Margin/Content/ScopeRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CliClients" type="VBoxContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

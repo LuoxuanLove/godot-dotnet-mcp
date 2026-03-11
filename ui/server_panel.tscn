@@ -1,0 +1,124 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/server_tab.gd" id="1"]
+
+[node name="ServerTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="Scroll"]
+unique_name_in_owner = true
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="Scroll/Margin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="StatusSectionTitle" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="StatusGrid" type="GridContainer" parent="Scroll/Margin/Content"]
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+
+[node name="ServerStateTitle" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="ServerStateValue" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="EndpointTitle" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="EndpointValue" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="ConnectionsTitle" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="ConnectionsValue" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="RequestsTitle" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="RequestsValue" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="LastRequestTitle" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+
+[node name="LastRequestValue" type="Label" parent="Scroll/Margin/Content/StatusGrid"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="SettingsSectionTitle" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="SettingsGrid" type="GridContainer" parent="Scroll/Margin/Content"]
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+
+[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/SettingsGrid"]
+unique_name_in_owner = true
+
+[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/SettingsGrid"]
+unique_name_in_owner = true
+min_value = 1024.0
+max_value = 65535.0
+
+[node name="AutoStartCheck" type="CheckBox" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="DebugCheck" type="CheckBox" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+
+[node name="LanguageRow" type="HBoxContainer" parent="Scroll/Margin/Content"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+
+[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Scroll/Margin/Content"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="StartButton" type="Button" parent="Scroll/Margin/Content/Buttons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="RestartButton" type="Button" parent="Scroll/Margin/Content/Buttons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StopButton" type="Button" parent="Scroll/Margin/Content/Buttons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="FullReloadButton" type="Button" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

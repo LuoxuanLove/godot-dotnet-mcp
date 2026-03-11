@@ -1,0 +1,123 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/tools_tab.gd" id="1"]
+
+[node name="ToolsTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="HeaderMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="HeaderContent" type="VBoxContainer" parent="HeaderMargin"]
+theme_override_constants/separation = 8
+
+[node name="ToolCountLabel" type="Label" parent="HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+
+[node name="ProfileRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent"]
+theme_override_constants/separation = 8
+
+[node name="ToolProfileLabel" type="Label" parent="HeaderMargin/HeaderContent/ProfileRow"]
+unique_name_in_owner = true
+
+[node name="ToolProfileOption" type="OptionButton" parent="HeaderMargin/HeaderContent/ProfileRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="AddProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow"]
+unique_name_in_owner = true
+
+[node name="ToolProfileDescription" type="Label" parent="HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="ActionsRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent"]
+theme_override_constants/separation = 8
+
+[node name="ExpandAllButton" type="Button" parent="HeaderMargin/HeaderContent/ActionsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CollapseAllButton" type="Button" parent="HeaderMargin/HeaderContent/ActionsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="Separator" type="HSeparator" parent="."]
+
+[node name="TreeContainer" type="VBoxContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ToolListOuterMargin" type="MarginContainer" parent="TreeContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="ToolListPanel" type="PanelContainer" parent="TreeContainer/ToolListOuterMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ToolListOverlay" type="Control" parent="TreeContainer/ToolListOuterMargin/ToolListPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ToolListMargin" type="MarginContainer" parent="TreeContainer/ToolListOuterMargin/ToolListPanel/ToolListOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 4
+
+[node name="ToolTree" type="Tree" parent="TreeContainer/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+columns = 1
+hide_root = true
+column_titles_visible = false
+select_mode = 1
+
+[node name="TopShadow" type="ColorRect" parent="TreeContainer/ToolListOuterMargin/ToolListPanel/ToolListOverlay"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 18.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="SaveProfileDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+min_size = Vector2i(320, 0)
+
+[node name="DialogContent" type="VBoxContainer" parent="SaveProfileDialog"]
+theme_override_constants/separation = 8
+
+[node name="SaveProfileDescription" type="Label" parent="SaveProfileDialog/DialogContent"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="ProfileNameEdit" type="LineEdit" parent="SaveProfileDialog/DialogContent"]
+unique_name_in_owner = true
