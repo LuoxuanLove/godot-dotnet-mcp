@@ -7,6 +7,7 @@ const AUDIT_LOG_PATH := "user://godot_dotnet_mcp_user_tool_audit.log"
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
 const MAX_AUDIT_ENTRIES := 500
+const SCAFFOLD_VERSION := "0.3.0"
 
 var _session_id := ""
 
@@ -40,7 +41,8 @@ func create_tool_scaffold(tool_name: String, display_name: String, description: 
 		"tool_name": slug,
 		"display_name": display_name if not display_name.is_empty() else _humanize(slug),
 		"description": description if not description.is_empty() else "User-defined tool scaffold.",
-		"script_path": "%s/%s.gd" % [CUSTOM_TOOLS_DIR, slug]
+		"script_path": "%s/%s.gd" % [CUSTOM_TOOLS_DIR, slug],
+		"scaffold_version": SCAFFOLD_VERSION
 	}
 
 	if not authorized:
@@ -127,17 +129,58 @@ func get_audit_entries(limit: int = 20, filter_action: String = "", filter_sessi
 	return entries.slice(entries.size() - limit)
 
 
+func get_compatibility_report() -> Dictionary:
+	var user_tools = list_user_tools()
+	var compatible: Array[Dictionary] = []
+	var needs_review: Array[Dictionary] = []
+
+	for tool in user_tools:
+		var item := tool.duplicate(true)
+		var scaffold_version = str(item.get("scaffold_version", "unknown"))
+		var status = _get_compatibility_status(scaffold_version)
+		item["compatibility_status"] = status
+		item["recommendation"] = _get_compatibility_recommendation(status)
+		if status == "compatible":
+			compatible.append(item)
+		else:
+			needs_review.append(item)
+
+	return {
+		"current_scaffold_version": SCAFFOLD_VERSION,
+		"user_tool_count": user_tools.size(),
+		"compatible_count": compatible.size(),
+		"compatible": compatible,
+		"needs_review_count": needs_review.size(),
+		"needs_review": needs_review
+	}
+
+
 func _inspect_script(script_path: String) -> Dictionary:
+	var file_content = _read_script_content(script_path)
+	var default_display_name = _humanize(script_path.get_file().get_basename())
+	var inspected = {
+		"script_path": script_path,
+		"display_name": default_display_name,
+		"category": USER_CATEGORY,
+		"domain_key": USER_DOMAIN,
+		"tool_names": [],
+		"scaffold_version": _extract_scaffold_version(file_content),
+		"loadable": false
+	}
+
 	var script_resource = ResourceLoader.load(script_path, "", ResourceLoader.CACHE_MODE_IGNORE)
 	if not (script_resource is Script):
-		return {}
+		inspected["load_error"] = "script_load_failed"
+		return inspected
 	(script_resource as Script).reload()
 	if not (script_resource as Script).can_instantiate():
-		return {}
+		inspected["load_error"] = "script_cannot_instantiate"
+		return inspected
 
 	var executor = script_resource.new()
 	if executor == null or not executor.has_method("get_tools"):
-		return {}
+		inspected["load_error"] = "missing_get_tools"
+		return inspected
 
 	var registration: Dictionary = {}
 	if executor.has_method("get_registration"):
@@ -148,13 +191,10 @@ func _inspect_script(script_path: String) -> Dictionary:
 		if tool_def is Dictionary:
 			tool_names.append("%s_%s" % [USER_CATEGORY, str(tool_def.get("name", ""))])
 
-	return {
-		"script_path": script_path,
-		"display_name": str(registration.get("display_name", script_path.get_file().get_basename())),
-		"category": USER_CATEGORY,
-		"domain_key": USER_DOMAIN,
-		"tool_names": tool_names
-	}
+	inspected["display_name"] = str(registration.get("display_name", default_display_name))
+	inspected["tool_names"] = tool_names
+	inspected["loadable"] = true
+	return inspected
 
 
 func _ensure_custom_tools_dir() -> Dictionary:
@@ -244,6 +284,8 @@ func _build_scaffold(tool_name: String, preview: Dictionary) -> String:
 	return """@tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
+const _SCAFFOLD_VERSION := %s
+
 
 func get_registration() -> Dictionary:
 	return {
@@ -282,12 +324,78 @@ func execute(tool_name_value: String, args: Dictionary) -> Dictionary:
 		_:
 			return _error("Unknown user tool: %%s" %% tool_name_value)
 """ % [
+		JSON.stringify(SCAFFOLD_VERSION),
 		JSON.stringify(str(preview.get("display_name", _humanize(tool_name)))),
 		JSON.stringify(tool_name),
 		JSON.stringify(str(preview.get("description", ""))),
 		JSON.stringify(tool_name),
 		JSON.stringify(str(preview.get("script_path", "")))
 	]
+
+
+func _read_script_content(script_path: String) -> String:
+	if not FileAccess.file_exists(script_path):
+		return ""
+
+	var file = FileAccess.open(script_path, FileAccess.READ)
+	if file == null:
+		return ""
+
+	var content = file.get_as_text()
+	file.close()
+	return content
+
+
+func _extract_scaffold_version(content: String) -> String:
+	if content.is_empty():
+		return "unknown"
+
+	var regex = RegEx.new()
+	regex.compile("(?m)^const\\s+_SCAFFOLD_VERSION\\s*:=\\s*\"([^\"]+)\"")
+	var match_result = regex.search(content)
+	if match_result == null:
+		return "unknown"
+	return str(match_result.get_string(1)).strip_edges()
+
+
+func _get_compatibility_status(scaffold_version: String) -> String:
+	if scaffold_version.is_empty() or scaffold_version == "unknown":
+		return "unknown"
+
+	var comparison = _compare_versions(scaffold_version, SCAFFOLD_VERSION)
+	if comparison == 0:
+		return "compatible"
+	if comparison < 0:
+		return "outdated"
+	return "newer"
+
+
+func _get_compatibility_recommendation(status: String) -> String:
+	match status:
+		"compatible":
+			return "No action required."
+		"outdated":
+			return "Rescaffold from the current template and migrate custom logic manually."
+		"newer":
+			return "Current plugin template is older than this user tool; verify plugin compatibility before editing."
+		_:
+			return "Add or verify the _SCAFFOLD_VERSION constant before relying on compatibility checks."
+
+
+func _compare_versions(left: String, right: String) -> int:
+	var left_parts = left.split(".")
+	var right_parts = right.split(".")
+	var max_parts = maxi(left_parts.size(), right_parts.size())
+
+	for index in range(max_parts):
+		var left_value = int(left_parts[index]) if index < left_parts.size() else 0
+		var right_value = int(right_parts[index]) if index < right_parts.size() else 0
+		if left_value < right_value:
+			return -1
+		if left_value > right_value:
+			return 1
+
+	return 0
 
 
 func _normalize_script_path(script_path: String) -> String:

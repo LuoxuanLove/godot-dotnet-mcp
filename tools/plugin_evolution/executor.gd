@@ -61,6 +61,14 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "check_compatibility",
+			"description": "PLUGIN EVOLUTION COMPATIBILITY: Compare existing User tools against the current scaffold version.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {}
+			}
+		},
+		{
 			"name": "usage_guide",
 			"description": "PLUGIN EVOLUTION USAGE GUIDE: Return the recommended authorization and User-tool workflow for this plugin.",
 			"inputSchema": {
@@ -97,6 +105,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 					str(args.get("filter_session", ""))
 				)
 			}, "User tool audit fetched")
+		"check_compatibility":
+			return _call_plugin_method(
+				"get_user_tool_compatibility_from_tools",
+				[],
+				"Plugin evolution compatibility bridge is unavailable"
+			)
 		"usage_guide":
 			return _call_plugin_method("get_evolution_usage_guide_from_tools", [], "Plugin evolution guide bridge is unavailable")
 		_:

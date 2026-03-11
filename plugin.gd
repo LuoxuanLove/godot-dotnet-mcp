@@ -775,6 +775,13 @@ func get_user_tool_audit(limit: int = 20, filter_action: String = "", filter_ses
 	return _user_tool_service.get_audit_entries(limit, filter_action, filter_session)
 
 
+func get_user_tool_compatibility_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": _user_tool_service.get_compatibility_report()
+	}
+
+
 func runtime_restart_server() -> Dictionary:
 	var success = _server_controller.start(_state.settings, "tool_runtime_restart")
 	_refresh_dock()
