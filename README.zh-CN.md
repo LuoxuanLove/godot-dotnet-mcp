@@ -2,24 +2,24 @@
 
 [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
-[![Download ZIP](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.1.0.zip)
+[![Download ZIP](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.2.0.zip)
 
-`Godot .NET MCP` 是一个运行在 Godot 编辑器内的 MCP 插件，面向 Godot 4 与 Godot.NET 工作流，提供稳定、可组合、可验证的编辑器能力入口，便于 Claude Code、Codex、Gemini CLI、Claude Desktop、Cursor 等客户端直接接入项目。
+`Godot .NET MCP` 是一个运行在 Godot 编辑器内、支持自进化的 MCP 插件，面向 Godot 4 与 Godot.NET 工作流，能把真实项目上下文直接暴露给客户端，并在用户授权下扩展 User 工具。
 
-当前正式发布版本：`v0.1.0`
+当前正式发布版本：`v0.2.0`
 
 ## 这是什么
 
-它不是一个独立守护进程，也不是脱离编辑器状态的外部桥接层，而是直接运行在 Godot 编辑器进程内的 MCP 服务。
+它是直接运行在 Godot 编辑器进程内的 MCP 服务，不是脱离编辑器状态的外部守护进程。
 
-这意味着客户端拿到的是更贴近真实编辑器上下文的能力入口，可以直接围绕场景、脚本、资源、编辑器状态、插件状态和项目配置工作，而不是依赖一层脱节的外部自动化脚本。
+客户端拿到的是实时项目上下文，并且插件可以通过显式授权扩展 User 工具，而不是依赖一层脱节的外部自动化脚本。
 
 ## 为什么用这个插件
 
 - **Godot.NET 优先**：不仅面向通用 Godot 项目，也把 Godot.NET / C# 的场景绑定、导出成员分析和脚本检查作为一等能力来设计。
 - **运行在编辑器内部**：无需额外守护进程，服务直接跟随 Godot 编辑器生命周期，部署、调试和接入链路更短。
 - **可扩展**：工具系统按 domain 拆分装载，支持热重载、自定义工具发现与后续能力增量扩展。
-- **可自进化**：插件可以根据当前项目、编辑器和运行时状态调整自身可见能力、配置输出和装载结果，更适合和 agent 工作流长期配合。
+- **可自进化**：插件可以在显式授权下脚手架、加载、审计和删除 User 工具，不会写入内置分类。
 - **面向真实接入**：重点不是演示接口，而是让 MCP 客户端真正接进 Godot 项目，包括 profile、配置生成、复制和写入链路。
 
 ## 关键特性
@@ -31,6 +31,7 @@
 - 支持插件级完整重载，以及按 domain 的局部热重载
 - 覆盖 Godot 编辑器中的主要项目、场景、脚本和资源操作链路
 - 支持用户自定义工具脚本发现、加载、调用与回收
+- 支持通过 `debug_runtime_bridge` 回读主项目调试会话状态与最近一次运行的基础生命周期事件
 
 ## 环境要求
 
@@ -137,6 +138,14 @@ POST http://127.0.0.1:3000/mcp
 - `/api/tools` 能返回工具列表
 - MCP 客户端能够连接到 `http://127.0.0.1:3000/mcp`
 
+### 4. 读取最近一次主项目运行状态
+
+使用 `debug_runtime_bridge` 读取最近一次由编辑器启动的主项目运行时信息。
+
+- `get_sessions` 可在主项目停止后继续返回最近一次调试会话状态
+- `get_recent` 可返回最近捕获到的基础生命周期事件，例如 `enter_tree`、`ready`、`close_requested`、`exit_tree`
+- 如果只是读取最近一次会话和生命周期事件，不要求主项目场景持续运行
+
 ## 路径约定
 
 - 资源路径统一使用 `res://`
@@ -164,8 +173,11 @@ git submodule update --init --recursive
 - [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
 - [docs/架构/安装与发布.md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
 - [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
+- [docs/模块/自进化系统.md](docs/%E6%A8%A1%E5%9D%97/%E8%87%AA%E8%BF%9B%E5%8C%96%E7%B3%BB%E7%BB%9F.md)
 
 ## 当前边界
 
-- 当前调试回读仍基于插件缓冲区，不是直接读取 Godot 原生 Output / Debugger 面板
+- 当前调试回读已支持主项目运行时桥接事件与编辑器调试会话状态，但仍不是对 Godot 原生 Output / Debugger 面板的 1:1 文本镜像
+- 这条能力对应的 MCP 工具名是 `debug_runtime_bridge`
+- 最近一次捕获到的会话状态和基础生命周期事件会在主项目停止后继续保留，但如果要看实时新增事件，仍需保持主项目运行
 - 某些依赖编辑器实时状态的能力，仍建议在真实项目工作流中做一次黑盒确认

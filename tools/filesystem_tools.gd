@@ -49,16 +49,27 @@ EXAMPLES:
 		},
 		{
 			"name": "file",
-			"description": """FILE OPERATIONS: Read and write files in the project.
+			"description": "COMPATIBILITY ALIAS: Legacy filesystem_file entry kept for existing MCP wrappers.",
+			"compatibility_alias": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string"},
+					"path": {"type": "string"},
+					"content": {"type": "string"},
+					"source": {"type": "string"},
+					"dest": {"type": "string"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "file_read",
+			"description": """FILE READ: Read file content and inspect file presence or metadata.
 
 ACTIONS:
 - read: Read file contents
-- write: Write content to file
-- append: Append content to file
-- delete: Delete a file
 - exists: Check if file exists
-- copy: Copy a file
-- move: Move/rename a file
 - get_info: Get file information
 
 NOTE: For script files, prefer using script_read, script_inspect, or script_edit_gd tools.
@@ -66,16 +77,41 @@ For resources, prefer using resource_manage tools.
 
 EXAMPLES:
 - Read file: {"action": "read", "path": "res://data/config.json"}
-- Write file: {"action": "write", "path": "res://data/save.json", "content": "{\\"level\\": 1}"}
-- Copy file: {"action": "copy", "source": "res://template.txt", "dest": "res://copy.txt"}
 - Get info: {"action": "get_info", "path": "res://project.godot"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["read", "write", "append", "delete", "exists", "copy", "move", "get_info"],
+						"enum": ["read", "exists", "get_info"],
 						"description": "File action"
+					},
+					"path": {
+						"type": "string",
+						"description": "File path"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "file_write",
+			"description": """FILE WRITE: Create or append plain-text files inside the project.
+
+ACTIONS:
+- write: Write content to file
+- append: Append content to file
+
+EXAMPLES:
+- Write file: {"action": "write", "path": "res://data/save.json", "content": "{\\"level\\": 1}"}
+- Append file: {"action": "append", "path": "res://notes.txt", "content": "\\nline"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["write", "append"],
+						"description": "Write action"
 					},
 					"path": {
 						"type": "string",
@@ -84,6 +120,35 @@ EXAMPLES:
 					"content": {
 						"type": "string",
 						"description": "Content to write/append"
+					}
+				},
+				"required": ["action", "path"]
+			}
+		},
+		{
+			"name": "file_manage",
+			"description": """FILE MANAGE: Delete, copy or move files in the project.
+
+ACTIONS:
+- delete: Delete a file
+- copy: Copy a file
+- move: Move or rename a file
+
+EXAMPLES:
+- Delete: {"action": "delete", "path": "res://old.txt"}
+- Copy: {"action": "copy", "source": "res://template.txt", "dest": "res://copy.txt"}
+- Move: {"action": "move", "source": "res://old.txt", "dest": "res://new.txt"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["delete", "copy", "move"],
+						"description": "Manage action"
+					},
+					"path": {
+						"type": "string",
+						"description": "File path"
 					},
 					"source": {
 						"type": "string",
@@ -195,7 +260,13 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"directory":
 			return _execute_directory(args)
 		"file":
-			return _execute_file(args)
+			return _execute_file_compat(args)
+		"file_read":
+			return _execute_file_read(args)
+		"file_write":
+			return _execute_file_write(args)
+		"file_manage":
+			return _execute_file_manage(args)
 		"json":
 			return _execute_json(args)
 		"search":
@@ -339,28 +410,49 @@ func _collect_files(path: String, filter: String, recursive: bool, results: Arra
 
 # ==================== FILE ====================
 
-func _execute_file(args: Dictionary) -> Dictionary:
+func _execute_file_read(args: Dictionary) -> Dictionary:
 	var action = args.get("action", "")
 
 	match action:
 		"read":
 			return _read_file(args.get("path", ""))
-		"write":
-			return _write_file(args.get("path", ""), args.get("content", ""))
-		"append":
-			return _append_file(args.get("path", ""), args.get("content", ""))
-		"delete":
-			return _delete_file(args.get("path", ""))
 		"exists":
 			return _file_exists(args.get("path", ""))
-		"copy":
-			return _copy_file(args.get("source", ""), args.get("dest", ""))
-		"move":
-			return _move_file(args.get("source", ""), args.get("dest", ""))
 		"get_info":
 			return _get_file_info(args.get("path", ""))
 		_:
 			return _error("Unknown action: %s" % action)
+
+
+func _execute_file_write(args: Dictionary) -> Dictionary:
+	match args.get("action", ""):
+		"write":
+			return _write_file(args.get("path", ""), args.get("content", ""))
+		"append":
+			return _append_file(args.get("path", ""), args.get("content", ""))
+		_:
+			return _error("Unknown action: %s" % str(args.get("action", "")))
+
+
+func _execute_file_manage(args: Dictionary) -> Dictionary:
+	match args.get("action", ""):
+		"delete":
+			return _delete_file(args.get("path", ""))
+		"copy":
+			return _copy_file(args.get("source", ""), args.get("dest", ""))
+		"move":
+			return _move_file(args.get("source", ""), args.get("dest", ""))
+		_:
+			return _error("Unknown action: %s" % str(args.get("action", "")))
+
+
+func _execute_file_compat(args: Dictionary) -> Dictionary:
+	var action = str(args.get("action", ""))
+	if action in ["read", "exists", "get_info"]:
+		return _execute_file_read(args)
+	if action in ["write", "append"]:
+		return _execute_file_write(args)
+	return _execute_file_manage(args)
 
 
 func _read_file(path: String) -> Dictionary:

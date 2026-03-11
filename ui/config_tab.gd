@@ -11,10 +11,12 @@ signal copy_requested(text: String, source: String)
 @onready var _platform_label: Label = %PlatformLabel
 @onready var _platform_option: OptionButton = %PlatformOption
 @onready var _desktop_header: Label = %DesktopHeader
+@onready var _desktop_header_divider: HSeparator = %DesktopHeaderDivider
 @onready var _desktop_desc: Label = %DesktopDescription
 @onready var _desktop_clients: VBoxContainer = %DesktopClients
 @onready var _separator: HSeparator = %Separator
 @onready var _cli_header: Label = %CliHeader
+@onready var _cli_header_divider: HSeparator = %CliHeaderDivider
 @onready var _cli_desc: Label = %CliDescription
 @onready var _scope_label: Label = %ScopeLabel
 @onready var _scope_option: OptionButton = %ScopeOption
@@ -49,7 +51,7 @@ func apply_model(model: Dictionary) -> void:
 	var selected_group = _resolve_selected_group(selected_platform, platform_defs)
 
 	_rebuild_platform_options(platform_defs, selected_platform, localization)
-	_apply_section_visibility(selected_group)
+	_apply_section_visibility(selected_group, str(selected_client.get("id", "")))
 
 	_desktop_header.text = localization.get_text("config_section_desktop")
 	_desktop_desc.text = localization.get_text("config_section_desktop_desc")
@@ -239,16 +241,19 @@ func _resolve_selected_group(selected_platform: String, platform_defs: Array) ->
 	return ""
 
 
-func _apply_section_visibility(selected_group: String) -> void:
+func _apply_section_visibility(selected_group: String, selected_client_id: String) -> void:
 	var show_desktop = selected_group == "desktop"
 	var show_cli = selected_group == "cli"
+	var show_claude_scope = show_cli and selected_client_id == "claude_code"
 	_desktop_header.visible = show_desktop
+	_desktop_header_divider.visible = show_desktop
 	_desktop_desc.visible = show_desktop
 	_desktop_clients.visible = show_desktop
 	_separator.visible = false
 	_cli_header.visible = show_cli
+	_cli_header_divider.visible = show_cli
 	_cli_desc.visible = show_cli
-	_scope_label.visible = show_cli
-	_scope_option.visible = show_cli
+	_scope_label.visible = show_claude_scope
+	_scope_option.visible = show_claude_scope
 	var scope_row = get_node("Scroll/Margin/Content/ScopeRow") as HBoxContainer
-	scope_row.visible = show_cli
+	scope_row.visible = show_claude_scope

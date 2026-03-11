@@ -67,8 +67,18 @@ func set_disabled_tools(disabled_tools: Array) -> void:
 
 
 func get_tools_by_category() -> Dictionary:
+	return _build_tools_by_category(true)
+
+
+func get_all_tools_by_category() -> Dictionary:
+	return _build_tools_by_category(false)
+
+
+func _build_tools_by_category(visible_only: bool) -> Dictionary:
 	var result: Dictionary = {}
 	for category in _ordered_categories:
+		if visible_only and not _is_category_visible(category):
+			continue
 		var defs = _ensure_tool_definitions(category)
 		if defs.is_empty():
 			continue
@@ -80,8 +90,18 @@ func get_tools_by_category() -> Dictionary:
 
 
 func get_tool_definitions() -> Array[Dictionary]:
+	return _build_tool_definitions(true)
+
+
+func get_all_tool_definitions() -> Array[Dictionary]:
+	return _build_tool_definitions(false)
+
+
+func _build_tool_definitions(visible_only: bool) -> Array[Dictionary]:
 	var definitions: Array[Dictionary] = []
 	for category in _ordered_categories:
+		if visible_only and not _is_category_visible(category):
+			continue
 		for tool_def in _ensure_tool_definitions(category):
 			var full_def = _decorate_tool_definition(category, tool_def)
 			full_def["name"] = "%s_%s" % [category, str(tool_def.get("name", ""))]
@@ -95,8 +115,18 @@ func get_tool_load_errors() -> Array[Dictionary]:
 
 
 func get_domain_states() -> Array[Dictionary]:
+	return _build_domain_states(true)
+
+
+func get_all_domain_states() -> Array[Dictionary]:
+	return _build_domain_states(false)
+
+
+func _build_domain_states(visible_only: bool) -> Array[Dictionary]:
 	var states: Array[Dictionary] = []
 	for category in _ordered_categories:
+		if visible_only and not _is_category_visible(category):
+			continue
 		var entry: Dictionary = _entries_by_category.get(category, {})
 		var runtime: Dictionary = _runtime_by_category.get(category, {})
 		var defs = _tool_definitions_by_category.get(category, [])
@@ -139,6 +169,9 @@ func get_performance_summary() -> Dictionary:
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	if not _is_category_executable(category):
+		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
+
 	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
 	if not runtime_result.get("success", false):
 		return runtime_result
@@ -518,7 +551,40 @@ func _decorate_tool_definition(category: String, tool_def: Dictionary) -> Dictio
 	decorated["category"] = category
 	decorated["load_state"] = _current_load_state(category)
 	decorated["source"] = str(entry.get("source", "builtin"))
+	decorated["script_path"] = str(entry.get("path", ""))
+	decorated["domain_key"] = str(entry.get("domain_key", "other"))
 	return decorated
+
+
+func _get_permission_provider():
+	if _server_context == null:
+		return null
+	if _server_context.has_method("get_plugin_permission_provider"):
+		return _server_context.get_plugin_permission_provider()
+	if _server_context.has_method("get_parent"):
+		return _server_context.get_parent()
+	return null
+
+
+func _is_category_visible(category: String) -> bool:
+	var provider = _get_permission_provider()
+	if provider != null and provider.has_method("is_tool_category_visible_for_permission"):
+		return bool(provider.is_tool_category_visible_for_permission(category))
+	return true
+
+
+func _is_category_executable(category: String) -> bool:
+	var provider = _get_permission_provider()
+	if provider != null and provider.has_method("is_tool_category_executable_for_permission"):
+		return bool(provider.is_tool_category_executable_for_permission(category))
+	return true
+
+
+func _get_permission_error(category: String) -> String:
+	var provider = _get_permission_provider()
+	if provider != null and provider.has_method("get_permission_denied_message_for_category"):
+		return str(provider.get_permission_denied_message_for_category(category))
+	return "Current permission level does not allow this tool category"
 
 
 func _current_load_state(category: String) -> String:

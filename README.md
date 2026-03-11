@@ -2,24 +2,24 @@
 
 [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
-[![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.1.0.zip)
+[![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.2.0.zip)
 
-`Godot .NET MCP` is an MCP plugin that runs inside the Godot editor. It is built for Godot 4 and Godot.NET workflows, and exposes stable, composable, verifiable editor capabilities to clients such as Claude Code, Codex, Gemini CLI, Claude Desktop, and Cursor.
+`Godot .NET MCP` is an editor-native, self-evolving MCP plugin for Godot 4 and Godot.NET. It runs inside the editor, exposes live project capabilities to MCP clients, and can grow User tools through explicit authorization.
 
-Current public version: `v0.1.0`
+Current public version: `v0.2.0`
 
 ## What It Is
 
-This is not a separate daemon and not an external bridge detached from editor state. It runs inside the Godot editor process and exposes MCP access from the real project context.
+It is an MCP endpoint that runs inside the Godot editor, not a detached daemon.
 
-That makes it more suitable for agent-driven workflows that need live access to scenes, scripts, resources, editor state, plugin state, and project configuration instead of a disconnected automation layer.
+It gives agents live access to the real project context, and extends itself through authorized User tools instead of hidden background automation.
 
 ## Why This Plugin
 
 - **Godot.NET first**: it is designed for general Godot projects, but treats Godot.NET and C# scene bindings, exported members, and script inspection as first-class capabilities.
 - **Editor-native**: no extra background service is required; startup, configuration, and debugging stay close to the editor lifecycle.
 - **Extensible**: tool loading is split by domain and supports hot reload, custom tool discovery, and incremental capability growth.
-- **Self-evolving**: the plugin can adapt its visible capabilities, configuration output, and load results based on the current project, editor, and runtime state.
+- **Self-evolving**: the plugin can scaffold, load, audit, and remove authorized User tools without writing into builtin categories.
 - **Built for real client integration**: the focus is not a demo endpoint, but a usable connection path for MCP clients through profiles, config generation, copy, and write flows.
 
 ## Key Features
@@ -31,6 +31,7 @@ That makes it more suitable for agent-driven workflows that need live access to 
 - Full plugin reload and domain-level hot reload
 - Coverage across the main Godot editor workflows for project, scene, script, and resource operations
 - Custom tool script discovery, loading, invocation, and cleanup
+- Runtime bridge readback through `debug_runtime_bridge`, including debugger session state and the latest captured project lifecycle events
 
 ## Requirements
 
@@ -137,6 +138,14 @@ Confirm that:
 - `/api/tools` returns the tool list
 - your MCP client can connect to `http://127.0.0.1:3000/mcp`
 
+### 4. Read the latest project runtime state
+
+Use `debug_runtime_bridge` to read structured runtime information from the last editor-run project session.
+
+- `get_sessions` returns the latest debugger session state even after the project has stopped
+- `get_recent` returns the latest captured lifecycle events such as `enter_tree`, `ready`, `close_requested`, and `exit_tree`
+- the project does not need to stay running to read the most recent captured session and lifecycle events
+
 ## Path Conventions
 
 - Resource paths use `res://`
@@ -163,8 +172,11 @@ git submodule update --init --recursive
 - [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
 - [docs/架构/安装与发布.md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
 - [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
+- [docs/模块/自进化系统.md](docs/%E6%A8%A1%E5%9D%97/%E8%87%AA%E8%BF%9B%E5%8C%96%E7%B3%BB%E7%BB%9F.md)
 
 ## Current Boundaries
 
-- Debug log readback currently comes from the plugin buffer, not directly from the native Godot Output / Debugger panels
+- Runtime debug readback now supports structured project-side bridge events and editor debugger session state, but it still does not mirror the native Godot Output / Debugger panels 1:1
+- The correct MCP tool name for this capability is `debug_runtime_bridge`
+- The latest captured session state and basic lifecycle events remain readable after the project stops, but real-time observation still requires the project to be running
 - Capabilities that depend on live editor state should still be validated in a real project workflow

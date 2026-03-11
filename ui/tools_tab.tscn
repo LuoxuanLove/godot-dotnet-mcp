@@ -47,6 +47,18 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
+[node name="UserActionsRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent"]
+theme_override_constants/separation = 8
+
+[node name="ShowUserToolsCheck" type="CheckBox" parent="HeaderMargin/HeaderContent/UserActionsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DeleteUserToolButton" type="Button" parent="HeaderMargin/HeaderContent/UserActionsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+disabled = true
+
 [node name="Separator" type="HSeparator" parent="."]
 
 [node name="TreeContainer" type="VBoxContainer" parent="."]

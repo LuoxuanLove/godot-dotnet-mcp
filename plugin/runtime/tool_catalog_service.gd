@@ -88,15 +88,31 @@ func build_tool_name_index(tools_by_category: Dictionary) -> Array:
 	return tool_names
 
 
+func tool_belongs_to_category(tool_name: String, category: String) -> bool:
+	return tool_name.begins_with(category + "_")
+
+
 func _get_disabled_tools_for_builtin_profile(profile: Dictionary, tool_names: Array) -> Array:
 	var enabled_categories = profile.get("enabled_categories", [])
-	if enabled_categories.is_empty():
+	var excluded_categories = profile.get("excluded_categories", [])
+	if enabled_categories.is_empty() and excluded_categories.is_empty():
 		return []
 
 	var disabled: Array = []
 	for tool_name in tool_names:
-		var category = str(tool_name).split("_")[0]
-		if not enabled_categories.has(category):
+		var belongs_to_enabled: bool = enabled_categories.is_empty()
+		for category in enabled_categories:
+			if tool_belongs_to_category(str(tool_name), str(category)):
+				belongs_to_enabled = true
+				break
+
+		var belongs_to_excluded: bool = false
+		for category in excluded_categories:
+			if tool_belongs_to_category(str(tool_name), str(category)):
+				belongs_to_excluded = true
+				break
+
+		if (not belongs_to_enabled) or belongs_to_excluded:
 			disabled.append(tool_name)
 
 	disabled.sort()

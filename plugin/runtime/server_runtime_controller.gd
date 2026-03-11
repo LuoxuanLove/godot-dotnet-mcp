@@ -78,6 +78,12 @@ func get_tools_by_category() -> Dictionary:
 	return {}
 
 
+func get_all_tools_by_category() -> Dictionary:
+	if _has_server_method("get_all_tools_by_category"):
+		return _server.get_all_tools_by_category()
+	return get_tools_by_category()
+
+
 func get_tool_load_errors() -> Array:
 	if _has_server_method("get_tool_load_errors"):
 		return _server.get_tool_load_errors()
@@ -90,6 +96,12 @@ func get_domain_states() -> Array:
 	return []
 
 
+func get_all_domain_states() -> Array:
+	if _has_server_method("get_all_domain_states"):
+		return _server.get_all_domain_states()
+	return get_domain_states()
+
+
 func get_reload_status() -> Dictionary:
 	if _has_server_method("get_reload_status"):
 		return _server.get_reload_status()
@@ -99,6 +111,18 @@ func get_reload_status() -> Dictionary:
 func get_performance_summary() -> Dictionary:
 	if _has_server_method("get_performance_summary"):
 		return _server.get_performance_summary()
+	return {}
+
+
+func reload_domain(category: String) -> Dictionary:
+	if _has_server_method("reload_tool_domain"):
+		return _server.reload_tool_domain(category)
+	return {}
+
+
+func reload_all_domains() -> Dictionary:
+	if _has_server_method("reload_all_tool_domains"):
+		return _server.reload_all_tool_domains()
 	return {}
 
 

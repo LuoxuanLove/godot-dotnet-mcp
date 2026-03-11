@@ -3,6 +3,8 @@ extends VBoxContainer
 
 signal profile_selected(profile_id: String)
 signal save_profile_requested(profile_name: String)
+signal show_user_tools_toggled(enabled: bool)
+signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
@@ -11,13 +13,43 @@ signal domain_collapse_toggled(domain_key: String)
 signal expand_all_requested
 signal collapse_all_requested
 
+const CATEGORY_LABEL_KEYS := {
+	"scene": "cat_scene",
+	"node": "cat_node",
+	"script": "cat_script",
+	"resource": "cat_resource",
+	"filesystem": "cat_filesystem",
+	"project": "cat_project",
+	"editor": "cat_editor",
+	"plugin_runtime": "cat_plugin_runtime",
+	"plugin_evolution": "cat_plugin_evolution",
+	"plugin_developer": "cat_plugin_developer",
+	"debug": "cat_debug",
+	"animation": "cat_animation",
+	"signal": "cat_signal",
+	"group": "cat_group",
+	"material": "cat_material",
+	"shader": "cat_shader",
+	"lighting": "cat_lighting",
+	"particle": "cat_particle",
+	"tilemap": "cat_tilemap",
+	"geometry": "cat_geometry",
+	"physics": "cat_physics",
+	"navigation": "cat_navigation",
+	"audio": "cat_audio",
+	"ui": "cat_ui",
+	"user": "cat_user"
+}
+
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _profile_label: Label = %ToolProfileLabel
 @onready var _profile_option: OptionButton = %ToolProfileOption
 @onready var _add_profile_button: Button = %AddProfileButton
 @onready var _profile_desc_label: Label = %ToolProfileDescription
+@onready var _show_user_tools_check: CheckBox = %ShowUserToolsCheck
 @onready var _expand_all_button: Button = %ExpandAllButton
 @onready var _collapse_all_button: Button = %CollapseAllButton
+@onready var _delete_user_tool_button: Button = %DeleteUserToolButton
 @onready var _tool_tree: Tree = %ToolTree
 @onready var _top_shadow: ColorRect = %TopShadow
 @onready var _save_dialog: ConfirmationDialog = %SaveProfileDialog
@@ -27,17 +59,21 @@ signal collapse_all_requested
 var _profile_option_syncing := false
 var _tree_syncing := false
 var _current_scale := -1.0
+var _selected_user_script_path := ""
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_profile_option.item_selected.connect(_on_profile_option_selected)
 	_add_profile_button.pressed.connect(_on_add_profile_button_pressed)
+	_show_user_tools_check.toggled.connect(_on_show_user_tools_check_toggled)
 	_expand_all_button.pressed.connect(_on_expand_all_button_pressed)
 	_collapse_all_button.pressed.connect(_on_collapse_all_button_pressed)
+	_delete_user_tool_button.pressed.connect(_on_delete_user_tool_button_pressed)
 	_save_dialog.confirmed.connect(_on_save_dialog_confirmed)
 	_tool_tree.item_edited.connect(_on_tree_item_edited)
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
+	_tool_tree.item_selected.connect(_on_tree_item_selected)
 	_configure_top_shadow()
 	set_process(true)
 
@@ -56,8 +92,11 @@ func apply_model(model: Dictionary) -> void:
 	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
 	_profile_label.text = localization.get_text("tool_profile")
 	_add_profile_button.text = localization.get_text("btn_add_profile")
+	_show_user_tools_check.text = localization.get_text("show_user_tools")
 	_expand_all_button.text = localization.get_text("btn_expand_all")
 	_collapse_all_button.text = localization.get_text("btn_collapse_all")
+	_delete_user_tool_button.text = localization.get_text("btn_delete_user_tool")
+	_show_user_tools_check.set_pressed_no_signal(bool(model.get("show_user_tools", false)))
 	_profile_desc_label.text = profile_description
 	_save_dialog.title = localization.get_text("tool_profile_save_title")
 	_save_dialog.get_ok_button().text = localization.get_text("btn_save_profile")
@@ -86,7 +125,9 @@ func apply_model(model: Dictionary) -> void:
 		index += 1
 	_profile_option_syncing = false
 
+	_selected_user_script_path = ""
 	_render_tool_tree(model)
+	_sync_delete_button()
 
 
 func _render_tool_tree(model: Dictionary) -> void:
@@ -94,6 +135,10 @@ func _render_tool_tree(model: Dictionary) -> void:
 	_tool_tree.clear()
 	_tool_tree.set_column_clip_content(0, true)
 	var root = _tool_tree.create_item()
+	if root == null:
+		_tree_syncing = false
+		call_deferred("_update_top_shadow_visibility")
+		return
 
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
 	var domain_defs: Array = model.get("domain_defs", [])
@@ -123,11 +168,16 @@ func _create_domain_item(root: TreeItem, model: Dictionary, domain_key: String, 
 	var settings: Dictionary = model.get("settings", {})
 	var counts = _count_categories(model, categories)
 	var item = _tool_tree.create_item(root)
+	if item == null:
+		return
 	item.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
 	item.set_editable(0, true)
 	item.set_checked(0, _is_domain_fully_enabled(model, categories))
 	item.set_text(0, "%s    %d/%d" % [model.get("localization").get_text(label_key), counts["enabled"], counts["total"]])
 	item.set_metadata(0, {"kind": "domain", "key": domain_key})
+	var domain_tooltip = _get_group_tooltip(model.get("localization"), label_key)
+	if not domain_tooltip.is_empty():
+		item.set_tooltip_text(0, domain_tooltip)
 	item.collapsed = domain_key in settings.get("collapsed_domains", [])
 
 	for category in categories:
@@ -138,14 +188,22 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 	var settings: Dictionary = model.get("settings", {})
 	var counts = _count_category(model, category)
 	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return
 	item.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
 	item.set_editable(0, true)
 	item.set_checked(0, _is_category_fully_enabled(model, category))
+	var label_key = _get_category_label_key(category)
 	item.set_text(0, "%s    %d/%d" % [_get_category_label(model.get("localization"), category), counts["enabled"], counts["total"]])
 	item.set_metadata(0, {"kind": "category", "key": category})
+	var category_tooltip = _get_group_tooltip(model.get("localization"), label_key)
+	if not category_tooltip.is_empty():
+		item.set_tooltip_text(0, category_tooltip)
 	item.collapsed = category in settings.get("collapsed_categories", [])
 
 	for tool_def in model.get("tools_by_category", {}).get(category, []):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
 		_create_tool_item(item, model, category, tool_def)
 
 
@@ -154,11 +212,19 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 	var tool_name = str(tool_def.get("name", ""))
 	var full_name = "%s_%s" % [category, tool_name]
 	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return
 	item.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
 	item.set_editable(0, true)
 	item.set_checked(0, not model.get("settings", {}).get("disabled_tools", []).has(full_name))
 	item.set_text(0, _get_tool_display_name(localization, full_name, tool_name))
-	item.set_metadata(0, {"kind": "tool", "key": full_name})
+	item.set_metadata(0, {
+		"kind": "tool",
+		"key": full_name,
+		"category": category,
+		"source": str(tool_def.get("source", "builtin")),
+		"script_path": str(tool_def.get("script_path", ""))
+	})
 
 	var desc_key = "tool_%s_desc" % full_name
 	var desc_text = localization.get_text(desc_key)
@@ -171,6 +237,8 @@ func _count_enabled_tools(model: Dictionary) -> Array:
 	var enabled = 0
 	for category in model.get("tools_by_category", {}).keys():
 		for tool_def in model["tools_by_category"][category]:
+			if bool(tool_def.get("compatibility_alias", false)):
+				continue
 			total += 1
 			var full_name = "%s_%s" % [category, tool_def.get("name", "")]
 			if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
@@ -192,6 +260,8 @@ func _count_category(model: Dictionary, category: String) -> Dictionary:
 	var total = 0
 	var enabled = 0
 	for tool_def in model.get("tools_by_category", {}).get(category, []):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
 		total += 1
 		var full_name = "%s_%s" % [category, tool_def.get("name", "")]
 		if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
@@ -210,33 +280,19 @@ func _is_category_fully_enabled(model: Dictionary, category: String) -> bool:
 
 
 func _get_category_label(localization, category: String) -> String:
-	var category_keys = {
-		"scene": "cat_scene",
-		"node": "cat_node",
-		"script": "cat_script",
-		"resource": "cat_resource",
-		"filesystem": "cat_filesystem",
-		"project": "cat_project",
-		"editor": "cat_editor",
-		"plugin": "cat_plugin",
-		"debug": "cat_debug",
-		"animation": "cat_animation",
-		"signal": "cat_signal",
-		"group": "cat_group",
-		"material": "cat_material",
-		"shader": "cat_shader",
-		"lighting": "cat_lighting",
-		"particle": "cat_particle",
-		"tilemap": "cat_tilemap",
-		"geometry": "cat_geometry",
-		"physics": "cat_physics",
-		"navigation": "cat_navigation",
-		"audio": "cat_audio",
-		"ui": "cat_ui"
-	}
-	var key = category_keys.get(category, category)
+	var key = CATEGORY_LABEL_KEYS.get(category, category)
 	var translated = localization.get_text(str(key))
 	return translated if translated != key else category.capitalize()
+
+
+func _get_category_label_key(category: String) -> String:
+	return str(CATEGORY_LABEL_KEYS.get(category, category))
+
+
+func _get_group_tooltip(localization, label_key: String) -> String:
+	var desc_key = "%s_desc" % label_key
+	var translated = localization.get_text(desc_key)
+	return translated if translated != desc_key else ""
 
 
 func _get_tool_display_name(localization, full_name: String, tool_name: String) -> String:
@@ -268,6 +324,16 @@ func _on_add_profile_button_pressed() -> void:
 
 func _on_save_dialog_confirmed() -> void:
 	save_profile_requested.emit(_profile_name_edit.text.strip_edges())
+
+
+func _on_show_user_tools_check_toggled(pressed: bool) -> void:
+	show_user_tools_toggled.emit(pressed)
+
+
+func _on_delete_user_tool_button_pressed() -> void:
+	if _selected_user_script_path.is_empty():
+		return
+	delete_user_tool_requested.emit(_selected_user_script_path)
 
 
 func _on_tree_item_edited() -> void:
@@ -310,6 +376,17 @@ func _on_expand_all_button_pressed() -> void:
 
 func _on_collapse_all_button_pressed() -> void:
 	collapse_all_requested.emit()
+
+
+func _on_tree_item_selected() -> void:
+	var item = _tool_tree.get_selected()
+	_selected_user_script_path = ""
+	if item != null:
+		var metadata = item.get_metadata(0)
+		if metadata is Dictionary and str(metadata.get("kind", "")) == "tool":
+			if str(metadata.get("category", "")) == "user" and str(metadata.get("source", "")) == "custom":
+				_selected_user_script_path = str(metadata.get("script_path", ""))
+	_sync_delete_button()
 
 
 func _configure_top_shadow() -> void:
@@ -370,6 +447,9 @@ func _apply_editor_scale(scale: float) -> void:
 	var actions_row = get_node("HeaderMargin/HeaderContent/ActionsRow") as HBoxContainer
 	actions_row.add_theme_constant_override("separation", int(round(8 * scale)))
 
+	var user_actions_row = get_node("HeaderMargin/HeaderContent/UserActionsRow") as HBoxContainer
+	user_actions_row.add_theme_constant_override("separation", int(round(8 * scale)))
+
 	var tool_list_outer_margin = get_node("TreeContainer/ToolListOuterMargin") as MarginContainer
 	tool_list_outer_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
 	tool_list_outer_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
@@ -393,5 +473,9 @@ func _apply_editor_scale(scale: float) -> void:
 	_top_shadow.offset_bottom = 18.0 * scale
 	_save_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
 
-	for control in [_profile_option, _add_profile_button, _expand_all_button, _collapse_all_button]:
+	for control in [_profile_option, _add_profile_button, _show_user_tools_check, _expand_all_button, _collapse_all_button, _delete_user_tool_button]:
 		control.custom_minimum_size.y = 30.0 * scale
+
+
+func _sync_delete_button() -> void:
+	_delete_user_tool_button.disabled = _selected_user_script_path.is_empty()

@@ -11,12 +11,15 @@ const BUILTIN_ENTRIES: Array[Dictionary] = [
 	{"category": "project", "path": "res://addons/godot_dotnet_mcp/tools/project/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "script", "path": "res://addons/godot_dotnet_mcp/tools/script/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "editor", "path": "res://addons/godot_dotnet_mcp/tools/editor/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
-	{"category": "plugin", "path": "res://addons/godot_dotnet_mcp/tools/plugin/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": false},
+	{"category": "plugin", "path": "res://addons/godot_dotnet_mcp/tools/plugin/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
+	{"category": "plugin_runtime", "path": "res://addons/godot_dotnet_mcp/tools/plugin_runtime/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
+	{"category": "plugin_evolution", "path": "res://addons/godot_dotnet_mcp/tools/plugin_evolution/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
+	{"category": "plugin_developer", "path": "res://addons/godot_dotnet_mcp/tools/plugin_developer/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
 	{"category": "debug", "path": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "filesystem", "path": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "group", "path": "res://addons/godot_dotnet_mcp/tools/group/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "signal", "path": "res://addons/godot_dotnet_mcp/tools/signal/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
-	{"category": "animation", "path": "res://addons/godot_dotnet_mcp/tools/animation/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
+	{"category": "animation", "path": "res://addons/godot_dotnet_mcp/tools/animation/executor.gd", "domain_key": "visual", "source": "builtin", "hot_reloadable": true},
 	{"category": "material", "path": "res://addons/godot_dotnet_mcp/tools/material/executor.gd", "domain_key": "visual", "source": "builtin", "hot_reloadable": true},
 	{"category": "shader", "path": "res://addons/godot_dotnet_mcp/tools/shader/executor.gd", "domain_key": "visual", "source": "builtin", "hot_reloadable": true},
 	{"category": "lighting", "path": "res://addons/godot_dotnet_mcp/tools/lighting/executor.gd", "domain_key": "visual", "source": "builtin", "hot_reloadable": true},
@@ -120,20 +123,15 @@ func _build_custom_entry(script_path: String) -> Dictionary:
 	elif executor.has_method("get_custom_tool_registration"):
 		registration = executor.get_custom_tool_registration()
 
-	var default_category = _sanitize_category_name(script_path.get_file().get_basename())
-	var category = str(registration.get("category", default_category))
-	if category.is_empty():
-		return {"success": false, "error": "Custom tool category is empty"}
-
 	return {
 		"success": true,
 		"entry": {
-			"category": category,
+			"category": "user",
 			"path": script_path,
-			"domain_key": str(registration.get("domain_key", "other")),
+			"domain_key": "user",
 			"source": "custom",
 			"hot_reloadable": bool(registration.get("hot_reloadable", true)),
-			"display_name": str(registration.get("display_name", category))
+			"display_name": str(registration.get("display_name", script_path.get_file().get_basename()))
 		}
 	}
 
@@ -143,12 +141,3 @@ func _load_custom_script(script_path: String) -> Resource:
 	if script_resource is Script:
 		script_resource.reload()
 	return script_resource
-
-
-func _sanitize_category_name(value: String) -> String:
-	var sanitized = value.strip_edges().to_lower()
-	for ch in [" ", "-", ".", "/", "\\"]:
-		sanitized = sanitized.replace(ch, "_")
-	while sanitized.contains("__"):
-		sanitized = sanitized.replace("__", "_")
-	return sanitized.strip_edges()

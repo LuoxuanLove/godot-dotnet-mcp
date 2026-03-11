@@ -8,7 +8,8 @@ const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.ts
 signal current_tab_changed(index: int)
 signal port_changed(value: int)
 signal auto_start_toggled(enabled: bool)
-signal debug_toggled(enabled: bool)
+signal log_level_changed(level: String)
+signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
 signal start_requested
 signal restart_requested
@@ -16,6 +17,8 @@ signal stop_requested
 signal full_reload_requested
 signal profile_selected(profile_id: String)
 signal save_profile_requested(profile_name: String)
+signal show_user_tools_toggled(enabled: bool)
+signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
@@ -46,7 +49,8 @@ func _ready() -> void:
 	if _server_tab:
 		_server_tab.port_changed.connect(_on_server_tab_port_changed)
 		_server_tab.auto_start_toggled.connect(_on_server_tab_auto_start_toggled)
-		_server_tab.debug_toggled.connect(_on_server_tab_debug_toggled)
+		_server_tab.log_level_changed.connect(_on_server_tab_log_level_changed)
+		_server_tab.permission_level_changed.connect(_on_server_tab_permission_level_changed)
 		_server_tab.language_changed.connect(_on_server_tab_language_changed)
 		_server_tab.start_requested.connect(_on_server_tab_start_requested)
 		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
@@ -56,6 +60,8 @@ func _ready() -> void:
 	if _tools_tab:
 		_tools_tab.profile_selected.connect(_on_tools_tab_profile_selected)
 		_tools_tab.save_profile_requested.connect(_on_tools_tab_save_profile_requested)
+		_tools_tab.show_user_tools_toggled.connect(_on_tools_tab_show_user_tools_toggled)
+		_tools_tab.delete_user_tool_requested.connect(_on_tools_tab_delete_user_tool_requested)
 		_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
 		_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
 		_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
@@ -73,6 +79,8 @@ func _ready() -> void:
 
 func apply_model(model: Dictionary) -> void:
 	var localization = model.get("localization")
+	if localization == null:
+		return
 	var is_running = bool(model.get("is_running", false))
 	var editor_scale = float(model.get("editor_scale", 1.0))
 	var color = Color(0.2, 0.8, 0.2) if is_running else Color(0.9, 0.3, 0.3)
@@ -200,8 +208,12 @@ func _on_server_tab_auto_start_toggled(enabled: bool) -> void:
 	auto_start_toggled.emit(enabled)
 
 
-func _on_server_tab_debug_toggled(enabled: bool) -> void:
-	debug_toggled.emit(enabled)
+func _on_server_tab_log_level_changed(level: String) -> void:
+	log_level_changed.emit(level)
+
+
+func _on_server_tab_permission_level_changed(level: String) -> void:
+	permission_level_changed.emit(level)
 
 
 func _on_server_tab_language_changed(language_code: String) -> void:
@@ -230,6 +242,14 @@ func _on_tools_tab_profile_selected(profile_id: String) -> void:
 
 func _on_tools_tab_save_profile_requested(profile_name: String) -> void:
 	save_profile_requested.emit(profile_name)
+
+
+func _on_tools_tab_show_user_tools_toggled(enabled: bool) -> void:
+	show_user_tools_toggled.emit(enabled)
+
+
+func _on_tools_tab_delete_user_tool_requested(script_path: String) -> void:
+	delete_user_tool_requested.emit(script_path)
 
 
 func _on_tools_tab_tool_toggled(tool_name: String, enabled: bool) -> void:

@@ -8,31 +8,44 @@ const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
+const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
 const PENDING_FOCUS_SNAPSHOT_KEY := "_pending_focus_snapshot"
+const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
+const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
 
 var _state := PluginRuntimeState.new()
 var _settings_store := SettingsStore.new()
 var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
+var _user_tool_service := UserToolService.new()
 var _localization: LocalizationService
 var _dock: Control
 var _status_poll_accumulator := 0.0
+var _editor_debugger_bridge: EditorDebuggerPlugin
 
 
 func _enter_tree() -> void:
 	_load_state()
+	_validate_permission_configuration()
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
+	_state.settings["debug_mode"] = true
+	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
 
 	_server_controller.attach(self, _state.settings)
 	_server_controller.server_started.connect(_on_server_started)
 	_server_controller.server_stopped.connect(_on_server_stopped)
 	_server_controller.request_received.connect(_on_request_received)
+	_ensure_runtime_bridge_autoload()
+	_install_editor_debugger_bridge()
 
 	_create_dock()
 	_apply_initial_tool_profile_if_needed()
@@ -52,7 +65,17 @@ func _exit_tree() -> void:
 	set_process(false)
 	_save_settings()
 	_remove_dock()
+	_uninstall_editor_debugger_bridge()
 	_server_controller.detach()
+
+
+func _disable_plugin() -> void:
+	_remove_runtime_bridge_autoload()
+
+
+func _validate_permission_configuration() -> void:
+	for issue in PluginRuntimeState.get_domain_category_consistency_issues():
+		push_warning("[Godot MCP] Permission configuration issue: %s" % issue)
 
 
 func _process(delta: float) -> void:
@@ -88,6 +111,62 @@ func _load_state() -> void:
 
 func _save_settings() -> void:
 	_settings_store.save_plugin_settings(PluginRuntimeState.SETTINGS_PATH, _state.settings)
+
+
+func _ensure_runtime_bridge_autoload() -> void:
+	if not ResourceLoader.exists(RUNTIME_BRIDGE_AUTOLOAD_PATH):
+		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge script missing")
+		push_error("[Godot MCP] Runtime bridge autoload script not found: %s" % RUNTIME_BRIDGE_AUTOLOAD_PATH)
+		return
+	var setting_key := "autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME
+	var current_path := str(ProjectSettings.get_setting(setting_key, ""))
+	if _is_runtime_bridge_autoload_path(current_path):
+		MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload already installed")
+		return
+	if not current_path.is_empty():
+		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Autoload name is occupied by another script")
+		push_warning("[Godot MCP] Runtime bridge autoload name is already used: %s" % current_path)
+		return
+	add_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	ProjectSettings.save()
+	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
+	print("[Godot MCP] Runtime bridge autoload added")
+
+
+func _remove_runtime_bridge_autoload() -> void:
+	var setting_key := "autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME
+	var current_path := str(ProjectSettings.get_setting(setting_key, ""))
+	if not _is_runtime_bridge_autoload_path(current_path):
+		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Runtime bridge autoload not owned by this plugin")
+		return
+	remove_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME)
+	ProjectSettings.save()
+	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
+	print("[Godot MCP] Runtime bridge autoload removed")
+
+
+func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
+	var normalized := setting_value.trim_prefix("*")
+	if normalized == RUNTIME_BRIDGE_AUTOLOAD_PATH:
+		return true
+	if normalized.is_empty() or not ResourceLoader.exists(normalized):
+		return false
+	var resource := ResourceLoader.load(normalized)
+	return resource != null and str(resource.resource_path) == RUNTIME_BRIDGE_AUTOLOAD_PATH
+
+
+func _install_editor_debugger_bridge() -> void:
+	if _editor_debugger_bridge != null:
+		return
+	_editor_debugger_bridge = MCPEditorDebuggerBridge.new()
+	add_debugger_plugin(_editor_debugger_bridge)
+
+
+func _uninstall_editor_debugger_bridge() -> void:
+	if _editor_debugger_bridge == null:
+		return
+	remove_debugger_plugin(_editor_debugger_bridge)
+	_editor_debugger_bridge = null
 
 
 func _create_dock() -> void:
@@ -137,7 +216,8 @@ func _wire_dock_signals() -> void:
 	_dock.current_tab_changed.connect(_on_current_tab_changed)
 	_dock.port_changed.connect(_on_port_changed)
 	_dock.auto_start_toggled.connect(_on_auto_start_toggled)
-	_dock.debug_toggled.connect(_on_debug_toggled)
+	_dock.log_level_changed.connect(_on_log_level_changed)
+	_dock.permission_level_changed.connect(_on_permission_level_changed)
 	_dock.language_changed.connect(_on_language_changed)
 	_dock.start_requested.connect(_on_start_requested)
 	_dock.restart_requested.connect(_on_restart_requested)
@@ -145,6 +225,8 @@ func _wire_dock_signals() -> void:
 	_dock.full_reload_requested.connect(_on_full_reload_requested)
 	_dock.profile_selected.connect(_on_profile_selected)
 	_dock.save_profile_requested.connect(_on_save_profile_requested)
+	_dock.show_user_tools_toggled.connect(_on_show_user_tools_toggled)
+	_dock.delete_user_tool_requested.connect(_on_delete_user_tool_requested)
 	_dock.tool_toggled.connect(_on_tool_toggled)
 	_dock.category_toggled.connect(_on_category_toggled)
 	_dock.domain_toggled.connect(_on_domain_toggled)
@@ -159,8 +241,21 @@ func _wire_dock_signals() -> void:
 
 
 func _build_dock_model() -> Dictionary:
-	var tools_by_category = _server_controller.get_tools_by_category()
-	var tool_names = _tool_catalog.build_tool_name_index(tools_by_category)
+	if _tool_catalog == null:
+		_tool_catalog = ToolCatalogService.new()
+	if _localization == null:
+		LocalizationService.reset_instance()
+		_localization = LocalizationService.get_instance()
+		_localization.set_language(str(_state.settings.get("language", "")))
+	if _user_tool_service == null:
+		_user_tool_service = UserToolService.new()
+
+	var all_tools_by_category = _server_controller.get_all_tools_by_category().duplicate(true)
+	var tools_by_category = all_tools_by_category.duplicate(true)
+	for category in tools_by_category.keys():
+		if not is_tool_category_visible_for_permission(str(category)):
+			tools_by_category.erase(category)
+	var tool_names = _tool_catalog.build_tool_name_index(all_tools_by_category)
 	var profile_id = str(_state.settings.get("tool_profile_id", "default"))
 
 	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
@@ -184,6 +279,11 @@ func _build_dock_model() -> Dictionary:
 		"settings": _state.settings,
 		"current_language": _state.resolve_active_language(_localization),
 		"current_tab": _state.current_tab,
+		"permission_levels": PluginRuntimeState.PERMISSION_LEVELS,
+		"current_permission_level": _get_permission_level(),
+		"show_user_tools": bool(_state.settings.get("show_user_tools", false)),
+		"log_levels": MCPDebugBuffer.get_available_levels(),
+		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
 		"current_cli_scope": _state.current_cli_scope,
 		"current_config_platform": _state.current_config_platform,
 		"editor_scale": _get_editor_scale(),
@@ -199,6 +299,7 @@ func _build_dock_model() -> Dictionary:
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
 		"profile_description": _get_tool_profile_description(profile_id, tool_names),
+		"user_tools": _user_tool_service.list_user_tools(),
 		"desktop_clients": desktop_clients,
 		"cli_clients": cli_clients,
 		"config_platforms": config_platforms
@@ -215,7 +316,7 @@ func _apply_initial_tool_profile_if_needed() -> void:
 	if not _state.needs_initial_tool_profile_apply:
 		return
 
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_tools_by_category())
+	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
 	if tool_names.is_empty():
 		return
 
@@ -351,13 +452,6 @@ func _on_auto_start_toggled(enabled: bool) -> void:
 	_refresh_dock()
 
 
-func _on_debug_toggled(enabled: bool) -> void:
-	_state.settings["debug_mode"] = enabled
-	_server_controller.set_debug_mode(enabled)
-	_save_settings()
-	_refresh_dock()
-
-
 func _on_language_changed(language_code: String) -> void:
 	var focus_snapshot := {}
 	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
@@ -394,8 +488,21 @@ func _on_full_reload_requested() -> void:
 	_schedule_plugin_reenable()
 
 
+func _on_log_level_changed(level: String) -> void:
+	_state.settings["log_level"] = level
+	MCPDebugBuffer.set_minimum_level(level)
+	_save_settings()
+	_refresh_dock()
+
+
+func _on_permission_level_changed(level: String) -> void:
+	_state.settings["permission_level"] = PluginRuntimeState.normalize_permission_level(level)
+	_save_settings()
+	_refresh_dock()
+
+
 func _on_profile_selected(profile_id: String) -> void:
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_tools_by_category())
+	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
 	_state.settings["tool_profile_id"] = profile_id
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 		profile_id,
@@ -410,9 +517,20 @@ func _on_profile_selected(profile_id: String) -> void:
 
 
 func _on_save_profile_requested(profile_name: String) -> void:
-	if profile_name.is_empty():
-		_show_message(_localization.get_text("tool_profile_name_required"))
+	var result = _save_custom_profile(profile_name)
+	if not bool(result.get("success", false)):
+		_show_message(str(result.get("error", _localization.get_text("tool_profile_save_failed"))))
 		return
+	_show_message(str(result.get("message", "")))
+	_refresh_dock()
+
+
+func _save_custom_profile(profile_name: String) -> Dictionary:
+	if profile_name.is_empty():
+		return {
+			"success": false,
+			"error": _localization.get_text("tool_profile_name_required")
+		}
 
 	var result = _settings_store.save_custom_profile(
 		PluginRuntimeState.TOOL_PROFILE_DIR,
@@ -420,13 +538,36 @@ func _on_save_profile_requested(profile_name: String) -> void:
 		_state.settings.get("disabled_tools", [])
 	)
 	if not result.get("success", false):
-		_show_message(_localization.get_text("tool_profile_save_failed"))
-		return
+		return {
+			"success": false,
+			"error": _localization.get_text("tool_profile_save_failed")
+		}
 
 	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
 	_state.settings["tool_profile_id"] = "custom:%s" % str(result.get("slug", ""))
 	_save_settings()
-	_show_message(_localization.get_text("tool_profile_saved") % profile_name)
+	return {
+		"success": true,
+		"profile_id": str(_state.settings.get("tool_profile_id", "")),
+		"message": _localization.get_text("tool_profile_saved") % profile_name
+	}
+
+
+func _on_show_user_tools_toggled(enabled: bool) -> void:
+	_state.settings["show_user_tools"] = enabled
+	_save_settings()
+	_refresh_dock()
+
+
+func _on_delete_user_tool_requested(script_path: String) -> void:
+	var result = _user_tool_service.delete_tool(script_path, true)
+	if not bool(result.get("success", false)):
+		_show_message(str(result.get("error", "Failed to delete user tool")))
+		return
+	_server_controller.reload_all_domains()
+	_cleanup_disabled_tools()
+	_save_settings()
+	_show_message(str(result.get("message", "User tool deleted")))
 	_refresh_dock()
 
 
@@ -435,7 +576,21 @@ func _on_tool_toggled(tool_name: String, enabled: bool) -> void:
 
 
 func _on_category_toggled(category: String, enabled: bool) -> void:
-	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_tools_by_category()):
+	if not enabled and _is_plugin_category_restricted(category):
+		for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
+			if str(tool_name).begins_with(category + "_"):
+				_set_tool_enabled(str(tool_name), false)
+		_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
+		_save_settings()
+		_refresh_dock()
+		return
+
+	if enabled and not _can_enable_category(category):
+		_show_message(get_permission_denied_message_for_category(category))
+		_refresh_dock()
+		return
+
+	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
 		if str(tool_name).begins_with(category + "_"):
 			_set_tool_enabled(str(tool_name), enabled)
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
@@ -444,6 +599,11 @@ func _on_category_toggled(category: String, enabled: bool) -> void:
 
 
 func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
+	if enabled and not _can_enable_domain(domain_key):
+		_show_message(get_permission_denied_message_for_domain(domain_key))
+		_refresh_dock()
+		return
+
 	var target_categories: Array = []
 	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
 		if str(domain_def.get("key", "")) != domain_key:
@@ -452,15 +612,16 @@ func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 		break
 
 	if target_categories.is_empty():
-		for category in _server_controller.get_tools_by_category().keys():
+		for category in _server_controller.get_all_tools_by_category().keys():
 			var known_domain = _tool_catalog.find_domain_key_for_category(PluginRuntimeState.TOOL_DOMAIN_DEFS, str(category))
 			if known_domain.is_empty():
 				target_categories.append(str(category))
 
-	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_tools_by_category()):
-		var category = str(tool_name).split("_")[0]
-		if target_categories.has(category):
-			_set_tool_enabled(str(tool_name), enabled)
+	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
+		for category in target_categories:
+			if _tool_catalog.tool_belongs_to_category(str(tool_name), str(category)):
+				_set_tool_enabled(str(tool_name), enabled)
+				break
 
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
 	_save_settings()
@@ -470,13 +631,11 @@ func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 func _on_category_collapse_toggled(category: String) -> void:
 	_toggle_array_membership(_state.settings["collapsed_categories"], category)
 	_save_settings()
-	_refresh_dock()
 
 
 func _on_domain_collapse_toggled(domain_key: String) -> void:
 	_toggle_array_membership(_state.settings["collapsed_domains"], domain_key)
 	_save_settings()
-	_refresh_dock()
 
 
 func _on_expand_all_requested() -> void:
@@ -488,7 +647,7 @@ func _on_expand_all_requested() -> void:
 
 func _on_collapse_all_requested() -> void:
 	var all_categories: Array = []
-	for category in _server_controller.get_tools_by_category().keys():
+	for category in _server_controller.get_all_tools_by_category().keys():
 		all_categories.append(str(category))
 
 	var all_domains = PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS.duplicate()
@@ -541,6 +700,10 @@ func _on_request_received(_method: String, _params: Dictionary) -> void:
 
 
 func _apply_tool_enabled(tool_name: String, enabled: bool) -> void:
+	if enabled and not _can_enable_tool(tool_name):
+		_show_message(get_permission_denied_message_for_tool(tool_name))
+		_refresh_dock()
+		return
 	_set_tool_enabled(tool_name, enabled)
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
 	_save_settings()
@@ -567,6 +730,311 @@ func _show_message(message: String) -> void:
 	print("[Godot MCP] %s" % message)
 	if _dock and is_instance_valid(_dock):
 		_dock.show_message(_localization.get_text("dialog_title"), message)
+
+
+func set_log_level_for_tools(level: String) -> Dictionary:
+	_on_log_level_changed(level)
+	return {"success": true, "log_level": str(_state.settings.get("log_level", level))}
+
+
+func get_log_level_for_tools() -> String:
+	return str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level()))
+
+
+func get_user_tool_summaries() -> Array[Dictionary]:
+	return _user_tool_service.list_user_tools()
+
+
+func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
+	var result = _user_tool_service.create_tool_scaffold(
+		str(args.get("tool_name", "")),
+		str(args.get("display_name", "")),
+		str(args.get("description", "")),
+		bool(args.get("authorized", false))
+	)
+	if bool(result.get("success", false)):
+		_server_controller.reload_all_domains()
+		_cleanup_disabled_tools()
+		_save_settings()
+		_refresh_dock()
+	return result
+
+
+func delete_user_tool_from_tools(script_path: String, authorized: bool) -> Dictionary:
+	var result = _user_tool_service.delete_tool(script_path, authorized)
+	if bool(result.get("success", false)):
+		_server_controller.reload_all_domains()
+		_cleanup_disabled_tools()
+		_save_settings()
+		_refresh_dock()
+	return result
+
+
+func get_user_tool_audit(limit: int = 20) -> Array[Dictionary]:
+	return _user_tool_service.get_audit_entries(limit)
+
+
+func runtime_restart_server() -> Dictionary:
+	var success = _server_controller.start(_state.settings, "tool_runtime_restart")
+	_refresh_dock()
+	return {"success": success, "running": _server_controller.is_running()}
+
+
+func runtime_soft_reload() -> Dictionary:
+	var was_running = _server_controller.is_running()
+	LocalizationService.reset_instance()
+	_localization = LocalizationService.get_instance()
+	_localization.set_language(str(_state.settings.get("language", "")))
+	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+	if was_running:
+		_server_controller.start(_state.settings, "tool_soft_reload")
+	else:
+		_server_controller.reinitialize(_state.settings, "tool_soft_reload")
+	_recreate_dock()
+	return {"success": true, "message": "Plugin soft reloaded", "running": _server_controller.is_running()}
+
+
+func runtime_full_reload() -> Dictionary:
+	_on_full_reload_requested()
+	return {"success": true, "message": "Plugin full reload scheduled"}
+
+
+func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
+	if enabled and not _can_enable_tool(tool_name):
+		return {"success": false, "error": get_permission_denied_message_for_tool(tool_name)}
+	_apply_tool_enabled(tool_name, enabled)
+	return {"success": true, "tool_name": tool_name, "enabled": enabled}
+
+
+func set_category_enabled_from_tools(category: String, enabled: bool) -> Dictionary:
+	if enabled and not _can_enable_category(category):
+		return {"success": false, "error": get_permission_denied_message_for_category(category)}
+	_on_category_toggled(category, enabled)
+	return {"success": true, "category": category, "enabled": enabled}
+
+
+func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Dictionary:
+	if enabled and not _can_enable_domain(domain_key):
+		return {"success": false, "error": get_permission_denied_message_for_domain(domain_key)}
+	_on_domain_toggled(domain_key, enabled)
+	return {"success": true, "domain": domain_key, "enabled": enabled}
+
+
+func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
+	_on_show_user_tools_toggled(enabled)
+	return {"success": true, "show_user_tools": enabled}
+
+
+func get_developer_settings_for_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": {
+			"permission_level": _get_permission_level(),
+			"log_level": get_log_level_for_tools(),
+			"show_user_tools": bool(_state.settings.get("show_user_tools", false)),
+			"language": str(_state.settings.get("language", "")),
+			"resolved_language": _state.resolve_active_language(_localization),
+			"tool_profile_id": str(_state.settings.get("tool_profile_id", "default"))
+		}
+	}
+
+
+func set_language_from_tools(language_code: String) -> Dictionary:
+	if language_code.is_empty():
+		return {"success": false, "error": "Language code is required"}
+	if not _localization.get_available_languages().has(language_code):
+		return {"success": false, "error": "Unsupported language: %s" % language_code}
+	_on_language_changed(language_code)
+	return {
+		"success": true,
+		"language": _state.resolve_active_language(_localization)
+	}
+
+
+func get_languages_for_tools() -> Dictionary:
+	var languages: Array[Dictionary] = []
+	var active_language = _state.resolve_active_language(_localization)
+	var codes: Array = _localization.get_available_languages().keys()
+	codes.sort()
+	for code in codes:
+		languages.append({
+			"code": str(code),
+			"name": _localization.get_language_display_name(str(code), active_language)
+		})
+	return {
+		"success": true,
+		"data": {
+			"current_language": active_language,
+			"languages": languages
+		}
+	}
+
+
+func list_profiles_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": {
+			"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			"custom_profiles": _state.custom_tool_profiles
+		}
+	}
+
+
+func apply_profile_from_tools(profile_id: String) -> Dictionary:
+	if profile_id.is_empty():
+		return {"success": false, "error": "Profile id is required"}
+	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+		return {"success": false, "error": "Unknown profile id: %s" % profile_id}
+	_on_profile_selected(profile_id)
+	return {
+		"success": true,
+		"profile_id": str(_state.settings.get("tool_profile_id", profile_id))
+	}
+
+
+func save_profile_from_tools(profile_name: String) -> Dictionary:
+	var result = _save_custom_profile(profile_name)
+	if bool(result.get("success", false)):
+		_refresh_dock()
+	return result
+
+
+func get_runtime_usage_guide_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": {
+			"summary": [
+				"Start with plugin_runtime_state before changing toggles or reload state.",
+				"Prefer reload_domain or reload_all_domains first, then soft_reload_plugin, and keep full_reload_plugin for editor-side lifecycle resets only.",
+				"Use debug_runtime_bridge to read the latest project session state and captured lifecycle events, even after the project has stopped.",
+				"Use runtime toggles to disable tools freely, but enabling plugin_evolution or plugin_developer targets requires the matching permission level."
+			],
+			"recommended_flow": [
+				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and the active permission mode."},
+				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable anything when isolating faults; only enable targets allowed by the current permission level."},
+				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
+				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
+				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
+				{"step": 6, "name": "Verify", "tools": ["debug_log", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
+			],
+			"warnings": [
+				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
+				"Enabling plugin_evolution or plugin_developer targets from runtime toggles is permission-gated and cannot bypass the user-selected mode.",
+				"debug_runtime_bridge is the MCP tool name; runtime state remains readable after stop, but real-time observation still requires the project to be running.",
+				"Full plugin reload should be reserved for Dock wiring or plugin lifecycle recreation, not routine executor edits."
+			]
+		},
+		"message": "Plugin runtime usage guide fetched"
+	}
+
+
+func get_evolution_usage_guide_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": {
+			"summary": [
+				"Self-evolution only manages User-category tools and never writes into builtin categories.",
+				"Create and delete actions must pass explicit authorization; otherwise they return preview-only results.",
+				"Audit entries should be checked after every authorized change.",
+				"Use debug_runtime_bridge if a new User tool is expected to affect the running project and you need to inspect the latest session or lifecycle result."
+			],
+			"recommended_flow": [
+				{"step": 1, "name": "Inspect current User tools", "tools": ["plugin_evolution_list_user_tools"], "purpose": "Read existing User tools before adding or removing scripts."},
+				{"step": 2, "name": "Preview scaffold or deletion", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool"], "purpose": "Run without authorization first to inspect the pending change."},
+				{"step": 3, "name": "Authorize and apply", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool"], "purpose": "Repeat the action with explicit authorization only after user approval."},
+				{"step": 4, "name": "Reload and verify", "tools": ["plugin_runtime_reload", "plugin_runtime_state"], "purpose": "Refresh tool domains and verify the updated User tool inventory."},
+				{"step": 5, "name": "Audit", "tools": ["plugin_evolution_user_tool_audit"], "purpose": "Confirm that the authorized change has been recorded."}
+			],
+			"warnings": [
+				"Stable mode hides and denies the entire plugin_evolution category.",
+				"User tools must stay inside the User category even when generated through MCP.",
+				"Deletion requests should be previewed before authorization to avoid removing the wrong script."
+			]
+		},
+		"message": "Plugin evolution usage guide fetched"
+	}
+
+
+func get_usage_guide_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": {
+			"summary": [
+				"Developer mode is the only permission level that exposes plugin_developer tools and the legacy plugin compatibility category.",
+				"Use this category for Dock-facing settings such as language, preset selection, log level and permission-mode inspection.",
+				"Permission level itself is user-controlled from the Dock and is intentionally not mutable through MCP.",
+				"Use debug_runtime_bridge for the latest project session and lifecycle readback; it remains readable after the project stops."
+			],
+			"recommended_flow": [
+				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read permission level, log level, language, active preset and reload status before making changes."},
+				{"step": 2, "name": "Tune the session", "tools": ["plugin_developer_log_level", "plugin_developer_set_language", "plugin_developer_apply_profile"], "purpose": "Adjust Dock-facing developer settings for the current debugging session."},
+				{"step": 3, "name": "Inspect project runtime result", "tools": ["debug_runtime_bridge"], "purpose": "Read the latest captured project session state and lifecycle events after each run."},
+				{"step": 4, "name": "Coordinate with runtime and evolution", "tools": ["plugin_runtime_usage_guide", "plugin_evolution_usage_guide"], "purpose": "Use the sibling guide tools to choose the correct reload or self-evolution flow."},
+				{"step": 5, "name": "Save reusable presets", "tools": ["plugin_developer_save_profile"], "purpose": "Persist a known-good tool selection after manual tuning."}
+			],
+			"permission_levels": {
+				"developer": "Shows and allows plugin_runtime, plugin_evolution and plugin_developer.",
+				"evolution": "Shows and allows plugin_runtime and plugin_evolution, but hides and denies plugin_developer.",
+				"stable": "Shows and allows only plugin_runtime, and hides and denies plugin_evolution and plugin_developer."
+			},
+			"warnings": [
+				"Changing permission level is intentionally restricted to the Dock so external agents cannot raise their own privileges.",
+				"Evolution mode hides the developer category at both UI and execution levels.",
+				"Use the exact MCP tool name debug_runtime_bridge when reading recent project runtime state.",
+				"Stable mode denies both plugin_evolution and plugin_developer, including direct calls from cached wrappers."
+			]
+		},
+		"message": "Plugin usage guide fetched"
+	}
+
+
+func _get_permission_level() -> String:
+	return PluginRuntimeState.normalize_permission_level(str(_state.settings.get("permission_level", PluginRuntimeState.PERMISSION_EVOLUTION)))
+
+
+func is_tool_category_visible_for_permission(category: String) -> bool:
+	if category == "user":
+		return bool(_state.settings.get("show_user_tools", false))
+	if category == "plugin":
+		return _get_permission_level() == PluginRuntimeState.PERMISSION_DEVELOPER
+	return is_tool_category_executable_for_permission(category)
+
+
+func is_tool_category_executable_for_permission(category: String) -> bool:
+	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
+
+
+func get_permission_denied_message_for_category(category: String) -> String:
+	return _localization.get_text("permission_denied_category") % [_get_permission_level(), category]
+
+
+func get_permission_denied_message_for_tool(tool_name: String) -> String:
+	var category = PluginRuntimeState.extract_category_from_tool_name(tool_name)
+	if category.is_empty():
+		return _localization.get_text("permission_denied_tool") % [_get_permission_level(), tool_name]
+	return get_permission_denied_message_for_category(category)
+
+
+func get_permission_denied_message_for_domain(domain_key: String) -> String:
+	return _localization.get_text("permission_denied_domain") % [_get_permission_level(), domain_key]
+
+
+func _can_enable_tool(tool_name: String) -> bool:
+	if not PluginRuntimeState.permission_allows_tool(_get_permission_level(), tool_name):
+		return false
+	return true
+
+
+func _can_enable_category(category: String) -> bool:
+	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
+
+
+func _can_enable_domain(domain_key: String) -> bool:
+	return PluginRuntimeState.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
+
+
+func _is_plugin_category_restricted(category: String) -> bool:
+	return PluginRuntimeState.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
 
 
 func _get_editor_scale() -> float:
@@ -621,3 +1089,16 @@ func _schedule_plugin_reenable() -> void:
 	coordinator.name = "MCPPluginReloadCoordinator"
 	coordinator.configure(PLUGIN_ID, editor_interface)
 	base_control.add_child(coordinator)
+
+
+func _cleanup_disabled_tools() -> void:
+	var valid_tools := {}
+	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
+		valid_tools[str(tool_name)] = true
+
+	var filtered: Array = []
+	for tool_name in _state.settings.get("disabled_tools", []):
+		if valid_tools.has(str(tool_name)):
+			filtered.append(str(tool_name))
+	_state.settings["disabled_tools"] = filtered
+	_server_controller.set_disabled_tools(filtered)

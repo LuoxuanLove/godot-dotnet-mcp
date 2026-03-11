@@ -33,7 +33,7 @@ var _tool_loader_initialized := false
 # MCP Protocol info
 const MCP_VERSION = "2025-06-18"
 const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.1.0"
+const SERVER_VERSION = "0.2.0"
 
 
 func _ready() -> void:
@@ -196,6 +196,10 @@ func get_tools_by_category() -> Dictionary:
 	return _tool_loader.get_tools_by_category()
 
 
+func get_all_tools_by_category() -> Dictionary:
+	return _tool_loader.get_all_tools_by_category()
+
+
 func get_enabled_tools() -> Array[Dictionary]:
 	"""Returns only enabled tool definitions"""
 	var enabled: Array[Dictionary] = []
@@ -215,12 +219,24 @@ func get_domain_states() -> Array[Dictionary]:
 	return _tool_loader.get_domain_states()
 
 
+func get_all_domain_states() -> Array[Dictionary]:
+	return _tool_loader.get_all_domain_states()
+
+
 func get_reload_status() -> Dictionary:
 	return _tool_loader.get_reload_status()
 
 
 func get_performance_summary() -> Dictionary:
 	return _tool_loader.get_performance_summary()
+
+
+func reload_tool_domain(domain: String) -> Dictionary:
+	return _tool_loader.reload_domain(domain)
+
+
+func reload_all_tool_domains() -> Dictionary:
+	return _tool_loader.reload_all_domains()
 
 
 func _ensure_initialized() -> void:
@@ -521,6 +537,10 @@ func _handle_initialize(params: Dictionary, id) -> Dictionary:
 	return _create_json_rpc_response(result, id)
 
 
+func get_plugin_permission_provider():
+	return get_parent()
+
+
 func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
 	var tools_list: Array[Dictionary] = []
 
@@ -588,6 +608,22 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 
 
 func _resolve_tool_call_name(tool_name: String) -> Dictionary:
+	for tool_def in _tool_loader.get_tool_definitions():
+		if str(tool_def.get("name", "")) != tool_name:
+			continue
+		var exact_category = str(tool_def.get("category", ""))
+		if exact_category.is_empty():
+			break
+		var resolved_tool = tool_name
+		var exact_prefix = "%s_" % exact_category
+		if tool_name.begins_with(exact_prefix):
+			resolved_tool = tool_name.substr(exact_prefix.length())
+		return {
+			"success": true,
+			"category": exact_category,
+			"tool": resolved_tool
+		}
+
 	var matched_category := ""
 	for state in _tool_loader.get_domain_states():
 		var category = str(state.get("category", ""))

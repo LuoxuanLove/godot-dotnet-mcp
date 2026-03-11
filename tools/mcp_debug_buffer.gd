@@ -3,12 +3,22 @@ extends RefCounted
 class_name MCPDebugBuffer
 
 const MAX_EVENTS := 200
+const LEVEL_ORDER := {
+	"trace": 0,
+	"debug": 1,
+	"info": 2,
+	"warning": 3,
+	"error": 4
+}
 
 static var _events: Array[Dictionary] = []
+static var _minimum_level := "info"
 
 
 static func record(level: String, source: String, message: String, tool_name: String = "", metadata: Dictionary = {}) -> void:
 	if message.is_empty():
+		return
+	if not _should_record(level):
 		return
 
 	var event := {
@@ -54,3 +64,23 @@ static func clear() -> void:
 
 static func size() -> int:
 	return _events.size()
+
+
+static func set_minimum_level(level: String) -> void:
+	var normalized = str(level).to_lower()
+	_minimum_level = normalized if LEVEL_ORDER.has(normalized) else "info"
+
+
+static func get_minimum_level() -> String:
+	return _minimum_level
+
+
+static func get_available_levels() -> Array[String]:
+	return ["trace", "debug", "info", "warning", "error"]
+
+
+static func _should_record(level: String) -> bool:
+	var normalized = str(level).to_lower()
+	var current_rank = int(LEVEL_ORDER.get(normalized, LEVEL_ORDER["info"]))
+	var threshold_rank = int(LEVEL_ORDER.get(_minimum_level, LEVEL_ORDER["info"]))
+	return current_rank >= threshold_rank

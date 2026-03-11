@@ -5,40 +5,110 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Provides logging, debugging, and performance monitoring
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 
 
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "log",
-			"description": """LOGGING: Write messages to Godot's console/output.
+			"description": "COMPATIBILITY ALIAS: Legacy debug_log tool entry kept for existing MCP wrappers.",
+			"compatibility_alias": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string"},
+					"message": {"type": "string"},
+					"limit": {"type": "integer"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "log_write",
+			"description": """LOG WRITE: Write messages to Godot's console/output.
 
 ACTIONS:
 - print: Print a message
 - warning: Print a warning message
 - error: Print an error message
 - rich: Print rich text (supports BBCode)
-- get_recent: Read recent buffered debug events
-- get_errors: Read buffered warning/error events
-- clear_buffer: Clear buffered debug events
 
 EXAMPLES:
 - Print message: {"action": "print", "message": "Hello from MCP"}
 - Warning: {"action": "warning", "message": "Something might be wrong"}
-- Error: {"action": "error", "message": "Something went wrong!"}
-- Rich text: {"action": "rich", "message": "[color=red]Red text[/color]"}
-- Read recent events: {"action": "get_recent", "limit": 20}""",
+- Error: {"action": "error", "message": "Something went wrong!"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["print", "warning", "error", "rich", "get_recent", "get_errors", "clear_buffer"],
+						"enum": ["print", "warning", "error", "rich"],
 						"description": "Log action"
 					},
 					"message": {
 						"type": "string",
 						"description": "Message to log"
+					},
+					"limit": {
+						"type": "integer",
+						"description": "Max number of events to return"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "log_buffer",
+			"description": """LOG BUFFER: Read or clear buffered MCP debug events.
+
+ACTIONS:
+- get_recent: Read recent buffered debug events
+- get_errors: Read buffered warning/error events
+- clear_buffer: Clear buffered debug events
+
+EXAMPLES:
+- Read recent events: {"action": "get_recent", "limit": 20}
+- Read errors only: {"action": "get_errors", "limit": 20}
+- Clear buffer: {"action": "clear_buffer"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["get_recent", "get_errors", "clear_buffer"],
+						"description": "Buffer action"
+					},
+					"limit": {
+						"type": "integer",
+						"description": "Max number of events to return"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "runtime_bridge",
+			"description": """RUNTIME BRIDGE: Read structured runtime bridge events from the running project.
+
+ACTIONS:
+- get_recent: Read recent runtime bridge events
+- get_errors: Read runtime bridge warning/error events
+- get_sessions: Read editor debugger session states
+- get_summary: Read a combined runtime bridge summary
+- clear_buffer: Clear captured runtime bridge events and session state
+
+EXAMPLES:
+- Read runtime events: {"action": "get_recent", "limit": 20}
+- Read runtime errors: {"action": "get_errors", "limit": 20}
+- Read debugger sessions: {"action": "get_sessions"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["get_recent", "get_errors", "get_sessions", "get_summary", "clear_buffer"],
+						"description": "Runtime bridge action"
 					},
 					"limit": {
 						"type": "integer",
@@ -146,7 +216,13 @@ EXAMPLES:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"log":
-			return _execute_log(args)
+			return _execute_log_compat(args)
+		"log_write":
+			return _execute_log_write(args)
+		"log_buffer":
+			return _execute_log_buffer(args)
+		"runtime_bridge":
+			return _execute_runtime_bridge(args)
 		"performance":
 			return _execute_performance(args)
 		"profiler":
@@ -159,7 +235,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 # ==================== LOG ====================
 
-func _execute_log(args: Dictionary) -> Dictionary:
+func _execute_log_write(args: Dictionary) -> Dictionary:
 	var action = args.get("action", "")
 	var message = args.get("message", "")
 
@@ -184,6 +260,17 @@ func _execute_log(args: Dictionary) -> Dictionary:
 				return _error("Message is required")
 			print_rich(message)
 			MCPDebugBuffer.record("info", "debug_log", message)
+		_:
+			return _error("Unknown action: %s" % action)
+
+	return _success({
+		"action": action,
+		"message": message
+	}, "Message logged")
+
+
+func _execute_log_buffer(args: Dictionary) -> Dictionary:
+	match args.get("action", ""):
 		"get_recent":
 			return _success({
 				"count": MCPDebugBuffer.size(),
@@ -199,12 +286,46 @@ func _execute_log(args: Dictionary) -> Dictionary:
 			MCPDebugBuffer.clear()
 			return _success({"count": 0}, "Debug buffer cleared")
 		_:
-			return _error("Unknown action: %s" % action)
+			return _error("Unknown action: %s" % str(args.get("action", "")))
 
-	return _success({
-		"action": action,
-		"message": message
-	}, "Message logged")
+
+func _execute_log_compat(args: Dictionary) -> Dictionary:
+	var action = str(args.get("action", ""))
+	if action in ["print", "warning", "error", "rich"]:
+		return _execute_log_write(args)
+	return _execute_log_buffer(args)
+
+
+func _execute_runtime_bridge(args: Dictionary) -> Dictionary:
+	match str(args.get("action", "")):
+		"get_recent":
+			var recent_events := MCPRuntimeDebugStore.get_recent(int(args.get("limit", 50)))
+			return _success({
+				"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+				"count": recent_events.size(),
+				"events": recent_events
+			})
+		"get_errors":
+			var events := MCPRuntimeDebugStore.get_errors(int(args.get("limit", 50)))
+			return _success({
+				"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+				"count": events.size(),
+				"events": events
+			})
+		"get_sessions":
+			var sessions := MCPRuntimeDebugStore.get_sessions()
+			return _success({
+				"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+				"count": sessions.size(),
+				"sessions": sessions
+			})
+		"get_summary":
+			return _success(MCPRuntimeDebugStore.get_summary())
+		"clear_buffer":
+			MCPRuntimeDebugStore.clear()
+			return _success({"count": 0}, "Runtime bridge buffer cleared")
+		_:
+			return _error("Unknown action: %s" % str(args.get("action", "")))
 
 
 # ==================== PERFORMANCE ====================

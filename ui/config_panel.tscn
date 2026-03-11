@@ -29,6 +29,7 @@ theme_override_constants/separation = 16
 
 [node name="ConfigHeader" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
+horizontal_alignment = 1
 
 [node name="ConfigDescription" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
@@ -45,8 +46,13 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
+[node name="DesktopHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
 [node name="DesktopHeader" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
+horizontal_alignment = 1
 
 [node name="DesktopDescription" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
@@ -62,6 +68,11 @@ unique_name_in_owner = true
 
 [node name="CliHeader" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
+horizontal_alignment = 1
+
+[node name="CliHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
 
 [node name="CliDescription" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true

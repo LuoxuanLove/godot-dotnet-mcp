@@ -62,15 +62,26 @@ EXAMPLES:
 		},
 		{
 			"name": "manage",
-			"description": """RESOURCE MANAGEMENT: Create, import, and manage resources.
+			"description": "COMPATIBILITY ALIAS: Legacy resource_manage entry kept for existing MCP wrappers.",
+			"compatibility_alias": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string"},
+					"type": {"type": "string"},
+					"path": {"type": "string"},
+					"source": {"type": "string"},
+					"dest": {"type": "string"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "create",
+			"description": """RESOURCE CREATE: Create a new resource file from a resource type.
 
 ACTIONS:
 - create: Create a new resource
-- import: Import external file as resource
-- copy: Copy a resource
-- move: Move/rename a resource
-- delete: Delete a resource
-- reload: Reload a resource from disk
 
 RESOURCE CREATION:
 - Resource: Generic resource
@@ -80,18 +91,10 @@ RESOURCE CREATION:
 - Material: Create material resource
 
 EXAMPLES:
-- Create script: {"action": "create", "type": "GDScript", "path": "res://scripts/player.gd"}
-- Copy resource: {"action": "copy", "source": "res://sprites/enemy.png", "dest": "res://sprites/boss.png"}
-- Move resource: {"action": "move", "source": "res://old/file.gd", "dest": "res://new/file.gd"}
-- Delete: {"action": "delete", "path": "res://unused/old.tscn"}""",
+- Create script: {"type": "GDScript", "path": "res://scripts/player.gd"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {
-						"type": "string",
-						"enum": ["create", "import", "copy", "move", "delete", "reload"],
-						"description": "Management action"
-					},
 					"type": {
 						"type": "string",
 						"description": "Resource type to create"
@@ -99,6 +102,31 @@ EXAMPLES:
 					"path": {
 						"type": "string",
 						"description": "Resource path"
+					}
+				},
+				"required": ["type", "path"]
+			}
+		},
+		{
+			"name": "file_ops",
+			"description": """RESOURCE FILE OPS: Copy, move, delete or reload an existing resource file.
+
+ACTIONS:
+- copy: Copy a resource
+- move: Move or rename a resource
+- delete: Delete a resource
+- reload: Reload a resource from disk
+
+EXAMPLES:
+- Copy resource: {"action": "copy", "source": "res://sprites/enemy.png", "dest": "res://sprites/boss.png"}
+- Reload: {"action": "reload", "path": "res://materials/metal.tres"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["copy", "move", "delete", "reload"],
+						"description": "Resource file action"
 					},
 					"source": {
 						"type": "string",
@@ -161,7 +189,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"query":
 			return _execute_query(args)
 		"manage":
-			return _execute_manage(args)
+			return _execute_manage_compat(args)
+		"create":
+			return _execute_create(args)
+		"file_ops":
+			return _execute_file_ops(args)
 		"texture":
 			return _execute_texture(args)
 		_:
@@ -331,12 +363,12 @@ func _get_dependencies(path: String) -> Dictionary:
 
 # ==================== MANAGE ====================
 
-func _execute_manage(args: Dictionary) -> Dictionary:
-	var action = args.get("action", "")
+func _execute_create(args: Dictionary) -> Dictionary:
+	return _create_resource(args.get("type", ""), args.get("path", ""))
 
-	match action:
-		"create":
-			return _create_resource(args.get("type", ""), args.get("path", ""))
+
+func _execute_file_ops(args: Dictionary) -> Dictionary:
+	match args.get("action", ""):
 		"copy":
 			return _copy_resource(args.get("source", ""), args.get("dest", ""))
 		"move":
@@ -346,7 +378,14 @@ func _execute_manage(args: Dictionary) -> Dictionary:
 		"reload":
 			return _reload_resource(args.get("path", ""))
 		_:
-			return _error("Unknown action: %s" % action)
+			return _error("Unknown action: %s" % str(args.get("action", "")))
+
+
+func _execute_manage_compat(args: Dictionary) -> Dictionary:
+	var action = str(args.get("action", ""))
+	if action == "create":
+		return _execute_create(args)
+	return _execute_file_ops(args)
 
 
 func _create_resource(type_name: String, path: String) -> Dictionary:
