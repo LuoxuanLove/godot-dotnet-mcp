@@ -38,6 +38,28 @@ EXAMPLES:
 			}
 		},
 		{
+			"name": "dotnet",
+			"description": """PROJECT DOTNET: Parse .csproj files and return structured .NET project metadata.
+
+FEATURES:
+- Discover .csproj files under res:// when path is omitted
+- Read TargetFramework / AssemblyName / RootNamespace / DefineConstants
+- Extract PackageReference and ProjectReference items
+
+EXAMPLES:
+- Auto-discover: {}
+- Read a specific project: {"path": "res://Mechoes.csproj"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "string",
+						"description": "Optional .csproj file path"
+					}
+				}
+			}
+		},
+		{
 			"name": "settings",
 			"description": """PROJECT SETTINGS: Modify project settings.
 
@@ -194,6 +216,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"info":
 			return _execute_info(args)
+		"dotnet":
+			return _execute_dotnet(args)
 		"settings":
 			return _execute_settings(args)
 		"input":
@@ -220,6 +244,173 @@ func _execute_info(args: Dictionary) -> Dictionary:
 			return _get_export_presets()
 		_:
 			return _error("Unknown action: %s" % action)
+
+
+func _execute_dotnet(args: Dictionary) -> Dictionary:
+	var requested_path := _normalize_res_path(str(args.get("path", "")))
+	var project_paths: Array[String] = []
+
+	if requested_path.is_empty():
+		project_paths = _find_csproj_files("res://")
+		if project_paths.is_empty():
+			return _error("No .csproj files found under res://")
+	else:
+		if not requested_path.ends_with(".csproj"):
+			return _error("Path must point to a .csproj file")
+		if not FileAccess.file_exists(requested_path):
+			return _error("File not found: %s" % requested_path)
+		project_paths.append(requested_path)
+
+	var projects: Array[Dictionary] = []
+	for project_path in project_paths:
+		var parse_result = _parse_csproj_file(project_path)
+		if not bool(parse_result.get("success", false)):
+			return parse_result
+		projects.append(parse_result.get("data", {}).duplicate(true))
+
+	return _success({
+		"count": projects.size(),
+		"projects": projects
+	})
+
+
+func _find_csproj_files(dir_path: String) -> Array[String]:
+	var results: Array[String] = []
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return results
+
+	dir.list_dir_begin()
+	while true:
+		var entry := dir.get_next()
+		if entry.is_empty():
+			break
+		if entry.begins_with("."):
+			continue
+		var child_path := "%s%s" % [dir_path, entry] if dir_path == "res://" else "%s/%s" % [dir_path, entry]
+		if dir.current_is_dir():
+			results.append_array(_find_csproj_files(child_path))
+		elif entry.ends_with(".csproj"):
+			results.append(_normalize_res_path(child_path))
+	dir.list_dir_end()
+	results.sort()
+	return results
+
+
+func _parse_csproj_file(path: String) -> Dictionary:
+	var read_result = _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var target_framework := _extract_first_xml_tag(content, "TargetFramework")
+	var target_frameworks: Array[String] = []
+	if target_framework.is_empty():
+		target_frameworks = _split_semicolon_values(_extract_first_xml_tag(content, "TargetFrameworks"))
+		if not target_frameworks.is_empty():
+			target_framework = target_frameworks[0]
+	else:
+		target_frameworks.append(target_framework)
+
+	var assembly_name := _extract_first_xml_tag(content, "AssemblyName")
+	if assembly_name.is_empty():
+		assembly_name = path.get_file().trim_suffix(".csproj")
+
+	var define_constants_raw := _extract_first_xml_tag(content, "DefineConstants")
+	var package_references := _parse_package_references(content)
+	var project_references := _parse_project_references(content)
+
+	return _success({
+		"path": _normalize_res_path(path),
+		"target_framework": target_framework,
+		"target_frameworks": target_frameworks,
+		"assembly_name": assembly_name,
+		"root_namespace": _extract_first_xml_tag(content, "RootNamespace"),
+		"define_constants": define_constants_raw,
+		"define_constants_list": _split_semicolon_values(define_constants_raw),
+		"package_reference_count": package_references.size(),
+		"package_references": package_references,
+		"project_reference_count": project_references.size(),
+		"project_references": project_references
+	})
+
+
+func _extract_first_xml_tag(content: String, tag_name: String) -> String:
+	var regex := RegEx.new()
+	regex.compile("(?s)<%s>(.*?)</%s>" % [tag_name, tag_name])
+	var match_result := regex.search(content)
+	if match_result == null:
+		return ""
+	return str(match_result.get_string(1)).strip_edges()
+
+
+func _extract_xml_attribute(attributes: String, attribute_name: String) -> String:
+	var regex := RegEx.new()
+	regex.compile("%s\\s*=\\s*\"([^\"]*)\"" % attribute_name)
+	var match_result := regex.search(attributes)
+	if match_result == null:
+		return ""
+	return str(match_result.get_string(1)).strip_edges()
+
+
+func _split_semicolon_values(value: String) -> Array[String]:
+	var items: Array[String] = []
+	for entry in value.split(";"):
+		var trimmed := entry.strip_edges()
+		if not trimmed.is_empty():
+			items.append(trimmed)
+	return items
+
+
+func _parse_package_references(content: String) -> Array[Dictionary]:
+	var references: Array[Dictionary] = []
+	var block_regex := RegEx.new()
+	block_regex.compile("(?s)<PackageReference\\b([^>]*)>(.*?)</PackageReference>")
+	for match_result in block_regex.search_all(content):
+		var attributes := str(match_result.get_string(1))
+		var body := str(match_result.get_string(2))
+		references.append({
+			"name": _extract_xml_attribute(attributes, "Include"),
+			"version": _extract_xml_attribute(attributes, "Version") if not _extract_xml_attribute(attributes, "Version").is_empty() else _extract_first_xml_tag(body, "Version"),
+			"condition": _extract_xml_attribute(attributes, "Condition")
+		})
+
+	var self_closing_regex := RegEx.new()
+	self_closing_regex.compile("(?m)<PackageReference\\b([^>]*)/>")
+	for match_result in self_closing_regex.search_all(content):
+		var attributes := str(match_result.get_string(1))
+		references.append({
+			"name": _extract_xml_attribute(attributes, "Include"),
+			"version": _extract_xml_attribute(attributes, "Version"),
+			"condition": _extract_xml_attribute(attributes, "Condition")
+		})
+
+	return references
+
+
+func _parse_project_references(content: String) -> Array[Dictionary]:
+	var references: Array[Dictionary] = []
+	var block_regex := RegEx.new()
+	block_regex.compile("(?s)<ProjectReference\\b([^>]*)>(.*?)</ProjectReference>")
+	for match_result in block_regex.search_all(content):
+		var attributes := str(match_result.get_string(1))
+		references.append({
+			"path": _extract_xml_attribute(attributes, "Include"),
+			"name": _extract_first_xml_tag(str(match_result.get_string(2)), "Name"),
+			"condition": _extract_xml_attribute(attributes, "Condition")
+		})
+
+	var self_closing_regex := RegEx.new()
+	self_closing_regex.compile("(?m)<ProjectReference\\b([^>]*)/>")
+	for match_result in self_closing_regex.search_all(content):
+		var attributes := str(match_result.get_string(1))
+		references.append({
+			"path": _extract_xml_attribute(attributes, "Include"),
+			"name": "",
+			"condition": _extract_xml_attribute(attributes, "Condition")
+		})
+
+	return references
 
 
 func _get_project_info() -> Dictionary:

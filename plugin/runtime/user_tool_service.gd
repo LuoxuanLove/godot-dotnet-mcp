@@ -6,6 +6,13 @@ const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const AUDIT_LOG_PATH := "user://godot_dotnet_mcp_user_tool_audit.log"
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
+const MAX_AUDIT_ENTRIES := 500
+
+var _session_id := ""
+
+
+func _init() -> void:
+	_session_id = _build_session_id()
 
 
 func list_user_tools() -> Array[Dictionary]:
@@ -22,7 +29,7 @@ func list_user_tools() -> Array[Dictionary]:
 	return tools
 
 
-func create_tool_scaffold(tool_name: String, display_name: String, description: String, authorized: bool) -> Dictionary:
+func create_tool_scaffold(tool_name: String, display_name: String, description: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var slug = _slugify_tool_name(tool_name if not tool_name.is_empty() else display_name)
 	if slug.is_empty():
 		return _authorization_required("create_user_tool", {"reason": "empty_tool_name"})
@@ -37,30 +44,30 @@ func create_tool_scaffold(tool_name: String, display_name: String, description: 
 	}
 
 	if not authorized:
-		_append_audit("create_user_tool", false, false, preview)
+		_append_audit("create_user_tool", false, false, preview, "", agent_hint)
 		return _authorization_required("create_user_tool", preview)
 
 	if FileAccess.file_exists(str(preview["script_path"])):
-		_append_audit("create_user_tool", true, false, preview, "script_exists")
+		_append_audit("create_user_tool", true, false, preview, "script_exists", agent_hint)
 		return {"success": false, "error": "User tool script already exists", "data": preview}
 
 	var ensure_result = _ensure_custom_tools_dir()
 	if not bool(ensure_result.get("success", false)):
-		_append_audit("create_user_tool", true, false, preview, "mkdir_failed")
+		_append_audit("create_user_tool", true, false, preview, "mkdir_failed", agent_hint)
 		return ensure_result
 
 	var file = FileAccess.open(str(preview["script_path"]), FileAccess.WRITE)
 	if file == null:
-		_append_audit("create_user_tool", true, false, preview, "write_failed")
+		_append_audit("create_user_tool", true, false, preview, "write_failed", agent_hint)
 		return {"success": false, "error": "Failed to create user tool script", "data": preview}
 
 	file.store_string(_build_scaffold(slug, preview))
 	file.close()
-	_append_audit("create_user_tool", true, true, preview)
+	_append_audit("create_user_tool", true, true, preview, "", agent_hint)
 	return {"success": true, "message": "User tool scaffold created", "data": preview}
 
 
-func delete_tool(script_path: String, authorized: bool) -> Dictionary:
+func delete_tool(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var normalized_path = _normalize_script_path(script_path)
 	if normalized_path.is_empty():
 		return {"success": false, "error": "Invalid user tool script path"}
@@ -70,26 +77,26 @@ func delete_tool(script_path: String, authorized: bool) -> Dictionary:
 		"uid_path": "%s.uid" % normalized_path
 	}
 	if not authorized:
-		_append_audit("delete_user_tool", false, false, preview)
+		_append_audit("delete_user_tool", false, false, preview, "", agent_hint)
 		return _authorization_required("delete_user_tool", preview)
 
 	if not FileAccess.file_exists(normalized_path):
-		_append_audit("delete_user_tool", true, false, preview, "missing_script")
+		_append_audit("delete_user_tool", true, false, preview, "missing_script", agent_hint)
 		return {"success": false, "error": "User tool script does not exist", "data": preview}
 
 	var remove_error = DirAccess.remove_absolute(ProjectSettings.globalize_path(normalized_path))
 	if remove_error != OK:
-		_append_audit("delete_user_tool", true, false, preview, "remove_failed")
+		_append_audit("delete_user_tool", true, false, preview, "remove_failed", agent_hint)
 		return {"success": false, "error": "Failed to delete user tool script", "data": preview}
 
 	if FileAccess.file_exists(str(preview["uid_path"])):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(str(preview["uid_path"])))
 
-	_append_audit("delete_user_tool", true, true, preview)
+	_append_audit("delete_user_tool", true, true, preview, "", agent_hint)
 	return {"success": true, "message": "User tool deleted", "data": preview}
 
 
-func get_audit_entries(limit: int = 20) -> Array[Dictionary]:
+func get_audit_entries(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
 	if not FileAccess.file_exists(AUDIT_LOG_PATH):
 		return []
 
@@ -107,7 +114,12 @@ func get_audit_entries(limit: int = 20) -> Array[Dictionary]:
 			continue
 		var data = json.get_data()
 		if data is Dictionary:
-			entries.append((data as Dictionary).duplicate(true))
+			var entry := (data as Dictionary).duplicate(true)
+			if not filter_action.is_empty() and str(entry.get("action", "")) != filter_action:
+				continue
+			if not filter_session.is_empty() and str(entry.get("session_id", "")) != filter_session:
+				continue
+			entries.append(entry)
 	file.close()
 
 	if limit <= 0 or entries.size() <= limit:
@@ -192,7 +204,7 @@ func _authorization_required(action: String, preview: Dictionary) -> Dictionary:
 	}
 
 
-func _append_audit(action: String, authorized: bool, success: bool, payload: Dictionary, error_code: String = "") -> void:
+func _append_audit(action: String, authorized: bool, success: bool, payload: Dictionary, error_code: String = "", agent_hint: String = "") -> void:
 	var file = FileAccess.open(AUDIT_LOG_PATH, FileAccess.READ_WRITE)
 	if file == null:
 		file = FileAccess.open(AUDIT_LOG_PATH, FileAccess.WRITE)
@@ -203,12 +215,28 @@ func _append_audit(action: String, authorized: bool, success: bool, payload: Dic
 	file.seek_end()
 	file.store_line(JSON.stringify({
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
+		"session_id": _session_id,
+		"agent_hint": agent_hint,
 		"action": action,
 		"authorized": authorized,
 		"success": success,
 		"error_code": error_code,
 		"payload": payload
 	}))
+	file.close()
+	_truncate_audit_log()
+
+
+func _truncate_audit_log() -> void:
+	var entries := get_audit_entries(0)
+	if entries.size() <= MAX_AUDIT_ENTRIES:
+		return
+	var file = FileAccess.open(AUDIT_LOG_PATH, FileAccess.WRITE)
+	if file == null:
+		push_warning("[Godot MCP] audit log truncate failed: %s" % AUDIT_LOG_PATH)
+		return
+	for entry in entries.slice(entries.size() - MAX_AUDIT_ENTRIES):
+		file.store_line(JSON.stringify(entry))
 	file.close()
 
 
@@ -288,3 +316,8 @@ func _humanize(value: String) -> String:
 			continue
 		words.append(word.substr(0, 1).to_upper() + word.substr(1))
 	return " ".join(words)
+
+
+func _build_session_id() -> String:
+	var timestamp := Time.get_datetime_string_from_system(false, true).replace(":", "").replace("-", "").replace("T", "_")
+	return "%s_%010d" % [timestamp, randi()]

@@ -4,9 +4,16 @@ const EVENT_CHANNEL := "godot_mcp/runtime_event"
 const LOG_CHANNEL := "godot_mcp/runtime_log"
 const FALLBACK_FILE_PATH := "user://godot_mcp_runtime_bridge_events.json"
 const MAX_STORED_EVENTS := 300
+const FALLBACK_FLUSH_INTERVAL_SECONDS := 2.0
+
+var _pending_events: Array[Dictionary] = []
+var _fallback_cache: Array[Dictionary] = []
+var _fallback_cache_loaded := false
+var _flush_timer: Timer
 
 
 func _enter_tree() -> void:
+	_ensure_flush_timer()
 	_emit_event("enter_tree")
 
 
@@ -19,6 +26,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_emit_event("exit_tree")
+	_flush_to_disk()
 
 
 func _notification(what: int) -> void:
@@ -92,11 +100,10 @@ func _append_fallback_event(channel: String, payload: Dictionary) -> void:
 		"session_id": -1,
 		"payload": payload.duplicate(true)
 	}
-	var events := _read_fallback_events()
-	events.append(event)
-	if events.size() > MAX_STORED_EVENTS:
-		events = events.slice(events.size() - MAX_STORED_EVENTS)
-	_write_fallback_events(events)
+	_pending_events.append(event)
+	_trim_cached_events()
+	if _flush_timer != null and _flush_timer.is_stopped():
+		_flush_timer.start()
 
 
 func _read_fallback_events() -> Array[Dictionary]:
@@ -129,3 +136,47 @@ func _write_fallback_events(events: Array[Dictionary]) -> void:
 		return
 	file.store_string(JSON.stringify(events))
 	file.close()
+
+
+func _ensure_flush_timer() -> void:
+	if _flush_timer != null and is_instance_valid(_flush_timer):
+		return
+	_flush_timer = Timer.new()
+	_flush_timer.name = "MCPRuntimeBridgeFlushTimer"
+	_flush_timer.one_shot = false
+	_flush_timer.wait_time = FALLBACK_FLUSH_INTERVAL_SECONDS
+	_flush_timer.timeout.connect(_on_flush_timer_timeout)
+	add_child(_flush_timer)
+
+
+func _on_flush_timer_timeout() -> void:
+	_flush_to_disk()
+
+
+func _flush_to_disk() -> void:
+	if _pending_events.is_empty():
+		if _flush_timer != null:
+			_flush_timer.stop()
+		return
+	if not _fallback_cache_loaded:
+		_fallback_cache = _read_fallback_events()
+		_fallback_cache_loaded = true
+	_fallback_cache.append_array(_pending_events)
+	if _fallback_cache.size() > MAX_STORED_EVENTS:
+		_fallback_cache = _fallback_cache.slice(_fallback_cache.size() - MAX_STORED_EVENTS)
+	_write_fallback_events(_fallback_cache)
+	_pending_events.clear()
+	if _flush_timer != null:
+		_flush_timer.stop()
+
+
+func _trim_cached_events() -> void:
+	var projected_size := _pending_events.size()
+	if _fallback_cache_loaded:
+		projected_size += _fallback_cache.size()
+	if projected_size <= MAX_STORED_EVENTS:
+		return
+	var overflow := projected_size - MAX_STORED_EVENTS
+	while overflow > 0 and not _pending_events.is_empty():
+		_pending_events.remove_at(0)
+		overflow -= 1

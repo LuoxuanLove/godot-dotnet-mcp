@@ -750,7 +750,8 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 		str(args.get("tool_name", "")),
 		str(args.get("display_name", "")),
 		str(args.get("description", "")),
-		bool(args.get("authorized", false))
+		bool(args.get("authorized", false)),
+		str(args.get("agent_hint", ""))
 	)
 	if bool(result.get("success", false)):
 		_server_controller.reload_all_domains()
@@ -760,8 +761,8 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 	return result
 
 
-func delete_user_tool_from_tools(script_path: String, authorized: bool) -> Dictionary:
-	var result = _user_tool_service.delete_tool(script_path, authorized)
+func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
+	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
 	if bool(result.get("success", false)):
 		_server_controller.reload_all_domains()
 		_cleanup_disabled_tools()
@@ -770,8 +771,8 @@ func delete_user_tool_from_tools(script_path: String, authorized: bool) -> Dicti
 	return result
 
 
-func get_user_tool_audit(limit: int = 20) -> Array[Dictionary]:
-	return _user_tool_service.get_audit_entries(limit)
+func get_user_tool_audit(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
+	return _user_tool_service.get_audit_entries(limit, filter_action, filter_session)
 
 
 func runtime_restart_server() -> Dictionary:

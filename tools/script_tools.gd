@@ -203,6 +203,77 @@ EXAMPLES:
 				},
 				"required": ["action", "path"]
 			}
+		},
+		{
+			"name": "edit_cs",
+			"description": """C# EDIT: Template-based editing for .cs scripts.
+
+ACTIONS:
+- create: Create a new .cs script from namespace/class/base_type
+- write: Replace full script content
+- add_field: Append a field near the end of the primary class
+- add_method: Append a method stub near the end of the primary class
+
+EXAMPLES:
+- Create: {"action": "create", "path": "res://Scripts/Player.cs", "namespace": "Game", "class_name": "Player", "base_type": "Node"}
+- Add field: {"action": "add_field", "path": "res://Scripts/Player.cs", "name": "Speed", "type": "float", "value": "5.0f", "exported": true}
+- Add method: {"action": "add_method", "path": "res://Scripts/Player.cs", "name": "Jump", "return_type": "void", "body": "// TODO: implement"}
+- Write: {"action": "write", "path": "res://Scripts/Player.cs", "content": "using Godot;"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["create", "write", "add_field", "add_method"]
+					},
+					"path": {
+						"type": "string",
+						"description": "C# script file path"
+					},
+					"namespace": {
+						"type": "string"
+					},
+					"class_name": {
+						"type": "string"
+					},
+					"base_type": {
+						"type": "string"
+					},
+					"content": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					},
+					"value": {
+						"type": "string"
+					},
+					"access": {
+						"type": "string"
+					},
+					"modifiers": {
+						"type": "array",
+						"items": {"type": "string"}
+					},
+					"exported": {
+						"type": "boolean"
+					},
+					"params": {
+						"type": "array",
+						"items": {"type": "string"}
+					},
+					"body": {
+						"type": "string"
+					},
+					"return_type": {
+						"type": "string"
+					},
+				},
+				"required": ["action", "path"]
+			}
 		}
 	]
 
@@ -221,6 +292,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _execute_exports(args)
 		"edit_gd":
 			return _execute_edit_gd(args)
+		"edit_cs":
+			return _execute_edit_cs(args)
 		_:
 			return _error("Unknown tool: %s" % tool_name)
 
@@ -351,6 +424,27 @@ func _execute_edit_gd(args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s" % action)
 
 
+func _execute_edit_cs(args: Dictionary) -> Dictionary:
+	var action = str(args.get("action", ""))
+	var path = _normalize_res_path(str(args.get("path", "")))
+	if path.is_empty():
+		return _error("Path is required")
+	if not path.ends_with(".cs"):
+		return _error("script_edit_cs only supports .cs files")
+
+	match action:
+		"create":
+			return _create_csharp_script(path, args)
+		"write":
+			return _write_csharp_script(path, str(args.get("content", "")))
+		"add_field":
+			return _add_csharp_field(path, args)
+		"add_method":
+			return _add_csharp_method(path, args)
+		_:
+			return _error("Unknown action: %s" % action)
+
+
 func _open_script(path: String) -> Dictionary:
 	var normalized = _normalize_res_path(path)
 	if normalized.is_empty():
@@ -458,6 +552,248 @@ func _write_gdscript(path: String, content: String) -> Dictionary:
 		"language": "gdscript",
 		"line_count": content.split("\n").size()
 	}, "Script written: %s" % path)
+
+
+func _create_csharp_script(path: String, args: Dictionary) -> Dictionary:
+	if FileAccess.file_exists(path):
+		return _error("Script already exists: %s" % path)
+
+	var class_name_str := str(args.get("class_name", "")).strip_edges()
+	if class_name_str.is_empty():
+		class_name_str = path.get_file().trim_suffix(".cs")
+	var namespace_str := str(args.get("namespace", "")).strip_edges()
+	var base_type := str(args.get("base_type", "Node")).strip_edges()
+	if base_type.is_empty():
+		base_type = "Node"
+
+	var lines: Array[String] = []
+	lines.append("using Godot;")
+	lines.append("")
+	if not namespace_str.is_empty():
+		lines.append("namespace %s;" % namespace_str)
+		lines.append("")
+	lines.append("public partial class %s : %s" % [class_name_str, base_type])
+	lines.append("{")
+	lines.append("}")
+
+	return _write_csharp_script(path, "\n".join(lines))
+
+
+func _write_csharp_script(path: String, content: String) -> Dictionary:
+	if content.is_empty():
+		return _error("Content is required")
+
+	var dir_path = path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
+
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return _error("Failed to write script")
+
+	file.store_string(content)
+	file.close()
+
+	var fs = _get_filesystem()
+	if fs:
+		fs.scan()
+
+	return _validate_csharp_script(path, content)
+
+
+func _add_csharp_field(path: String, args: Dictionary) -> Dictionary:
+	var field_name = str(args.get("name", "")).strip_edges()
+	if field_name.is_empty():
+		return _error("Field name is required")
+	var member_code = _build_csharp_field_code(args)
+	return _append_csharp_member(path, member_code)
+
+
+func _add_csharp_method(path: String, args: Dictionary) -> Dictionary:
+	var method_name = str(args.get("name", "")).strip_edges()
+	if method_name.is_empty():
+		return _error("Method name is required")
+	var member_code = _build_csharp_method_code(args)
+	return _append_csharp_member(path, member_code)
+
+
+func _build_csharp_field_code(args: Dictionary) -> String:
+	var access = str(args.get("access", "public")).strip_edges()
+	if access.is_empty():
+		access = "public"
+	var type_name = str(args.get("type", "Variant")).strip_edges()
+	if type_name.is_empty():
+		type_name = "Variant"
+	var field_name = str(args.get("name", "")).strip_edges()
+	var value = str(args.get("value", "")).strip_edges()
+	var exported = bool(args.get("exported", false))
+	var modifiers = args.get("modifiers", [])
+
+	var parts: Array[String] = []
+	parts.append(access)
+	if modifiers is Array:
+		for modifier in modifiers:
+			var modifier_text = str(modifier).strip_edges()
+			if not modifier_text.is_empty():
+				parts.append(modifier_text)
+	parts.append(type_name)
+	parts.append(field_name)
+
+	var declaration = " ".join(parts)
+	if not value.is_empty():
+		declaration += " = %s" % value
+	declaration += ";"
+	if exported:
+		return "[Export]\n%s" % declaration
+	return declaration
+
+
+func _build_csharp_method_code(args: Dictionary) -> String:
+	var access = str(args.get("access", "public")).strip_edges()
+	if access.is_empty():
+		access = "public"
+	var return_type = str(args.get("return_type", "void")).strip_edges()
+	if return_type.is_empty():
+		return_type = "void"
+	var method_name = str(args.get("name", "")).strip_edges()
+	var modifiers = args.get("modifiers", [])
+	var params_value = args.get("params", [])
+	var body = str(args.get("body", "")).strip_edges()
+	if body.is_empty():
+		body = "// TODO: implement"
+		if return_type != "void":
+			body += "\nreturn default;"
+
+	var signature_parts: Array[String] = []
+	signature_parts.append(access)
+	if modifiers is Array:
+		for modifier in modifiers:
+			var modifier_text = str(modifier).strip_edges()
+			if not modifier_text.is_empty():
+				signature_parts.append(modifier_text)
+	signature_parts.append(return_type)
+
+	var params_list: Array[String] = []
+	if params_value is Array:
+		for item in params_value:
+			var param_text = str(item).strip_edges()
+			if not param_text.is_empty():
+				params_list.append(param_text)
+	signature_parts.append("%s(%s)" % [method_name, ", ".join(params_list)])
+
+	var lines: Array[String] = []
+	lines.append(" ".join(signature_parts))
+	lines.append("{")
+	for body_line in body.split("\n"):
+		lines.append("    %s" % body_line)
+	lines.append("}")
+	return "\n".join(lines)
+
+
+func _append_csharp_member(path: String, member_code: String) -> Dictionary:
+	var read_result = _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content = str(read_result.get("data", {}).get("content", ""))
+	var class_close_index = _find_primary_csharp_class_close(content)
+	if class_close_index == -1:
+		return _error("Failed to locate primary C# class body")
+
+	var member_indent = _detect_csharp_member_indent(content, class_close_index)
+	var indented_member = _indent_multiline_block(member_code, member_indent)
+	var prefix = _trim_trailing_whitespace(content.substr(0, class_close_index))
+	var suffix = content.substr(class_close_index)
+	var new_content = "%s\n\n%s\n%s" % [prefix, indented_member, suffix]
+	return _write_csharp_script(path, new_content)
+
+
+func _find_primary_csharp_class_close(content: String) -> int:
+	var class_index = content.find("class ")
+	if class_index == -1:
+		return -1
+
+	var open_brace_index = content.find("{", class_index)
+	if open_brace_index == -1:
+		return -1
+
+	return _find_matching_brace(content, open_brace_index)
+
+
+func _find_matching_brace(content: String, open_brace_index: int) -> int:
+	var depth = 0
+	for index in range(open_brace_index, content.length()):
+		var char_value = content.substr(index, 1)
+		if char_value == "{":
+			depth += 1
+		elif char_value == "}":
+			depth -= 1
+			if depth == 0:
+				return index
+	return -1
+
+
+func _detect_csharp_member_indent(content: String, class_close_index: int) -> String:
+	var line_start_index = content.rfind("\n", class_close_index)
+	if line_start_index == -1:
+		return "    "
+
+	var closing_line = content.substr(line_start_index + 1, class_close_index - line_start_index - 1)
+	return "%s    " % _leading_whitespace(closing_line)
+
+
+func _indent_multiline_block(content: String, indent: String) -> String:
+	var lines: Array[String] = []
+	for raw_line in content.split("\n"):
+		lines.append("%s%s" % [indent, raw_line])
+	return "\n".join(lines)
+
+
+func _leading_whitespace(line: String) -> String:
+	var index = 0
+	while index < line.length():
+		var char_value = line.substr(index, 1)
+		if char_value != " " and char_value != "\t":
+			break
+		index += 1
+	return line.substr(0, index)
+
+
+func _trim_trailing_whitespace(value: String) -> String:
+	var end_index = value.length()
+	while end_index > 0:
+		var char_value = value.substr(end_index - 1, 1)
+		if char_value != " " and char_value != "\t" and char_value != "\n" and char_value != "\r":
+			break
+		end_index -= 1
+	return value.substr(0, end_index)
+
+
+func _validate_csharp_script(path: String, content: String) -> Dictionary:
+	var parse_result = _parse_script_metadata(path)
+	if not bool(parse_result.get("success", false)):
+		return _error("C# script validation failed", {
+			"path": path,
+			"line_count": content.split("\n").size(),
+			"parse_result": parse_result
+		})
+
+	var metadata := parse_result.get("data", {})
+	if str(metadata.get("class_name", "")).strip_edges().is_empty():
+		return _error("C# script validation failed: class declaration not found", {
+			"path": path,
+			"line_count": content.split("\n").size()
+		})
+
+	return _success({
+		"path": path,
+		"language": "csharp",
+		"class_name": metadata.get("class_name", ""),
+		"namespace": metadata.get("namespace", ""),
+		"line_count": content.split("\n").size(),
+		"method_count": metadata.get("methods", []).size(),
+		"export_count": metadata.get("exports", []).size()
+	}, "C# script written: %s" % path)
 
 
 func _delete_script_file(path: String) -> Dictionary:

@@ -11,7 +11,6 @@ const BUILTIN_ENTRIES: Array[Dictionary] = [
 	{"category": "project", "path": "res://addons/godot_dotnet_mcp/tools/project/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "script", "path": "res://addons/godot_dotnet_mcp/tools/script/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "editor", "path": "res://addons/godot_dotnet_mcp/tools/editor/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
-	{"category": "plugin", "path": "res://addons/godot_dotnet_mcp/tools/plugin/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
 	{"category": "plugin_runtime", "path": "res://addons/godot_dotnet_mcp/tools/plugin_runtime/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
 	{"category": "plugin_evolution", "path": "res://addons/godot_dotnet_mcp/tools/plugin_evolution/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},
 	{"category": "plugin_developer", "path": "res://addons/godot_dotnet_mcp/tools/plugin_developer/executor.gd", "domain_key": "plugin", "source": "builtin", "hot_reloadable": false},

@@ -29,7 +29,8 @@ func get_tools() -> Array[Dictionary]:
 					"tool_name": {"type": "string"},
 					"display_name": {"type": "string"},
 					"description": {"type": "string"},
-					"authorized": {"type": "boolean"}
+					"authorized": {"type": "boolean"},
+					"agent_hint": {"type": "string"}
 				},
 				"required": ["tool_name"]
 			}
@@ -41,7 +42,8 @@ func get_tools() -> Array[Dictionary]:
 				"type": "object",
 				"properties": {
 					"script_path": {"type": "string"},
-					"authorized": {"type": "boolean"}
+					"authorized": {"type": "boolean"},
+					"agent_hint": {"type": "string"}
 				},
 				"required": ["script_path"]
 			}
@@ -52,7 +54,9 @@ func get_tools() -> Array[Dictionary]:
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"limit": {"type": "integer"}
+					"limit": {"type": "integer"},
+					"filter_action": {"type": "string"},
+					"filter_session": {"type": "string"}
 				}
 			}
 		},
@@ -79,14 +83,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"delete_user_tool":
 			return _call_plugin_method(
 				"delete_user_tool_from_tools",
-				[str(args.get("script_path", "")), bool(args.get("authorized", false))],
+				[str(args.get("script_path", "")), bool(args.get("authorized", false)), str(args.get("agent_hint", ""))],
 				"Plugin evolution bridge is unavailable"
 			)
 		"user_tool_audit":
 			var plugin = _get_plugin()
 			if plugin == null or not plugin.has_method("get_user_tool_audit"):
 				return _error("Plugin evolution bridge is unavailable")
-			return _success({"entries": plugin.get_user_tool_audit(int(args.get("limit", 20)))}, "User tool audit fetched")
+			return _success({
+				"entries": plugin.get_user_tool_audit(
+					int(args.get("limit", 20)),
+					str(args.get("filter_action", "")),
+					str(args.get("filter_session", ""))
+				)
+			}, "User tool audit fetched")
 		"usage_guide":
 			return _call_plugin_method("get_evolution_usage_guide_from_tools", [], "Plugin evolution guide bridge is unavailable")
 		_:
