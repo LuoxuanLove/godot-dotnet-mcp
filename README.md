@@ -1,236 +1,170 @@
 ﻿# Godot .NET MCP
 
-`Godot .NET MCP` 是一个运行在 Godot 编辑器内的 MCP 插件，面向 Godot 4 与 Godot.NET 工作流，提供稳定、可组合、可验证的编辑器工具入口，便于 Claude Code、Codex、Gemini CLI 等客户端直接操作项目。
+[![Chinese Docs](https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-1677ff)](docs/%E6%A6%82%E8%BF%B0.md)
+[![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
+[![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.1.0.zip)
 
-当前正式发布版本：`v0.1.0`
+`Godot .NET MCP` is an MCP plugin that runs inside the Godot editor. It is built for Godot 4 and Godot.NET workflows, and exposes stable, composable, verifiable editor capabilities to clients such as Claude Code, Codex, Gemini CLI, Claude Desktop, and Cursor.
 
-## 特性
+Current public version: `v0.1.0`
 
-- 运行在 Godot 编辑器进程内，不依赖额外守护进程
-- 提供 HTTP + MCP 协议入口，默认地址为 `http://127.0.0.1:3000/mcp`
-- 提供 76 个顶层工具，覆盖场景、节点、资源、脚本、插件运行时、动画、材质、TileMap、导航、物理、音频、UI 等能力域
-- 支持 Godot.NET / C# 场景绑定审计、导出成员分析与脚本检查
-- 提供 Dock UI，可管理端口、语言、工具 profile、CLI 配置与客户端接入信息
-- 支持工具禁用、配置复制、一键写入客户端配置
-- 支持插件级完整重载，行为尽量贴近 Godot 项目设置中的“关闭再启用插件”
-- 已补齐最小 TileSet 闭环与插件调试缓冲区回读能力
+## What It Is
 
-## 环境要求
+This is not a separate daemon and not an external bridge detached from editor state. It runs inside the Godot editor process and exposes MCP access from the real project context.
+
+That makes it more suitable for agent-driven workflows that need live access to scenes, scripts, resources, editor state, plugin state, and project configuration instead of a disconnected automation layer.
+
+## Why This Plugin
+
+- **Godot.NET first**: it is designed for general Godot projects, but treats Godot.NET and C# scene bindings, exported members, and script inspection as first-class capabilities.
+- **Editor-native**: no extra background service is required; startup, configuration, and debugging stay close to the editor lifecycle.
+- **Extensible**: tool loading is split by domain and supports hot reload, custom tool discovery, and incremental capability growth.
+- **Self-evolving**: the plugin can adapt its visible capabilities, configuration output, and load results based on the current project, editor, and runtime state.
+- **Built for real client integration**: the focus is not a demo endpoint, but a usable connection path for MCP clients through profiles, config generation, copy, and write flows.
+
+## Key Features
+
+- HTTP + MCP endpoint, defaulting to `http://127.0.0.1:3000/mcp`
+- Dock UI for port, language, tool profile, and client configuration management
+- Platform-specific config generation for desktop and CLI clients
+- Config copy and one-click write flows
+- Full plugin reload and domain-level hot reload
+- Coverage across the main Godot editor workflows for project, scene, script, and resource operations
+- Custom tool script discovery, loading, invocation, and cleanup
+
+## Requirements
 
 - Godot `4.6+`
-- 建议使用 Godot Mono / .NET 版本
-- 用于接入的 MCP 客户端，例如：
+- Godot Mono / .NET build recommended
+- An MCP client such as:
   - Claude Code
   - Codex CLI
   - Gemini CLI
   - Claude Desktop
   - Cursor
 
-## 安装
+## Installation
 
-### 方式一：直接复制插件目录
+### Option 1: Copy the plugin directory
 
-将本插件放到你的 Godot 项目内：
+Place the plugin in your Godot project as:
 
 ```text
 addons/godot_dotnet_mcp
 ```
 
-目录就位后：
+Then:
 
-1. 用 Godot 打开项目。
-2. 进入 `Project Settings > Plugins`。
-3. 启用 `Godot .NET MCP`。
-4. 在右侧 Dock 中打开 `MCPDock`。
-5. 确认端口后启动服务。
+1. Open the project in Godot.
+2. Go to `Project Settings > Plugins`.
+3. Enable `Godot .NET MCP`.
+4. Open `MCPDock` from the right-side dock.
+5. Confirm the port and start the service.
 
-### 方式二：作为 Git Submodule
+### Option 2: Use Git submodule
 
 ```bash
 git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git addons/godot_dotnet_mcp
 git submodule update --init --recursive
 ```
 
-如果是首次克隆主项目：
+For a fresh clone:
 
 ```bash
 git clone --recurse-submodules <your-project-repo>
 ```
 
-### 方式三：使用发布包
+### Option 3: Use the release package
 
-可从 GitHub Releases 页面下载发布包：
+Download the latest package from:
 
 ```text
 https://github.com/LuoxuanLove/godot-dotnet-mcp/releases
 ```
 
-解压后保持目录结构为：
+Extract it so the final structure remains:
 
 ```text
 addons/godot_dotnet_mcp
 ```
 
-再按“方式一”启用即可。
+Then enable it as described in Option 1.
 
-## 快速开始
+## Quick Start
 
-### 1. 启动本地服务
+### 1. Start the local service
 
-启用插件后，默认会根据配置自动启动服务。也可以在 `MCPDock > 服务器` 中手动启动。
+After enabling the plugin, the service can start automatically from saved settings, or you can start it manually from `MCPDock > Server`.
 
-健康检查：
+Health check:
 
 ```text
 GET http://127.0.0.1:3000/health
 ```
 
-工具列表：
+Tool list:
 
 ```text
 GET http://127.0.0.1:3000/api/tools
 ```
 
-MCP 主入口：
+MCP endpoint:
 
 ```text
 POST http://127.0.0.1:3000/mcp
 ```
 
-### 2. 将客户端接到 Godot
+### 2. Connect a client
 
-打开 `MCPDock > 配置` 后，可先选择 Agent 平台，再查看或复制对应内容：
+Open `MCPDock > Config`, choose a target platform, then inspect or copy the generated output.
 
-- Claude Desktop 配置
-- Cursor 配置
-- Gemini 配置
-- Claude Code 命令
-- Codex CLI 命令
+- Desktop clients show JSON config, target path, and write actions
+- CLI clients show the generated command text
+- `Claude Code` additionally supports `user / project` scope switching
 
-默认服务地址为：
+Recommended order:
 
-```json
-{
-  "url": "http://127.0.0.1:3000/mcp"
-}
-```
+1. Select the target client.
+2. Confirm the generated endpoint and config content.
+3. Use `Write Config` if you want the plugin to update the target file.
+4. Use `Copy` if you want to apply the config manually.
 
-配置页推荐按以下顺序使用：
+### 3. Verify the connection
 
-1. 先在顶部 `Agent 平台` 下拉中选择目标客户端。
-2. 如果选中的是 `Claude Desktop`、`Cursor` 或 `Gemini`，页面会显示对应配置文件路径、当前生成的 JSON 文本，以及“写入配置”“复制”按钮。
-3. 如果选中的是 `Claude Code` 或 `Codex`，页面会切换为 CLI 命令视图；其中 `Claude Code` 额外提供 `user / project` 作用域切换。
-4. 写入前先确认服务地址、配置内容和目标路径；不希望直接改本机配置时，可只使用“复制”按钮。
+Confirm that:
 
-配置页的按钮行为如下：
+- `/health` returns normally
+- `/api/tools` returns the tool list
+- your MCP client can connect to `http://127.0.0.1:3000/mcp`
 
-- `写入配置`：只更新目标配置文件中的 `mcpServers.godot-mcp` 节点，不覆盖其它服务器配置。
-- `复制`：复制当前平台对应的 JSON 或 CLI 命令文本。
-- `作用域`：仅影响 `Claude Code` 命令生成，不影响桌面端 JSON 配置内容。
+## Path Conventions
 
-### 3. 验证是否工作
+- Resource paths use `res://`
+- Node paths should normally be relative to the current scene root, for example `Player/Camera2D`
+- `/root/...` style paths are also supported in the current version
+- Write operations are expected to be readable back after execution
 
-建议先调用以下工具：
+## Repository Migration
 
-- `scene_management`
-- `node_query`
-- `project_info`
-- `script_inspect`
-- `scene_audit`
-
-## 典型能力
-
-### 场景与节点
-
-- 打开、保存、另存场景
-- 创建场景与节点
-- 读取节点树、属性、变换、可见性、元数据
-- 调用节点方法、管理生命周期
-
-### 资源与脚本
-
-- 枚举、搜索、读取资源
-- 读取纹理、脚本、依赖关系
-- 创建或编辑 GDScript
-- 提取 GDScript / C# 元数据、导出字段与符号
-
-### Godot.NET / 绑定审计
-
-- 分析 C# 脚本导出成员
-- 审查 `.tscn` 中的绑定缺失
-- 生成结构化 `scene_audit` 问题列表
-
-### 编辑器与调试
-
-- 读取编辑器状态、设置、文件系统、插件状态
-- 写入调试日志并回读最近事件 / 错误事件
-- 获取可由插件侧读取的 profiler 摘要
-
-### 插件运行时
-
-- 查看各工具 domain 的加载状态、来源和版本
-- 单独热重载某个 domain，无需重启 MCP 服务
-- 重载全部 hot-reloadable domain 并回读最近一次重载摘要
-
-### 高级域
-
-- 动画、AnimationTree、StateMachine
-- Material、Shader、Lighting、Particle
-- TileMap / TileSet
-- Navigation、Physics、Audio、UI Theme / Control
-
-## 路径约定
-
-- 资源路径统一使用 `res://`
-- 节点路径默认推荐使用“相对当前场景根节点”的路径，例如 `Player/Camera2D`
-- 当前版本也兼容 `/root/...` 风格路径
-- 工具写操作默认要求“写后可读回”
-
-## 仓库迁移说明
-
-- GitHub 仓库名已收口为 `godot-dotnet-mcp`
-- Godot 内的安装目录保持不变，仍然使用 `addons/godot_dotnet_mcp`
-- 如果你是从旧仓库地址迁移，请更新 submodule URL 后执行：
+- The GitHub repository name is `godot-dotnet-mcp`
+- The Godot installation directory stays `addons/godot_dotnet_mcp`
+- If you are migrating from an older repository URL, update the submodule URL and run:
 
 ```bash
 git submodule sync --recursive
 git submodule update --init --recursive
 ```
 
-## 项目结构
+## Docs
 
-- `plugin.cfg`：Godot 插件清单
-- `plugin.gd`：插件入口与 Dock 装配
-- `plugin/runtime/mcp_http_server.gd`：HTTP / MCP 服务实现
-- `tools/`：按能力域拆分的工具执行器与共享 helper
-- `ui/`：Dock 场景与页签脚本
-- `localization/`：本地化资源
-- `docs/`：用户与开发文档
-- `release/`：发布包输出目录
-
-## 文档
-
+- [Chinese overview](docs/%E6%A6%82%E8%BF%B0.md)
 - [CHANGELOG.md](CHANGELOG.md)
-- [docs/概述.md](docs/概述.md)
-- [docs/架构/服务与路由.md](docs/架构/服务与路由.md)
-- [docs/架构/配置与界面.md](docs/架构/配置与界面.md)
-- [docs/模块/工具系统.md](docs/模块/工具系统.md)
+- [docs/架构/服务与路由.md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
+- [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
+- [docs/架构/安装与发布.md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
+- [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
 
-## 当前边界
+## Current Boundaries
 
-- 当前调试回读能力基于插件调试缓冲区，不是直接读取 Godot 原生 Output / Debugger 面板
-- 目标是提供稳定、自动化友好的编辑器操作入口，不是完整覆盖 Godot 全部 API
-
-## 版本与发布
-
-- 版本变更见 [CHANGELOG.md](CHANGELOG.md)
-- 二进制发布包见 GitHub Releases 页面
-- 安装说明见 [docs/架构/安装与发布.md](docs/架构/安装与发布.md)
-
-## 作者
-
-- 作者：落萱_Love
-
-## 许可证
-
-本项目采用 [MIT License](LICENSE)。
+- Debug log readback currently comes from the plugin buffer, not directly from the native Godot Output / Debugger panels
+- Capabilities that depend on live editor state should still be validated in a real project workflow
