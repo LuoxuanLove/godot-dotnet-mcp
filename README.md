@@ -1,6 +1,6 @@
 ﻿# Godot .NET MCP
 
-[![Chinese Docs](https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-1677ff)](docs/%E6%A6%82%E8%BF%B0.md)
+[![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
 [![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.1.0.zip)
 
@@ -157,7 +157,7 @@ git submodule update --init --recursive
 
 ## Docs
 
-- [Chinese overview](docs/%E6%A6%82%E8%BF%B0.md)
+- [README.zh-CN.md](README.zh-CN.md)
 - [CHANGELOG.md](CHANGELOG.md)
 - [docs/架构/服务与路由.md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
 - [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
