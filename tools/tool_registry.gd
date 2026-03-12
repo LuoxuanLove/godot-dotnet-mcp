@@ -136,7 +136,4 @@ func _build_custom_entry(script_path: String) -> Dictionary:
 
 
 func _load_custom_script(script_path: String) -> Resource:
-	var script_resource = ResourceLoader.load(script_path, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if script_resource is Script:
-		script_resource.reload()
-	return script_resource
+	return ResourceLoader.load(script_path, "", ResourceLoader.CACHE_MODE_REUSE)

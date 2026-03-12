@@ -68,10 +68,23 @@ func _exit_tree() -> void:
 	_remove_dock()
 	_uninstall_editor_debugger_bridge()
 	_server_controller.detach()
+	LocalizationService.reset_instance()
+	_localization = null
+	_user_tool_service = null
+	_config_service = null
+	_tool_catalog = null
+	_server_controller = null
+	_settings_store = null
+	_state = null
 
 
 func _disable_plugin() -> void:
-	_remove_runtime_bridge_autoload()
+	MCPRuntimeDebugStore.set_bridge_status(
+		_is_runtime_bridge_autoload_path(str(ProjectSettings.get_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, ""))),
+		RUNTIME_BRIDGE_AUTOLOAD_NAME,
+		RUNTIME_BRIDGE_AUTOLOAD_PATH,
+		"Plugin disabled without removing runtime bridge autoload"
+	)
 
 
 func _validate_permission_configuration() -> void:
@@ -128,6 +141,7 @@ func _ensure_runtime_bridge_autoload() -> void:
 		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Autoload name is occupied by another script")
 		push_warning("[Godot MCP] Runtime bridge autoload name is already used: %s" % current_path)
 		return
+	_clear_runtime_bridge_root_instance()
 	add_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
 	ProjectSettings.save()
 	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
@@ -140,6 +154,7 @@ func _remove_runtime_bridge_autoload() -> void:
 	if not _is_runtime_bridge_autoload_path(current_path):
 		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Runtime bridge autoload not owned by this plugin")
 		return
+	_clear_runtime_bridge_root_instance()
 	remove_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME)
 	ProjectSettings.save()
 	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
@@ -156,6 +171,21 @@ func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
 	return resource != null and str(resource.resource_path) == RUNTIME_BRIDGE_AUTOLOAD_PATH
 
 
+func _clear_runtime_bridge_root_instance() -> void:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return
+
+	var runtime_bridge = tree.root.get_node_or_null(NodePath(RUNTIME_BRIDGE_AUTOLOAD_NAME))
+	if runtime_bridge == null or not is_instance_valid(runtime_bridge):
+		return
+
+	if runtime_bridge.get_parent() != null:
+		runtime_bridge.get_parent().remove_child(runtime_bridge)
+	runtime_bridge.set_script(null)
+	runtime_bridge.free()
+
+
 func _install_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge != null:
 		return
@@ -167,6 +197,7 @@ func _uninstall_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge == null:
 		return
 	remove_debugger_plugin(_editor_debugger_bridge)
+	_editor_debugger_bridge.set_script(null)
 	_editor_debugger_bridge = null
 
 
@@ -185,7 +216,10 @@ func _create_dock() -> void:
 func _remove_dock() -> void:
 	if _dock != null and is_instance_valid(_dock):
 		remove_control_from_docks(_dock)
-		_dock.queue_free()
+		if _dock.get_parent() != null:
+			_dock.get_parent().remove_child(_dock)
+		_dock.set_script(null)
+		_dock.free()
 	_dock = null
 
 
@@ -209,7 +243,10 @@ func _remove_stale_docks() -> void:
 		if child.name != "MCPDock" and script_path != MCP_DOCK_SCRIPT_PATH:
 			continue
 		remove_control_from_docks(child)
-		child.queue_free()
+		if child.get_parent() != null:
+			child.get_parent().remove_child(child)
+		child.set_script(null)
+		child.free()
 		print("[Godot MCP] Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
 
 
@@ -1171,7 +1208,7 @@ func _get_editor_scale() -> float:
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REUSE)
 	return scene as PackedScene
 
 

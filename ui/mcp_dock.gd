@@ -17,6 +17,8 @@ signal stop_requested
 signal full_reload_requested
 signal profile_selected(profile_id: String)
 signal save_profile_requested(profile_name: String)
+signal rename_profile_requested(profile_id: String, profile_name: String)
+signal delete_profile_requested(profile_id: String)
 signal show_user_tools_toggled(enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
@@ -60,6 +62,8 @@ func _ready() -> void:
 	if _tools_tab:
 		_tools_tab.profile_selected.connect(_on_tools_tab_profile_selected)
 		_tools_tab.save_profile_requested.connect(_on_tools_tab_save_profile_requested)
+		_tools_tab.rename_profile_requested.connect(_on_tools_tab_rename_profile_requested)
+		_tools_tab.delete_profile_requested.connect(_on_tools_tab_delete_profile_requested)
 		_tools_tab.show_user_tools_toggled.connect(_on_tools_tab_show_user_tools_toggled)
 		_tools_tab.delete_user_tool_requested.connect(_on_tools_tab_delete_user_tool_requested)
 		_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
@@ -244,6 +248,14 @@ func _on_tools_tab_save_profile_requested(profile_name: String) -> void:
 	save_profile_requested.emit(profile_name)
 
 
+func _on_tools_tab_rename_profile_requested(profile_id: String, profile_name: String) -> void:
+	rename_profile_requested.emit(profile_id, profile_name)
+
+
+func _on_tools_tab_delete_profile_requested(profile_id: String) -> void:
+	delete_profile_requested.emit(profile_id)
+
+
 func _on_tools_tab_show_user_tools_toggled(enabled: bool) -> void:
 	show_user_tools_toggled.emit(enabled)
 
@@ -316,7 +328,7 @@ func _apply_editor_scale(scale: float) -> void:
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REUSE)
 	return scene as PackedScene
 
 

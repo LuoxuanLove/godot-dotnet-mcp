@@ -192,7 +192,10 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 
 func _dispose_server_node() -> void:
 	if _server != null and is_instance_valid(_server):
-		_server.queue_free()
+		if _server.get_parent() != null:
+			_server.get_parent().remove_child(_server)
+		_server.set_script(null)
+		_server.free()
 	_server = null
 
 

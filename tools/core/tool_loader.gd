@@ -367,7 +367,7 @@ func _ensure_tool_definitions(category: String) -> Array:
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
 	var executor = runtime.get("instance", null)
 	if executor == null:
-		var instantiate_result = _instantiate_executor(category, true, "definitions")
+		var instantiate_result = _instantiate_executor(category, false, "definitions")
 		if not instantiate_result.get("success", false):
 			_record_load_error(category, str(_entries_by_category.get(category, {}).get("path", "")), str(instantiate_result.get("error", "Failed to load tool definitions")))
 			_tool_definitions_by_category[category] = []
@@ -384,7 +384,7 @@ func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
 	if runtime.get("instance", null) != null:
 		return {"success": true, "runtime": runtime}
 
-	var instantiate_result = _instantiate_executor(category, true, reason)
+	var instantiate_result = _instantiate_executor(category, false, reason)
 	if not instantiate_result.get("success", false):
 		return _failure("tool_load_failed", category, "", str(instantiate_result.get("error", "Failed to load tool runtime")))
 

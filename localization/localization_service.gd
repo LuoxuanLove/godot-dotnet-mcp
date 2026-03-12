@@ -854,12 +854,9 @@ func _init_translations() -> void:
 
 
 func _load_language_translations(file_path: String):
-	var lang_script = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
+	var lang_script = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REUSE)
 	if lang_script == null:
 		return {}
-
-	if lang_script is Script:
-		(lang_script as Script).reload()
 
 	if lang_script.has_method("get_translations"):
 		return lang_script.call("get_translations")
