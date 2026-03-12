@@ -66,6 +66,8 @@ func _ready() -> void:
 		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
 		_server_tab.stop_requested.connect(_on_server_tab_stop_requested)
 		_server_tab.full_reload_requested.connect(_on_server_tab_full_reload_requested)
+		if _server_tab.has_signal("copy_requested"):
+			_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
 
 	if _tools_tab:
 		_tools_tab.profile_selected.connect(_on_tools_tab_profile_selected)
@@ -104,7 +106,7 @@ func apply_model(model: Dictionary) -> void:
 	_title_label.text = localization.get_text("title")
 	_status_label.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
 	_status_label.add_theme_color_override("font_color", color)
-	_apply_self_diagnostics(model, localization)
+	_self_diag_panel.visible = false
 
 	if _tab_container.get_tab_count() >= 3:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
@@ -247,6 +249,10 @@ func _on_server_tab_stop_requested() -> void:
 
 func _on_server_tab_full_reload_requested() -> void:
 	full_reload_requested.emit()
+
+
+func _on_server_tab_copy_requested(text: String, source: String) -> void:
+	copy_requested.emit(text, source)
 
 
 func _on_tools_tab_profile_selected(profile_id: String) -> void:

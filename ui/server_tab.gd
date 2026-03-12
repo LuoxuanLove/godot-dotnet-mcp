@@ -10,7 +10,14 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
+signal copy_requested(text: String, source: String)
 
+@onready var _self_diag_title: Label = %SelfDiagnosticsTitle
+@onready var _self_diag_badge: Label = %SelfDiagnosticsBadge
+@onready var _self_diag_copy_button: Button = %SelfDiagnosticsCopyButton
+@onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
+@onready var _self_diag_details: Label = %SelfDiagnosticsDetails
+@onready var _self_diag_divider: HSeparator = %SelfDiagnosticsDivider
 @onready var _state_value: Label = %ServerStateValue
 @onready var _endpoint_value: Label = %EndpointValue
 @onready var _connections_value: Label = %ConnectionsValue
@@ -42,6 +49,7 @@ var _log_level_syncing := false
 var _permission_level_syncing := false
 var _current_scale := -1.0
 var _current_layout_width := -1.0
+var _self_diag_copy_text := ""
 
 
 func _ready() -> void:
@@ -56,6 +64,7 @@ func _ready() -> void:
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_stop_button.pressed.connect(_on_stop_button_pressed)
 	_full_reload_button.pressed.connect(_on_full_reload_button_pressed)
+	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
 
 
 func apply_model(model: Dictionary) -> void:
@@ -71,6 +80,7 @@ func apply_model(model: Dictionary) -> void:
 	else:
 		_apply_responsive_layout()
 
+	_apply_self_diagnostics(model, localization)
 	_status_section_title.text = localization.get_text("server_status")
 	_settings_section_title.text = localization.get_text("settings")
 	_server_state_title.text = localization.get_text("server_state_label")
@@ -232,8 +242,10 @@ func _apply_editor_scale(scale: float) -> void:
 	content.add_theme_constant_override("separation", int(round(12 * scale)))
 
 	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
+	var self_diag_header = get_node("Scroll/Margin/Content/SelfDiagnosticsHeader") as HBoxContainer
 	status_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
 	status_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
 
 	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
 	settings_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
@@ -371,7 +383,102 @@ func _apply_responsive_layout() -> void:
 
 	for button in [_start_button, _restart_button, _stop_button, _full_reload_button]:
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+	_self_diag_copy_button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+	_self_diag_copy_button.custom_minimum_size.x = 72.0 * scale
 
 
 func _on_resized() -> void:
 	_apply_responsive_layout()
+
+
+func _apply_self_diagnostics(model: Dictionary, localization) -> void:
+	var diagnostics = model.get("self_diagnostics", {})
+	_self_diag_copy_text = str(model.get("self_diagnostic_copy_text", ""))
+	_self_diag_title.text = localization.get_text("self_diag_title")
+	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
+
+	if not (diagnostics is Dictionary) or (diagnostics as Dictionary).is_empty():
+		_self_diag_badge.text = ""
+		_self_diag_summary.text = localization.get_text("self_diag_empty")
+		_self_diag_details.text = ""
+		return
+
+	var diag := diagnostics as Dictionary
+	var status = str(diag.get("status", "ok"))
+	var badge_color = _get_self_diag_status_color(status)
+	_self_diag_badge.text = _get_self_diag_status_text(status, localization)
+	_self_diag_badge.add_theme_color_override("font_color", badge_color)
+
+	var active_incidents = int(diag.get("active_incident_count", 0))
+	var tool_loader = diag.get("tool_loader", {})
+	var tool_load_error_count = 0
+	if tool_loader is Dictionary:
+		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
+	var last_operation_text = localization.get_text("self_diag_last_operation_none")
+	var last_operation = diag.get("last_operation", {})
+	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
+		last_operation_text = "%s (%s ms)" % [
+			str((last_operation as Dictionary).get("kind", "")),
+			str((last_operation as Dictionary).get("duration_ms", 0.0))
+		]
+
+	_self_diag_summary.text = "%s | %s | %s" % [
+		localization.get_text("self_diag_active_incidents") % active_incidents,
+		localization.get_text("self_diag_tool_load_errors") % tool_load_error_count,
+		localization.get_text("self_diag_last_operation") % last_operation_text
+	]
+
+	var recent_lines: Array[String] = []
+	for incident in diag.get("recent_incidents", []):
+		if not (incident is Dictionary):
+			continue
+		var incident_dict := incident as Dictionary
+		recent_lines.append("%s | %s | %s" % [
+			_get_self_diag_category_text(str(incident_dict.get("category", "")), localization),
+			_get_self_diag_code_text(str(incident_dict.get("code", "")), localization),
+			str(incident_dict.get("message", ""))
+		])
+		if recent_lines.size() >= 3:
+			break
+	if recent_lines.is_empty():
+		_self_diag_details.text = localization.get_text("self_diag_empty")
+	else:
+		_self_diag_details.text = "\n".join(recent_lines)
+
+
+func _get_self_diag_status_text(status: String, localization) -> String:
+	match status:
+		"error":
+			return localization.get_text("self_diag_status_error")
+		"warning":
+			return localization.get_text("self_diag_status_warning")
+		_:
+			return localization.get_text("self_diag_status_ok")
+
+
+func _get_self_diag_status_color(status: String) -> Color:
+	match status:
+		"error":
+			return Color(0.9, 0.3, 0.3)
+		"warning":
+			return Color(0.95, 0.7, 0.2)
+		_:
+			return Color(0.2, 0.8, 0.2)
+
+
+func _get_self_diag_category_text(category: String, localization) -> String:
+	var key = "self_diag_category_%s" % category
+	var translated = localization.get_text(key)
+	return translated if translated != key else category
+
+
+func _get_self_diag_code_text(code: String, localization) -> String:
+	var key = "self_diag_code_%s" % code
+	var translated = localization.get_text(key)
+	return translated if translated != key else code
+
+
+func _on_self_diag_copy_pressed() -> void:
+	if _self_diag_copy_text.is_empty():
+		return
+	copy_requested.emit(_self_diag_copy_text, "Plugin Self Diagnostics")
