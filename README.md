@@ -1,8 +1,9 @@
 ﻿# Godot .NET MCP
 [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
-> This project is aimed at an AI-native Godot editor experience, not just another MCP server wrapper.
-> Its real leverage comes from letting agents understand live Godot projects, scene structure, scripts, and editor state directly, rather than only forwarding commands into the engine.
+> This project aims to push the Godot editor itself toward an AI-native form through a plugin, not just wrap MCP around it.
+> The goal is to let agents understand live Godot projects and evolve authorized tools inside the editor, not merely execute commands.
+
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
 [![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.3.0.zip)
 

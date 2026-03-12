@@ -1,8 +1,9 @@
 ﻿# Godot .NET MCP
 [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-> 这个项目的目标不是再做一个套在 Godot 外面的 MCP 服务壳，而是把 Godot 编辑器本身推进到更 AI Native 的形态。
-> 它真正的价值也不只是让 AI 代替人去执行命令，而是让 AI 能直接理解 Godot 项目的场景结构、脚本、资源和编辑器上下文。
+> 这个项目不是再做一个套在 Godot 外面的 MCP 服务壳，而是通过插件形式把 Godot 编辑器本身推进到更 AI Native 的形态。
+> 目标是让 AI 在编辑器内直接理解 Godot 项目，并在授权边界内自进化扩展工具，而不只是执行命令。
+
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
 [![Download ZIP](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.3.0.zip)
 
