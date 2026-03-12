@@ -231,7 +231,12 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 
 
 func reload_domain(category: String) -> Dictionary:
+	if category == "user":
+		_refresh_entries()
+
 	if not _entries_by_category.has(category):
+		if category == "user":
+			return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
 		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
 			"domain": category,
 			"error": "Unknown tool domain"

@@ -959,21 +959,21 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 		str(args.get("agent_hint", ""))
 	)
 	if bool(result.get("success", false)):
-		_schedule_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh()
 	return result
 
 
 func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_schedule_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh()
 	return result
 
 
 func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.restore_latest_backup(authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_schedule_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh()
 	return result
 
 

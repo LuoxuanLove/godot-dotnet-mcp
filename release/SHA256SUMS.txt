@@ -1,1 +1,1 @@
-﻿3bac03ced21840f95aca39edaee0d64c26713f8af03757fe58858bb505c467ec *godot-dotnet-mcp-0.2.0.zip
+﻿15d06695b43ffb27ed3ed50b77a054b7b34a96dbf1eb6231033d83e9689fe004  godot-dotnet-mcp-0.3.0.zip

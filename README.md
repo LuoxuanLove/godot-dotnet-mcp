@@ -1,12 +1,14 @@
 ﻿# Godot .NET MCP
-
 [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
+
+> This project is aimed at an AI-native Godot editor experience, not just another MCP server wrapper.
+> Its real leverage comes from letting agents understand live Godot projects, scene structure, scripts, and editor state directly, rather than only forwarding commands into the engine.
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
-[![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.2.0.zip)
+[![Download ZIP](https://img.shields.io/badge/download-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.3.0.zip)
 
 `Godot .NET MCP` is an editor-native, self-evolving MCP plugin for Godot 4 and Godot.NET. It runs inside the editor, exposes live project capabilities to MCP clients, and can grow User tools through explicit authorization.
 
-Current public version: `v0.2.0`
+Current public version: `v0.3.0`
 
 ## What It Is
 
