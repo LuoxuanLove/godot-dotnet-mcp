@@ -191,6 +191,78 @@ func rename_custom_profile(profile_dir: String, profile_id: String, profile_name
 	}
 
 
+func export_tool_config(file_path: String, profile_id: String, disabled_tools: Array) -> Dictionary:
+	var trimmed_path = file_path.strip_edges()
+	if trimmed_path.is_empty():
+		return {"success": false, "error_code": "config_path_required"}
+
+	var ensure_result = _ensure_parent_dir(trimmed_path)
+	if not bool(ensure_result.get("success", false)):
+		return ensure_result
+
+	var file = FileAccess.open(trimmed_path, FileAccess.WRITE)
+	if file == null:
+		return {"success": false, "error_code": "config_write_failed", "file_path": trimmed_path}
+
+	file.store_string(JSON.stringify({
+		"format_version": 1,
+		"profile_id": profile_id,
+		"disabled_tools": disabled_tools.duplicate()
+	}, "\t"))
+	file.close()
+
+	return {"success": true, "file_path": trimmed_path}
+
+
+func import_tool_config(file_path: String) -> Dictionary:
+	var trimmed_path = file_path.strip_edges()
+	if trimmed_path.is_empty():
+		return {"success": false, "error_code": "config_path_required"}
+	if not FileAccess.file_exists(trimmed_path):
+		return {"success": false, "error_code": "config_not_found", "file_path": trimmed_path}
+
+	var file = FileAccess.open(trimmed_path, FileAccess.READ)
+	if file == null:
+		return {"success": false, "error_code": "config_open_failed", "file_path": trimmed_path}
+
+	var json = JSON.new()
+	var text = file.get_as_text()
+	file.close()
+	if json.parse(text) != OK:
+		return {"success": false, "error_code": "config_parse_failed", "file_path": trimmed_path}
+
+	var data = json.get_data()
+	if not (data is Dictionary):
+		return {"success": false, "error_code": "config_parse_failed", "file_path": trimmed_path}
+
+	var profile_id = str(data.get("profile_id", "")).strip_edges()
+	if profile_id.is_empty():
+		return {"success": false, "error_code": "config_profile_required", "file_path": trimmed_path}
+
+	var disabled_tools = data.get("disabled_tools", null)
+	if not (disabled_tools is Array):
+		return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+
+	var normalized_disabled_tools: Array[String] = []
+	for tool_name in disabled_tools:
+		if not (tool_name is String):
+			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+		var normalized_name = str(tool_name).strip_edges()
+		if normalized_name.is_empty():
+			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+		normalized_disabled_tools.append(normalized_name)
+
+	return {
+		"success": true,
+		"file_path": trimmed_path,
+		"data": {
+			"format_version": int(data.get("format_version", 1)),
+			"profile_id": profile_id,
+			"disabled_tools": normalized_disabled_tools
+		}
+	}
+
+
 func _slugify_profile_name(profile_name: String) -> String:
 	var lowered = profile_name.strip_edges().to_lower()
 	var regex = RegEx.new()
@@ -229,3 +301,24 @@ func _read_custom_profile_file(file_path: String) -> Dictionary:
 		return {"success": false, "error_code": "profile_parse_failed"}
 
 	return {"success": true, "data": data}
+
+
+func _ensure_parent_dir(file_path: String) -> Dictionary:
+	var dir_path = file_path.get_base_dir()
+	if dir_path.is_empty() or dir_path == ".":
+		return {"success": true}
+
+	var absolute_dir = ProjectSettings.globalize_path(dir_path)
+	if DirAccess.dir_exists_absolute(absolute_dir):
+		return {"success": true}
+
+	var error = DirAccess.make_dir_recursive_absolute(absolute_dir)
+	if error != OK:
+		return {
+			"success": false,
+			"error_code": "config_dir_create_failed",
+			"dir_path": dir_path,
+			"file_path": file_path
+		}
+
+	return {"success": true}

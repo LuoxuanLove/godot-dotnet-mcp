@@ -58,8 +58,10 @@ const TREE_CHECK_COLUMN := 1
 @onready var _expand_all_button: Button = %ExpandAllButton
 @onready var _collapse_all_button: Button = %CollapseAllButton
 @onready var _delete_user_tool_button: Button = %DeleteUserToolButton
+@onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
 @onready var _top_shadow: ColorRect = %TopShadow
+@onready var _bottom_shadow: ColorRect = %BottomShadow
 @onready var _tool_preview_panel: PanelContainer = %ToolPreviewPanel
 @onready var _tool_preview_title: Label = %ToolPreviewTitle
 @onready var _tool_preview_text: TextEdit = %ToolPreviewText
@@ -108,7 +110,15 @@ func _ready() -> void:
 	_tool_preview_text.context_menu_enabled = true
 	_tool_preview_text.set_line_wrapping_mode(TextEdit.LINE_WRAPPING_BOUNDARY)
 	_tool_preview_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_configure_top_shadow()
+	var top_pane = _content_split.get_node("TopPane") as Control
+	var bottom_pane = _content_split.get_node("BottomPane") as Control
+	var tool_list_panel = _content_split.get_node("TopPane/ToolListOuterMargin/ToolListPanel") as Control
+	top_pane.clip_contents = true
+	bottom_pane.clip_contents = true
+	tool_list_panel.clip_contents = true
+	_tool_preview_panel.clip_contents = true
+	_configure_tree_shadow(_top_shadow, false)
+	_configure_tree_shadow(_bottom_shadow, true)
 	set_process(true)
 
 
@@ -142,7 +152,7 @@ func _render_tool_tree(model: Dictionary) -> void:
 	var root = _tool_tree.create_item()
 	if root == null:
 		_tree_syncing = false
-		call_deferred("_update_top_shadow_visibility")
+		call_deferred("_update_tree_shadow_visibility")
 		return
 
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
@@ -166,7 +176,7 @@ func _render_tool_tree(model: Dictionary) -> void:
 		_create_domain_item(root, model, "other", "domain_other", other_categories)
 
 	_tree_syncing = false
-	call_deferred("_update_top_shadow_visibility")
+	call_deferred("_update_tree_shadow_visibility")
 
 
 func _apply_localized_copy(localization, model: Dictionary, profile_description: String) -> void:
@@ -502,106 +512,84 @@ func _on_tree_gui_input(event: InputEvent) -> void:
 	call_deferred("_handle_tree_click_deferred", mouse_event.position)
 
 
-func _configure_top_shadow() -> void:
+func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
 	var shader := Shader.new()
 	shader.code = """
 shader_type canvas_item;
 
 uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 0.58);
+uniform bool invert_gradient = false;
 
 void fragment() {
-	float alpha = pow(1.0 - UV.y, 1.35) * shadow_color.a;
+	float amount = 1.0 - UV.y;
+	if (invert_gradient) {
+		amount = UV.y;
+	}
+	float alpha = pow(amount, 1.35) * shadow_color.a;
 	COLOR = vec4(shadow_color.rgb, alpha);
 }
 """
 	var material := ShaderMaterial.new()
 	material.shader = shader
 	material.set_shader_parameter("shadow_color", Color(0.0, 0.0, 0.0, 0.58))
-	_top_shadow.material = material
-	_top_shadow.color = Color.WHITE
-	_top_shadow.anchor_left = 0.0
-	_top_shadow.anchor_top = 0.0
-	_top_shadow.anchor_right = 1.0
-	_top_shadow.anchor_bottom = 0.0
-	_top_shadow.offset_left = -12.0
-	_top_shadow.offset_top = 0.0
-	_top_shadow.offset_right = 12.0
-	_top_shadow.offset_bottom = 18.0
-	_top_shadow.z_index = 8
+	material.set_shader_parameter("invert_gradient", invert)
+	shadow.material = material
+	shadow.color = Color.WHITE
+	shadow.anchor_left = 0.0
+	shadow.anchor_right = 1.0
+	shadow.offset_left = -12.0
+	shadow.offset_right = 12.0
+	shadow.z_index = 8
+	if invert:
+		shadow.anchor_top = 1.0
+		shadow.anchor_bottom = 1.0
+		shadow.offset_top = -18.0
+		shadow.offset_bottom = 0.0
+	else:
+		shadow.anchor_top = 0.0
+		shadow.anchor_bottom = 0.0
+		shadow.offset_top = 0.0
+		shadow.offset_bottom = 18.0
 
 
 func _process(_delta: float) -> void:
-	_update_top_shadow_visibility()
+	_update_tree_shadow_visibility()
 
 
-func _update_top_shadow_visibility() -> void:
+func _update_tree_shadow_visibility() -> void:
 	if not is_instance_valid(_tool_tree):
 		_top_shadow.visible = false
+		_bottom_shadow.visible = false
 		return
 	var scroll: Vector2 = _tool_tree.get_scroll()
+	var root = _tool_tree.get_root()
+	var has_items := root != null and root.get_first_child() != null
 	_top_shadow.visible = scroll.y > 0.5
+	_bottom_shadow.visible = has_items and _tree_has_hidden_content_below(root)
 
 
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
 
-	var header_margin = get_node("HeaderMargin") as MarginContainer
-	header_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	header_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	header_margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
-	header_margin.add_theme_constant_override("margin_bottom", int(round(8 * scale)))
-
-	var header_content = get_node("HeaderMargin/HeaderContent") as VBoxContainer
-	header_content.add_theme_constant_override("separation", int(round(8 * scale)))
-
-	var profile_row = get_node("HeaderMargin/HeaderContent/ProfileRow") as HBoxContainer
-	profile_row.add_theme_constant_override("separation", int(round(8 * scale)))
-
-	var actions_row = get_node("HeaderMargin/HeaderContent/ActionsRow") as HBoxContainer
-	actions_row.add_theme_constant_override("separation", int(round(8 * scale)))
-
-	var user_actions_row = get_node("HeaderMargin/HeaderContent/UserActionsRow") as HBoxContainer
-	user_actions_row.add_theme_constant_override("separation", int(round(8 * scale)))
-
-	var tool_list_outer_margin = get_node("TreeContainer/ToolListOuterMargin") as MarginContainer
-	tool_list_outer_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	tool_list_outer_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	tool_list_outer_margin.add_theme_constant_override("margin_top", int(round(3 * scale)))
-	tool_list_outer_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
-
-	var tool_list_margin = get_node("TreeContainer/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin") as MarginContainer
-	tool_list_margin.add_theme_constant_override("margin_left", int(round(4 * scale)))
-	tool_list_margin.add_theme_constant_override("margin_right", 0)
-	tool_list_margin.add_theme_constant_override("margin_top", int(round(4 * scale)))
-	tool_list_margin.add_theme_constant_override("margin_bottom", int(round(4 * scale)))
-
-	var preview_outer_margin = get_node("PreviewOuterMargin") as MarginContainer
-	preview_outer_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	preview_outer_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	preview_outer_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
-
-	var preview_margin = get_node("PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin") as MarginContainer
-	preview_margin.add_theme_constant_override("margin_left", int(round(10 * scale)))
-	preview_margin.add_theme_constant_override("margin_right", int(round(10 * scale)))
-	preview_margin.add_theme_constant_override("margin_top", int(round(10 * scale)))
-	preview_margin.add_theme_constant_override("margin_bottom", int(round(10 * scale)))
-
-	var preview_content = get_node("PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent") as VBoxContainer
-	preview_content.add_theme_constant_override("separation", int(round(6 * scale)))
-
 	_tool_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tool_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tool_tree.custom_minimum_size.y = 320.0 * scale
+	# Tree content scrolls internally, so its minimum height must stay low enough
+	# for the split container to keep search, divider and preview from overlapping.
+	_tool_tree.custom_minimum_size.y = 96.0 * scale
 	_tool_tree.custom_minimum_size.x = 0.0
 	_tool_tree.set_column_expand(TREE_TEXT_COLUMN, true)
 	_tool_tree.set_column_expand(TREE_CHECK_COLUMN, false)
 	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(320 * scale)))
 	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(44 * scale)))
-	_tool_preview_panel.custom_minimum_size.y = 148.0 * scale
+	_tool_preview_panel.custom_minimum_size.y = 88.0 * scale
 	_top_shadow.offset_left = -12.0 * scale
 	_top_shadow.offset_right = 12.0 * scale
-	_top_shadow.custom_minimum_size.y = 18.0 * scale
-	_top_shadow.offset_bottom = 18.0 * scale
+	_top_shadow.custom_minimum_size.y = 14.0 * scale
+	_top_shadow.offset_bottom = 14.0 * scale
+	_bottom_shadow.offset_left = -12.0 * scale
+	_bottom_shadow.offset_right = 12.0 * scale
+	_bottom_shadow.custom_minimum_size.y = 14.0 * scale
+	_bottom_shadow.offset_top = -14.0 * scale
 	_save_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
 	_delete_profile_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
 
@@ -808,6 +796,32 @@ func _find_item_by_selection(item: TreeItem) -> TreeItem:
 			return found
 		child = child.get_next()
 	return null
+
+
+func _tree_has_hidden_content_below(root: TreeItem) -> bool:
+	var last_item = _find_last_visible_tree_item(root)
+	if last_item == null:
+		return false
+	var rect = _tool_tree.get_item_area_rect(last_item, TREE_TEXT_COLUMN, -1)
+	return rect.position.y + rect.size.y > _tool_tree.size.y + 1.0
+
+
+func _find_last_visible_tree_item(item: TreeItem) -> TreeItem:
+	if item == null:
+		return null
+	var child = item.get_first_child()
+	if child == null:
+		return item
+
+	var last_visible: TreeItem = null
+	while child != null:
+		last_visible = child
+		if not child.collapsed:
+			var deepest = _find_last_visible_tree_item(child)
+			if deepest != null:
+				last_visible = deepest
+		child = child.get_next()
+	return last_visible
 
 
 func _refresh_preview() -> void:

@@ -30,6 +30,7 @@ var _localization: LocalizationService
 var _dock: Control
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
+var _pending_runtime_reload_action := ""
 
 
 func _enter_tree() -> void:
@@ -743,6 +744,20 @@ func _get_custom_profile_error_text(error_code: String) -> String:
 			return _localization.get_text("tool_profile_delete_failed")
 
 
+func _get_tool_config_error_text(error_code: String) -> String:
+	match error_code:
+		"config_path_required":
+			return _localization.get_text("tool_config_path_required")
+		"config_not_found":
+			return _localization.get_text("tool_config_not_found")
+		"config_profile_required", "config_disabled_tools_invalid", "config_parse_failed":
+			return _localization.get_text("tool_config_validation_failed")
+		"config_dir_create_failed", "config_write_failed", "config_open_failed":
+			return _localization.get_text("tool_config_write_failed")
+		_:
+			return _localization.get_text("tool_config_validation_failed")
+
+
 func _on_show_user_tools_toggled(enabled: bool) -> void:
 	_state.settings["show_user_tools"] = enabled
 	_save_settings()
@@ -986,27 +1001,41 @@ func get_user_tool_compatibility_from_tools() -> Dictionary:
 
 func runtime_restart_server() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_restart_server", "runtime_restart_server")
-	var success = _server_controller.start(_state.settings, "tool_runtime_restart")
-	_refresh_dock()
-	_finish_self_operation(operation, success, "plugin", "runtime_restart_server")
-	return {"success": success, "running": _server_controller.is_running()}
+	if not _pending_runtime_reload_action.is_empty():
+		_finish_self_operation(operation, false, "plugin", "runtime_restart_server", ["runtime_reload_pending"])
+		return {
+			"success": false,
+			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
+		}
+
+	_pending_runtime_reload_action = "runtime_restart_server"
+	_schedule_runtime_reload("_complete_runtime_server_restart", [str(operation.get("operation_id", ""))])
+	return {
+		"success": true,
+		"message": "Runtime server restart scheduled",
+		"running": _server_controller.is_running(),
+		"deferred": true
+	}
 
 
 func runtime_soft_reload() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_soft_reload", "runtime_soft_reload")
+	if not _pending_runtime_reload_action.is_empty():
+		_finish_self_operation(operation, false, "plugin", "runtime_soft_reload", ["runtime_reload_pending"])
+		return {
+			"success": false,
+			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
+		}
+
 	var was_running = _server_controller.is_running()
-	_refresh_service_instances()
-	LocalizationService.reset_instance()
-	_localization = LocalizationService.get_instance()
-	_localization.set_language(str(_state.settings.get("language", "")))
-	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
-	if was_running:
-		_server_controller.start(_state.settings, "tool_soft_reload")
-	else:
-		_server_controller.reinitialize(_state.settings, "tool_soft_reload")
-	_recreate_dock()
-	_finish_self_operation(operation, true, "plugin", "runtime_soft_reload")
-	return {"success": true, "message": "Plugin soft reloaded", "running": _server_controller.is_running()}
+	_pending_runtime_reload_action = "runtime_soft_reload"
+	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running])
+	return {
+		"success": true,
+		"message": "Plugin soft reload scheduled",
+		"running": was_running,
+		"deferred": true
+	}
 
 
 func runtime_full_reload() -> Dictionary:
@@ -1014,6 +1043,57 @@ func runtime_full_reload() -> Dictionary:
 	_on_full_reload_requested()
 	_finish_self_operation(operation, true, "plugin", "runtime_full_reload")
 	return {"success": true, "message": "Plugin full reload scheduled"}
+
+
+func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
+	var callback = Callable(self, method_name)
+	if not bound_args.is_empty():
+		callback = callback.bindv(bound_args)
+
+	var tree := get_tree()
+	if tree == null:
+		callback.call_deferred()
+		return
+
+	var timer = tree.create_timer(0.05)
+	timer.timeout.connect(callback, CONNECT_ONE_SHOT)
+
+
+func _complete_runtime_server_restart(operation_id: String) -> void:
+	var success := false
+	if _state != null and _server_controller != null:
+		success = _server_controller.start(_state.settings, "tool_runtime_restart")
+		_refresh_dock()
+	_pending_runtime_reload_action = ""
+	_finish_self_operation(
+		{"operation_id": operation_id},
+		success,
+		"plugin",
+		"runtime_restart_server"
+	)
+
+
+func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> void:
+	var success := false
+	if _state != null and _server_controller != null:
+		_refresh_service_instances()
+		LocalizationService.reset_instance()
+		_localization = LocalizationService.get_instance()
+		_localization.set_language(str(_state.settings.get("language", "")))
+		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+		if was_running:
+			success = _server_controller.start(_state.settings, "tool_soft_reload")
+		else:
+			success = _server_controller.reinitialize(_state.settings, "tool_soft_reload")
+		_recreate_dock()
+		_refresh_dock()
+	_pending_runtime_reload_action = ""
+	_finish_self_operation(
+		{"operation_id": operation_id},
+		success,
+		"plugin",
+		"runtime_soft_reload"
+	)
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
@@ -1165,6 +1245,82 @@ func delete_profile_from_tools(profile_id: String) -> Dictionary:
 	if bool(result.get("success", false)):
 		_refresh_dock()
 	return result
+
+
+func export_config_from_tools(file_path: String) -> Dictionary:
+	var disabled_tools: Array = _state.settings.get("disabled_tools", [])
+	var result = _settings_store.export_tool_config(
+		file_path,
+		str(_state.settings.get("tool_profile_id", "default")),
+		disabled_tools
+	)
+	if not bool(result.get("success", false)):
+		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_write_failed")))}
+
+	return {
+		"success": true,
+		"data": {
+			"path": str(result.get("file_path", file_path)),
+			"profile_id": str(_state.settings.get("tool_profile_id", "default")),
+			"disabled_tools": disabled_tools.duplicate(),
+			"disabled_tool_count": disabled_tools.size()
+		},
+		"message": _localization.get_text("tool_config_exported")
+	}
+
+
+func import_config_from_tools(file_path: String) -> Dictionary:
+	var result = _settings_store.import_tool_config(file_path)
+	if not bool(result.get("success", false)):
+		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_parse_failed")))}
+
+	var imported_data: Dictionary = result.get("data", {})
+	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
+	var valid_tools := {}
+	for tool_name in tool_names:
+		valid_tools[str(tool_name)] = true
+
+	var imported_disabled: Array[String] = []
+	var ignored_tools: Array[String] = []
+	for tool_name in imported_data.get("disabled_tools", []):
+		var normalized_tool_name = str(tool_name)
+		if valid_tools.has(normalized_tool_name):
+			imported_disabled.append(normalized_tool_name)
+		else:
+			ignored_tools.append(normalized_tool_name)
+	imported_disabled.sort()
+	ignored_tools.sort()
+
+	var requested_profile_id = str(imported_data.get("profile_id", "default"))
+	var resolved_profile_id = requested_profile_id
+	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+		resolved_profile_id = _tool_catalog.find_matching_profile_id(
+			imported_disabled,
+			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			_state.custom_tool_profiles,
+			tool_names
+		)
+		if resolved_profile_id.is_empty():
+			resolved_profile_id = "default"
+
+	_state.settings["tool_profile_id"] = resolved_profile_id
+	_state.settings["disabled_tools"] = imported_disabled
+	_cleanup_disabled_tools()
+	_save_settings()
+	_refresh_dock()
+
+	return {
+		"success": true,
+		"data": {
+			"path": str(result.get("file_path", file_path)),
+			"requested_profile_id": requested_profile_id,
+			"resolved_profile_id": resolved_profile_id,
+			"disabled_tools": _state.settings.get("disabled_tools", []).duplicate(),
+			"disabled_tool_count": _state.settings.get("disabled_tools", []).size(),
+			"ignored_tools": ignored_tools
+		},
+		"message": _localization.get_text("tool_config_imported")
+	}
 
 
 func get_runtime_usage_guide_from_tools() -> Dictionary:

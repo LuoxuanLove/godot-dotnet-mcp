@@ -118,6 +118,28 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "export_config",
+			"description": "PLUGIN DEVELOPER EXPORT CONFIG: Export the current tool profile id and disabled-tools selection to a JSON file.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"path": {"type": "string"}
+				},
+				"required": ["path"]
+			}
+		},
+		{
+			"name": "import_config",
+			"description": "PLUGIN DEVELOPER IMPORT CONFIG: Import a tool profile id and disabled-tools selection from a JSON file and apply it.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"path": {"type": "string"}
+				},
+				"required": ["path"]
+			}
+		},
+		{
 			"name": "usage_guide",
 			"description": "PLUGIN DEVELOPER USAGE GUIDE: Return the recommended usage flow, reload policy and development/debug loop for this plugin.",
 			"inputSchema": {
@@ -154,6 +176,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			)
 		"delete_profile":
 			return _call_plugin_method("delete_profile_from_tools", [str(args.get("profile_id", ""))], "Plugin developer bridge is unavailable")
+		"export_config":
+			return _call_plugin_method("export_config_from_tools", [str(args.get("path", ""))], "Plugin developer bridge is unavailable")
+		"import_config":
+			return _call_plugin_method("import_config_from_tools", [str(args.get("path", ""))], "Plugin developer bridge is unavailable")
 		"usage_guide":
 			return _call_plugin_method("get_usage_guide_from_tools", [], "Plugin developer bridge is unavailable")
 		_:
