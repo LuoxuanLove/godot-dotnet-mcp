@@ -7,23 +7,29 @@ signal server_stopped
 signal request_received(method: String, params: Dictionary)
 
 const SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd"
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 var _plugin: EditorPlugin
 var _server: Node
 
 
 func attach(plugin: EditorPlugin, settings: Dictionary) -> void:
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_attach", "attach")
 	_plugin = plugin
 	_ensure_server_node(settings)
+	_finish_operation(operation, _server != null, "server_runtime_controller", "attach")
 
 
 func detach() -> void:
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_detach", "detach")
 	stop()
 	_dispose_server_node()
 	_plugin = null
+	_finish_operation(operation, true, "server_runtime_controller", "detach")
 
 
 func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
 	var force_reload_server = reason == "tool_soft_reload"
 	if force_reload_server:
 		stop()
@@ -31,6 +37,20 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 
 	_ensure_server_node(settings, force_reload_server)
 	if _server == null:
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"server_error",
+			"server_node_missing",
+			"Server node could not be created during reinitialize",
+			"server_runtime_controller",
+			reason,
+			SERVER_SCRIPT_PATH,
+			"",
+			str(operation.get("operation_id", "")),
+			true,
+			"Inspect the server script and plugin lifecycle logs."
+		)
+		_finish_operation(operation, false, "server_runtime_controller", reason)
 		return false
 
 	if _has_server_method("reinitialize"):
@@ -53,20 +73,43 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 		if _has_server_method("set_disabled_tools"):
 			_server.set_disabled_tools(settings.get("disabled_tools", []))
 
+	_finish_operation(operation, true, "server_runtime_controller", reason)
 	return true
 
 
 func start(settings: Dictionary, reason: String = "manual") -> bool:
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_start", reason, {"reason": reason})
 	if not reinitialize(settings, reason):
+		_finish_operation(operation, false, "server_runtime_controller", reason)
 		return false
 	if _has_server_method("start"):
-		return _server.start()
+		var started = _server.start()
+		if not started:
+			PluginSelfDiagnosticStore.record_incident(
+				"error",
+				"server_error",
+				"server_start_failed",
+				"Embedded MCP server failed to start",
+				"server_runtime_controller",
+				reason,
+				SERVER_SCRIPT_PATH,
+				"",
+				str(operation.get("operation_id", "")),
+				true,
+				"Inspect the server listen error and port configuration.",
+				{"port": int(settings.get("port", 3000))}
+			)
+		_finish_operation(operation, started, "server_runtime_controller", reason)
+		return started
+	_finish_operation(operation, false, "server_runtime_controller", reason)
 	return false
 
 
 func stop() -> void:
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_stop", "stop")
 	if _has_server_method("stop"):
 		_server.stop()
+	_finish_operation(operation, true, "server_runtime_controller", "stop")
 
 
 func is_running() -> bool:
@@ -158,6 +201,19 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 		return
 
 	if _plugin == null:
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"lifecycle_error",
+			"server_attach_missing_plugin",
+			"Server node creation was requested before the plugin instance was available",
+			"server_runtime_controller",
+			"ensure_server_node",
+			SERVER_SCRIPT_PATH,
+			"",
+			"",
+			true,
+			"Ensure attach() runs after the plugin enters the tree."
+		)
 		return
 
 	var script = ResourceLoader.load(
@@ -168,10 +224,36 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 	if script is Script and force_reload:
 		_reload_script_dependency_chain(script as Script, {})
 	if script == null:
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"resource_missing",
+			"server_script_missing",
+			"Server script could not be loaded",
+			"server_runtime_controller",
+			"ensure_server_node",
+			SERVER_SCRIPT_PATH,
+			"",
+			"",
+			true,
+			"Verify that the embedded HTTP server script exists and can be instantiated."
+		)
 		return
 
 	_server = script.new()
 	if _server == null:
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"server_error",
+			"server_instance_create_failed",
+			"Server script.new() returned null",
+			"server_runtime_controller",
+			"ensure_server_node",
+			SERVER_SCRIPT_PATH,
+			"",
+			"",
+			true,
+			"Inspect the server script for instantiation errors."
+		)
 		return
 
 	_server.name = "MCPHttpServer"
@@ -246,3 +328,10 @@ func _on_server_stopped() -> void:
 
 func _on_request_received(method: String, params: Dictionary) -> void:
 	request_received.emit(method, params)
+
+
+func _finish_operation(operation: Dictionary, success: bool, component: String, phase: String) -> void:
+	if operation.is_empty():
+		return
+	var finished = PluginSelfDiagnosticStore.end_operation(str(operation.get("operation_id", "")), success, [], {"component": component, "phase": phase})
+	PluginSelfDiagnosticStore.record_slow_operation(finished, component, phase)

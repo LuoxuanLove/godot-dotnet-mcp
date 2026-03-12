@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -45,6 +46,7 @@ func initialize(disabled_tools: Array = []) -> Dictionary:
 	_performance["preload_ms"] = _elapsed_ms(preload_started)
 	_performance["startup_ms"] = _elapsed_ms(started_usec)
 	_reload_status = _make_reload_status("initialize")
+	_sync_load_error_incidents("initialize")
 
 	return {
 		"tool_count": get_tool_definitions().size(),
@@ -245,6 +247,7 @@ func reload_domain(category: String) -> Dictionary:
 
 	var instantiate_result = _instantiate_executor(category, true, "reload")
 	if not instantiate_result.get("success", false):
+		_record_reload_incident(category, str(instantiate_result.get("error", "Failed to reload tool domain")), "reload_domain")
 		if not old_runtime.is_empty():
 			_runtime_by_category[category] = old_runtime
 		if not definitions_before.is_empty():
@@ -266,6 +269,7 @@ func reload_domain(category: String) -> Dictionary:
 	}
 	var definitions = _extract_tool_definitions(category, executor)
 	if definitions.is_empty():
+		_record_reload_incident(category, "Reloaded tool domain did not expose any tool definitions", "reload_domain")
 		if not old_runtime.is_empty():
 			_runtime_by_category[category] = old_runtime
 		if not definitions_before.is_empty():
@@ -276,6 +280,7 @@ func reload_domain(category: String) -> Dictionary:
 		}], _elapsed_ms(reload_started)))
 
 	_tool_definitions_by_category[category] = definitions
+	_sync_load_error_incidents("reload_domain")
 	_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
 	_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
 
@@ -303,6 +308,7 @@ func reload_all_domains() -> Dictionary:
 		reloaded.append_array(status.get("reloaded_domains", []))
 		skipped.append_array(status.get("skipped_domains", []))
 		failed.append_array(status.get("failed_domains", []))
+	_sync_load_error_incidents("reload_all_domains")
 
 	return _update_reload_status(_make_reload_status("reload_all_domains", reloaded, skipped, failed, _elapsed_ms(started_usec)))
 
@@ -352,6 +358,7 @@ func _refresh_entries() -> void:
 
 	_entries_by_category = new_entries
 	_ordered_categories = new_order
+	_sync_load_error_incidents("refresh_entries")
 
 
 func _set_disabled_tools(disabled_tools: Array) -> void:
@@ -499,6 +506,7 @@ func _record_load_error(category: String, path: String, message: String) -> void
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
 	runtime["last_error"] = error_info
 	_runtime_by_category[category] = runtime
+	_sync_load_error_incidents("record_load_error")
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
@@ -649,3 +657,46 @@ func _current_load_state(category: String) -> String:
 	if defs.is_empty():
 		return "uninitialized"
 	return "definitions_only"
+
+
+func _sync_load_error_incidents(phase: String) -> void:
+	for error_info in _load_errors:
+		if not (error_info is Dictionary):
+			continue
+		var info := error_info as Dictionary
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"tool_load_error",
+			"tool_domain_load_failed",
+			str(info.get("message", "Tool domain load failed")),
+			"tool_loader",
+			phase,
+			str(info.get("path", "")),
+			"",
+			"",
+			true,
+			"Inspect the tool domain script and the editor output for the failing category.",
+			{
+				"category": str(info.get("category", "")),
+				"source": str(info.get("source", "builtin"))
+			}
+		)
+
+
+func _record_reload_incident(category: String, message: String, phase: String) -> void:
+	PluginSelfDiagnosticStore.record_incident(
+		"error",
+		"reload_conflict",
+		"tool_reload_failed",
+		message,
+		"tool_loader",
+		phase,
+		str(_entries_by_category.get(category, {}).get("path", "")),
+		"",
+		"",
+		true,
+		"Inspect the last reload status and the failing tool domain script.",
+		{
+			"category": category
+		}
+	)

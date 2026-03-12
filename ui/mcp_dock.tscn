@@ -30,6 +30,40 @@ size_flags_horizontal = 3
 [node name="StatusLabel" type="Label" parent="Header/HeaderMargin/HeaderContent"]
 unique_name_in_owner = true
 
+[node name="SelfDiagnosticsPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="SelfDiagnosticsMargin" type="MarginContainer" parent="SelfDiagnosticsPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="SelfDiagnosticsContent" type="VBoxContainer" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin"]
+theme_override_constants/separation = 6
+
+[node name="SelfDiagnosticsHeader" type="HBoxContainer" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent"]
+theme_override_constants/separation = 8
+
+[node name="SelfDiagnosticsTitle" type="Label" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent/SelfDiagnosticsHeader"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="SelfDiagnosticsBadge" type="Label" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent/SelfDiagnosticsHeader"]
+unique_name_in_owner = true
+
+[node name="SelfDiagnosticsCopyButton" type="Button" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent/SelfDiagnosticsHeader"]
+unique_name_in_owner = true
+
+[node name="SelfDiagnosticsSummary" type="Label" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="SelfDiagnosticsDetails" type="Label" parent="SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
 [node name="TabContainer" type="TabContainer" parent="."]
 unique_name_in_owner = true
 size_flags_horizontal = 3

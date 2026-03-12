@@ -7,6 +7,7 @@ class_name MCPHttpServer
 
 const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 signal server_started
 signal server_stopped
@@ -126,6 +127,25 @@ func start() -> bool:
 	var error = _tcp_server.listen(_port, _host)
 	if error != OK:
 		push_error("[MCP] Failed to start server on port %d: %s" % [_port, error_string(error)])
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"server_error",
+			"server_listen_failed",
+			"Embedded MCP server failed to listen on the configured endpoint",
+			"mcp_http_server",
+			"start",
+			"",
+			"",
+			"",
+			true,
+			"Check whether the configured host/port is already in use.",
+			{
+				"host": _host,
+				"port": _port,
+				"error_code": error,
+				"error_text": error_string(error)
+			}
+		)
 		return false
 
 	_running = true
@@ -253,6 +273,20 @@ func _register_tools() -> void:
 	_log("Registered %d tools across %d categories" % [int(summary.get("tool_count", 0)), int(summary.get("category_count", 0))])
 	if int(summary.get("tool_load_error_count", 0)) > 0:
 		_log("Skipped %d tool categories due to load errors" % int(summary.get("tool_load_error_count", 0)))
+		PluginSelfDiagnosticStore.record_incident(
+			"warning",
+			"tool_load_error",
+			"tool_domain_load_failed",
+			"One or more tool domains were skipped during server registration",
+			"mcp_http_server",
+			"register_tools",
+			"",
+			"",
+			"",
+			true,
+			"Inspect the tool loader load-error list and editor output for the failing categories.",
+			{"tool_load_error_count": int(summary.get("tool_load_error_count", 0))}
+		)
 
 
 func _process_http_request(client: StreamPeerTCP) -> void:
@@ -471,6 +505,23 @@ func _handle_mcp_request(body: String) -> Dictionary:
 
 	if error != OK:
 		push_error("[MCP] JSON parse error: %s" % json.get_error_message())
+		PluginSelfDiagnosticStore.record_incident(
+			"warning",
+			"server_error",
+			"json_parse_error",
+			"MCP request JSON parsing failed",
+			"mcp_http_server",
+			"handle_mcp_request",
+			"",
+			"",
+			"",
+			true,
+			"Inspect the malformed request body sent to /mcp.",
+			{
+				"error_message": json.get_error_message(),
+				"body_length": body.length()
+			}
+		)
 		return _create_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null)
 
 	var request = json.get_data()

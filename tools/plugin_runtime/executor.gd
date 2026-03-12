@@ -14,13 +14,25 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "state",
-			"description": "PLUGIN RUNTIME STATE: Read loaded domains, usage stats and the latest reload summary.",
+			"description": "PLUGIN RUNTIME STATE: Read loaded domains, usage stats, self diagnostics and the latest reload summary.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_loaded_domains", "get_reload_status", "get_tool_usage_stats"]
+						"enum": ["list_loaded_domains", "get_reload_status", "get_tool_usage_stats", "get_self_health", "get_self_errors", "get_self_timeline", "clear_self_diagnostics"]
+					},
+					"severity": {
+						"type": "string",
+						"enum": ["info", "warning", "error"]
+					},
+					"category": {
+						"type": "string"
+					},
+					"limit": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 200
 					}
 				},
 				"required": ["action"]
@@ -109,6 +121,26 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 						"count": stats.size(),
 						"tool_usage_stats": stats
 					}, "Tool usage stats fetched")
+				"get_self_health":
+					return _call_plugin_method("get_self_diagnostic_health_from_tools", [], "Plugin self diagnostics bridge is unavailable")
+				"get_self_errors":
+					return _call_plugin_method(
+						"get_self_diagnostic_errors_from_tools",
+						[
+							str(args.get("severity", "")),
+							str(args.get("category", "")),
+							int(args.get("limit", 20))
+						],
+						"Plugin self diagnostics bridge is unavailable"
+					)
+				"get_self_timeline":
+					return _call_plugin_method(
+						"get_self_diagnostic_timeline_from_tools",
+						[int(args.get("limit", 20))],
+						"Plugin self diagnostics bridge is unavailable"
+					)
+				"clear_self_diagnostics":
+					return _call_plugin_method("clear_self_diagnostics_from_tools", [], "Plugin self diagnostics bridge is unavailable")
 				_:
 					return _error("Unknown action: %s" % str(args.get("action", "")))
 		"reload":
