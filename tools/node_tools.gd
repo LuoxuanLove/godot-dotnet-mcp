@@ -273,7 +273,7 @@ EXAMPLES:
 					"action": {"type": "string", "enum": ["call", "call_deferred", "propagate_call", "has_method", "get_method_list"]},
 					"path": {"type": "string"},
 					"method": {"type": "string"},
-					"args": {"type": "array"},
+					"args": {"type": "array", "items": {}},
 					"parent_first": {"type": "boolean", "description": "Call parent before children (default: false)"},
 					"filter": {"type": "string", "description": "Filter methods by name"}
 				},
@@ -687,6 +687,9 @@ func _set_position(node: Node, args: Dictionary) -> Dictionary:
 	var y = args.get("y", 0.0)
 	var z = args.get("z", 0.0)
 	var use_global = args.get("global", false)
+
+	if not (x is float or x is int) or not (y is float or y is int) or not (z is float or z is int):
+		return _error("Coordinates (x, y, z) must be numbers")
 
 	if node is Node2D:
 		if use_global:

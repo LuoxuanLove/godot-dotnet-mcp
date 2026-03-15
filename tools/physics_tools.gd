@@ -197,6 +197,7 @@ EXAMPLES (2D):
 					},
 					"points": {
 						"type": "array",
+						"items": {"type": "object"},
 						"description": "Polygon points array"
 					},
 					"disabled": {

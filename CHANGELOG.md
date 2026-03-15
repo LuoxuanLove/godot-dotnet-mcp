@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 - 2026-03-14
+
+### Fixed
+
+- 修复了全量 MCP 工具中的 JSON Schema 合规性问题，重点解决了 `array` 类型定义缺失 `items` 属性导致的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal` 及 `collision_shape` 等核心工具。
+- 修复了 `editor_status` 和 `node_transform` 工具在参数类型非法时的静默通过问题，增强了输入校验的鲁棒性。
+
 ## 0.3.0 - 2026-03-12
 
 ### Added

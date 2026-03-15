@@ -9,7 +9,7 @@ const LATEST_DELETED_META_PATH := "%s/latest_deleted.json" % BACKUP_DIR
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
 const MAX_AUDIT_ENTRIES := 500
-const SCAFFOLD_VERSION := "0.3.0"
+const SCAFFOLD_VERSION := "0.4.0"
 
 var _session_id := ""
 

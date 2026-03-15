@@ -55,6 +55,7 @@ EXAMPLES:
 					},
 					"args": {
 						"type": "array",
+						"items": {},
 						"description": "Method arguments"
 					}
 				},

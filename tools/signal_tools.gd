@@ -59,6 +59,7 @@ EXAMPLES:
 					},
 					"args": {
 						"type": "array",
+						"items": {},
 						"description": "Arguments for signal emission"
 					},
 					"flags": {

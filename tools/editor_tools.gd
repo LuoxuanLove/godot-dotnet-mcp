@@ -147,6 +147,7 @@ EXAMPLES:
 					},
 					"args": {
 						"type": "array",
+						"items": {},
 						"description": "Method arguments"
 					},
 					"merge_mode": {
@@ -384,6 +385,10 @@ func _get_main_screen() -> Dictionary:
 func _set_main_screen(screen: String) -> Dictionary:
 	if screen.is_empty():
 		return _error("Screen is required")
+
+	var valid_screens = ["2D", "3D", "Script", "AssetLib"]
+	if not screen in valid_screens:
+		return _error("Invalid screen: %s. Valid options: %s" % [screen, str(valid_screens)])
 
 	var ei = _get_editor_interface()
 	if not ei:
