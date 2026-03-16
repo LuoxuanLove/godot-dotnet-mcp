@@ -526,6 +526,26 @@ const TRANSLATIONS: Dictionary = {
 	"tool_filesystem_file_read_desc": "Read file contents and inspect file existence or metadata",
 	"tool_filesystem_file_write_desc": "Write or append plain-text files within the project",
 	"tool_filesystem_file_manage_desc": "Delete, copy or move files within the project",
+
+	# Intelligence tools
+	"tool_intelligence_project_advise_name": "Conseils projet",
+	"tool_intelligence_project_advise_desc": "Retourne des suggestions basées sur des règles et les outils suivants recommandés selon l'état actuel du projet.",
+	"tool_intelligence_project_configure_name": "Configurer le projet",
+	"tool_intelligence_project_configure_desc": "Lit ou modifie les paramètres du projet, les actions d'entrée et la configuration autoload.",
+	"tool_intelligence_project_run_name": "Lancer le projet",
+	"tool_intelligence_project_run_desc": "Démarre l'exécution du projet dans l'éditeur Godot.",
+	"tool_intelligence_project_stop_name": "Arrêter le projet",
+	"tool_intelligence_project_stop_desc": "Arrête le projet en cours d'exécution.",
+	"tool_intelligence_runtime_diagnose_name": "Diagnostic runtime",
+	"tool_intelligence_runtime_diagnose_desc": "Analyse le contexte des erreurs d'exécution et retourne des informations de diagnostic structurées.",
+	"tool_intelligence_scene_analyze_name": "Analyser la scène",
+	"tool_intelligence_scene_analyze_desc": "Analyse en profondeur la structure de la scène, les liaisons de nœuds et les membres de script exportés.",
+	"tool_intelligence_scene_patch_name": "Patcher la scène",
+	"tool_intelligence_scene_patch_desc": "Applique des opérations groupées sur les nœuds de scène : ajouter, supprimer, définir des propriétés ou réorganiser.",
+	"tool_intelligence_script_analyze_name": "Analyser le script",
+	"tool_intelligence_script_analyze_desc": "Analyse la structure, les symboles et les membres exportés d'un script GDScript ou C#.",
+	"tool_intelligence_script_patch_name": "Patcher le script",
+	"tool_intelligence_script_patch_desc": "Ajoute des fonctions, variables, signaux ou champs exportés à un script.",
 }
 
 

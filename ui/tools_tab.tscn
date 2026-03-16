@@ -67,67 +67,6 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ProfileRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent" unique_id=591810913]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ToolProfileLabel" type="Label" parent="HeaderMargin/HeaderContent/ProfileRow" unique_id=194778527]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ToolProfileOption" type="OptionButton" parent="HeaderMargin/HeaderContent/ProfileRow" unique_id=448860873]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="AddProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow" unique_id=1367124968]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="RenameProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow" unique_id=1125579527]
-unique_name_in_owner = true
-layout_mode = 2
-disabled = true
-
-[node name="DeleteProfileButton" type="Button" parent="HeaderMargin/HeaderContent/ProfileRow" unique_id=1632866169]
-unique_name_in_owner = true
-layout_mode = 2
-disabled = true
-
-[node name="ToolProfileDescription" type="Label" parent="HeaderMargin/HeaderContent" unique_id=745658899]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 3
-
-[node name="ActionsRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent" unique_id=1662265991]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ExpandAllButton" type="Button" parent="HeaderMargin/HeaderContent/ActionsRow" unique_id=589978292]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CollapseAllButton" type="Button" parent="HeaderMargin/HeaderContent/ActionsRow" unique_id=142250569]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="UserActionsRow" type="HBoxContainer" parent="HeaderMargin/HeaderContent" unique_id=39724083]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ShowUserToolsCheck" type="CheckBox" parent="HeaderMargin/HeaderContent/UserActionsRow" unique_id=2142547269]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="DeleteUserToolButton" type="Button" parent="HeaderMargin/HeaderContent/UserActionsRow" unique_id=259129556]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-disabled = true
-
 [node name="ContentSplit" type="VSplitContainer" parent="." unique_id=1069031372]
 unique_name_in_owner = true
 layout_mode = 2
@@ -200,7 +139,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 columns = 2
 allow_reselect = true
-hide_root = true
+hide_root = false
 select_mode = 1
 
 [node name="TopShadow" type="ColorRect" parent="ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay" unique_id=786619846]
@@ -286,33 +225,3 @@ size_flags_vertical = 3
 editable = false
 wrap_mode = 1
 scroll_fit_content_width = true
-
-[node name="SaveProfileDialog" type="ConfirmationDialog" parent="." unique_id=527209375]
-unique_name_in_owner = true
-size = Vector2i(320, 100)
-min_size = Vector2i(320, 0)
-
-[node name="DialogContent" type="VBoxContainer" parent="SaveProfileDialog" unique_id=432156962]
-theme_override_constants/separation = 8
-
-[node name="SaveProfileDescription" type="Label" parent="SaveProfileDialog/DialogContent" unique_id=21528417]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 3
-
-[node name="ProfileNameEdit" type="LineEdit" parent="SaveProfileDialog/DialogContent" unique_id=352965099]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="DeleteProfileDialog" type="ConfirmationDialog" parent="." unique_id=1808230296]
-unique_name_in_owner = true
-size = Vector2i(320, 100)
-min_size = Vector2i(320, 0)
-
-[node name="DialogContent" type="VBoxContainer" parent="DeleteProfileDialog" unique_id=1876617847]
-theme_override_constants/separation = 8
-
-[node name="DeleteProfileDescription" type="Label" parent="DeleteProfileDialog/DialogContent" unique_id=2125264667]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 3

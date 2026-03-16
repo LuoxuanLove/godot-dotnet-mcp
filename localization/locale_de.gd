@@ -526,6 +526,26 @@ const TRANSLATIONS: Dictionary = {
 	"tool_filesystem_file_read_desc": "Read file contents and inspect file existence or metadata",
 	"tool_filesystem_file_write_desc": "Write or append plain-text files within the project",
 	"tool_filesystem_file_manage_desc": "Delete, copy or move files within the project",
+
+	# Intelligence tools
+	"tool_intelligence_project_advise_name": "Projektberatung",
+	"tool_intelligence_project_advise_desc": "Gibt regelbasierte Vorschläge und empfohlene Folgewerkzeuge basierend auf dem aktuellen Projektstatus zurück.",
+	"tool_intelligence_project_configure_name": "Projektkonfiguration",
+	"tool_intelligence_project_configure_desc": "Liest oder ändert Projekteinstellungen, Eingabe-Aktionen und Autoload-Konfiguration.",
+	"tool_intelligence_project_run_name": "Projekt starten",
+	"tool_intelligence_project_run_desc": "Startet das Projekt im Godot-Editor.",
+	"tool_intelligence_project_stop_name": "Projekt stoppen",
+	"tool_intelligence_project_stop_desc": "Stoppt das aktuell laufende Projekt.",
+	"tool_intelligence_runtime_diagnose_name": "Laufzeitdiagnose",
+	"tool_intelligence_runtime_diagnose_desc": "Analysiert den Kontext von Laufzeitfehlern und gibt strukturierte Diagnoseinformationen zurück.",
+	"tool_intelligence_scene_analyze_name": "Szene analysieren",
+	"tool_intelligence_scene_analyze_desc": "Analysiert tiefgehend Szenenstruktur, Knotenbindungen und exportierte Skriptmitglieder.",
+	"tool_intelligence_scene_patch_name": "Szene patchen",
+	"tool_intelligence_scene_patch_desc": "Wendet Stapeloperationen auf Szenenknoten an: Hinzufügen, Löschen, Eigenschaften setzen oder umordnen.",
+	"tool_intelligence_script_analyze_name": "Skript analysieren",
+	"tool_intelligence_script_analyze_desc": "Analysiert Struktur, Symbole und exportierte Mitglieder eines GDScript- oder C#-Skripts.",
+	"tool_intelligence_script_patch_name": "Skript patchen",
+	"tool_intelligence_script_patch_desc": "Fügt Funktionen, Variablen, Signale oder exportierte Felder zu einem Skript hinzu.",
 }
 
 

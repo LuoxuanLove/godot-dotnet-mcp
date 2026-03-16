@@ -15,19 +15,13 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
-signal profile_selected(profile_id: String)
-signal save_profile_requested(profile_name: String)
-signal rename_profile_requested(profile_id: String, profile_name: String)
-signal delete_profile_requested(profile_id: String)
-signal show_user_tools_toggled(enabled: bool)
-signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
+signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal category_collapse_toggled(category: String)
 signal domain_collapse_toggled(domain_key: String)
-signal expand_all_requested
-signal collapse_all_requested
+signal intelligence_tool_collapse_toggled(full_name: String)
 signal cli_scope_changed(scope: String)
 signal config_platform_changed(platform_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
@@ -70,19 +64,14 @@ func _ready() -> void:
 			_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
 
 	if _tools_tab:
-		_tools_tab.profile_selected.connect(_on_tools_tab_profile_selected)
-		_tools_tab.save_profile_requested.connect(_on_tools_tab_save_profile_requested)
-		_tools_tab.rename_profile_requested.connect(_on_tools_tab_rename_profile_requested)
-		_tools_tab.delete_profile_requested.connect(_on_tools_tab_delete_profile_requested)
-		_tools_tab.show_user_tools_toggled.connect(_on_tools_tab_show_user_tools_toggled)
-		_tools_tab.delete_user_tool_requested.connect(_on_tools_tab_delete_user_tool_requested)
+		if _tools_tab.has_signal("delete_user_tool_requested"):
+			_tools_tab.connect("delete_user_tool_requested", _on_tools_tab_delete_user_tool_requested)
 		_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
 		_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
 		_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
 		_tools_tab.category_collapse_toggled.connect(_on_tools_tab_category_collapse_toggled)
 		_tools_tab.domain_collapse_toggled.connect(_on_tools_tab_domain_collapse_toggled)
-		_tools_tab.expand_all_requested.connect(_on_tools_tab_expand_all_requested)
-		_tools_tab.collapse_all_requested.connect(_on_tools_tab_collapse_all_requested)
+		_tools_tab.intelligence_tool_collapse_toggled.connect(_on_tools_tab_intelligence_tool_collapse_toggled)
 
 	if _config_tab:
 		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
@@ -92,6 +81,8 @@ func _ready() -> void:
 
 
 func apply_model(model: Dictionary) -> void:
+	if _status_indicator == null or _tab_container == null:
+		return
 	var localization = model.get("localization")
 	if localization == null:
 		return
@@ -112,7 +103,6 @@ func apply_model(model: Dictionary) -> void:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
 		_tab_container.set_tab_title(1, localization.get_text("tab_tools"))
 		_tab_container.set_tab_title(2, localization.get_text("tab_config"))
-
 	if _server_tab and _server_tab.has_method("apply_model"):
 		_server_tab.apply_model(model)
 	if _tools_tab and _tools_tab.has_method("apply_model"):
@@ -156,6 +146,8 @@ func capture_focus_snapshot() -> Dictionary:
 
 
 func restore_focus_snapshot(snapshot: Dictionary) -> void:
+	if _tab_container == null:
+		return
 	var tab_index = int(snapshot.get("tab_index", _tab_container.current_tab))
 	if tab_index >= 0 and tab_index < _tab_container.get_tab_count():
 		_tab_container.current_tab = tab_index
@@ -255,26 +247,6 @@ func _on_server_tab_copy_requested(text: String, source: String) -> void:
 	copy_requested.emit(text, source)
 
 
-func _on_tools_tab_profile_selected(profile_id: String) -> void:
-	profile_selected.emit(profile_id)
-
-
-func _on_tools_tab_save_profile_requested(profile_name: String) -> void:
-	save_profile_requested.emit(profile_name)
-
-
-func _on_tools_tab_rename_profile_requested(profile_id: String, profile_name: String) -> void:
-	rename_profile_requested.emit(profile_id, profile_name)
-
-
-func _on_tools_tab_delete_profile_requested(profile_id: String) -> void:
-	delete_profile_requested.emit(profile_id)
-
-
-func _on_tools_tab_show_user_tools_toggled(enabled: bool) -> void:
-	show_user_tools_toggled.emit(enabled)
-
-
 func _on_tools_tab_delete_user_tool_requested(script_path: String) -> void:
 	delete_user_tool_requested.emit(script_path)
 
@@ -299,12 +271,8 @@ func _on_tools_tab_domain_collapse_toggled(domain_key: String) -> void:
 	domain_collapse_toggled.emit(domain_key)
 
 
-func _on_tools_tab_expand_all_requested() -> void:
-	expand_all_requested.emit()
-
-
-func _on_tools_tab_collapse_all_requested() -> void:
-	collapse_all_requested.emit()
+func _on_tools_tab_intelligence_tool_collapse_toggled(full_name: String) -> void:
+	intelligence_tool_collapse_toggled.emit(full_name)
 
 
 func _on_config_tab_cli_scope_changed(scope: String) -> void:

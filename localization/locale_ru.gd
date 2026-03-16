@@ -526,6 +526,26 @@ const TRANSLATIONS: Dictionary = {
 	"tool_filesystem_file_read_desc": "Read file contents and inspect file existence or metadata",
 	"tool_filesystem_file_write_desc": "Write or append plain-text files within the project",
 	"tool_filesystem_file_manage_desc": "Delete, copy or move files within the project",
+
+	# Intelligence tools
+	"tool_intelligence_project_advise_name": "Рекомендации по проекту",
+	"tool_intelligence_project_advise_desc": "Возвращает основанные на правилах предложения и рекомендуемые следующие инструменты на основе текущего состояния проекта.",
+	"tool_intelligence_project_configure_name": "Настройка проекта",
+	"tool_intelligence_project_configure_desc": "Читает или изменяет настройки проекта, действия ввода и конфигурацию autoload.",
+	"tool_intelligence_project_run_name": "Запустить проект",
+	"tool_intelligence_project_run_desc": "Запускает проект в редакторе Godot.",
+	"tool_intelligence_project_stop_name": "Остановить проект",
+	"tool_intelligence_project_stop_desc": "Останавливает текущий запущенный проект.",
+	"tool_intelligence_runtime_diagnose_name": "Диагностика выполнения",
+	"tool_intelligence_runtime_diagnose_desc": "Анализирует контекст ошибок выполнения и возвращает структурированную диагностическую информацию.",
+	"tool_intelligence_scene_analyze_name": "Анализ сцены",
+	"tool_intelligence_scene_analyze_desc": "Глубоко анализирует структуру сцены, привязки узлов и экспортируемые члены скрипта.",
+	"tool_intelligence_scene_patch_name": "Патч сцены",
+	"tool_intelligence_scene_patch_desc": "Применяет пакетные операции к узлам сцены: добавить, удалить, установить свойства или изменить родитель.",
+	"tool_intelligence_script_analyze_name": "Анализ скрипта",
+	"tool_intelligence_script_analyze_desc": "Анализирует структуру, символы и экспортируемые члены GDScript или C# скрипта.",
+	"tool_intelligence_script_patch_name": "Патч скрипта",
+	"tool_intelligence_script_patch_desc": "Добавляет функции, переменные, сигналы или экспортируемые поля в скрипт.",
 }
 
 

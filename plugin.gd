@@ -64,7 +64,7 @@ func _enter_tree() -> void:
 	_restore_pending_focus_snapshot_if_needed()
 	_finish_self_operation(operation, true, "plugin", "_enter_tree")
 
-	print("[Godot MCP] Plugin loaded")
+	MCPDebugBuffer.record("info", "plugin", "Plugin initialized")
 
 
 func _exit_tree() -> void:
@@ -99,6 +99,7 @@ func _disable_plugin() -> void:
 func _validate_permission_configuration() -> void:
 	for issue in PluginRuntimeState.get_domain_category_consistency_issues():
 		push_warning("[Godot MCP] Permission configuration issue: %s" % issue)
+		MCPDebugBuffer.record("warning", "plugin", "Permission config issue: %s" % issue)
 
 
 func _process(delta: float) -> void:
@@ -141,6 +142,7 @@ func _ensure_runtime_bridge_autoload() -> void:
 	if not ResourceLoader.exists(RUNTIME_BRIDGE_AUTOLOAD_PATH):
 		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge script missing")
 		push_error("[Godot MCP] Runtime bridge autoload script not found: %s" % RUNTIME_BRIDGE_AUTOLOAD_PATH)
+		MCPDebugBuffer.record("error", "plugin", "Runtime bridge script not found: %s" % RUNTIME_BRIDGE_AUTOLOAD_PATH)
 		_record_self_incident("error", "resource_missing", "runtime_bridge_script_missing", "Runtime bridge autoload script not found", "plugin", "_ensure_runtime_bridge_autoload", RUNTIME_BRIDGE_AUTOLOAD_PATH, "", str(operation.get("operation_id", "")), true, "Verify that the runtime bridge script exists and is enabled.")
 		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
 		return
@@ -153,6 +155,7 @@ func _ensure_runtime_bridge_autoload() -> void:
 	if not current_path.is_empty():
 		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Autoload name is occupied by another script")
 		push_warning("[Godot MCP] Runtime bridge autoload name is already used: %s" % current_path)
+		MCPDebugBuffer.record("warning", "plugin", "Runtime bridge autoload name conflict: %s" % current_path)
 		_record_self_incident("warning", "autoload_conflict", "autoload_name_occupied", "Runtime bridge autoload name is already occupied", "plugin", "_ensure_runtime_bridge_autoload", current_path, "", str(operation.get("operation_id", "")), true, "Resolve the conflicting autoload entry before enabling the runtime bridge.", {"setting_key": setting_key})
 		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
 		return
@@ -162,7 +165,7 @@ func _ensure_runtime_bridge_autoload() -> void:
 	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
 	_record_runtime_bridge_stale_instance("_ensure_runtime_bridge_autoload", str(operation.get("operation_id", "")))
 	_finish_self_operation(operation, true, "plugin", "_ensure_runtime_bridge_autoload")
-	print("[Godot MCP] Runtime bridge autoload added")
+	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload registered")
 
 
 func _remove_runtime_bridge_autoload() -> void:
@@ -179,7 +182,7 @@ func _remove_runtime_bridge_autoload() -> void:
 	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
 	_record_runtime_bridge_stale_instance("_remove_runtime_bridge_autoload", str(operation.get("operation_id", "")))
 	_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
-	print("[Godot MCP] Runtime bridge autoload removed")
+	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload removed")
 
 
 func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
@@ -239,6 +242,7 @@ func _create_dock() -> void:
 	var dock_scene = _load_packed_scene(MCP_DOCK_SCENE_PATH)
 	if dock_scene == null:
 		push_error("[Godot MCP] Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
+		MCPDebugBuffer.record("error", "plugin", "Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
 		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Failed to load dock scene", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and script dependencies.")
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
@@ -298,7 +302,8 @@ func _remove_stale_docks() -> void:
 			child.get_parent().remove_child(child)
 		child.set_script(null)
 		child.free()
-		print("[Godot MCP] Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
+		MCPDebugBuffer.record("debug", "plugin",
+			"Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
 	var remaining_count = _count_dock_instances()
 	if remaining_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance remains after stale-dock cleanup", "plugin", "_remove_stale_docks", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and editor plugin reload ordering.", {"dock_count": remaining_count})
@@ -320,19 +325,13 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
 	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
 	connected = _connect_dock_signal("full_reload_requested", _on_full_reload_requested, operation_id) and connected
-	connected = _connect_dock_signal("profile_selected", _on_profile_selected, operation_id) and connected
-	connected = _connect_dock_signal("save_profile_requested", _on_save_profile_requested, operation_id) and connected
-	connected = _connect_dock_signal("rename_profile_requested", _on_rename_profile_requested, operation_id) and connected
-	connected = _connect_dock_signal("delete_profile_requested", _on_delete_profile_requested, operation_id) and connected
-	connected = _connect_dock_signal("show_user_tools_toggled", _on_show_user_tools_toggled, operation_id) and connected
 	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
 	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
 	connected = _connect_dock_signal("domain_toggled", _on_domain_toggled, operation_id) and connected
 	connected = _connect_dock_signal("category_collapse_toggled", _on_category_collapse_toggled, operation_id) and connected
 	connected = _connect_dock_signal("domain_collapse_toggled", _on_domain_collapse_toggled, operation_id) and connected
-	connected = _connect_dock_signal("expand_all_requested", _on_expand_all_requested, operation_id) and connected
-	connected = _connect_dock_signal("collapse_all_requested", _on_collapse_all_requested, operation_id) and connected
+	connected = _connect_dock_signal("intelligence_tool_collapse_toggled", _on_intelligence_tool_collapse_toggled, operation_id) and connected
 	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
 	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
 	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
@@ -604,7 +603,7 @@ func _on_permission_level_changed(level: String) -> void:
 	_refresh_dock()
 
 
-func _on_profile_selected(profile_id: String) -> void:
+func _apply_tool_profile(profile_id: String) -> void:
 	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
 	_state.settings["tool_profile_id"] = profile_id
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
@@ -616,33 +615,6 @@ func _on_profile_selected(profile_id: String) -> void:
 	)
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
 	_save_settings()
-	_refresh_dock()
-
-
-func _on_save_profile_requested(profile_name: String) -> void:
-	var result = _save_custom_profile(profile_name)
-	if not bool(result.get("success", false)):
-		_show_message(str(result.get("error", _localization.get_text("tool_profile_save_failed"))))
-		return
-	_show_message(str(result.get("message", "")))
-	_refresh_dock()
-
-
-func _on_rename_profile_requested(profile_id: String, profile_name: String) -> void:
-	var result = _rename_custom_profile(profile_id, profile_name)
-	if not bool(result.get("success", false)):
-		_show_message(str(result.get("error", _localization.get_text("tool_profile_rename_failed"))))
-		return
-	_show_message(str(result.get("message", "")))
-	_refresh_dock()
-
-
-func _on_delete_profile_requested(profile_id: String) -> void:
-	var result = _delete_custom_profile(profile_id)
-	if not bool(result.get("success", false)):
-		_show_message(str(result.get("error", _localization.get_text("tool_profile_delete_failed"))))
-		return
-	_show_message(str(result.get("message", "")))
 	_refresh_dock()
 
 
@@ -758,12 +730,6 @@ func _get_tool_config_error_text(error_code: String) -> String:
 			return _localization.get_text("tool_config_validation_failed")
 
 
-func _on_show_user_tools_toggled(enabled: bool) -> void:
-	_state.settings["show_user_tools"] = enabled
-	_save_settings()
-	_refresh_dock()
-
-
 func _on_delete_user_tool_requested(script_path: String) -> void:
 	var result = _user_tool_service.delete_tool(script_path, true)
 	if not bool(result.get("success", false)):
@@ -843,23 +809,9 @@ func _on_domain_collapse_toggled(domain_key: String) -> void:
 	_save_settings()
 
 
-func _on_expand_all_requested() -> void:
-	_state.settings["collapsed_categories"] = []
-	_state.settings["collapsed_domains"] = []
+func _on_intelligence_tool_collapse_toggled(full_name: String) -> void:
+	_toggle_array_membership(_state.settings["collapsed_intelligence_tools"], full_name)
 	_save_settings()
-	_refresh_dock()
-
-
-func _on_collapse_all_requested() -> void:
-	var all_categories: Array = []
-	for category in _server_controller.get_all_tools_by_category().keys():
-		all_categories.append(str(category))
-
-	var all_domains = PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS.duplicate()
-	_state.settings["collapsed_categories"] = all_categories
-	_state.settings["collapsed_domains"] = all_domains
-	_save_settings()
-	_refresh_dock()
 
 
 func _on_cli_scope_changed(scope: String) -> void:
@@ -932,7 +884,7 @@ func _toggle_array_membership(items: Array, value: String) -> void:
 
 
 func _show_message(message: String) -> void:
-	print("[Godot MCP] %s" % message)
+	MCPDebugBuffer.record("info", "plugin", message)
 	if _dock and is_instance_valid(_dock):
 		_dock.show_message(_localization.get_text("dialog_title"), message)
 
@@ -1155,7 +1107,9 @@ func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Diction
 
 
 func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
-	_on_show_user_tools_toggled(enabled)
+	_state.settings["show_user_tools"] = enabled
+	_save_settings()
+	_refresh_dock()
 	return {"success": true, "show_user_tools": enabled}
 
 
@@ -1219,7 +1173,7 @@ func apply_profile_from_tools(profile_id: String) -> Dictionary:
 		return {"success": false, "error": "Profile id is required"}
 	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
 		return {"success": false, "error": "Unknown profile id: %s" % profile_id}
-	_on_profile_selected(profile_id)
+	_apply_tool_profile(profile_id)
 	return {
 		"success": true,
 		"profile_id": str(_state.settings.get("tool_profile_id", profile_id))

@@ -5,6 +5,7 @@ class_name MCPToolRegistry
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 
 const BUILTIN_ENTRIES: Array[Dictionary] = [
+	{"category": "intelligence", "path": "res://addons/godot_dotnet_mcp/tools/intelligence/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "scene", "path": "res://addons/godot_dotnet_mcp/tools/scene/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "node", "path": "res://addons/godot_dotnet_mcp/tools/node/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},
 	{"category": "resource", "path": "res://addons/godot_dotnet_mcp/tools/resource/executor.gd", "domain_key": "core", "source": "builtin", "hot_reloadable": true},

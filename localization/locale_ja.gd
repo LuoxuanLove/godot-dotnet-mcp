@@ -526,6 +526,26 @@ const TRANSLATIONS: Dictionary = {
 	# Group tools
 	"tool_group_group_name": "Group",
 	"tool_group_group_desc": "Query and manage node groups globally",
+
+	# Intelligence tools
+	"tool_intelligence_project_advise_name": "プロジェクトアドバイズ",
+	"tool_intelligence_project_advise_desc": "現在のプロジェクト状態に基づくルールベースの提案と推奨次ツールを返します。",
+	"tool_intelligence_project_configure_name": "プロジェクト設定",
+	"tool_intelligence_project_configure_desc": "プロジェクト設定、入力アクション、autoload 設定を読み取りまたは変更します。",
+	"tool_intelligence_project_run_name": "プロジェクト実行",
+	"tool_intelligence_project_run_desc": "Godot エディター内でプロジェクトの実行を開始します。",
+	"tool_intelligence_project_stop_name": "プロジェクト停止",
+	"tool_intelligence_project_stop_desc": "現在実行中のプロジェクトを停止します。",
+	"tool_intelligence_runtime_diagnose_name": "ランタイム診断",
+	"tool_intelligence_runtime_diagnose_desc": "ランタイムエラーのコンテキストを分析し、構造化された診断情報を返します。",
+	"tool_intelligence_scene_analyze_name": "シーン分析",
+	"tool_intelligence_scene_analyze_desc": "シーン構造、ノードバインディング、エクスポートされたスクリプトメンバーを深く分析します。",
+	"tool_intelligence_scene_patch_name": "シーンパッチ",
+	"tool_intelligence_scene_patch_desc": "シーンノードにバッチ操作を適用します：追加、削除、プロパティ設定、または親変更。",
+	"tool_intelligence_script_analyze_name": "スクリプト分析",
+	"tool_intelligence_script_analyze_desc": "GDScript または C# スクリプトの構造、シンボル、エクスポートメンバーを分析します。",
+	"tool_intelligence_script_patch_name": "スクリプトパッチ",
+	"tool_intelligence_script_patch_desc": "スクリプトに関数、変数、シグナル、またはエクスポートフィールドを追加します。",
 }
 
 

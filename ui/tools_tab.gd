@@ -1,19 +1,13 @@
 @tool
 extends VBoxContainer
 
-signal profile_selected(profile_id: String)
-signal save_profile_requested(profile_name: String)
-signal rename_profile_requested(profile_id: String, profile_name: String)
-signal delete_profile_requested(profile_id: String)
-signal show_user_tools_toggled(enabled: bool)
-signal delete_user_tool_requested(script_path: String)
 signal tool_toggled(tool_name: String, enabled: bool)
+signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal category_collapse_toggled(category: String)
 signal domain_collapse_toggled(domain_key: String)
-signal expand_all_requested
-signal collapse_all_requested
+signal intelligence_tool_collapse_toggled(full_name: String)
 
 const CATEGORY_LABEL_KEYS := {
 	"scene": "cat_scene",
@@ -40,24 +34,84 @@ const CATEGORY_LABEL_KEYS := {
 	"navigation": "cat_navigation",
 	"audio": "cat_audio",
 	"ui": "cat_ui",
-	"user": "cat_user"
+	"user": "cat_user",
+	"intelligence": "cat_intelligence"
 }
 
 const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
+const INTELLIGENCE_CATEGORY := "intelligence"
+const INTELLIGENCE_TOOL_ATOMIC_CHILDREN := {
+	"intelligence_project_state": [
+		{"tool": "project_info",         "actions": ["get_info"]},
+		{"tool": "project_dotnet",       "actions": []},
+		{"tool": "filesystem_directory", "actions": ["get_files"]},
+		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_errors_context", "get_scene_snapshot", "get_recent_filtered"]},
+		{"tool": "debug_dotnet",         "actions": ["restore"]}
+	],
+	"intelligence_project_advise": [
+		{"tool": "project_info",         "actions": ["get_info"]},
+		{"tool": "filesystem_directory", "actions": ["get_files"]},
+		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_recent_filtered"]},
+		{"tool": "debug_dotnet",         "actions": ["restore"]}
+	],
+	"intelligence_runtime_diagnose": [
+		{"tool": "debug_runtime_bridge", "actions": ["get_errors_context"]},
+		{"tool": "debug_dotnet",         "actions": ["restore"]},
+		{"tool": "debug_performance",    "actions": ["get_fps", "get_memory", "get_render_info"]}
+	],
+	"intelligence_project_configure": [
+		{"tool": "project_info",     "actions": ["get_settings"]},
+		{"tool": "project_settings", "actions": ["set"]},
+		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
+		{"tool": "project_input",    "actions": ["list_actions"]}
+	],
+	"intelligence_project_run":  [{"tool": "scene_run", "actions": ["play_main", "play_custom"]}],
+	"intelligence_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
+	"intelligence_bindings_audit": [
+		{"tool": "script_inspect",       "actions": ["path"]},
+		{"tool": "script_references",    "actions": ["get_scene_refs", "get_base_type"]},
+		{"tool": "scene_bindings",       "actions": ["from_path"]},
+		{"tool": "scene_audit",          "actions": ["from_path"]},
+		{"tool": "filesystem_directory", "actions": ["get_files"]}
+	],
+	"intelligence_scene_validate": [
+		{"tool": "scene_audit",    "actions": ["from_path"]},
+		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]}
+	],
+	"intelligence_scene_analyze": [
+		{"tool": "scene_bindings", "actions": ["from_path"]},
+		{"tool": "scene_audit",    "actions": ["from_path"]},
+		{"tool": "script_inspect", "actions": ["path"]}
+	],
+	"intelligence_scene_patch": [
+		{"tool": "scene_management", "actions": ["get_current", "open", "save"]},
+		{"tool": "node_lifecycle",   "actions": ["create", "delete"]},
+		{"tool": "node_property",    "actions": ["set"]},
+		{"tool": "node_hierarchy",   "actions": ["reparent"]}
+	],
+	"intelligence_script_analyze": [
+		{"tool": "script_inspect",    "actions": ["path"]},
+		{"tool": "script_symbols",    "actions": ["path"]},
+		{"tool": "script_exports",    "actions": ["path"]},
+		{"tool": "script_references", "actions": ["get_scene_refs", "get_base_type"]}
+	],
+	"intelligence_script_patch": [
+		{"tool": "script_inspect",  "actions": ["path"]},
+		{"tool": "script_edit_gd",  "actions": ["add_function", "add_variable", "add_signal", "add_export"]},
+		{"tool": "script_edit_cs",  "actions": ["add_method", "add_field"]}
+	],
+	"intelligence_project_index_build": [
+		{"tool": "filesystem_directory", "actions": ["get_files"]},
+		{"tool": "script_inspect",       "actions": ["path"]},
+		{"tool": "resource_query",       "actions": ["get_dependencies"]}
+	],
+	"intelligence_project_symbol_search":  [{"tool": "filesystem_directory", "actions": ["get_files"]}],
+	"intelligence_scene_dependency_graph": [{"tool": "resource_query",       "actions": ["get_dependencies"]}]
+}
 
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
-@onready var _profile_label: Label = %ToolProfileLabel
-@onready var _profile_option: OptionButton = %ToolProfileOption
-@onready var _add_profile_button: Button = %AddProfileButton
-@onready var _rename_profile_button: Button = %RenameProfileButton
-@onready var _delete_profile_button: Button = %DeleteProfileButton
-@onready var _profile_desc_label: Label = %ToolProfileDescription
-@onready var _show_user_tools_check: CheckBox = %ShowUserToolsCheck
-@onready var _expand_all_button: Button = %ExpandAllButton
-@onready var _collapse_all_button: Button = %CollapseAllButton
-@onready var _delete_user_tool_button: Button = %DeleteUserToolButton
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
 @onready var _top_shadow: ColorRect = %TopShadow
@@ -65,21 +119,18 @@ const TREE_CHECK_COLUMN := 1
 @onready var _tool_preview_panel: PanelContainer = %ToolPreviewPanel
 @onready var _tool_preview_title: Label = %ToolPreviewTitle
 @onready var _tool_preview_text: TextEdit = %ToolPreviewText
-@onready var _save_dialog: ConfirmationDialog = %SaveProfileDialog
-@onready var _profile_name_edit: LineEdit = %ProfileNameEdit
-@onready var _save_dialog_desc: Label = %SaveProfileDescription
-@onready var _delete_profile_dialog: ConfirmationDialog = %DeleteProfileDialog
-@onready var _delete_profile_desc: Label = %DeleteProfileDescription
 
-var _profile_option_syncing := false
+const _CTX_COPY_NAME   := 0
+const _CTX_COPY_SCHEMA := 1
+const _CTX_DELETE_TOOL := 3
+const _CTX_EXPAND_ALL  := 10
+const _CTX_COLLAPSE_ALL := 11
+
 var _tree_syncing := false
 var _current_scale := -1.0
-var _selected_user_script_path := ""
-var _selected_profile_id := "default"
-var _selected_profile_name := ""
-var _selected_profile_is_custom := false
-var _profile_dialog_mode := "save"
 var _localization = null
+var _context_menu: PopupMenu = null
+var _context_menu_metadata: Dictionary = {}
 var _current_model: Dictionary = {}
 var _selected_tree_kind := ""
 var _selected_tree_key := ""
@@ -87,21 +138,12 @@ var _selected_tool_category := ""
 var _selected_tool_name := ""
 var _selection_sync_queued := false
 var _last_tree_signature := ""
+var _last_preview_key := ""
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_search_edit.text_changed.connect(_on_search_text_changed)
-	_profile_option.item_selected.connect(_on_profile_option_selected)
-	_add_profile_button.pressed.connect(_on_add_profile_button_pressed)
-	_rename_profile_button.pressed.connect(_on_rename_profile_button_pressed)
-	_delete_profile_button.pressed.connect(_on_delete_profile_button_pressed)
-	_show_user_tools_check.toggled.connect(_on_show_user_tools_check_toggled)
-	_expand_all_button.pressed.connect(_on_expand_all_button_pressed)
-	_collapse_all_button.pressed.connect(_on_collapse_all_button_pressed)
-	_delete_user_tool_button.pressed.connect(_on_delete_user_tool_button_pressed)
-	_save_dialog.confirmed.connect(_on_save_dialog_confirmed)
-	_delete_profile_dialog.confirmed.connect(_on_delete_profile_dialog_confirmed)
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.gui_input.connect(_on_tree_gui_input)
 	_tool_tree.set_allow_reselect(true)
@@ -120,28 +162,33 @@ func _ready() -> void:
 	_configure_tree_shadow(_top_shadow, false)
 	_configure_tree_shadow(_bottom_shadow, true)
 	set_process(true)
+	_context_menu = PopupMenu.new()
+	add_child(_context_menu)
+	_context_menu.id_pressed.connect(_on_context_menu_id_pressed)
 
 
 func apply_model(model: Dictionary) -> void:
 	var localization = model.get("localization")
 	_localization = localization
 	_current_model = model
-	var settings: Dictionary = model.get("settings", {})
-	var builtin_profiles: Array = model.get("builtin_profiles", [])
-	var custom_profiles: Dictionary = model.get("custom_profiles", {})
-	var profile_description = str(model.get("profile_description", ""))
 	var editor_scale = float(model.get("editor_scale", 1.0))
 
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
 
-	_apply_localized_copy(localization, model, profile_description)
-	_rebuild_profile_options(localization, builtin_profiles, custom_profiles, str(settings.get("tool_profile_id", "default")))
-	_sync_profile_selection_from_option()
-	_sync_profile_buttons()
+	_apply_localized_copy(localization, model)
 
 	var tree_signature = _build_tree_signature(model)
 	_refresh_tree_state(model, tree_signature)
+
+
+func _get_root_label(model: Dictionary) -> String:
+	var counts = _count_intelligence_enabled(model)
+	var localization = model.get("localization")
+	var label = localization.get_text("cat_intelligence") if localization else "Intelligence"
+	if label == "cat_intelligence":
+		label = "Intelligence"
+	return "%s    %d/%d" % [label, int(counts[0]), int(counts[1])]
 
 
 func _render_tool_tree(model: Dictionary) -> void:
@@ -155,94 +202,48 @@ func _render_tool_tree(model: Dictionary) -> void:
 		call_deferred("_update_tree_shadow_visibility")
 		return
 
-	var tools_by_category: Dictionary = model.get("tools_by_category", {})
-	var domain_defs: Array = model.get("domain_defs", [])
-	var rendered_categories: Array[String] = []
+	# Root node replaces expand/collapse buttons
+	root.set_text(TREE_TEXT_COLUMN, _get_root_label(model))
+	root.set_metadata(TREE_TEXT_COLUMN, {"kind": "root"})
+	root.set_selectable(TREE_TEXT_COLUMN, true)
 
-	for domain_def in domain_defs:
-		var categories: Array = []
-		for category in domain_def.get("categories", []):
-			if tools_by_category.has(category) and _category_matches_search(model, str(category)):
-				categories.append(category)
-				rendered_categories.append(category)
-		if not categories.is_empty():
-			_create_domain_item(root, model, str(domain_def.get("key", "")), str(domain_def.get("label", "")), categories)
-
-	var other_categories: Array = []
-	for category in tools_by_category.keys():
-		if not rendered_categories.has(category) and _category_matches_search(model, str(category)):
-			other_categories.append(category)
-	if not other_categories.is_empty():
-		_create_domain_item(root, model, "other", "domain_other", other_categories)
+	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
+		_create_tool_item(root, model, INTELLIGENCE_CATEGORY, tool_def)
 
 	_tree_syncing = false
 	call_deferred("_update_tree_shadow_visibility")
 
 
-func _apply_localized_copy(localization, model: Dictionary, profile_description: String) -> void:
-	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
+func _apply_localized_copy(localization, model: Dictionary) -> void:
+	_tool_count_label.text = localization.get_text("tools_enabled") % _count_intelligence_enabled(model)
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
-	_profile_label.text = localization.get_text("tool_profile")
-	_add_profile_button.text = localization.get_text("btn_add_profile")
-	_rename_profile_button.text = localization.get_text("btn_rename_profile")
-	_delete_profile_button.text = localization.get_text("btn_delete_profile")
-	_show_user_tools_check.text = localization.get_text("show_user_tools")
-	_expand_all_button.text = localization.get_text("btn_expand_all")
-	_collapse_all_button.text = localization.get_text("btn_collapse_all")
-	_delete_user_tool_button.text = localization.get_text("btn_delete_user_tool")
-	_show_user_tools_check.set_pressed_no_signal(bool(model.get("show_user_tools", false)))
-	_profile_desc_label.text = profile_description
-	_save_dialog.title = localization.get_text("tool_profile_save_title")
-	_save_dialog.get_ok_button().text = localization.get_text("btn_save_profile")
-	_save_dialog_desc.text = localization.get_text("tool_profile_save_desc")
-	_profile_name_edit.placeholder_text = localization.get_text("tool_profile_name_placeholder")
-
-
-func _rebuild_profile_options(localization, builtin_profiles: Array, custom_profiles: Dictionary, selected_profile_id: String) -> void:
-	_profile_option_syncing = true
-	_profile_option.clear()
-
-	var index := 0
-	for profile in builtin_profiles:
-		_profile_option.add_item(localization.get_text(str(profile.get("name_key", ""))), index)
-		_profile_option.set_item_metadata(index, {
-			"profile_id": str(profile.get("id", "")),
-			"profile_name": localization.get_text(str(profile.get("name_key", ""))),
-			"is_custom": false
-		})
-		if str(profile.get("id", "")) == selected_profile_id:
-			_profile_option.select(index)
-		index += 1
-
-	var custom_ids = custom_profiles.keys()
-	custom_ids.sort()
-	for profile_id in custom_ids:
-		var custom_profile = custom_profiles[profile_id]
-		_profile_option.add_item(str(custom_profile.get("name", profile_id)), index)
-		_profile_option.set_item_metadata(index, {
-			"profile_id": str(profile_id),
-			"profile_name": str(custom_profile.get("name", profile_id)),
-			"is_custom": true
-		})
-		if str(profile_id) == selected_profile_id:
-			_profile_option.select(index)
-		index += 1
-
-	_profile_option_syncing = false
 
 
 func _refresh_tree_state(model: Dictionary, tree_signature: String) -> void:
 	if tree_signature != _last_tree_signature:
 		_last_tree_signature = tree_signature
 		_render_tool_tree(model)
-		_sync_delete_button()
 		_refresh_preview()
 		if _has_tree_selection():
 			_queue_selection_sync()
 		return
 
-	_sync_delete_button()
 	_refresh_preview()
+
+
+func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary) -> void:
+	item.set_text(TREE_TEXT_COLUMN, text)
+	item.set_selectable(TREE_TEXT_COLUMN, true)
+	item.set_metadata(TREE_TEXT_COLUMN, metadata)
+	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.6, 0.6, 0.6))
+	item.collapsed = true
+
+
+func _configure_action_item(item: TreeItem, action_name: String, parent_tool: String) -> void:
+	item.set_text(TREE_TEXT_COLUMN, "· %s" % action_name)
+	item.set_selectable(TREE_TEXT_COLUMN, true)
+	item.set_metadata(TREE_TEXT_COLUMN, {"kind": "action", "key": parent_tool + "." + action_name, "action": action_name, "tool": parent_tool})
+	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.45, 0.45, 0.45))
 
 
 func _configure_item_toggle(item: TreeItem, checked: bool) -> void:
@@ -312,12 +313,24 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 
 
 func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, tool_def: Dictionary) -> void:
-	var localization = model.get("localization")
 	var tool_name = str(tool_def.get("name", ""))
 	var full_name = "%s_%s" % [category, tool_name]
 	var item = _tool_tree.create_item(parent)
 	if item == null:
 		return
+	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
+	if category == INTELLIGENCE_CATEGORY:
+		var has_children := INTELLIGENCE_TOOL_ATOMIC_CHILDREN.has(full_name)
+		if has_children:
+			var settings: Dictionary = model.get("settings", {})
+			item.collapsed = full_name in settings.get("collapsed_intelligence_tools", [])
+		var visited := {}
+		visited[full_name] = true
+		_create_atomic_tool_children(item, model, full_name, visited)
+
+
+func _configure_tool_row(item: TreeItem, model: Dictionary, full_name: String, category: String, tool_name: String, tool_def: Dictionary) -> void:
+	var localization = model.get("localization")
 	_configure_item_toggle(item, not model.get("settings", {}).get("disabled_tools", []).has(full_name))
 	_configure_item_text(item, _get_tool_display_name(localization, full_name, tool_name), {
 		"kind": "tool",
@@ -327,6 +340,47 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 		"source": str(tool_def.get("source", "builtin")),
 		"script_path": str(tool_def.get("script_path", ""))
 	}, _get_tool_description(localization, full_name, tool_def))
+
+
+func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intelligence_full_name: String, visited: Dictionary = {}) -> void:
+	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+		var atomic_full_name: String
+		var actions: Array = []
+		if entry is Dictionary:
+			atomic_full_name = str(entry.get("tool", ""))
+			actions = entry.get("actions", [])
+		else:
+			atomic_full_name = str(entry)
+
+		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
+			continue
+		var atomic_tool_def = _get_tool_def_by_full_name(model, atomic_full_name)
+		if atomic_tool_def.is_empty():
+			continue
+		if not _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
+			continue
+		var category = _extract_category_from_full_name(model, atomic_full_name)
+		var tool_name = str(atomic_tool_def.get("name", ""))
+		if category.is_empty() or tool_name.is_empty():
+			continue
+
+		var item = _tool_tree.create_item(parent)
+		if item == null:
+			continue
+		# Atomic tool: info-only row, no checkbox
+		_configure_info_row(item, _get_tool_display_name(_localization, atomic_full_name, tool_name),
+			{"kind": "atomic", "key": atomic_full_name, "category": category, "tool_name": tool_name})
+
+		if category == INTELLIGENCE_CATEGORY:
+			var next_visited = visited.duplicate()
+			next_visited[atomic_full_name] = true
+			_create_atomic_tool_children(item, model, atomic_full_name, next_visited)
+
+		# Third level: action leaf nodes
+		for action_name in actions:
+			var action_item = _tool_tree.create_item(item)
+			if action_item != null:
+				_configure_action_item(action_item, str(action_name), atomic_full_name)
 
 
 func _count_enabled_tools(model: Dictionary) -> Array:
@@ -340,6 +394,19 @@ func _count_enabled_tools(model: Dictionary) -> Array:
 			var full_name = "%s_%s" % [category, tool_def.get("name", "")]
 			if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
 				enabled += 1
+	return [enabled, total]
+
+
+func _count_intelligence_enabled(model: Dictionary) -> Array:
+	var total := 0
+	var enabled := 0
+	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
+		total += 1
+		var full_name = "%s_%s" % [INTELLIGENCE_CATEGORY, tool_def.get("name", "")]
+		if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
+			enabled += 1
 	return [enabled, total]
 
 
@@ -415,63 +482,6 @@ func _humanize_identifier(value: String) -> String:
 	return " ".join(parts)
 
 
-func _on_profile_option_selected(index: int) -> void:
-	if _profile_option_syncing:
-		return
-	_sync_profile_selection_from_option(index)
-	_sync_profile_buttons()
-	profile_selected.emit(_selected_profile_id)
-
-
-func _on_add_profile_button_pressed() -> void:
-	_profile_dialog_mode = "save"
-	_profile_name_edit.text = ""
-	_refresh_profile_dialog_copy()
-	_save_dialog.popup_centered()
-	_profile_name_edit.grab_focus()
-
-
-func _on_rename_profile_button_pressed() -> void:
-	if not _selected_profile_is_custom:
-		return
-	_profile_dialog_mode = "rename"
-	_profile_name_edit.text = _selected_profile_name
-	_refresh_profile_dialog_copy()
-	_save_dialog.popup_centered()
-	_profile_name_edit.grab_focus()
-
-
-func _on_save_dialog_confirmed() -> void:
-	var profile_name = _profile_name_edit.text.strip_edges()
-	if _profile_dialog_mode == "rename":
-		rename_profile_requested.emit(_selected_profile_id, profile_name)
-		return
-	save_profile_requested.emit(profile_name)
-
-
-func _on_delete_profile_button_pressed() -> void:
-	if not _selected_profile_is_custom:
-		return
-	_refresh_delete_profile_dialog_copy()
-	_delete_profile_dialog.popup_centered()
-
-
-func _on_delete_profile_dialog_confirmed() -> void:
-	if not _selected_profile_is_custom:
-		return
-	delete_profile_requested.emit(_selected_profile_id)
-
-
-func _on_show_user_tools_check_toggled(pressed: bool) -> void:
-	show_user_tools_toggled.emit(pressed)
-
-
-func _on_delete_user_tool_button_pressed() -> void:
-	if _selected_user_script_path.is_empty():
-		return
-	delete_user_tool_requested.emit(_selected_user_script_path)
-
-
 func _on_tree_item_collapsed(item: TreeItem) -> void:
 	if _tree_syncing or item == null:
 		return
@@ -483,33 +493,147 @@ func _on_tree_item_collapsed(item: TreeItem) -> void:
 			domain_collapse_toggled.emit(str(metadata.get("key", "")))
 		"category":
 			category_collapse_toggled.emit(str(metadata.get("key", "")))
-
-
-func _on_expand_all_button_pressed() -> void:
-	expand_all_requested.emit()
-
-
-func _on_collapse_all_button_pressed() -> void:
-	collapse_all_requested.emit()
+		"tool":
+			var full_name = str(metadata.get("key", ""))
+			if not full_name.is_empty():
+				intelligence_tool_collapse_toggled.emit(full_name)
 
 
 func _on_search_text_changed(_new_text: String) -> void:
 	if _current_model.is_empty():
 		return
 	_render_tool_tree(_current_model)
-	_sync_delete_button()
 	_refresh_preview()
 	if _has_tree_selection():
 		_queue_selection_sync()
 
 
 func _on_tree_gui_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_SPACE:
+				var selected := _tool_tree.get_selected()
+				if selected != null and selected.get_child_count() > 0:
+					selected.collapsed = not selected.collapsed
+					_on_tree_item_collapsed(selected)
+					get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventMouseButton):
 		return
 	var mouse_event := event as InputEventMouseButton
-	if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
+	if not mouse_event.pressed:
 		return
+	if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+		var item = _tool_tree.get_item_at_position(mouse_event.position)
+		if item != null:
+			_show_tree_context_menu(item, _tool_tree.get_global_transform().origin + mouse_event.position)
+			get_viewport().set_input_as_handled()
+		return
+	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if mouse_event.shift_pressed:
+		var item: TreeItem = _tool_tree.get_item_at_position(mouse_event.position)
+		if item != null and item.get_child_count() > 0:
+			# gui_input fires BEFORE Tree's internal _gui_input(), so item.collapsed
+			# is still the OLD state here. Toggle to opposite = desired new state.
+			var want_collapsed: bool = not item.collapsed
+			_tree_syncing = true
+			_set_subtree_collapsed(item, want_collapsed)
+			_tree_syncing = false
+			# root.collapsed is not tracked in settings and resets on every re-render.
+			# Skip saving for root to avoid the re-render resetting root back to expanded.
+			if item != _tool_tree.get_root():
+				_sync_subtree_collapsed_to_settings(item, want_collapsed)
+			get_viewport().set_input_as_handled()
+			return
 	call_deferred("_handle_tree_click_deferred", mouse_event.position)
+
+
+func _set_subtree_collapsed(item: TreeItem, collapsed: bool) -> void:
+	item.collapsed = collapsed
+	var child := item.get_first_child()
+	while child != null:
+		_set_subtree_collapsed(child, collapsed)
+		child = child.get_next()
+
+
+func _sync_subtree_collapsed_to_settings(item: TreeItem, want_collapsed: bool) -> void:
+	if item == null:
+		return
+	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
+	if metadata is Dictionary:
+		var meta := metadata as Dictionary
+		if str(meta.get("kind", "")) == "tool":
+			var full_name := str(meta.get("key", ""))
+			if not full_name.is_empty():
+				var settings: Dictionary = _current_model.get("settings", {})
+				var is_saved_collapsed: bool = full_name in settings.get("collapsed_intelligence_tools", [])
+				if is_saved_collapsed != want_collapsed:
+					intelligence_tool_collapse_toggled.emit(full_name)
+	var child := item.get_first_child()
+	while child != null:
+		_sync_subtree_collapsed_to_settings(child, want_collapsed)
+		child = child.get_next()
+
+
+func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
+	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
+	if not (metadata is Dictionary):
+		return
+	var meta := metadata as Dictionary
+	_context_menu_metadata = meta
+	_context_menu.clear()
+	var kind = str(meta.get("kind", ""))
+	match kind:
+		"root":
+			_context_menu.add_item("Expand All", _CTX_EXPAND_ALL)
+			_context_menu.add_item("Collapse All", _CTX_COLLAPSE_ALL)
+		"tool":
+			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
+			_context_menu.add_item("Copy Schema JSON", _CTX_COPY_SCHEMA)
+			if str(meta.get("source", "")) == "user_tool":
+				_context_menu.add_separator()
+				_context_menu.add_item("Delete User Tool", _CTX_DELETE_TOOL)
+		"atomic":
+			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
+		"action":
+			_context_menu.add_item("Copy Action Name", _CTX_COPY_NAME)
+		_:
+			return
+	_context_menu.popup(Rect2i(int(global_pos.x), int(global_pos.y), 0, 0))
+
+
+func _on_context_menu_id_pressed(id: int) -> void:
+	var kind = str(_context_menu_metadata.get("kind", ""))
+	match id:
+		_CTX_COPY_NAME:
+			var name_to_copy: String
+			if kind == "action":
+				name_to_copy = str(_context_menu_metadata.get("action", ""))
+			else:
+				name_to_copy = str(_context_menu_metadata.get("key", ""))
+			DisplayServer.clipboard_set(name_to_copy)
+		_CTX_COPY_SCHEMA:
+			var full_name = str(_context_menu_metadata.get("key", ""))
+			var tool_def = _get_tool_def_by_full_name(_current_model, full_name)
+			var schema = tool_def.get("inputSchema", {})
+			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
+		_CTX_DELETE_TOOL:
+			var script_path = str(_context_menu_metadata.get("script_path", ""))
+			if not script_path.is_empty():
+				delete_user_tool_requested.emit(script_path)
+		_CTX_EXPAND_ALL:
+			var root = _tool_tree.get_root()
+			if root != null:
+				_set_subtree_collapsed(root, false)
+		_CTX_COLLAPSE_ALL:
+			var root = _tool_tree.get_root()
+			if root != null:
+				var child = root.get_first_child()
+				while child != null:
+					_set_subtree_collapsed(child, true)
+					child = child.get_next()
 
 
 func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
@@ -590,76 +714,19 @@ func _apply_editor_scale(scale: float) -> void:
 	_bottom_shadow.offset_right = 12.0 * scale
 	_bottom_shadow.custom_minimum_size.y = 14.0 * scale
 	_bottom_shadow.offset_top = -14.0 * scale
-	_save_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
-	_delete_profile_dialog.min_size = Vector2i(int(round(320 * scale)), 0)
 
-	for control in [_search_edit, _profile_option, _add_profile_button, _rename_profile_button, _delete_profile_button, _show_user_tools_check, _expand_all_button, _collapse_all_button, _delete_user_tool_button]:
-		control.custom_minimum_size.y = 30.0 * scale
-
-
-func _sync_delete_button() -> void:
-	_delete_user_tool_button.disabled = _selected_user_script_path.is_empty()
-
-
-func _sync_profile_selection_from_option(index: int = -1) -> void:
-	var selected_index = index if index >= 0 else _profile_option.get_selected()
-	if selected_index < 0:
-		_selected_profile_id = "default"
-		_selected_profile_name = ""
-		_selected_profile_is_custom = false
-		return
-
-	var metadata = _profile_option.get_item_metadata(selected_index)
-	if not (metadata is Dictionary):
-		_selected_profile_id = "default"
-		_selected_profile_name = ""
-		_selected_profile_is_custom = false
-		return
-
-	_selected_profile_id = str(metadata.get("profile_id", "default"))
-	_selected_profile_name = str(metadata.get("profile_name", _selected_profile_id))
-	_selected_profile_is_custom = bool(metadata.get("is_custom", false))
-
-
-func _sync_profile_buttons() -> void:
-	_rename_profile_button.disabled = not _selected_profile_is_custom
-	_delete_profile_button.disabled = not _selected_profile_is_custom
-	_refresh_profile_dialog_copy()
-	_refresh_delete_profile_dialog_copy()
-
-
-func _refresh_profile_dialog_copy() -> void:
-	if _localization == null:
-		return
-	if _profile_dialog_mode == "rename":
-		_save_dialog.title = _localization.get_text("tool_profile_rename_title")
-		_save_dialog_desc.text = _localization.get_text("tool_profile_rename_desc")
-	else:
-		_save_dialog.title = _localization.get_text("tool_profile_save_title")
-		_save_dialog_desc.text = _localization.get_text("tool_profile_save_desc")
-	_save_dialog.get_ok_button().text = _localization.get_text("btn_save_profile")
-	_profile_name_edit.placeholder_text = _localization.get_text("tool_profile_name_placeholder")
-
-
-func _refresh_delete_profile_dialog_copy() -> void:
-	if _localization == null:
-		return
-	_delete_profile_dialog.title = _localization.get_text("tool_profile_delete_title")
-	_delete_profile_desc.text = _localization.get_text("tool_profile_delete_desc") % [_selected_profile_name]
+	_search_edit.custom_minimum_size.y = 30.0 * scale
 
 
 func _category_matches_search(model: Dictionary, category: String) -> bool:
 	var query = _get_search_query()
 	if query.is_empty():
 		return true
-	if _get_category_label(model.get("localization"), category).to_lower().contains(query):
+	var category_matches = _get_category_label(model.get("localization"), category).to_lower().contains(query)
+	if category_matches:
 		return true
 	for tool_def in model.get("tools_by_category", {}).get(category, []):
-		if bool(tool_def.get("compatibility_alias", false)):
-			continue
-		var tool_name = str(tool_def.get("name", ""))
-		var full_name = "%s_%s" % [category, tool_name]
-		if _get_tool_display_name(model.get("localization"), full_name, tool_name).to_lower().contains(query):
+		if _matches_tool_search(model, category, tool_def, query, category_matches):
 			return true
 	return false
 
@@ -671,14 +738,57 @@ func _get_filtered_tool_definitions(model: Dictionary, category: String) -> Arra
 	for tool_def in model.get("tools_by_category", {}).get(category, []):
 		if bool(tool_def.get("compatibility_alias", false)):
 			continue
-		if query.is_empty() or category_matches:
-			filtered.append(tool_def)
-			continue
-		var tool_name = str(tool_def.get("name", ""))
-		var full_name = "%s_%s" % [category, tool_name]
-		if _get_tool_display_name(model.get("localization"), full_name, tool_name).to_lower().contains(query):
+		if _matches_tool_search(model, category, tool_def, query, category_matches):
 			filtered.append(tool_def)
 	return filtered
+
+
+func _matches_tool_search(model: Dictionary, category: String, tool_def: Dictionary, query: String, category_matches: bool = false) -> bool:
+	if bool(tool_def.get("compatibility_alias", false)):
+		return false
+	if query.is_empty() or category_matches:
+		return true
+	var localization = model.get("localization")
+	var tool_name = str(tool_def.get("name", ""))
+	var full_name = "%s_%s" % [category, tool_name]
+	if _get_tool_display_name(localization, full_name, tool_name).to_lower().contains(query):
+		return true
+	if category != INTELLIGENCE_CATEGORY:
+		return false
+	return _matches_atomic_tool_search_recursive(model, full_name, {})
+
+
+func _matches_atomic_tool_search(model: Dictionary, atomic_full_name: String, atomic_tool_def: Dictionary) -> bool:
+	var query = _get_search_query()
+	if query.is_empty():
+		return true
+	var localization = model.get("localization")
+	var tool_name = str(atomic_tool_def.get("name", ""))
+	if _get_tool_display_name(localization, atomic_full_name, tool_name).to_lower().contains(query):
+		return true
+	var description = _get_tool_description(localization, atomic_full_name, atomic_tool_def)
+	return description.to_lower().contains(query)
+
+
+func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_name: String, visited: Dictionary) -> bool:
+	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+		var atomic_full_name: String
+		if entry is Dictionary:
+			atomic_full_name = str(entry.get("tool", ""))
+		else:
+			atomic_full_name = str(entry)
+		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
+			continue
+		var atomic_tool_def = _get_tool_def_by_full_name(model, atomic_full_name)
+		if atomic_tool_def.is_empty():
+			continue
+		if _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
+			return true
+		var next_visited = visited.duplicate()
+		next_visited[atomic_full_name] = true
+		if _matches_atomic_tool_search_recursive(model, atomic_full_name, next_visited):
+			return true
+	return false
 
 
 func _get_search_query() -> String:
@@ -705,19 +815,15 @@ func _apply_selection_metadata(metadata) -> void:
 		_selected_tree_key = str(metadata_dict.get("key", ""))
 		_selected_tool_category = str(metadata_dict.get("category", ""))
 		_selected_tool_name = str(metadata_dict.get("tool_name", ""))
-		if _selected_tree_kind == "tool":
-			if str(metadata_dict.get("category", "")) == "user" and str(metadata_dict.get("source", "")) == "custom":
-				_selected_user_script_path = str(metadata_dict.get("script_path", ""))
-	_sync_delete_button()
 	_refresh_preview()
 
 
 func _clear_selection_metadata() -> void:
-	_selected_user_script_path = ""
 	_selected_tree_kind = ""
 	_selected_tree_key = ""
 	_selected_tool_category = ""
 	_selected_tool_name = ""
+	_last_preview_key = ""
 
 
 func _restore_tree_selection() -> void:
@@ -729,7 +835,6 @@ func _restore_tree_selection() -> void:
 	var item = _find_item_by_selection(root)
 	if item == null:
 		_clear_selection_metadata()
-		_sync_delete_button()
 		_refresh_preview()
 		return
 	_tool_tree.set_selected(item, TREE_TEXT_COLUMN)
@@ -828,9 +933,15 @@ func _refresh_preview() -> void:
 	if _localization == null:
 		return
 	_tool_preview_title.text = _localization.get_text("tool_preview_title")
+	# Build a key representing the current selection to detect changes
+	var current_preview_key := "%s|%s|%s" % [_selected_tree_kind, _selected_tree_key, _selected_tool_name]
+	var selection_changed := current_preview_key != _last_preview_key
+	_last_preview_key = current_preview_key
+	# Preserve scroll position when re-rendering without a selection change
+	var saved_v_scroll := _tool_preview_text.get_v_scroll() if not selection_changed else 0
 	_tool_preview_text.clear()
 	_tool_preview_text.set_text(_build_preview_text())
-	_tool_preview_text.set_v_scroll(0)
+	_tool_preview_text.set_v_scroll(saved_v_scroll)
 
 
 func _build_preview_text() -> String:
@@ -844,6 +955,10 @@ func _build_preview_text() -> String:
 			return _build_category_preview()
 		"tool":
 			return _build_tool_preview()
+		"atomic":
+			return _build_atomic_item_preview()
+		"action":
+			return _build_action_item_preview()
 		_:
 			return str(_localization.get_text("tool_preview_empty"))
 
@@ -871,7 +986,7 @@ func _build_domain_preview() -> String:
 
 func _build_category_preview() -> String:
 	var category = _selected_tree_key
-	var tools: Array = _current_model.get("tools_by_category", {}).get(category, [])
+	var tools: Array = _get_filtered_tool_definitions(_current_model, category)
 	var lines: Array[String] = [
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
 		"",
@@ -885,6 +1000,11 @@ func _build_category_preview() -> String:
 		var tool_name = str(tool_def.get("name", ""))
 		var full_name = "%s_%s" % [category, tool_name]
 		lines.append("- %s" % _get_tool_display_name(_localization, full_name, tool_name))
+	if category == "intelligence":
+		lines.append("")
+		var hint_key = "tool_preview_intelligence_category_hint"
+		var hint_text = _localization.get_text(hint_key)
+		lines.append(hint_text)
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
@@ -925,7 +1045,98 @@ func _build_tool_preview() -> String:
 	else:
 		lines.append_array(parameter_lines)
 
+	if category == "intelligence":
+		lines.append("")
+		lines.append(_localization.get_text("tool_preview_atomic_tools"))
+		var atomic_lines = _build_atomic_tool_preview_lines(_selected_tree_key, 0, {})
+		if atomic_lines.is_empty():
+			lines.append(_localization.get_text("tool_preview_no_atomic_tools"))
+		else:
+			lines.append_array(atomic_lines)
+		lines.append("")
+		var hint_key = "tool_preview_intelligence_tool_hint"
+		var hint_text = _localization.get_text(hint_key)
+		lines.append(hint_text)
+
 	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _build_atomic_item_preview() -> String:
+	var atomic_full_name = _selected_tree_key
+	if atomic_full_name.is_empty():
+		return str(_localization.get_text("tool_preview_empty"))
+	var tool_def = _get_tool_def_by_full_name(_current_model, atomic_full_name)
+	if tool_def.is_empty():
+		return str(_localization.get_text("tool_preview_empty"))
+	var category = _extract_category_from_full_name(_current_model, atomic_full_name)
+	var tool_name = str(tool_def.get("name", ""))
+	var display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
+	var description = _get_tool_description(_localization, atomic_full_name, tool_def)
+	var actions = _extract_action_values(tool_def)
+	var lines: Array[String] = [
+		"%s: %s" % [_localization.get_text("tool_preview_tool"), display_name],
+		"%s: %s" % [_localization.get_text("tool_preview_tool_id"), atomic_full_name],
+		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
+		"",
+		_localization.get_text("tool_preview_description"),
+		description if not description.is_empty() else _localization.get_text("tool_preview_no_description"),
+	]
+	if not actions.is_empty():
+		lines.append("")
+		lines.append(_localization.get_text("tool_preview_actions"))
+		for action_value in actions:
+			lines.append("- %s" % action_value)
+	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _build_action_item_preview() -> String:
+	var key = _selected_tree_key
+	if key.is_empty():
+		return str(_localization.get_text("tool_preview_empty"))
+	var dot_idx = key.rfind(".")
+	if dot_idx < 0:
+		return str(_localization.get_text("tool_preview_empty"))
+	var parent_tool: String = key.left(dot_idx)
+	var action_name: String = key.substr(dot_idx + 1)
+	var tool_def = _get_tool_def_by_full_name(_current_model, parent_tool)
+	var category = _extract_category_from_full_name(_current_model, parent_tool)
+	var tool_name = str(tool_def.get("name", "")) if not tool_def.is_empty() else parent_tool
+	var display_name = _get_tool_display_name(_localization, parent_tool, tool_name) if not tool_def.is_empty() else parent_tool
+	var lines: Array[String] = [
+		"Action: %s" % action_name,
+		"%s: %s" % [_localization.get_text("tool_preview_tool"), display_name],
+		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
+	]
+	if not tool_def.is_empty():
+		var param_lines = _build_action_parameter_lines(tool_def)
+		if not param_lines.is_empty():
+			lines.append("")
+			lines.append(_localization.get_text("tool_preview_params"))
+			lines.append_array(param_lines)
+	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _build_action_parameter_lines(tool_def: Dictionary) -> Array[String]:
+	var input_schema = tool_def.get("inputSchema", {})
+	if not (input_schema is Dictionary):
+		return []
+	var properties = (input_schema as Dictionary).get("properties", {})
+	if not (properties is Dictionary):
+		return []
+	var required_lookup: Dictionary = {}
+	for required_name in (input_schema as Dictionary).get("required", []):
+		required_lookup[str(required_name)] = true
+	var property_names: Array = (properties as Dictionary).keys()
+	property_names.sort()
+	var lines: Array[String] = []
+	for property_name in property_names:
+		if property_name == "action":
+			continue
+		var property_def = (properties as Dictionary).get(property_name, {})
+		if not (property_def is Dictionary):
+			continue
+		lines.append("- %s" % _format_parameter_summary(str(property_name), property_def as Dictionary, required_lookup))
+	return lines
 
 
 func _find_domain_definition(domain_key: String) -> Dictionary:
@@ -948,6 +1159,58 @@ func _find_tool_definition(category: String, tool_name: String) -> Dictionary:
 		if str(tool_def.get("name", "")) == tool_name:
 			return (tool_def as Dictionary).duplicate(true)
 	return {}
+
+
+func _get_tool_def_by_full_name(model: Dictionary, full_name: String) -> Dictionary:
+	var category = _extract_category_from_full_name(model, full_name)
+	if category.is_empty():
+		return {}
+	var tool_name = full_name.trim_prefix("%s_" % category)
+	for tool_def in model.get("tools_by_category", {}).get(category, []):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
+		if str(tool_def.get("name", "")) == tool_name:
+			return (tool_def as Dictionary).duplicate(true)
+	return {}
+
+
+func _extract_category_from_full_name(model: Dictionary, full_name: String) -> String:
+	for category in model.get("tools_by_category", {}).keys():
+		var category_name = str(category)
+		if full_name.begins_with("%s_" % category_name):
+			return category_name
+	return ""
+
+
+func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
+	var lines: Array[String] = []
+	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+		var atomic_full_name: String
+		var actions: Array = []
+		if entry is Dictionary:
+			atomic_full_name = str(entry.get("tool", ""))
+			actions = entry.get("actions", [])
+		else:
+			atomic_full_name = str(entry)
+		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
+			continue
+		var atomic_tool_def = _get_tool_def_by_full_name(_current_model, atomic_full_name)
+		if atomic_tool_def.is_empty():
+			continue
+		var category = _extract_category_from_full_name(_current_model, atomic_full_name)
+		var tool_name = str(atomic_tool_def.get("name", ""))
+		if category.is_empty() or tool_name.is_empty():
+			continue
+		var display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
+		var indent = "  ".repeat(depth)
+		lines.append("%s- %s" % [indent, display_name])
+		for action_name in actions:
+			lines.append("%s  · %s" % [indent, str(action_name)])
+		if category == INTELLIGENCE_CATEGORY:
+			var next_visited = visited.duplicate()
+			next_visited[atomic_full_name] = true
+			lines.append_array(_build_atomic_tool_preview_lines(atomic_full_name, depth + 1, next_visited))
+	return lines
 
 
 func _extract_action_values(tool_def: Dictionary) -> Array[String]:
@@ -1038,6 +1301,7 @@ func _build_tree_signature(model: Dictionary) -> String:
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(model.get("settings", {}).get("collapsed_categories", [])),
 		JSON.stringify(model.get("settings", {}).get("collapsed_domains", [])),
+		JSON.stringify(model.get("settings", {}).get("collapsed_intelligence_tools", [])),
 		JSON.stringify(model.get("tool_load_errors", []))
 	]
 	var categories: Array = tools_by_category.keys()

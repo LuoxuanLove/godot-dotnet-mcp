@@ -18,23 +18,52 @@ const PLUGIN_CATEGORY_PERMISSION_LEVELS := {
 const ALL_TOOL_CATEGORIES = [
 	"scene", "node", "script", "resource", "filesystem", "project", "editor", "debug",
 	"plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "group", "signal", "animation", "material", "shader", "lighting", "particle", "tilemap", "geometry",
-	"physics", "navigation", "audio", "ui", "user"
+	"physics", "navigation", "audio", "ui", "user", "intelligence"
 ]
 
 const DEFAULT_COLLAPSED_DOMAINS = ["core", "plugin", "visual", "gameplay", "interface", "user", "other"]
+const DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS: Array = [
+	"intelligence_project_state",
+	"intelligence_project_advise",
+	"intelligence_runtime_diagnose",
+	"intelligence_project_configure",
+	"intelligence_project_run",
+	"intelligence_project_stop",
+	"intelligence_bindings_audit",
+	"intelligence_scene_validate",
+	"intelligence_scene_analyze",
+	"intelligence_scene_patch",
+	"intelligence_script_analyze",
+	"intelligence_script_patch",
+	"intelligence_project_index_build",
+	"intelligence_project_symbol_search",
+	"intelligence_scene_dependency_graph"
+]
 
 const BUILTIN_TOOL_PROFILES = [
+	{
+		"id": "intelligence",
+		"name_key": "tool_profile_intelligence",
+		"desc_key": "tool_profile_intelligence_desc",
+		"enabled_categories": ["intelligence"]
+	},
+	{
+		"id": "task",
+		"name_key": "tool_profile_task",
+		"desc_key": "tool_profile_task_desc",
+		"enabled_categories": ["intelligence", "project", "scene", "script", "debug", "plugin_runtime", "plugin_developer", "filesystem"]
+	},
 	{
 		"id": "slim",
 		"name_key": "tool_profile_slim",
 		"desc_key": "tool_profile_slim_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_developer", "debug", "group", "signal"]
+		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_developer", "debug", "group", "signal", "intelligence"]
 	},
 	{
 		"id": "default",
 		"name_key": "tool_profile_default",
 		"desc_key": "tool_profile_default_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "group", "signal", "animation", "physics", "navigation", "audio", "ui"]
+		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "group", "signal", "animation", "physics", "navigation", "audio", "ui", "intelligence"]
 	},
 	{
 		"id": "full",
@@ -49,7 +78,7 @@ const TOOL_DOMAIN_DEFS = [
 	{
 		"key": "core",
 		"label": "domain_core",
-		"categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "debug", "group", "signal"]
+		"categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "debug", "group", "signal", "intelligence"]
 	},
 	{
 		"key": "plugin",
@@ -86,11 +115,12 @@ const DEFAULT_SETTINGS = {
 	"log_level": "info",
 	"permission_level": PERMISSION_EVOLUTION,
 	"disabled_tools": [],
-	"tool_profile_id": "default",
+	"tool_profile_id": "intelligence",
 	"language": "",
 	"show_user_tools": false,
 	"collapsed_categories": [],
-	"collapsed_domains": []
+	"collapsed_domains": [],
+	"collapsed_intelligence_tools": DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS
 }
 
 var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)

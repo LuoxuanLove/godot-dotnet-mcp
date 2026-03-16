@@ -41,9 +41,9 @@ func _ready() -> void:
 	_ensure_initialized()
 
 
-func _log(message: String) -> void:
+func _log(message: String, level: String = "debug") -> void:
+	MCPDebugBuffer.record(level, "server", message)
 	if _debug_mode:
-		MCPDebugBuffer.record("info", "mcp_server", message)
 		print("[MCP] " + message)
 
 
@@ -58,7 +58,7 @@ func _process(_delta: float) -> void:
 			_clients.append(client)
 			_pending_data[client] = ""
 			_total_connections += 1
-			_log("Client connected (total: %d)" % _clients.size())
+			_log("Client connected (total: %d)" % _clients.size(), "info")
 			client_connected.emit()
 
 	# Process existing clients
@@ -74,19 +74,19 @@ func _process(_delta: float) -> void:
 				if data[0] == OK:
 					var request_str = data[1].get_string_from_utf8()
 					_pending_data[client] += request_str
-					_log("Received %d bytes, total pending: %d" % [available, _pending_data[client].length()])
+					_log("Received %d bytes, total pending: %d" % [available, _pending_data[client].length()], "trace")
 					_process_http_request(client)
 				else:
-					_log("Error receiving data: %s" % data[0])
+					_log("Error receiving data: %s" % data[0], "warning")
 		elif status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
 			clients_to_remove.append(client)
-			_log("Client status changed: %s" % status)
+			_log("Client status changed: %s" % status, "debug")
 
 	# Remove disconnected clients
 	for client in clients_to_remove:
 		_clients.erase(client)
 		_pending_data.erase(client)
-		_log("Client disconnected")
+		_log("Client disconnected", "info")
 		client_disconnected.emit()
 
 
@@ -108,9 +108,9 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	set_disabled_tools(disabled_tools)
 	_register_tools()
 
-	_log("Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
+	_log("Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port], "info")
 	if not _tool_loader.get_tool_load_errors().is_empty():
-		_log("Tool load warnings after reinit: %d" % _tool_loader.get_tool_load_errors().size())
+		_log("Tool load warnings after reinit: %d" % _tool_loader.get_tool_load_errors().size(), "warning")
 
 	return {
 		"tool_count": _tool_loader.get_tool_definitions().size(),
@@ -149,7 +149,7 @@ func start() -> bool:
 		return false
 
 	_running = true
-	_log("Server started on http://%s:%d/mcp" % [_host, _port])
+	_log("Server started on http://%s:%d/mcp" % [_host, _port], "info")
 	server_started.emit()
 	return true
 
@@ -166,7 +166,7 @@ func stop() -> void:
 
 	_tcp_server.stop()
 	_running = false
-	_log("Server stopped")
+	_log("Server stopped", "info")
 	server_stopped.emit()
 
 
@@ -270,9 +270,9 @@ func _ensure_initialized() -> void:
 func _register_tools() -> void:
 	var summary = _tool_loader.initialize(get_disabled_tools())
 	_tool_loader_initialized = true
-	_log("Registered %d tools across %d categories" % [int(summary.get("tool_count", 0)), int(summary.get("category_count", 0))])
+	_log("Registered %d tools across %d categories" % [int(summary.get("tool_count", 0)), int(summary.get("category_count", 0))], "info")
 	if int(summary.get("tool_load_error_count", 0)) > 0:
-		_log("Skipped %d tool categories due to load errors" % int(summary.get("tool_load_error_count", 0)))
+		_log("Skipped %d tool categories due to load errors" % int(summary.get("tool_load_error_count", 0)), "warning")
 		PluginSelfDiagnosticStore.record_incident(
 			"warning",
 			"tool_load_error",
@@ -298,7 +298,7 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	var header_end = data.find("\r\n\r\n")
 	if header_end == -1:
 		if data.length() > 0:
-			_log("Waiting for headers... current data length: %d" % data.length())
+			_log("Waiting for headers... current data length: %d" % data.length(), "trace")
 		return
 
 	# Parse HTTP headers
@@ -328,20 +328,20 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	var body_byte_size = body_bytes.size()
 	var request_body := ""
 
-	_log("Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s" % [headers.get("method", "?"), content_length, body_byte_size, is_chunked])
+	_log("Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s" % [headers.get("method", "?"), content_length, body_byte_size, is_chunked], "trace")
 
 	# Handle chunked encoding
 	if is_chunked:
 		var decoded_chunked = _decode_chunked_body_bytes(body_bytes)
 		if not bool(decoded_chunked.get("complete", false)):
-			_log("Waiting for chunked body...")
+			_log("Waiting for chunked body...", "trace")
 			return  # Wait for more data
 		var request_bytes: PackedByteArray = decoded_chunked.get("body", PackedByteArray())
 		request_body = request_bytes.get_string_from_utf8()
 		var remaining_bytes: PackedByteArray = decoded_chunked.get("remaining", PackedByteArray())
 		_pending_data[client] = remaining_bytes.get_string_from_utf8()
 	elif body_byte_size < content_length:
-		_log("Waiting for body... need %d bytes, have %d bytes" % [content_length, body_byte_size])
+		_log("Waiting for body... need %d bytes, have %d bytes" % [content_length, body_byte_size], "trace")
 		return  # Wait for more data
 
 	# Extract the complete request body (by bytes, then convert back to string)
@@ -360,7 +360,7 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	var method = headers.get("method", "GET")
 	var path = headers.get("path", "/")
 
-	_log("Processing: %s %s (body length: %d)" % [method, path, request_body.length()])
+	_log("Processing: %s %s (body: %d bytes)" % [method, path, request_body.length()], "debug")
 	_total_requests += 1
 	_last_request_method = method
 	_last_request_at_unix = int(Time.get_unix_time_from_system())
@@ -369,12 +369,10 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	var no_body := false
 
 	if method == "POST" and path == "/mcp":
-		_log("Handling MCP request...")
 		response = _handle_mcp_request(request_body)
 		no_body = response.get("_no_body", false)
 		if response.has("_no_body"):
 			response.erase("_no_body")
-		_log("MCP response ready")
 	elif method == "GET" and path == "/mcp":
 		response = {
 			"status": 405,
@@ -393,9 +391,7 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	else:
 		response = {"error": "Not found", "status": 404}
 
-	_log("Sending response...")
 	_send_http_response(client, response, no_body)
-	_log("Response sent")
 
 
 func _decode_chunked_body_bytes(data: PackedByteArray) -> Dictionary:
@@ -470,7 +466,7 @@ func _close_client(client: StreamPeerTCP) -> void:
 		client.disconnect_from_host()
 		_clients.erase(client)
 		_pending_data.erase(client)
-		_log("Client connection closed")
+		_log("Client connection closed", "debug")
 
 
 func _parse_http_headers(header_section: String) -> Dictionary:
@@ -499,7 +495,7 @@ func _parse_http_headers(header_section: String) -> Dictionary:
 
 
 func _handle_mcp_request(body: String) -> Dictionary:
-	_log("Parsing request body (%d bytes)..." % body.length())
+	_log("Parsing request body (%d bytes)" % body.length(), "trace")
 	var json = JSON.new()
 	var error = json.parse(body)
 
@@ -533,7 +529,7 @@ func _handle_mcp_request(body: String) -> Dictionary:
 	var has_id = request.has("id")
 	var id = _normalize_json_rpc_id(request.get("id"))
 
-	_log("Method: %s, ID: %s" % [method, id])
+	_log("Method: %s, ID: %s" % [method, id], "debug")
 
 	request_received.emit(method, params)
 
@@ -557,7 +553,7 @@ func _handle_mcp_request(body: String) -> Dictionary:
 		_:
 			response = _create_json_rpc_error(-32601, "Method not found: %s" % method, id)
 
-	_log("Response ready for method: %s" % method)
+	_log("Response ready for method: %s" % method, "debug")
 
 	return response
 
@@ -565,11 +561,11 @@ func _handle_mcp_request(body: String) -> Dictionary:
 func _handle_notification(method: String, _params: Dictionary) -> void:
 	match method:
 		"initialized", "notifications/initialized":
-			_log("Client initialized")
+			_log("Client initialized", "info")
 		"notifications/cancelled":
-			_log("Request cancelled by client")
+			_log("Request cancelled by client", "debug")
 		_:
-			_log("Notification received: %s" % method)
+			_log("Notification received: %s" % method, "debug")
 
 
 func _handle_initialize(params: Dictionary, id) -> Dictionary:
@@ -596,8 +592,9 @@ func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
 	var tools_list: Array[Dictionary] = []
 
 	for tool_def in _tool_loader.get_tool_definitions():
-		# Only include enabled tools
-		if is_tool_enabled(tool_def["name"]):
+		# Only expose intelligence_* and user_* tools to agents; atomic tools are internal implementation
+		var _tn := str(tool_def["name"])
+		if is_tool_enabled(tool_def["name"]) and (_tn.begins_with("intelligence_") or _tn.begins_with("user_")):
 			tools_list.append({
 				"name": tool_def["name"],
 				"description": tool_def.get("description", ""),
@@ -616,7 +613,7 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 	var tool_name = params.get("name", "")
 	var arguments = params.get("arguments", {})
 
-	_log("Tool call: %s" % tool_name)
+	_log("Tool call: %s" % tool_name, "debug")
 
 	if tool_name.is_empty():
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
@@ -632,16 +629,15 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 	var category = str(resolved.get("category", ""))
 	var actual_tool_name = str(resolved.get("tool", ""))
 
-	_log("Category: %s, Tool: %s" % [category, actual_tool_name])
+	_log("Category: %s, Tool: %s" % [category, actual_tool_name], "debug")
 
-	_log("Executing tool...")
 	var result: Dictionary = _tool_loader.execute_tool(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)
 	if not result.get("success", false):
 		MCPDebugBuffer.record(
-			"error",
-			"tool_call",
-			str(result.get("error", "Tool execution failed")),
+			"warning",
+			"server",
+			"Tool failed: %s — %s" % [tool_name, str(result.get("error", "execution failed"))],
 			tool_name,
 			{"arguments": _sanitize_for_json(arguments)}
 		)
@@ -652,8 +648,6 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 			str(result.get("message", "Scene run action completed")),
 			tool_name
 		)
-
-	_log("Tool result: success=%s" % result.get("success", false))
 
 	return _create_tool_response(result, id)
 
@@ -707,7 +701,7 @@ func _create_tool_response(result: Dictionary, id) -> Dictionary:
 	var result_text = JSON.stringify(sanitized_result)
 	var is_error = not normalized_result.get("success", false)
 
-	_log("Tool response text length: %d, is_error=%s" % [result_text.length(), is_error])
+	_log("Tool response text length: %d, is_error=%s" % [result_text.length(), is_error], "trace")
 
 	return _create_json_rpc_response({
 		"content": [{
@@ -802,7 +796,8 @@ func _create_health_response() -> Dictionary:
 
 func _create_tools_list_response() -> Dictionary:
 	return {
-		"tools": _tool_loader.get_tool_definitions(),
+		"tools": _tool_loader.get_tool_definitions().filter(
+			func(d): var n := str(d.get("name", "")); return n.begins_with("intelligence_") or n.begins_with("user_")),
 		"domain_states": _tool_loader.get_domain_states(),
 		"performance": _tool_loader.get_performance_summary()
 	}
@@ -856,7 +851,7 @@ func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool 
 	var err1 = client.put_data(header_bytes)
 	var err2 = client.put_data(body_bytes)
 
-	_log("Response sent: status=%d, size=%d bytes, errors=(h:%s, b:%s)" % [status_code, body_bytes.size(), err1, err2])
+	_log("Response sent: status=%d, size=%d bytes, errors=(h:%s, b:%s)" % [status_code, body_bytes.size(), err1, err2], "trace")
 
 
 func _normalize_json_rpc_id(id):

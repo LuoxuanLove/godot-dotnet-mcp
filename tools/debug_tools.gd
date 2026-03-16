@@ -99,22 +99,37 @@ ACTIONS:
 - get_sessions: Read editor debugger session states
 - get_summary: Read a combined runtime bridge summary
 - clear_buffer: Clear captured runtime bridge events and session state
+- get_recent_filtered: Read recent events filtered by level (error/warning/info) with tail support
+- get_errors_context: Read error events with enriched context (error_type, message, script, node, stacktrace)
+- get_scene_snapshot: Read last captured scene state (node tree, properties, signals) from runtime bridge
 
 EXAMPLES:
 - Read runtime events: {"action": "get_recent", "limit": 20}
 - Read runtime errors: {"action": "get_errors", "limit": 20}
-- Read debugger sessions: {"action": "get_sessions"}""",
+- Read debugger sessions: {"action": "get_sessions"}
+- Filtered by level: {"action": "get_recent_filtered", "level": "error", "tail": 10}
+- Error context: {"action": "get_errors_context", "limit": 10}
+- Scene snapshot: {"action": "get_scene_snapshot"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_recent", "get_errors", "get_sessions", "get_summary", "clear_buffer"],
+						"enum": ["get_recent", "get_errors", "get_sessions", "get_summary", "clear_buffer", "get_recent_filtered", "get_errors_context", "get_scene_snapshot"],
 						"description": "Runtime bridge action"
 					},
 					"limit": {
 						"type": "integer",
 						"description": "Max number of events to return"
+					},
+					"level": {
+						"type": "string",
+						"enum": ["error", "warning", "info"],
+						"description": "Log level filter for get_recent_filtered"
+					},
+					"tail": {
+						"type": "integer",
+						"description": "Return only the last N events (for get_recent_filtered)"
 					}
 				},
 				"required": ["action"]
@@ -364,8 +379,106 @@ func _execute_runtime_bridge(args: Dictionary) -> Dictionary:
 		"clear_buffer":
 			MCPRuntimeDebugStore.clear()
 			return _success({"count": 0}, "Runtime bridge buffer cleared")
+		"get_recent_filtered":
+			return _execute_runtime_bridge_filtered(args)
+		"get_errors_context":
+			return _execute_runtime_bridge_errors_context(args)
+		"get_scene_snapshot":
+			return _execute_runtime_bridge_scene_snapshot(args)
 		_:
 			return _error("Unknown action: %s" % str(args.get("action", "")))
+
+
+func _execute_runtime_bridge_filtered(args: Dictionary) -> Dictionary:
+	var level: String = str(args.get("level", ""))
+	var tail: int = int(args.get("tail", 0))
+	var limit: int = int(args.get("limit", 100))
+
+	var all_events: Array[Dictionary] = MCPRuntimeDebugStore.get_recent(limit)
+	var filtered: Array[Dictionary] = []
+
+	for evt in all_events:
+		var payload = evt.get("payload", {})
+		if not (payload is Dictionary):
+			payload = {}
+		var evt_level: String = str(payload.get("level", "info"))
+		if level.is_empty() or evt_level == level:
+			filtered.append(evt)
+
+	if tail > 0 and filtered.size() > tail:
+		var tail_items: Array[Dictionary] = []
+		for i in range(filtered.size() - tail, filtered.size()):
+			tail_items.append(filtered[i])
+		filtered = tail_items
+
+	return _success({
+		"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+		"filter_level": level if not level.is_empty() else "all",
+		"count": filtered.size(),
+		"events": filtered
+	})
+
+
+func _execute_runtime_bridge_errors_context(args: Dictionary) -> Dictionary:
+	var limit: int = int(args.get("limit", 20))
+	var raw_errors: Array[Dictionary] = MCPRuntimeDebugStore.get_errors(limit)
+
+	var enriched: Array = []
+	for evt in raw_errors:
+		var payload = evt.get("payload", {})
+		if not (payload is Dictionary):
+			payload = {}
+
+		var ctx: Dictionary = {
+			"timestamp": str(evt.get("timestamp_text", "")),
+			"session_id": evt.get("session_id", -1),
+			"error_type": str(payload.get("error_type", payload.get("level", "error"))),
+			"message": str(payload.get("message", "")),
+			"script": str(payload.get("script", payload.get("source", ""))),
+			"line": int(payload.get("line", payload.get("line_number", -1))),
+			"node": str(payload.get("node", payload.get("node_path", ""))),
+			"stacktrace": payload.get("stacktrace", payload.get("stack_trace", []))
+		}
+		enriched.append(ctx)
+
+	return _success({
+		"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+		"count": enriched.size(),
+		"errors": enriched,
+		"note": "Fields may be empty if not captured by the runtime bridge"
+	})
+
+
+func _execute_runtime_bridge_scene_snapshot(_args: Dictionary) -> Dictionary:
+	var sessions: Dictionary = MCPRuntimeDebugStore.get_sessions()
+	var recent_events: Array[Dictionary] = MCPRuntimeDebugStore.get_recent(50)
+
+	# Look for scene-related events
+	var scene_events: Array = []
+	for evt in recent_events:
+		var kind: String = str(evt.get("kind", ""))
+		if kind in ["scene_changed", "scene_loaded", "scene_ready", "node_added", "node_removed",
+				"script_error", "ready", "enter_tree", "close_requested", "exit_tree"]:
+			scene_events.append(evt)
+
+	# Get last known scene from events
+	var last_scene: String = ""
+	for evt in recent_events:
+		var payload = evt.get("payload", {})
+		if payload is Dictionary:
+			var scene_path: String = str(payload.get("scene", payload.get("scene_path", "")))
+			if not scene_path.is_empty():
+				last_scene = scene_path
+				break
+
+	return _success({
+		"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+		"session_count": sessions.size(),
+		"last_known_scene": last_scene,
+		"scene_event_count": scene_events.size(),
+		"scene_events": scene_events,
+		"note": "Snapshot reflects last captured runtime state. Run the project to capture live data."
+	})
 
 
 func _execute_dotnet(args: Dictionary) -> Dictionary:

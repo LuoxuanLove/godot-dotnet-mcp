@@ -1,4 +1,4 @@
-﻿# Godot .NET MCP
+# Godot .NET MCP
 [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
 > 这个项目不是再做一个套在 Godot 外面的 MCP 服务壳，而是通过插件形式把 Godot 编辑器本身推进到更 AI Native 的形态。

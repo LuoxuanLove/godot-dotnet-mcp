@@ -526,6 +526,26 @@ const TRANSLATIONS: Dictionary = {
 	# Group tools
 	"tool_group_group_name": "分组",
 	"tool_group_group_desc": "全局查询和管理节点分组",
+
+	# Intelligence tools
+	"tool_intelligence_project_advise_name": "專案建議",
+	"tool_intelligence_project_advise_desc": "根據當前專案狀態，回傳基於規則的建議和推薦的後續工具。",
+	"tool_intelligence_project_configure_name": "專案設定",
+	"tool_intelligence_project_configure_desc": "讀取或修改專案設定、輸入動作和自動載入配置。",
+	"tool_intelligence_project_run_name": "執行專案",
+	"tool_intelligence_project_run_desc": "在 Godot 編輯器內啟動執行專案。",
+	"tool_intelligence_project_stop_name": "停止專案",
+	"tool_intelligence_project_stop_desc": "停止目前正在執行的專案。",
+	"tool_intelligence_runtime_diagnose_name": "執行時診斷",
+	"tool_intelligence_runtime_diagnose_desc": "分析執行時錯誤上下文，回傳結構化的診斷資訊。",
+	"tool_intelligence_scene_analyze_name": "場景分析",
+	"tool_intelligence_scene_analyze_desc": "深入分析場景結構、節點綁定和導出的腳本成員。",
+	"tool_intelligence_scene_patch_name": "場景修改",
+	"tool_intelligence_scene_patch_desc": "對場景節點套用批次操作：新增、刪除、設屬性或變更父子關係。",
+	"tool_intelligence_script_analyze_name": "腳本分析",
+	"tool_intelligence_script_analyze_desc": "分析 GDScript 或 C# 腳本的結構、符號和導出成員。",
+	"tool_intelligence_script_patch_name": "腳本修改",
+	"tool_intelligence_script_patch_desc": "對腳本新增函式、變數、信號或導出欄位。",
 }
 
 

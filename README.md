@@ -1,4 +1,4 @@
-﻿# Godot .NET MCP
+# Godot .NET MCP
 [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
 > This project aims to push the Godot editor itself toward an AI-native form through a plugin, not just wrap MCP around it.

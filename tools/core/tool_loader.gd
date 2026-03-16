@@ -189,7 +189,14 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	if not _is_category_executable(category):
+		MCPDebugBuffer.record("warning", "tool_loader",
+			"%s_%s denied: %s" % [category, tool_name, _get_permission_error(category)],
+			"%s_%s" % [category, tool_name])
 		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
+
+	MCPDebugBuffer.record("debug", "tool_loader",
+		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
+		"%s_%s" % [category, tool_name])
 
 	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
 	if not runtime_result.get("success", false):
@@ -206,11 +213,17 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
 
 	if result is Dictionary and bool(result.get("success", true)):
+		MCPDebugBuffer.record("info", "tool_loader",
+			"%s_%s ok (%.0fms)" % [category, tool_name, elapsed_ms],
+			"%s_%s" % [category, tool_name])
 		return result
 
 	var error_message = "Tool execution failed"
 	if result is Dictionary:
 		error_message = str(result.get("error", error_message))
+		MCPDebugBuffer.record("warning", "tool_loader",
+			"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+			"%s_%s" % [category, tool_name])
 		var failure_result: Dictionary = result.duplicate(true)
 		var failure_data = failure_result.get("data", {})
 		if not (failure_data is Dictionary):
@@ -224,6 +237,9 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 		failure_result["data"] = failure_data
 		return failure_result
 
+	MCPDebugBuffer.record("warning", "tool_loader",
+		"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+		"%s_%s" % [category, tool_name])
 	return _failure("tool_execution_failed", category, tool_name, error_message, {
 		"action": str(args.get("action", "")),
 		"elapsed_ms": elapsed_ms
@@ -231,12 +247,14 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 
 
 func reload_domain(category: String) -> Dictionary:
+	MCPDebugBuffer.record("info", "tool_loader", "Reloading domain: %s" % category)
 	if category == "user":
 		_refresh_entries()
 
 	if not _entries_by_category.has(category):
 		if category == "user":
 			return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
+		MCPDebugBuffer.record("warning", "tool_loader", "Unknown domain: %s" % category)
 		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
 			"domain": category,
 			"error": "Unknown tool domain"
@@ -252,14 +270,17 @@ func reload_domain(category: String) -> Dictionary:
 
 	var instantiate_result = _instantiate_executor(category, true, "reload")
 	if not instantiate_result.get("success", false):
-		_record_reload_incident(category, str(instantiate_result.get("error", "Failed to reload tool domain")), "reload_domain")
+		var reload_err := str(instantiate_result.get("error", "Failed to reload tool domain"))
+		MCPDebugBuffer.record("error", "tool_loader",
+			"Domain %s reload failed: %s" % [category, reload_err])
+		_record_reload_incident(category, reload_err, "reload_domain")
 		if not old_runtime.is_empty():
 			_runtime_by_category[category] = old_runtime
 		if not definitions_before.is_empty():
 			_tool_definitions_by_category[category] = definitions_before
 		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
 			"domain": category,
-			"error": str(instantiate_result.get("error", "Failed to reload tool domain"))
+			"error": reload_err
 		}], _elapsed_ms(reload_started)))
 
 	var executor = instantiate_result.get("executor")
@@ -288,6 +309,9 @@ func reload_domain(category: String) -> Dictionary:
 	_sync_load_error_incidents("reload_domain")
 	_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
 	_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
+
+	MCPDebugBuffer.record("info", "tool_loader",
+		"Domain %s reloaded: %d tools (%.0fms)" % [category, definitions.size(), _elapsed_ms(reload_started)])
 
 	if not _category_has_enabled_tools(category):
 		_unload_runtime(category, "reload_completed_disabled")
@@ -437,7 +461,15 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 	if script_resource == null:
 		return {"success": false, "error": "Failed to load tool script"}
 	if script_resource is Script and not script_resource.can_instantiate():
-		return {"success": false, "error": "Tool script could not be instantiated"}
+		# Stale cache recovery: reload with CACHE_MODE_REPLACE to evict the broken
+		# cache entry without touching the dependency chain.
+		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+		if script_resource == null:
+			return {"success": false, "error": "Failed to load tool script"}
+		if script_resource is Script:
+			script_resource.reload()
+		if script_resource is Script and not script_resource.can_instantiate():
+			return {"success": false, "error": "Tool script could not be instantiated [replace_reload_failed]"}
 	if not script_resource.has_method("new"):
 		return {"success": false, "error": "Loaded tool resource is not instantiable"}
 
@@ -485,11 +517,18 @@ func _reload_script_dependency_chain(script_resource: Script, visited: Dictionar
 	if base_script is Script:
 		_reload_script_dependency_chain(base_script as Script, visited)
 
+	# Only reload this script if it has GDScript dependencies (parent class or Script
+	# constants) that were themselves reloaded and whose class IDs may have changed.
+	# Scripts with only built-in base classes and no Script constants are already fresh
+	# from CACHE_MODE_IGNORE and do not need reload() — calling it would corrupt them.
+	var needs_reload := base_script is Script
 	for constant_value in script_resource.get_script_constant_map().values():
 		if constant_value is Script:
 			_reload_script_dependency_chain(constant_value as Script, visited)
+			needs_reload = true
 
-	script_resource.reload()
+	if needs_reload:
+		script_resource.reload()
 
 
 func _extract_tool_definitions(category: String, executor) -> Array:
