@@ -1,1 +1,0 @@
-﻿15d06695b43ffb27ed3ed50b77a054b7b34a96dbf1eb6231033d83e9689fe004  godot-dotnet-mcp-0.3.0.zip
