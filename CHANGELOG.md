@@ -18,9 +18,13 @@
 
 - 重构 `Tools` 页工具树：顶层直接展示 Intelligence 工具，每个工具下可展开查看所依赖的原子工具链路，原子工具可进一步展开至 Action 叶节点。
 - 新增工具树 Shift+点击递归展开/折叠，以及右键上下文菜单（复制工具名 / Schema / 删除用户工具）。
-- 移除工具树中旧有的 Profile 预设管理 UI（Profile 下拉、保存/删除 Profile 对话框），精简交互路径。
 - 全面优化 MCPDebugBuffer 日志系统：统一 source 命名规范，`_log()` 支持等级参数（trace/debug/info/warning/error），在 tool_loader、intelligence、atomic_bridge、impl_* 各层补充关键日志点。
 - 将仓库目录结构调整为符合 Godot Asset Library 规范的 `addons/godot_dotnet_mcp/` 布局，并添加 `.gitattributes` 控制 ZIP 分发内容。
+
+### Removed
+
+- 移除 `Tools` 页 Profile 预设管理 UI（Profile 下拉、保存 / 删除 Profile 对话框），Profile 管理已迁移至 `plugin_developer_*` 工具组通过 MCP 调用完成。
+- 暂时移除 `Tools` 页用户工具管理 UI，User 工具的创建、删除与恢复目前统一通过 `plugin_evolution_*` 工具组完成；UI 侧管理入口将在后续版本中进一步更新。
 
 ### Fixed
 
