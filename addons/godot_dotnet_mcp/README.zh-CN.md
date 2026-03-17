@@ -1,40 +1,22 @@
 # Godot .NET MCP
-[![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
+[![最新版本](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-> 这个项目不是再做一个套在 Godot 外面的 MCP 服务壳，而是通过插件形式把 Godot 编辑器本身推进到更 AI Native 的形态。
-> 目标是让 AI 在编辑器内直接理解 Godot 项目，并在授权边界内自进化扩展工具，而不只是执行命令。
-
-[![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
-[![Download ZIP](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-latest%20zip-2ea44f)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest/download/godot-dotnet-mcp-0.3.0.zip)
-
-`Godot .NET MCP` 是一个运行在 Godot 编辑器内、支持自进化的 MCP 插件，面向 Godot 4 与 Godot.NET 工作流，能把真实项目上下文直接暴露给客户端，并在用户授权下扩展 User 工具。
-
-当前正式发布版本：`v0.3.0`（v0.4.0 开发中）
+> 运行在 Godot 编辑器进程内的 MCP 插件——Agent 直接读取活的项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
 
 ## 这是什么
 
-它是直接运行在 Godot 编辑器进程内的 MCP 服务，不是脱离编辑器状态的外部守护进程。
+嵌入 Godot 编辑器进程的 MCP 服务端。调用 `intelligence_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再用 `intelligence_project_advise` 获取具体可执行的改进建议。之后根据建议，用场景、脚本、节点或资源工具做精准修改。
 
-客户端拿到的是实时项目上下文，并且插件可以通过显式授权扩展 User 工具，而不是依赖一层脱节的外部自动化脚本。
+Intelligence 层（15 个内置工具）是 Agent 的推荐起点，覆盖项目快照、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
+
+如需扩展工具集：在 `custom_tools/` 中放置 `.gd` 文件，实现 `handles / get_tools / execute`，工具名统一以 `user_` 开头。插件自动发现并加载。`plugin_evolution` 工具组负责脚手架、审计和删除。
 
 ## 为什么用这个插件
 
-- **Godot.NET 优先**：不仅面向通用 Godot 项目，也把 Godot.NET / C# 的场景绑定、导出成员分析和脚本检查作为一等能力来设计。
-- **运行在编辑器内部**：无需额外守护进程，服务直接跟随 Godot 编辑器生命周期，部署、调试和接入链路更短。
-- **可扩展**：工具系统按 domain 拆分装载，支持热重载、自定义工具发现与后续能力增量扩展。
-- **可自进化**：插件可以在显式授权下脚手架、加载、审计和删除 User 工具，不会写入内置分类。
-- **面向真实接入**：重点不是演示接口，而是让 MCP 客户端真正接进 Godot 项目，包括 profile、配置生成、复制和写入链路。
-
-## 关键特性
-
-- 提供 HTTP + MCP 协议入口，默认地址为 `http://127.0.0.1:3000/mcp`
-- 提供 Dock UI，可管理端口、语言、工具 profile 与客户端配置
-- 支持面向桌面端和 CLI 客户端的平台化配置生成
-- 支持配置复制和一键写入
-- 支持插件级完整重载，以及按 domain 的局部热重载
-- 覆盖 Godot 编辑器中的主要项目、场景、脚本和资源操作链路
-- 支持用户自定义工具脚本发现、加载、调用与回收
-- 支持通过 `debug_runtime_bridge` 回读主项目调试会话状态与最近一次运行的基础生命周期事件
+- **运行在编辑器内部**：在 Godot 进程中运行，场景查询、脚本读取和属性修改直接反映编辑器的真实状态。
+- **Godot.NET 优先**：C# 绑定检查（`intelligence_bindings_audit`）、导出成员分析、`.cs` 脚本修补均内置，不是附加功能。
+- **Intelligence 优先**：`intelligence_project_state` → `intelligence_project_advise` → 具体操作，是设计好的工作流，不需要猜从哪个原子工具入手。
+- **可用户扩展**：`custom_tools/` 中的脚本作为一等工具加载，无需重建插件。`plugin_evolution` 管理全生命周期。
 
 ## 环境要求
 
@@ -51,7 +33,7 @@
 
 ### 方式一：直接复制插件目录
 
-将本插件放到你的 Godot 项目内：
+将插件放到你的 Godot 项目内：
 
 ```text
 addons/godot_dotnet_mcp
@@ -67,16 +49,13 @@ addons/godot_dotnet_mcp
 
 ### 方式二：作为 Git Submodule
 
-```bash
-git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git addons/godot_dotnet_mcp
-git submodule update --init --recursive
-```
-
-如果是首次克隆主项目：
+仓库根目录内含 `addons/godot_dotnet_mcp/`（v0.4 后重组，插件不再在仓库根部）。添加子模块时，克隆到父级目录：
 
 ```bash
-git clone --recurse-submodules <your-project-repo>
+git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dotnet-mcp
 ```
+
+插件位于 `_godot-dotnet-mcp/addons/godot_dotnet_mcp/`，将该目录复制或符号链接到项目的 `addons/` 下即可。如需更简单的方式，推荐使用方式三。
 
 ### 方式三：使用发布包
 
@@ -92,13 +71,13 @@ https://github.com/LuoxuanLove/godot-dotnet-mcp/releases
 addons/godot_dotnet_mcp
 ```
 
-再按“方式一”启用即可。
+再按"方式一"启用即可。
 
 ## 快速开始
 
 ### 1. 启动本地服务
 
-启用插件后，服务可以根据已保存配置自动启动，也可以在 `MCPDock > Server` 中手动启动。
+启用插件后，服务可根据已保存设置自动启动，也可在 `MCPDock > Server` 中手动启动。
 
 健康检查：
 
@@ -122,14 +101,14 @@ POST http://127.0.0.1:3000/mcp
 
 打开 `MCPDock > Config`，选择目标平台后查看或复制生成结果。
 
-- 桌面端会显示 JSON 配置、目标路径和写入操作
-- CLI 客户端会显示对应命令文本
+- 桌面端显示 JSON 配置、目标路径和写入操作
+- CLI 客户端显示对应命令文本
 - `Claude Code` 额外支持 `user / project` 作用域切换
 
 推荐顺序：
 
-1. 先选择目标客户端。
-2. 再确认服务地址和生成内容。
+1. 选择目标客户端。
+2. 确认服务地址和生成内容。
 3. 需要自动落地时使用 `Write Config`。
 4. 只想手动处理时使用 `Copy`。
 
@@ -143,44 +122,30 @@ POST http://127.0.0.1:3000/mcp
 
 ### 4. 读取最近一次主项目运行状态
 
-使用 `debug_runtime_bridge` 读取最近一次由编辑器启动的主项目运行时信息。
-
-- `get_sessions` 可在主项目停止后继续返回最近一次调试会话状态
-- `get_recent` 可返回最近捕获到的基础生命周期事件，例如 `enter_tree`、`ready`、`close_requested`、`exit_tree`
-- 如果只是读取最近一次会话和生命周期事件，不要求主项目场景持续运行
+使用 `intelligence_runtime_diagnose` 读取最近一次由编辑器启动的运行时信息——错误、编译问题、性能数据。主项目停止后仍可读取。
 
 ## 路径约定
 
 - 资源路径统一使用 `res://`
-- 节点路径默认推荐使用相对当前场景根节点的路径，例如 `Player/Camera2D`
-- 当前版本也兼容 `/root/...` 风格路径
-- 工具写操作默认要求“写后可读回”
-
-## 仓库迁移说明
-
-- GitHub 仓库名为 `godot-dotnet-mcp`
-- Godot 内的安装目录保持不变，仍然使用 `addons/godot_dotnet_mcp`
-- 如果你是从旧仓库地址迁移，请更新 submodule URL 后执行：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive
-```
+- 节点路径默认推荐相对当前场景根节点，例如 `Player/Camera2D`
+- 也支持 `/root/...` 风格路径
+- 工具写操作默认要求"写后可读回"
 
 ## 文档
 
 - [README.md](README.md)
-- [docs/概述.md](docs/%E6%A6%82%E8%BF%B0.md)
 - [CHANGELOG.md](CHANGELOG.md)
+- [docs/概述.md](docs/%E6%A6%82%E8%BF%B0.md)
+- [docs/模块/Intelligence工具层.md](docs/%E6%A8%A1%E5%9D%97/Intelligence%E5%B7%A5%E5%85%B7%E5%B1%82.md)
+- [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
+- [docs/模块/用户扩展.md](docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
 - [docs/架构/服务与路由.md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
 - [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
 - [docs/架构/安装与发布.md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
-- [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
-- [docs/模块/自进化系统.md](docs/%E6%A8%A1%E5%9D%97/%E8%87%AA%E8%BF%9B%E5%8C%96%E7%B3%BB%E7%BB%9F.md)
 
 ## 当前边界
 
-- 当前调试回读已支持主项目运行时桥接事件与编辑器调试会话状态，但仍不是对 Godot 原生 Output / Debugger 面板的 1:1 文本镜像
-- 这条能力对应的 MCP 工具名是 `debug_runtime_bridge`
-- 最近一次捕获到的会话状态和基础生命周期事件会在主项目停止后继续保留，但如果要看实时新增事件，仍需保持主项目运行
-- 某些依赖编辑器实时状态的能力，仍建议在真实项目工作流中做一次黑盒确认
+- 当前调试回读支持主项目运行时桥接事件与编辑器调试会话状态，但不是 Godot 原生 Output / Debugger 面板的 1:1 文本镜像
+- 读取运行时状态推荐使用 `intelligence_runtime_diagnose`
+- 最近一次捕获的会话状态与生命周期事件在主项目停止后仍可读取；若要观察实时新增事件，仍需保持主项目运行
+- 依赖编辑器实时状态的能力建议在真实项目工作流中做一次验证
