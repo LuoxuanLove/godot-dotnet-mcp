@@ -3,6 +3,8 @@
 
 > An MCP server plugin running inside the Godot editor — agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
 
+![Godot .NET MCP Tools](asset_library/preview-tools-en.png)
+
 ## What It Is
 
 An MCP endpoint embedded in the Godot editor process. Call `intelligence_project_state` to get a real snapshot of the open project — scene count, script count, errors, run state — then `intelligence_project_advise` for specific, actionable recommendations. From there, use scene, script, node, or resource tools to make targeted changes.

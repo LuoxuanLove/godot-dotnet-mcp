@@ -3,6 +3,8 @@
 
 > 运行在 Godot 编辑器进程内的 MCP 插件——Agent 直接读取活的项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
 
+![Godot .NET MCP 工具页](asset_library/preview-tools-cn.png)
+
 ## 这是什么
 
 嵌入 Godot 编辑器进程的 MCP 服务端。调用 `intelligence_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再用 `intelligence_project_advise` 获取具体可执行的改进建议。之后根据建议，用场景、脚本、节点或资源工具做精准修改。
