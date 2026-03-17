@@ -1,11 +1,31 @@
 # Changelog
 
-## 0.4.0 - 2026-03-14
+## 0.4.0 - 2026-03-17
+
+### Added
+
+- 新增 Intelligence 工具层，提供 15 个面向项目全链路理解与操作的高层工具，分为四类：
+  - **项目级（6 个）**：`intelligence_project_state`（项目快照）、`intelligence_project_advise`（诊断建议）、`intelligence_project_configure`（配置管理）、`intelligence_project_run`（运行项目）、`intelligence_project_stop`（停止项目）、`intelligence_runtime_diagnose`（运行时诊断）
+  - **场景级（3 个）**：`intelligence_scene_validate`（场景验证）、`intelligence_scene_analyze`（深度分析）、`intelligence_scene_patch`（结构化修改）
+  - **脚本级（3 个）**：`intelligence_bindings_audit`（C# 绑定审计）、`intelligence_script_analyze`（脚本深度分析）、`intelligence_script_patch`（脚本结构化修改）
+  - **索引级（3 个）**：`intelligence_project_index_build`（构建项目索引）、`intelligence_project_symbol_search`（符号搜索）、`intelligence_scene_dependency_graph`（场景依赖图）
+- 新增 Atomic Bridge 调度层，将 Intelligence 工具与底层原子工具解耦，支持工具链组合调用。
+- 新增用户自定义工具接入规范：自定义工具放置于 `custom_tools/` 目录，须以 `user_*` 前缀命名并实现 `handles()` / `get_tools()` / `execute()` 接口，可通过 bridge 共享调度能力。
+- 新增插件目录写保护机制（`PLUGIN_PROTECTED_PATHS`），阻止工具对插件自身文件的非授权修改。
+- 补充 9 种语言（de/en/es/fr/ja/pt/ru/zh_cn/zh_tw）的 Intelligence 工具本地化文案。
+
+### Changed
+
+- 重构 `Tools` 页工具树：顶层直接展示 Intelligence 工具，每个工具下可展开查看所依赖的原子工具链路，原子工具可进一步展开至 Action 叶节点。
+- 新增工具树 Shift+点击递归展开/折叠，以及右键上下文菜单（复制工具名 / Schema / 删除用户工具）。
+- 移除工具树中旧有的 Profile 预设管理 UI（Profile 下拉、保存/删除 Profile 对话框），精简交互路径。
+- 全面优化 MCPDebugBuffer 日志系统：统一 source 命名规范，`_log()` 支持等级参数（trace/debug/info/warning/error），在 tool_loader、intelligence、atomic_bridge、impl_* 各层补充关键日志点。
+- 将仓库目录结构调整为符合 Godot Asset Library 规范的 `addons/godot_dotnet_mcp/` 布局，并添加 `.gitattributes` 控制 ZIP 分发内容。
 
 ### Fixed
 
-- 修复了全量 MCP 工具中的 JSON Schema 合规性问题，重点解决了 `array` 类型定义缺失 `items` 属性导致的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal` 及 `collision_shape` 等核心工具。
-- 修复了 `editor_status` 和 `node_transform` 工具在参数类型非法时的静默通过问题，增强了输入校验的鲁棒性。
+- 修复全量 MCP 工具中 `array` 类型定义缺失 `items` 属性导致的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
+- 修复 `editor_status` 和 `node_transform` 工具对非法参数类型静默通过的问题，增强输入校验鲁棒性。
 
 ## 0.3.0 - 2026-03-12
 
