@@ -387,7 +387,8 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	elif method == "GET" and path == "/api/tools":
 		response = _create_tools_list_response()
 	elif method == "OPTIONS":
-		response = _create_cors_response()
+		response = {"status": 405, "_no_body": true}
+		no_body = true
 	else:
 		response = {"error": "Not found", "status": 404}
 
@@ -803,13 +804,6 @@ func _create_tools_list_response() -> Dictionary:
 	}
 
 
-func _create_cors_response() -> Dictionary:
-	return {
-		"status": 204,
-		"cors": true
-	}
-
-
 func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
 	# Sanitize data before JSON serialization
 	var response_data = data.duplicate(true)
@@ -837,10 +831,6 @@ func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool 
 	if not no_body:
 		headers += "Content-Type: application/json; charset=utf-8\r\n"
 	headers += "Content-Length: %d\r\n" % body_bytes.size()
-	headers += "Access-Control-Allow-Origin: *\r\n"
-	headers += "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-	headers += "Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With, Authorization\r\n"
-	headers += "Access-Control-Max-Age: 86400\r\n"
 	headers += "Connection: keep-alive\r\n"
 	for header_name in extra_headers:
 		headers += "%s: %s\r\n" % [header_name, extra_headers[header_name]]
