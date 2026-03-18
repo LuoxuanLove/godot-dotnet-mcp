@@ -34,7 +34,7 @@ var _tool_loader_initialized := false
 # MCP Protocol info
 const MCP_VERSION = "2025-06-18"
 const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.4.0"
+const SERVER_VERSION = "0.5.0"
 
 
 func _ready() -> void:

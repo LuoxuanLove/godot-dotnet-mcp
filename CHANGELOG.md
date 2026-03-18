@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0 - 2026-03-18
+
+### Added
+
+- 新增 `debug_editor_log` 工具（`debug` 域），直接读取 Godot 编辑器 Output 面板（EditorLog RichTextLabel）：
+  - `get_output`：读取面板当前可见行（受面板过滤状态影响，AI 侧可感知）
+  - `get_errors`：按前缀提取错误/警告行，自动解析 `res://` 路径与行号
+  - `clear`：清空 Output 面板
+  - 与 `debug_log_buffer`（MCP 内部日志）及 `debug_runtime_bridge`（EngineDebugger 结构化事件）互补，三者不重叠
+- 新增 `intelligence_script_analyze` 可选参数 `include_diagnostics: bool`（默认 `false`）：
+  - 对 `.gd` 文件，通过 `lsp_client.gd` 连接 Godot 内置 LSP（`127.0.0.1:6005`），获取 GDScript 解析错误与警告
+  - 返回 `diagnostics` 字段，含 `parse_errors[]`（severity / message / line / column / length）、`error_count`、`warning_count`
+  - LSP 不可用时优雅降级：`available: false`，不影响其他分析字段
+  - 新建 `tools/intelligence/lsp_client.gd`：纯 GDScript `StreamPeerTCP` 实现，完整 JSON-RPC + `Content-Length` 帧协议，同步阻塞轮询（最长 5 秒超时）
+- 新增 `intelligence_runtime_diagnose` 可选参数 `include_gd_errors: bool`（默认 `false`）：
+  - 启用时，通过 `debug_editor_log.get_errors` 读取 Output 面板 GDScript 错误/警告，合并为 `gd_errors[]` 与 `gd_error_count` 字段
+  - `has_errors` 字段同步计入 GDScript 错误
+
+### Changed
+
+- 补充 `docs/模块/工具域索引.md`：`debug` 域描述加入编辑器输出面板读取；`intelligence` 目录树加入 `lsp_client.gd`
+- 补充 `docs/模块/Intelligence工具层.md`：`intelligence_script_analyze` 新增 LSP 诊断说明；`intelligence_runtime_diagnose` 说明 `include_gd_errors` 参数
+- 补充 `docs/模块/工具系统.md`：在 task Profile 工具列表中加入 `debug_editor_log`
+
 ## 0.4.0 - 2026-03-17
 
 ### Added

@@ -3,6 +3,8 @@ extends RefCounted
 
 ## Intelligence implementation: bindings_audit, script_analyze, script_patch
 
+const LspClient = preload("res://addons/godot_dotnet_mcp/tools/intelligence/lsp_client.gd")
+
 var bridge
 
 const HANDLED_TOOLS := ["bindings_audit", "script_analyze", "script_patch"]
@@ -28,11 +30,12 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "script_analyze",
-			"description": "SCRIPT ANALYZE: Deep analysis of a script file: class structure, methods, exports, signals, inheritance, and scene references.",
+			"description": "SCRIPT ANALYZE: Deep analysis of a script file: class structure, methods, exports, signals, inheritance, and scene references. For .gd files, set include_diagnostics:true to also get GDScript parse errors and warnings from Godot's built-in LSP (requires Godot LSP running on port 6005).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"script": {"type": "string", "description": "Script path (res://..., .gd or .cs)"}
+					"script": {"type": "string", "description": "Script path (res://..., .gd or .cs)"},
+					"include_diagnostics": {"type": "boolean", "description": "Include GDScript static diagnostics via Godot LSP (default: false, .gd only)"}
 				},
 				"required": ["script"]
 			}
@@ -274,6 +277,7 @@ func _execute_bindings_audit(args: Dictionary) -> Dictionary:
 
 func _execute_script_analyze(args: Dictionary) -> Dictionary:
 	var script_path := str(args.get("script", "")).strip_edges()
+	var include_diagnostics := bool(args.get("include_diagnostics", false))
 	if script_path.is_empty():
 		return bridge.error("script path is required")
 	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
@@ -321,7 +325,7 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 		issues.append(bridge.build_issue("info", "no_scene_reference",
 			"Script is not referenced by any discovered scene.", {"script": script_path}))
 
-	return bridge.success({
+	var result_data: Dictionary = {
 		"script": script_path,
 		"language": str(inspect_data.get("language", "unknown")),
 		"class_name": str(inspect_data.get("class_name", "")),
@@ -339,7 +343,20 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 		"scene_refs": scene_refs,
 		"issue_count": issues.size(),
 		"issues": issues
-	})
+	}
+
+	if include_diagnostics and script_path.ends_with(".gd"):
+		MCPDebugBuffer.record("debug", "intelligence",
+			"script_analyze: requesting LSP diagnostics for %s" % script_path)
+		var lsp := LspClient.new()
+		var diag_result: Dictionary = lsp.get_diagnostics(script_path)
+		result_data["diagnostics"] = diag_result
+		MCPDebugBuffer.record("debug", "intelligence",
+			"script_analyze: LSP available=%s errors=%d" % [
+				str(diag_result.get("available", false)),
+				int(diag_result.get("error_count", 0))])
+
+	return bridge.success(result_data)
 
 
 func _execute_script_patch(args: Dictionary) -> Dictionary:

@@ -106,6 +106,10 @@ func get_tools() -> Array[Dictionary]:
 					"tail": {
 						"type": "integer",
 						"description": "Number of recent runtime errors to include (default: 20)"
+					},
+					"include_gd_errors": {
+						"type": "boolean",
+						"description": "Include GDScript errors/warnings from the editor Output panel (default: false)"
 					}
 				}
 			}
@@ -400,6 +404,7 @@ func _execute_project_stop(_args: Dictionary) -> Dictionary:
 func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	var include_compile_errors := bool(args.get("include_compile_errors", true))
 	var include_performance := bool(args.get("include_performance", false))
+	var include_gd_errors := bool(args.get("include_gd_errors", false))
 	var tail := max(int(args.get("tail", 20)), 1)
 
 	var runtime_errors_raw: Array = bridge.extract_array(
@@ -444,11 +449,26 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 		var render_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_performance", {"action": "get_render_info"}))
 		performance = {"fps": fps_data, "memory": mem_data, "render": render_data}
 
-	return bridge.success({
-		"has_errors": not runtime_errors.is_empty() or compile_error_count > 0,
+	var gd_errors: Array = []
+	var gd_error_count := 0
+	if include_gd_errors:
+		var el_result: Dictionary = bridge.call_atomic("debug_editor_log", {"action": "get_errors", "limit": 50})
+		if bool(el_result.get("success", false)):
+			var el_data: Dictionary = bridge.extract_data(el_result)
+			gd_error_count = int(el_data.get("error_count", 0))
+			for raw in el_data.get("errors", []):
+				if raw is Dictionary:
+					gd_errors.append(raw)
+
+	var result_data: Dictionary = {
+		"has_errors": not runtime_errors.is_empty() or compile_error_count > 0 or gd_error_count > 0,
 		"runtime_error_count": runtime_errors.size(),
 		"runtime_errors": runtime_errors,
 		"compile_error_count": compile_error_count,
 		"compile_errors": compile_errors,
 		"performance": performance
-	})
+	}
+	if include_gd_errors:
+		result_data["gd_error_count"] = gd_error_count
+		result_data["gd_errors"] = gd_errors
+	return bridge.success(result_data)

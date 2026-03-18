@@ -226,6 +226,48 @@ EXAMPLES:
 			}
 		},
 		{
+			"name": "editor_log",
+			"description": """EDITOR LOG: Read or clear the Godot editor Output panel (EditorLog).
+
+Reads the editor's Output panel content directly — distinct from log_buffer (MCP internal events)
+and runtime_bridge (EngineDebugger structured events). Use this to capture print() output,
+GDScript runtime push_error/push_warning, and third-party plugin log lines.
+
+NOTE: Returned content reflects the current EditorLog filter state. If the user has filters
+active (e.g. "errors only"), some lines may be absent. Toggle filters in the Output panel
+to control visibility before reading.
+
+ACTIONS:
+- get_output: Read current Output panel lines (up to `limit`, newest last)
+- get_errors: Extract error/warning lines from the Output panel
+- clear: Clear the Output panel
+
+EXAMPLES:
+- Read output: {"action": "get_output", "limit": 100}
+- Read errors: {"action": "get_errors", "limit": 50}
+- Read errors without warnings: {"action": "get_errors", "include_warnings": false}
+- Clear panel: {"action": "clear"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["get_output", "get_errors", "clear"],
+						"description": "EditorLog action"
+					},
+					"limit": {
+						"type": "integer",
+						"description": "Max number of lines/errors to return (default: get_output=100, get_errors=50)"
+					},
+					"include_warnings": {
+						"type": "boolean",
+						"description": "Include warning lines in get_errors (default: true)"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "class_db",
 			"description": """CLASS DATABASE: Query information about Godot classes.
 
@@ -284,6 +326,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _execute_profiler(args)
 		"class_db":
 			return _execute_class_db(args)
+		"editor_log":
+			return _execute_editor_log(args)
 		_:
 			return _error("Unknown tool: %s" % tool_name)
 
@@ -1046,3 +1090,146 @@ func _class_exists(cls_name: String) -> Dictionary:
 		"class": cls_name,
 		"exists": ClassDB.class_exists(cls_name)
 	})
+
+
+# ==================== EDITOR LOG ====================
+
+var _editor_log_rtl_cache: WeakRef = null
+
+
+func _execute_editor_log(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", ""))
+	match action:
+		"get_output":
+			return _editor_log_get_output(args)
+		"get_errors":
+			return _editor_log_get_errors(args)
+		"clear":
+			return _editor_log_clear()
+		_:
+			return _error("Unknown action: %s" % action)
+
+
+func _editor_log_get_output(args: Dictionary) -> Dictionary:
+	var rtl := _get_editor_log_rtl()
+	if rtl == null:
+		return _error("EditorLog not accessible — ensure plugin is running inside the Godot editor")
+	var limit := int(args.get("limit", 100))
+	var raw_text := rtl.get_parsed_text()
+	var all_lines := raw_text.split("\n")
+	var lines: Array[String] = []
+	for raw_line in all_lines:
+		var ln := raw_line.strip_edges()
+		if not ln.is_empty():
+			lines.append(ln)
+	if limit > 0 and lines.size() > limit:
+		var trimmed: Array[String] = []
+		for i in range(lines.size() - limit, lines.size()):
+			trimmed.append(lines[i])
+		lines = trimmed
+	return _success({
+		"lines": lines,
+		"line_count": lines.size(),
+		"source": "editor_log",
+		"note": "Content reflects current EditorLog filter state in the Output panel."
+	})
+
+
+func _editor_log_get_errors(args: Dictionary) -> Dictionary:
+	var rtl := _get_editor_log_rtl()
+	if rtl == null:
+		return _error("EditorLog not accessible — ensure plugin is running inside the Godot editor")
+	var limit := int(args.get("limit", 50))
+	var include_warnings := bool(args.get("include_warnings", true))
+	var raw_text := rtl.get_parsed_text()
+	var all_lines := raw_text.split("\n")
+	var errors: Array = []
+	var error_prefixes: Array[String] = ["ERROR:", "SCRIPT ERROR:", "USER ERROR:", "Parse Error:", "Invalid"]
+	var warning_prefixes: Array[String] = ["WARNING:", "USER WARNING:", "SCRIPT WARNING:"]
+	for raw_line in all_lines:
+		var ln := raw_line.strip_edges()
+		if ln.is_empty():
+			continue
+		var is_error := false
+		for prefix in error_prefixes:
+			if ln.begins_with(prefix):
+				is_error = true
+				break
+		if is_error:
+			errors.append(_parse_editor_log_error_line(ln, "error"))
+			continue
+		if include_warnings:
+			for prefix in warning_prefixes:
+				if ln.begins_with(prefix):
+					errors.append(_parse_editor_log_error_line(ln, "warning"))
+					break
+	if limit > 0 and errors.size() > limit:
+		errors = errors.slice(errors.size() - limit)
+	return _success({
+		"errors": errors,
+		"error_count": errors.size()
+	})
+
+
+func _editor_log_clear() -> Dictionary:
+	var rtl := _get_editor_log_rtl()
+	if rtl == null:
+		return _error("EditorLog not accessible — ensure plugin is running inside the Godot editor")
+	rtl.clear()
+	return _success({"cleared": true})
+
+
+func _get_editor_log_rtl() -> RichTextLabel:
+	if _editor_log_rtl_cache != null:
+		var cached = _editor_log_rtl_cache.get_ref()
+		if cached != null and is_instance_valid(cached):
+			return cached as RichTextLabel
+	var main_loop = Engine.get_main_loop()
+	if not (main_loop is SceneTree):
+		return null
+	var root := (main_loop as SceneTree).root
+	if root == null:
+		return null
+	var rtl := _find_editor_log_rtl(root)
+	if rtl != null:
+		_editor_log_rtl_cache = weakref(rtl)
+	return rtl
+
+
+func _find_editor_log_rtl(node: Node) -> RichTextLabel:
+	if node.get_class() == "EditorLog":
+		for i in range(node.get_child_count()):
+			var child := node.get_child(i)
+			if child is RichTextLabel:
+				return child as RichTextLabel
+	for i in range(node.get_child_count()):
+		var result := _find_editor_log_rtl(node.get_child(i))
+		if result != null:
+			return result
+	return null
+
+
+func _parse_editor_log_error_line(line: String, severity: String) -> Dictionary:
+	var entry: Dictionary = {
+		"message": line,
+		"severity": severity,
+		"file": "",
+		"line": -1
+	}
+	var res_idx := line.find("res://")
+	if res_idx >= 0:
+		var rest := line.substr(res_idx)
+		var colon_idx := rest.rfind(":")
+		if colon_idx > 0:
+			var path_part := rest.substr(0, colon_idx)
+			var after_colon := rest.substr(colon_idx + 1)
+			var line_num_str := ""
+			for ch in after_colon:
+				if ch.is_valid_int() or (line_num_str.is_empty() and ch == "-"):
+					line_num_str += ch
+				else:
+					break
+			if not line_num_str.is_empty():
+				entry["file"] = path_part
+				entry["line"] = int(line_num_str)
+	return entry
