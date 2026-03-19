@@ -110,6 +110,7 @@ const TOOL_DOMAIN_DEFS = [
 const DEFAULT_SETTINGS = {
 	"port": 3000,
 	"host": "127.0.0.1",
+	"transport_mode": "http",
 	"auto_start": true,
 	"debug_mode": true,
 	"log_level": "info",
@@ -118,9 +119,7 @@ const DEFAULT_SETTINGS = {
 	"tool_profile_id": "intelligence",
 	"language": "",
 	"show_user_tools": false,
-	"collapsed_categories": [],
-	"collapsed_domains": [],
-	"collapsed_intelligence_tools": DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS
+	"collapsed_nodes": {}
 }
 
 var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)

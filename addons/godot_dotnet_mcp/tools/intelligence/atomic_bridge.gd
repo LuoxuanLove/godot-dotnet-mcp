@@ -24,6 +24,7 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
 	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd"
 }
+const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 const PROJECT_FILE_PATTERNS := {
 	"gd_scripts": "*.gd",
@@ -34,10 +35,40 @@ const PROJECT_FILE_PATTERNS := {
 }
 
 var _atomic_executors := {}
+var _runtime_context: Dictionary = {}
 
 
 func success(data = null, message: String = "") -> Dictionary:
 	return {"success": true, "data": data, "message": message}
+
+
+func configure_runtime(context: Dictionary) -> void:
+	_runtime_context = context.duplicate(true)
+
+
+func get_tool_loader():
+	if Engine.has_singleton("MCPRuntimeBridge"):
+		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
+		if runtime_bridge != null and runtime_bridge.has_method("get_tool_loader"):
+			var loader = runtime_bridge.get_tool_loader()
+			if loader != null:
+				return loader
+	return _runtime_context.get("tool_loader", null)
+
+
+func get_gdscript_lsp_diagnostics_service():
+	var loader = get_tool_loader()
+	if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
+		var loader_service = loader.get_gdscript_lsp_diagnostics_service()
+		if loader_service != null:
+			return loader_service
+	if Engine.has_singleton("MCPRuntimeBridge"):
+		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
+		if runtime_bridge != null and runtime_bridge.has_method("get_gdscript_lsp_diagnostics_service"):
+			var service = runtime_bridge.get_gdscript_lsp_diagnostics_service()
+			if service != null:
+				return service
+	return GDScriptLspDiagnosticsService.get_singleton()
 
 
 func error(message: String, data = null, hints: Array = []) -> Dictionary:

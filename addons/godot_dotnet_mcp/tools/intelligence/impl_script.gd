@@ -3,7 +3,11 @@ extends RefCounted
 
 ## Intelligence implementation: bindings_audit, script_analyze, script_patch
 
+const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
+const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
+
 var bridge
+var _tool_loader_context
 
 const HANDLED_TOOLS := ["bindings_audit", "script_analyze", "script_patch"]
 
@@ -12,11 +16,17 @@ func handles(tool_name: String) -> bool:
 	return tool_name in HANDLED_TOOLS
 
 
+func configure_runtime(_context: Dictionary) -> void:
+	_tool_loader_context = _context.get("tool_loader", null)
+	MCPDebugBuffer.record("info", "intelligence",
+		"impl_script configure_runtime tool_loader=%s" % str(_tool_loader_context != null))
+
+
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "bindings_audit",
-			"description": "BINDINGS AUDIT: Audit C# script bindings. Detects Export/Signal/NodePath issues.",
+			"description": "BINDINGS AUDIT: Audit C# [Export]/[Signal]/NodePath binding consistency against scene references. C# only (.cs). Provide script to audit one file, scene to audit its scripts, or omit both to scan all .cs in project. Returns: total_issues, results[]{kind, issues[]{severity, type, message}}. Use when runtime_diagnose shows C# binding errors.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -28,18 +38,19 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "script_analyze",
-			"description": "SCRIPT ANALYZE: Deep analysis of a script file: class structure, methods, exports, signals, inheritance, and scene references.",
+			"description": "SCRIPT ANALYZE: Inspect a .gd or .cs script — class structure, methods, exports, signals, variables, and scene references. Returns: class_name, base_type, methods[], exports[], signals[], variables[], scene_refs[], issues[]. For .gd files: include_diagnostics=true adds background diagnostics{available, pending, parse_errors[]{severity, message, line, column}, error_count} via Godot LSP using the saved file content on disk. The first call may return pending while LSP work finishes in the background. Unsaved editor buffer changes are not included. Requires: script path.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"script": {"type": "string", "description": "Script path (res://..., .gd or .cs)"}
+					"script": {"type": "string", "description": "Script path (res://..., .gd or .cs)"},
+					"include_diagnostics": {"type": "boolean", "description": "Include GDScript static diagnostics via Godot LSP (default: false, .gd only)"}
 				},
 				"required": ["script"]
 			}
 		},
 		{
 			"name": "script_patch",
-			"description": "SCRIPT PATCH: Apply structured modifications to a GDScript or C# script. Supports add_method, add_export, add_signal, add_variable ops. Use dry_run:true (default) to preview first.",
+			"description": "SCRIPT PATCH: Add or edit members in a .gd or .cs script. Add ops: add_method, add_export, add_variable (both); add_signal (.gd only). Edit ops: replace_method_body (replace function body, keep signature), delete_member (remove declaration; member_type: function/variable/signal/auto), rename_member (rename declaration only, not references; new_name required). dry_run=true (default) previews — check op_previews[]{op, valid, name} before applying. Returns: applied_ops[], failed_ops[]{op, error} when dry_run=false. Requires: script and ops[].",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -50,14 +61,16 @@ func get_tools() -> Array[Dictionary]:
 						"items": {
 							"type": "object",
 							"properties": {
-								"op": {"type": "string", "enum": ["add_method", "add_export", "add_signal", "add_variable"]},
-								"name": {"type": "string", "description": "Name of the method/export/signal/variable"},
+								"op": {"type": "string", "enum": ["add_method", "add_export", "add_signal", "add_variable", "replace_method_body", "delete_member", "rename_member"]},
+								"name": {"type": "string", "description": "Member name (old name for rename_member)"},
 								"type": {"type": "string", "description": "Type annotation"},
 								"default_value": {"type": "string", "description": "Default value expression"},
-								"body": {"type": "string", "description": "Method body (for add_method)"},
+								"body": {"type": "string", "description": "Method body (for add_method / replace_method_body)"},
 								"params": {"type": "array", "description": "Parameters for add_method/add_signal"},
 								"hint": {"type": "string", "description": "Export hint for add_export"},
-								"onready": {"type": "boolean", "description": "Add @onready for add_variable"}
+								"onready": {"type": "boolean", "description": "Add @onready for add_variable"},
+								"member_type": {"type": "string", "description": "Member type for delete_member: function, variable, signal, auto (default: auto)"},
+								"new_name": {"type": "string", "description": "New name for rename_member"}
 							},
 							"required": ["op", "name"]
 						}
@@ -77,6 +90,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"script_analyze": return _execute_script_analyze(args)
 		"script_patch":   return _execute_script_patch(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
+
+
+func tick(delta: float) -> void:
+	MCPDebugBuffer.record("info", "intelligence", "executor tick loader=%s" % str(_tool_loader_context != null))
 
 
 # --- private helpers ---
@@ -224,6 +241,43 @@ func _apply_patch_op(op: Dictionary, script_path: String, atomic_tool: String, i
 					"type": str(op.get("type", "Variant")),
 					"export": false
 				})
+		"replace_method_body":
+			if is_gd:
+				return bridge.call_atomic(atomic_tool, {
+					"action": "replace_function_body",
+					"path": script_path,
+					"name": member_name,
+					"body": str(op.get("body", ""))
+				})
+			else:
+				return bridge.call_atomic(atomic_tool, {
+					"action": "replace_method_body",
+					"path": script_path,
+					"name": member_name,
+					"body": str(op.get("body", ""))
+				})
+		"delete_member":
+			if is_gd:
+				return bridge.call_atomic(atomic_tool, {
+					"action": "remove_member",
+					"path": script_path,
+					"name": member_name,
+					"member_type": str(op.get("member_type", "auto"))
+				})
+			else:
+				return bridge.call_atomic(atomic_tool, {
+					"action": "delete_member",
+					"path": script_path,
+					"name": member_name,
+					"member_type": str(op.get("member_type", "auto"))
+				})
+		"rename_member":
+			return bridge.call_atomic(atomic_tool, {
+				"action": "rename_member",
+				"path": script_path,
+				"name": member_name,
+				"new_name": str(op.get("new_name", ""))
+			})
 		_:
 			return bridge.error("Unknown script patch op: %s" % op_name)
 
@@ -274,6 +328,7 @@ func _execute_bindings_audit(args: Dictionary) -> Dictionary:
 
 func _execute_script_analyze(args: Dictionary) -> Dictionary:
 	var script_path := str(args.get("script", "")).strip_edges()
+	var include_diagnostics := bool(args.get("include_diagnostics", false))
 	if script_path.is_empty():
 		return bridge.error("script path is required")
 	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
@@ -321,7 +376,7 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 		issues.append(bridge.build_issue("info", "no_scene_reference",
 			"Script is not referenced by any discovered scene.", {"script": script_path}))
 
-	return bridge.success({
+	var result_data: Dictionary = {
 		"script": script_path,
 		"language": str(inspect_data.get("language", "unknown")),
 		"class_name": str(inspect_data.get("class_name", "")),
@@ -339,7 +394,50 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 		"scene_refs": scene_refs,
 		"issue_count": issues.size(),
 		"issues": issues
-	})
+	}
+
+	if include_diagnostics and script_path.ends_with(".gd"):
+		MCPDebugBuffer.record("info", "intelligence",
+			"script_analyze diagnostics branch entered: %s" % script_path)
+		var diagnostics_source := FileAccess.get_file_as_string(script_path)
+		var diagnostics_service = _get_gdscript_lsp_diagnostics_service()
+		MCPDebugBuffer.record("info", "intelligence",
+			"script_analyze diagnostics loader=%s service=%s" % [
+				str(bridge != null and bridge.has_method("get_tool_loader") and bridge.get_tool_loader() != null),
+				str(diagnostics_service != null)
+			])
+		var diagnostics_result: Dictionary = {}
+		if diagnostics_service != null and diagnostics_service.has_method("request_diagnostics"):
+			var diagnostics_result_raw = diagnostics_service.request_diagnostics(
+				script_path,
+				diagnostics_source
+			)
+			if diagnostics_result_raw is Dictionary:
+				diagnostics_result = (diagnostics_result_raw as Dictionary).duplicate(true)
+		if diagnostics_result.is_empty():
+			diagnostics_result = {
+				"available": false,
+				"pending": true,
+				"finished": false,
+				"state": "queued",
+				"script": script_path,
+				"source_hash": str(diagnostics_source.hash()),
+				"parse_errors": [],
+				"error_count": 0,
+				"warning_count": 0,
+				"note": "Diagnostics are being resolved in the background from saved file content on disk."
+			}
+		MCPDebugBuffer.record("info", "intelligence",
+			"script_analyze diagnostics state=%s pending=%s available=%s" % [
+				str(diagnostics_result.get("state", "unknown")),
+				str(bool(diagnostics_result.get("pending", false))),
+				str(bool(diagnostics_result.get("available", false)))
+			])
+		result_data["diagnostics"] = diagnostics_result
+		result_data["diagnostics_status"] = _build_diagnostics_status_summary(diagnostics_result)
+		return bridge.success(result_data)
+
+	return bridge.success(result_data)
 
 
 func _execute_script_patch(args: Dictionary) -> Dictionary:
@@ -421,3 +519,29 @@ func _execute_script_patch(args: Dictionary) -> Dictionary:
 		"applied_ops": applied_ops,
 		"failed_ops": failed_ops
 	})
+
+
+func _get_gdscript_lsp_diagnostics_service():
+	if bridge != null and bridge.has_method("get_tool_loader"):
+		var loader = bridge.get_tool_loader()
+		if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
+			var loader_service = loader.get_gdscript_lsp_diagnostics_service()
+			if loader_service != null:
+				return loader_service
+	if bridge != null and bridge.has_method("get_gdscript_lsp_diagnostics_service"):
+		var service = bridge.get_gdscript_lsp_diagnostics_service()
+		if service != null:
+			return service
+	if _tool_loader_context != null and _tool_loader_context.has_method("get_gdscript_lsp_diagnostics_service"):
+		return _tool_loader_context.get_gdscript_lsp_diagnostics_service()
+	return GDScriptLspDiagnosticsService.get_singleton()
+
+
+func _build_diagnostics_status_summary(diagnostics_result: Dictionary) -> Dictionary:
+	return {
+		"source": "godot_lsp",
+		"available": bool(diagnostics_result.get("available", false)),
+		"pending": bool(diagnostics_result.get("pending", false)),
+		"finished": bool(diagnostics_result.get("finished", false)),
+		"phase": str(diagnostics_result.get("phase", diagnostics_result.get("state", "unknown")))
+	}

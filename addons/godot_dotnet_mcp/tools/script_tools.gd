@@ -214,7 +214,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["create", "write", "delete", "add_function", "remove_function", "add_variable", "add_signal", "add_export", "get_functions", "get_variables"]
+						"enum": ["create", "write", "delete", "add_function", "remove_function", "add_variable", "add_signal", "add_export", "get_functions", "get_variables", "replace_function_body", "remove_member", "rename_member"]
 					},
 					"path": {
 						"type": "string",
@@ -247,6 +247,14 @@ EXAMPLES:
 					},
 					"return_type": {
 						"type": "string"
+					},
+					"member_type": {
+						"type": "string",
+						"description": "Member type hint for remove_member/rename_member: function, variable, signal, export, auto (default: auto)"
+					},
+					"new_name": {
+						"type": "string",
+						"description": "New name for rename_member"
 					}
 				},
 				"required": ["action", "path"]
@@ -272,7 +280,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["create", "write", "add_field", "add_method"]
+						"enum": ["create", "write", "add_field", "add_method", "replace_method_body", "delete_member", "rename_member"]
 					},
 					"path": {
 						"type": "string",
@@ -319,6 +327,14 @@ EXAMPLES:
 					"return_type": {
 						"type": "string"
 					},
+					"member_type": {
+						"type": "string",
+						"description": "Member type hint for delete_member/rename_member: method, field, property, auto (default: auto)"
+					},
+					"new_name": {
+						"type": "string",
+						"description": "New name for rename_member"
+					}
 				},
 				"required": ["action", "path"]
 			}
@@ -493,6 +509,12 @@ func _execute_edit_gd(args: Dictionary) -> Dictionary:
 			return _get_gd_functions(path)
 		"get_variables":
 			return _get_gd_variables(path)
+		"replace_function_body":
+			return _replace_gd_function_body(path, str(args.get("name", "")), str(args.get("body", "")))
+		"remove_member":
+			return _remove_gd_member(path, str(args.get("name", "")), str(args.get("member_type", "auto")))
+		"rename_member":
+			return _rename_gd_member(path, str(args.get("name", "")), str(args.get("new_name", "")))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -514,6 +536,12 @@ func _execute_edit_cs(args: Dictionary) -> Dictionary:
 			return _add_csharp_field(path, args)
 		"add_method":
 			return _add_csharp_method(path, args)
+		"replace_method_body":
+			return _replace_csharp_method_body(path, str(args.get("name", "")), str(args.get("body", "")))
+		"delete_member":
+			return _remove_csharp_member(path, str(args.get("name", "")), str(args.get("member_type", "auto")))
+		"rename_member":
+			return _rename_csharp_member(path, str(args.get("name", "")), str(args.get("new_name", "")))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -1331,6 +1359,20 @@ func _add_gd_function(path: String, args: Dictionary) -> Dictionary:
 	return _write_gdscript(path, content + func_code)
 
 
+func _strip_gd_func_modifiers(stripped: String) -> String:
+	## Strip leading GDScript function modifiers (static, async, etc.)
+	var s := stripped
+	var modifiers := ["static", "async"]
+	var changed := true
+	while changed:
+		changed = false
+		for mod in modifiers:
+			if s.begins_with(mod + " ") or s.begins_with(mod + "\t"):
+				s = s.substr(mod.length()).strip_edges(true, false)
+				changed = true
+	return s
+
+
 func _remove_gd_function(path: String, name: String) -> Dictionary:
 	if name.is_empty():
 		return _error("Function name is required")
@@ -1347,7 +1389,7 @@ func _remove_gd_function(path: String, name: String) -> Dictionary:
 
 	for line in lines:
 		var stripped = line.strip_edges()
-		if stripped.begins_with("func %s" % name):
+		if _strip_gd_func_modifiers(stripped).begins_with("func %s" % name):
 			in_function = true
 			func_indent = line.length() - line.strip_edges(true, false).length()
 			continue
@@ -1494,3 +1536,307 @@ func _get_gd_variables(path: String) -> Dictionary:
 		"count": variables.size(),
 		"variables": variables
 	})
+
+
+# ==================== GDScript: replace / remove / rename ====================
+
+func _replace_gd_function_body(path: String, name: String, new_body: String) -> Dictionary:
+	if name.is_empty():
+		return _error("Function name is required")
+
+	var read_result = _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var lines := content.split("\n")
+	var func_line := -1
+	for i in range(lines.size()):
+		var stripped := lines[i].strip_edges()
+		var core := _strip_gd_func_modifiers(stripped)
+		if core.begins_with("func %s(" % name) or core.begins_with("func %s (" % name):
+			func_line = i
+			break
+	if func_line < 0:
+		return _error("Function not found: %s" % name)
+
+	var func_indent := lines[func_line].length() - lines[func_line].strip_edges(true, false).length()
+	var body_start := func_line + 1
+	var body_end := body_start
+	while body_end < lines.size():
+		var line := lines[body_end]
+		var stripped := line.strip_edges()
+		if not stripped.is_empty():
+			var cur_indent := line.length() - line.strip_edges(true, false).length()
+			if cur_indent <= func_indent:
+				break
+		body_end += 1
+
+	var indent_str := ""
+	for _i in func_indent:
+		indent_str += "\t"
+	var body_indent := indent_str + "\t"
+
+	# Trim trailing blank lines from body range so inter-function separators are preserved
+	var actual_body_end := body_end
+	while actual_body_end > body_start and lines[actual_body_end - 1].strip_edges().is_empty():
+		actual_body_end -= 1
+
+	var new_lines: Array[String] = []
+	for i in range(body_start):
+		new_lines.append(lines[i])
+	for body_line in new_body.split("\n"):
+		new_lines.append(body_indent + body_line)
+	# Preserve inter-function blank lines that were trimmed
+	for i in range(actual_body_end, body_end):
+		new_lines.append(lines[i])
+	for i in range(body_end, lines.size()):
+		new_lines.append(lines[i])
+
+	return _write_gdscript(path, "\n".join(new_lines))
+
+
+func _remove_gd_member(path: String, name: String, member_type: String) -> Dictionary:
+	if name.is_empty():
+		return _error("Member name is required")
+	match member_type:
+		"function", "method":
+			return _remove_gd_function(path, name)
+		"variable", "export", "signal":
+			return _remove_gd_declaration_line(path, name, member_type)
+		_:
+			# auto: try function first, then declaration line
+			var fn_result := _remove_gd_function(path, name)
+			if bool(fn_result.get("success", false)):
+				return fn_result
+			return _remove_gd_declaration_line(path, name, "auto")
+
+
+func _remove_gd_declaration_line(path: String, name: String, member_type: String) -> Dictionary:
+	var read_result := _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var lines := content.split("\n")
+	var new_lines: Array[String] = []
+	var removed := false
+
+	for line in lines:
+		var stripped := line.strip_edges()
+		var matches := false
+		if member_type == "signal" or member_type == "auto":
+			if stripped == "signal %s" % name or stripped.begins_with("signal %s(" % name) or stripped.begins_with("signal %s (" % name):
+				matches = true
+		if not matches and member_type != "signal":
+			# variable / export / auto
+			if stripped.begins_with("var %s" % name) or \
+			   stripped.begins_with("@export var %s" % name) or \
+			   stripped.begins_with("@onready var %s" % name) or \
+			   stripped.begins_with("@export_range") and (" var %s" % name) in stripped or \
+			   stripped.begins_with("@export_group") and false:
+				# simple check: after "var <name>" expect end of name
+				var after_var := ""
+				if "var %s" % name in stripped:
+					var idx := stripped.find("var %s" % name)
+					after_var = stripped.substr(idx + ("var %s" % name).length())
+					if after_var.is_empty() or after_var[0] in [":", "=", " ", "\t"]:
+						matches = true
+		if matches:
+			removed = true
+		else:
+			new_lines.append(line)
+
+	if not removed:
+		return _error("Member not found: %s" % name)
+	return _write_gdscript(path, "\n".join(new_lines))
+
+
+func _rename_gd_member(path: String, old_name: String, new_name: String) -> Dictionary:
+	if old_name.is_empty():
+		return _error("Old name is required")
+	if new_name.is_empty():
+		return _error("New name is required")
+
+	var read_result := _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var lines := content.split("\n")
+	var new_lines: Array[String] = []
+	var renamed := false
+
+	for line in lines:
+		var stripped := line.strip_edges()
+		var new_line := line
+		# func <name>(  or  func <name> (  (also handles static func, async func, etc.)
+		var core := _strip_gd_func_modifiers(stripped)
+		if core.begins_with("func %s(" % old_name) or core.begins_with("func %s (" % old_name):
+			new_line = line.replace("func %s(" % old_name, "func %s(" % new_name)
+			new_line = new_line.replace("func %s (" % old_name, "func %s (" % new_name)
+			renamed = true
+		# var <name> / @export var <name> / @onready var <name>
+		elif "var %s" % old_name in stripped:
+			var after_idx := stripped.find("var %s" % old_name)
+			var after := stripped.substr(after_idx + ("var %s" % old_name).length())
+			if after.is_empty() or after[0] in [":", "=", " ", "\t"]:
+				new_line = line.replace("var %s" % old_name, "var %s" % new_name)
+				renamed = true
+		# signal <name>
+		elif stripped.begins_with("signal %s" % old_name):
+			var after := stripped.substr(("signal %s" % old_name).length())
+			if after.is_empty() or after[0] in ["(", " ", "\t"]:
+				new_line = line.replace("signal %s" % old_name, "signal %s" % new_name)
+				renamed = true
+		new_lines.append(new_line)
+
+	if not renamed:
+		return _error("Member not found: %s" % old_name)
+	return _write_gdscript(path, "\n".join(new_lines))
+
+
+# ==================== C#: replace / remove / rename ====================
+
+func _replace_csharp_method_body(path: String, name: String, new_body: String) -> Dictionary:
+	if name.is_empty():
+		return _error("Method name is required")
+
+	var read_result := _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var masked := _mask_csharp_non_code(content)
+
+	# find method signature in masked text: validates it's a proper declaration
+	var search_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+%s\\s*\\(" % name
+	var regex := RegEx.new()
+	if regex.compile(search_pattern) != OK:
+		return _error("Failed to compile method search pattern")
+
+	var method_match := regex.search(masked)
+	if method_match == null:
+		return _error("Method not found in C# file: %s" % name)
+
+	# find the opening brace of the method body
+	var open_brace := _find_next_non_code_brace(masked, method_match.get_end(0))
+	if open_brace == -1:
+		return _error("Method body opening brace not found for: %s" % name)
+
+	var close_brace := _find_matching_brace(masked, open_brace)
+	if close_brace == -1:
+		return _error("Method body closing brace not found for: %s" % name)
+
+	# detect indent for body
+	var line_start := content.rfind("\n", open_brace)
+	var method_line := content.substr(line_start + 1, open_brace - line_start - 1)
+	var body_indent := _leading_whitespace(method_line) + "\t"
+
+	var indented_body := _indent_multiline_block(new_body.strip_edges(), body_indent)
+	var new_content := content.substr(0, open_brace + 1) + "\n" + indented_body + "\n" + _leading_whitespace(method_line) + content.substr(close_brace)
+	return _write_csharp_script(path, new_content)
+
+
+func _remove_csharp_member(path: String, name: String, member_type: String) -> Dictionary:
+	if name.is_empty():
+		return _error("Member name is required")
+
+	var read_result := _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var masked := _mask_csharp_non_code(content)
+
+	# Try method pattern first (unless member_type says field/property)
+	if member_type in ["method", "function", "auto", ""]:
+		var method_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+%s\\s*\\(" % name
+		var regex := RegEx.new()
+		if regex.compile(method_pattern) == OK:
+			var mm := regex.search(masked)
+			if mm != null:
+				var open_brace := _find_next_non_code_brace(masked, mm.get_end(0))
+				if open_brace != -1:
+					var close_brace := _find_matching_brace(masked, open_brace)
+					if close_brace != -1:
+						# find line start (include any [Attribute] lines before)
+						var member_start := _find_member_block_start(content, mm.get_start(0))
+						var member_end := close_brace + 1
+						# trim trailing newline
+						while member_end < content.length() and content.substr(member_end, 1) == "\n":
+							member_end += 1
+						var new_content := content.substr(0, member_start) + content.substr(member_end)
+						return _write_csharp_script(path, new_content)
+
+	if member_type in ["field", "property", "variable", "auto", ""]:
+		# single-line field: access modifiers + type + name
+		var field_pattern := "(?m)^[^\\S\\n]*(?:\\[[^\\]]+\\]\\s*\\n[^\\S\\n]*)?(?:(?:public|private|protected|internal|static|readonly|const|new)\\s+)+[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+%s\\s*[;=]" % name
+		var regex := RegEx.new()
+		if regex.compile(field_pattern) == OK:
+			var fm := regex.search(masked)
+			if fm != null:
+				var member_start := _find_member_block_start(content, fm.get_start(0))
+				var line_end := content.find("\n", fm.get_end(0))
+				if line_end == -1:
+					line_end = content.length()
+				else:
+					line_end += 1
+				var new_content := content.substr(0, member_start) + content.substr(line_end)
+				return _write_csharp_script(path, new_content)
+
+	return _error("Member not found in C# file: %s" % name)
+
+
+func _find_member_block_start(content: String, member_pos: int) -> int:
+	# Walk back to include [Attribute] lines above the member declaration
+	var line_start := content.rfind("\n", member_pos - 1)
+	if line_start == -1:
+		return 0
+	# Check if line before is an attribute
+	var prev_line_start := content.rfind("\n", line_start - 1)
+	if prev_line_start == -1:
+		prev_line_start = -1
+	var prev_line := content.substr(prev_line_start + 1, line_start - prev_line_start - 1).strip_edges()
+	if prev_line.begins_with("[") and prev_line.ends_with("]"):
+		return prev_line_start + 1
+	return line_start + 1
+
+
+func _rename_csharp_member(path: String, old_name: String, new_name: String) -> Dictionary:
+	if old_name.is_empty():
+		return _error("Old name is required")
+	if new_name.is_empty():
+		return _error("New name is required")
+
+	var read_result := _read_text_file(path)
+	if not bool(read_result.get("success", false)):
+		return read_result
+
+	var content := str(read_result.get("data", {}).get("content", ""))
+	var masked := _mask_csharp_non_code(content)
+
+	# Try method pattern
+	var method_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+(%s)\\s*\\(" % old_name
+	var regex := RegEx.new()
+	if regex.compile(method_pattern) == OK:
+		var mm := regex.search(masked)
+		if mm != null:
+			# group 1 is the method name occurrence
+			var name_start := mm.get_start(1)
+			var name_end := mm.get_end(1)
+			var new_content := content.substr(0, name_start) + new_name + content.substr(name_end)
+			return _write_csharp_script(path, new_content)
+
+	# Try field/property pattern
+	var field_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|readonly|const|new)\\s+)+[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+(%s)\\s*[;={]" % old_name
+	regex = RegEx.new()
+	if regex.compile(field_pattern) == OK:
+		var fm := regex.search(masked)
+		if fm != null:
+			var name_start := fm.get_start(1)
+			var name_end := fm.get_end(1)
+			var new_content := content.substr(0, name_start) + new_name + content.substr(name_end)
+			return _write_csharp_script(path, new_content)
+
+	return _error("Member not found in C# file: %s" % old_name)

@@ -18,7 +18,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_index_build",
-			"description": "PROJECT INDEX BUILD: Build an in-memory index of scripts/scenes/resources and basic symbol information.",
+			"description": "PROJECT INDEX BUILD: Build an in-memory symbol index over all scripts, scenes, and resources. MUST be called before project_symbol_search or scene_dependency_graph. Index is session-scoped — call again after plugin reload. Returns: script_count, scene_count, resource_count, symbol_count. Optional: include_resources=false to skip .tres/.res files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -31,7 +31,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_symbol_search",
-			"description": "PROJECT SYMBOL SEARCH: Search the project index for a given symbol name.",
+			"description": "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name in the project index. REQUIRES project_index_build first. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -45,7 +45,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "scene_dependency_graph",
-			"description": "SCENE DEPENDENCY GRAPH: Return a static dependency graph between .tscn scenes based on ExtResource references.",
+			"description": "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. REQUIRES project_index_build first. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path → [dep_paths]}, count.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {

@@ -68,12 +68,14 @@ EXAMPLES:
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["create", "delete", "duplicate", "instantiate", "replace", "request_ready"]},
+					"action": {"type": "string", "enum": ["create", "delete", "duplicate", "instantiate", "replace", "request_ready", "attach_script", "rename"]},
 					"type": {"type": "string"},
 					"name": {"type": "string"},
 					"path": {"type": "string"},
+					"node_path": {"type": "string", "description": "Node path (used by attach_script and rename)"},
 					"parent_path": {"type": "string"},
 					"scene_path": {"type": "string"},
+					"script_path": {"type": "string", "description": "Script resource path (used by attach_script)"},
 					"new_name": {"type": "string"},
 					"new_node_path": {"type": "string", "description": "Replacement node path"},
 					"flags": {"type": "array", "items": {"type": "string"}, "description": "Duplicate flags: signals, groups, scripts"}
@@ -510,6 +512,34 @@ func _execute_lifecycle(args: Dictionary) -> Dictionary:
 			return _replace_node(args.get("path", ""), args.get("new_node_path", ""))
 		"request_ready":
 			return _request_ready(args.get("path", ""))
+		"attach_script":
+			var node_path := str(args.get("node_path", ""))
+			var script_path := str(args.get("script_path", ""))
+			if node_path.is_empty():
+				return _error("node_path is required")
+			if script_path.is_empty():
+				return _error("script_path is required")
+			var node = _find_node_by_path(node_path)
+			if node == null:
+				return _error("Node not found: %s" % node_path)
+			var script = load(script_path)
+			if script == null:
+				return _error("Cannot load script: %s" % script_path)
+			node.set_script(script)
+			return _success({"node_path": node_path, "script_path": script_path}, "Script attached: %s → %s" % [script_path, node_path])
+		"rename":
+			var node_path := str(args.get("node_path", ""))
+			var new_name := str(args.get("new_name", "")).strip_edges()
+			if node_path.is_empty():
+				return _error("node_path is required")
+			if new_name.is_empty():
+				return _error("new_name is required")
+			var node = _find_node_by_path(node_path)
+			if node == null:
+				return _error("Node not found: %s" % node_path)
+			var old_name := str(node.name)
+			node.name = new_name
+			return _success({"old_name": old_name, "new_name": str(node.name)}, "Node renamed: %s → %s" % [old_name, str(node.name)])
 		_:
 			return _error("Unknown action: %s" % action)
 

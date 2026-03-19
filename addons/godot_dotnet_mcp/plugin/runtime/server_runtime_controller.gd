@@ -7,10 +7,12 @@ signal server_stopped
 signal request_received(method: String, params: Dictionary)
 
 const SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd"
+const STDIO_SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd"
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 var _plugin: EditorPlugin
 var _server: Node
+var _stdio_server: Node
 
 
 func attach(plugin: EditorPlugin, settings: Dictionary) -> void:
@@ -24,6 +26,7 @@ func detach() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_detach", "detach")
 	stop()
 	_dispose_server_node()
+	_dispose_stdio_server_node()
 	_plugin = null
 	_finish_operation(operation, true, "server_runtime_controller", "detach")
 
@@ -99,6 +102,10 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 				"Inspect the server listen error and port configuration.",
 				{"port": int(settings.get("port", 3000))}
 			)
+		# Start stdio server if transport_mode includes stdio
+		var transport_mode := str(settings.get("transport_mode", "http"))
+		if transport_mode in ["stdio", "both"]:
+			_ensure_stdio_server_node(settings)
 		_finish_operation(operation, started, "server_runtime_controller", reason)
 		return started
 	_finish_operation(operation, false, "server_runtime_controller", reason)
@@ -109,7 +116,14 @@ func stop() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_stop", "stop")
 	if _has_server_method("stop"):
 		_server.stop()
+	if _stdio_server != null and is_instance_valid(_stdio_server) and _stdio_server.has_method("stop"):
+		_stdio_server.stop()
 	_finish_operation(operation, true, "server_runtime_controller", "stop")
+
+
+func is_stdio_running() -> bool:
+	return _stdio_server != null and is_instance_valid(_stdio_server) and \
+		_stdio_server.has_method("is_running") and _stdio_server.is_running()
 
 
 func is_running() -> bool:
@@ -177,6 +191,12 @@ func reload_all_domains() -> Dictionary:
 func get_connection_stats() -> Dictionary:
 	if _has_server_method("get_connection_stats"):
 		return _server.get_connection_stats()
+	return {}
+
+
+func get_tool_loader_status() -> Dictionary:
+	if _has_server_method("get_tool_loader_status"):
+		return _server.get_tool_loader_status()
 	return {}
 
 
@@ -279,6 +299,41 @@ func _dispose_server_node() -> void:
 		_server.set_script(null)
 		_server.free()
 	_server = null
+
+
+func _ensure_stdio_server_node(settings: Dictionary) -> void:
+	if _plugin == null:
+		return
+	# Create stdio server node if not already present
+	if _stdio_server == null or not is_instance_valid(_stdio_server):
+		var script = ResourceLoader.load(STDIO_SERVER_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+		if script == null:
+			return
+		_stdio_server = script.new()
+		if _stdio_server == null:
+			return
+		_stdio_server.name = "MCPStdioServer"
+		_plugin.add_child(_stdio_server)
+
+	# Inject tool_loader from the HTTP server
+	if _server != null and is_instance_valid(_server) and _server.has_method("get_tool_loader"):
+		_stdio_server.initialize(_server.get_tool_loader(), bool(settings.get("debug_mode", false)))
+	elif _server != null and is_instance_valid(_server) and "_tool_loader" in _server:
+		_stdio_server.initialize(_server._tool_loader, bool(settings.get("debug_mode", false)))
+
+	if _stdio_server.has_method("set_disabled_tools"):
+		_stdio_server.set_disabled_tools(settings.get("disabled_tools", []))
+	if _stdio_server.has_method("start"):
+		_stdio_server.start()
+
+
+func _dispose_stdio_server_node() -> void:
+	if _stdio_server != null and is_instance_valid(_stdio_server):
+		if _stdio_server.get_parent() != null:
+			_stdio_server.get_parent().remove_child(_stdio_server)
+		_stdio_server.set_script(null)
+		_stdio_server.free()
+	_stdio_server = null
 
 
 func _reload_script_dependency_chain(script_resource: Script, visited: Dictionary) -> void:

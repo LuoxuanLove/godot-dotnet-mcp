@@ -15,7 +15,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "scene_validate",
-			"description": "SCENE VALIDATE: Validate a scene file for structural issues and missing dependencies.",
+			"description": "SCENE VALIDATE: Quick integrity check of a .tscn file — structural errors and missing file references. Lighter than scene_analyze; use first to confirm a scene is loadable. Returns: valid, issues[]{severity, type, message}, missing_dependencies[]. Requires: scene (.tscn path).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -26,7 +26,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "scene_analyze",
-			"description": "SCENE ANALYZE: Deep analysis of a scene: node hierarchy, scripts, bindings, and issues.",
+			"description": "SCENE ANALYZE: Deep inspection of a .tscn — node count, attached scripts with class_name/base_type, signal bindings, and structural issues. Use after scene_validate passes, or when debugging binding mismatches. Returns: node_count, binding_count, scripts[]{path, class_name, base_type}, issues[]. Requires: scene (.tscn path).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -37,7 +37,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "scene_patch",
-			"description": "SCENE PATCH: Apply structured modifications to a scene. Supports add_node, remove_node, set_property, attach_script, reparent_node ops. Use dry_run:true (default) to preview first.",
+			"description": "SCENE PATCH: Apply structured edits to a .tscn file. Ops: add_node, remove_node, set_property, attach_script, reparent_node, rename_node, update_property. dry_run=true (default) previews without saving — always confirm first. Returns: op_previews[]{op, valid} (dry_run), applied_ops[], failed_ops[] (applied). Note: update_property verifies the property exists before writing (use set_property to force-write). Requires: scene and ops[].",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -48,7 +48,7 @@ func get_tools() -> Array[Dictionary]:
 						"items": {
 							"type": "object",
 							"properties": {
-								"op": {"type": "string", "enum": ["add_node", "remove_node", "set_property", "attach_script", "reparent_node"]},
+								"op": {"type": "string", "enum": ["add_node", "remove_node", "set_property", "attach_script", "reparent_node", "rename_node", "update_property"]},
 								"name": {"type": "string"},
 								"type": {"type": "string"},
 								"parent_path": {"type": "string"},
@@ -56,7 +56,8 @@ func get_tools() -> Array[Dictionary]:
 								"property": {"type": "string"},
 								"value": {},
 								"script": {"type": "string"},
-								"new_parent": {"type": "string"}
+								"new_parent": {"type": "string"},
+								"new_name": {"type": "string", "description": "New name (used by rename_node)"}
 							},
 							"required": ["op"]
 						}
@@ -94,6 +95,15 @@ func _apply_scene_patch_op(op: Dictionary) -> Dictionary:
 			return bridge.call_atomic("node_lifecycle", {"action": "attach_script", "node_path": str(op.get("node_path", "")), "script_path": str(op.get("script", ""))})
 		"reparent_node":
 			return bridge.call_atomic("node_hierarchy", {"action": "reparent", "node_path": str(op.get("node_path", "")), "new_parent": str(op.get("new_parent", ""))})
+		"rename_node":
+			return bridge.call_atomic("node_lifecycle", {"action": "rename", "node_path": str(op.get("node_path", "")), "new_name": str(op.get("new_name", ""))})
+		"update_property":
+			var prop := str(op.get("property", ""))
+			var node_path := str(op.get("node_path", ""))
+			var read_result: Dictionary = bridge.call_atomic("node_property", {"action": "get", "node_path": node_path, "property": prop})
+			if not bool(read_result.get("success", false)):
+				return bridge.error("Property '%s' does not exist on node '%s'" % [prop, node_path])
+			return bridge.call_atomic("node_property", {"action": "set", "node_path": node_path, "property": prop, "value": op.get("value", null)})
 		_:
 			return bridge.error("Unknown scene patch op: %s" % op_name)
 

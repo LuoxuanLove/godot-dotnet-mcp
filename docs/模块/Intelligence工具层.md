@@ -15,7 +15,8 @@ tools/intelligence/
 ├── impl_project.gd    # 项目级工具实现（6 个）
 ├── impl_scene.gd      # 场景级工具实现（3 个）
 ├── impl_script.gd     # 脚本级工具实现（3 个）
-└── impl_index.gd      # 索引与搜索实现（3 个）
+├── impl_index.gd      # 索引与搜索实现（3 个）
+└── lsp_client.gd      # Godot LSP 客户端（StreamPeerTCP，供 impl_script 调用）
 ```
 
 ---
@@ -28,7 +29,7 @@ tools/intelligence/
 |---|---|
 | `intelligence_project_state` | 项目快照：脚本数、场景数、资源数、运行状态、错误统计 |
 | `intelligence_project_advise` | 综合诊断：自动检测错误、缺失场景、C# 绑定问题，给出具体可执行的建议 |
-| `intelligence_runtime_diagnose` | 收集运行时错误、编译错误、性能快照，提供结构化诊断摘要 |
+| `intelligence_runtime_diagnose` | 收集运行时错误、编译错误、性能快照，提供结构化诊断摘要；`include_gd_errors:true` 可额外读取 Output 面板 GDScript 错误 |
 | `intelligence_project_configure` | 读写 ProjectSettings、Autoload 列表、输入映射 |
 | `intelligence_project_run` | 通过 EditorInterface 启动主场景或指定场景 |
 | `intelligence_project_stop` | 停止当前运行中的项目 |
@@ -74,7 +75,7 @@ intelligence_runtime_diagnose  → 运行后诊断
 | 工具名 | 功能说明 |
 |---|---|
 | `intelligence_bindings_audit` | 审计 C# 脚本的 `[Export]` / `[Signal]` / NodePath 绑定，支持单脚本或全项目扫描 |
-| `intelligence_script_analyze` | 分析脚本结构：方法、导出字段、信号、变量、场景引用、继承链 |
+| `intelligence_script_analyze` | 分析脚本结构：方法、导出字段、信号、变量、场景引用、继承链；`.gd` 文件支持 `include_diagnostics:true` 获取 LSP 静态诊断 |
 | `intelligence_script_patch` | 修改 `.gd` 或 `.cs` 脚本，支持 `dry_run` 预演 |
 
 **`intelligence_script_patch` 支持的操作类型**：
@@ -85,6 +86,30 @@ intelligence_runtime_diagnose  → 运行后诊断
 | `add_export` | 添加 export 字段 |
 | `add_signal` | 添加信号 |
 | `add_variable` | 添加变量 |
+
+**`intelligence_script_analyze` LSP 静态诊断**：
+
+当 `include_diagnostics: true` 且脚本为 `.gd` 时，`lsp_client.gd` 会通过 loader 持有的后台诊断服务连接 Godot 内置 LSP（`127.0.0.1:6005`），返回 GDScript 解析错误与警告：
+
+```json
+"diagnostics": {
+  "available": true,
+  "pending": false,
+  "finished": true,
+  "phase": "ready",
+  "parse_errors": [
+    {"severity": "error", "message": "...", "line": 12, "column": 4, "length": 10}
+  ],
+  "error_count": 1,
+  "warning_count": 0
+}
+```
+
+- 同次返回还会附带轻量 `diagnostics_status`，仅说明 `source / available / pending / finished / phase`
+- 首次调用可能返回 `pending: true`，随后再次调用即可读取后台回填结果
+- Godot LSP 未运行时：`available: false`，不影响其余分析字段
+- 仅支持 `.gd` 文件，`.cs` 请使用 `intelligence_bindings_audit` 或 `debug_dotnet`
+- 详细运行态自检统一通过 `plugin_runtime_state(action=get_lsp_diagnostics_status)` 读取，不在 Intelligence 返回里展开插件内部快照
 
 ---
 

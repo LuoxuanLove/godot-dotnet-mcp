@@ -39,9 +39,8 @@
 
 Server 页头部的自诊断卡片展示数据来自：
 
-- `plugin_runtime_state.get_self_health`
-- `plugin_runtime_state.get_self_errors`
-- `plugin_runtime_state.get_self_timeline`
+- `plugin_runtime_state(action=get_lsp_diagnostics_status)`：详细运行态自检快照
+- `project_state(include_runtime_health=true)`：轻量健康摘要
 
 这块内容不放在 Dock 顶部公共区域，而是跟随 `Server` 页展示，以避免其他页签承载无关信息。
 

@@ -10,6 +10,8 @@ var _pending_events: Array[Dictionary] = []
 var _fallback_cache: Array[Dictionary] = []
 var _fallback_cache_loaded := false
 var _flush_timer: Timer
+var _tool_loader = null
+var _gdscript_lsp_diagnostics_service = null
 
 
 func _enter_tree() -> void:
@@ -65,6 +67,22 @@ func emit_error(message: String, metadata: Dictionary = {}) -> void:
 
 func emit_event(event_name: String, metadata: Dictionary = {}) -> void:
 	_emit_event(event_name, metadata)
+
+
+func set_tool_loader(tool_loader) -> void:
+	_tool_loader = tool_loader
+
+
+func get_tool_loader():
+	return _tool_loader
+
+
+func set_gdscript_lsp_diagnostics_service(service) -> void:
+	_gdscript_lsp_diagnostics_service = service
+
+
+func get_gdscript_lsp_diagnostics_service():
+	return _gdscript_lsp_diagnostics_service
 
 
 func _emit_event(event_name: String, metadata: Dictionary = {}) -> void:

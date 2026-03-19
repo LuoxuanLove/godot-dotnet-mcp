@@ -7,6 +7,8 @@ class_name MCPHttpServer
 
 const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
+const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 signal server_started
@@ -30,14 +32,19 @@ var _last_request_at_unix: int = 0
 var _disabled_tools: Dictionary = {}
 var _tool_loader := MCPToolLoader.new()
 var _tool_loader_initialized := false
+var _tool_loader_healthy := false
+var _tool_loader_status: String = "uninitialized"
+var _tool_loader_last_summary: Dictionary = {}
+var _gdscript_lsp_diagnostics_service
 
 # MCP Protocol info
 const MCP_VERSION = "2025-06-18"
 const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.4.0"
+const SERVER_VERSION = "0.5.0"
 
 
 func _ready() -> void:
+	set_process(true)
 	_ensure_initialized()
 
 
@@ -89,6 +96,9 @@ func _process(_delta: float) -> void:
 		_log("Client disconnected", "info")
 		client_disconnected.emit()
 
+	if _tool_loader != null and _tool_loader.has_method("tick"):
+		_tool_loader.tick(_delta)
+
 
 func initialize(port: int, host: String, debug: bool) -> void:
 	_ensure_initialized()
@@ -106,7 +116,7 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	_host = host
 	_debug_mode = debug
 	set_disabled_tools(disabled_tools)
-	_register_tools()
+	_register_tools(reason, reason == "tool_soft_reload")
 
 	_log("Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port], "info")
 	if not _tool_loader.get_tool_load_errors().is_empty():
@@ -115,7 +125,8 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	return {
 		"tool_count": _tool_loader.get_tool_definitions().size(),
 		"tool_category_count": _tool_loader.get_domain_states().size(),
-		"tool_load_error_count": _tool_loader.get_tool_load_errors().size()
+		"tool_load_error_count": _tool_loader.get_tool_load_errors().size(),
+		"tool_loader_status": get_tool_loader_status()
 	}
 
 
@@ -201,6 +212,7 @@ func set_disabled_tools(disabled: Array) -> void:
 	for name in disabled:
 		_disabled_tools[str(name)] = true
 	_tool_loader.set_disabled_tools(disabled)
+	_refresh_tool_loader_status_from_loader()
 
 
 func get_disabled_tools() -> Array:
@@ -214,6 +226,23 @@ func is_tool_enabled(tool_name: String) -> bool:
 func get_tools_by_category() -> Dictionary:
 	"""Returns tools organized by category for UI display"""
 	return _tool_loader.get_tools_by_category()
+
+
+func get_tool_loader() -> MCPToolLoader:
+	return _tool_loader
+
+
+func get_tool_loader_status() -> Dictionary:
+	return {
+		"initialized": _tool_loader_initialized,
+		"healthy": _tool_loader_healthy,
+		"status": _tool_loader_status,
+		"tool_count": int(_tool_loader_last_summary.get("tool_count", 0)),
+		"exposed_tool_count": int(_tool_loader_last_summary.get("exposed_tool_count", 0)),
+		"category_count": int(_tool_loader_last_summary.get("category_count", 0)),
+		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0)),
+		"last_summary": _tool_loader_last_summary.duplicate(true)
+	}
 
 
 func get_all_tools_by_category() -> Dictionary:
@@ -233,6 +262,12 @@ func get_enabled_tools() -> Array[Dictionary]:
 
 func get_tool_load_errors() -> Array[Dictionary]:
 	return _tool_loader.get_tool_load_errors()
+
+
+func get_gdscript_lsp_diagnostics_service():
+	if _tool_loader != null and _tool_loader.has_method("get_gdscript_lsp_diagnostics_service"):
+		return _tool_loader.get_gdscript_lsp_diagnostics_service()
+	return GDScriptLspDiagnosticsService.get_singleton()
 
 
 func get_domain_states() -> Array[Dictionary]:
@@ -263,15 +298,47 @@ func _ensure_initialized() -> void:
 	if _tcp_server == null:
 		_tcp_server = TCPServer.new()
 	if not _tool_loader_initialized:
-		_tool_loader.configure(self)
 		_register_tools()
 
 
-func _register_tools() -> void:
-	var summary = _tool_loader.initialize(get_disabled_tools())
-	_tool_loader_initialized = true
-	_log("Registered %d tools across %d categories" % [int(summary.get("tool_count", 0)), int(summary.get("category_count", 0))], "info")
-	if int(summary.get("tool_load_error_count", 0)) > 0:
+func _register_tools(reason: String = "initialize", force_reload_scripts: bool = false) -> void:
+	var summary = _rebuild_tool_loader(reason, force_reload_scripts)
+	if _should_recover_tool_loader(summary):
+		_log("Tool loader came back empty during %s; retrying with a fresh force-reload pass" % reason, "warning")
+		summary = _rebuild_tool_loader("%s_recover" % reason, true)
+	var status := _classify_tool_loader_health(summary)
+	_tool_loader_initialized = bool(status.get("initialized", false))
+	_tool_loader_healthy = bool(status.get("healthy", false))
+	_tool_loader_status = str(status.get("status", "unknown"))
+	_tool_loader_last_summary = summary.duplicate(true)
+	_log("Registered %d tools across %d categories (%s)" % [
+		int(summary.get("tool_count", 0)),
+		int(summary.get("category_count", 0)),
+		reason
+	], "info")
+	if not _tool_loader_healthy:
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"tool_load_error",
+			"tool_registry_empty_after_register",
+			"Tool registration completed with no exposed tools",
+			"mcp_http_server",
+			"register_tools",
+			"",
+			"",
+			"",
+			true,
+			"Inspect the visibility filters, disabled tool list, and tool loader registration summary.",
+			{
+				"reason": reason,
+				"status": _tool_loader_status,
+				"tool_count": int(summary.get("tool_count", 0)),
+				"exposed_tool_count": int(summary.get("exposed_tool_count", 0)),
+				"category_count": int(summary.get("category_count", 0)),
+				"tool_load_error_count": int(summary.get("tool_load_error_count", 0))
+			}
+		)
+	elif int(summary.get("tool_load_error_count", 0)) > 0:
 		_log("Skipped %d tool categories due to load errors" % int(summary.get("tool_load_error_count", 0)), "warning")
 		PluginSelfDiagnosticStore.record_incident(
 			"warning",
@@ -287,6 +354,66 @@ func _register_tools() -> void:
 			"Inspect the tool loader load-error list and editor output for the failing categories.",
 			{"tool_load_error_count": int(summary.get("tool_load_error_count", 0))}
 		)
+
+
+func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Dictionary:
+	_replace_tool_loader()
+	var summary = _tool_loader.initialize(get_disabled_tools(), force_reload_scripts)
+	var category_count = int(summary.get("category_count", 0))
+	var tool_count = int(summary.get("tool_count", 0))
+	_log("Tool loader summary after %s: %d tools / %d categories" % [reason, tool_count, category_count], "debug")
+	return summary
+
+
+func _replace_tool_loader() -> void:
+	if _tool_loader != null and _tool_loader.has_method("get_gdscript_lsp_diagnostics_service"):
+		var previous_service = _tool_loader.get_gdscript_lsp_diagnostics_service()
+		if previous_service != null and previous_service.has_method("clear"):
+			previous_service.clear()
+	_tool_loader = MCPToolLoader.new()
+	_tool_loader.configure(self)
+
+
+func _should_recover_tool_loader(summary: Dictionary) -> bool:
+	return int(summary.get("category_count", 0)) <= 0 and int(summary.get("tool_load_error_count", 0)) <= 0
+
+
+func _classify_tool_loader_health(summary: Dictionary) -> Dictionary:
+	var category_count := int(summary.get("category_count", 0))
+	var tool_count := int(summary.get("tool_count", 0))
+	var exposed_tool_count := int(summary.get("exposed_tool_count", 0))
+	var tool_load_error_count := int(summary.get("tool_load_error_count", 0))
+	var status := "ready"
+	var healthy := true
+	if category_count <= 0 and tool_load_error_count <= 0:
+		status = "empty_registry"
+		healthy = false
+	elif tool_count <= 0 or exposed_tool_count <= 0:
+		status = "no_visible_tools"
+		healthy = false
+	elif tool_load_error_count > 0:
+		status = "degraded"
+	return {
+		"initialized": category_count > 0 or tool_count > 0 or tool_load_error_count > 0,
+		"healthy": healthy,
+		"status": status
+	}
+
+
+func _refresh_tool_loader_status_from_loader() -> void:
+	if _tool_loader == null:
+		return
+	var summary := {
+		"tool_count": _tool_loader.get_tool_definitions().size(),
+		"exposed_tool_count": _tool_loader.get_exposed_tool_definitions().size(),
+		"category_count": _tool_loader.get_domain_states().size(),
+		"tool_load_error_count": _tool_loader.get_tool_load_errors().size()
+	}
+	var status := _classify_tool_loader_health(summary)
+	_tool_loader_initialized = bool(status.get("initialized", false))
+	_tool_loader_healthy = bool(status.get("healthy", false))
+	_tool_loader_status = str(status.get("status", "unknown"))
+	_tool_loader_last_summary = summary.duplicate(true)
 
 
 func _process_http_request(client: StreamPeerTCP) -> void:
@@ -590,21 +717,20 @@ func get_plugin_permission_provider():
 
 func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
 	var tools_list: Array[Dictionary] = []
-
-	for tool_def in _tool_loader.get_tool_definitions():
-		# Only expose intelligence_* and user_* tools to agents; atomic tools are internal implementation
-		var _tn := str(tool_def["name"])
-		if is_tool_enabled(tool_def["name"]) and (_tn.begins_with("intelligence_") or _tn.begins_with("user_")):
-			tools_list.append({
-				"name": tool_def["name"],
-				"description": tool_def.get("description", ""),
-				"loadState": tool_def.get("load_state", "definitions_only"),
-				"source": tool_def.get("source", "builtin"),
-				"inputSchema": tool_def.get("inputSchema", {
-					"type": "object",
-					"properties": {}
-				})
+	for tool_def in _tool_loader.get_exposed_tool_definitions():
+		tools_list.append({
+			"name": tool_def["name"],
+			"description": tool_def.get("description", ""),
+			"category": tool_def.get("category", ""),
+			"domainKey": tool_def.get("domain_key", "other"),
+			"loadState": tool_def.get("load_state", "definitions_only"),
+			"source": tool_def.get("source", "builtin"),
+			"enabled": bool(tool_def.get("enabled", true)),
+			"inputSchema": tool_def.get("inputSchema", {
+				"type": "object",
+				"properties": {}
 			})
+		})
 
 	return _create_json_rpc_response({"tools": tools_list}, id)
 
@@ -778,8 +904,11 @@ func _create_json_rpc_error(code: int, message: String, id) -> Dictionary:
 
 
 func _create_health_response() -> Dictionary:
+	var exposed_tools := _tool_loader.get_exposed_tool_definitions()
+	var loader_status := get_tool_loader_status()
+	var status_text := "ok" if bool(loader_status.get("healthy", false)) else str(loader_status.get("status", "degraded"))
 	return {
-		"status": "ok",
+		"status": status_text,
 		"server": SERVER_NAME,
 		"version": SERVER_VERSION,
 		"running": _running,
@@ -788,6 +917,9 @@ func _create_health_response() -> Dictionary:
 		"total_requests": _total_requests,
 		"last_request_method": _last_request_method,
 		"last_request_at_unix": _last_request_at_unix,
+		"tool_count": _tool_loader.get_tool_definitions().size(),
+		"exposed_tool_count": exposed_tools.size(),
+		"tool_loader_status": loader_status,
 		"domain_states": _tool_loader.get_domain_states(),
 		"reload_status": _tool_loader.get_reload_status(),
 		"performance": _tool_loader.get_performance_summary()
@@ -796,9 +928,11 @@ func _create_health_response() -> Dictionary:
 
 func _create_tools_list_response() -> Dictionary:
 	return {
-		"tools": _tool_loader.get_tool_definitions().filter(
-			func(d): var n := str(d.get("name", "")); return n.begins_with("intelligence_") or n.begins_with("user_")),
+		"tools": _tool_loader.get_exposed_tool_definitions(),
 		"domain_states": _tool_loader.get_domain_states(),
+		"tool_count": _tool_loader.get_tool_definitions().size(),
+		"exposed_tool_count": _tool_loader.get_exposed_tool_definitions().size(),
+		"tool_loader_status": get_tool_loader_status(),
 		"performance": _tool_loader.get_performance_summary()
 	}
 
