@@ -1,15 +1,15 @@
 ﻿# Godot .NET MCP
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
-> An MCP server plugin running inside the Godot editor 鈥?agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
+> An MCP server plugin running inside the Godot editor —agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
 
 ![Godot .NET MCP Tools](asset_library/preview-tools-en.png)
 
 ## What It Is
 
-An MCP endpoint embedded in the Godot editor process. Call `intelligence_project_state` to get a real snapshot of the open project 鈥?scene count, script count, errors, run state 鈥?then `intelligence_project_advise` for specific, actionable recommendations. From there, use scene, script, node, or resource tools to make targeted changes.
+An MCP endpoint embedded in the Godot editor process. Call `intelligence_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then `intelligence_project_advise` for specific, actionable recommendations. From there, use scene, script, node, or resource tools to make targeted changes.
 
-The Intelligence layer (15 built-in tools) is the intended starting point for agents. It provides project-level snapshots, scene analysis, script structure inspection, C# binding auditing, and symbol search 鈥?all reading from the live editor, not disk snapshots.
+The Intelligence layer (15 built-in tools) is the intended starting point for agents. It provides project-level snapshots, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
 For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; Intelligence tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `lsp_diagnostics` and `tool_loader` status.
 
@@ -21,7 +21,7 @@ To extend the tool set: place a `.gd` file in `custom_tools/` implementing `hand
 
 - **Editor-native**: Runs inside the Godot process. Scene queries, script reads, and property changes reflect the actual live editor state.
 - **Godot.NET first**: C# binding inspection (`intelligence_bindings_audit`), exported member analysis, and `.cs` script patching are built in.
-- **Intelligence-first**: `intelligence_project_state` 鈫?`intelligence_project_advise` 鈫?targeted action is the intended workflow. No need to guess which atomic tool to start with.
+- **Intelligence-first**: `intelligence_project_state` →`intelligence_project_advise` →targeted action is the intended workflow. No need to guess which atomic tool to start with.
 - **User-extensible**: `custom_tools/` scripts are loaded as first-class tools with no plugin rebuild. `plugin_evolution` manages the lifecycle.
 
 ## Requirements
@@ -128,7 +128,7 @@ Confirm that:
 
 ### 4. Read the latest project runtime state
 
-Use `intelligence_runtime_diagnose` to read structured runtime information 鈥?errors, compile issues, and performance data 鈥?from the most recent editor-run session. Works after the project stops.
+Use `intelligence_runtime_diagnose` to read structured runtime information —errors, compile issues, and performance data —from the most recent editor-run session. Works after the project stops.
 
 ## Path Conventions
 
