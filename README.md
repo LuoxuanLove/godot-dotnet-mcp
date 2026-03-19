@@ -142,12 +142,12 @@ Use `intelligence_runtime_diagnose` to read structured runtime information —er
 - [README.zh-CN.md](README.zh-CN.md)
 - [CHANGELOG.md](CHANGELOG.md)
 - [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)
-- [docs/妯″潡/Intelligence宸ュ叿灞?md](docs/%E6%A8%A1%E5%9D%97/Intelligence%E5%B7%A5%E5%85%B7%E5%B1%82.md)
-- [docs/妯″潡/宸ュ叿绯荤粺.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
-- [docs/妯″潡/鐢ㄦ埛鎵╁睍.md](docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
-- [docs/鏋舵瀯/鏈嶅姟涓庤矾鐢?md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
-- [docs/鏋舵瀯/閰嶇疆涓庣晫闈?md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
-- [docs/鏋舵瀯/瀹夎涓庡彂甯?md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
+- [Docs: Intelligence Layer](docs/模块/Intelligence工具层.md)
+- [Docs: Tool System](docs/模块/工具系统.md)
+- [Docs: User Extensions](docs/模块/用户扩展.md)
+- [Docs: Services and Routing](docs/架构/服务与路由.md)
+- [Docs: Configuration and UI](docs/架构/配置与界面.md)
+- [Docs: Installation and Release](docs/架构/安装与发布.md)
 
 ## Current Boundaries
 
