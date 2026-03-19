@@ -3,6 +3,7 @@ extends EditorPlugin
 
 const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
@@ -45,10 +46,7 @@ func _enter_tree() -> void:
 	_state.settings["debug_mode"] = true
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
 
-	_server_controller.attach(self, _state.settings)
-	_server_controller.server_started.connect(_on_server_started)
-	_server_controller.server_stopped.connect(_on_server_stopped)
-	_server_controller.request_received.connect(_on_request_received)
+	_attach_server_controller()
 	_ensure_runtime_bridge_autoload()
 	_install_editor_debugger_bridge()
 
@@ -73,13 +71,12 @@ func _exit_tree() -> void:
 	_save_settings()
 	_remove_dock()
 	_uninstall_editor_debugger_bridge()
-	_server_controller.detach()
+	_dispose_server_controller()
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
 	_config_service = null
 	_tool_catalog = null
-	_server_controller = null
 	_settings_store = null
 	_state = null
 	_finish_self_operation(operation, true, "plugin", "_exit_tree")
@@ -119,6 +116,49 @@ func start_server() -> void:
 
 func stop_server() -> void:
 	_on_stop_requested()
+
+
+func _attach_server_controller() -> void:
+	if _server_controller == null:
+		_server_controller = ServerRuntimeController.new()
+	_server_controller.attach(self, _state.settings)
+	_connect_server_controller_signals()
+
+
+func _connect_server_controller_signals() -> void:
+	if _server_controller == null:
+		return
+	if not _server_controller.server_started.is_connected(_on_server_started):
+		_server_controller.server_started.connect(_on_server_started)
+	if not _server_controller.server_stopped.is_connected(_on_server_stopped):
+		_server_controller.server_stopped.connect(_on_server_stopped)
+	if not _server_controller.request_received.is_connected(_on_request_received):
+		_server_controller.request_received.connect(_on_request_received)
+
+
+func _disconnect_server_controller_signals() -> void:
+	if _server_controller == null:
+		return
+	if _server_controller.server_started.is_connected(_on_server_started):
+		_server_controller.server_started.disconnect(_on_server_started)
+	if _server_controller.server_stopped.is_connected(_on_server_stopped):
+		_server_controller.server_stopped.disconnect(_on_server_stopped)
+	if _server_controller.request_received.is_connected(_on_request_received):
+		_server_controller.request_received.disconnect(_on_request_received)
+
+
+func _dispose_server_controller() -> void:
+	if _server_controller == null:
+		return
+	_disconnect_server_controller_signals()
+	_server_controller.detach()
+	_server_controller = null
+
+
+func _recreate_server_controller() -> void:
+	_dispose_server_controller()
+	_server_controller = ServerRuntimeController.new()
+	_attach_server_controller()
 
 
 func _load_state() -> void:
@@ -329,9 +369,7 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
 	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
 	connected = _connect_dock_signal("domain_toggled", _on_domain_toggled, operation_id) and connected
-	connected = _connect_dock_signal("category_collapse_toggled", _on_category_collapse_toggled, operation_id) and connected
-	connected = _connect_dock_signal("domain_collapse_toggled", _on_domain_collapse_toggled, operation_id) and connected
-	connected = _connect_dock_signal("intelligence_tool_collapse_toggled", _on_intelligence_tool_collapse_toggled, operation_id) and connected
+	connected = _connect_dock_signal("tree_collapse_changed", _on_tree_collapse_changed, operation_id) and connected
 	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
 	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
 	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
@@ -799,18 +837,8 @@ func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 	_refresh_dock()
 
 
-func _on_category_collapse_toggled(category: String) -> void:
-	_toggle_array_membership(_state.settings["collapsed_categories"], category)
-	_save_settings()
-
-
-func _on_domain_collapse_toggled(domain_key: String) -> void:
-	_toggle_array_membership(_state.settings["collapsed_domains"], domain_key)
-	_save_settings()
-
-
-func _on_intelligence_tool_collapse_toggled(full_name: String) -> void:
-	_toggle_array_membership(_state.settings["collapsed_intelligence_tools"], full_name)
+func _on_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
+	TreeCollapseState.set_node_collapsed(_state.settings, kind, key, collapsed)
 	_save_settings()
 
 
@@ -874,13 +902,6 @@ func _set_tool_enabled(tool_name: String, enabled: bool) -> void:
 	elif not disabled_tools.has(tool_name):
 		disabled_tools.append(tool_name)
 	_state.settings["disabled_tools"] = disabled_tools
-
-
-func _toggle_array_membership(items: Array, value: String) -> void:
-	if items.has(value):
-		items.erase(value)
-	else:
-		items.append(value)
 
 
 func _show_message(message: String) -> void:
@@ -1029,6 +1050,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 	var success := false
 	if _state != null and _server_controller != null:
 		_refresh_service_instances()
+		_recreate_server_controller()
 		LocalizationService.reset_instance()
 		_localization = LocalizationService.get_instance()
 		_localization.set_language(str(_state.settings.get("language", "")))

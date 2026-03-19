@@ -8,6 +8,7 @@ const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools/"
 
 var _bridge
 var _impls: Array = []
+var _runtime_context: Dictionary = {}
 
 
 func _init() -> void:
@@ -32,6 +33,8 @@ func _init() -> void:
 				"Failed to instantiate impl: %s" % impl_name)
 			continue
 		impl.bridge = _bridge
+		if impl.has_method("configure_runtime"):
+			impl.configure_runtime(_runtime_context)
 		_impls.append(impl)
 
 	_load_custom_tools()
@@ -72,6 +75,8 @@ func _load_custom_tools() -> void:
 		if not tool_names_ok:
 			continue
 		impl.bridge = _bridge
+		if impl.has_method("configure_runtime"):
+			impl.configure_runtime(_runtime_context)
 		impl.set_meta("is_user_tool", true)
 		impl.set_meta("script_path", path)
 		_impls.append(impl)
@@ -101,3 +106,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	if _bridge != null:
 		return _bridge.error("Unknown tool: %s" % tool_name)
 	return {"success": false, "error": "Unknown tool: %s" % tool_name}
+
+
+func tick(delta: float) -> void:
+	for impl in _impls:
+		if impl != null and impl.has_method("tick"):
+			impl.tick(delta)
+
+
+func configure_runtime(context: Dictionary) -> void:
+	_runtime_context = context.duplicate(true)
+	MCPDebugBuffer.record("info", "intelligence",
+		"executor configure_runtime tool_loader=%s" % str(_runtime_context.get("tool_loader", null) != null))
+	if _bridge != null and _bridge.has_method("configure_runtime"):
+		_bridge.configure_runtime(_runtime_context)
+	for impl in _impls:
+		if impl != null and impl.has_method("configure_runtime"):
+			impl.configure_runtime(_runtime_context)

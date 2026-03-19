@@ -19,9 +19,7 @@ signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
-signal category_collapse_toggled(category: String)
-signal domain_collapse_toggled(domain_key: String)
-signal intelligence_tool_collapse_toggled(full_name: String)
+signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
 signal cli_scope_changed(scope: String)
 signal config_platform_changed(platform_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
@@ -69,9 +67,7 @@ func _ready() -> void:
 		_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
 		_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
 		_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
-		_tools_tab.category_collapse_toggled.connect(_on_tools_tab_category_collapse_toggled)
-		_tools_tab.domain_collapse_toggled.connect(_on_tools_tab_domain_collapse_toggled)
-		_tools_tab.intelligence_tool_collapse_toggled.connect(_on_tools_tab_intelligence_tool_collapse_toggled)
+		_tools_tab.tree_collapse_changed.connect(_on_tools_tab_tree_collapse_changed)
 
 	if _config_tab:
 		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
@@ -263,16 +259,8 @@ func _on_tools_tab_domain_toggled(domain_key: String, enabled: bool) -> void:
 	domain_toggled.emit(domain_key, enabled)
 
 
-func _on_tools_tab_category_collapse_toggled(category: String) -> void:
-	category_collapse_toggled.emit(category)
-
-
-func _on_tools_tab_domain_collapse_toggled(domain_key: String) -> void:
-	domain_collapse_toggled.emit(domain_key)
-
-
-func _on_tools_tab_intelligence_tool_collapse_toggled(full_name: String) -> void:
-	intelligence_tool_collapse_toggled.emit(full_name)
+func _on_tools_tab_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
+	tree_collapse_changed.emit(kind, key, collapsed)
 
 
 func _on_config_tab_cli_scope_changed(scope: String) -> void:

@@ -2,6 +2,10 @@
 extends RefCounted
 class_name SettingsStore
 
+const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
+
 
 func load_plugin_settings(default_settings: Dictionary, settings_path: String, all_categories: Array, default_domains: Array) -> Dictionary:
 	var settings = default_settings.duplicate(true)
@@ -17,17 +21,22 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 					settings.merge(data, true)
 			file.close()
 	else:
-		settings["collapsed_categories"] = all_categories.duplicate()
-		settings["collapsed_domains"] = default_domains.duplicate()
+		settings["collapsed_nodes"] = {
+			TreeCollapseState.KIND_DOMAIN: default_domains.duplicate(),
+			TreeCollapseState.KIND_CATEGORY: all_categories.duplicate(),
+			TreeCollapseState.KIND_TOOL: PluginRuntimeState.DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS.duplicate(),
+			TreeCollapseState.KIND_ATOMIC: IntelligenceTreeCatalog.get_default_collapsed_atomic_tools()
+		}
 
 	if str(settings.get("tool_profile_id", "")).is_empty():
 		settings["tool_profile_id"] = "default"
 
-	if has_settings_file:
-		if not settings.has("collapsed_categories"):
-			settings["collapsed_categories"] = all_categories.duplicate()
-		if not settings.has("collapsed_domains"):
-			settings["collapsed_domains"] = default_domains.duplicate()
+	TreeCollapseState.normalize_settings(
+		settings,
+		all_categories,
+		default_domains,
+		PluginRuntimeState.DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS
+	)
 
 	return {
 		"settings": settings,

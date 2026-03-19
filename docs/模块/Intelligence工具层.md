@@ -89,11 +89,14 @@ intelligence_runtime_diagnose  → 运行后诊断
 
 **`intelligence_script_analyze` LSP 静态诊断**：
 
-当 `include_diagnostics: true` 且脚本为 `.gd` 时，`lsp_client.gd` 通过 TCP 连接 Godot 内置 LSP（`127.0.0.1:6005`），发送 `textDocument/didOpen`，等待 `textDocument/publishDiagnostics` 通知，返回 GDScript 解析错误与警告：
+当 `include_diagnostics: true` 且脚本为 `.gd` 时，`lsp_client.gd` 会通过 loader 持有的后台诊断服务连接 Godot 内置 LSP（`127.0.0.1:6005`），返回 GDScript 解析错误与警告：
 
 ```json
 "diagnostics": {
   "available": true,
+  "pending": false,
+  "finished": true,
+  "phase": "ready",
   "parse_errors": [
     {"severity": "error", "message": "...", "line": 12, "column": 4, "length": 10}
   ],
@@ -102,9 +105,11 @@ intelligence_runtime_diagnose  → 运行后诊断
 }
 ```
 
+- 同次返回还会附带轻量 `diagnostics_status`，仅说明 `source / available / pending / finished / phase`
+- 首次调用可能返回 `pending: true`，随后再次调用即可读取后台回填结果
 - Godot LSP 未运行时：`available: false`，不影响其余分析字段
 - 仅支持 `.gd` 文件，`.cs` 请使用 `intelligence_bindings_audit` 或 `debug_dotnet`
-- 超时默认 5 秒，期间会同步阻塞工具执行（与 `debug_dotnet` 行为一致）
+- 详细运行态自检统一通过 `plugin_runtime_state(action=get_lsp_diagnostics_status)` 读取，不在 Intelligence 返回里展开插件内部快照
 
 ---
 

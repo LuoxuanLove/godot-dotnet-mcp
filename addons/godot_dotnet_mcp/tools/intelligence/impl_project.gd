@@ -20,20 +20,24 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Get a snapshot of the current project state.",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, scene_paths[], script_paths[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"error_limit": {
 						"type": "integer",
 						"description": "Max errors to include (default: 10)"
+					},
+					"include_runtime_health": {
+						"type": "boolean",
+						"description": "Include lightweight plugin runtime health summary, including lsp_diagnostics and tool_loader health (default: false)"
 					}
 				}
 			}
 		},
 		{
 			"name": "project_advise",
-			"description": "PROJECT ADVISE: Generate diagnostic suggestions and workflow recommendations based on current project state. Merges previous project_suggest and workflow_recommend into a single direct-query tool.",
+			"description": "PROJECT ADVISE: Actionable suggestions and next-tool recommendations based on live project state. Use when you need prioritized action items rather than raw data. Returns: suggestions[]{category, severity, message, tool_hint}, next_tools[]. Optional: goal (e.g. \"fix errors\", \"explore scene\") to refine recommendations.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -54,7 +58,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_configure",
-			"description": "PROJECT CONFIGURE: Read or write project settings, autoload list, and input actions. Write actions require explicit action parameter.",
+			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, and input actions. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -73,7 +77,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_run",
-			"description": "PROJECT RUN: Start running the project in the editor. Optionally specify a custom scene to run.",
+			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state for compile errors before running. Pair with project_stop.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -83,7 +87,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_stop",
-			"description": "PROJECT STOP: Stop the currently running project in the editor.",
+			"description": "PROJECT STOP: Stop the currently running project in the editor. No parameters. Returns: stopped=true on success.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {}
@@ -91,7 +95,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "runtime_diagnose",
-			"description": "RUNTIME DIAGNOSE: Collect structured runtime errors, compile errors, and optional performance data. Use when the project has errors or behaves unexpectedly.",
+			"description": "RUNTIME DIAGNOSE: Full error report with stacktraces — use when project_state shows error_count > 0 or compile_error_count > 0. Returns: has_errors, runtime_errors[]{message, script, line, stacktrace}, compile_errors[]{message, source_file, source_line}. Key options: tail (default 20, limits runtime error count), include_gd_errors=true adds GDScript Output panel errors (gd_errors[]{severity, message, file, line}), include_performance=true adds fps/memory snapshot.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -164,6 +168,78 @@ func _get_runtime_warnings(limit: int) -> Array:
 	return warnings
 
 
+func _get_lsp_runtime_health_summary() -> Dictionary:
+	var summary: Dictionary = {
+		"enabled": false,
+		"available": false,
+		"last_state": "unavailable",
+		"last_error": ""
+	}
+	if bridge == null or not bridge.has_method("get_tool_loader"):
+		summary["last_error"] = "Tool loader is unavailable"
+		return summary
+	var loader = bridge.get_tool_loader()
+	if loader == null:
+		summary["last_error"] = "Tool loader is unavailable"
+		return summary
+	summary["enabled"] = loader.has_method("get_gdscript_lsp_diagnostics_service")
+	if not loader.has_method("get_lsp_diagnostics_debug_snapshot"):
+		summary["last_error"] = "LSP diagnostics snapshot is unavailable"
+		return summary
+	var snapshot_raw = loader.get_lsp_diagnostics_debug_snapshot()
+	if not (snapshot_raw is Dictionary):
+		summary["last_error"] = "LSP diagnostics snapshot is unavailable"
+		return summary
+	var snapshot: Dictionary = snapshot_raw
+	var service_snapshot_raw = snapshot.get("service", {})
+	if not (service_snapshot_raw is Dictionary):
+		summary["last_error"] = "LSP diagnostics service snapshot is unavailable"
+		return summary
+	var service_snapshot: Dictionary = service_snapshot_raw
+	var current_status_raw = service_snapshot.get("status", {})
+	var current_status: Dictionary = current_status_raw if current_status_raw is Dictionary else {}
+	var last_completed_raw = service_snapshot.get("last_completed_status", {})
+	var last_completed: Dictionary = last_completed_raw if last_completed_raw is Dictionary else {}
+	var source_status := current_status if not current_status.is_empty() else last_completed
+	summary["available"] = bool(snapshot.get("service_available", false))
+	summary["last_state"] = str(source_status.get("phase", source_status.get("state", "idle")))
+	summary["last_error"] = str(source_status.get("error", last_completed.get("error", "")))
+	return summary
+
+
+func _get_tool_loader_health_summary() -> Dictionary:
+	var summary: Dictionary = {
+		"enabled": false,
+		"available": false,
+		"status": "unavailable",
+		"tool_count": 0,
+		"exposed_tool_count": 0,
+		"last_error": ""
+	}
+	if bridge == null or not bridge.has_method("get_tool_loader"):
+		summary["last_error"] = "Tool loader is unavailable"
+		return summary
+	var loader = bridge.get_tool_loader()
+	if loader == null:
+		summary["last_error"] = "Tool loader is unavailable"
+		return summary
+	summary["enabled"] = loader.has_method("get_tool_loader_status")
+	if not loader.has_method("get_tool_loader_status"):
+		summary["last_error"] = "Tool loader status is unavailable"
+		return summary
+	var status_raw = loader.get_tool_loader_status()
+	if not (status_raw is Dictionary):
+		summary["last_error"] = "Tool loader status is unavailable"
+		return summary
+	var status: Dictionary = status_raw
+	summary["available"] = true
+	summary["status"] = str(status.get("status", "unknown"))
+	summary["tool_count"] = int(status.get("tool_count", 0))
+	summary["exposed_tool_count"] = int(status.get("exposed_tool_count", 0))
+	summary["last_error"] = ""
+	return summary
+
+
 func _is_runtime_running(summary: Dictionary) -> bool:
 	var sessions = summary.get("sessions", {})
 	if sessions is Dictionary:
@@ -190,6 +266,7 @@ func _goal_contains(goal: String, keywords: Array) -> bool:
 
 func _execute_project_state(args: Dictionary) -> Dictionary:
 	var error_limit := max(int(args.get("error_limit", 10)), 0)
+	var include_runtime_health := bool(args.get("include_runtime_health", false))
 	MCPDebugBuffer.record("debug", "intelligence", "project_state: collecting stats (error_limit=%d)" % error_limit)
 	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
 	var dotnet_result: Dictionary = bridge.call_atomic("project_dotnet", {})
@@ -209,7 +286,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 
 	var compile_error_count := 0
 	if bool(dotnet_result.get("success", false)):
-		var dotnet_errors_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "restore"}))
+		var dotnet_errors_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(dotnet_errors_data.get("error_count", 0))
 
 	var current_scene := ""
@@ -218,7 +295,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		current_scene = str(scene_snapshot.get("current_scene", scene_snapshot.get("scene", "")))
 
 	var main_scene := str(project_info.get("main_scene", ""))
-	return bridge.success({
+	var result_data := {
 		"project_name": str(project_info.get("name", "Untitled")),
 		"project_description": str(project_info.get("description", "")),
 		"project_version": str(project_info.get("version", "")),
@@ -247,7 +324,13 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		"recent_warnings": recent_warnings,
 		"error_count": recent_errors.size(),
 		"warning_count": recent_warnings.size()
-	})
+	}
+	if include_runtime_health:
+		result_data["runtime_health"] = {
+			"lsp_diagnostics": _get_lsp_runtime_health_summary(),
+			"tool_loader": _get_tool_loader_health_summary()
+		}
+	return bridge.success(result_data)
 
 
 func _execute_project_advise(args: Dictionary) -> Dictionary:
@@ -263,7 +346,7 @@ func _execute_project_advise(args: Dictionary) -> Dictionary:
 	var runtime_summary := _get_runtime_summary()
 	var compile_error_count := 0
 	if bool(dotnet_result.get("success", false)):
-		var de: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "restore"}))
+		var de: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(de.get("error_count", 0))
 
 	var gd_count: int = (bridge.collect_files("*.gd") as Array).size()
@@ -428,7 +511,7 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	var compile_errors: Array = []
 	var compile_error_count := 0
 	if include_compile_errors:
-		var dotnet_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "restore"}))
+		var dotnet_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(dotnet_data.get("error_count", 0))
 		for raw in dotnet_data.get("errors", []):
 			if not (raw is Dictionary):

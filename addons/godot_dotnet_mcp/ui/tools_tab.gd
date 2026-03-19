@@ -5,9 +5,10 @@ signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
-signal category_collapse_toggled(category: String)
-signal domain_collapse_toggled(domain_key: String)
-signal intelligence_tool_collapse_toggled(full_name: String)
+signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
+
+const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 
 const CATEGORY_LABEL_KEYS := {
 	"scene": "cat_scene",
@@ -41,74 +42,7 @@ const CATEGORY_LABEL_KEYS := {
 const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
 const INTELLIGENCE_CATEGORY := "intelligence"
-const INTELLIGENCE_TOOL_ATOMIC_CHILDREN := {
-	"intelligence_project_state": [
-		{"tool": "project_info",         "actions": ["get_info"]},
-		{"tool": "project_dotnet",       "actions": []},
-		{"tool": "filesystem_directory", "actions": ["get_files"]},
-		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_errors_context", "get_scene_snapshot", "get_recent_filtered"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]}
-	],
-	"intelligence_project_advise": [
-		{"tool": "project_info",         "actions": ["get_info"]},
-		{"tool": "filesystem_directory", "actions": ["get_files"]},
-		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_recent_filtered"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]}
-	],
-	"intelligence_runtime_diagnose": [
-		{"tool": "debug_runtime_bridge", "actions": ["get_errors_context"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]},
-		{"tool": "debug_performance",    "actions": ["get_fps", "get_memory", "get_render_info"]}
-	],
-	"intelligence_project_configure": [
-		{"tool": "project_info",     "actions": ["get_settings"]},
-		{"tool": "project_settings", "actions": ["set"]},
-		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
-		{"tool": "project_input",    "actions": ["list_actions"]}
-	],
-	"intelligence_project_run":  [{"tool": "scene_run", "actions": ["play_main", "play_custom"]}],
-	"intelligence_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
-	"intelligence_bindings_audit": [
-		{"tool": "script_inspect",       "actions": ["path"]},
-		{"tool": "script_references",    "actions": ["get_scene_refs", "get_base_type"]},
-		{"tool": "scene_bindings",       "actions": ["from_path"]},
-		{"tool": "scene_audit",          "actions": ["from_path"]},
-		{"tool": "filesystem_directory", "actions": ["get_files"]}
-	],
-	"intelligence_scene_validate": [
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]}
-	],
-	"intelligence_scene_analyze": [
-		{"tool": "scene_bindings", "actions": ["from_path"]},
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "script_inspect", "actions": ["path"]}
-	],
-	"intelligence_scene_patch": [
-		{"tool": "scene_management", "actions": ["get_current", "open", "save"]},
-		{"tool": "node_lifecycle",   "actions": ["create", "delete"]},
-		{"tool": "node_property",    "actions": ["set"]},
-		{"tool": "node_hierarchy",   "actions": ["reparent"]}
-	],
-	"intelligence_script_analyze": [
-		{"tool": "script_inspect",    "actions": ["path"]},
-		{"tool": "script_symbols",    "actions": ["path"]},
-		{"tool": "script_exports",    "actions": ["path"]},
-		{"tool": "script_references", "actions": ["get_scene_refs", "get_base_type"]}
-	],
-	"intelligence_script_patch": [
-		{"tool": "script_inspect",  "actions": ["path"]},
-		{"tool": "script_edit_gd",  "actions": ["add_function", "add_variable", "add_signal", "add_export"]},
-		{"tool": "script_edit_cs",  "actions": ["add_method", "add_field"]}
-	],
-	"intelligence_project_index_build": [
-		{"tool": "filesystem_directory", "actions": ["get_files"]},
-		{"tool": "script_inspect",       "actions": ["path"]},
-		{"tool": "resource_query",       "actions": ["get_dependencies"]}
-	],
-	"intelligence_project_symbol_search":  [{"tool": "filesystem_directory", "actions": ["get_files"]}],
-	"intelligence_scene_dependency_graph": [{"tool": "resource_query",       "actions": ["get_dependencies"]}]
-}
+const INTELLIGENCE_ROOT_KEY := "intelligence_root"
 
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
@@ -204,8 +138,9 @@ func _render_tool_tree(model: Dictionary) -> void:
 
 	# Root node replaces expand/collapse buttons
 	root.set_text(TREE_TEXT_COLUMN, _get_root_label(model))
-	root.set_metadata(TREE_TEXT_COLUMN, {"kind": "root"})
+	root.set_metadata(TREE_TEXT_COLUMN, {"kind": TreeCollapseState.KIND_ROOT, "key": INTELLIGENCE_ROOT_KEY})
 	root.set_selectable(TREE_TEXT_COLUMN, true)
+	root.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ROOT, INTELLIGENCE_ROOT_KEY)
 
 	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
 		_create_tool_item(root, model, INTELLIGENCE_CATEGORY, tool_def)
@@ -231,12 +166,12 @@ func _refresh_tree_state(model: Dictionary, tree_signature: String) -> void:
 	_refresh_preview()
 
 
-func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary) -> void:
+func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary, collapsed: bool) -> void:
 	item.set_text(TREE_TEXT_COLUMN, text)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
 	item.set_metadata(TREE_TEXT_COLUMN, metadata)
 	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.6, 0.6, 0.6))
-	item.collapsed = true
+	item.collapsed = collapsed
 
 
 func _configure_action_item(item: TreeItem, action_name: String, parent_tool: String) -> void:
@@ -273,7 +208,7 @@ func _create_domain_item(root: TreeItem, model: Dictionary, domain_key: String, 
 		domain_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	var domain_tooltip = _get_group_tooltip(model.get("localization"), label_key)
 	_configure_item_text(item, domain_text, {"kind": "domain", "key": domain_key, "label_key": label_key}, domain_tooltip)
-	item.collapsed = domain_key in settings.get("collapsed_domains", [])
+	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_DOMAIN, domain_key)
 
 	for category in categories:
 		_create_category_item(item, model, str(category))
@@ -304,7 +239,7 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 	_configure_item_text(item, category_text, {"kind": "category", "key": category, "label_key": label_key}, category_tooltip)
 	if not load_error_messages.is_empty():
 		item.set_custom_color(TREE_TEXT_COLUMN, Color(0.9, 0.35, 0.35))
-	item.collapsed = category in settings.get("collapsed_categories", [])
+	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_CATEGORY, category)
 
 	for tool_def in _get_filtered_tool_definitions(model, category):
 		if bool(tool_def.get("compatibility_alias", false)):
@@ -320,10 +255,10 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 		return
 	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
 	if category == INTELLIGENCE_CATEGORY:
-		var has_children := INTELLIGENCE_TOOL_ATOMIC_CHILDREN.has(full_name)
+		var has_children := IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.has(full_name)
 		if has_children:
 			var settings: Dictionary = model.get("settings", {})
-			item.collapsed = full_name in settings.get("collapsed_intelligence_tools", [])
+			item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_TOOL, full_name)
 		var visited := {}
 		visited[full_name] = true
 		_create_atomic_tool_children(item, model, full_name, visited)
@@ -343,7 +278,7 @@ func _configure_tool_row(item: TreeItem, model: Dictionary, full_name: String, c
 
 
 func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intelligence_full_name: String, visited: Dictionary = {}) -> void:
-	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -369,7 +304,8 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intellige
 			continue
 		# Atomic tool: info-only row, no checkbox
 		_configure_info_row(item, _get_tool_display_name(_localization, atomic_full_name, tool_name),
-			{"kind": "atomic", "key": atomic_full_name, "category": category, "tool_name": tool_name})
+			{"kind": "atomic", "key": atomic_full_name, "category": category, "tool_name": tool_name},
+			TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, atomic_full_name))
 
 		if category == INTELLIGENCE_CATEGORY:
 			var next_visited = visited.duplicate()
@@ -488,15 +424,11 @@ func _on_tree_item_collapsed(item: TreeItem) -> void:
 	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
 	if not (metadata is Dictionary):
 		return
-	match str(metadata.get("kind", "")):
-		"domain":
-			domain_collapse_toggled.emit(str(metadata.get("key", "")))
-		"category":
-			category_collapse_toggled.emit(str(metadata.get("key", "")))
-		"tool":
-			var full_name = str(metadata.get("key", ""))
-			if not full_name.is_empty():
-				intelligence_tool_collapse_toggled.emit(full_name)
+	var kind = str(metadata.get("kind", ""))
+	var key = str(metadata.get("key", ""))
+	if key.is_empty():
+		return
+	tree_collapse_changed.emit(kind, key, item.collapsed)
 
 
 func _on_search_text_changed(_new_text: String) -> void:
@@ -541,10 +473,7 @@ func _on_tree_gui_input(event: InputEvent) -> void:
 			_tree_syncing = true
 			_set_subtree_collapsed(item, want_collapsed)
 			_tree_syncing = false
-			# root.collapsed is not tracked in settings and resets on every re-render.
-			# Skip saving for root to avoid the re-render resetting root back to expanded.
-			if item != _tool_tree.get_root():
-				_sync_subtree_collapsed_to_settings(item, want_collapsed)
+			_sync_subtree_collapsed_to_settings(item, want_collapsed)
 			get_viewport().set_input_as_handled()
 			return
 	call_deferred("_handle_tree_click_deferred", mouse_event.position)
@@ -561,20 +490,26 @@ func _set_subtree_collapsed(item: TreeItem, collapsed: bool) -> void:
 func _sync_subtree_collapsed_to_settings(item: TreeItem, want_collapsed: bool) -> void:
 	if item == null:
 		return
-	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
-	if metadata is Dictionary:
-		var meta := metadata as Dictionary
-		if str(meta.get("kind", "")) == "tool":
-			var full_name := str(meta.get("key", ""))
-			if not full_name.is_empty():
-				var settings: Dictionary = _current_model.get("settings", {})
-				var is_saved_collapsed: bool = full_name in settings.get("collapsed_intelligence_tools", [])
-				if is_saved_collapsed != want_collapsed:
-					intelligence_tool_collapse_toggled.emit(full_name)
+	_sync_item_collapsed_to_settings(item, want_collapsed)
 	var child := item.get_first_child()
 	while child != null:
 		_sync_subtree_collapsed_to_settings(child, want_collapsed)
 		child = child.get_next()
+
+
+func _sync_item_collapsed_to_settings(item: TreeItem, want_collapsed: bool) -> void:
+	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
+	if not (metadata is Dictionary):
+		return
+	var meta := metadata as Dictionary
+	var kind := str(meta.get("kind", ""))
+	var key := str(meta.get("key", ""))
+	var settings: Dictionary = _current_model.get("settings", {})
+	if key.is_empty() or not TreeCollapseState.EXPANDABLE_KINDS.has(kind):
+		return
+	var is_saved_collapsed: bool = TreeCollapseState.is_node_collapsed(settings, kind, key)
+	if is_saved_collapsed != want_collapsed:
+		tree_collapse_changed.emit(kind, key, want_collapsed)
 
 
 func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
@@ -627,13 +562,12 @@ func _on_context_menu_id_pressed(id: int) -> void:
 			var root = _tool_tree.get_root()
 			if root != null:
 				_set_subtree_collapsed(root, false)
+				_sync_subtree_collapsed_to_settings(root, false)
 		_CTX_COLLAPSE_ALL:
 			var root = _tool_tree.get_root()
 			if root != null:
-				var child = root.get_first_child()
-				while child != null:
-					_set_subtree_collapsed(child, true)
-					child = child.get_next()
+				_set_subtree_collapsed(root, true)
+				_sync_subtree_collapsed_to_settings(root, true)
 
 
 func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
@@ -771,7 +705,7 @@ func _matches_atomic_tool_search(model: Dictionary, atomic_full_name: String, at
 
 
 func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_name: String, visited: Dictionary) -> bool:
-	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
 		var atomic_full_name: String
 		if entry is Dictionary:
 			atomic_full_name = str(entry.get("tool", ""))
@@ -1184,7 +1118,7 @@ func _extract_category_from_full_name(model: Dictionary, full_name: String) -> S
 
 func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
 	var lines: Array[String] = []
-	for entry in INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -1299,9 +1233,7 @@ func _build_tree_signature(model: Dictionary) -> String:
 	var parts: Array[String] = [
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
-		JSON.stringify(model.get("settings", {}).get("collapsed_categories", [])),
-		JSON.stringify(model.get("settings", {}).get("collapsed_domains", [])),
-		JSON.stringify(model.get("settings", {}).get("collapsed_intelligence_tools", [])),
+		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
 		JSON.stringify(model.get("tool_load_errors", []))
 	]
 	var categories: Array = tools_by_category.keys()

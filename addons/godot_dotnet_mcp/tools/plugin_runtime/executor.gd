@@ -14,13 +14,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "state",
-			"description": "PLUGIN RUNTIME STATE: Read loaded domains, usage stats, self diagnostics and the latest reload summary.",
+			"description": "PLUGIN RUNTIME STATE: Read loaded domains, usage stats, self diagnostics, the latest reload summary, and detailed GDScript LSP diagnostics status via action=get_lsp_diagnostics_status.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_loaded_domains", "get_reload_status", "get_tool_usage_stats", "get_self_health", "get_self_errors", "get_self_timeline", "clear_self_diagnostics"]
+						"enum": ["list_loaded_domains", "get_reload_status", "get_tool_usage_stats", "get_self_health", "get_self_errors", "get_self_timeline", "clear_self_diagnostics", "get_lsp_diagnostics_status"]
 					},
 					"severity": {
 						"type": "string",
@@ -121,6 +121,13 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 						"count": stats.size(),
 						"tool_usage_stats": stats
 					}, "Tool usage stats fetched")
+				"get_lsp_diagnostics_status":
+					var snapshot := _build_lsp_diagnostics_snapshot(loader)
+					var service_summary_raw = snapshot.get("service", {})
+					var service_summary: Dictionary = service_summary_raw if service_summary_raw is Dictionary else {}
+					if bool(service_summary.get("available", false)):
+						return _success(snapshot, "LSP diagnostics status fetched")
+					return _error(str(snapshot.get("error", "LSP diagnostics status is unavailable")), snapshot)
 				"get_self_health":
 					return _call_plugin_method("get_self_diagnostic_health_from_tools", [], "Plugin self diagnostics bridge is unavailable")
 				"get_self_errors":
@@ -197,3 +204,109 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _call_plugin_method("get_runtime_usage_guide_from_tools", [], "Plugin runtime guide bridge is unavailable")
 		_:
 			return _error("Unknown plugin runtime tool: %s" % tool_name)
+
+
+func _build_lsp_diagnostics_snapshot(loader) -> Dictionary:
+	var snapshot: Dictionary = {
+		"loader": {
+			"available": loader != null,
+			"has_tool_loader": loader != null,
+			"owns_diagnostics_service": false,
+			"service_generation": 0,
+			"tool_loader_status": {}
+		},
+		"service": {
+			"available": false,
+			"request_count": 0,
+			"active_key": "",
+			"cache_entry_count": 0,
+			"last_completed_status": {},
+			"status": {},
+			"last_error": ""
+		},
+		"client": {
+			"available": false
+		},
+		"error": "LSP diagnostics status is unavailable"
+	}
+
+	if loader == null:
+		snapshot["error"] = "Tool loader is unavailable"
+		return snapshot
+
+	if loader != null:
+		if loader.has_method("get_lsp_diagnostics_debug_snapshot"):
+			var loader_snapshot = loader.get_lsp_diagnostics_debug_snapshot()
+			if loader_snapshot is Dictionary and not (loader_snapshot as Dictionary).is_empty():
+				return _normalize_lsp_diagnostics_snapshot(loader_snapshot as Dictionary)
+		if loader.has_method("get_gdscript_lsp_diagnostics_service"):
+			var service = loader.get_gdscript_lsp_diagnostics_service()
+			if service != null and service.has_method("get_debug_snapshot"):
+				return _normalize_lsp_diagnostics_snapshot({
+					"has_tool_loader": true,
+					"service_available": true,
+					"service": service.get_debug_snapshot()
+				})
+	snapshot["error"] = "Tool loader does not expose LSP diagnostics state"
+	return snapshot
+
+
+func _normalize_lsp_diagnostics_snapshot(raw_snapshot: Dictionary) -> Dictionary:
+	var snapshot: Dictionary = {
+		"loader": {
+			"available": bool(raw_snapshot.get("has_tool_loader", false)),
+			"has_tool_loader": bool(raw_snapshot.get("has_tool_loader", false)),
+			"owns_diagnostics_service": bool(raw_snapshot.get("service_available", false)),
+			"service_generation": int(raw_snapshot.get("service_generation", 0)),
+			"tool_loader_status": raw_snapshot.get("tool_loader_status", {})
+		},
+		"service": {
+			"available": false,
+			"request_count": 0,
+			"active_key": "",
+			"cache_entry_count": 0,
+			"last_completed_status": {},
+			"status": {},
+			"last_error": ""
+		},
+		"client": {
+			"available": false
+		},
+		"error": "LSP diagnostics status is unavailable"
+	}
+
+	var service_raw = raw_snapshot.get("service", {})
+	var service_snapshot: Dictionary = {}
+	if service_raw is Dictionary:
+		service_snapshot = (service_raw as Dictionary).duplicate(true)
+
+	var service_summary_raw = snapshot.get("service", {})
+	var service_summary: Dictionary = service_summary_raw if service_summary_raw is Dictionary else {}
+	service_summary["available"] = bool(raw_snapshot.get("service_available", false)) and not service_snapshot.is_empty()
+	service_summary["request_count"] = int(service_snapshot.get("request_count", 0))
+	service_summary["active_key"] = str(service_snapshot.get("active_key", ""))
+	service_summary["cache_entry_count"] = int(service_snapshot.get("cache_entry_count", 0))
+	service_summary["last_completed_status"] = service_snapshot.get("last_completed_status", {})
+	service_summary["status"] = service_snapshot.get("status", {})
+
+	var status_raw = service_summary.get("status", {})
+	var status_dict: Dictionary = status_raw if status_raw is Dictionary else {}
+	var last_completed_raw = service_summary.get("last_completed_status", {})
+	var last_completed: Dictionary = last_completed_raw if last_completed_raw is Dictionary else {}
+	var client_raw = service_snapshot.get("client", {})
+	if client_raw is Dictionary:
+		var client_snapshot := (client_raw as Dictionary).duplicate(true)
+		client_snapshot["available"] = not client_snapshot.is_empty()
+		snapshot["client"] = client_snapshot
+
+	var last_error := str(status_dict.get("error", ""))
+	if last_error.is_empty():
+		last_error = str(last_completed.get("error", ""))
+	service_summary["last_error"] = last_error
+	snapshot["service"] = service_summary
+
+	if bool(service_summary.get("available", false)):
+		snapshot.erase("error")
+	elif not last_error.is_empty():
+		snapshot["error"] = last_error
+	return snapshot
