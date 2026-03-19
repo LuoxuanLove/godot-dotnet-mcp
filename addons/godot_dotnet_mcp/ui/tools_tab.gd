@@ -42,7 +42,6 @@ const CATEGORY_LABEL_KEYS := {
 const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
 const INTELLIGENCE_CATEGORY := "intelligence"
-const INTELLIGENCE_ROOT_KEY := "intelligence_root"
 
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
@@ -116,15 +115,6 @@ func apply_model(model: Dictionary) -> void:
 	_refresh_tree_state(model, tree_signature)
 
 
-func _get_root_label(model: Dictionary) -> String:
-	var counts = _count_intelligence_enabled(model)
-	var localization = model.get("localization")
-	var label = localization.get_text("cat_intelligence") if localization else "Intelligence"
-	if label == "cat_intelligence":
-		label = "Intelligence"
-	return "%s    %d/%d" % [label, int(counts[0]), int(counts[1])]
-
-
 func _render_tool_tree(model: Dictionary) -> void:
 	_tree_syncing = true
 	_tool_tree.clear()
@@ -136,21 +126,35 @@ func _render_tool_tree(model: Dictionary) -> void:
 		call_deferred("_update_tree_shadow_visibility")
 		return
 
-	# Root node replaces expand/collapse buttons
-	root.set_text(TREE_TEXT_COLUMN, _get_root_label(model))
-	root.set_metadata(TREE_TEXT_COLUMN, {"kind": TreeCollapseState.KIND_ROOT, "key": INTELLIGENCE_ROOT_KEY})
-	root.set_selectable(TREE_TEXT_COLUMN, true)
-	root.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ROOT, INTELLIGENCE_ROOT_KEY)
-
-	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
-		_create_tool_item(root, model, INTELLIGENCE_CATEGORY, tool_def)
+	_create_root_group_item(root, model, INTELLIGENCE_CATEGORY)
+	_create_root_group_item(root, model, "user")
 
 	_tree_syncing = false
 	call_deferred("_update_tree_shadow_visibility")
 
 
+func _create_root_group_item(parent: TreeItem, model: Dictionary, category: String) -> void:
+	var settings: Dictionary = model.get("settings", {})
+	var counts = _count_category(model, category)
+	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return
+	var root_label = _get_category_label(model.get("localization"), category)
+	var root_text = "%s    %d/%d" % [root_label, counts["enabled"], counts["total"]]
+	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
+		root_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
+	var root_tooltip = _get_group_tooltip(model.get("localization"), _get_category_label_key(category))
+	_configure_info_row(item, root_text, {"kind": TreeCollapseState.KIND_ROOT, "key": category, "category": category, "label_key": _get_category_label_key(category)}, TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_ROOT, category))
+	if not root_tooltip.is_empty():
+		item.set_tooltip_text(TREE_TEXT_COLUMN, root_tooltip)
+	for tool_def in _get_filtered_tool_definitions(model, category):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
+		_create_tool_item(item, model, category, tool_def)
+
+
 func _apply_localized_copy(localization, model: Dictionary) -> void:
-	_tool_count_label.text = localization.get_text("tools_enabled") % _count_intelligence_enabled(model)
+	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
 
 
@@ -330,19 +334,6 @@ func _count_enabled_tools(model: Dictionary) -> Array:
 			var full_name = "%s_%s" % [category, tool_def.get("name", "")]
 			if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
 				enabled += 1
-	return [enabled, total]
-
-
-func _count_intelligence_enabled(model: Dictionary) -> Array:
-	var total := 0
-	var enabled := 0
-	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
-		if bool(tool_def.get("compatibility_alias", false)):
-			continue
-		total += 1
-		var full_name = "%s_%s" % [INTELLIGENCE_CATEGORY, tool_def.get("name", "")]
-		if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
-			enabled += 1
 	return [enabled, total]
 
 
@@ -885,6 +876,8 @@ func _build_preview_text() -> String:
 	match _selected_tree_kind:
 		"domain":
 			return _build_domain_preview()
+		"root":
+			return _build_category_preview()
 		"category":
 			return _build_category_preview()
 		"tool":

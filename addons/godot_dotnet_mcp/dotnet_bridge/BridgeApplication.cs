@@ -9,7 +9,7 @@ internal static class BridgeApplication
     {
         var options = BridgeOptions.Parse(args);
 
-        if (options.RemainingArguments.Length > 0)
+        if (options.Mode is not BridgeMode.InstallPlugin && options.RemainingArguments.Length > 0)
         {
             await error.WriteLineAsync($"Unrecognized arguments: {string.Join(" ", options.RemainingArguments)}");
             await error.WriteLineAsync("Use --help for usage.");
@@ -21,6 +21,7 @@ internal static class BridgeApplication
             BridgeMode.Help => await PrintHelpAsync(error),
             BridgeMode.Version => await PrintVersionAsync(output, cancellationToken),
             BridgeMode.Health => await PrintHealthAsync(output, cancellationToken),
+            BridgeMode.InstallPlugin => await PluginInstaller.RunAsync(options.RemainingArguments, output, error, cancellationToken),
             _ => await RunStdioAsync(input, output, error, cancellationToken),
         };
     }
@@ -34,11 +35,14 @@ Usage:
   GodotDotnetMcp.DotnetBridge [--stdio]
   GodotDotnetMcp.DotnetBridge --health
   GodotDotnetMcp.DotnetBridge --version
+  GodotDotnetMcp.DotnetBridge --install-plugin --project-path <path> [--source-path <path>] [--force]
 
 Modes:
   --stdio     Start the MCP stdio server (default)
   --health    Print a JSON health snapshot and exit
   --version   Print the bridge version and exit
+  --install-plugin
+              Copy the plugin into a Godot project addons folder
 """).ContinueWith(_ => 0);
     }
 

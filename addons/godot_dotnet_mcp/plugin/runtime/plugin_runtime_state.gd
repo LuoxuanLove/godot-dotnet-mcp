@@ -118,8 +118,13 @@ const DEFAULT_SETTINGS = {
 	"disabled_tools": [],
 	"tool_profile_id": "intelligence",
 	"language": "",
-	"show_user_tools": false,
-	"collapsed_nodes": {}
+	"show_user_tools": true,
+	"collapsed_nodes": {},
+	"bridge_executable_path": "",
+	"bridge_install_source": "",
+	"bridge_install_state": "not_configured",
+	"bridge_install_version": "",
+	"bridge_install_message": ""
 }
 
 var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)

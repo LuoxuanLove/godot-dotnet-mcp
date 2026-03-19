@@ -6,6 +6,7 @@ internal enum BridgeMode
     Health,
     Version,
     Help,
+    InstallPlugin,
 }
 
 internal sealed record BridgeOptions(BridgeMode Mode, string[] RemainingArguments)
@@ -38,6 +39,9 @@ internal sealed record BridgeOptions(BridgeMode Mode, string[] RemainingArgument
                 case "-h":
                 case "/?":
                     mode = BridgeMode.Help;
+                    break;
+                case "--install-plugin":
+                    mode = BridgeMode.InstallPlugin;
                     break;
                 default:
                     remaining.Add(arg);

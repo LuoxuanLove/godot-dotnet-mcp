@@ -7,6 +7,7 @@ This directory contains the v0.6 `.NET MCP Bridge` skeleton.
 - Independent .NET 8 console project
 - stdio MCP entry point
 - `--health` and `--version` process modes
+- `--install-plugin` CLI mode for Bridge-first plugin installation
 - Minimal JSON-RPC request routing for `initialize`, `tools/list`, `ping`, `shutdown`, and `exit`
 - Read-only tool set: `dotnet_build`, `csproj_read`, `cs_file_read`, `cs_diagnostics`, `solution_analyze`
 - Write tool set: `csproj_write` and `cs_file_patch`
@@ -16,8 +17,8 @@ This directory contains the v0.6 `.NET MCP Bridge` skeleton.
 
 ## What is not in scope yet
 
-- Plugin-side installation UI
 - Full release pipeline automation
+- Cross-platform Bridge-first install packaging
 
 ## Build
 
@@ -31,6 +32,21 @@ dotnet build addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj
 dotnet run --project addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj -- --health
 ```
 
+## Install plugin from Bridge
+
+The Bridge can copy the plugin into a Godot project when it is packaged with the plugin payload or when you provide an explicit source directory.
+
+```bash
+dotnet run --project addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj -- \
+  --install-plugin \
+  --project-path "C:/Path/To/MyGodotProject" \
+  --source-path "C:/Path/To/godot_dotnet_mcp" \
+  --force
+```
+
+The command expects the target path to be a Godot project root containing `project.godot`.
+If `--source-path` is omitted, the Bridge searches a few package-relative defaults next to the executable.
+
 ## Publish
 
 Release packaging targets `win-x64` and is designed to be self-contained, so users do not need to install .NET separately.
@@ -41,6 +57,7 @@ dotnet publish addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj -c Rele
 ```
 
 The generated package should center on the single-file Bridge exe and include checksum files and minimal install notes.
+If you plan to support Bridge-first installation out of the box, bundle the plugin payload alongside the executable so `--install-plugin` can find it without `--source-path`.
 
 ## Troubleshooting
 

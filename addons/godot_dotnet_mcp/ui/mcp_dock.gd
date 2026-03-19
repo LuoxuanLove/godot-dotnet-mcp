@@ -15,6 +15,9 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
+signal bridge_install_requested
+signal bridge_validate_requested
+signal bridge_clear_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
@@ -58,6 +61,9 @@ func _ready() -> void:
 		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
 		_server_tab.stop_requested.connect(_on_server_tab_stop_requested)
 		_server_tab.full_reload_requested.connect(_on_server_tab_full_reload_requested)
+		_server_tab.bridge_install_requested.connect(_on_server_tab_bridge_install_requested)
+		_server_tab.bridge_validate_requested.connect(_on_server_tab_bridge_validate_requested)
+		_server_tab.bridge_clear_requested.connect(_on_server_tab_bridge_clear_requested)
 		if _server_tab.has_signal("copy_requested"):
 			_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
 
@@ -237,6 +243,18 @@ func _on_server_tab_stop_requested() -> void:
 
 func _on_server_tab_full_reload_requested() -> void:
 	full_reload_requested.emit()
+
+
+func _on_server_tab_bridge_install_requested() -> void:
+	bridge_install_requested.emit()
+
+
+func _on_server_tab_bridge_validate_requested() -> void:
+	bridge_validate_requested.emit()
+
+
+func _on_server_tab_bridge_clear_requested() -> void:
+	bridge_clear_requested.emit()
 
 
 func _on_server_tab_copy_requested(text: String, source: String) -> void:
