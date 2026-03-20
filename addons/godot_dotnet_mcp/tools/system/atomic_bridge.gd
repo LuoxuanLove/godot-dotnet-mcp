@@ -1,10 +1,10 @@
 @tool
 extends RefCounted
 
-## Shared atomic tool bridge for intelligence implementations.
+## Shared atomic tool bridge for system implementations.
 ## call_atomic() is the single abstraction point for the v1 Backend Router.
 
-## Paths protected from write operations via intelligence/user tools.
+## Paths protected from write operations via system/user tools.
 ## Write ops targeting these paths require explicit allow_plugin_write=true in args.
 const PLUGIN_PROTECTED_PATHS: Array = [
 	"res://addons/godot_dotnet_mcp/",
@@ -117,7 +117,7 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
 			MCPDebugBuffer.record("warning", "atomic",
 				"Write blocked on protected path: %s (tool: %s)" % [target_path, full_name])
-			return error("Protected path: cannot write to MCP plugin directory via intelligence tools. Use plugin_developer tools with explicit authorization.")
+			return error("Protected path: cannot write to MCP plugin directory via system tools. Use plugin_developer tools with explicit authorization.")
 	var parts := full_name.split("_", false, 1)
 	if parts.size() < 2:
 		MCPDebugBuffer.record("debug", "atomic", "Invalid atomic name: %s" % full_name)

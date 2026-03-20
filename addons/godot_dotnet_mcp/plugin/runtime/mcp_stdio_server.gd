@@ -178,6 +178,8 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
 	if _disabled_tools.has(tool_name):
 		return _create_tool_response({"success": false, "error": "Tool '%s' is disabled" % tool_name}, id)
+	if _tool_loader.has_method("is_tool_exposed") and not bool(_tool_loader.is_tool_exposed(tool_name)):
+		return _create_tool_response({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, id)
 
 	var resolved := _resolve_tool_call_name(tool_name)
 	if not bool(resolved.get("success", false)):

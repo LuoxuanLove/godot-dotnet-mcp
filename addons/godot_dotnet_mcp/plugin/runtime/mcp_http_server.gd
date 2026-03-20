@@ -223,6 +223,14 @@ func is_tool_enabled(tool_name: String) -> bool:
 	return not _disabled_tools.has(tool_name)
 
 
+func is_tool_exposed(tool_name: String) -> bool:
+	if _tool_loader == null:
+		return false
+	if not _tool_loader.has_method("is_tool_exposed"):
+		return false
+	return bool(_tool_loader.is_tool_exposed(tool_name))
+
+
 func get_tools_by_category() -> Dictionary:
 	"""Returns tools organized by category for UI display"""
 	return _tool_loader.get_tools_by_category()
@@ -747,6 +755,8 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 	# Check if tool is enabled
 	if not is_tool_enabled(tool_name):
 		return _create_tool_response({"success": false, "error": "Tool '%s' is disabled" % tool_name}, id)
+	if not is_tool_exposed(tool_name):
+		return _create_tool_response({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, id)
 
 	var resolved = _resolve_tool_call_name(tool_name)
 	if not bool(resolved.get("success", false)):

@@ -1,6 +1,6 @@
 # Tools 页实现
 
-本文档说明 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 与 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 的节点结构、Intelligence 工具树、预览面板与当前布局约束。
+本文档说明 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 与 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 的节点结构、系统工具树、预览面板与当前布局约束。
 
 ---
 
@@ -8,9 +8,9 @@
 
 `Tools` 页当前聚焦四类能力：
 
-1. 显示当前已启用的 Intelligence 工具数
-2. 以根级平铺方式展示 8 个 Intelligence 工具
-3. 展开查看每个 Intelligence 工具依赖的原子工具链路
+1. 显示当前已启用的 系统工具数
+2. 以根级平铺方式展示 8 个 系统工具
+3. 展开查看每个 系统工具依赖的原子工具链路
 4. 展示当前选中项的描述、参数与原子工具预览
 
 当前页不再承担 profile 选择、保存、重命名、删除。
@@ -59,38 +59,38 @@ ToolsTab
 
 ---
 
-## Intelligence 工具树
+## 系统工具树
 
 当前树结构固定为：
 
 ```text
 root
-  ├─ intelligence_project_state
+  ├─ system_project_state
   │   ├─ project_info
   │   ├─ project_dotnet
   │   ├─ filesystem_directory
   │   └─ debug_runtime_bridge
-  ├─ intelligence_project_suggest
-  │   └─ intelligence_project_state
-  ├─ intelligence_workflow_recommend
-  │   └─ intelligence_project_state
-  ├─ intelligence_bindings_audit
+  ├─ system_project_suggest
+  │   └─ system_project_state
+  ├─ system_workflow_recommend
+  │   └─ system_project_state
+  ├─ system_bindings_audit
   │   ├─ script_inspect
   │   ├─ script_references
   │   ├─ scene_bindings
   │   ├─ scene_audit
   │   └─ filesystem_directory
-  ├─ intelligence_scene_validate
+  ├─ system_scene_validate
   │   ├─ scene_audit
   │   └─ resource_query
-  ├─ intelligence_project_index_build
+  ├─ system_project_index_build
   │   ├─ filesystem_directory
   │   ├─ script_inspect
   │   └─ resource_query
-  ├─ intelligence_project_symbol_search
-  │   └─ intelligence_project_index_build
-  └─ intelligence_scene_dependency_graph
-      └─ intelligence_project_index_build
+  ├─ system_project_symbol_search
+  │   └─ system_project_index_build
+  └─ system_scene_dependency_graph
+      └─ system_project_index_build
 ```
 
 说明：
@@ -107,8 +107,8 @@ root
 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 当前负责：
 
 - 接收 model 并刷新文案
-- 构建 Intelligence 根级工具树
-- 根据 `INTELLIGENCE_TOOL_ATOMIC_CHILDREN` 构建原子工具子树
+- 构建系统根级工具树
+- 根据 `SYSTEM_TOOL_ATOMIC_CHILDREN` 构建原子工具子树
 - 管理搜索关键字与递归命中结果
 - 管理当前选中项和预览文本
 - 发出工具启停与展开折叠信号
@@ -129,9 +129,9 @@ root
 
 当前搜索策略：
 
-- Intelligence 工具名称命中时保留该工具
-- 原子工具名称或描述命中时，保留其所属的 Intelligence 祖先
-- 搜索会递归命中 `INTELLIGENCE_TOOL_ATOMIC_CHILDREN`，因此搜索原子工具也能定位到上层 Intelligence 工具
+- 系统工具名称命中时保留该工具
+- 原子工具名称或描述命中时，保留其所属的 系统祖先
+- 搜索会递归命中 `SYSTEM_TOOL_ATOMIC_CHILDREN`，因此搜索原子工具也能定位到上层 系统工具
 
 搜索不会改写持久化折叠状态，只影响当前树重建结果。
 
@@ -146,7 +146,7 @@ root
 - category
 - tool
 
-其中 Intelligence 工具级预览会额外展示：
+其中 系统工具级预览会额外展示：
 
 - 描述
 - action 概览
@@ -208,5 +208,5 @@ root
 |---|---|
 | `ui/tools_tab.tscn` | Tools 页节点树与布局 |
 | `ui/tools_tab.gd` | Tools 页控制器 |
-| `tools/intelligence_tools.gd` | Intelligence 高层工具实现 |
+| `tools/system_tools.gd` | 系统高层工具实现 |
 | `plugin/runtime/plugin_runtime_state.gd` | 默认工具暴露策略 |

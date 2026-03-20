@@ -1,4 +1,4 @@
-@tool
+﻿@tool
 extends VBoxContainer
 
 signal tool_toggled(tool_name: String, enabled: bool)
@@ -7,7 +7,7 @@ signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
 
-const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 
 const CATEGORY_LABEL_KEYS := {
@@ -36,12 +36,13 @@ const CATEGORY_LABEL_KEYS := {
 	"audio": "cat_audio",
 	"ui": "cat_ui",
 	"user": "cat_user",
-	"intelligence": "cat_intelligence"
+	"system": "cat_system"
 }
 
 const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
-const INTELLIGENCE_CATEGORY := "intelligence"
+const SYSTEM_CATEGORY := "system"
+const USER_TOOL_CUSTOM_ROOT := "res://addons/godot_dotnet_mcp/custom_tools"
 
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
@@ -53,10 +54,11 @@ const INTELLIGENCE_CATEGORY := "intelligence"
 @onready var _tool_preview_title: Label = %ToolPreviewTitle
 @onready var _tool_preview_text: TextEdit = %ToolPreviewText
 
-const _CTX_COPY_NAME   := 0
-const _CTX_COPY_SCHEMA := 1
+const _CTX_COPY_LOCALIZED_NAME := 0
+const _CTX_COPY_ENGLISH_ID := 1
+const _CTX_COPY_SCHEMA := 2
 const _CTX_DELETE_TOOL := 3
-const _CTX_EXPAND_ALL  := 10
+const _CTX_EXPAND_ALL := 10
 const _CTX_COLLAPSE_ALL := 11
 
 var _tree_syncing := false
@@ -64,6 +66,7 @@ var _current_scale := -1.0
 var _localization = null
 var _context_menu: PopupMenu = null
 var _context_menu_metadata: Dictionary = {}
+var _context_menu_target: TreeItem = null
 var _current_model: Dictionary = {}
 var _selected_tree_kind := ""
 var _selected_tree_key := ""
@@ -126,7 +129,7 @@ func _render_tool_tree(model: Dictionary) -> void:
 		call_deferred("_update_tree_shadow_visibility")
 		return
 
-	_create_root_group_item(root, model, INTELLIGENCE_CATEGORY)
+	_create_root_group_item(root, model, SYSTEM_CATEGORY)
 	_create_root_group_item(root, model, "user")
 
 	_tree_syncing = false
@@ -144,7 +147,10 @@ func _create_root_group_item(parent: TreeItem, model: Dictionary, category: Stri
 	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
 		root_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	var root_tooltip = _get_group_tooltip(model.get("localization"), _get_category_label_key(category))
-	_configure_info_row(item, root_text, {"kind": TreeCollapseState.KIND_ROOT, "key": category, "category": category, "label_key": _get_category_label_key(category)}, TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_ROOT, category))
+	_configure_info_row(item, root_text, _build_tree_node_metadata(TreeCollapseState.KIND_ROOT, category, root_label, category, {
+		"category": category,
+		"label_key": _get_category_label_key(category)
+	}), TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_ROOT, category))
 	if not root_tooltip.is_empty():
 		item.set_tooltip_text(TREE_TEXT_COLUMN, root_tooltip)
 	for tool_def in _get_filtered_tool_definitions(model, category):
@@ -179,9 +185,15 @@ func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary, col
 
 
 func _configure_action_item(item: TreeItem, action_name: String, parent_tool: String) -> void:
-	item.set_text(TREE_TEXT_COLUMN, "· %s" % action_name)
+	var action_display_name := _get_action_display_name(parent_tool, action_name)
+	item.set_text(TREE_TEXT_COLUMN, action_display_name)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
-	item.set_metadata(TREE_TEXT_COLUMN, {"kind": "action", "key": parent_tool + "." + action_name, "action": action_name, "tool": parent_tool})
+	item.set_metadata(TREE_TEXT_COLUMN, _build_tree_node_metadata("action", parent_tool + "." + action_name, action_display_name, action_name, {
+		"action": action_name,
+		"tool": parent_tool,
+		"parent_tool": parent_tool,
+		"description_key": SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+	}))
 	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.45, 0.45, 0.45))
 
 
@@ -207,11 +219,12 @@ func _create_domain_item(root: TreeItem, model: Dictionary, domain_key: String, 
 	if item == null:
 		return
 	_configure_item_toggle(item, _is_domain_fully_enabled(model, categories))
-	var domain_text = "%s    %d/%d" % [model.get("localization").get_text(label_key), counts["enabled"], counts["total"]]
+	var domain_label = model.get("localization").get_text(label_key)
+	var domain_text = "%s    %d/%d" % [domain_label, counts["enabled"], counts["total"]]
 	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
 		domain_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	var domain_tooltip = _get_group_tooltip(model.get("localization"), label_key)
-	_configure_item_text(item, domain_text, {"kind": "domain", "key": domain_key, "label_key": label_key}, domain_tooltip)
+	_configure_item_text(item, domain_text, _build_tree_node_metadata("domain", domain_key, domain_label, domain_key, {"label_key": label_key}), domain_tooltip)
 	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_DOMAIN, domain_key)
 
 	for category in categories:
@@ -227,20 +240,18 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 	_configure_item_toggle(item, _is_category_fully_enabled(model, category))
 	var label_key = _get_category_label_key(category)
 	var load_error_messages = _get_category_load_error_messages(model, category)
-	var category_text = "%s    %d/%d" % [_get_category_label(model.get("localization"), category), counts["enabled"], counts["total"]]
+	var category_label = _get_category_label(model.get("localization"), category)
+	var category_text = "%s    %d/%d" % [category_label, counts["enabled"], counts["total"]]
 	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
 		category_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	if not load_error_messages.is_empty():
 		category_text += " %s" % model.get("localization").get_text("tools_load_error_suffix")
-	item.set_text(0, category_text)
-	item.set_selectable(0, true)
-	item.set_metadata(0, {"kind": "category", "key": category, "label_key": label_key})
 	var category_tooltip = _get_group_tooltip(model.get("localization"), label_key)
 	if not load_error_messages.is_empty():
 		if not category_tooltip.is_empty():
 			category_tooltip += "\n\n"
 		category_tooltip += "\n".join(load_error_messages)
-	_configure_item_text(item, category_text, {"kind": "category", "key": category, "label_key": label_key}, category_tooltip)
+	_configure_item_text(item, category_text, _build_tree_node_metadata("category", category, category_label, category, {"label_key": label_key}), category_tooltip)
 	if not load_error_messages.is_empty():
 		item.set_custom_color(TREE_TEXT_COLUMN, Color(0.9, 0.35, 0.35))
 	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_CATEGORY, category)
@@ -258,8 +269,8 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 	if item == null:
 		return
 	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
-	if category == INTELLIGENCE_CATEGORY:
-		var has_children := IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.has(full_name)
+	if category == SYSTEM_CATEGORY:
+		var has_children := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.has(full_name)
 		if has_children:
 			var settings: Dictionary = model.get("settings", {})
 			item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_TOOL, full_name)
@@ -271,18 +282,24 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 func _configure_tool_row(item: TreeItem, model: Dictionary, full_name: String, category: String, tool_name: String, tool_def: Dictionary) -> void:
 	var localization = model.get("localization")
 	_configure_item_toggle(item, not model.get("settings", {}).get("disabled_tools", []).has(full_name))
-	_configure_item_text(item, _get_tool_display_name(localization, full_name, tool_name), {
-		"kind": "tool",
-		"key": full_name,
+	var tool_display_name = _get_tool_display_name(localization, full_name, tool_name)
+	_configure_item_text(item, tool_display_name, _build_tree_node_metadata("tool", full_name, tool_display_name, full_name, {
 		"category": category,
 		"tool_name": tool_name,
 		"source": str(tool_def.get("source", "builtin")),
-		"script_path": str(tool_def.get("script_path", ""))
-	}, _get_tool_description(localization, full_name, tool_def))
+		"script_path": str(tool_def.get("script_path", "")),
+		"runtime_domain": str(tool_def.get("runtime_domain", "")),
+		"runtime_version": int(tool_def.get("runtime_version", 0)),
+		"runtime_state": str(tool_def.get("state", "")),
+		"pending_reload": bool(tool_def.get("pending_reload", false)),
+		"last_error": tool_def.get("last_error", null),
+		"discovery_source": str(tool_def.get("discovery_source", "")),
+		"last_refresh_reason": str(tool_def.get("last_refresh_reason", ""))
+	}), _get_tool_description(localization, full_name, tool_def))
 
 
-func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intelligence_full_name: String, visited: Dictionary = {}) -> void:
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, system_full_name: String, visited: Dictionary = {}) -> void:
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -307,11 +324,15 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intellige
 		if item == null:
 			continue
 		# Atomic tool: info-only row, no checkbox
-		_configure_info_row(item, _get_tool_display_name(_localization, atomic_full_name, tool_name),
-			{"kind": "atomic", "key": atomic_full_name, "category": category, "tool_name": tool_name},
+		var atomic_display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
+		_configure_info_row(item, atomic_display_name,
+			_build_tree_node_metadata("atomic", atomic_full_name, atomic_display_name, atomic_full_name, {
+				"category": category,
+				"tool_name": tool_name
+			}),
 			TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, atomic_full_name))
 
-		if category == INTELLIGENCE_CATEGORY:
+		if category == SYSTEM_CATEGORY:
 			var next_visited = visited.duplicate()
 			next_visited[atomic_full_name] = true
 			_create_atomic_tool_children(item, model, atomic_full_name, next_visited)
@@ -326,8 +347,8 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intellige
 func _count_enabled_tools(model: Dictionary) -> Array:
 	var total = 0
 	var enabled = 0
-	for category in model.get("tools_by_category", {}).keys():
-		for tool_def in _get_filtered_tool_definitions(model, str(category)):
+	for category in [SYSTEM_CATEGORY, "user"]:
+		for tool_def in _get_filtered_tool_definitions(model, category):
 			if bool(tool_def.get("compatibility_alias", false)):
 				continue
 			total += 1
@@ -398,6 +419,46 @@ func _get_tool_description(localization, full_name: String, tool_def: Dictionary
 	if translated != key:
 		return translated
 	return str(tool_def.get("description", ""))
+
+
+func _get_action_display_name(parent_tool: String, action_name: String) -> String:
+	if _localization != null:
+		var specific_key = SystemTreeCatalog.get_action_name_key(parent_tool, action_name)
+		var translated = _localization.get_text(specific_key)
+		if translated != specific_key:
+			return translated
+		var generic_key = SystemTreeCatalog.get_generic_action_name_key(action_name)
+		translated = _localization.get_text(generic_key)
+		if translated != generic_key:
+			return translated
+	return _humanize_identifier(action_name)
+
+
+func _get_action_description(parent_tool: String, action_name: String, tool_def: Dictionary) -> String:
+	var action_display_name = _get_action_display_name(parent_tool, action_name)
+	var parent_display_name = parent_tool
+	if not tool_def.is_empty():
+		var tool_name = str(tool_def.get("name", ""))
+		if not tool_name.is_empty():
+			parent_display_name = _get_tool_display_name(_localization, parent_tool, tool_name)
+	if _localization != null:
+		var specific_key = SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+		var translated = _localization.get_text(specific_key)
+		if translated != specific_key:
+			return translated
+		var generic_key = SystemTreeCatalog.get_generic_action_desc_key(action_name)
+		translated = _localization.get_text(generic_key)
+		if translated != generic_key:
+			return translated
+		var fallback_key = "tool_action_desc_fallback"
+		var fallback_template = _localization.get_text(fallback_key)
+		if fallback_template != fallback_key:
+			var fallback_text = fallback_template % [action_display_name, parent_display_name]
+			var tool_description = _get_tool_description(_localization, parent_tool, tool_def)
+			if not tool_description.is_empty():
+				fallback_text += "\n\n" + tool_description
+			return fallback_text
+	return ""
 
 
 func _humanize_identifier(value: String) -> String:
@@ -509,56 +570,100 @@ func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
 		return
 	var meta := metadata as Dictionary
 	_context_menu_metadata = meta
+	_context_menu_target = item
 	_context_menu.clear()
 	var kind = str(meta.get("kind", ""))
+	var has_children := item.get_child_count() > 0
+	_add_context_menu_item(_localization.get_text("tool_ctx_copy_localized_name"), _CTX_COPY_LOCALIZED_NAME)
+	_add_context_menu_item(_localization.get_text("tool_ctx_copy_english_id"), _CTX_COPY_ENGLISH_ID)
+	_context_menu.add_separator()
+	_add_context_menu_item(_localization.get_text("btn_expand_all"), _CTX_EXPAND_ALL, not has_children)
+	_add_context_menu_item(_localization.get_text("btn_collapse_all"), _CTX_COLLAPSE_ALL, not has_children)
 	match kind:
-		"root":
-			_context_menu.add_item("Expand All", _CTX_EXPAND_ALL)
-			_context_menu.add_item("Collapse All", _CTX_COLLAPSE_ALL)
 		"tool":
-			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
-			_context_menu.add_item("Copy Schema JSON", _CTX_COPY_SCHEMA)
-			if str(meta.get("source", "")) == "user_tool":
-				_context_menu.add_separator()
-				_context_menu.add_item("Delete User Tool", _CTX_DELETE_TOOL)
-		"atomic":
-			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
-		"action":
-			_context_menu.add_item("Copy Action Name", _CTX_COPY_NAME)
+			_context_menu.add_separator()
+			_add_context_menu_item(_localization.get_text("tool_ctx_copy_schema_json"), _CTX_COPY_SCHEMA)
+			if _is_user_tool_metadata(meta):
+				_add_context_menu_item(_localization.get_text("btn_delete_user_tool"), _CTX_DELETE_TOOL)
 		_:
-			return
+			pass
 	_context_menu.popup(Rect2i(int(global_pos.x), int(global_pos.y), 0, 0))
 
 
 func _on_context_menu_id_pressed(id: int) -> void:
-	var kind = str(_context_menu_metadata.get("kind", ""))
 	match id:
-		_CTX_COPY_NAME:
-			var name_to_copy: String
-			if kind == "action":
-				name_to_copy = str(_context_menu_metadata.get("action", ""))
-			else:
-				name_to_copy = str(_context_menu_metadata.get("key", ""))
-			DisplayServer.clipboard_set(name_to_copy)
+		_CTX_COPY_LOCALIZED_NAME:
+			DisplayServer.clipboard_set(_get_context_menu_localized_name())
+		_CTX_COPY_ENGLISH_ID:
+			DisplayServer.clipboard_set(_get_context_menu_english_id())
 		_CTX_COPY_SCHEMA:
 			var full_name = str(_context_menu_metadata.get("key", ""))
 			var tool_def = _get_tool_def_by_full_name(_current_model, full_name)
 			var schema = tool_def.get("inputSchema", {})
 			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
 		_CTX_DELETE_TOOL:
-			var script_path = str(_context_menu_metadata.get("script_path", ""))
+			var script_path = _get_context_menu_user_tool_script_path()
 			if not script_path.is_empty():
 				delete_user_tool_requested.emit(script_path)
 		_CTX_EXPAND_ALL:
-			var root = _tool_tree.get_root()
-			if root != null:
-				_set_subtree_collapsed(root, false)
-				_sync_subtree_collapsed_to_settings(root, false)
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, false)
+				_tree_syncing = false
+				_sync_subtree_collapsed_to_settings(_context_menu_target, false)
 		_CTX_COLLAPSE_ALL:
-			var root = _tool_tree.get_root()
-			if root != null:
-				_set_subtree_collapsed(root, true)
-				_sync_subtree_collapsed_to_settings(root, true)
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, true)
+				_tree_syncing = false
+				_sync_subtree_collapsed_to_settings(_context_menu_target, true)
+
+
+func _add_context_menu_item(label: String, id: int, disabled: bool = false) -> void:
+	var index := _context_menu.get_item_count()
+	_context_menu.add_item(label, id)
+	_context_menu.set_item_disabled(index, disabled)
+
+
+func _build_tree_node_metadata(kind: String, key: String, localized_name: String = "", english_id: String = "", extra: Dictionary = {}) -> Dictionary:
+	var metadata := {
+		"kind": kind,
+		"key": key,
+		"english_id": english_id if not english_id.is_empty() else key
+	}
+	if not localized_name.is_empty():
+		metadata["localized_name"] = localized_name
+	for extra_key in extra.keys():
+		metadata[str(extra_key)] = extra[extra_key]
+	return metadata
+
+
+func _get_context_menu_localized_name() -> String:
+	var localized_name := str(_context_menu_metadata.get("localized_name", ""))
+	if not localized_name.is_empty():
+		return localized_name
+	return str(_context_menu_metadata.get("key", ""))
+
+
+func _get_context_menu_english_id() -> String:
+	var english_id := str(_context_menu_metadata.get("english_id", ""))
+	if not english_id.is_empty():
+		return english_id
+	return str(_context_menu_metadata.get("key", ""))
+
+
+func _is_user_tool_metadata(meta: Dictionary) -> bool:
+	if str(meta.get("category", "")) != "user":
+		return false
+	var script_path = str(meta.get("script_path", ""))
+	return str(meta.get("source", "")) == "user_tool" and script_path.begins_with(USER_TOOL_CUSTOM_ROOT + "/")
+
+
+func _get_context_menu_user_tool_script_path() -> String:
+	var direct_path = str(_context_menu_metadata.get("script_path", ""))
+	if direct_path.begins_with(USER_TOOL_CUSTOM_ROOT + "/"):
+		return direct_path
+	return ""
 
 
 func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
@@ -678,7 +783,7 @@ func _matches_tool_search(model: Dictionary, category: String, tool_def: Diction
 	var full_name = "%s_%s" % [category, tool_name]
 	if _get_tool_display_name(localization, full_name, tool_name).to_lower().contains(query):
 		return true
-	if category != INTELLIGENCE_CATEGORY:
+	if category != SYSTEM_CATEGORY:
 		return false
 	return _matches_atomic_tool_search_recursive(model, full_name, {})
 
@@ -695,11 +800,25 @@ func _matches_atomic_tool_search(model: Dictionary, atomic_full_name: String, at
 	return description.to_lower().contains(query)
 
 
-func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_name: String, visited: Dictionary) -> bool:
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+func _matches_action_search(parent_tool: String, action_name: String, tool_def: Dictionary) -> bool:
+	var query = _get_search_query()
+	if query.is_empty():
+		return true
+	if _get_action_display_name(parent_tool, action_name).to_lower().contains(query):
+		return true
+	if action_name.to_lower().contains(query):
+		return true
+	var description = _get_action_description(parent_tool, action_name, tool_def)
+	return description.to_lower().contains(query)
+
+
+func _matches_atomic_tool_search_recursive(model: Dictionary, system_full_name: String, visited: Dictionary) -> bool:
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
+		var actions: Array = []
 		if entry is Dictionary:
 			atomic_full_name = str(entry.get("tool", ""))
+			actions = entry.get("actions", [])
 		else:
 			atomic_full_name = str(entry)
 		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
@@ -709,6 +828,9 @@ func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_
 			continue
 		if _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
 			return true
+		for action_name in actions:
+			if _matches_action_search(atomic_full_name, str(action_name), atomic_tool_def):
+				return true
 		var next_visited = visited.duplicate()
 		next_visited[atomic_full_name] = true
 		if _matches_atomic_tool_search_recursive(model, atomic_full_name, next_visited):
@@ -927,9 +1049,15 @@ func _build_category_preview() -> String:
 		var tool_name = str(tool_def.get("name", ""))
 		var full_name = "%s_%s" % [category, tool_name]
 		lines.append("- %s" % _get_tool_display_name(_localization, full_name, tool_name))
-	if category == "intelligence":
+	if category == "user":
+		var watch_lines = _build_user_watch_preview_lines()
+		if not watch_lines.is_empty():
+			lines.append("")
+			lines.append(_localization.get_text("tool_preview_watch_section"))
+			lines.append_array(watch_lines)
+	if category == "system":
 		lines.append("")
-		var hint_key = "tool_preview_intelligence_category_hint"
+		var hint_key = "tool_preview_system_category_hint"
 		var hint_text = _localization.get_text(hint_key)
 		lines.append(hint_text)
 	return "\n".join(_filter_empty_preview_lines(lines))
@@ -952,17 +1080,15 @@ func _build_tool_preview() -> String:
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
 		"",
 		_localization.get_text("tool_preview_description"),
-		description if not description.is_empty() else _localization.get_text("tool_preview_no_description"),
-		"",
-		_localization.get_text("tool_preview_actions")
+		description if not description.is_empty() else _localization.get_text("tool_preview_no_description")
 	]
 
 	var actions = _extract_action_values(tool_def)
-	if actions.is_empty():
-		lines.append(_localization.get_text("tool_preview_no_actions"))
-	else:
+	if not actions.is_empty():
+		lines.append("")
+		lines.append(_localization.get_text("tool_preview_actions"))
 		for action_value in actions:
-			lines.append("- %s" % action_value)
+			lines.append("- %s" % _get_action_display_name(_selected_tree_key, action_value))
 
 	lines.append("")
 	lines.append(_localization.get_text("tool_preview_params"))
@@ -972,7 +1098,14 @@ func _build_tool_preview() -> String:
 	else:
 		lines.append_array(parameter_lines)
 
-	if category == "intelligence":
+	if category == "user":
+		var runtime_lines = _build_user_runtime_preview_lines(tool_def)
+		if not runtime_lines.is_empty():
+			lines.append("")
+			lines.append(_localization.get_text("tool_preview_runtime_section"))
+			lines.append_array(runtime_lines)
+
+	if category == "system":
 		lines.append("")
 		lines.append(_localization.get_text("tool_preview_atomic_tools"))
 		var atomic_lines = _build_atomic_tool_preview_lines(_selected_tree_key, 0, {})
@@ -981,11 +1114,112 @@ func _build_tool_preview() -> String:
 		else:
 			lines.append_array(atomic_lines)
 		lines.append("")
-		var hint_key = "tool_preview_intelligence_tool_hint"
+		var hint_key = "tool_preview_system_tool_hint"
 		var hint_text = _localization.get_text(hint_key)
 		lines.append(hint_text)
 
 	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _build_user_runtime_preview_lines(tool_def: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var runtime_domain = str(tool_def.get("runtime_domain", ""))
+	if not runtime_domain.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_runtime_domain"), runtime_domain])
+	var runtime_version = int(tool_def.get("runtime_version", 0))
+	if runtime_version > 0:
+		lines.append("%s: %d" % [_localization.get_text("tool_preview_runtime_version"), runtime_version])
+	var runtime_state = _get_user_runtime_state_label(str(tool_def.get("state", "")))
+	if not runtime_state.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_runtime_state"), runtime_state])
+	lines.append("%s: %s" % [
+		_localization.get_text("tool_preview_pending_reload"),
+		_localization.get_text("status_enabled") if bool(tool_def.get("pending_reload", false)) else _localization.get_text("status_disabled")
+	])
+	var discovery_source = _get_user_watch_source_label(str(tool_def.get("discovery_source", "")))
+	if not discovery_source.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_discovery_source"), discovery_source])
+	var last_refresh_reason = _get_user_watch_reason_label(str(tool_def.get("last_refresh_reason", "")))
+	if not last_refresh_reason.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_last_refresh_reason"), last_refresh_reason])
+	var script_path = str(tool_def.get("script_path", ""))
+	if not script_path.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_script_path"), script_path])
+	var last_error = str(tool_def.get("last_error", ""))
+	if not last_error.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_last_error"), last_error])
+	var raw_state = str(tool_def.get("state", ""))
+	if raw_state == "reload_failed":
+		lines.append(_localization.get_text("tool_preview_reload_failed_keeps_old_version"))
+	elif raw_state == "waiting_quiesce":
+		lines.append(_localization.get_text("tool_preview_waiting_quiesce"))
+	return lines
+
+
+func _build_user_watch_preview_lines() -> Array[String]:
+	var lines: Array[String] = []
+	var watch_status: Dictionary = _current_model.get("user_tool_watch", {})
+	if not watch_status.is_empty():
+		var watching = bool(watch_status.get("watching", false))
+		lines.append("%s: %s" % [
+			_localization.get_text("tool_preview_watch_status"),
+			_localization.get_text("status_enabled") if watching else _localization.get_text("status_disabled")
+		])
+		lines.append("%s: %d" % [
+			_localization.get_text("tool_preview_watch_known_scripts"),
+			int(watch_status.get("known_script_count", 0))
+		])
+		var last_reason = _get_user_watch_reason_label(str(watch_status.get("last_change_reason", "")))
+		if not last_reason.is_empty():
+			lines.append("%s: %s" % [_localization.get_text("tool_preview_last_refresh_reason"), last_reason])
+		var last_error = str(watch_status.get("last_error", ""))
+		if not last_error.is_empty():
+			lines.append("%s: %s" % [_localization.get_text("tool_preview_watch_last_error"), last_error])
+	var invalid_tools: Array[String] = []
+	for tool_info in _current_model.get("user_tools", []):
+		if not (tool_info is Dictionary):
+			continue
+		var info := tool_info as Dictionary
+		if bool(info.get("loadable", false)):
+			continue
+		var display_name = str(info.get("display_name", info.get("script_path", "")))
+		var load_error = str(info.get("load_error", ""))
+		invalid_tools.append("%s (%s)" % [display_name, load_error if not load_error.is_empty() else "invalid"])
+	if not invalid_tools.is_empty():
+		lines.append("%s: %d" % [_localization.get_text("tool_preview_watch_invalid_scripts"), invalid_tools.size()])
+		for invalid_entry in invalid_tools:
+			lines.append("- %s" % invalid_entry)
+	return lines
+
+
+func _get_user_runtime_state_label(state: String) -> String:
+	if state.is_empty():
+		return ""
+	var key = "tool_preview_runtime_state_%s" % state
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(state)
+
+
+func _get_user_watch_source_label(source: String) -> String:
+	if source.is_empty():
+		return ""
+	var key = "tool_preview_discovery_source_%s" % source
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(source)
+
+
+func _get_user_watch_reason_label(reason: String) -> String:
+	if reason.is_empty():
+		return ""
+	var key = "tool_preview_watch_reason_%s" % reason
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(reason)
 
 
 func _build_atomic_item_preview() -> String:
@@ -1012,7 +1246,7 @@ func _build_atomic_item_preview() -> String:
 		lines.append("")
 		lines.append(_localization.get_text("tool_preview_actions"))
 		for action_value in actions:
-			lines.append("- %s" % action_value)
+			lines.append("- %s" % _get_action_display_name(atomic_full_name, action_value))
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
@@ -1030,9 +1264,13 @@ func _build_action_item_preview() -> String:
 	var tool_name = str(tool_def.get("name", "")) if not tool_def.is_empty() else parent_tool
 	var display_name = _get_tool_display_name(_localization, parent_tool, tool_name) if not tool_def.is_empty() else parent_tool
 	var lines: Array[String] = [
-		"Action: %s" % action_name,
-		"%s: %s" % [_localization.get_text("tool_preview_tool"), display_name],
+		"%s: %s" % [_localization.get_text("tool_action"), _get_action_display_name(parent_tool, action_name)],
+		"%s: %s" % [_localization.get_text("tool_preview_action_id"), action_name],
+		"%s: %s" % [_localization.get_text("tool_preview_parent_tool"), display_name],
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
+		"",
+		_localization.get_text("tool_preview_description"),
+		_get_action_description(parent_tool, action_name, tool_def),
 	]
 	if not tool_def.is_empty():
 		var param_lines = _build_action_parameter_lines(tool_def)
@@ -1109,9 +1347,9 @@ func _extract_category_from_full_name(model: Dictionary, full_name: String) -> S
 	return ""
 
 
-func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
+func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
 	var lines: Array[String] = []
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -1132,8 +1370,8 @@ func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int
 		var indent = "  ".repeat(depth)
 		lines.append("%s- %s" % [indent, display_name])
 		for action_name in actions:
-			lines.append("%s  · %s" % [indent, str(action_name)])
-		if category == INTELLIGENCE_CATEGORY:
+			lines.append("%s  - %s" % [indent, _get_action_display_name(atomic_full_name, str(action_name))])
+		if category == SYSTEM_CATEGORY:
 			var next_visited = visited.duplicate()
 			next_visited[atomic_full_name] = true
 			lines.append_array(_build_atomic_tool_preview_lines(atomic_full_name, depth + 1, next_visited))

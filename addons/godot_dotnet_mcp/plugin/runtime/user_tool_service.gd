@@ -216,15 +216,18 @@ func _inspect_script(script_path: String) -> Dictionary:
 	if not (script_resource is Script):
 		inspected["load_error"] = "script_load_failed"
 		return inspected
-	(script_resource as Script).reload()
-	if not (script_resource as Script).can_instantiate():
+	var executor = null
+	if (script_resource as Script).can_instantiate():
+		executor = script_resource.new()
+		if executor == null or not executor.has_method("get_tools"):
+			inspected["load_error"] = "missing_get_tools"
+			return inspected
+	else:
 		inspected["load_error"] = "script_cannot_instantiate"
-		return inspected
-
-	var executor = script_resource.new()
-	if executor == null or not executor.has_method("get_tools"):
-		inspected["load_error"] = "missing_get_tools"
-		return inspected
+		if not script_resource.has_method("get_tools"):
+			inspected["load_error"] = "missing_static_get_tools"
+			return inspected
+		executor = script_resource
 
 	var registration: Dictionary = {}
 	if executor.has_method("get_registration"):
@@ -233,7 +236,9 @@ func _inspect_script(script_path: String) -> Dictionary:
 	var tool_names: Array[String] = []
 	for tool_def in executor.get_tools():
 		if tool_def is Dictionary:
-			tool_names.append("%s_%s" % [USER_CATEGORY, str(tool_def.get("name", ""))])
+			var logical_name = _normalize_runtime_tool_name(str(tool_def.get("name", "")))
+			if not logical_name.is_empty():
+				tool_names.append("%s_%s" % [USER_CATEGORY, logical_name])
 
 	inspected["display_name"] = str(registration.get("display_name", default_display_name))
 	inspected["tool_names"] = tool_names
@@ -291,7 +296,9 @@ func _collect_script_paths(dir_path: String, output: Array[String]) -> void:
 		if dir.current_is_dir():
 			_collect_script_paths(child_path, output)
 		elif entry.ends_with(".gd"):
-			output.append(child_path)
+			var normalized_path = _normalize_script_path(child_path)
+			if not normalized_path.is_empty():
+				output.append(normalized_path)
 	dir.list_dir_end()
 
 
@@ -301,6 +308,13 @@ func _authorization_required(action: String, preview: Dictionary) -> Dictionary:
 		"error": "User authorization required",
 		"data": {"action": action, "requires_authorization": true, "preview": preview}
 	}
+
+
+func _normalize_runtime_tool_name(tool_name: String) -> String:
+	var normalized = tool_name.strip_edges()
+	if normalized.begins_with("user_"):
+		normalized = normalized.trim_prefix("user_")
+	return normalized
 
 
 func _append_audit(action: String, authorized: bool, success: bool, payload: Dictionary, error_code: String = "", agent_hint: String = "") -> void:
@@ -341,7 +355,7 @@ func _truncate_audit_log() -> void:
 
 func _build_scaffold(tool_name: String, preview: Dictionary) -> String:
 	return """@tool
-extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
+extends MCPBaseTool
 
 const _SCAFFOLD_VERSION := %s
 
@@ -382,6 +396,26 @@ func execute(tool_name_value: String, args: Dictionary) -> Dictionary:
 			}, "User tool executed")
 		_:
 			return _error("Unknown user tool: %%s" %% tool_name_value)
+
+
+func _success(data = null, message: String = "") -> Dictionary:
+	return {
+		"success": true,
+		"message": message,
+		"data": data
+	}
+
+
+func _error(message: String, data = null, hints: Array = []) -> Dictionary:
+	var result = {
+		"success": false,
+		"error": message
+	}
+	if data != null:
+		result["data"] = data
+	if not hints.is_empty():
+		result["hints"] = hints
+	return result
 """ % [
 		JSON.stringify(SCAFFOLD_VERSION),
 		JSON.stringify(str(preview.get("display_name", _humanize(tool_name)))),
@@ -613,12 +647,21 @@ func _compare_versions(left: String, right: String) -> int:
 
 
 func _normalize_script_path(script_path: String) -> String:
-	var normalized = script_path.replace("\\", "/")
-	if not normalized.begins_with(CUSTOM_TOOLS_DIR + "/"):
+	var normalized = script_path.replace("\\", "/").strip_edges()
+	if normalized.is_empty() or not normalized.ends_with(".gd"):
 		return ""
-	if not normalized.ends_with(".gd"):
+	if not normalized.begins_with("res://") and not normalized.begins_with("user://"):
+		normalized = "res://" + normalized.trim_prefix("/")
+
+	var global_root = ProjectSettings.globalize_path(CUSTOM_TOOLS_DIR).replace("\\", "/")
+	var global_path = ProjectSettings.globalize_path(normalized).replace("\\", "/")
+	if not global_path.begins_with(global_root + "/"):
 		return ""
-	return normalized
+
+	var localized = ProjectSettings.localize_path(global_path).replace("\\", "/")
+	if not localized.begins_with(CUSTOM_TOOLS_DIR + "/"):
+		return ""
+	return localized
 
 
 func _slugify_tool_name(value: String) -> String:

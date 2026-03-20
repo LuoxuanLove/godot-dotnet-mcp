@@ -127,10 +127,17 @@ func get_exposed_tool_definitions() -> Array[Dictionary]:
 	for tool_def in get_tool_definitions():
 		if not _is_exposed_tool_definition(tool_def):
 			continue
-		if not bool(tool_def.get("enabled", true)):
+		if not _as_bool(tool_def.get("enabled", true)):
 			continue
 		definitions.append((tool_def as Dictionary).duplicate(true))
 	return definitions
+
+
+func is_tool_exposed(tool_name: String) -> bool:
+	for tool_def in get_exposed_tool_definitions():
+		if str(tool_def.get("name", "")) == tool_name:
+			return true
+	return false
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
@@ -176,7 +183,7 @@ func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
 			"domain_key": str(entry.get("domain_key", "other")),
 			"source": str(entry.get("source", "builtin")),
 			"script_path": str(entry.get("path", "")),
-			"hot_reloadable": bool(entry.get("hot_reloadable", true)),
+			"hot_reloadable": _as_bool(entry.get("hot_reloadable", true)),
 			"loaded": runtime.get("instance", null) != null,
 			"load_state": _current_load_state(category),
 			"tool_count": defs.size(),
@@ -276,7 +283,7 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 	var elapsed_ms = _elapsed_ms(started_usec)
 	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
 
-	if result is Dictionary and bool(result.get("success", true)):
+	if result is Dictionary and _as_bool(result.get("success", true)):
 		MCPDebugBuffer.record("info", "tool_loader",
 			"%s_%s ok (%.0fms)" % [category, tool_name, elapsed_ms],
 			"%s_%s" % [category, tool_name])
@@ -316,6 +323,9 @@ func tick(delta: float) -> void:
 		var executor = runtime.get("instance", null)
 		if executor != null and executor.has_method("tick"):
 			executor.tick(delta)
+		if category == "user":
+			_sync_user_tool_runtime_definitions(executor)
+			_maybe_unload_idle_user_runtime(executor)
 	var diagnostics_service = get_gdscript_lsp_diagnostics_service()
 	if diagnostics_service != null and diagnostics_service.has_method("tick"):
 		diagnostics_service.tick(delta)
@@ -396,7 +406,7 @@ func reload_domain(category: String) -> Dictionary:
 		}]))
 
 	var entry: Dictionary = _entries_by_category.get(category, {})
-	if not bool(entry.get("hot_reloadable", true)):
+	if not (true if entry.get("hot_reloadable", true) else false):
 		return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
 
 	var old_runtime: Dictionary = _runtime_by_category.get(category, {}).duplicate(true)
@@ -420,6 +430,7 @@ func reload_domain(category: String) -> Dictionary:
 
 	var executor = instantiate_result.get("executor")
 	var version = int(old_runtime.get("version", 0)) + 1
+	var allow_empty_definitions = true if entry.get("allow_empty_definitions", false) else false
 	_runtime_by_category[category] = {
 		"instance": executor,
 		"state": "loaded",
@@ -430,6 +441,18 @@ func reload_domain(category: String) -> Dictionary:
 	}
 	var definitions = _extract_tool_definitions(category, executor)
 	if definitions.is_empty():
+		if allow_empty_definitions:
+			_tool_definitions_by_category[category] = []
+			_sync_load_error_incidents("reload_domain")
+			_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
+			_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
+			MCPDebugBuffer.record("info", "tool_loader",
+				"Domain %s reloaded with no tool definitions (allowed) (%.0fms)" % [category, _elapsed_ms(reload_started)])
+			_refresh_runtime_context()
+			_reset_gdscript_lsp_diagnostics_service()
+			if not _category_has_enabled_tools(category):
+				_unload_runtime(category, "reload_completed_disabled")
+			return _update_reload_status(_make_reload_status("reload_domain", [category], [], [], _elapsed_ms(reload_started)))
 		_record_reload_incident(category, "Reloaded tool domain did not expose any tool definitions", "reload_domain")
 		if not old_runtime.is_empty():
 			_runtime_by_category[category] = old_runtime
@@ -467,7 +490,7 @@ func reload_all_domains() -> Dictionary:
 	var failed: Array = []
 	for category in _ordered_categories:
 		var entry: Dictionary = _entries_by_category.get(category, {})
-		if not bool(entry.get("hot_reloadable", true)):
+		if not _as_bool(entry.get("hot_reloadable", true)):
 			skipped.append(category)
 			continue
 		var status = reload_domain(category)
@@ -479,6 +502,39 @@ func reload_all_domains() -> Dictionary:
 	_reset_gdscript_lsp_diagnostics_service()
 
 	return _update_reload_status(_make_reload_status("reload_all_domains", reloaded, skipped, failed, _elapsed_ms(started_usec)))
+
+
+func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
+	var normalized_path = script_path.strip_edges()
+	if normalized_path.is_empty():
+		return {"success": false, "error": "Missing script path"}
+	if not _entries_by_category.has("user"):
+		return {"success": false, "error": "User domain is not registered"}
+	if not _category_has_enabled_tools("user"):
+		_ensure_runtime_loaded("user", "request_reload_by_script")
+	var runtime: Dictionary = _runtime_by_category.get("user", {})
+	var executor = runtime.get("instance", null)
+	if executor == null or not executor.has_method("request_reload_by_script"):
+		return {"success": false, "error": "User runtime is unavailable"}
+	executor.request_reload_by_script(normalized_path, reason)
+	if executor.has_method("tick"):
+		executor.tick(0.0)
+	_sync_user_tool_runtime_definitions(executor)
+	_refresh_runtime_context()
+	return {
+		"success": true,
+		"script_path": normalized_path,
+		"reason": reason,
+		"runtime_state": executor.get_runtime_state_snapshot() if executor.has_method("get_runtime_state_snapshot") else []
+	}
+
+
+func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
+	var runtime: Dictionary = _runtime_by_category.get("user", {})
+	var executor = runtime.get("instance", null)
+	if executor != null and executor.has_method("get_runtime_state_snapshot"):
+		return executor.get_runtime_state_snapshot()
+	return []
 
 
 func get_disabled_tools() -> Array:
@@ -607,8 +663,6 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
 		if script_resource == null:
 			return {"success": false, "error": "Failed to load tool script"}
-		if script_resource is Script:
-			script_resource.reload()
 		if script_resource is Script and not script_resource.can_instantiate():
 			return {"success": false, "error": "Tool script could not be instantiated [replace_reload_failed]"}
 	if not script_resource.has_method("new"):
@@ -637,39 +691,17 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 func _load_script_resource(path: String, force_reload: bool) -> Resource:
 	var cache_mode = ResourceLoader.CACHE_MODE_REUSE
 	if force_reload:
-		cache_mode = ResourceLoader.CACHE_MODE_IGNORE
-	var script_resource = ResourceLoader.load(path, "", cache_mode)
-	if script_resource is Script and force_reload:
-		_reload_script_dependency_chain(script_resource as Script, {})
-	return script_resource
+		cache_mode = ResourceLoader.CACHE_MODE_REPLACE
+	return ResourceLoader.load(path, "", cache_mode)
 
 
-func _reload_script_dependency_chain(script_resource: Script, visited: Dictionary) -> void:
-	if script_resource == null:
-		return
-
-	var script_path = str(script_resource.resource_path)
-	if not script_path.is_empty():
-		if visited.has(script_path):
-			return
-		visited[script_path] = true
-
-	var base_script = script_resource.get_base_script()
-	if base_script is Script:
-		_reload_script_dependency_chain(base_script as Script, visited)
+func _reload_script_dependency_chain(_script_resource: Script, _visited: Dictionary) -> void:
+	pass
 
 	# Only reload this script if it has GDScript dependencies (parent class or Script
 	# constants) that were themselves reloaded and whose class IDs may have changed.
 	# Scripts with only built-in base classes and no Script constants are already fresh
 	# from CACHE_MODE_IGNORE and do not need reload() — calling it would corrupt them.
-	var needs_reload := base_script is Script
-	for constant_value in script_resource.get_script_constant_map().values():
-		if constant_value is Script:
-			_reload_script_dependency_chain(constant_value as Script, visited)
-			needs_reload = true
-
-	if needs_reload:
-		script_resource.reload()
 
 
 func _extract_tool_definitions(category: String, executor) -> Array:
@@ -800,16 +832,46 @@ func _decorate_tool_definition(category: String, tool_def: Dictionary) -> Dictio
 	decorated["full_name"] = full_name
 	decorated["enabled"] = is_tool_enabled(full_name)
 	decorated["load_state"] = _current_load_state(category)
-	decorated["source"] = str(entry.get("source", "builtin"))
-	decorated["script_path"] = str(entry.get("path", ""))
+	decorated["source"] = str(decorated.get("source", str(entry.get("source", "builtin"))))
+	decorated["domain_script_path"] = str(entry.get("path", ""))
+	decorated["script_path"] = str(decorated.get("script_path", str(entry.get("path", ""))))
 	decorated["domain_key"] = str(entry.get("domain_key", "other"))
 	return decorated
 
 
+func _sync_user_tool_runtime_definitions(executor) -> void:
+	if executor == null or not executor.has_method("get_tools"):
+		return
+	var previous_defs = _tool_definitions_by_category.get("user", [])
+	var next_defs = _extract_tool_definitions("user", executor)
+	if JSON.stringify(previous_defs) == JSON.stringify(next_defs):
+		return
+	_tool_definitions_by_category["user"] = next_defs
+	_refresh_runtime_context()
+
+
+func _maybe_unload_idle_user_runtime(executor) -> void:
+	var runtime: Dictionary = _runtime_by_category.get("user", {})
+	var defs: Array = _tool_definitions_by_category.get("user", [])
+	if executor == null:
+		if defs.is_empty() and not runtime.is_empty():
+			_runtime_by_category.erase("user")
+			_tool_definitions_by_category.erase("user")
+			_refresh_runtime_context()
+		return
+	if not executor.has_method("should_unload_runtime"):
+		return
+	if not _as_bool(executor.should_unload_runtime()):
+		return
+	_runtime_by_category.erase("user")
+	_tool_definitions_by_category.erase("user")
+	_refresh_runtime_context()
+
+
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
-	if bool(tool_def.get("compatibility_alias", false)):
+	if _as_bool(tool_def.get("compatibility_alias", false)):
 		return false
-	return true
+	return str(tool_def.get("category", "")) == "system"
 
 
 func _get_permission_provider():
@@ -825,15 +887,15 @@ func _get_permission_provider():
 func _is_category_visible(category: String) -> bool:
 	var provider = _get_permission_provider()
 	if provider != null and provider.has_method("is_tool_category_visible_for_permission"):
-		return bool(provider.is_tool_category_visible_for_permission(category))
-	return true
+		return _as_bool(provider.is_tool_category_visible_for_permission(category))
+	return false
 
 
 func _is_category_executable(category: String) -> bool:
 	var provider = _get_permission_provider()
 	if provider != null and provider.has_method("is_tool_category_executable_for_permission"):
-		return bool(provider.is_tool_category_executable_for_permission(category))
-	return true
+		return _as_bool(provider.is_tool_category_executable_for_permission(category))
+	return false
 
 
 func _get_permission_error(category: String) -> String:
@@ -841,6 +903,19 @@ func _get_permission_error(category: String) -> String:
 	if provider != null and provider.has_method("get_permission_denied_message_for_category"):
 		return str(provider.get_permission_denied_message_for_category(category))
 	return "Current permission level does not allow this tool category"
+
+
+func _as_bool(value) -> bool:
+	if value is bool:
+		return value
+	if value is int:
+		return value != 0
+	if value is float:
+		return !is_zero_approx(value)
+	if value is String:
+		var normalized = value.strip_edges().to_lower()
+		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
+	return value != null
 
 
 func _current_load_state(category: String) -> String:

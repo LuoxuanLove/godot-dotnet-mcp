@@ -1,126 +1,150 @@
-# Changelog
+# 变更日志
+
+## Unreleased
+
+### Added
+
+- 新增已完成的 `.NET MCP Bridge` 首批能力：包含独立 .NET 8 Bridge 进程、stdio MCP 通道、Windows 自包含发布配置、Bridge-first 插件安装，以及 C# / `.csproj` 读写工具链。
+- 新增 `custom_tools/` 外部落盘自动唤醒：将合法用户工具脚本直接放入 `res://addons/godot_dotnet_mcp/custom_tools/` 后，无需重启 Godot 即可被发现。
+- 新增 User Tool 运行时状态预览：`Tools` 预览中可查看运行时域、版本、状态、待重载、最近错误、发现来源和最近刷新原因。
+
+### Changed
+
+- 完成 User Tool 热重载架构收口：用户工具现在按“单脚本 runtime slot”管理，不再混入 `system` 执行器生命周期。
+- 统一 User Tool 刷新流程：显式拆分为注册表刷新、运行时重载与 UI 重建三个阶段。
+- 调整 `Tools` 页统计口径：只统计系统高层工具与 User Tool，不再把内部原子工具计入可见总数。
+- `Tools` 树继续保留 `系统` 与 `用户` 两个根节点。
+- 对外 MCP 工具继续收敛为 15 个 `system_*` 高层工具，原子工具仅保留为内部依赖。
+- 优化自检展示：区分“最近操作”和“最近告警”，并提供可恢复告警的清除入口。
+
+### Fixed
+
+- 修复 User Tool 运行时生命周期：外部新增、修改、删除、恢复脚本时，无需重启即可正确生效。
+- 修复空 `user` 域清理：删除最后一个 User Tool 后，运行时会正确回到 `uninitialized`。
 
 ## 0.5.0 - 2026-03-19
 
 ### Added
 
-- 新增 GDScript 异步诊断链路：`intelligence_script_analyze(include_diagnostics=true)` 会先返回脚本结构，再基于已保存到磁盘的脚本内容在后台补齐 `diagnostics`；首次调用可能返回 `pending`。
-- 新增运行态健康摘要与详细自检分层：
+- 新增异步 GDScript 诊断：`system_script_analyze(include_diagnostics=true)` 会先返回脚本结构，再基于已保存到磁盘的文件在后台补齐 `diagnostics`；首次调用可能返回 `pending`。
+- 新增运行时健康摘要与详细自检分层：
   - `plugin_runtime_state(action=get_lsp_diagnostics_status)` 作为唯一详细 LSP 自检入口，返回 `loader / service / client`
-  - `intelligence_project_state(include_runtime_health=true)` 返回轻量 `lsp_diagnostics` 健康摘要
-- 新增 `stdio` transport（`plugin/runtime/mcp_stdio_server.gd`），支持标准 `Content-Length` 帧的 stdin/stdout MCP 通道。
-- 扩展结构化修改能力：
-  - `intelligence_scene_patch` 新增 `rename_node`、`update_property`
-  - `intelligence_script_patch` 新增 `replace_method_body`、`delete_member`、`rename_member`
-  - `intelligence_runtime_diagnose` 新增 `include_gd_errors`
+  - `system_project_state(include_runtime_health=true)` 返回轻量 `lsp_diagnostics` 健康摘要
+- 新增 `stdio` 传输层（`plugin/runtime/mcp_stdio_server.gd`），支持标准 `Content-Length` 帧的 stdin/stdout MCP 通道。
+- 扩展结构化编辑能力：
+  - `system_scene_patch` 新增 `rename_node` 与 `update_property`
+  - `system_script_patch` 新增 `replace_method_body`、`delete_member`、`rename_member`
+  - `system_runtime_diagnose` 新增 `include_gd_errors`
 
 ### Changed
 
-- `intelligence_script_analyze(include_diagnostics=true)` 改为“结构信息即时返回，LSP 诊断后台补齐”的模式，不再同步阻塞等待 `publishDiagnostics`。
-- `/api/tools`、MCP `tools/list` 与 Dock Tools 页统一基于同一份“当前可见工具集合”生成；兼容别名继续可调用，但不再作为主展示入口。
-- GDScript LSP diagnostics service 统一由 `tool_loader` 持有并跨 `reload_domain`、`reload_all_domains`、`soft_reload_plugin` 接管生命周期，减少旧实例残留和热重载漂移。
-- 运行态文档与对外说明统一收口到 `plugin_runtime_state`、`intelligence_project_state` 与最新路由行为。
+- `system_script_analyze(include_diagnostics=true)` 改为“结构先返回、诊断后补齐”的模式，不再阻塞等待 `publishDiagnostics`。
+- `/api/tools`、MCP `tools/list` 与 Dock Tools 统一基于同一份可见工具集生成；兼容别名仍可调用，但不再作为主展示入口。
+- GDScript LSP diagnostics 服务由 `tool_loader` 统一持有，并跨 `reload_domain`、`reload_all_domains`、`soft_reload_plugin` 接管生命周期，减少旧实例残留。
+- 运行时说明与对外文档统一围绕 `plugin_runtime_state`、`system_project_state` 和当前路由行为收口。
 
 ### Fixed
 
-- 修复 `soft_reload_plugin` 后偶发出现的“HTTP 服务仍在线，但工具注册表为空”问题；现在会重建 server/controller 与 tool loader，恢复 `/health`、`/api/tools` 和 `tools/call` 的一致性。
-- 修复 Tools 页树形折叠状态在递归展开/收起过程中的持久化错位问题，根节点与 `atomic` 层现在会随统一状态模型正确回填，不再出现回弹或需要重复 Shift 点击的情况。
+- 修复 `soft_reload_plugin` 偶发出现的“HTTP 服务仍在线但工具注册表为空”问题；现在会一起重建 server/controller 与 tool loader，保持 `/health`、`/api/tools` 与 `tools/call` 一致。
+- 修复 Tools 树在递归展开/折叠后的状态回填错乱；根节点与 `atomic` 层现在会按统一状态模型正确恢复，不再反复回弹。
 
 ## 0.4.0 - 2026-03-17
 
 ### Added
 
-- 新增 Intelligence 工具层，提供 15 个面向项目推理和操作的高层工具，分为四类：
-  - **项目级（6 个）**：`intelligence_project_state`、`intelligence_project_advise`、`intelligence_project_configure`、`intelligence_project_run`、`intelligence_project_stop`、`intelligence_runtime_diagnose`
-  - **场景级（3 个）**：`intelligence_scene_validate`、`intelligence_scene_analyze`、`intelligence_scene_patch`
-  - **脚本级（3 个）**：`intelligence_bindings_audit`、`intelligence_script_analyze`、`intelligence_script_patch`
-  - **索引级（3 个）**：`intelligence_project_index_build`、`intelligence_project_symbol_search`、`intelligence_scene_dependency_graph`
-- 新增 Atomic Bridge 调度层，把 Intelligence 工具与底层原子工具解耦，支持工具链组合调用。
-- 新增用户自定义工具接入规范：`custom_tools/` 目录下的脚本需要使用 `user_*` 前缀，并实现 `handles()` / `get_tools()` / `execute()` 接口，可通过 bridge 共享调度能力。
-- 新增插件目录写保护机制（`PLUGIN_PROTECTED_PATHS`），防止工具对插件自身文件的非授权修改。
-- 补充 9 种语言（de/en/es/fr/ja/pt/ru/zh_cn/zh_tw）的 Intelligence 工具本地化文案。
+- 新增 System 工具层，提供 15 个面向项目级推理与操作的高层工具，分为四类：
+  - **Project（6）**：`system_project_state`、`system_project_advise`、`system_project_configure`、`system_project_run`、`system_project_stop`、`system_runtime_diagnose`
+  - **Scene（3）**：`system_scene_validate`、`system_scene_analyze`、`system_scene_patch`
+  - **Script（3）**：`system_bindings_audit`、`system_script_analyze`、`system_script_patch`
+  - **Index（3）**：`system_project_index_build`、`system_project_symbol_search`、`system_scene_dependency_graph`
+- 新增 Atomic Bridge 调度层，用于连接 System 工具与底层原子工具并支持工具链组合。
+- 新增用户自定义工具集成：放置在 `custom_tools/` 下的工具需要使用 `user_*` 前缀，并实现 `handles()`、`get_tools()` 与 `execute()`。
+- 新增插件目录写保护（`PLUGIN_PROTECTED_PATHS`），防止插件自有文件被未授权修改。
+- 新增 9 种语言的 System 文档本地化：de/en/es/fr/ja/pt/ru/zh_cn/zh_tw。
 
 ### Changed
 
-- 重构 `Tools` 页工具树：顶层直接展示 Intelligence 工具，每个工具下可展开查看依赖的原子工具链，原子工具还可以进一步展开到 Action 子节点。
-- 新增工具树 `Shift+点击` 递归展开/折叠，以及右键上下文菜单（复制工具名 / Schema / 删除用户工具）。
-- 全面优化 `MCPDebugBuffer` 日志系统：统一 source 命名规范，`_log()` 支持等级参数（trace/debug/info/warning/error），并在 `tool_loader`、`intelligence`、`atomic_bridge`、`impl_*` 各层补齐关键日志点。
-- 将仓库目录结构调整为符合 Godot Asset Library 规范的 `addons/godot_dotnet_mcp/` 布局，并添加 `.gitattributes` 控制 ZIP 分发内容。
+- 重构 `Tools` 页树结构：顶层直接显示 System 工具，每个工具可展开查看其依赖的原子工具链，原子工具还可继续展开到 Action 节点。
+- 新增 `Shift` 递归展开/折叠，以及右键菜单（复制工具名、Schema、删除用户工具）。
+- 重构 `MCPDebugBuffer` 日志系统：统一 source 命名、增加日志级别（`trace/debug/info/warning/error`），并补齐 `tool_loader`、`system`、`atomic_bridge`、`impl_*` 的关键日志点。
+- 仓库目录重组为 Godot Asset Library 规范的 `addons/godot_dotnet_mcp/` 布局，并新增 `.gitattributes` 控制发布 ZIP 内容。
 
 ### Removed
 
-- 移除 `Tools` 页 Profile 预设管理 UI（Profile 下拉、保存/删除 Profile 对话框），Profile 管理由 `plugin_developer_*` 工具组通过 MCP 完成。
-- 暂时移除 `Tools` 页用户工具管理 UI；用户工具的创建、删除与恢复目前统一通过 `plugin_evolution_*` 工具组完成，后续版本会继续补回 UI 管理入口。
+- 移除 `Tools` 页 Profile 预设管理 UI；Profile 管理迁移到 `plugin_developer_*` 工具组中通过 MCP 完成。
+- 暂时移除 `Tools` 页用户工具管理 UI；用户工具的创建、删除与恢复目前统一通过 `plugin_evolution_*` 工具组完成，后续版本可能恢复独立 UI。
 
 ### Fixed
 
-- 修复全量 MCP 工具中 `array` 类型定义缺少 `items` 属性导致的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
-- 修复 `editor_status` 和 `node_transform` 工具对非法参数类型静默通过的问题，增强输入校验的鲁棒性。
+- 修复多项 MCP 工具在 `array` 类型参数缺少 `items` 定义时触发的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
+- 修复 `editor_status` 与 `node_transform` 对非法参数类型过于宽松的问题，增强输入校验鲁棒性。
 
 ## 0.3.0 - 2026-03-12
 
 ### Added
 
-- 新增 Godot .NET / C# 工作流能力：`.csproj` 解析、模板化 C# 脚本写入、跨文件脚本引用索引，以及 `dotnet restore/build` 结构化诊断。
-- 新增运行时与插件自身的结构化诊断链路，覆盖运行时错误上下文、编译错误定位联动、插件自检摘要、错误时间线与健康状态查询。
-- 新增用户工具治理能力，包括脚手架版本化与兼容性检查、审计过滤与会话标识、删除前备份与最近一次恢复入口。
-- 新增工具调用统计回读，可按调用次数和最近调用时间查看工具使用情况。
-- 新增工具配置导入导出能力，支持 profile 和 disabled tools 的 JSON round-trip。
-- 新增完整技术文档体系，补齐架构、界面、模块和附录分层文档。
+- 新增 Godot .NET / C# 工作流支持：`.csproj` 解析、模板化 C# 脚本写入、跨文件脚本引用索引，以及基于 `dotnet restore/build` 的结构化诊断。
+- 新增运行时与插件自检能力，覆盖运行时错误上下文、编译错误定位、插件自检摘要、错误时间线与健康查询。
+- 新增用户工具治理能力，包括脚手架版本化与兼容性检查、审计过滤与会话标识、删除前备份与最近恢复入口。
+- 新增工具使用统计，可查看调用次数与最近调用时间。
+- 新增工具配置导入导出，支持 profile 与 disabled tools 的 JSON 往返。
+- 新增完整技术文档体系，覆盖架构、界面、模块与附录。
 
 ### Changed
 
-- 收口 Dock 内插件自检的展示位置，统一放到 `Server` 页开头，减少跨页重复信息。
-- 重构 `Tools` 页的树形交互和信息层次，收口搜索、tooltip、状态标记、预览面板、拖动分界和 profile 操作链路。
-- 补齐分类、工具说明和提示信息的多语言内容，减少非英文环境下的未翻译标识暴露。
-- 对 `README`、中文说明和安装发布文档做了同步收口，使首次接入、安装和配置流程更直接。
+- 将 Dock 中的插件自检摘要统一移动到 `Server` 页顶部，减少跨页重复信息。
+- 重构 `Tools` 页的树形交互与信息层次，收口搜索、tooltip、状态标记、预览面板、拖动分隔与 profile 操作链路。
+- 补齐新增分类、工具说明与提示的本地化资源。
+- 将公开版本号提升到 `0.3.0`，并同步插件元数据与运行时版本字符串。
 
 ### Fixed
 
-- 修复 `Tools` 页在折叠和重建过程中出现的 `Tree blocked / 空实体` 报错，减少 Dock 使用时的中断和连锁错误。
-
-### Known Limitations
-
-- 当前主项目调试回读更适合读取结构化状态和基础生命周期信息，仍不是 Godot 原生 Output / Debugger 面板的全量镜像。
-- 如果项目中已经存在同名 `MCPRuntimeBridge` Autoload，插件不会强行覆盖该设置，相关运行时回读能力会表现为未接入状态。
+- 修复兼容执行器聚合导致的重复插件注册，保留 `plugin_runtime`、`plugin_evolution`、`plugin_developer` 三个独立入口。
+- 修复继承脚本热重载不完整导致的工具域加载缺失，恢复 `script` 域及其扩展工具的稳定发现。
+- 修复插件启停与运行时重载期间 HTTP 传输中断的问题，将软重载改为延迟调度。
 
 ## 0.2.0 - 2026-03-11
 
 ### Added
 
-- 新增主项目运行时回读能力，可在 Godot 编辑器启动和停止主项目后，通过 `debug_runtime_bridge` 查看最近一次调试会话状态与基础生命周期事件。
-- 新增更完整的插件治理能力，包括运行时控制、自进化工具管理、开发者工具入口，以及对应的内嵌使用指南。
-- 新增插件权限级别与授权边界，方便在稳定使用、自进化扩展和开发调试之间做清晰隔离。
-- 新增 `User` 分类相关管理能力，便于发现、审查和清理用户侧扩展工具。
+- 新增主项目运行时回读能力，可通过 `debug_runtime_bridge` 追踪 Godot 编辑器启动/停止后的调试会话状态。
+- 新增更完整的插件治理层，包括运行时控制、自动化工具管理、开发者入口与使用引导。
+- 新增插件权限级别与授权边界，用于区分稳定使用、自我扩展与开发调试。
+- 新增 `User` 分类管理支持，便于发现、审计与清理用户侧扩展工具。
 
 ### Changed
 
-- 重新整理工具分组与插件分类，降低单一工具入口承载过多 action 的问题，整体可发现性和可读性更好。
-- 收口 Dock 界面布局和文案，重点优化 Server、Config、Tools 页签在窄宽度下的可用性与信息层次。
-- 补齐新增分类、工具说明和提示信息的多语言内容，减少非英文环境下的未翻译标识暴露。
-- 对 `README`、中文说明和安装发布文档做了同步收口，使首次接入、安装和配置流程更直接。
+- 重新整理工具分组与插件分类，减少单个工具入口暴露过多动作的问题，提升可发现性。
+- 简化 Dock 界面布局与文档，重点优化 `Server`、`Config`、`Tools` 在窄宽度下的可用性。
+- 补充更多分类、工具说明与提示的多语言内容，减少未翻译标记。
+- 同步 `README`、中文 README 与发布文档，使首次接入、安装与配置流程保持一致。
 
 ### Fixed
 
-- 修复兼容执行器聚合器导致的 `plugin` 重复注册问题，保留细粒度的 `plugin_runtime`、`plugin_evolution`、`plugin_developer` 入口。
-- 修复 `tool_loader` 在继承脚本热重载不完整时导致的工具域漏加载问题，恢复 `script` 域及相关扩展工具的稳定发现。
-- 修复插件启停和运行时重载过程中 HTTP transport 被提前中断的问题，软重载现在延迟执行。
+- 修复兼容执行器聚合器导致的 `plugin` 重复注册，保留 `plugin_runtime`、`plugin_evolution`、`plugin_developer` 入口。
+- 修复 `tool_loader` 未完整热重载继承脚本时导致的工具域漏加载，恢复 `script` 域及相关扩展工具的稳定发现。
+- 修复插件启停与运行时重载过程中 HTTP 传输被提前中断的问题，将软重载改为延迟执行。
+
+### Known Limitations
+
+- 当前运行时回读更适合读取结构化状态与生命周期信息，而不是完整镜像 Godot 原生 Output / Debugger 面板。
+- 如果项目中已存在同名 `MCPRuntimeBridge` Autoload，插件不会强制覆盖该设置，相关运行时回读会显示为未安装。
 
 ## 0.1.0 - 2026-03-11
 
 ### Added
 
-- 首个正式对外发布版本。
-- Dock 化配置界面与工具 profile 管理。
+- 首个公开发布版本。
+- 基于 Dock 的配置界面与工具 Profile 管理。
 - 75 个顶层 MCP 工具。
-- 场景、节点、资源、脚本、动画、材质、TileMap、导航、物理、音频、UI 等能力域。
+- 场景、节点、资源、脚本、动画、材质、TileMap、导航、物理、音频与 UI 能力。
 - Godot .NET / C# 场景绑定分析与导出成员审计。
-- TileSet 最小闭环：`create_empty`、`assign_to_tilemap`。
-- 调试事件缓冲区与基础诊断回读工具。
-- 受控临时场景目录与场景保存链路收口。
+- TileSet 最小闭环支持：`create_empty` 与 `assign_to_tilemap`。
+- 调试事件缓冲与基础运行时诊断回读工具。
+- 受控的临时场景目录与场景保存链路。
 - 继承感知的资源类型过滤。
 - 安装与发布打包文档。
 
 ### Known Limitations
 
-- `/root/...` 路径兼容补丁已落地，但最终黑盒行为仍取决于插件重载后的稳定性确认。
+- `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。

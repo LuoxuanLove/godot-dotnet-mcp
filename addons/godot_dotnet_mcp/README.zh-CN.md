@@ -7,17 +7,17 @@
 
 ## 这是什么
 
-嵌入 Godot 编辑器进程的 MCP 服务端。调用 `intelligence_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再用 `intelligence_project_advise` 获取具体可执行的改进建议。之后根据建议，用场景、脚本、节点或资源工具做精准修改。
+嵌入 Godot 编辑器进程的 MCP 服务端。调用 `system_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再用 `system_project_advise` 获取具体可执行的改进建议。之后根据建议，用场景、脚本、节点或资源工具做精准修改。
 
-Intelligence 层（15 个内置工具）是 Agent 的推荐起点，覆盖项目快照、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
+系统层（15 个内置工具）是 Agent 的推荐起点，覆盖项目快照、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
 
 如需扩展工具集：在 `custom_tools/` 中放置 `.gd` 文件，实现 `handles / get_tools / execute`，工具名统一以 `user_` 开头。插件自动发现并加载。`plugin_evolution` 工具组负责脚手架、审计和删除。
 
 ## 为什么用这个插件
 
 - **运行在编辑器内部**：在 Godot 进程中运行，场景查询、脚本读取和属性修改直接反映编辑器的真实状态。
-- **Godot.NET 优先**：C# 绑定检查（`intelligence_bindings_audit`）、导出成员分析、`.cs` 脚本修补均内置，不是附加功能。
-- **Intelligence 优先**：`intelligence_project_state` → `intelligence_project_advise` → 具体操作，是设计好的工作流，不需要猜从哪个原子工具入手。
+- **Godot.NET 优先**：C# 绑定检查（`system_bindings_audit`）、导出成员分析、`.cs` 脚本修补均内置，不是附加功能。
+- **系统优先**：`system_project_state` → `system_project_advise` → 具体操作，是设计好的工作流，不需要猜从哪个原子工具入手。
 - **可用户扩展**：`custom_tools/` 中的脚本作为一等工具加载，无需重建插件。`plugin_evolution` 管理全生命周期。
 
 ## 环境要求
@@ -124,7 +124,7 @@ POST http://127.0.0.1:3000/mcp
 
 ### 4. 读取最近一次主项目运行状态
 
-使用 `intelligence_runtime_diagnose` 读取最近一次由编辑器启动的运行时信息——错误、编译问题、性能数据。主项目停止后仍可读取。
+使用 `system_runtime_diagnose` 读取最近一次由编辑器启动的运行时信息——错误、编译问题、性能数据。主项目停止后仍可读取。
 
 ## 路径约定
 
@@ -138,7 +138,7 @@ POST http://127.0.0.1:3000/mcp
 - [README.md](README.md)
 - [CHANGELOG.md](CHANGELOG.md)
 - [docs/概述.md](docs/%E6%A6%82%E8%BF%B0.md)
-- [docs/模块/Intelligence工具层.md](docs/%E6%A8%A1%E5%9D%97/Intelligence%E5%B7%A5%E5%85%B7%E5%B1%82.md)
+- [docs/模块/System工具层.md](docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
 - [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
 - [docs/模块/用户扩展.md](docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
 - [docs/架构/服务与路由.md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
@@ -148,6 +148,6 @@ POST http://127.0.0.1:3000/mcp
 ## 当前边界
 
 - 当前调试回读支持主项目运行时桥接事件与编辑器调试会话状态，但不是 Godot 原生 Output / Debugger 面板的 1:1 文本镜像
-- 读取运行时状态推荐使用 `intelligence_runtime_diagnose`
+- 读取运行时状态推荐使用 `system_runtime_diagnose`
 - 最近一次捕获的会话状态与生命周期事件在主项目停止后仍可读取；若要观察实时新增事件，仍需保持主项目运行
 - 依赖编辑器实时状态的能力建议在真实项目工作流中做一次验证

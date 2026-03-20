@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cxcsjc8225x3f"]
 
-[ext_resource type="Script" uid="uid://dgj3nw3kbbfdq" path="res://addons/godot_dotnet_mcp/ui/tools_tab.gd" id="1"]
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/tools_tab.gd" id="1"]
 
 [sub_resource type="Shader" id="Shader_pyddu"]
 code = "

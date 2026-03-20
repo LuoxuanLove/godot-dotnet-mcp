@@ -907,10 +907,11 @@ func _load_language_translations(file_path: String):
 	if lang_script == null:
 		return {}
 
-	if lang_script.has_method("get_translations"):
-		return lang_script.call("get_translations")
+	var translations = lang_script.get("TRANSLATIONS")
+	if translations is Dictionary:
+		return (translations as Dictionary).duplicate(true)
 
-	return lang_script.get("TRANSLATIONS")
+	return {}
 
 
 func _build_language_map(base_translations, supplemental_translations) -> Dictionary:

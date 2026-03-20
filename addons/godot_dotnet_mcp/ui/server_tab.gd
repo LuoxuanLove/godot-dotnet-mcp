@@ -2,7 +2,6 @@
 extends VBoxContainer
 
 signal port_changed(value: int)
-signal auto_start_toggled(enabled: bool)
 signal log_level_changed(level: String)
 signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
@@ -13,11 +12,13 @@ signal full_reload_requested
 signal bridge_install_requested
 signal bridge_validate_requested
 signal bridge_clear_requested
+signal clear_self_diagnostics_requested
 signal copy_requested(text: String, source: String)
 
 @onready var _self_diag_title: Label = %SelfDiagnosticsTitle
 @onready var _self_diag_badge: Label = %SelfDiagnosticsBadge
 @onready var _self_diag_copy_button: Button = %SelfDiagnosticsCopyButton
+@onready var _self_diag_clear_button: Button = %SelfDiagnosticsClearButton
 @onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
 @onready var _self_diag_details: Label = %SelfDiagnosticsDetails
 @onready var _self_diag_divider: HSeparator = %SelfDiagnosticsDivider
@@ -43,7 +44,6 @@ signal copy_requested(text: String, source: String)
 @onready var _requests_value: Label = %RequestsValue
 @onready var _last_request_value: Label = %LastRequestValue
 @onready var _port_spin: SpinBox = %PortSpin
-@onready var _auto_start_check: CheckBox = %AutoStartCheck
 @onready var _log_level_label: Label = %LogLevelLabel
 @onready var _log_level_option: OptionButton = %LogLevelOption
 @onready var _permission_level_label: Label = %PermissionLevelLabel
@@ -76,7 +76,6 @@ func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	resized.connect(_on_resized)
 	_port_spin.value_changed.connect(_on_port_spin_changed)
-	_auto_start_check.toggled.connect(_on_auto_start_check_toggled)
 	_log_level_option.item_selected.connect(_on_log_level_option_selected)
 	_permission_level_option.item_selected.connect(_on_permission_level_option_selected)
 	_language_option.item_selected.connect(_on_language_option_selected)
@@ -87,6 +86,7 @@ func _ready() -> void:
 	_bridge_validate_button.pressed.connect(_on_bridge_validate_button_pressed)
 	_bridge_clear_button.pressed.connect(_on_bridge_clear_button_pressed)
 	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
+	_self_diag_clear_button.pressed.connect(_on_self_diag_clear_pressed)
 
 
 func apply_model(model: Dictionary) -> void:
@@ -119,7 +119,6 @@ func apply_model(model: Dictionary) -> void:
 	_log_level_label.text = localization.get_text("log_level")
 	_permission_level_label.text = localization.get_text("permission_level")
 	_language_label.text = localization.get_text("language")
-	_auto_start_check.text = localization.get_text("auto_start")
 
 	_state_value.text = _build_overview_health_text(self_diagnostics, localization)
 	_endpoint_value.text = _build_overview_service_text(is_running, settings, localization)
@@ -128,7 +127,6 @@ func apply_model(model: Dictionary) -> void:
 	_last_request_value.text = _build_overview_activity_text(stats, localization)
 
 	_port_spin.set_value_no_signal(int(settings.get("port", 3000)))
-	_auto_start_check.set_pressed_no_signal(bool(settings.get("auto_start", true)))
 	_log_level_syncing = true
 	_log_level_option.clear()
 	var current_log_level = str(model.get("current_log_level", "info"))
@@ -337,10 +335,6 @@ func _on_permission_level_option_selected(index: int) -> void:
 	if _permission_level_syncing:
 		return
 	permission_level_changed.emit(str(_permission_level_option.get_item_metadata(index)))
-
-
-func _on_auto_start_check_toggled(pressed: bool) -> void:
-	auto_start_toggled.emit(pressed)
 
 
 func _on_start_button_pressed() -> void:
@@ -560,8 +554,6 @@ func _apply_responsive_layout() -> void:
 	_permission_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 	_language_option.custom_minimum_size.y = 32.0 * scale
 	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_auto_start_check.custom_minimum_size.x = content_width
-	_auto_start_check.custom_minimum_size.y = 32.0 * scale
 
 	var button_width = content_width if overview_buttons.columns == 1 else (content_width - row_spacing * float(overview_buttons.columns - 1)) / float(overview_buttons.columns)
 	for button in [_start_button, _restart_button, _full_reload_button]:
@@ -573,8 +565,9 @@ func _apply_responsive_layout() -> void:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = content_width if overview_buttons.columns == 1 else button_width
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
-	_self_diag_copy_button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
-	_self_diag_copy_button.custom_minimum_size.x = 72.0 * scale
+	for button in [_self_diag_copy_button, _self_diag_clear_button]:
+		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+		button.custom_minimum_size.x = 72.0 * scale
 
 
 func _on_resized() -> void:
@@ -586,11 +579,13 @@ func _apply_self_diagnostics(model: Dictionary, localization) -> void:
 	_self_diag_copy_text = str(model.get("self_diagnostic_copy_text", ""))
 	_self_diag_title.text = localization.get_text("self_diag_title")
 	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
+	_self_diag_clear_button.text = localization.get_text("self_diag_clear")
 
 	if not (diagnostics is Dictionary) or (diagnostics as Dictionary).is_empty():
 		_self_diag_badge.text = ""
 		_self_diag_summary.text = localization.get_text("self_diag_empty")
 		_self_diag_details.text = ""
+		_self_diag_clear_button.disabled = true
 		return
 
 	var diag := diagnostics as Dictionary
@@ -600,22 +595,32 @@ func _apply_self_diagnostics(model: Dictionary, localization) -> void:
 	_self_diag_badge.add_theme_color_override("font_color", badge_color)
 
 	var active_incidents = int(diag.get("active_incident_count", 0))
+	_self_diag_clear_button.disabled = active_incidents <= 0
 	var tool_loader = diag.get("tool_loader", {})
 	var tool_load_error_count = 0
 	if tool_loader is Dictionary:
 		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
 	var last_operation_text = localization.get_text("self_diag_last_operation_none")
+	var latest_incident_text = localization.get_text("self_diag_latest_incident_none")
 	var last_operation = diag.get("last_operation", {})
 	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
 		last_operation_text = "%s (%s ms)" % [
 			str((last_operation as Dictionary).get("kind", "")),
 			str((last_operation as Dictionary).get("duration_ms", 0.0))
 		]
+	var latest_incident = diag.get("latest_incident", {})
+	if latest_incident is Dictionary and not (latest_incident as Dictionary).is_empty():
+		var latest_incident_dict := latest_incident as Dictionary
+		latest_incident_text = "%s | %s" % [
+			_get_self_diag_code_text(str(latest_incident_dict.get("code", "")), localization),
+			str(latest_incident_dict.get("message", ""))
+		]
 
-	_self_diag_summary.text = "%s | %s | %s" % [
+	_self_diag_summary.text = "%s | %s | %s | %s" % [
 		localization.get_text("self_diag_active_incidents") % active_incidents,
 		localization.get_text("self_diag_tool_load_errors") % tool_load_error_count,
-		localization.get_text("self_diag_last_operation") % last_operation_text
+		localization.get_text("self_diag_last_operation") % last_operation_text,
+		localization.get_text("self_diag_latest_incident") % latest_incident_text
 	]
 
 	var recent_lines: Array[String] = []
@@ -672,3 +677,7 @@ func _on_self_diag_copy_pressed() -> void:
 	if _self_diag_copy_text.is_empty():
 		return
 	copy_requested.emit(_self_diag_copy_text, "Plugin Self Diagnostics")
+
+
+func _on_self_diag_clear_pressed() -> void:
+	clear_self_diagnostics_requested.emit()

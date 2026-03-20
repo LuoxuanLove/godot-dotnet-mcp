@@ -848,29 +848,7 @@ func _list_autoloads() -> Dictionary:
 
 
 func _add_autoload(name: String, path: String) -> Dictionary:
-	if name.is_empty():
-		return _error("Autoload name is required")
-	if path.is_empty():
-		return _error("Path is required")
-
-	if not path.begins_with("res://"):
-		path = "res://" + path
-
-	var setting_path = "autoload/" + name
-	if ProjectSettings.has_setting(setting_path):
-		return _error("Autoload already exists: %s" % name)
-
-	# Add with singleton prefix
-	ProjectSettings.set_setting(setting_path, "*" + path)
-
-	var error = ProjectSettings.save()
-	if error != OK:
-		return _error("Failed to save project settings")
-
-	return _success({
-		"name": name,
-		"path": path
-	}, "Autoload added")
+	return _error("Adding autoloads through MCP is disabled for safety")
 
 
 func _remove_autoload(name: String) -> Dictionary:

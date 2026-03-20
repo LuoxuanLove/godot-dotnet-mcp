@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-## Intelligence implementation: bindings_audit, script_analyze, script_patch
+## System implementation: bindings_audit, script_analyze, script_patch
 
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
@@ -18,7 +18,7 @@ func handles(tool_name: String) -> bool:
 
 func configure_runtime(_context: Dictionary) -> void:
 	_tool_loader_context = _context.get("tool_loader", null)
-	MCPDebugBuffer.record("info", "intelligence",
+	MCPDebugBuffer.record("info", "system",
 		"impl_script configure_runtime tool_loader=%s" % str(_tool_loader_context != null))
 
 
@@ -84,7 +84,7 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	MCPDebugBuffer.record("debug", "intelligence", "tool: %s" % tool_name)
+	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
 		"bindings_audit": return _execute_bindings_audit(args)
 		"script_analyze": return _execute_script_analyze(args)
@@ -93,7 +93,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 func tick(delta: float) -> void:
-	MCPDebugBuffer.record("info", "intelligence", "executor tick loader=%s" % str(_tool_loader_context != null))
+	MCPDebugBuffer.record("info", "system", "executor tick loader=%s" % str(_tool_loader_context != null))
 
 
 # --- private helpers ---
@@ -293,18 +293,18 @@ func _execute_bindings_audit(args: Dictionary) -> Dictionary:
 	if not target_script.is_empty():
 		if not target_script.ends_with(".cs"):
 			return bridge.error("bindings_audit only supports C# scripts (.cs)")
-		MCPDebugBuffer.record("debug", "intelligence",
+		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: script=%s" % target_script)
 		results.append(_audit_script(target_script, include_warnings))
 	elif not target_scene.is_empty():
 		if not target_scene.ends_with(".tscn"):
 			return bridge.error("scene must be a .tscn file")
-		MCPDebugBuffer.record("debug", "intelligence",
+		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: scene=%s" % target_scene)
 		results.append(_audit_scene(target_scene, include_warnings))
 	else:
 		var cs_scripts: Array = bridge.collect_files("*.cs")
-		MCPDebugBuffer.record("debug", "intelligence",
+		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: scanning %d C# scripts" % cs_scripts.size())
 		for sp in cs_scripts:
 			results.append(_audit_script(str(sp), include_warnings))
@@ -334,10 +334,10 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
 		return bridge.error("script must be a .gd or .cs file")
 	if not FileAccess.file_exists(script_path):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"script_analyze: file not found: %s" % script_path)
 		return bridge.error("Script file not found: %s" % script_path)
-	MCPDebugBuffer.record("debug", "intelligence", "script_analyze: %s" % script_path)
+	MCPDebugBuffer.record("debug", "system", "script_analyze: %s" % script_path)
 
 	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
 	var symbols_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_symbols", {"path": script_path}))
@@ -397,11 +397,11 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 	}
 
 	if include_diagnostics and script_path.ends_with(".gd"):
-		MCPDebugBuffer.record("info", "intelligence",
+		MCPDebugBuffer.record("info", "system",
 			"script_analyze diagnostics branch entered: %s" % script_path)
 		var diagnostics_source := FileAccess.get_file_as_string(script_path)
 		var diagnostics_service = _get_gdscript_lsp_diagnostics_service()
-		MCPDebugBuffer.record("info", "intelligence",
+		MCPDebugBuffer.record("info", "system",
 			"script_analyze diagnostics loader=%s service=%s" % [
 				str(bridge != null and bridge.has_method("get_tool_loader") and bridge.get_tool_loader() != null),
 				str(diagnostics_service != null)
@@ -427,7 +427,7 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 				"warning_count": 0,
 				"note": "Diagnostics are being resolved in the background from saved file content on disk."
 			}
-		MCPDebugBuffer.record("info", "intelligence",
+		MCPDebugBuffer.record("info", "system",
 			"script_analyze diagnostics state=%s pending=%s available=%s" % [
 				str(diagnostics_result.get("state", "unknown")),
 				str(bool(diagnostics_result.get("pending", false))),
@@ -450,10 +450,10 @@ func _execute_script_patch(args: Dictionary) -> Dictionary:
 	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
 		return bridge.error("script must be a .gd or .cs file")
 	if not FileAccess.file_exists(script_path):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"script_patch: file not found: %s" % script_path)
 		return bridge.error("Script file not found: %s" % script_path)
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"script_patch: %s, dry_run=%s, ops=%d" % [script_path, str(dry_run), (ops_raw as Array).size() if ops_raw is Array else 0])
 	if not (ops_raw is Array) or (ops_raw as Array).is_empty():
 		return bridge.error("ops must be a non-empty array")

@@ -11,6 +11,7 @@ const BridgeInstallServiceScript = preload("res://addons/godot_dotnet_mcp/plugin
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -28,6 +29,7 @@ var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
 var _user_tool_service := UserToolService.new()
+var _user_tool_watch_service := UserToolWatchService.new()
 var _bridge_install_service: BridgeInstallService
 var _localization: LocalizationService
 var _dock: Control
@@ -50,6 +52,7 @@ func _enter_tree() -> void:
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
 
 	_attach_server_controller()
+	_configure_user_tool_watch_service()
 	_ensure_runtime_bridge_autoload()
 	_install_editor_debugger_bridge()
 
@@ -72,6 +75,8 @@ func _exit_tree() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_exit_tree", "_exit_tree")
 	set_process(false)
 	_save_settings()
+	if _user_tool_watch_service != null:
+		_user_tool_watch_service.stop()
 	_remove_dock()
 	_remove_bridge_install_dialog()
 	_uninstall_editor_debugger_bridge()
@@ -79,6 +84,7 @@ func _exit_tree() -> void:
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
+	_user_tool_watch_service = null
 	_config_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -104,6 +110,8 @@ func _validate_permission_configuration() -> void:
 
 
 func _process(delta: float) -> void:
+	if _user_tool_watch_service != null:
+		_user_tool_watch_service.tick()
 	_status_poll_accumulator += delta
 	if _status_poll_accumulator >= 0.5:
 		_status_poll_accumulator = 0.0
@@ -163,6 +171,7 @@ func _recreate_server_controller() -> void:
 	_dispose_server_controller()
 	_server_controller = ServerRuntimeController.new()
 	_attach_server_controller()
+	_configure_user_tool_watch_service()
 
 
 func _load_state() -> void:
@@ -173,6 +182,7 @@ func _load_state() -> void:
 		PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS
 	)
 	_state.settings = load_result["settings"]
+	_state.settings["auto_start"] = true
 	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
 	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
 
@@ -395,6 +405,14 @@ func _on_bridge_clear_requested() -> void:
 		_show_bridge_install_feedback("bridge_install_cleared", str(result.get("message", "Bridge registration cleared.")))
 
 
+func _on_clear_self_diagnostics_requested() -> void:
+	var result = clear_self_diagnostics_from_tools()
+	if bool(result.get("success", false)):
+		_show_message(_localization.get_text("self_diag_cleared"))
+		return
+	_show_message(str(result.get("error", _localization.get_text("self_diag_clear_failed"))))
+
+
 func _on_bridge_install_file_selected(path: String) -> void:
 	var bridge_install_service = _get_bridge_install_service()
 	var result = bridge_install_service.register_executable(_state.settings, path, "plugin_file_dialog")
@@ -469,7 +487,6 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	var connected = true
 	connected = _connect_dock_signal("current_tab_changed", _on_current_tab_changed, operation_id) and connected
 	connected = _connect_dock_signal("port_changed", _on_port_changed, operation_id) and connected
-	connected = _connect_dock_signal("auto_start_toggled", _on_auto_start_toggled, operation_id) and connected
 	connected = _connect_dock_signal("log_level_changed", _on_log_level_changed, operation_id) and connected
 	connected = _connect_dock_signal("permission_level_changed", _on_permission_level_changed, operation_id) and connected
 	connected = _connect_dock_signal("language_changed", _on_language_changed, operation_id) and connected
@@ -480,6 +497,7 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("bridge_install_requested", _on_bridge_install_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_validate_requested", _on_bridge_validate_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_clear_requested", _on_bridge_clear_requested, operation_id) and connected
+	connected = _connect_dock_signal("clear_self_diagnostics_requested", _on_clear_self_diagnostics_requested, operation_id) and connected
 	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
 	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
@@ -528,6 +546,7 @@ func _build_dock_model() -> Dictionary:
 
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var bridge_install = _get_bridge_install_service().build_snapshot(_state.settings)
+	var user_tool_watch = _get_user_tool_watch_status()
 	return {
 		"localization": _localization,
 		"settings": _state.settings,
@@ -557,6 +576,7 @@ func _build_dock_model() -> Dictionary:
 		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
 		"profile_description": _get_tool_profile_description(profile_id, tool_names),
 		"user_tools": _user_tool_service.list_user_tools(),
+		"user_tool_watch": user_tool_watch,
 		"desktop_clients": desktop_clients,
 		"cli_clients": cli_clients,
 		"config_platforms": config_platforms
@@ -699,12 +719,6 @@ func _on_current_tab_changed(index: int) -> void:
 
 func _on_port_changed(value: int) -> void:
 	_state.settings["port"] = value
-	_save_settings()
-	_refresh_dock()
-
-
-func _on_auto_start_toggled(enabled: bool) -> void:
-	_state.settings["auto_start"] = enabled
 	_save_settings()
 	_refresh_dock()
 
@@ -1055,21 +1069,21 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 		str(args.get("agent_hint", ""))
 	)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "create_user_tool")
 	return result
 
 
 func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", script_path)), "delete_user_tool")
 	return result
 
 
 func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.restore_latest_backup(authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "restore_user_tool")
 	return result
 
 
@@ -1077,8 +1091,36 @@ func _schedule_user_tool_catalog_refresh() -> void:
 	call_deferred("_apply_user_tool_catalog_refresh")
 
 
-func _apply_user_tool_catalog_refresh() -> void:
-	_server_controller.reload_all_domains()
+func _apply_user_tool_catalog_refresh(script_path: String = "", reason: String = "user_tool_catalog_refresh") -> void:
+	_refresh_user_tool_registry()
+	_reload_user_tool_runtime(script_path, reason)
+	_rebuild_user_tool_ui_model()
+
+
+func _apply_external_user_tool_catalog_refresh(changed_paths: Array[String], reason: String = "external_watch") -> void:
+	_refresh_user_tool_registry()
+	if changed_paths.is_empty():
+		_reload_user_tool_runtime("", reason)
+	else:
+		for script_path in changed_paths:
+			_reload_user_tool_runtime(str(script_path), reason)
+	_rebuild_user_tool_ui_model()
+
+
+func _refresh_user_tool_registry() -> Array[Dictionary]:
+	return _user_tool_service.list_user_tools()
+
+
+func _reload_user_tool_runtime(script_path: String, reason: String) -> Dictionary:
+	var coordinator = _create_reload_coordinator()
+	if coordinator == null:
+		return {"success": false, "error": "Reload coordinator is unavailable"}
+	if not script_path.is_empty():
+		return coordinator.request_reload_by_script(script_path, reason)
+	return coordinator.request_reload("user", reason)
+
+
+func _rebuild_user_tool_ui_model() -> void:
 	_cleanup_disabled_tools()
 	_save_settings()
 	_refresh_dock()
@@ -1136,8 +1178,8 @@ func runtime_soft_reload() -> Dictionary:
 
 func runtime_full_reload() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_full_reload", "runtime_full_reload")
-	_on_full_reload_requested()
-	_finish_self_operation(operation, true, "plugin", "runtime_full_reload")
+	var was_running := _server_controller != null and _server_controller.is_running()
+	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running])
 	return {"success": true, "message": "Plugin full reload scheduled"}
 
 
@@ -1190,6 +1232,30 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 		success,
 		"plugin",
 		"runtime_soft_reload"
+	)
+
+
+func _complete_runtime_full_reload(operation_id: String, was_running: bool) -> void:
+	var success := false
+	if _state != null and _server_controller != null:
+		_refresh_service_instances()
+		_recreate_server_controller()
+		LocalizationService.reset_instance()
+		_localization = LocalizationService.get_instance()
+		_localization.set_language(str(_state.settings.get("language", "")))
+		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+		if was_running:
+			success = _server_controller.start(_state.settings, "tool_full_reload")
+		else:
+			success = _server_controller.reinitialize(_state.settings, "tool_full_reload")
+		_recreate_dock()
+		_refresh_dock()
+	_pending_runtime_reload_action = ""
+	_finish_self_operation(
+		{"operation_id": operation_id},
+		success,
+		"plugin",
+		"runtime_full_reload"
 	)
 
 
@@ -1732,8 +1798,28 @@ func _schedule_plugin_reenable() -> void:
 
 	var coordinator = PluginReloadCoordinator.new()
 	coordinator.name = "MCPPluginReloadCoordinator"
-	coordinator.configure(PLUGIN_ID, editor_interface)
+	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
 	base_control.add_child(coordinator)
+
+
+func _create_reload_coordinator():
+	var coordinator = PluginReloadCoordinator.new()
+	coordinator.configure(PLUGIN_ID, get_editor_interface(), _server_controller)
+	return coordinator
+
+
+func _configure_user_tool_watch_service() -> void:
+	if _user_tool_watch_service == null:
+		_user_tool_watch_service = UserToolWatchService.new()
+	_user_tool_watch_service.stop()
+	_user_tool_watch_service.configure(self, _create_reload_coordinator(), _user_tool_service)
+	_user_tool_watch_service.start()
+
+
+func _get_user_tool_watch_status() -> Dictionary:
+	if _user_tool_watch_service == null:
+		return {}
+	return _user_tool_watch_service.get_status()
 
 
 func _cleanup_disabled_tools() -> void:
@@ -1754,4 +1840,5 @@ func _refresh_service_instances() -> void:
 	_tool_catalog = ToolCatalogService.new()
 	_config_service = ClientConfigService.new()
 	_user_tool_service = UserToolService.new()
+	_user_tool_watch_service = UserToolWatchService.new()
 	_bridge_install_service = BridgeInstallServiceScript.new()

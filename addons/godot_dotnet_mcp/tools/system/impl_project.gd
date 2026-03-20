@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-## Intelligence implementation: project_state, project_advise, project_configure,
+## System implementation: project_state, project_advise, project_configure,
 ## project_run, project_stop, runtime_diagnose
 
 var bridge
@@ -122,7 +122,7 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	MCPDebugBuffer.record("debug", "intelligence", "tool: %s" % tool_name)
+	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
 		"project_state":     return _execute_project_state(args)
 		"project_advise":    return _execute_project_advise(args)
@@ -267,7 +267,7 @@ func _goal_contains(goal: String, keywords: Array) -> bool:
 func _execute_project_state(args: Dictionary) -> Dictionary:
 	var error_limit := max(int(args.get("error_limit", 10)), 0)
 	var include_runtime_health := bool(args.get("include_runtime_health", false))
-	MCPDebugBuffer.record("debug", "intelligence", "project_state: collecting stats (error_limit=%d)" % error_limit)
+	MCPDebugBuffer.record("debug", "system", "project_state: collecting stats (error_limit=%d)" % error_limit)
 	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
 	var dotnet_result: Dictionary = bridge.call_atomic("project_dotnet", {})
 	var dotnet_data: Dictionary = bridge.extract_data(dotnet_result)
@@ -335,7 +335,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 
 func _execute_project_advise(args: Dictionary) -> Dictionary:
 	var goal := str(args.get("goal", "general")).strip_edges()
-	MCPDebugBuffer.record("debug", "intelligence", "project_advise: goal=%s" % goal)
+	MCPDebugBuffer.record("debug", "system", "project_advise: goal=%s" % goal)
 	var include_suggestions := bool(args.get("include_suggestions", true))
 	var include_workflow := bool(args.get("include_workflow", true))
 	if goal.is_empty():
@@ -457,7 +457,7 @@ func _execute_project_configure(args: Dictionary) -> Dictionary:
 
 func _execute_project_run(args: Dictionary) -> Dictionary:
 	var custom_scene := str(args.get("scene", "")).strip_edges()
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"project_run: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
 	var run_result: Dictionary
 	if custom_scene.is_empty():
@@ -465,7 +465,7 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 	else:
 		run_result = bridge.call_atomic("scene_run", {"action": "play_custom", "path": custom_scene})
 	if not bool(run_result.get("success", false)):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"project_run failed: %s" % str(run_result.get("error", "unknown")))
 		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")))
 	return bridge.success({
@@ -475,10 +475,10 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 
 
 func _execute_project_stop(_args: Dictionary) -> Dictionary:
-	MCPDebugBuffer.record("debug", "intelligence", "project_stop: stopping project")
+	MCPDebugBuffer.record("debug", "system", "project_stop: stopping project")
 	var stop_result: Dictionary = bridge.call_atomic("scene_run", {"action": "stop"})
 	if not bool(stop_result.get("success", false)):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"project_stop failed: %s" % str(stop_result.get("error", "unknown")))
 		return bridge.error("Failed to stop project: %s" % str(stop_result.get("error", "unknown")))
 	return bridge.success({"stopped": true}, "Project stopped")

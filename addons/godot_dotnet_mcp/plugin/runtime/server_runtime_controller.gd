@@ -33,7 +33,7 @@ func detach() -> void:
 
 func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
-	var force_reload_server = reason == "tool_soft_reload"
+	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload"
 	if force_reload_server:
 		stop()
 		_dispose_server_node()
@@ -60,7 +60,7 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 		_server.reinitialize(
 			int(settings.get("port", 3000)),
 			str(settings.get("host", "127.0.0.1")),
-			bool(settings.get("debug_mode", true)),
+			_as_bool(settings.get("debug_mode", true)),
 			settings.get("disabled_tools", []),
 			reason
 		)
@@ -71,7 +71,7 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 			_server.initialize(
 				int(settings.get("port", 3000)),
 				str(settings.get("host", "127.0.0.1")),
-				bool(settings.get("debug_mode", true))
+				_as_bool(settings.get("debug_mode", true))
 			)
 		if _has_server_method("set_disabled_tools"):
 			_server.set_disabled_tools(settings.get("disabled_tools", []))
@@ -188,6 +188,23 @@ func reload_all_domains() -> Dictionary:
 	return {}
 
 
+func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
+	var normalized_path = script_path.strip_edges()
+	if normalized_path.is_empty():
+		return {"success": false, "error": "Missing script path"}
+	var loader = _resolve_tool_loader()
+	if loader == null or not loader.has_method("request_reload_by_script"):
+		return {"success": false, "error": "Tool loader does not support script reload requests"}
+	return loader.request_reload_by_script(normalized_path, reason)
+
+
+func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
+	var loader = _resolve_tool_loader()
+	if loader == null or not loader.has_method("get_user_tool_runtime_snapshot"):
+		return []
+	return loader.get_user_tool_runtime_snapshot()
+
+
 func get_connection_stats() -> Dictionary:
 	if _has_server_method("get_connection_stats"):
 		return _server.get_connection_stats()
@@ -239,11 +256,9 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 	var script = ResourceLoader.load(
 		SERVER_SCRIPT_PATH,
 		"",
-		ResourceLoader.CACHE_MODE_IGNORE if force_reload else ResourceLoader.CACHE_MODE_REUSE
+		ResourceLoader.CACHE_MODE_REPLACE if force_reload else ResourceLoader.CACHE_MODE_REUSE
 	)
-	if script is Script and force_reload:
-		_reload_script_dependency_chain(script as Script, {})
-	if script == null:
+	if script == null or not (script is Script):
 		PluginSelfDiagnosticStore.record_incident(
 			"error",
 			"resource_missing",
@@ -258,8 +273,23 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 			"Verify that the embedded HTTP server script exists and can be instantiated."
 		)
 		return
+	if not (script as Script).can_instantiate():
+		PluginSelfDiagnosticStore.record_incident(
+			"error",
+			"server_error",
+			"server_script_not_instantiable",
+			"Server script exists but cannot be instantiated",
+			"server_runtime_controller",
+			"ensure_server_node",
+			SERVER_SCRIPT_PATH,
+			"",
+			"",
+			true,
+			"Inspect the server script for parse errors or invalid inheritance."
+		)
+		return
 
-	_server = script.new()
+	_server = (script as Script).new()
 	if _server == null:
 		PluginSelfDiagnosticStore.record_incident(
 			"error",
@@ -283,7 +313,7 @@ func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> vo
 		_server.initialize(
 			int(settings.get("port", 3000)),
 			str(settings.get("host", "127.0.0.1")),
-			bool(settings.get("debug_mode", true))
+			_as_bool(settings.get("debug_mode", true))
 		)
 
 	if _has_server_method("set_disabled_tools"):
@@ -307,9 +337,11 @@ func _ensure_stdio_server_node(settings: Dictionary) -> void:
 	# Create stdio server node if not already present
 	if _stdio_server == null or not is_instance_valid(_stdio_server):
 		var script = ResourceLoader.load(STDIO_SERVER_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
-		if script == null:
+		if script == null or not (script is Script):
 			return
-		_stdio_server = script.new()
+		if not (script as Script).can_instantiate():
+			return
+		_stdio_server = (script as Script).new()
 		if _stdio_server == null:
 			return
 		_stdio_server.name = "MCPStdioServer"
@@ -317,9 +349,9 @@ func _ensure_stdio_server_node(settings: Dictionary) -> void:
 
 	# Inject tool_loader from the HTTP server
 	if _server != null and is_instance_valid(_server) and _server.has_method("get_tool_loader"):
-		_stdio_server.initialize(_server.get_tool_loader(), bool(settings.get("debug_mode", false)))
+		_stdio_server.initialize(_server.get_tool_loader(), _as_bool(settings.get("debug_mode", false)))
 	elif _server != null and is_instance_valid(_server) and "_tool_loader" in _server:
-		_stdio_server.initialize(_server._tool_loader, bool(settings.get("debug_mode", false)))
+		_stdio_server.initialize(_server._tool_loader, _as_bool(settings.get("debug_mode", false)))
 
 	if _stdio_server.has_method("set_disabled_tools"):
 		_stdio_server.set_disabled_tools(settings.get("disabled_tools", []))
@@ -336,27 +368,6 @@ func _dispose_stdio_server_node() -> void:
 	_stdio_server = null
 
 
-func _reload_script_dependency_chain(script_resource: Script, visited: Dictionary) -> void:
-	if script_resource == null:
-		return
-
-	var script_path = str(script_resource.resource_path)
-	if not script_path.is_empty():
-		if visited.has(script_path):
-			return
-		visited[script_path] = true
-
-	var base_script = script_resource.get_base_script()
-	if base_script is Script:
-		_reload_script_dependency_chain(base_script as Script, visited)
-
-	for constant_value in script_resource.get_script_constant_map().values():
-		if constant_value is Script:
-			_reload_script_dependency_chain(constant_value as Script, visited)
-
-	script_resource.reload()
-
-
 func _connect_server_signals() -> void:
 	if _server == null:
 		return
@@ -371,6 +382,29 @@ func _connect_server_signals() -> void:
 
 func _has_server_method(method_name: String) -> bool:
 	return _server != null and is_instance_valid(_server) and _server.has_method(method_name)
+
+
+func _resolve_tool_loader():
+	if _server == null or not is_instance_valid(_server):
+		return null
+	if _server.has_method("get_tool_loader"):
+		return _server.get_tool_loader()
+	if "_tool_loader" in _server:
+		return _server._tool_loader
+	return null
+
+
+func _as_bool(value) -> bool:
+	if value is bool:
+		return value
+	if value is int:
+		return value != 0
+	if value is float:
+		return !is_zero_approx(value)
+	if value is String:
+		var normalized = value.strip_edges().to_lower()
+		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
+	return value != null
 
 
 func _on_server_started() -> void:

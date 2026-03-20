@@ -1,4 +1,4 @@
-﻿# Godot .NET MCP
+# Godot .NET MCP
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
 > An MCP server plugin running inside the Godot editor —agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
@@ -7,21 +7,21 @@
 
 ## What It Is
 
-An MCP endpoint embedded in the Godot editor process. Call `intelligence_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then `intelligence_project_advise` for specific, actionable recommendations. From there, use scene, script, node, or resource tools to make targeted changes.
+An MCP endpoint embedded in the Godot editor process. Call `system_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then `system_project_advise` for specific, actionable recommendations. From there, use scene, script, node, or resource tools to make targeted changes.
 
-The Intelligence layer (15 built-in tools) is the intended starting point for agents. It provides project-level snapshots, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
+The System layer (15 built-in tools) is the intended starting point for agents. It provides project-level snapshots, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
-For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; Intelligence tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `lsp_diagnostics` and `tool_loader` status.
+For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; System tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `lsp_diagnostics` and `tool_loader` status.
 
-For GDScript diagnostics, `intelligence_script_analyze(include_diagnostics=true)` returns structure data immediately and fills LSP diagnostics in the background from the saved file content on disk. The first call may return `pending`; later calls return the cached result. Unsaved editor buffer changes are not included yet.
+For GDScript diagnostics, `system_script_analyze(include_diagnostics=true)` returns structure data immediately and fills LSP diagnostics in the background from the saved file content on disk. The first call may return `pending`; later calls return the cached result. Unsaved editor buffer changes are not included yet.
 
 To extend the tool set: place a `.gd` file in `custom_tools/` implementing `handles / get_tools / execute`, with all tool names prefixed `user_`. The plugin picks it up automatically. `plugin_evolution` tools handle scaffolding, auditing, and removal from the Dock or via MCP.
 
 ## Why This Plugin
 
 - **Editor-native**: Runs inside the Godot process. Scene queries, script reads, and property changes reflect the actual live editor state.
-- **Godot.NET first**: C# binding inspection (`intelligence_bindings_audit`), exported member analysis, and `.cs` script patching are built in.
-- **Intelligence-first**: `intelligence_project_state` →`intelligence_project_advise` →targeted action is the intended workflow. No need to guess which atomic tool to start with.
+- **Godot.NET first**: C# binding inspection (`system_bindings_audit`), exported member analysis, and `.cs` script patching are built in.
+- **System-first**: `system_project_state` →`system_project_advise` →targeted action is the intended workflow. No need to guess which atomic tool to start with.
 - **User-extensible**: `custom_tools/` scripts are loaded as first-class tools with no plugin rebuild. `plugin_evolution` manages the lifecycle.
 
 ## Requirements
@@ -128,7 +128,7 @@ Confirm that:
 
 ### 4. Read the latest project runtime state
 
-Use `intelligence_runtime_diagnose` to read structured runtime information —errors, compile issues, and performance data —from the most recent editor-run session. Works after the project stops.
+Use `system_runtime_diagnose` to read structured runtime information —errors, compile issues, and performance data —from the most recent editor-run session. Works after the project stops.
 
 ## Path Conventions
 
@@ -141,7 +141,7 @@ Use `intelligence_runtime_diagnose` to read structured runtime information —er
 
 - [README.zh-CN.md](README.zh-CN.md)
 - Release notes are maintained in the repository root as `CHANGELOG.md` and `CHANGELOG.zh-CN.md`.
-- [docs/妯″潡/Intelligence宸ュ叿灞?md](docs/%E6%A8%A1%E5%9D%97/Intelligence%E5%B7%A5%E5%85%B7%E5%B1%82.md)
+- [docs/妯″潡/System宸ュ叿灞?md](docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
 - [docs/妯″潡/宸ュ叿绯荤粺.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
 - [docs/妯″潡/鐢ㄦ埛鎵╁睍.md](docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
 - [docs/鏋舵瀯/鏈嶅姟涓庤矾鐢?md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
@@ -151,6 +151,6 @@ Use `intelligence_runtime_diagnose` to read structured runtime information —er
 ## Current Boundaries
 
 - Runtime debug readback supports structured project-side bridge events and editor debugger session state; it does not mirror the native Godot Output / Debugger panels 1:1
-- `intelligence_runtime_diagnose` is the recommended tool for reading runtime state
+- `system_runtime_diagnose` is the recommended tool for reading runtime state
 - The latest captured session state and basic lifecycle events remain readable after the project stops; real-time observation still requires the project to be running
 - Capabilities that depend on live editor state should be validated in a real project workflow

@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-## Intelligence implementation: scene_validate, scene_analyze, scene_patch
+## System implementation: scene_validate, scene_analyze, scene_patch
 
 var bridge
 const HANDLED_TOOLS := ["scene_validate", "scene_analyze", "scene_patch"]
@@ -71,7 +71,7 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	MCPDebugBuffer.record("debug", "intelligence", "tool: %s" % tool_name)
+	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
 		"scene_validate": return _execute_scene_validate(args)
 		"scene_analyze":  return _execute_scene_analyze(args)
@@ -117,10 +117,10 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 	if not scene_path.ends_with(".tscn"):
 		return bridge.error("scene must be a .tscn file")
 	if not FileAccess.file_exists(scene_path):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"scene_validate: file not found: %s" % scene_path)
 		return bridge.error("Scene file not found: %s" % scene_path)
-	MCPDebugBuffer.record("debug", "intelligence", "scene_validate: %s" % scene_path)
+	MCPDebugBuffer.record("debug", "system", "scene_validate: %s" % scene_path)
 	var audit_result: Dictionary = bridge.call_atomic("scene_audit", {"action": "from_path", "path": scene_path})
 	var audit_data: Dictionary = bridge.extract_data(audit_result)
 	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": scene_path})
@@ -159,10 +159,10 @@ func _execute_scene_analyze(args: Dictionary) -> Dictionary:
 	if not scene_path.ends_with(".tscn"):
 		return bridge.error("scene must be a .tscn file")
 	if not FileAccess.file_exists(scene_path):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"scene_analyze: file not found: %s" % scene_path)
 		return bridge.error("Scene file not found: %s" % scene_path)
-	MCPDebugBuffer.record("debug", "intelligence", "scene_analyze: %s" % scene_path)
+	MCPDebugBuffer.record("debug", "system", "scene_analyze: %s" % scene_path)
 	var bindings_result: Dictionary = bridge.call_atomic("scene_bindings", {"action": "from_path", "path": scene_path})
 	var bindings_data: Dictionary = bridge.extract_data(bindings_result)
 	var audit_result: Dictionary = bridge.call_atomic("scene_audit", {"action": "from_path", "path": scene_path})
@@ -201,10 +201,10 @@ func _execute_scene_patch(args: Dictionary) -> Dictionary:
 	if not scene_path.ends_with(".tscn"):
 		return bridge.error("scene must be a .tscn file")
 	if not FileAccess.file_exists(scene_path):
-		MCPDebugBuffer.record("warning", "intelligence",
+		MCPDebugBuffer.record("warning", "system",
 			"scene_patch: file not found: %s" % scene_path)
 		return bridge.error("Scene file not found: %s" % scene_path)
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"scene_patch: %s, dry_run=%s, ops=%d" % [scene_path, str(dry_run), (ops_raw as Array).size() if ops_raw is Array else 0])
 	if not (ops_raw is Array) or (ops_raw as Array).is_empty():
 		return bridge.error("ops must be a non-empty array")

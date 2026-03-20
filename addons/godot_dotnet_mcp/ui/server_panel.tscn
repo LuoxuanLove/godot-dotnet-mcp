@@ -45,6 +45,9 @@ unique_name_in_owner = true
 [node name="SelfDiagnosticsCopyButton" type="Button" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
 unique_name_in_owner = true
 
+[node name="SelfDiagnosticsClearButton" type="Button" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
+unique_name_in_owner = true
+
 [node name="SelfDiagnosticsSummary" type="Label" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
 autowrap_mode = 3
@@ -151,10 +154,6 @@ horizontal_alignment = 0
 unique_name_in_owner = true
 min_value = 1024.0
 max_value = 65535.0
-
-[node name="AutoStartCheck" type="CheckBox" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
-unique_name_in_owner = true
-size_flags_horizontal = 4
 
 [node name="LogLevelRow" type="GridContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
 unique_name_in_owner = true

@@ -7,7 +7,6 @@ const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.ts
 
 signal current_tab_changed(index: int)
 signal port_changed(value: int)
-signal auto_start_toggled(enabled: bool)
 signal log_level_changed(level: String)
 signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
@@ -18,6 +17,7 @@ signal full_reload_requested
 signal bridge_install_requested
 signal bridge_validate_requested
 signal bridge_clear_requested
+signal clear_self_diagnostics_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
@@ -31,29 +31,20 @@ signal copy_requested(text: String, source: String)
 @onready var _status_indicator: ColorRect = %StatusIndicator
 @onready var _title_label: Label = %TitleLabel
 @onready var _status_label: Label = %StatusLabel
-@onready var _self_diag_panel: PanelContainer = %SelfDiagnosticsPanel
-@onready var _self_diag_title: Label = %SelfDiagnosticsTitle
-@onready var _self_diag_badge: Label = %SelfDiagnosticsBadge
-@onready var _self_diag_copy_button: Button = %SelfDiagnosticsCopyButton
-@onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
-@onready var _self_diag_details: Label = %SelfDiagnosticsDetails
 @onready var _tab_container: TabContainer = %TabContainer
 var _current_scale := -1.0
 var _server_tab: Control
 var _tools_tab: Control
 var _config_tab: Control
-var _self_diag_copy_text := ""
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_ensure_tabs()
 	_tab_container.tab_changed.connect(_on_tab_changed)
-	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
 
 	if _server_tab:
 		_server_tab.port_changed.connect(_on_server_tab_port_changed)
-		_server_tab.auto_start_toggled.connect(_on_server_tab_auto_start_toggled)
 		_server_tab.log_level_changed.connect(_on_server_tab_log_level_changed)
 		_server_tab.permission_level_changed.connect(_on_server_tab_permission_level_changed)
 		_server_tab.language_changed.connect(_on_server_tab_language_changed)
@@ -64,6 +55,8 @@ func _ready() -> void:
 		_server_tab.bridge_install_requested.connect(_on_server_tab_bridge_install_requested)
 		_server_tab.bridge_validate_requested.connect(_on_server_tab_bridge_validate_requested)
 		_server_tab.bridge_clear_requested.connect(_on_server_tab_bridge_clear_requested)
+		if _server_tab.has_signal("clear_self_diagnostics_requested"):
+			_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
 		if _server_tab.has_signal("copy_requested"):
 			_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
 
@@ -99,7 +92,6 @@ func apply_model(model: Dictionary) -> void:
 	_title_label.text = localization.get_text("title")
 	_status_label.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
 	_status_label.add_theme_color_override("font_color", color)
-	_self_diag_panel.visible = false
 
 	if _tab_container.get_tab_count() >= 3:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
@@ -213,10 +205,6 @@ func _on_server_tab_port_changed(value: int) -> void:
 	port_changed.emit(value)
 
 
-func _on_server_tab_auto_start_toggled(enabled: bool) -> void:
-	auto_start_toggled.emit(enabled)
-
-
 func _on_server_tab_log_level_changed(level: String) -> void:
 	log_level_changed.emit(level)
 
@@ -255,6 +243,10 @@ func _on_server_tab_bridge_validate_requested() -> void:
 
 func _on_server_tab_bridge_clear_requested() -> void:
 	bridge_clear_requested.emit()
+
+
+func _on_server_tab_clear_self_diagnostics_requested() -> void:
+	clear_self_diagnostics_requested.emit()
 
 
 func _on_server_tab_copy_requested(text: String, source: String) -> void:
@@ -314,19 +306,6 @@ func _apply_editor_scale(scale: float) -> void:
 	header_content.add_theme_constant_override("separation", int(round(10 * scale)))
 
 	_status_indicator.custom_minimum_size = Vector2(12, 12) * scale
-	_self_diag_copy_button.custom_minimum_size.y = 28.0 * scale
-
-	var self_diag_margin = get_node("SelfDiagnosticsPanel/SelfDiagnosticsMargin") as MarginContainer
-	self_diag_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	self_diag_margin.add_theme_constant_override("margin_top", int(round(10 * scale)))
-	self_diag_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	self_diag_margin.add_theme_constant_override("margin_bottom", int(round(10 * scale)))
-
-	var self_diag_content = get_node("SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent") as VBoxContainer
-	self_diag_content.add_theme_constant_override("separation", int(round(6 * scale)))
-
-	var self_diag_header = get_node("SelfDiagnosticsPanel/SelfDiagnosticsMargin/SelfDiagnosticsContent/SelfDiagnosticsHeader") as HBoxContainer
-	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
 
 
 func _load_packed_scene(path: String) -> PackedScene:
@@ -363,94 +342,3 @@ func _activate_host_dock_tab_deferred() -> void:
 					return
 		current = parent
 
-
-func _apply_self_diagnostics(model: Dictionary, localization) -> void:
-	var diagnostics = model.get("self_diagnostics", {})
-	var copy_text = str(model.get("self_diagnostic_copy_text", ""))
-	_self_diag_copy_text = copy_text
-	_self_diag_title.text = localization.get_text("self_diag_title")
-	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
-
-	if not (diagnostics is Dictionary) or (diagnostics as Dictionary).is_empty():
-		_self_diag_panel.visible = false
-		return
-
-	_self_diag_panel.visible = true
-	var diag := diagnostics as Dictionary
-	var status = str(diag.get("status", "ok"))
-	var badge_color = _get_self_diag_status_color(status)
-	_self_diag_badge.text = _get_self_diag_status_text(status, localization)
-	_self_diag_badge.add_theme_color_override("font_color", badge_color)
-
-	var active_incidents = int(diag.get("active_incident_count", 0))
-	var tool_loader = diag.get("tool_loader", {})
-	var tool_load_error_count = 0
-	if tool_loader is Dictionary:
-		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
-	var last_operation_text = localization.get_text("self_diag_last_operation_none")
-	var last_operation = diag.get("last_operation", {})
-	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
-		last_operation_text = "%s (%s ms)" % [
-			str((last_operation as Dictionary).get("kind", "")),
-			str((last_operation as Dictionary).get("duration_ms", 0.0))
-		]
-	_self_diag_summary.text = "%s | %s | %s" % [
-		localization.get_text("self_diag_active_incidents") % active_incidents,
-		localization.get_text("self_diag_tool_load_errors") % tool_load_error_count,
-		localization.get_text("self_diag_last_operation") % last_operation_text
-	]
-
-	var recent_lines: Array[String] = []
-	for incident in diag.get("recent_incidents", []):
-		if not (incident is Dictionary):
-			continue
-		var incident_dict := incident as Dictionary
-		recent_lines.append("%s | %s | %s" % [
-			_get_self_diag_category_text(str(incident_dict.get("category", "")), localization),
-			_get_self_diag_code_text(str(incident_dict.get("code", "")), localization),
-			str(incident_dict.get("message", ""))
-		])
-		if recent_lines.size() >= 3:
-			break
-	if recent_lines.is_empty():
-		_self_diag_details.text = localization.get_text("self_diag_empty")
-	else:
-		_self_diag_details.text = "\n".join(recent_lines)
-
-
-func _get_self_diag_status_text(status: String, localization) -> String:
-	match status:
-		"error":
-			return localization.get_text("self_diag_status_error")
-		"warning":
-			return localization.get_text("self_diag_status_warning")
-		_:
-			return localization.get_text("self_diag_status_ok")
-
-
-func _get_self_diag_status_color(status: String) -> Color:
-	match status:
-		"error":
-			return Color(0.9, 0.3, 0.3)
-		"warning":
-			return Color(0.95, 0.7, 0.2)
-		_:
-			return Color(0.2, 0.8, 0.2)
-
-
-func _get_self_diag_category_text(category: String, localization) -> String:
-	var key = "self_diag_category_%s" % category
-	var translated = localization.get_text(key)
-	return translated if translated != key else category
-
-
-func _get_self_diag_code_text(code: String, localization) -> String:
-	var key = "self_diag_code_%s" % code
-	var translated = localization.get_text(key)
-	return translated if translated != key else code
-
-
-func _on_self_diag_copy_pressed() -> void:
-	if _self_diag_copy_text.is_empty():
-		return
-	copy_requested.emit(_self_diag_copy_text, "Plugin Self Diagnostics")

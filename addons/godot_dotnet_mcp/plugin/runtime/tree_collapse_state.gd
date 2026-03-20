@@ -1,8 +1,8 @@
-@tool
+﻿@tool
 extends RefCounted
 class_name TreeCollapseState
 
-const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 
 const COLLAPSED_NODES_KEY := "collapsed_nodes"
 const KIND_ROOT := "root"
@@ -13,7 +13,7 @@ const KIND_ATOMIC := "atomic"
 const EXPANDABLE_KINDS := [KIND_ROOT, KIND_DOMAIN, KIND_CATEGORY, KIND_TOOL, KIND_ATOMIC]
 
 
-static func normalize_settings(settings: Dictionary, all_categories: Array, default_domains: Array, default_intelligence_tools: Array) -> void:
+static func normalize_settings(settings: Dictionary, all_categories: Array, default_domains: Array, default_system_tools: Array) -> void:
 	var existing := settings.get(COLLAPSED_NODES_KEY, {})
 	var normalized := {}
 	if existing is Dictionary:
@@ -21,8 +21,8 @@ static func normalize_settings(settings: Dictionary, all_categories: Array, defa
 	normalized[KIND_ROOT] = _normalize_key_list(normalized.get(KIND_ROOT, []))
 	normalized[KIND_DOMAIN] = _normalize_key_list(normalized.get(KIND_DOMAIN, settings.get("collapsed_domains", default_domains)))
 	normalized[KIND_CATEGORY] = _normalize_key_list(normalized.get(KIND_CATEGORY, settings.get("collapsed_categories", all_categories)))
-	normalized[KIND_TOOL] = _normalize_key_list(normalized.get(KIND_TOOL, settings.get("collapsed_intelligence_tools", default_intelligence_tools)))
-	normalized[KIND_ATOMIC] = _normalize_key_list(normalized.get(KIND_ATOMIC, IntelligenceTreeCatalog.get_default_collapsed_atomic_tools()))
+	normalized[KIND_TOOL] = _normalize_key_list(normalized.get(KIND_TOOL, settings.get("collapsed_system_tools", default_system_tools)))
+	normalized[KIND_ATOMIC] = _normalize_key_list(normalized.get(KIND_ATOMIC, SystemTreeCatalog.get_default_collapsed_atomic_tools()))
 	for key in normalized.keys():
 		if key in EXPANDABLE_KINDS:
 			continue
@@ -30,7 +30,7 @@ static func normalize_settings(settings: Dictionary, all_categories: Array, defa
 		normalized[key] = _normalize_key_list(value)
 	settings.erase("collapsed_categories")
 	settings.erase("collapsed_domains")
-	settings.erase("collapsed_intelligence_tools")
+	settings.erase("collapsed_system_tools")
 	settings[COLLAPSED_NODES_KEY] = normalized
 
 

@@ -6,6 +6,7 @@ const MAX_INCIDENTS := 200
 const MAX_OPERATIONS := 100
 const DEFAULT_LIMIT := 50
 const SLOW_OPERATION_THRESHOLD_MS := 1200.0
+const SLOW_OPERATION_WARNING_THRESHOLD_MS := 1500.0
 
 static var _incidents: Array[Dictionary] = []
 static var _operations: Array[Dictionary] = []
@@ -160,11 +161,12 @@ static func record_slow_operation(operation: Dictionary, component: String, phas
 	var duration_ms = float(operation.get("duration_ms", 0.0))
 	if duration_ms <= threshold_ms:
 		return {}
+	var severity := "warning" if duration_ms > SLOW_OPERATION_WARNING_THRESHOLD_MS else "info"
 	return record_incident(
-		"warning",
+		severity,
 		"performance_warning",
 		"reload_duration_slow",
-		"Operation exceeded the slow-operation threshold",
+		"Operation exceeded the slow-operation threshold (%.1fms > %.1fms)" % [duration_ms, threshold_ms],
 		component,
 		phase if not phase.is_empty() else str(operation.get("phase", "")),
 		"",
@@ -175,7 +177,8 @@ static func record_slow_operation(operation: Dictionary, component: String, phas
 		{
 			"kind": str(operation.get("kind", "")),
 			"duration_ms": duration_ms,
-			"threshold_ms": threshold_ms
+			"threshold_ms": threshold_ms,
+			"warning_threshold_ms": SLOW_OPERATION_WARNING_THRESHOLD_MS
 		}
 	)
 
@@ -224,6 +227,9 @@ static func get_health_snapshot(snapshot: Dictionary = {}, limit: int = 3) -> Di
 		incident_counts[severity] = int(incident_counts.get(severity, 0)) + 1
 
 	var recent_incidents = _apply_limit(incidents, limit)
+	var latest_incident = {}
+	if not recent_incidents.is_empty():
+		latest_incident = recent_incidents[0]
 	var last_operation = {}
 	var operations = get_operations(1)
 	if not operations.is_empty():
@@ -253,6 +259,7 @@ static func get_health_snapshot(snapshot: Dictionary = {}, limit: int = 3) -> Di
 		"summary": summary,
 		"incident_counts": incident_counts,
 		"active_incident_count": active_incident_count,
+		"latest_incident": latest_incident,
 		"last_operation": last_operation,
 		"autoload": (snapshot.get("autoload", {}) if snapshot.get("autoload", {}) is Dictionary else {}).duplicate(true),
 		"server": (snapshot.get("server", {}) if snapshot.get("server", {}) is Dictionary else {}).duplicate(true),
@@ -278,6 +285,13 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 		lines.append("Last operation: %s (%sms)" % [
 			str((last_operation as Dictionary).get("kind", "")),
 			str((last_operation as Dictionary).get("duration_ms", 0.0))
+		])
+	var latest_incident = snapshot.get("latest_incident", {})
+	if latest_incident is Dictionary and not (latest_incident as Dictionary).is_empty():
+		lines.append("Latest incident: [%s] %s: %s" % [
+			str((latest_incident as Dictionary).get("severity", "info")),
+			str((latest_incident as Dictionary).get("code", "")),
+			str((latest_incident as Dictionary).get("message", ""))
 		])
 
 	for incident in snapshot.get("recent_incidents", []):

@@ -1,25 +1,46 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added the first completed `.NET MCP Bridge` implementation for Godot .NET workflows, including a standalone .NET 8 bridge process, stdio MCP transport, Windows self-contained publish profile, Bridge-first plugin installation, and C# / `.csproj` read-write tooling.
+- Added external `custom_tools/` watch coordination so valid user tool scripts dropped into `res://addons/godot_dotnet_mcp/custom_tools/` are discovered without restarting Godot.
+- Added user-tool runtime status to the Tools preview, including runtime domain, version, state, pending reload, last error, discovery source, and last refresh reason.
+
+### Changed
+
+- Finished the user-tool hot reload refactor: user tools now reload as per-script runtime slots instead of being mixed into the `system` executor lifecycle.
+- Unified user-tool refresh flow under explicit registry refresh, runtime reload, and UI rebuild stages.
+- Refined the Tools page so it keeps separate `System` and `User` roots while counting only System high-level tools plus User tools in the visible total.
+- Limited externally exposed MCP tools to the 15 `system_*` high-level tools; atomic tools remain internal-only.
+- Simplified self-diagnostic presentation by separating the latest operation from the latest incident and adding a clear action for recoverable warnings.
+
+### Fixed
+
+- Fixed user-tool runtime lifecycle so external add / change / delete / restore flows apply cleanly without requiring a Godot restart.
+- Fixed user-domain cleanup so removing the final user tool returns the domain to `uninitialized`.
+
 ## 0.5.0 - 2026-03-19
 
 ### Added
 
-- Added asynchronous GDScript diagnostics: `intelligence_script_analyze(include_diagnostics=true)` now returns script structure immediately and fills `diagnostics` in the background from the saved file on disk. The first call may return `pending`.
+- Added asynchronous GDScript diagnostics: `system_script_analyze(include_diagnostics=true)` now returns script structure immediately and fills `diagnostics` in the background from the saved file on disk. The first call may return `pending`.
 - Added runtime health summaries and detailed self-check split:
   - `plugin_runtime_state(action=get_lsp_diagnostics_status)` is the only detailed LSP self-check entry and returns `loader / service / client`
-  - `intelligence_project_state(include_runtime_health=true)` returns a lightweight `lsp_diagnostics` health summary
+  - `system_project_state(include_runtime_health=true)` returns a lightweight `lsp_diagnostics` health summary
 - Added `stdio` transport (`plugin/runtime/mcp_stdio_server.gd`) for standard `Content-Length` framed stdin/stdout MCP communication.
 - Expanded structured editing support:
-  - `intelligence_scene_patch` adds `rename_node` and `update_property`
-  - `intelligence_script_patch` adds `replace_method_body`, `delete_member`, and `rename_member`
-  - `intelligence_runtime_diagnose` adds `include_gd_errors`
+  - `system_scene_patch` adds `rename_node` and `update_property`
+  - `system_script_patch` adds `replace_method_body`, `delete_member`, and `rename_member`
+  - `system_runtime_diagnose` adds `include_gd_errors`
 
 ### Changed
 
-- `intelligence_script_analyze(include_diagnostics=true)` now returns structure data immediately and resolves LSP diagnostics in the background instead of blocking for `publishDiagnostics`.
+- `system_script_analyze(include_diagnostics=true)` now returns structure data immediately and resolves LSP diagnostics in the background instead of blocking for `publishDiagnostics`.
 - `/api/tools`, MCP `tools/list`, and Dock Tools now share the same generated visible tool set; aliases remain callable but are no longer the primary presentation entry.
 - The GDScript LSP diagnostics service is owned by `tool_loader` and survives `reload_domain`, `reload_all_domains`, and `soft_reload_plugin` lifecycle handoff to reduce stale-instance drift.
-- Runtime docs and external guidance are consolidated around `plugin_runtime_state`, `intelligence_project_state`, and the current routing behavior.
+- Runtime docs and external guidance are consolidated around `plugin_runtime_state`, `system_project_state`, and the current routing behavior.
 
 ### Fixed
 
@@ -30,21 +51,21 @@
 
 ### Added
 
-- Added the Intelligence tool layer, providing 15 high-level tools for project-level reasoning and actions, grouped into four categories:
-  - **Project (6)**: `intelligence_project_state`, `intelligence_project_advise`, `intelligence_project_configure`, `intelligence_project_run`, `intelligence_project_stop`, `intelligence_runtime_diagnose`
-  - **Scene (3)**: `intelligence_scene_validate`, `intelligence_scene_analyze`, `intelligence_scene_patch`
-  - **Script (3)**: `intelligence_bindings_audit`, `intelligence_script_analyze`, `intelligence_script_patch`
-  - **Index (3)**: `intelligence_project_index_build`, `intelligence_project_symbol_search`, `intelligence_scene_dependency_graph`
-- Added an Atomic Bridge scheduling layer to connect Intelligence tools with lower-level atomic tools and support tool-chain composition.
+- Added the System tool layer, providing 15 high-level tools for project-level reasoning and actions, grouped into four categories:
+  - **Project (6)**: `system_project_state`, `system_project_advise`, `system_project_configure`, `system_project_run`, `system_project_stop`, `system_runtime_diagnose`
+  - **Scene (3)**: `system_scene_validate`, `system_scene_analyze`, `system_scene_patch`
+  - **Script (3)**: `system_bindings_audit`, `system_script_analyze`, `system_script_patch`
+  - **Index (3)**: `system_project_index_build`, `system_project_symbol_search`, `system_scene_dependency_graph`
+- Added an Atomic Bridge scheduling layer to connect System tools with lower-level atomic tools and support tool-chain composition.
 - Added user-defined tool integration: tools placed under `custom_tools/` must use the `user_*` prefix and implement `handles()`, `get_tools()`, and `execute()`.
 - Added plugin-directory write protection via `PLUGIN_PROTECTED_PATHS` to prevent unauthorized edits to plugin-owned files.
-- Added localized Intelligence documentation in 9 languages: de/en/es/fr/ja/pt/ru/zh_cn/zh_tw.
+- Added localized System documentation in 9 languages: de/en/es/fr/ja/pt/ru/zh_cn/zh_tw.
 
 ### Changed
 
-- Reworked the `Tools` page tree so top-level Intelligence tools are shown directly, each tool can expand to its dependent atomic tool chain, and atomic tools can expand further into action-level nodes.
+- Reworked the `Tools` page tree so top-level System tools are shown directly, each tool can expand to its dependent atomic tool chain, and atomic tools can expand further into action-level nodes.
 - Added tree recursive expand/collapse with Shift-click, plus a right-click context menu for copy tool name, schema, and user-tool deletion.
-- Overhauled `MCPDebugBuffer` logging: unified source naming, added log levels (`trace/debug/info/warning/error`), and filled in key log points across `tool_loader`, `intelligence`, `atomic_bridge`, and `impl_*`.
+- Overhauled `MCPDebugBuffer` logging: unified source naming, added log levels (`trace/debug/info/warning/error`), and filled in key log points across `tool_loader`, `system`, `atomic_bridge`, and `impl_*`.
 - Restructured the repository layout to match the Godot Asset Library convention under `addons/godot_dotnet_mcp/`, and added `.gitattributes` rules for release ZIP contents.
 
 ### Removed

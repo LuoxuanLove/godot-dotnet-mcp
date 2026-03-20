@@ -1,8 +1,8 @@
 @tool
 extends RefCounted
 
-## Intelligence implementation: project_index_build, project_symbol_search, scene_dependency_graph
-## Holds _project_index shared state -- legitimate memory sharing, not intelligence->intelligence calls.
+## System implementation: project_index_build, project_symbol_search, scene_dependency_graph
+## Holds _project_index shared state -- legitimate memory sharing, not system->system calls.
 
 var bridge
 var _project_index: Dictionary = {}
@@ -64,7 +64,7 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	MCPDebugBuffer.record("debug", "intelligence", "tool: %s" % tool_name)
+	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
 		"project_index_build":    return _execute_project_index_build(args)
 		"project_symbol_search":  return _execute_project_symbol_search(args)
@@ -184,10 +184,10 @@ func _traverse_scene_deps(current: String, max_depth: int, dep_map: Dictionary, 
 
 func _execute_project_index_build(args: Dictionary) -> Dictionary:
 	var include_resources := bool(args.get("include_resources", true))
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"index_build: include_resources=%s" % str(include_resources))
 	var index := _build_project_index(include_resources)
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"index_build: %d scripts, %d scenes, %d symbols" % [
 			int((index.get("script_paths", []) as Array).size()),
 			int((index.get("scenes", []) as Array).size()),
@@ -230,7 +230,7 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 	matches.append_array(exact_matches)
 	matches.append_array(partial_matches)
 
-	MCPDebugBuffer.record("debug", "intelligence",
+	MCPDebugBuffer.record("debug", "system",
 		"symbol_search: '%s' → %d exact, %d partial" % [symbol, exact_matches.size(), partial_matches.size()])
 	return bridge.success({
 		"symbol": symbol,

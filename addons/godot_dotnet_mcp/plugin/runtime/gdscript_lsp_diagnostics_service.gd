@@ -2,7 +2,7 @@
 extends RefCounted
 class_name GDScriptLspDiagnosticsService
 
-const LspClientPath := "res://addons/godot_dotnet_mcp/tools/intelligence/lsp_client.gd"
+const LspClientPath := "res://addons/godot_dotnet_mcp/tools/system/lsp_client.gd"
 
 const CACHE_LIMIT := 32
 const DEFAULT_TIMEOUT_MS := 15000

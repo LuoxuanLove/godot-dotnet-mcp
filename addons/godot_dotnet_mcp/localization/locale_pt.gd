@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 ## Tradu莽茫o em portugu锚s
@@ -527,25 +527,25 @@ const TRANSLATIONS: Dictionary = {
 	"tool_filesystem_file_write_desc": "Write or append plain-text files within the project",
 	"tool_filesystem_file_manage_desc": "Delete, copy or move files within the project",
 
-	# Intelligence tools
-	"tool_intelligence_project_advise_name": "Assessoria de projeto",
-	"tool_intelligence_project_advise_desc": "Retorna sugestões baseadas em regras e ferramentas seguintes recomendadas com base no estado atual do projeto.",
-	"tool_intelligence_project_configure_name": "Configurar projeto",
-	"tool_intelligence_project_configure_desc": "Lê ou modifica configurações do projeto, ações de entrada e configuração de autoload.",
-	"tool_intelligence_project_run_name": "Executar projeto",
-	"tool_intelligence_project_run_desc": "Inicia a execução do projeto dentro do editor Godot.",
-	"tool_intelligence_project_stop_name": "Parar projeto",
-	"tool_intelligence_project_stop_desc": "Para o projeto em execução atualmente.",
-	"tool_intelligence_runtime_diagnose_name": "Diagnóstico de runtime",
-	"tool_intelligence_runtime_diagnose_desc": "Analisa o contexto de erros de execução e retorna informações de diagnóstico estruturadas.",
-	"tool_intelligence_scene_analyze_name": "Analisar cena",
-	"tool_intelligence_scene_analyze_desc": "Analisa profundamente a estrutura da cena, ligações de nós e membros de script exportados.",
-	"tool_intelligence_scene_patch_name": "Corrigir cena",
-	"tool_intelligence_scene_patch_desc": "Aplica operações em lote a nós de cena: adicionar, excluir, definir propriedades ou reorganizar.",
-	"tool_intelligence_script_analyze_name": "Analisar script",
-	"tool_intelligence_script_analyze_desc": "Analisa a estrutura, símbolos e membros exportados de um script GDScript ou C#.",
-	"tool_intelligence_script_patch_name": "Corrigir script",
-	"tool_intelligence_script_patch_desc": "Adiciona funções, variáveis, sinais ou campos exportados a um script.",
+	# System tools
+	"tool_system_project_advise_name": "Assessoria de projeto",
+	"tool_system_project_advise_desc": "Retorna sugestões baseadas em regras e ferramentas seguintes recomendadas com base no estado atual do projeto.",
+	"tool_system_project_configure_name": "Configurar projeto",
+	"tool_system_project_configure_desc": "Lê ou modifica configurações do projeto, ações de entrada e configuração de autoload.",
+	"tool_system_project_run_name": "Executar projeto",
+	"tool_system_project_run_desc": "Inicia a execução do projeto dentro do editor Godot.",
+	"tool_system_project_stop_name": "Parar projeto",
+	"tool_system_project_stop_desc": "Para o projeto em execução atualmente.",
+	"tool_system_runtime_diagnose_name": "Diagnóstico de runtime",
+	"tool_system_runtime_diagnose_desc": "Analisa o contexto de erros de execução e retorna informações de diagnóstico estruturadas.",
+	"tool_system_scene_analyze_name": "Analisar cena",
+	"tool_system_scene_analyze_desc": "Analisa profundamente a estrutura da cena, ligações de nós e membros de script exportados.",
+	"tool_system_scene_patch_name": "Corrigir cena",
+	"tool_system_scene_patch_desc": "Aplica operações em lote a nós de cena: adicionar, excluir, definir propriedades ou reorganizar.",
+	"tool_system_script_analyze_name": "Analisar script",
+	"tool_system_script_analyze_desc": "Analisa a estrutura, símbolos e membros exportados de um script GDScript ou C#.",
+	"tool_system_script_patch_name": "Corrigir script",
+	"tool_system_script_patch_desc": "Adiciona funções, variáveis, sinais ou campos exportados a um script.",
 }
 
 
