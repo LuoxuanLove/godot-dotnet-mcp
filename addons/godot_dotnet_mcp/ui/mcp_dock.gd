@@ -17,6 +17,10 @@ signal full_reload_requested
 signal bridge_install_requested
 signal bridge_validate_requested
 signal bridge_clear_requested
+signal central_server_detect_requested
+signal central_server_install_requested
+signal central_server_start_requested
+signal central_server_stop_requested
 signal clear_self_diagnostics_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
@@ -55,6 +59,14 @@ func _ready() -> void:
 		_server_tab.bridge_install_requested.connect(_on_server_tab_bridge_install_requested)
 		_server_tab.bridge_validate_requested.connect(_on_server_tab_bridge_validate_requested)
 		_server_tab.bridge_clear_requested.connect(_on_server_tab_bridge_clear_requested)
+		if _server_tab.has_signal("central_server_detect_requested"):
+			_server_tab.central_server_detect_requested.connect(_on_server_tab_central_server_detect_requested)
+		if _server_tab.has_signal("central_server_install_requested"):
+			_server_tab.central_server_install_requested.connect(_on_server_tab_central_server_install_requested)
+		if _server_tab.has_signal("central_server_start_requested"):
+			_server_tab.central_server_start_requested.connect(_on_server_tab_central_server_start_requested)
+		if _server_tab.has_signal("central_server_stop_requested"):
+			_server_tab.central_server_stop_requested.connect(_on_server_tab_central_server_stop_requested)
 		if _server_tab.has_signal("clear_self_diagnostics_requested"):
 			_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
 		if _server_tab.has_signal("copy_requested"):
@@ -245,6 +257,22 @@ func _on_server_tab_bridge_clear_requested() -> void:
 	bridge_clear_requested.emit()
 
 
+func _on_server_tab_central_server_detect_requested() -> void:
+	central_server_detect_requested.emit()
+
+
+func _on_server_tab_central_server_install_requested() -> void:
+	central_server_install_requested.emit()
+
+
+func _on_server_tab_central_server_start_requested() -> void:
+	central_server_start_requested.emit()
+
+
+func _on_server_tab_central_server_stop_requested() -> void:
+	central_server_stop_requested.emit()
+
+
 func _on_server_tab_clear_self_diagnostics_requested() -> void:
 	clear_self_diagnostics_requested.emit()
 
@@ -341,4 +369,3 @@ func _activate_host_dock_tab_deferred() -> void:
 					tab_container.current_tab = index
 					return
 		current = parent
-

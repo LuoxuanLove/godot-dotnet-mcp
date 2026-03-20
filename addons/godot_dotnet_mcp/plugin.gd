@@ -8,6 +8,8 @@ const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/setti
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const BridgeInstallServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/bridge_install_service.gd")
+const CentralServerAttachServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/central_server_attach_service.gd")
+const CentralServerProcessServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/central_server_process_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
@@ -31,12 +33,15 @@ var _config_service := ClientConfigService.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
 var _bridge_install_service: BridgeInstallService
+var _central_server_attach_service: CentralServerAttachService
+var _central_server_process_service: CentralServerProcessService
 var _localization: LocalizationService
 var _dock: Control
 var _bridge_install_dialog: FileDialog
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
+var _last_central_server_endpoint_reachable := false
 
 
 func _enter_tree() -> void:
@@ -55,6 +60,8 @@ func _enter_tree() -> void:
 	_configure_user_tool_watch_service()
 	_ensure_runtime_bridge_autoload()
 	_install_editor_debugger_bridge()
+	_configure_central_server_process_service()
+	_configure_central_server_attach_service()
 
 	_create_dock()
 	_apply_initial_tool_profile_if_needed()
@@ -77,6 +84,10 @@ func _exit_tree() -> void:
 	_save_settings()
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.stop()
+	if _central_server_attach_service != null:
+		_central_server_attach_service.stop()
+	if _central_server_process_service != null:
+		_central_server_process_service.stop_service()
 	_remove_dock()
 	_remove_bridge_install_dialog()
 	_uninstall_editor_debugger_bridge()
@@ -85,6 +96,9 @@ func _exit_tree() -> void:
 	_localization = null
 	_user_tool_service = null
 	_user_tool_watch_service = null
+	_central_server_attach_service = null
+	_central_server_process_service = null
+	_last_central_server_endpoint_reachable = false
 	_config_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -112,6 +126,11 @@ func _validate_permission_configuration() -> void:
 func _process(delta: float) -> void:
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.tick()
+	if _central_server_attach_service != null:
+		_central_server_attach_service.tick()
+	if _central_server_process_service != null:
+		_central_server_process_service.tick()
+		_ensure_local_central_server_if_needed()
 	_status_poll_accumulator += delta
 	if _status_poll_accumulator >= 0.5:
 		_status_poll_accumulator = 0.0
@@ -319,8 +338,8 @@ func _create_dock() -> void:
 func _remove_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("remove_dock", "_remove_dock")
 	if _dock != null and is_instance_valid(_dock):
-		remove_control_from_docks(_dock)
 		if _dock.get_parent() != null:
+			remove_control_from_docks(_dock)
 			_dock.get_parent().remove_child(_dock)
 		_dock.set_script(null)
 		_dock.free()
@@ -405,6 +424,54 @@ func _on_bridge_clear_requested() -> void:
 		_show_bridge_install_feedback("bridge_install_cleared", str(result.get("message", "Bridge registration cleared.")))
 
 
+func _on_central_server_detect_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var status = _central_server_process_service.refresh_detection()
+	_refresh_dock()
+	_show_message(_resolve_central_server_process_feedback(status, "detect"))
+
+
+func _on_central_server_install_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var status = _central_server_process_service.install_or_update_service()
+	_refresh_dock()
+	if not bool(status.get("success", false)):
+		_show_message(_resolve_central_server_process_feedback(status, "install_error"))
+		return
+	var running_status = _central_server_process_service.ensure_service_running()
+	if _central_server_attach_service != null:
+		_central_server_attach_service.request_attach_soon()
+	_show_message(_resolve_central_server_process_feedback(status, "install_success"))
+	if str(running_status.get("status", "")) == "launch_error":
+		_show_message(_resolve_central_server_process_feedback(running_status, "start"))
+
+
+func _on_central_server_start_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var status = _central_server_process_service.start_service()
+	_refresh_dock()
+	if str(status.get("status", "")) == "launch_error":
+		_show_message(_resolve_central_server_process_feedback(status, "start"))
+		return
+	if _central_server_attach_service != null:
+		_central_server_attach_service.request_attach_soon()
+	_show_message(_resolve_central_server_process_feedback(status, "start"))
+
+
+func _on_central_server_stop_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var status = _central_server_process_service.stop_service()
+	_refresh_dock()
+	if str(status.get("status", "")) == "launch_error":
+		_show_message(_resolve_central_server_process_feedback(status, "stop_error"))
+		return
+	_show_message(_resolve_central_server_process_feedback(status, "stop_success"))
+
+
 func _on_clear_self_diagnostics_requested() -> void:
 	var result = clear_self_diagnostics_from_tools()
 	if bool(result.get("success", false)):
@@ -467,8 +534,8 @@ func _remove_stale_docks() -> void:
 			script_path = str(script.resource_path)
 		if child.name != "MCPDock" and script_path != MCP_DOCK_SCRIPT_PATH:
 			continue
-		remove_control_from_docks(child)
 		if child.get_parent() != null:
+			remove_control_from_docks(child)
 			child.get_parent().remove_child(child)
 		child.set_script(null)
 		child.free()
@@ -497,6 +564,10 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("bridge_install_requested", _on_bridge_install_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_validate_requested", _on_bridge_validate_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_clear_requested", _on_bridge_clear_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_detect_requested", _on_central_server_detect_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_install_requested", _on_central_server_install_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_start_requested", _on_central_server_start_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_stop_requested", _on_central_server_stop_requested, operation_id) and connected
 	connected = _connect_dock_signal("clear_self_diagnostics_requested", _on_clear_self_diagnostics_requested, operation_id) and connected
 	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
@@ -546,6 +617,8 @@ func _build_dock_model() -> Dictionary:
 
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var bridge_install = _get_bridge_install_service().build_snapshot(_state.settings)
+	var central_server_attach = _get_central_server_attach_status()
+	var central_server_process = _get_central_server_process_status()
 	var user_tool_watch = _get_user_tool_watch_status()
 	return {
 		"localization": _localization,
@@ -571,6 +644,8 @@ func _build_dock_model() -> Dictionary:
 		"self_diagnostics": self_diagnostics,
 		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
 		"bridge_install": bridge_install,
+		"central_server_attach": central_server_attach,
+		"central_server_process": central_server_process,
 		"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
@@ -1816,6 +1891,114 @@ func _configure_user_tool_watch_service() -> void:
 	_user_tool_watch_service.start()
 
 
+func _configure_central_server_process_service() -> void:
+	if _central_server_process_service == null:
+		_central_server_process_service = CentralServerProcessServiceScript.new()
+	_central_server_process_service.configure(self, _state.settings)
+	_central_server_process_service.refresh_detection()
+
+
+func _ensure_local_central_server_if_needed() -> void:
+	if _central_server_process_service == null or _central_server_attach_service == null:
+		return
+
+	var attach_status = _central_server_attach_service.get_status()
+	if not bool(attach_status.get("enabled", true)):
+		return
+
+	var attach_state = str(attach_status.get("status", "idle"))
+	if attach_state == "attached" or attach_state == "attaching" or attach_state == "heartbeat_pending":
+		var attached_status = _central_server_process_service.get_status()
+		_last_central_server_endpoint_reachable = bool(attached_status.get("endpoint_reachable", false))
+		return
+
+	var status = _central_server_process_service.ensure_service_running()
+	var endpoint_reachable = bool(status.get("endpoint_reachable", false))
+	if endpoint_reachable and not _last_central_server_endpoint_reachable:
+		_central_server_attach_service.request_attach_soon()
+	_last_central_server_endpoint_reachable = endpoint_reachable
+	if str(status.get("status", "")) == "starting":
+		_central_server_attach_service.request_attach_soon()
+
+
+func _configure_central_server_attach_service() -> void:
+	if _central_server_attach_service == null:
+		_central_server_attach_service = CentralServerAttachServiceScript.new()
+	_central_server_attach_service.configure(self, _state.settings)
+	_central_server_attach_service.start()
+
+
+func _get_central_server_attach_status() -> Dictionary:
+	if _central_server_attach_service == null:
+		return {}
+	return _localize_central_server_attach_status(_central_server_attach_service.get_status())
+
+
+func _get_central_server_process_status() -> Dictionary:
+	if _central_server_process_service == null:
+		return {}
+	return _central_server_process_service.get_status()
+
+
+func _localize_central_server_attach_status(status: Dictionary) -> Dictionary:
+	var localized = status.duplicate(true)
+	if _localization == null:
+		return localized
+
+	var last_error = str(localized.get("last_error", "")).strip_edges()
+	if not last_error.is_empty():
+		return localized
+
+	var message_key = "central_server_message_idle"
+	match str(localized.get("status", "idle")):
+		"disabled":
+			message_key = "central_server_message_disabled"
+		"configured":
+			message_key = "central_server_message_configured"
+		"attaching":
+			message_key = "central_server_message_attaching"
+		"attached":
+			message_key = "central_server_message_attached"
+		"heartbeat_pending":
+			message_key = "central_server_message_heartbeat_pending"
+		"stopped":
+			message_key = "central_server_message_stopped"
+	localized["message"] = _localization.get_text(message_key)
+	return localized
+
+
+func _resolve_central_server_process_feedback(status: Dictionary, action: String) -> String:
+	if _localization == null:
+		return str(status.get("message", ""))
+
+	match action:
+		"detect":
+			if bool(status.get("endpoint_reachable", false)):
+				return _localization.get_text("central_server_process_message_endpoint_reachable")
+			if bool(status.get("local_install_ready", false)):
+				return _localization.get_text("central_server_process_message_install_ready")
+			if bool(status.get("install_available", false)):
+				return _localization.get_text("central_server_process_message_install_available")
+			return _localization.get_text("central_server_process_detect_missing")
+		"install_error":
+			return _localization.get_text("central_server_process_install_failed")
+		"install_success":
+			if str(status.get("launch_source", "")) == "local_install":
+				return _localization.get_text("central_server_process_install_completed")
+			return _localization.get_text("central_server_process_install_completed_pending_restart")
+		"start":
+			if str(status.get("status", "")) == "launch_error":
+				return _localization.get_text("central_server_process_start_failed")
+			if bool(status.get("endpoint_reachable", false)):
+				return _localization.get_text("central_server_process_message_endpoint_reachable")
+			return _localization.get_text("central_server_process_starting")
+		"stop_error":
+			return _localization.get_text("central_server_process_stop_failed")
+		"stop_success":
+			return _localization.get_text("central_server_process_stopped_message")
+	return str(status.get("message", ""))
+
+
 func _get_user_tool_watch_status() -> Dictionary:
 	if _user_tool_watch_service == null:
 		return {}
@@ -1842,3 +2025,5 @@ func _refresh_service_instances() -> void:
 	_user_tool_service = UserToolService.new()
 	_user_tool_watch_service = UserToolWatchService.new()
 	_bridge_install_service = BridgeInstallServiceScript.new()
+	_central_server_attach_service = CentralServerAttachServiceScript.new()
+	_central_server_process_service = CentralServerProcessServiceScript.new()

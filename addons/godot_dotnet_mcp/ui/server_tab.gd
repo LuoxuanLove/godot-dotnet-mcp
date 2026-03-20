@@ -12,6 +12,10 @@ signal full_reload_requested
 signal bridge_install_requested
 signal bridge_validate_requested
 signal bridge_clear_requested
+signal central_server_detect_requested
+signal central_server_install_requested
+signal central_server_start_requested
+signal central_server_stop_requested
 signal clear_self_diagnostics_requested
 signal copy_requested(text: String, source: String)
 
@@ -37,6 +41,26 @@ signal copy_requested(text: String, source: String)
 @onready var _bridge_install_button: Button = %BridgeInstallButton
 @onready var _bridge_validate_button: Button = %BridgeValidateButton
 @onready var _bridge_clear_button: Button = %BridgeClearButton
+@onready var _central_server_section_divider: HSeparator = %CentralServerSectionDivider
+@onready var _central_server_section_title: Label = %CentralServerSectionTitle
+@onready var _central_server_status_title: Label = %CentralServerStatusTitle
+@onready var _central_server_status_value: Label = %CentralServerStatusValue
+@onready var _central_server_endpoint_title: Label = %CentralServerEndpointTitle
+@onready var _central_server_endpoint_value: Label = %CentralServerEndpointValue
+@onready var _central_server_project_title: Label = %CentralServerProjectTitle
+@onready var _central_server_project_value: Label = %CentralServerProjectValue
+@onready var _central_server_session_title: Label = %CentralServerSessionTitle
+@onready var _central_server_session_value: Label = %CentralServerSessionValue
+@onready var _central_server_message_title: Label = %CentralServerMessageTitle
+@onready var _central_server_message_value: Label = %CentralServerMessageValue
+@onready var _central_server_local_status_title: Label = %CentralServerLocalStatusTitle
+@onready var _central_server_local_status_value: Label = %CentralServerLocalStatusValue
+@onready var _central_server_local_command_title: Label = %CentralServerLocalCommandTitle
+@onready var _central_server_local_command_value: Label = %CentralServerLocalCommandValue
+@onready var _central_server_detect_button: Button = %CentralServerDetectButton
+@onready var _central_server_install_button: Button = %CentralServerInstallButton
+@onready var _central_server_start_button: Button = %CentralServerStartButton
+@onready var _central_server_stop_button: Button = %CentralServerStopButton
 @onready var _overview_buttons: GridContainer = %OverviewButtons
 @onready var _state_value: Label = %ServerStateValue
 @onready var _endpoint_value: Label = %EndpointValue
@@ -85,6 +109,10 @@ func _ready() -> void:
 	_bridge_install_button.pressed.connect(_on_bridge_install_button_pressed)
 	_bridge_validate_button.pressed.connect(_on_bridge_validate_button_pressed)
 	_bridge_clear_button.pressed.connect(_on_bridge_clear_button_pressed)
+	_central_server_detect_button.pressed.connect(_on_central_server_detect_button_pressed)
+	_central_server_install_button.pressed.connect(_on_central_server_install_button_pressed)
+	_central_server_start_button.pressed.connect(_on_central_server_start_button_pressed)
+	_central_server_stop_button.pressed.connect(_on_central_server_stop_button_pressed)
 	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
 	_self_diag_clear_button.pressed.connect(_on_self_diag_clear_pressed)
 
@@ -96,6 +124,8 @@ func apply_model(model: Dictionary) -> void:
 	var stats: Dictionary = model.get("stats", {})
 	var self_diagnostics: Dictionary = model.get("self_diagnostics", {})
 	var bridge_install: Dictionary = model.get("bridge_install", {})
+	var central_server_attach: Dictionary = model.get("central_server_attach", {})
+	var central_server_process: Dictionary = model.get("central_server_process", {})
 	var is_running = bool(model.get("is_running", false))
 	var editor_scale = float(model.get("editor_scale", 1.0))
 	_is_running = is_running
@@ -107,6 +137,8 @@ func apply_model(model: Dictionary) -> void:
 
 	_apply_self_diagnostics(model, localization)
 	_apply_bridge_install(bridge_install, localization)
+	_apply_central_server_attach(central_server_attach, localization)
+	_apply_central_server_process(central_server_process, localization)
 	_status_section_title.text = localization.get_text("plugin_overview_title")
 	_settings_section_title.text = localization.get_text("settings")
 	_advanced_section_title.text = localization.get_text("advanced_settings")
@@ -227,6 +259,84 @@ func _resolve_bridge_state_text(bridge_state: String, localization) -> String:
 			return localization.get_text("bridge_install_invalid")
 		_:
 			return localization.get_text("bridge_install_not_configured")
+
+
+func _apply_central_server_attach(central_server_attach: Dictionary, localization) -> void:
+	var status = str(central_server_attach.get("status", "idle"))
+	var endpoint = str(central_server_attach.get("endpoint", ""))
+	var project_id = str(central_server_attach.get("project_id", ""))
+	var session_id = str(central_server_attach.get("session_id", ""))
+	var message = str(central_server_attach.get("message", ""))
+	var last_error = str(central_server_attach.get("last_error", ""))
+	var enabled = bool(central_server_attach.get("enabled", true))
+
+	_central_server_section_title.text = localization.get_text("central_server_section_title")
+	_central_server_status_title.text = localization.get_text("central_server_status_label")
+	_central_server_endpoint_title.text = localization.get_text("central_server_endpoint_label")
+	_central_server_project_title.text = localization.get_text("central_server_project_label")
+	_central_server_session_title.text = localization.get_text("central_server_session_label")
+	_central_server_message_title.text = localization.get_text("central_server_message_label")
+
+	_central_server_status_value.text = _resolve_central_server_status_text(status, enabled, localization)
+	_central_server_endpoint_value.text = endpoint if not endpoint.is_empty() else "-"
+	_central_server_project_value.text = project_id if not project_id.is_empty() else "-"
+	_central_server_session_value.text = session_id if not session_id.is_empty() else "-"
+	_central_server_message_value.text = last_error if not last_error.is_empty() else (message if not message.is_empty() else localization.get_text("central_server_message_idle"))
+
+
+func _apply_central_server_process(central_server_process: Dictionary, localization) -> void:
+	if _central_server_local_status_title == null \
+	or _central_server_local_status_value == null \
+	or _central_server_local_command_title == null \
+	or _central_server_local_command_value == null \
+	or _central_server_detect_button == null \
+	or _central_server_install_button == null \
+	or _central_server_start_button == null \
+	or _central_server_stop_button == null:
+		return
+
+	var status = str(central_server_process.get("status", "idle"))
+	var launch_available = bool(central_server_process.get("launch_available", false))
+	var install_available = bool(central_server_process.get("install_available", false))
+	var local_install_ready = bool(central_server_process.get("local_install_ready", false))
+	var detected_command = str(central_server_process.get("detected_command", ""))
+	var pid = int(central_server_process.get("pid", 0))
+
+	_central_server_local_status_title.text = localization.get_text("central_server_local_status_label")
+	_central_server_local_command_title.text = localization.get_text("central_server_local_command_label")
+	_central_server_detect_button.text = localization.get_text("central_server_detect_button")
+	_central_server_install_button.text = localization.get_text("central_server_upgrade_button") if local_install_ready else localization.get_text("central_server_install_button")
+	_central_server_start_button.text = localization.get_text("central_server_start_button")
+	_central_server_stop_button.text = localization.get_text("central_server_stop_button")
+
+	var status_text = _resolve_central_server_process_status_text(status, localization)
+	if pid > 0:
+		status_text += " (PID %d)" % pid
+	if local_install_ready:
+		status_text += " · %s" % localization.get_text("central_server_process_install_ready")
+	elif install_available:
+		status_text += " · %s" % localization.get_text("central_server_process_install_available")
+	else:
+		status_text += " · %s" % localization.get_text("central_server_process_install_unavailable")
+	_central_server_local_status_value.text = status_text
+	_central_server_local_command_value.text = detected_command if not detected_command.is_empty() else localization.get_text("central_server_process_detect_missing")
+	_central_server_install_button.disabled = not install_available
+	_central_server_start_button.disabled = not launch_available or status == "running" or status == "starting"
+	_central_server_stop_button.disabled = pid <= 0
+
+
+func _resolve_central_server_process_status_text(status: String, localization) -> String:
+	var key = "central_server_process_status_%s" % status
+	var translated = localization.get_text(key)
+	return translated if translated != key else status.capitalize()
+
+
+func _resolve_central_server_status_text(status: String, enabled: bool, localization) -> String:
+	if not enabled:
+		return localization.get_text("central_server_status_disabled")
+	var key = "central_server_status_%s" % status
+	var translated = localization.get_text(key)
+	return translated if translated != key else status.capitalize()
 
 
 func _build_overview_health_text(self_diagnostics: Dictionary, localization) -> String:
@@ -364,6 +474,22 @@ func _on_bridge_clear_button_pressed() -> void:
 	bridge_clear_requested.emit()
 
 
+func _on_central_server_detect_button_pressed() -> void:
+	central_server_detect_requested.emit()
+
+
+func _on_central_server_install_button_pressed() -> void:
+	central_server_install_requested.emit()
+
+
+func _on_central_server_start_button_pressed() -> void:
+	central_server_start_requested.emit()
+
+
+func _on_central_server_stop_button_pressed() -> void:
+	central_server_stop_requested.emit()
+
+
 func _get_margin_node() -> MarginContainer:
 	return get_node_or_null("Scroll/Margin") as MarginContainer
 
@@ -392,15 +518,25 @@ func _apply_editor_scale(scale: float) -> void:
 	var self_diag_header = get_node("Scroll/Margin/Content/SelfDiagnosticsHeader") as HBoxContainer
 	var bridge_content = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent") as VBoxContainer
 	var bridge_status_row = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeStatusRow") as GridContainer
-	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as HBoxContainer
+	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as GridContainer
+	var central_server_content = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent") as VBoxContainer
+	var central_server_status_row = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow") as GridContainer
+	var central_server_buttons = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons") as GridContainer
 	status_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
 	status_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
-	overview_buttons.add_theme_constant_override("separation", int(round(8 * scale)))
+	overview_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	overview_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
 	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
 	bridge_content.add_theme_constant_override("separation", int(round(8 * scale)))
 	bridge_status_row.add_theme_constant_override("h_separation", int(round(12 * scale)))
 	bridge_status_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-	bridge_buttons.add_theme_constant_override("separation", int(round(8 * scale)))
+	bridge_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	bridge_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	central_server_content.add_theme_constant_override("separation", int(round(8 * scale)))
+	central_server_status_row.add_theme_constant_override("h_separation", int(round(12 * scale)))
+	central_server_status_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	central_server_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	central_server_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
 
 	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
 	settings_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
@@ -462,13 +598,18 @@ func _apply_responsive_layout() -> void:
 	var overview_buttons = get_node("Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons") as GridContainer
 	var bridge_center = get_node("Scroll/Margin/Content/BridgeContentCenter") as CenterContainer
 	var bridge_content = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent") as VBoxContainer
+	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as GridContainer
+	var central_server_center = get_node("Scroll/Margin/Content/CentralServerContentCenter") as CenterContainer
+	var central_server_content = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent") as VBoxContainer
+	var central_server_buttons = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons") as GridContainer
 	var settings_center = get_node("Scroll/Margin/Content/SettingsCenter") as CenterContainer
 	var settings_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent") as VBoxContainer
 	var section_divider = get_node("Scroll/Margin/Content/SectionDivider") as HSeparator
 	var bridge_divider = get_node("Scroll/Margin/Content/BridgeSectionDivider") as HSeparator
+	var central_server_divider = get_node("Scroll/Margin/Content/CentralServerSectionDivider") as HSeparator
 	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
 	var bridge_status_row = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeStatusRow") as GridContainer
-	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as HBoxContainer
+	var central_server_status_row = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow") as GridContainer
 	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
 	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
 	var advanced_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent") as VBoxContainer
@@ -481,14 +622,21 @@ func _apply_responsive_layout() -> void:
 		margin.add_theme_constant_override("margin_top", int(round(vertical_margin)))
 		margin.add_theme_constant_override("margin_bottom", int(round(vertical_margin)))
 	content.add_theme_constant_override("separation", int(round(section_spacing)))
-	overview_buttons.add_theme_constant_override("separation", int(round(row_spacing)))
+	overview_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	overview_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
 	bridge_content.add_theme_constant_override("separation", int(round(section_spacing)))
+	central_server_content.add_theme_constant_override("separation", int(round(section_spacing)))
 	settings_content.add_theme_constant_override("separation", int(round(section_spacing)))
 	status_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
 	status_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
 	bridge_status_row.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
 	bridge_status_row.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
-	bridge_buttons.add_theme_constant_override("separation", int(round(row_spacing)))
+	bridge_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	bridge_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
+	central_server_status_row.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
+	central_server_status_row.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
+	central_server_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	central_server_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
 	settings_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
 	settings_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
 	log_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
@@ -504,13 +652,21 @@ func _apply_responsive_layout() -> void:
 	overview_buttons.custom_minimum_size.x = content_width
 	bridge_center.custom_minimum_size.x = content_width
 	bridge_content.custom_minimum_size.x = content_width
+	bridge_buttons.custom_minimum_size.x = content_width
+	central_server_center.custom_minimum_size.x = content_width
+	central_server_content.custom_minimum_size.x = content_width
+	central_server_buttons.custom_minimum_size.x = content_width
 	settings_center.custom_minimum_size.x = content_width
 	settings_content.custom_minimum_size.x = content_width
 	section_divider.custom_minimum_size.x = content_width
 	bridge_divider.custom_minimum_size.x = content_width
+	central_server_divider.custom_minimum_size.x = content_width
 	status_grid.columns = status_columns
 	overview_buttons.columns = 1 if narrow_layout else (2 if compact_layout else 3)
 	bridge_status_row.columns = 2 if not narrow_layout else 1
+	bridge_buttons.columns = 1 if ultra_narrow_layout else 2
+	central_server_status_row.columns = 2 if not narrow_layout else 1
+	central_server_buttons.columns = 1 if ultra_narrow_layout else 2
 	settings_grid.columns = settings_columns
 	log_level_row.columns = settings_columns
 	permission_level_row.columns = settings_columns
@@ -546,6 +702,15 @@ func _apply_responsive_layout() -> void:
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x = field_width if bridge_status_row.columns == 2 else content_width
 
+	for title_label in [_central_server_status_title, _central_server_endpoint_title, _central_server_project_title, _central_server_session_title, _central_server_message_title, _central_server_local_status_title, _central_server_local_command_title]:
+		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		title_label.custom_minimum_size.x = label_width if central_server_status_row.columns == 2 else 0.0
+
+	for value_label in [_central_server_status_value, _central_server_endpoint_value, _central_server_project_value, _central_server_session_value, _central_server_message_value, _central_server_local_status_value, _central_server_local_command_value]:
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		value_label.custom_minimum_size.x = field_width if central_server_status_row.columns == 2 else content_width
+
 	_port_spin.custom_minimum_size.y = 32.0 * scale
 	_port_spin.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 	_log_level_option.custom_minimum_size.y = 32.0 * scale
@@ -556,6 +721,8 @@ func _apply_responsive_layout() -> void:
 	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 
 	var button_width = content_width if overview_buttons.columns == 1 else (content_width - row_spacing * float(overview_buttons.columns - 1)) / float(overview_buttons.columns)
+	var bridge_button_width = content_width if bridge_buttons.columns == 1 else (content_width - row_spacing * float(bridge_buttons.columns - 1)) / float(bridge_buttons.columns)
+	var central_server_button_width = content_width if central_server_buttons.columns == 1 else (content_width - row_spacing * float(central_server_buttons.columns - 1)) / float(central_server_buttons.columns)
 	for button in [_start_button, _restart_button, _full_reload_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = button_width
@@ -563,7 +730,11 @@ func _apply_responsive_layout() -> void:
 
 	for button in [_bridge_install_button, _bridge_validate_button, _bridge_clear_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.custom_minimum_size.x = content_width if overview_buttons.columns == 1 else button_width
+		button.custom_minimum_size.x = bridge_button_width
+		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+	for button in [_central_server_detect_button, _central_server_install_button, _central_server_start_button, _central_server_stop_button]:
+		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.custom_minimum_size.x = central_server_button_width
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
 	for button in [_self_diag_copy_button, _self_diag_clear_button]:
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale

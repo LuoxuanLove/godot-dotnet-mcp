@@ -111,7 +111,8 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 columns = 3
 size_flags_horizontal = 4
-theme_override_constants/separation = 8
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
 
 [node name="StartButton" type="Button" parent="Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons"]
 unique_name_in_owner = true
@@ -261,8 +262,10 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="BridgeButtons" type="HBoxContainer" parent="Scroll/Margin/Content/BridgeContentCenter/BridgeContent"]
-theme_override_constants/separation = 8
+[node name="BridgeButtons" type="GridContainer" parent="Scroll/Margin/Content/BridgeContentCenter/BridgeContent"]
+columns = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
 
 [node name="BridgeInstallButton" type="Button" parent="Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons"]
 unique_name_in_owner = true
@@ -273,5 +276,96 @@ unique_name_in_owner = true
 size_flags_horizontal = 3
 
 [node name="BridgeClearButton" type="Button" parent="Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerSectionDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerSectionTitle" type="Label" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+
+[node name="CentralServerContentCenter" type="CenterContainer" parent="Scroll/Margin/Content"]
+size_flags_horizontal = 3
+
+[node name="CentralServerContent" type="VBoxContainer" parent="Scroll/Margin/Content/CentralServerContentCenter"]
+size_flags_horizontal = 4
+theme_override_constants/separation = 8
+
+[node name="CentralServerStatusRow" type="GridContainer" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent"]
+unique_name_in_owner = true
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+
+[node name="CentralServerLocalStatusTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerLocalStatusValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerLocalCommandTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerLocalCommandValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerStatusTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerStatusValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerEndpointTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerEndpointValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerProjectTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerProjectValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerSessionTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerSessionValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerMessageTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerMessageValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerButtons" type="GridContainer" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent"]
+columns = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="CentralServerDetectButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerInstallButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerStartButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerStopButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
