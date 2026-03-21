@@ -11,14 +11,16 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
     private readonly EditorSessionService _sessions;
     private readonly TcpListener _listener;
     private readonly string _prefix;
+    private readonly Func<Task>? _shutdownRequested;
     private Task? _loopTask;
 
-    public EditorAttachHttpServer(string host, int port, EditorSessionService sessions, TextWriter error)
+    public EditorAttachHttpServer(string host, int port, EditorSessionService sessions, TextWriter error, Func<Task>? shutdownRequested = null)
     {
         _sessions = sessions;
         _error = error;
         _listener = new TcpListener(ParseAddress(host), port);
         _prefix = $"http://{host}:{port}/";
+        _shutdownRequested = shutdownRequested;
     }
 
     public string Prefix => _prefix;
@@ -92,6 +94,13 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
             var request = await ReadRequestAsync(stream, cancellationToken);
             if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase))
             {
+                if (string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(request.Path, "/api/server/health", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteJsonResponseAsync(stream, 200, new { success = true, status = "ok", endpoint = _prefix }, cancellationToken);
+                    return;
+                }
+
                 await WriteJsonResponseAsync(stream, 405, new { success = false, error = "Method not allowed" }, cancellationToken);
                 return;
             }
@@ -106,6 +115,9 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
                     return;
                 case "/api/editor/detach":
                     await HandleDetachAsync(stream, request.Body, cancellationToken);
+                    return;
+                case "/api/server/shutdown":
+                    await HandleShutdownAsync(stream, cancellationToken);
                     return;
                 default:
                     await WriteJsonResponseAsync(stream, 404, new { success = false, error = "Not found", path = request.Path }, cancellationToken);
@@ -152,6 +164,15 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
         var request = DeserializeBody<EditorSessionService.EditorSessionDetachRequest>(body);
         var result = _sessions.Detach(request);
         await WriteJsonResponseAsync(stream, 200, result, cancellationToken);
+    }
+
+    private async Task HandleShutdownAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        await WriteJsonResponseAsync(stream, 200, new { success = true, shuttingDown = true }, cancellationToken);
+        if (_shutdownRequested is not null)
+        {
+            _ = Task.Run(_shutdownRequested, CancellationToken.None);
+        }
     }
 
     private static async Task<ParsedRequest> ReadRequestAsync(NetworkStream stream, CancellationToken cancellationToken)

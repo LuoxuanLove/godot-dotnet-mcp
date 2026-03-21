@@ -42,7 +42,7 @@ Godot .NET MCP Central Server
 
 Usage:
   GodotDotnetMcp.CentralServer [--stdio]
-  GodotDotnetMcp.CentralServer --attach-only [--attach-host HOST] [--attach-port PORT]
+  GodotDotnetMcp.CentralServer --attach-only [--attach-host HOST] [--attach-port PORT] [--log-file PATH]
   GodotDotnetMcp.CentralServer --proxy-call --tool TOOL [--server-host HOST] [--server-port PORT] [--args-json JSON] [--arg key=value]
   GodotDotnetMcp.CentralServer --health
   GodotDotnetMcp.CentralServer --version
@@ -50,6 +50,7 @@ Usage:
 Modes:
   --stdio        Start the MCP stdio server (default)
   --attach-only  Start only the local editor attach HTTP server and keep running
+                 Optional: --log-file PATH writes attach-only logs to a local file
   --proxy-call   Forward one tool call directly to a Godot editor MCP HTTP endpoint
                  Use --arg key=value for simple arguments, or --args-json for a full JSON object
   --health       Print a JSON health snapshot and exit
@@ -98,7 +99,16 @@ Modes:
         var server = new CentralStdioMcpServer(output, error, dispatcher);
         using var attachServerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var attachEndpoint = ResolveAttachEndpoint(options: null, configuration);
-        await using var attachServer = new EditorAttachHttpServer(attachEndpoint.Host, attachEndpoint.Port, editorSessions, error);
+        await using var attachServer = new EditorAttachHttpServer(
+            attachEndpoint.Host,
+            attachEndpoint.Port,
+            editorSessions,
+            error,
+            () =>
+            {
+                attachServerCts.Cancel();
+                return Task.CompletedTask;
+            });
         attachServer.Start(attachServerCts.Token);
         try
         {
@@ -117,23 +127,62 @@ Modes:
         var registry = new ProjectRegistryService();
         var editorSessions = new EditorSessionService(registry);
         var attachEndpoint = ResolveAttachEndpoint(args, configuration);
+        using var attachOnlyCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        await using var logWriter = await CreateOptionalLogWriterAsync(args, cancellationToken);
+        var effectiveError = logWriter is null ? error : TextWriter.Synchronized(new CompositeTextWriter(error, logWriter));
 
-        await using var attachServer = new EditorAttachHttpServer(attachEndpoint.Host, attachEndpoint.Port, editorSessions, error);
-        attachServer.Start(cancellationToken);
+        await using var attachServer = new EditorAttachHttpServer(
+            attachEndpoint.Host,
+            attachEndpoint.Port,
+            editorSessions,
+            effectiveError,
+            () =>
+            {
+                attachOnlyCts.Cancel();
+                return Task.CompletedTask;
+            });
+        attachServer.Start(attachOnlyCts.Token);
 
         await using var writer = new StreamWriter(output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
         await writer.WriteLineAsync($"attach-only listening on http://{attachEndpoint.Host}:{attachEndpoint.Port}/");
         await writer.FlushAsync();
+        await effectiveError.WriteLineAsync($"attach-only listening on http://{attachEndpoint.Host}:{attachEndpoint.Port}/");
+        await effectiveError.FlushAsync();
 
         try
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            await Task.Delay(Timeout.Infinite, attachOnlyCts.Token);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (attachOnlyCts.IsCancellationRequested)
         {
         }
 
         return 0;
+    }
+
+    private static async Task<StreamWriter?> CreateOptionalLogWriterAsync(string[] args, CancellationToken cancellationToken)
+    {
+        var logFilePath = GetOptionValue(args, "--log-file");
+        if (string.IsNullOrWhiteSpace(logFilePath))
+        {
+            return null;
+        }
+
+        var normalizedPath = Path.GetFullPath(logFilePath);
+        var directory = Path.GetDirectoryName(normalizedPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var stream = new FileStream(normalizedPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+        {
+            AutoFlush = true
+        };
+        await writer.WriteLineAsync($"[{DateTimeOffset.Now:O}] Starting attach-only server.");
+        await writer.FlushAsync(cancellationToken);
+        return writer;
     }
 
     private static async Task<int> RunProxyCallAsync(string[] args, Stream output, TextWriter error, CancellationToken cancellationToken)
@@ -355,4 +404,48 @@ Modes:
         DateTimeOffset TimestampUtc);
 
     private sealed record AttachEndpoint(string Host, int Port);
+
+    private sealed class CompositeTextWriter : TextWriter
+    {
+        private readonly TextWriter[] _writers;
+
+        public CompositeTextWriter(params TextWriter[] writers)
+        {
+            _writers = writers;
+        }
+
+        public override Encoding Encoding => _writers.Length > 0 ? _writers[0].Encoding : Encoding.UTF8;
+
+        public override void Write(char value)
+        {
+            foreach (var writer in _writers)
+            {
+                writer.Write(value);
+            }
+        }
+
+        public override void Write(string? value)
+        {
+            foreach (var writer in _writers)
+            {
+                writer.Write(value);
+            }
+        }
+
+        public override async Task WriteLineAsync(string? value)
+        {
+            foreach (var writer in _writers)
+            {
+                await writer.WriteLineAsync(value);
+            }
+        }
+
+        public override async Task FlushAsync()
+        {
+            foreach (var writer in _writers)
+            {
+                await writer.FlushAsync();
+            }
+        }
+    }
 }

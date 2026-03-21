@@ -12,6 +12,7 @@ const CentralServerAttachServiceScript = preload("res://addons/godot_dotnet_mcp/
 const CentralServerProcessServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/central_server_process_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
+const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
@@ -30,6 +31,7 @@ var _settings_store := SettingsStore.new()
 var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
+var _client_install_detection_service := ClientInstallDetectionService.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
 var _bridge_install_service: BridgeInstallService
@@ -38,6 +40,8 @@ var _central_server_process_service: CentralServerProcessService
 var _localization: LocalizationService
 var _dock: Control
 var _bridge_install_dialog: FileDialog
+var _client_executable_dialog: FileDialog
+var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
@@ -90,6 +94,7 @@ func _exit_tree() -> void:
 		_central_server_process_service.stop_service()
 	_remove_dock()
 	_remove_bridge_install_dialog()
+	_remove_client_executable_dialog()
 	_uninstall_editor_debugger_bridge()
 	_dispose_server_controller()
 	LocalizationService.reset_instance()
@@ -100,6 +105,7 @@ func _exit_tree() -> void:
 	_central_server_process_service = null
 	_last_central_server_endpoint_reachable = false
 	_config_service = null
+	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
@@ -202,8 +208,13 @@ func _load_state() -> void:
 	)
 	_state.settings = load_result["settings"]
 	_state.settings["auto_start"] = true
+	if not (_state.settings.get("client_manual_paths", {}) is Dictionary):
+		_state.settings["client_manual_paths"] = {}
+	_state.current_cli_scope = str(_state.settings.get("current_cli_scope", _state.current_cli_scope))
+	_state.current_config_platform = str(_state.settings.get("current_config_platform", _state.current_config_platform))
 	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
 	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_configure_client_install_detection_service()
 
 
 func _save_settings() -> void:
@@ -378,6 +389,40 @@ func _remove_bridge_install_dialog() -> void:
 	_bridge_install_dialog = null
 
 
+func _ensure_client_executable_dialog() -> void:
+	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
+		return
+
+	var editor_interface = get_editor_interface()
+	if editor_interface == null:
+		return
+	var base_control = editor_interface.get_base_control()
+	if base_control == null:
+		return
+
+	_client_executable_dialog = FileDialog.new()
+	_client_executable_dialog.name = "ClientExecutableDialog"
+	_client_executable_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_client_executable_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_client_executable_dialog.filters = PackedStringArray([
+		"*.exe ; Executable",
+		"*.cmd ; Command Script",
+		"*.bat ; Batch Script",
+		"* ; All Files"
+	])
+	_client_executable_dialog.file_selected.connect(_on_client_executable_file_selected)
+	base_control.add_child(_client_executable_dialog)
+
+
+func _remove_client_executable_dialog() -> void:
+	if _client_executable_dialog == null:
+		return
+	if is_instance_valid(_client_executable_dialog):
+		_client_executable_dialog.queue_free()
+	_client_executable_dialog = null
+	_pending_client_path_request = {}
+
+
 func _open_bridge_install_dialog() -> void:
 	_ensure_bridge_install_dialog()
 	if _bridge_install_dialog == null or not is_instance_valid(_bridge_install_dialog):
@@ -435,6 +480,16 @@ func _on_central_server_detect_requested() -> void:
 func _on_central_server_install_requested() -> void:
 	if _central_server_process_service == null:
 		return
+	var preview = _central_server_process_service.refresh_detection()
+	if not bool(preview.get("install_available", false)):
+		_show_message(_resolve_central_server_process_feedback(preview, "detect"))
+		return
+	_show_confirmation(_build_central_server_install_confirmation(preview), Callable(self, "_perform_central_server_install"))
+
+
+func _perform_central_server_install() -> void:
+	if _central_server_process_service == null:
+		return
 	var status = _central_server_process_service.install_or_update_service()
 	_refresh_dock()
 	if not bool(status.get("success", false)):
@@ -443,7 +498,12 @@ func _on_central_server_install_requested() -> void:
 	var running_status = _central_server_process_service.ensure_service_running()
 	if _central_server_attach_service != null:
 		_central_server_attach_service.request_attach_soon()
-	_show_message(_resolve_central_server_process_feedback(status, "install_success"))
+	var success_message = _resolve_central_server_process_feedback(status, "install_success")
+	var install_details = _build_central_server_install_details(status)
+	if install_details.is_empty():
+		_show_message(success_message)
+	else:
+		_show_message("%s\n\n%s" % [success_message, install_details])
 	if str(running_status.get("status", "")) == "launch_error":
 		_show_message(_resolve_central_server_process_feedback(running_status, "start"))
 
@@ -470,6 +530,26 @@ func _on_central_server_stop_requested() -> void:
 		_show_message(_resolve_central_server_process_feedback(status, "stop_error"))
 		return
 	_show_message(_resolve_central_server_process_feedback(status, "stop_success"))
+
+
+func _on_central_server_open_install_dir_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var result = _central_server_process_service.open_install_directory()
+	if not bool(result.get("success", false)):
+		_show_message(_localization.get_text("central_server_open_install_dir_failed"))
+		return
+	_show_message(_localization.get_text("central_server_open_install_dir_success"))
+
+
+func _on_central_server_open_logs_requested() -> void:
+	if _central_server_process_service == null:
+		return
+	var result = _central_server_process_service.open_log_location()
+	if not bool(result.get("success", false)):
+		_show_message(_localization.get_text("central_server_open_logs_failed"))
+		return
+	_show_message(_localization.get_text("central_server_open_logs_success"))
 
 
 func _on_clear_self_diagnostics_requested() -> void:
@@ -560,7 +640,7 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("start_requested", _on_start_requested, operation_id) and connected
 	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
 	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
-	connected = _connect_dock_signal("full_reload_requested", _on_full_reload_requested, operation_id) and connected
+	connected = _connect_dock_signal("full_reload_requested", runtime_full_reload, operation_id) and connected
 	connected = _connect_dock_signal("bridge_install_requested", _on_bridge_install_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_validate_requested", _on_bridge_validate_requested, operation_id) and connected
 	connected = _connect_dock_signal("bridge_clear_requested", _on_bridge_clear_requested, operation_id) and connected
@@ -568,6 +648,8 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("central_server_install_requested", _on_central_server_install_requested, operation_id) and connected
 	connected = _connect_dock_signal("central_server_start_requested", _on_central_server_start_requested, operation_id) and connected
 	connected = _connect_dock_signal("central_server_stop_requested", _on_central_server_stop_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_open_install_dir_requested", _on_central_server_open_install_dir_requested, operation_id) and connected
+	connected = _connect_dock_signal("central_server_open_logs_requested", _on_central_server_open_logs_requested, operation_id) and connected
 	connected = _connect_dock_signal("clear_self_diagnostics_requested", _on_clear_self_diagnostics_requested, operation_id) and connected
 	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
@@ -576,7 +658,15 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("tree_collapse_changed", _on_tree_collapse_changed, operation_id) and connected
 	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
 	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
+	connected = _connect_dock_signal("config_validate_requested", _on_config_validate_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_action_requested", _on_config_client_action_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_launch_requested", _on_config_client_launch_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_path_pick_requested", _on_config_client_path_pick_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_path_clear_requested", _on_config_client_path_clear_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_open_config_dir_requested", _on_config_client_open_config_dir_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_client_open_config_file_requested", _on_config_client_open_config_file_requested, operation_id) and connected
 	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
+	connected = _connect_dock_signal("config_remove_requested", _on_config_remove_requested, operation_id) and connected
 	connected = _connect_dock_signal("copy_requested", _on_copy_requested, operation_id) and connected
 	return connected
 
@@ -598,6 +688,7 @@ func _build_dock_model() -> Dictionary:
 			tools_by_category.erase(category)
 	var tool_names = _tool_catalog.build_tool_name_index(all_tools_by_category)
 	var profile_id = str(_state.settings.get("tool_profile_id", "default"))
+	var current_tab = int(_state.current_tab)
 
 	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
 		profile_id = _tool_catalog.find_matching_profile_id(
@@ -610,16 +701,28 @@ func _build_dock_model() -> Dictionary:
 			profile_id = "default"
 		_state.settings["tool_profile_id"] = profile_id
 
-	var desktop_clients = _build_desktop_client_models()
-	var cli_clients = _build_cli_client_models()
-	var config_platforms = _build_config_platform_models(desktop_clients, cli_clients)
-	_state.current_config_platform = _resolve_current_config_platform(config_platforms)
-
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var bridge_install = _get_bridge_install_service().build_snapshot(_state.settings)
 	var central_server_attach = _get_central_server_attach_status()
 	var central_server_process = _get_central_server_process_status()
 	var user_tool_watch = _get_user_tool_watch_status()
+	var user_tools: Array = []
+	var desktop_clients: Array[Dictionary] = []
+	var cli_clients: Array[Dictionary] = []
+	var config_platforms: Array[Dictionary] = []
+	var config_connection_mode := {}
+
+	if current_tab == 1:
+		user_tools = _user_tool_service.list_user_tools()
+
+	if current_tab == 2:
+		var client_install_statuses = _get_client_install_statuses()
+		desktop_clients = _build_desktop_client_models(central_server_process, client_install_statuses)
+		cli_clients = _build_cli_client_models(central_server_process, client_install_statuses)
+		config_platforms = _build_config_platform_models(desktop_clients, cli_clients)
+		_state.current_config_platform = _resolve_current_config_platform(config_platforms)
+		_state.settings["current_config_platform"] = _state.current_config_platform
+		config_connection_mode = _build_config_connection_mode(central_server_process)
 	return {
 		"localization": _localization,
 		"settings": _state.settings,
@@ -650,16 +753,19 @@ func _build_dock_model() -> Dictionary:
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
 		"profile_description": _get_tool_profile_description(profile_id, tool_names),
-		"user_tools": _user_tool_service.list_user_tools(),
+		"user_tools": user_tools,
 		"user_tool_watch": user_tool_watch,
 		"desktop_clients": desktop_clients,
 		"cli_clients": cli_clients,
-		"config_platforms": config_platforms
+		"config_platforms": config_platforms,
+		"config_connection_mode": config_connection_mode
 	}
 
 
 func _refresh_dock() -> void:
 	if _dock == null or not is_instance_valid(_dock):
+		return
+	if not _dock.is_visible_in_tree():
 		return
 	_dock.apply_model(_build_dock_model())
 
@@ -709,54 +815,417 @@ func _get_tool_profile_description(profile_id: String, tool_names: Array) -> Str
 	return description
 
 
-func _build_desktop_client_models() -> Array[Dictionary]:
+func _build_desktop_client_models(central_server_process: Dictionary = {}, client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
 	var host = str(_state.settings.get("host", "127.0.0.1"))
 	var port = int(_state.settings.get("port", 3000))
+	var transport = _build_client_transport_model(central_server_process, host, port)
 	return [
-		{
+		_build_client_ui_model("claude_desktop", {
 			"id": "claude_desktop",
 			"name_key": "config_client_claude_desktop",
-			"summary_key": "config_client_claude_desktop_desc",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("claude_desktop", transport), transport),
 			"path": _config_service.get_claude_config_path(),
-			"content": _config_service.get_url_config(host, port),
+			"content": _build_desktop_client_config_content(transport),
 			"writeable": true
-		},
-		{
+		}, client_install_statuses),
+		_build_client_ui_model("cursor", {
 			"id": "cursor",
 			"name_key": "config_client_cursor",
-			"summary_key": "config_client_cursor_desc",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("cursor", transport), transport),
 			"path": _config_service.get_cursor_config_path(),
-			"content": _config_service.get_url_config(host, port),
+			"content": _build_desktop_client_config_content(transport),
 			"writeable": true
-		},
-		{
+		}, client_install_statuses),
+		_build_client_ui_model("trae", {
+			"id": "trae",
+			"name_key": "config_client_trae",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("trae", transport), transport),
+			"path": _config_service.get_trae_config_path(),
+			"content": _build_desktop_client_config_content(transport),
+			"writeable": true
+		}, client_install_statuses),
+		_build_client_ui_model("codex_desktop", {
+			"id": "codex_desktop",
+			"name_key": "config_client_codex_desktop",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("codex_desktop", transport), transport),
+			"content": "",
+			"writeable": false
+		}, client_install_statuses),
+		_build_client_ui_model("opencode_desktop", {
+			"id": "opencode_desktop",
+			"name_key": "config_client_opencode_desktop",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("opencode_desktop", transport), transport),
+			"content": "",
+			"writeable": false
+		}, client_install_statuses),
+		_build_client_ui_model("gemini", {
 			"id": "gemini",
 			"name_key": "config_client_gemini",
-			"summary_key": "config_client_gemini_desc",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("gemini", transport), transport),
 			"path": _config_service.get_gemini_config_path(),
-			"content": _config_service.get_http_url_config(host, port),
+			"content": _build_gemini_client_config_content(transport),
 			"writeable": true
-		}
+		}, client_install_statuses)
 	]
 
 
-func _build_cli_client_models() -> Array[Dictionary]:
+func _build_cli_client_models(central_server_process: Dictionary = {}, client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
 	var host = str(_state.settings.get("host", "127.0.0.1"))
 	var port = int(_state.settings.get("port", 3000))
+	var transport = _build_client_transport_model(central_server_process, host, port)
 	return [
-		{
+		_build_client_ui_model("claude_code", {
 			"id": "claude_code",
 			"name_key": "config_client_claude_code",
-			"summary_key": "config_client_claude_code_desc",
-			"content": _config_service.get_claude_code_command(_state.current_cli_scope, host, port)
-		},
-		{
+			"summary_text": _build_client_summary_text(_get_cli_summary_key("claude_code", transport), transport),
+			"content": _build_claude_code_cli_content(transport),
+			"launch_action_label_key": "config_client_action_open_terminal"
+		}, client_install_statuses),
+		_build_client_ui_model("codex", {
 			"id": "codex",
 			"name_key": "config_client_codex",
-			"summary_key": "config_client_codex_desc",
-			"content": _config_service.get_codex_command(host, port)
-		}
+			"summary_text": _build_client_summary_text(_get_cli_summary_key("codex", transport), transport),
+			"content": _build_codex_cli_content(transport),
+			"primary_action_label_key": "config_client_action_add",
+			"launch_action_label_key": "config_client_action_open_terminal"
+		}, client_install_statuses),
+		_build_client_ui_model("opencode", {
+			"id": "opencode",
+			"name_key": "config_client_opencode",
+			"summary_text": _build_client_summary_text(_get_cli_summary_key("opencode", transport), transport),
+			"path": _config_service.get_opencode_config_path(),
+			"content": _build_opencode_cli_content(transport),
+			"writeable": true,
+			"launch_action_label_key": "config_client_action_open_terminal"
+		}, client_install_statuses)
 	]
+
+
+func _build_client_transport_model(central_server_process: Dictionary, host: String, port: int) -> Dictionary:
+	var launch_available = bool(central_server_process.get("client_launch_available", false))
+	var executable_path = str(central_server_process.get("client_executable_path", "")).strip_edges()
+	var arguments = central_server_process.get("client_arguments", [])
+	var argument_list: Array = []
+	if arguments is Array:
+		argument_list.assign(arguments)
+	elif arguments is PackedStringArray:
+		argument_list.assign(Array(arguments))
+
+	if launch_available and not executable_path.is_empty():
+		return {
+			"mode": "stdio",
+			"command": executable_path,
+			"args": argument_list,
+			"mode_label_key": "config_transport_local_stdio"
+		}
+
+	return {
+		"mode": "http",
+		"host": host,
+		"port": port,
+		"mode_label_key": "config_transport_http_fallback"
+	}
+
+
+func _build_client_summary_text(base_key: String, transport: Dictionary) -> String:
+	var base_text = _localization.get_text(base_key)
+	var transport_text = _localization.get_text(str(transport.get("mode_label_key", "")))
+	if transport_text.is_empty() or transport_text == str(transport.get("mode_label_key", "")):
+		return base_text
+	return "%s\n%s" % [base_text, transport_text]
+
+
+func _build_desktop_client_config_content(transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return _config_service.get_command_config(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return _config_service.get_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
+
+
+func _build_gemini_client_config_content(transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return _config_service.get_command_config(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return _config_service.get_http_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
+
+
+func _build_claude_code_cli_content(transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return _config_service.get_claude_code_stdio_command(
+			_state.current_cli_scope,
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return _config_service.get_claude_code_command(
+		_state.current_cli_scope,
+		str(transport.get("host", "127.0.0.1")),
+		int(transport.get("port", 3000))
+	)
+
+
+func _build_codex_cli_content(transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return _config_service.get_codex_stdio_command(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return _config_service.get_codex_command(
+		str(transport.get("host", "127.0.0.1")),
+		int(transport.get("port", 3000))
+	)
+
+
+func _build_opencode_cli_content(transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return _config_service.get_opencode_local_config(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return _config_service.get_opencode_remote_config(
+		str(transport.get("host", "127.0.0.1")),
+		int(transport.get("port", 3000))
+	)
+
+
+func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		match client_id:
+			"claude_code":
+				return "config_client_claude_code_stdio_desc"
+			"codex":
+				return "config_client_codex_stdio_desc"
+			"opencode":
+				return "config_client_opencode_stdio_desc"
+	return "config_client_%s_desc" % client_id
+
+
+func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		match client_id:
+			"claude_desktop":
+				return "config_client_claude_desktop_stdio_desc"
+			"cursor":
+				return "config_client_cursor_stdio_desc"
+			"trae":
+				return "config_client_trae_stdio_desc"
+			"gemini":
+				return "config_client_gemini_stdio_desc"
+	return "config_client_%s_desc" % client_id
+
+
+func _build_config_connection_mode(central_server_process: Dictionary) -> Dictionary:
+	var transport = _build_client_transport_model(
+		central_server_process,
+		str(_state.settings.get("host", "127.0.0.1")),
+		int(_state.settings.get("port", 3000))
+	)
+	var description = _localization.get_text(str(transport.get("mode_label_key", "")))
+	if str(transport.get("mode", "")) == "stdio":
+		var command = str(central_server_process.get("client_command", "")).strip_edges()
+		return {
+			"mode": "stdio",
+			"label": _localization.get_text("config_mode_local_stdio_title"),
+			"description": "%s\n%s" % [_localization.get_text("config_mode_local_stdio_desc"), command],
+			"validate_enabled": not command.is_empty()
+		}
+	var endpoint = "http://%s:%d/mcp" % [str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000))]
+	return {
+		"mode": "http",
+		"label": description,
+		"description": "%s\n%s" % [_localization.get_text("config_mode_http_fallback_desc"), endpoint],
+		"validate_enabled": true
+	}
+
+
+func _build_client_ui_model(client_id: String, client: Dictionary, client_install_statuses: Dictionary) -> Dictionary:
+	var model = client.duplicate(true)
+	var detection: Dictionary = client_install_statuses.get(client_id, {})
+	var codex_cli_detection: Dictionary = client_install_statuses.get("codex", {})
+	var opencode_cli_detection: Dictionary = client_install_statuses.get("opencode", {})
+	model["path_label_text"] = _localization.get_text("config_client_write_path_label")
+	if detection.is_empty():
+		return model
+
+	var status = str(detection.get("status", ""))
+	if not status.is_empty():
+		model["install_status_text"] = _get_client_install_status_text(status)
+		model["install_message_text"] = _get_client_install_message_text(client_id, status)
+	if bool(detection.get("manual_path_invalid", false)):
+		model["install_message_text"] = _localization.get_text("config_client_manual_path_invalid_msg")
+
+	var runtime_status = str(detection.get("runtime_status", {}).get("status", ""))
+	if not runtime_status.is_empty():
+		model["runtime_status_text"] = _get_client_runtime_status_text(runtime_status)
+
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", ""))
+	if not entry_status.is_empty():
+		model["entry_status_text"] = _get_client_entry_status_text(entry_status)
+
+	var config_path = str(detection.get("config_path", "")).strip_edges()
+	if not config_path.is_empty():
+		model["path"] = config_path
+
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	var using_manual_path = bool(detection.get("using_manual_path", false))
+	var has_manual_path = bool(detection.get("has_manual_path", false))
+	model["path_source_text"] = _get_client_path_source_text(
+		str(detection.get("detected_via", "")),
+		using_manual_path,
+		not executable_path.is_empty()
+	)
+	if not executable_path.is_empty():
+		if client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
+			model["detail_label_text"] = _localization.get_text("config_client_cli_entry_label")
+			model["explanation_text"] = _localization.get_text("config_client_cli_detected_explainer")
+		else:
+			model["detail_label_text"] = _localization.get_text("config_client_program_entry_label")
+			model["explanation_text"] = _localization.get_text("config_client_desktop_path_explainer")
+		model["detail_value"] = executable_path
+	elif client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
+		model["detail_label_text"] = _localization.get_text("config_client_cli_path_label")
+		model["detail_value"] = executable_path
+		model["explanation_text"] = _localization.get_text("config_client_cli_missing_explainer")
+	elif client_id == "claude_desktop" or client_id == "cursor" or client_id == "trae":
+		model["explanation_text"] = _localization.get_text("config_client_desktop_write_only_explainer")
+	else:
+		model["explanation_text"] = _localization.get_text("config_client_pick_path_explainer")
+
+	if using_manual_path:
+		model["explanation_text"] = _localization.get_text("config_client_custom_path_explainer")
+
+	match client_id:
+		"codex_desktop":
+			model["guidance_text"] = _localization.get_text(
+				"config_client_codex_desktop_cli_recommendation_ready"
+				if str(codex_cli_detection.get("status", "")) == "ready"
+				else "config_client_codex_desktop_cli_recommendation_missing"
+			)
+			if str(detection.get("detected_via", "")) == "windows_store":
+				var store_note = _localization.get_text("config_client_codex_desktop_store_notice")
+				if not store_note.is_empty():
+					model["guidance_text"] = "%s\n%s" % [model["guidance_text"], store_note]
+		"opencode_desktop":
+			model["guidance_text"] = _localization.get_text(
+				"config_client_opencode_desktop_cli_recommendation_ready"
+				if str(opencode_cli_detection.get("status", "")) == "ready"
+				else "config_client_opencode_desktop_cli_recommendation_missing"
+			)
+
+	model["launch_supported"] = bool(detection.get("launch_supported", false))
+	model["launch_enabled"] = bool(detection.get("launch_supported", false))
+	if client_id == "cursor" or client_id == "trae":
+		model["launch_action_label_key"] = "config_client_action_open_project"
+	elif client_id == "claude_code" or client_id == "codex" or client_id == "opencode":
+		model["launch_action_label_key"] = "config_client_action_open_terminal"
+
+	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
+	model["path_pick_enabled"] = bool(detection.get("path_pick_supported", false))
+	model["path_pick_action_label_key"] = "config_client_action_reselect_path" if has_manual_path else (
+		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "opencode" else "config_client_action_choose_program_path"
+	)
+	model["path_clear_supported"] = bool(detection.get("path_clear_supported", false))
+	model["path_clear_enabled"] = bool(detection.get("path_clear_supported", false))
+	if not config_path.is_empty():
+		model["open_config_dir_supported"] = true
+		model["open_config_dir_enabled"] = not config_path.get_base_dir().is_empty()
+		model["open_config_file_supported"] = true
+		model["open_config_file_enabled"] = FileAccess.file_exists(config_path)
+
+	match client_id:
+		"claude_desktop", "cursor", "trae", "opencode":
+			model["writeable"] = bool(detection.get("write_supported", false))
+			model["remove_supported"] = bool(detection.get("write_supported", false))
+			model["remove_enabled"] = entry_status == "present"
+		"codex":
+			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
+			if not bool(detection.get("auto_add_supported", false)):
+				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status)
+		"claude_code", "codex_desktop", "opencode_desktop", "opencode":
+			model["writeable"] = false
+	return model
+
+
+func _get_client_install_statuses() -> Dictionary:
+	if _client_install_detection_service == null:
+		_client_install_detection_service = ClientInstallDetectionService.new()
+	_configure_client_install_detection_service()
+	return _client_install_detection_service.detect_all()
+
+
+func _invalidate_client_install_status_cache() -> void:
+	if _client_install_detection_service == null:
+		return
+	_client_install_detection_service.invalidate_cache()
+
+
+func _configure_client_install_detection_service() -> void:
+	if _client_install_detection_service == null or _state == null:
+		return
+	_client_install_detection_service.configure(_state.settings)
+
+
+func _get_client_install_status_text(status: String) -> String:
+	match status:
+		"ready":
+			return _localization.get_text("config_client_status_ready")
+		"config_only":
+			return _localization.get_text("config_client_status_config_only")
+		"missing":
+			return _localization.get_text("config_client_status_missing")
+		_:
+			return _localization.get_text("config_client_status_error")
+
+
+func _get_client_runtime_status_text(status: String) -> String:
+	match status:
+		"running":
+			return _localization.get_text("config_client_runtime_running")
+		"not_running":
+			return _localization.get_text("config_client_runtime_not_running")
+		_:
+			return _localization.get_text("config_client_runtime_unknown")
+
+
+func _get_client_entry_status_text(status: String) -> String:
+	match status:
+		"present":
+			return _localization.get_text("config_client_entry_present")
+		"missing_file":
+			return _localization.get_text("config_client_entry_missing_file")
+		"empty":
+			return _localization.get_text("config_client_entry_empty")
+		"missing_server":
+			return _localization.get_text("config_client_entry_missing_server")
+		"invalid_json":
+			return _localization.get_text("config_client_entry_invalid_json")
+		"incompatible_root", "incompatible_mcp_servers":
+			return _localization.get_text("config_client_entry_incompatible")
+		_:
+			return _localization.get_text("config_client_status_error")
+
+
+func _get_client_install_message_text(client_id: String, status: String) -> String:
+	var key := "config_client_%s_%s_msg" % [client_id, status]
+	var localized = _localization.get_text(key)
+	if localized == key:
+		return ""
+	return localized
+
+
+func _get_client_path_source_text(detected_via: String, using_manual_path: bool, has_detected_path: bool) -> String:
+	if using_manual_path:
+		return _localization.get_text("config_client_path_source_manual")
+	if detected_via == "windows_store":
+		return _localization.get_text("config_client_path_source_store")
+	if has_detected_path:
+		return _localization.get_text("config_client_path_source_auto")
+	if not detected_via.is_empty():
+		return _localization.get_text("config_client_path_source_auto")
+	return _localization.get_text("config_client_path_source_missing")
 
 
 func _build_config_platform_models(desktop_clients: Array[Dictionary], cli_clients: Array[Dictionary]) -> Array[Dictionary]:
@@ -765,13 +1234,15 @@ func _build_config_platform_models(desktop_clients: Array[Dictionary], cli_clien
 		platforms.append({
 			"id": str(client.get("id", "")),
 			"name_key": str(client.get("name_key", "")),
-			"group": "desktop"
+			"group": "desktop",
+			"display_name_key": "config_platform_desktop_prefix"
 		})
 	for client in cli_clients:
 		platforms.append({
 			"id": str(client.get("id", "")),
 			"name_key": str(client.get("name_key", "")),
-			"group": "cli"
+			"group": "cli",
+			"display_name_key": "config_platform_cli_prefix"
 		})
 	return platforms
 
@@ -790,6 +1261,9 @@ func _resolve_current_config_platform(platforms: Array[Dictionary]) -> String:
 
 func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
+	if _state.current_tab == 2:
+		_invalidate_client_install_status_cache()
+	_refresh_dock()
 
 
 func _on_port_changed(value: int) -> void:
@@ -1056,27 +1530,370 @@ func _on_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> vo
 
 func _on_cli_scope_changed(scope: String) -> void:
 	_state.current_cli_scope = scope
+	_state.settings["current_cli_scope"] = scope
+	_save_settings()
 	_refresh_dock()
 
 
 func _on_config_platform_changed(platform_id: String) -> void:
 	_state.current_config_platform = platform_id
+	_state.settings["current_config_platform"] = platform_id
+	_save_settings()
 	_refresh_dock()
 
 
+func _on_config_validate_requested(_platform_id: String) -> void:
+	if _central_server_process_service == null:
+		return
+	var result = _central_server_process_service.validate_client_transport(
+		str(_state.settings.get("host", "127.0.0.1")),
+		int(_state.settings.get("port", 3000))
+	)
+	if not bool(result.get("success", false)):
+		_show_message("%s\n\n%s" % [
+			_localization.get_text("config_validate_failed"),
+			str(result.get("message", ""))
+		])
+		return
+	var mode = str(result.get("mode", "http"))
+	var success_key = "config_validate_success_stdio" if mode == "stdio" else "config_validate_success_http"
+	_show_message("%s\n\n%s" % [
+		_localization.get_text(success_key),
+		str(result.get("message", ""))
+	])
+
+
+func _on_config_client_action_requested(client_id: String) -> void:
+	var client_statuses = _get_client_install_statuses()
+	match client_id:
+		"codex":
+			_apply_codex_mcp_config(client_statuses.get("codex", {}))
+		_:
+			pass
+
+
+func _on_config_client_launch_requested(client_id: String) -> void:
+	var client_statuses = _get_client_install_statuses()
+	match client_id:
+		"cursor":
+			_launch_cursor_for_current_project(client_statuses.get("cursor", {}))
+		"trae":
+			_launch_desktop_agent_for_current_project(
+				_localization.get_text("config_client_trae"),
+				client_statuses.get("trae", {})
+			)
+		"claude_code":
+			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_claude_code"), client_statuses.get("claude_code", {}))
+		"codex":
+			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_codex"), client_statuses.get("codex", {}))
+		"opencode":
+			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_opencode"), client_statuses.get("opencode", {}))
+		_:
+			_show_message(_localization.get_text("msg_client_launch_unsupported"))
+
+
+func _on_config_client_path_pick_requested(client_id: String) -> void:
+	var client_statuses = _get_client_install_statuses()
+	_open_client_executable_dialog(client_id, client_statuses.get(client_id, {}))
+
+
+func _on_config_client_path_clear_requested(client_id: String) -> void:
+	var manual_paths = _get_client_manual_paths()
+	if not manual_paths.has(client_id):
+		_show_message(_localization.get_text("msg_client_manual_path_missing"))
+		return
+	manual_paths.erase(client_id)
+	_state.settings["client_manual_paths"] = manual_paths
+	_save_settings()
+	_configure_client_install_detection_service()
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+	_show_message(_localization.get_text("msg_client_path_cleared") % _get_client_display_name(client_id))
+
+
+func _on_config_client_open_config_dir_requested(client_id: String) -> void:
+	var client_statuses = _get_client_install_statuses()
+	var detection: Dictionary = client_statuses.get(client_id, {})
+	var config_path = str(detection.get("config_path", "")).strip_edges()
+	if config_path.is_empty():
+		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
+		return
+	var dir_path = config_path.get_base_dir()
+	if dir_path.is_empty():
+		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
+		return
+	if not DirAccess.dir_exists_absolute(dir_path):
+		var dir_error = DirAccess.make_dir_recursive_absolute(dir_path)
+		if dir_error != OK:
+			_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
+			return
+	var result = _config_service.open_target_path(dir_path)
+	if not bool(result.get("success", false)):
+		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
+		return
+	_show_message(_localization.get_text("msg_client_open_config_dir_success") % _get_client_display_name(client_id))
+
+
+func _on_config_client_open_config_file_requested(client_id: String) -> void:
+	var client_statuses = _get_client_install_statuses()
+	var detection: Dictionary = client_statuses.get(client_id, {})
+	var config_path = str(detection.get("config_path", "")).strip_edges()
+	if config_path.is_empty() or not FileAccess.file_exists(config_path):
+		_show_message(_localization.get_text("msg_client_open_config_file_missing") % _get_client_display_name(client_id))
+		return
+	var result = _config_service.open_text_file(config_path)
+	if not bool(result.get("success", false)):
+		_show_message(_localization.get_text("msg_client_open_config_file_failed") % _get_client_display_name(client_id))
+		return
+	_show_message(_localization.get_text("msg_client_open_config_file_success") % _get_client_display_name(client_id))
+
+
 func _on_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
-	var result = _config_service.write_config_file(config_type, filepath, config)
-	if not result.get("success", false):
-		match str(result.get("error", "")):
-			"parse_error":
-				_show_message(_localization.get_text("msg_parse_error"))
-			"dir_error":
-				_show_message(_localization.get_text("msg_dir_error") + str(result.get("path", "")))
-			_:
-				_show_message(_localization.get_text("msg_write_error"))
+	var preflight = _config_service.preflight_write_config(config_type, filepath, config)
+	if not bool(preflight.get("success", false)):
+		_show_message(_build_config_write_failure_message(preflight, filepath))
 		return
 
-	_show_message(_localization.get_text("msg_config_success") % client_name)
+	if bool(preflight.get("requires_confirmation", false)):
+		_show_confirmation(
+			_build_config_write_confirmation_message(client_name, preflight),
+			func() -> void:
+				_perform_config_write(config_type, filepath, config, client_name, preflight, true)
+		)
+		return
+
+	_perform_config_write(config_type, filepath, config, client_name, preflight, false)
+
+
+func _perform_config_write(
+	config_type: String,
+	filepath: String,
+	config: String,
+	client_name: String,
+	preflight: Dictionary,
+	allow_incompatible_overwrite: bool
+) -> void:
+	var result = _config_service.write_config_file(
+		config_type,
+		filepath,
+		config,
+		{
+			"preflight": preflight,
+			"allow_incompatible_overwrite": allow_incompatible_overwrite
+		}
+	)
+	if not bool(result.get("success", false)):
+		_show_message(_build_config_write_failure_message(result, filepath))
+		return
+
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+
+	var success_lines: PackedStringArray = PackedStringArray([
+		_localization.get_text("msg_config_success") % client_name,
+		_localization.get_text("msg_config_verified") % str(result.get("path", filepath))
+	])
+	var backup_path = str(result.get("backup_path", "")).strip_edges()
+	if not backup_path.is_empty():
+		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
+	success_lines.append(_localization.get_text("msg_config_effect_hint"))
+	success_lines.append(_build_client_runtime_followup_message(config_type))
+	_show_message("\n\n".join(success_lines))
+
+
+func _on_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
+	var inspection = _config_service.inspect_config_entry(config_type, filepath)
+	if not bool(inspection.get("success", false)):
+		_show_message(_build_config_remove_failure_message(inspection, filepath))
+		return
+
+	var status = str(inspection.get("status", "missing_file"))
+	if status != "present":
+		_show_message(_build_config_remove_noop_message(inspection, client_name))
+		return
+
+	_show_confirmation(
+		_build_config_remove_confirmation_message(client_name, inspection),
+		func() -> void:
+			_perform_config_remove(config_type, filepath, client_name, inspection)
+	)
+
+
+func _perform_config_remove(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
+	var result = _config_service.remove_config_entry(config_type, filepath, {"inspection": inspection})
+	if not bool(result.get("success", false)):
+		_show_message(_build_config_remove_failure_message(result, filepath))
+		return
+
+	if not bool(result.get("removed", false)):
+		_show_message(_build_config_remove_noop_message(result, client_name))
+		return
+
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+
+	var success_lines: PackedStringArray = PackedStringArray([
+		_localization.get_text("msg_config_remove_success") % client_name
+	])
+	var backup_path = str(result.get("backup_path", "")).strip_edges()
+	if not backup_path.is_empty():
+		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
+	success_lines.append(_build_client_runtime_followup_message(config_type))
+	_show_message("\n\n".join(success_lines))
+
+
+func _build_config_write_confirmation_message(client_name: String, preflight: Dictionary) -> String:
+	var lines: PackedStringArray = PackedStringArray([
+		_localization.get_text("msg_config_overwrite_confirm") % client_name
+	])
+	var filepath = str(preflight.get("path", ""))
+	match str(preflight.get("status", "")):
+		"invalid_json":
+			lines.append(_localization.get_text("msg_config_precheck_invalid_json") % filepath)
+		"incompatible_root":
+			lines.append(_localization.get_text("msg_config_precheck_incompatible_root") % filepath)
+		"incompatible_mcp_servers":
+			lines.append(_localization.get_text("msg_config_precheck_incompatible_servers") % filepath)
+		"incompatible_mcp":
+			lines.append(_localization.get_text("msg_config_precheck_incompatible_mcp") % filepath)
+		_:
+			lines.append(_localization.get_text("msg_write_error"))
+
+	var backup_path = str(preflight.get("backup_path", "")).strip_edges()
+	if not backup_path.is_empty():
+		lines.append(_localization.get_text("msg_config_backup_notice") % backup_path)
+	return "\n\n".join(lines)
+
+
+func _build_config_remove_confirmation_message(client_name: String, inspection: Dictionary) -> String:
+	var lines: PackedStringArray = PackedStringArray([
+		_localization.get_text("msg_config_remove_confirm") % client_name,
+		_localization.get_text("msg_config_remove_safe_scope")
+	])
+	var backup_path = str(inspection.get("backup_path", "")).strip_edges()
+	if not backup_path.is_empty():
+		lines.append(_localization.get_text("msg_config_backup_notice") % backup_path)
+	return "\n\n".join(lines)
+
+
+func _build_config_write_failure_message(result: Dictionary, filepath: String) -> String:
+	var message := ""
+	match str(result.get("error", "")):
+		"parse_error":
+			message = _localization.get_text("msg_parse_error")
+		"dir_error":
+			message = _localization.get_text("msg_dir_error") + str(result.get("path", ""))
+		"precheck_read_error":
+			message = _localization.get_text("msg_config_precheck_read_error") % str(result.get("path", filepath))
+		"precheck_confirmation_required":
+			message = _build_config_write_confirmation_message("MCP", result)
+		"backup_error":
+			message = _localization.get_text("msg_config_backup_failed") % str(result.get("backup_path", filepath + ".bak"))
+		"readback_missing_file":
+			message = "%s\n\n%s" % [
+				_localization.get_text("msg_config_readback_failed"),
+				_localization.get_text("msg_config_readback_missing_file") % str(result.get("path", filepath))
+			]
+		"readback_open_error":
+			message = "%s\n\n%s" % [
+				_localization.get_text("msg_config_readback_failed"),
+				_localization.get_text("msg_config_readback_open_error") % str(result.get("path", filepath))
+			]
+		"readback_parse_error", "readback_missing_servers":
+			message = "%s\n\n%s" % [
+				_localization.get_text("msg_config_readback_failed"),
+				_localization.get_text("msg_config_readback_parse_error") % str(result.get("path", filepath))
+			]
+		"readback_missing_server":
+			message = "%s\n\n%s" % [
+				_localization.get_text("msg_config_readback_failed"),
+				_localization.get_text("msg_config_readback_missing_server") % [
+					str(result.get("server_name", "godot-mcp")),
+					str(result.get("path", filepath))
+				]
+			]
+		"readback_mismatch":
+			message = "%s\n\n%s" % [
+				_localization.get_text("msg_config_readback_failed"),
+				_localization.get_text("msg_config_readback_mismatch") % [
+					str(result.get("server_name", "godot-mcp")),
+					str(result.get("path", filepath))
+				]
+			]
+		_:
+			message = _localization.get_text("msg_write_error")
+
+	if bool(result.get("rollback_restored", false)):
+		message = "%s\n\n%s" % [message, _localization.get_text("msg_config_restored_backup")]
+	elif str(result.get("rollback_error", "")) == "restore_failed":
+		message = "%s\n\n%s" % [
+			message,
+			_localization.get_text("msg_config_restore_failed") % str(result.get("backup_path", filepath + ".bak"))
+		]
+	return message
+
+
+func _build_config_remove_failure_message(result: Dictionary, filepath: String) -> String:
+	var message := ""
+	match str(result.get("error", "")):
+		"precheck_read_error":
+			message = _localization.get_text("msg_config_precheck_read_error") % str(result.get("path", filepath))
+		"backup_error":
+			message = _localization.get_text("msg_config_backup_failed") % str(result.get("backup_path", filepath + ".bak"))
+		"remove_blocked_invalid_json":
+			message = _localization.get_text("msg_config_remove_blocked_invalid_json") % str(result.get("path", filepath))
+		"remove_blocked_incompatible_root", "remove_blocked_incompatible_mcp_servers", "remove_blocked_incompatible_mcp":
+			message = _localization.get_text("msg_config_remove_blocked_incompatible") % str(result.get("path", filepath))
+		"readback_missing_file":
+			message = _localization.get_text("msg_config_remove_readback_failed") % str(result.get("path", filepath))
+		"readback_open_error", "readback_parse_error", "readback_missing_servers":
+			message = _localization.get_text("msg_config_remove_readback_failed") % str(result.get("path", filepath))
+		"readback_remove_mismatch":
+			message = _localization.get_text("msg_config_remove_readback_mismatch") % [
+				str(result.get("server_name", "godot-mcp")),
+				str(result.get("path", filepath))
+			]
+		_:
+			message = _localization.get_text("msg_config_remove_failed")
+
+	if bool(result.get("rollback_restored", false)):
+		message = "%s\n\n%s" % [message, _localization.get_text("msg_config_restored_backup")]
+	elif str(result.get("rollback_error", "")) == "restore_failed":
+		message = "%s\n\n%s" % [
+			message,
+			_localization.get_text("msg_config_restore_failed") % str(result.get("backup_path", filepath + ".bak"))
+		]
+	return message
+
+
+func _build_config_remove_noop_message(result: Dictionary, client_name: String) -> String:
+	match str(result.get("status", result.get("noop_reason", ""))):
+		"missing_file":
+			return _localization.get_text("msg_config_remove_noop_missing_file") % client_name
+		"empty", "missing_server":
+			return _localization.get_text("msg_config_remove_noop_missing_entry") % client_name
+		_:
+			return _localization.get_text("msg_config_remove_failed")
+
+
+func _build_client_runtime_followup_message(client_id: String) -> String:
+	var detection = _get_client_install_statuses().get(client_id, {})
+	var runtime_status = str(detection.get("runtime_status", {}).get("status", "unknown"))
+	if runtime_status == "running":
+		match client_id:
+			"claude_desktop":
+				return _localization.get_text("msg_config_restart_claude")
+			"cursor":
+				return _localization.get_text("msg_config_restart_cursor")
+			"trae":
+				return _localization.get_text("msg_config_restart_trae")
+			"opencode", "opencode_desktop":
+				return _localization.get_text("msg_config_restart_opencode")
+			_:
+				return _localization.get_text("msg_config_effect_hint")
+	if runtime_status == "not_running":
+		return _localization.get_text("msg_config_client_not_running")
+	return _localization.get_text("msg_config_effect_hint")
 
 
 func _on_copy_requested(text: String, source: String) -> void:
@@ -1120,6 +1937,215 @@ func _show_message(message: String) -> void:
 	MCPDebugBuffer.record("info", "plugin", message)
 	if _dock and is_instance_valid(_dock):
 		_dock.show_message(_localization.get_text("dialog_title"), message)
+
+
+func _show_confirmation(message: String, on_confirmed: Callable) -> void:
+	MCPDebugBuffer.record("info", "plugin", message)
+	if _dock and is_instance_valid(_dock) and _dock.has_method("show_confirmation"):
+		_dock.show_confirmation(_localization.get_text("dialog_title"), message, on_confirmed)
+		return
+	if on_confirmed.is_valid():
+		on_confirmed.call()
+
+
+func _open_client_executable_dialog(client_id: String, detection: Dictionary) -> void:
+	_ensure_client_executable_dialog()
+	if _client_executable_dialog == null or not is_instance_valid(_client_executable_dialog):
+		_show_message(_localization.get_text("msg_client_path_dialog_unavailable"))
+		return
+
+	var current_path = str(detection.get("executable_path", detection.get("manual_path", ""))).strip_edges()
+	_pending_client_path_request = {
+		"client_id": client_id
+	}
+	_client_executable_dialog.title = _localization.get_text("msg_client_path_dialog_title") % _get_client_display_name(client_id)
+	if not current_path.is_empty():
+		_client_executable_dialog.current_path = current_path
+		_client_executable_dialog.current_dir = current_path.get_base_dir()
+	else:
+		_client_executable_dialog.current_dir = ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
+	_client_executable_dialog.popup_centered_ratio(0.75)
+
+
+func _on_client_executable_file_selected(path: String) -> void:
+	var client_id = str(_pending_client_path_request.get("client_id", "")).strip_edges()
+	_pending_client_path_request = {}
+	if client_id.is_empty():
+		return
+
+	var normalized_path = path.replace("\\", "/").strip_edges()
+	if normalized_path.is_empty() or not FileAccess.file_exists(normalized_path):
+		_show_message(_localization.get_text("msg_client_path_invalid"))
+		return
+
+	var manual_paths = _get_client_manual_paths()
+	manual_paths[client_id] = normalized_path
+	_state.settings["client_manual_paths"] = manual_paths
+	_save_settings()
+	_configure_client_install_detection_service()
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+	_show_message("%s\n\n%s" % [
+		_localization.get_text("msg_client_path_saved") % _get_client_display_name(client_id),
+		normalized_path
+	])
+
+
+func _get_client_manual_paths() -> Dictionary:
+	var manual_paths = _state.settings.get("client_manual_paths", {})
+	if manual_paths is Dictionary:
+		return manual_paths.duplicate(true)
+	return {}
+
+
+func _get_client_display_name(client_id: String) -> String:
+	match client_id:
+		"claude_desktop":
+			return _localization.get_text("config_client_claude_desktop")
+		"claude_code":
+			return _localization.get_text("config_client_claude_code")
+		"cursor":
+			return _localization.get_text("config_client_cursor")
+		"trae":
+			return _localization.get_text("config_client_trae")
+		"codex_desktop":
+			return _localization.get_text("config_client_codex_desktop")
+		"codex":
+			return _localization.get_text("config_client_codex")
+		"opencode_desktop":
+			return _localization.get_text("config_client_opencode_desktop")
+		"opencode":
+			return _localization.get_text("config_client_opencode")
+		"gemini":
+			return _localization.get_text("config_client_gemini")
+		_:
+			return client_id
+
+
+func _apply_codex_mcp_config(detection: Dictionary) -> void:
+	if detection.is_empty() or str(detection.get("status", "")) != "ready":
+		_show_message(_get_client_install_message_text("codex", str(detection.get("status", "missing"))))
+		return
+
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_codex"))
+		return
+
+	var transport = _build_client_transport_model(
+		_get_central_server_process_status(),
+		str(_state.settings.get("host", "127.0.0.1")),
+		int(_state.settings.get("port", 3000))
+	)
+
+	var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", "godot-mcp"]))
+	if not bool(remove_result.get("success", false)):
+		var remove_message = str(remove_result.get("message", ""))
+		if remove_message.find("No MCP server named 'godot-mcp' found.") == -1:
+			_show_message("%s\n\n%s" % [
+				_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
+				remove_message
+			])
+			return
+
+	var add_result = _config_service.execute_cli_command(executable_path, _build_codex_add_arguments(transport))
+	if not bool(add_result.get("success", false)):
+		_show_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
+			str(add_result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+	_show_message(_localization.get_text("msg_client_action_success") % _localization.get_text("config_client_codex"))
+
+
+func _launch_cursor_for_current_project(detection: Dictionary) -> void:
+	_launch_desktop_agent_for_current_project(_localization.get_text("config_client_cursor"), detection)
+
+
+func _launch_desktop_agent_for_current_project(client_name: String, detection: Dictionary) -> void:
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_message(_localization.get_text("msg_client_action_missing_executable") % client_name)
+		return
+
+	var project_root = _get_current_project_root()
+	var result = _config_service.launch_desktop_client(
+		executable_path,
+		PackedStringArray([project_root]),
+		project_root
+	)
+	if not bool(result.get("success", false)):
+		_show_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_launch_failed") % client_name,
+			str(result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+	_show_message("%s\n\n%s" % [
+		_localization.get_text("msg_client_launch_success") % client_name,
+		_localization.get_text("msg_client_launch_workdir") % project_root
+	])
+
+
+func _launch_cli_agent_for_current_project(client_id: String, client_name: String, detection: Dictionary) -> void:
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_message(_localization.get_text("msg_client_action_missing_executable") % client_name)
+		return
+
+	var project_root = _get_current_project_root()
+	var arguments := PackedStringArray()
+	match client_id:
+		"claude_code", "codex":
+			arguments = PackedStringArray()
+		"opencode":
+			arguments = PackedStringArray([project_root])
+		_:
+			_show_message(_localization.get_text("msg_client_launch_unsupported"))
+			return
+
+	var result = _config_service.launch_cli_client_in_terminal(executable_path, arguments, project_root)
+	if not bool(result.get("success", false)):
+		_show_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_launch_failed") % client_name,
+			str(result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache()
+	_refresh_dock()
+	_show_message("%s\n\n%s" % [
+		_localization.get_text("msg_client_launch_success") % client_name,
+		"%s\n%s" % [
+			_localization.get_text("msg_client_launch_workdir") % project_root,
+			_localization.get_text("msg_client_launch_terminal_hint")
+		]
+	])
+
+
+func _get_current_project_root() -> String:
+	return ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
+
+
+func _build_codex_add_arguments(transport: Dictionary) -> PackedStringArray:
+	if str(transport.get("mode", "")) == "stdio":
+		var args := PackedStringArray(["mcp", "add", "godot-mcp", "--", str(transport.get("command", ""))])
+		for value in transport.get("args", []):
+			args.append(str(value))
+		return args
+
+	return PackedStringArray([
+		"mcp",
+		"add",
+		"godot-mcp",
+		"--url",
+		"http://%s:%d/mcp" % [str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000))]
+	])
 
 
 func set_log_level_for_tools(level: String) -> Dictionary:
@@ -1241,8 +2267,9 @@ func runtime_soft_reload() -> Dictionary:
 		}
 
 	var was_running = _server_controller.is_running()
+	var focus_snapshot := _capture_dock_focus_snapshot()
 	_pending_runtime_reload_action = "runtime_soft_reload"
-	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running])
+	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
 	return {
 		"success": true,
 		"message": "Plugin soft reload scheduled",
@@ -1254,7 +2281,8 @@ func runtime_soft_reload() -> Dictionary:
 func runtime_full_reload() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_full_reload", "runtime_full_reload")
 	var was_running := _server_controller != null and _server_controller.is_running()
-	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running])
+	var focus_snapshot := _capture_dock_focus_snapshot()
+	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
 	return {"success": true, "message": "Plugin full reload scheduled"}
 
 
@@ -1286,7 +2314,7 @@ func _complete_runtime_server_restart(operation_id: String) -> void:
 	)
 
 
-func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> void:
+func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
 	var success := false
 	if _state != null and _server_controller != null:
 		_refresh_service_instances()
@@ -1301,6 +2329,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 			success = _server_controller.reinitialize(_state.settings, "tool_soft_reload")
 		_recreate_dock()
 		_refresh_dock()
+		_restore_runtime_dock_focus_snapshot(focus_snapshot)
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -1310,7 +2339,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 	)
 
 
-func _complete_runtime_full_reload(operation_id: String, was_running: bool) -> void:
+func _complete_runtime_full_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
 	var success := false
 	if _state != null and _server_controller != null:
 		_refresh_service_instances()
@@ -1325,6 +2354,7 @@ func _complete_runtime_full_reload(operation_id: String, was_running: bool) -> v
 			success = _server_controller.reinitialize(_state.settings, "tool_full_reload")
 		_recreate_dock()
 		_refresh_dock()
+		_restore_runtime_dock_focus_snapshot(focus_snapshot)
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -1332,6 +2362,21 @@ func _complete_runtime_full_reload(operation_id: String, was_running: bool) -> v
 		"plugin",
 		"runtime_full_reload"
 	)
+
+
+func _capture_dock_focus_snapshot() -> Dictionary:
+	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
+		return _dock.capture_focus_snapshot()
+	return {"tab_index": _state.current_tab, "focus_path": ""}
+
+
+func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
+	if _dock == null or not is_instance_valid(_dock):
+		return
+	if _dock.has_method("activate_host_dock_tab"):
+		_dock.activate_host_dock_tab()
+	if _dock.has_method("restore_focus_snapshot"):
+		_dock.restore_focus_snapshot(snapshot)
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
@@ -1428,8 +2473,7 @@ func set_language_from_tools(language_code: String) -> Dictionary:
 func get_languages_for_tools() -> Dictionary:
 	var languages: Array[Dictionary] = []
 	var active_language = _state.resolve_active_language(_localization)
-	var codes: Array = _localization.get_available_languages().keys()
-	codes.sort()
+	var codes: Array = _localization.get_available_language_codes()
 	for code in codes:
 		languages.append({
 			"code": str(code),
@@ -1981,7 +3025,10 @@ func _resolve_central_server_process_feedback(status: Dictionary, action: String
 				return _localization.get_text("central_server_process_message_install_available")
 			return _localization.get_text("central_server_process_detect_missing")
 		"install_error":
-			return _localization.get_text("central_server_process_install_failed")
+			var install_error = str(status.get("message", "")).strip_edges()
+			if install_error.is_empty():
+				return _localization.get_text("central_server_process_install_failed")
+			return "%s\n\n%s" % [_localization.get_text("central_server_process_install_failed"), install_error]
 		"install_success":
 			if str(status.get("launch_source", "")) == "local_install":
 				return _localization.get_text("central_server_process_install_completed")
@@ -1997,6 +3044,39 @@ func _resolve_central_server_process_feedback(status: Dictionary, action: String
 		"stop_success":
 			return _localization.get_text("central_server_process_stopped_message")
 	return str(status.get("message", ""))
+
+
+func _build_central_server_install_confirmation(status: Dictionary) -> String:
+	var action_key = "central_server_install_confirm_upgrade" if bool(status.get("local_install_ready", false)) else "central_server_install_confirm_install"
+	var summary = _localization.get_text(action_key)
+	if int(status.get("pid", 0)) > 0 and str(status.get("launch_source", "")) == "local_install":
+		summary += "\n%s" % _localization.get_text("central_server_install_confirm_auto_restart")
+	var details = _build_central_server_install_details(status, true)
+	if details.is_empty():
+		return summary
+	return "%s\n\n%s" % [summary, details]
+
+
+func _build_central_server_install_details(status: Dictionary, include_source_fallback: bool = false) -> String:
+	if _localization == null:
+		return ""
+
+	var lines: PackedStringArray = PackedStringArray()
+	var install_version = str(status.get("install_version", "")).strip_edges()
+	var source_version = str(status.get("source_runtime_version", "")).strip_edges()
+	var install_dir = str(status.get("local_install_dir", "")).strip_edges()
+	var install_source = str(status.get("install_source_dir", "")).strip_edges()
+	if install_source.is_empty() and include_source_fallback:
+		install_source = str(status.get("source_runtime_dir", "")).strip_edges()
+
+	var resolved_version = install_version if not install_version.is_empty() else source_version
+	if not resolved_version.is_empty():
+		lines.append("%s %s" % [_localization.get_text("central_server_install_version_label"), resolved_version])
+	if not install_dir.is_empty():
+		lines.append("%s %s" % [_localization.get_text("central_server_install_dir_label"), install_dir])
+	if not install_source.is_empty():
+		lines.append("%s %s" % [_localization.get_text("central_server_install_source_label"), install_source])
+	return "\n".join(lines)
 
 
 func _get_user_tool_watch_status() -> Dictionary:
@@ -2022,6 +3102,7 @@ func _refresh_service_instances() -> void:
 	_settings_store = SettingsStore.new()
 	_tool_catalog = ToolCatalogService.new()
 	_config_service = ClientConfigService.new()
+	_client_install_detection_service = ClientInstallDetectionService.new()
 	_user_tool_service = UserToolService.new()
 	_user_tool_watch_service = UserToolWatchService.new()
 	_bridge_install_service = BridgeInstallServiceScript.new()

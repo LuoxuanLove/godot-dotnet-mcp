@@ -1,0 +1,7 @@
+{
+	"version": "0.6.0-dev",
+	"repo_owner": "LuoxuanLove",
+	"repo_name": "godot-dotnet-mcp",
+	"tag_template": "central-server-v{version}",
+	"asset_name_template": "GodotDotnetMcp.CentralServer-win-x64-v{version}.zip"
+}

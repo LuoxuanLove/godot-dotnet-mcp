@@ -1,0 +1,41 @@
+name: publish-central-server
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "central-server-v*"
+
+jobs:
+  build-win-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish central server package
+        shell: pwsh
+        run: .\scripts\publish_central_server.ps1
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-server-win-x64
+          path: |
+            release_dist/central_server/*.zip
+            release_dist/central_server/*.sha256
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_dist/central_server/*.zip
+            release_dist/central_server/*.sha256
+          generate_release_notes: true

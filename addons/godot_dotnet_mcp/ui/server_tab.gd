@@ -16,6 +16,8 @@ signal central_server_detect_requested
 signal central_server_install_requested
 signal central_server_start_requested
 signal central_server_stop_requested
+signal central_server_open_install_dir_requested
+signal central_server_open_logs_requested
 signal clear_self_diagnostics_requested
 signal copy_requested(text: String, source: String)
 
@@ -57,10 +59,18 @@ signal copy_requested(text: String, source: String)
 @onready var _central_server_local_status_value: Label = %CentralServerLocalStatusValue
 @onready var _central_server_local_command_title: Label = %CentralServerLocalCommandTitle
 @onready var _central_server_local_command_value: Label = %CentralServerLocalCommandValue
+@onready var _central_server_install_version_title: Label = %CentralServerInstallVersionTitle
+@onready var _central_server_install_version_value: Label = %CentralServerInstallVersionValue
+@onready var _central_server_install_dir_title: Label = %CentralServerInstallDirTitle
+@onready var _central_server_install_dir_value: Label = %CentralServerInstallDirValue
+@onready var _central_server_install_source_title: Label = %CentralServerInstallSourceTitle
+@onready var _central_server_install_source_value: Label = %CentralServerInstallSourceValue
 @onready var _central_server_detect_button: Button = %CentralServerDetectButton
 @onready var _central_server_install_button: Button = %CentralServerInstallButton
 @onready var _central_server_start_button: Button = %CentralServerStartButton
 @onready var _central_server_stop_button: Button = %CentralServerStopButton
+@onready var _central_server_open_install_dir_button: Button = %CentralServerOpenInstallDirButton
+@onready var _central_server_open_logs_button: Button = %CentralServerOpenLogsButton
 @onready var _overview_buttons: GridContainer = %OverviewButtons
 @onready var _state_value: Label = %ServerStateValue
 @onready var _endpoint_value: Label = %EndpointValue
@@ -113,6 +123,8 @@ func _ready() -> void:
 	_central_server_install_button.pressed.connect(_on_central_server_install_button_pressed)
 	_central_server_start_button.pressed.connect(_on_central_server_start_button_pressed)
 	_central_server_stop_button.pressed.connect(_on_central_server_stop_button_pressed)
+	_central_server_open_install_dir_button.pressed.connect(_on_central_server_open_install_dir_button_pressed)
+	_central_server_open_logs_button.pressed.connect(_on_central_server_open_logs_button_pressed)
 	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
 	_self_diag_clear_button.pressed.connect(_on_self_diag_clear_pressed)
 
@@ -207,8 +219,12 @@ func apply_model(model: Dictionary) -> void:
 	_language_option.clear()
 	var current_lang = str(model.get("current_language", "en"))
 	var selected_index = -1
-	var language_codes = languages.keys()
-	language_codes.sort()
+	var language_codes: Array = []
+	if localization != null and localization.has_method("get_available_language_codes"):
+		language_codes = localization.get_available_language_codes()
+	else:
+		language_codes = languages.keys()
+		language_codes.sort()
 	var index = 0
 	for lang_code in language_codes:
 		_language_option.add_item(localization.get_language_display_name(str(lang_code), current_lang), index)
@@ -289,25 +305,44 @@ func _apply_central_server_process(central_server_process: Dictionary, localizat
 	or _central_server_local_status_value == null \
 	or _central_server_local_command_title == null \
 	or _central_server_local_command_value == null \
+	or _central_server_install_version_title == null \
+	or _central_server_install_version_value == null \
+	or _central_server_install_dir_title == null \
+	or _central_server_install_dir_value == null \
+	or _central_server_install_source_title == null \
+	or _central_server_install_source_value == null \
 	or _central_server_detect_button == null \
 	or _central_server_install_button == null \
 	or _central_server_start_button == null \
-	or _central_server_stop_button == null:
+	or _central_server_stop_button == null \
+	or _central_server_open_install_dir_button == null \
+	or _central_server_open_logs_button == null:
 		return
 
 	var status = str(central_server_process.get("status", "idle"))
 	var launch_available = bool(central_server_process.get("launch_available", false))
 	var install_available = bool(central_server_process.get("install_available", false))
 	var local_install_ready = bool(central_server_process.get("local_install_ready", false))
+	var install_dir = str(central_server_process.get("local_install_dir", ""))
+	var install_version = str(central_server_process.get("install_version", ""))
+	var install_source_dir = str(central_server_process.get("install_source_dir", ""))
+	var source_runtime_dir = str(central_server_process.get("source_runtime_dir", ""))
+	var source_runtime_version = str(central_server_process.get("source_runtime_version", ""))
 	var detected_command = str(central_server_process.get("detected_command", ""))
+	var log_file_path = str(central_server_process.get("log_file_path", ""))
 	var pid = int(central_server_process.get("pid", 0))
 
 	_central_server_local_status_title.text = localization.get_text("central_server_local_status_label")
 	_central_server_local_command_title.text = localization.get_text("central_server_local_command_label")
+	_central_server_install_version_title.text = localization.get_text("central_server_install_version_label")
+	_central_server_install_dir_title.text = localization.get_text("central_server_install_dir_label")
+	_central_server_install_source_title.text = localization.get_text("central_server_install_source_label")
 	_central_server_detect_button.text = localization.get_text("central_server_detect_button")
 	_central_server_install_button.text = localization.get_text("central_server_upgrade_button") if local_install_ready else localization.get_text("central_server_install_button")
 	_central_server_start_button.text = localization.get_text("central_server_start_button")
 	_central_server_stop_button.text = localization.get_text("central_server_stop_button")
+	_central_server_open_install_dir_button.text = localization.get_text("central_server_open_install_dir_button")
+	_central_server_open_logs_button.text = localization.get_text("central_server_open_logs_button")
 
 	var status_text = _resolve_central_server_process_status_text(status, localization)
 	if pid > 0:
@@ -319,10 +354,15 @@ func _apply_central_server_process(central_server_process: Dictionary, localizat
 	else:
 		status_text += " · %s" % localization.get_text("central_server_process_install_unavailable")
 	_central_server_local_status_value.text = status_text
+	_central_server_install_version_value.text = install_version if not install_version.is_empty() else (source_runtime_version if not source_runtime_version.is_empty() else "-")
+	_central_server_install_dir_value.text = install_dir if not install_dir.is_empty() else localization.get_text("central_server_process_detect_missing")
+	_central_server_install_source_value.text = install_source_dir if not install_source_dir.is_empty() else (source_runtime_dir if not source_runtime_dir.is_empty() else localization.get_text("central_server_process_detect_missing"))
 	_central_server_local_command_value.text = detected_command if not detected_command.is_empty() else localization.get_text("central_server_process_detect_missing")
 	_central_server_install_button.disabled = not install_available
 	_central_server_start_button.disabled = not launch_available or status == "running" or status == "starting"
 	_central_server_stop_button.disabled = pid <= 0
+	_central_server_open_install_dir_button.disabled = install_dir.is_empty()
+	_central_server_open_logs_button.disabled = log_file_path.is_empty()
 
 
 func _resolve_central_server_process_status_text(status: String, localization) -> String:
@@ -400,12 +440,10 @@ func _get_overview_profile_text(profile_id: String, localization) -> String:
 
 func _get_overview_language_text(current_language: String, localization) -> String:
 	if current_language.is_empty():
-		return localization.get_text("language_name_en")
-	var language_key = "language_name_%s" % current_language
-	var language_text = localization.get_text_for(current_language, language_key)
-	if language_text == language_key:
-		return current_language.capitalize()
-	return language_text
+		current_language = "en"
+	if localization != null and localization.has_method("get_language_display_name"):
+		return localization.get_language_display_name(current_language, current_language)
+	return current_language.capitalize()
 
 
 func _build_overview_activity_text(stats: Dictionary, localization) -> String:
@@ -488,6 +526,14 @@ func _on_central_server_start_button_pressed() -> void:
 
 func _on_central_server_stop_button_pressed() -> void:
 	central_server_stop_requested.emit()
+
+
+func _on_central_server_open_install_dir_button_pressed() -> void:
+	central_server_open_install_dir_requested.emit()
+
+
+func _on_central_server_open_logs_button_pressed() -> void:
+	central_server_open_logs_requested.emit()
 
 
 func _get_margin_node() -> MarginContainer:
@@ -702,11 +748,11 @@ func _apply_responsive_layout() -> void:
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x = field_width if bridge_status_row.columns == 2 else content_width
 
-	for title_label in [_central_server_status_title, _central_server_endpoint_title, _central_server_project_title, _central_server_session_title, _central_server_message_title, _central_server_local_status_title, _central_server_local_command_title]:
+	for title_label in [_central_server_local_status_title, _central_server_install_version_title, _central_server_install_dir_title, _central_server_install_source_title, _central_server_status_title, _central_server_endpoint_title, _central_server_project_title, _central_server_session_title, _central_server_message_title, _central_server_local_command_title]:
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		title_label.custom_minimum_size.x = label_width if central_server_status_row.columns == 2 else 0.0
 
-	for value_label in [_central_server_status_value, _central_server_endpoint_value, _central_server_project_value, _central_server_session_value, _central_server_message_value, _central_server_local_status_value, _central_server_local_command_value]:
+	for value_label in [_central_server_local_status_value, _central_server_install_version_value, _central_server_install_dir_value, _central_server_install_source_value, _central_server_status_value, _central_server_endpoint_value, _central_server_project_value, _central_server_session_value, _central_server_message_value, _central_server_local_command_value]:
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x = field_width if central_server_status_row.columns == 2 else content_width
@@ -732,7 +778,7 @@ func _apply_responsive_layout() -> void:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = bridge_button_width
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
-	for button in [_central_server_detect_button, _central_server_install_button, _central_server_start_button, _central_server_stop_button]:
+	for button in [_central_server_detect_button, _central_server_install_button, _central_server_start_button, _central_server_stop_button, _central_server_open_install_dir_button, _central_server_open_logs_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = central_server_button_width
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
@@ -847,7 +893,12 @@ func _get_self_diag_code_text(code: String, localization) -> String:
 func _on_self_diag_copy_pressed() -> void:
 	if _self_diag_copy_text.is_empty():
 		return
-	copy_requested.emit(_self_diag_copy_text, "Plugin Self Diagnostics")
+	var source_name := "Plugin Self Diagnostics"
+	if _state_value != null:
+		source_name = _self_diag_title.text.strip_edges()
+	if source_name.is_empty():
+		source_name = "Plugin Self Diagnostics"
+	copy_requested.emit(_self_diag_copy_text, source_name)
 
 
 func _on_self_diag_clear_pressed() -> void:

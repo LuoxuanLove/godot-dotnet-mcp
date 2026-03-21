@@ -32,7 +32,7 @@ func configure(plugin: EditorPlugin, settings: Dictionary) -> void:
 
 
 func start() -> void:
-	if _plugin == null or not is_instance_valid(_plugin):
+	if not _can_host_request_nodes():
 		return
 	_ensure_request_nodes()
 	if _session_id.is_empty():
@@ -49,7 +49,10 @@ func stop() -> void:
 		_cleanup_request_nodes()
 		_reset_runtime_state("stopped")
 		return
-	_send_detach()
+	if _can_issue_request(_detach_request):
+		_send_detach()
+	else:
+		_cleanup_request_nodes()
 	_reset_runtime_state("stopped")
 
 
@@ -90,11 +93,13 @@ func request_attach_soon() -> void:
 	if not _is_enabled():
 		return
 	_last_attach_attempt_msec = 0
-	if _project_id.is_empty() and not _attach_in_flight:
+	if _project_id.is_empty() and not _attach_in_flight and _can_host_request_nodes():
 		_send_attach()
 
 
 func _ensure_request_nodes() -> void:
+	if not _can_host_request_nodes():
+		return
 	_attach_request = _ensure_request_node(_attach_request, "CentralServerAttachRequest", _on_attach_request_completed)
 	_heartbeat_request = _ensure_request_node(_heartbeat_request, "CentralServerHeartbeatRequest", _on_heartbeat_request_completed)
 	_detach_request = _ensure_request_node(_detach_request, "CentralServerDetachRequest", _on_detach_request_completed)
@@ -103,6 +108,8 @@ func _ensure_request_nodes() -> void:
 func _ensure_request_node(request: HTTPRequest, node_name: String, callback: Callable) -> HTTPRequest:
 	if request != null and is_instance_valid(request):
 		return request
+	if not _can_host_request_nodes():
+		return null
 	var created := HTTPRequest.new()
 	created.name = node_name
 	created.timeout = 5.0
@@ -129,6 +136,12 @@ func _cleanup_request_node(request: HTTPRequest) -> void:
 
 func _send_attach() -> void:
 	_ensure_request_nodes()
+	if not _can_issue_request(_attach_request):
+		_attach_in_flight = false
+		_status = "attach_error"
+		_last_error = "Attach request node is not ready."
+		_last_message = _last_error
+		return
 	_attach_in_flight = true
 	_last_attach_attempt_msec = Time.get_ticks_msec()
 	_status = "attaching"
@@ -160,6 +173,13 @@ func _send_attach() -> void:
 
 func _send_heartbeat() -> void:
 	_ensure_request_nodes()
+	if not _can_issue_request(_heartbeat_request):
+		_heartbeat_in_flight = false
+		_project_id = ""
+		_status = "heartbeat_error"
+		_last_error = "Heartbeat request node is not ready."
+		_last_message = _last_error
+		return
 	_heartbeat_in_flight = true
 	_last_heartbeat_msec = Time.get_ticks_msec()
 	_status = "heartbeat_pending"
@@ -192,6 +212,9 @@ func _send_detach() -> void:
 	if _detach_in_flight:
 		return
 	_ensure_request_nodes()
+	if not _can_issue_request(_detach_request):
+		_detach_in_flight = false
+		return
 	_detach_in_flight = true
 	var payload := {
 		"projectId": _project_id,
@@ -314,6 +337,14 @@ func _get_godot_version() -> String:
 
 func _build_session_id() -> String:
 	return "%s-%s" % [Time.get_unix_time_from_system(), randi()]
+
+
+func _can_host_request_nodes() -> bool:
+	return _plugin != null and is_instance_valid(_plugin) and _plugin.is_inside_tree()
+
+
+func _can_issue_request(request: HTTPRequest) -> bool:
+	return _can_host_request_nodes() and request != null and is_instance_valid(request) and request.is_inside_tree()
 
 
 func _reset_runtime_state(next_status: String) -> void:

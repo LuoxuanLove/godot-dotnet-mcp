@@ -307,10 +307,24 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="CentralServerLocalCommandTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+[node name="CentralServerInstallVersionTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
 unique_name_in_owner = true
 
-[node name="CentralServerLocalCommandValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+[node name="CentralServerInstallVersionValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerInstallDirTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerInstallDirValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="CentralServerInstallSourceTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerInstallSourceValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
@@ -349,6 +363,13 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 autowrap_mode = 3
 
+[node name="CentralServerLocalCommandTitle" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+
+[node name="CentralServerLocalCommandValue" type="Label" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
 [node name="CentralServerButtons" type="GridContainer" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent"]
 columns = 2
 theme_override_constants/h_separation = 8
@@ -367,5 +388,13 @@ unique_name_in_owner = true
 size_flags_horizontal = 3
 
 [node name="CentralServerStopButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerOpenInstallDirButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CentralServerOpenLogsButton" type="Button" parent="Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons"]
 unique_name_in_owner = true
 size_flags_horizontal = 3

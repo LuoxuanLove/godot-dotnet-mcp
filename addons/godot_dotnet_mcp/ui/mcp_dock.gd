@@ -21,6 +21,8 @@ signal central_server_detect_requested
 signal central_server_install_requested
 signal central_server_start_requested
 signal central_server_stop_requested
+signal central_server_open_install_dir_requested
+signal central_server_open_logs_requested
 signal clear_self_diagnostics_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
@@ -29,7 +31,15 @@ signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
 signal cli_scope_changed(scope: String)
 signal config_platform_changed(platform_id: String)
+signal config_client_action_requested(client_id: String)
+signal config_client_launch_requested(client_id: String)
+signal config_client_path_pick_requested(client_id: String)
+signal config_client_path_clear_requested(client_id: String)
+signal config_client_open_config_dir_requested(client_id: String)
+signal config_client_open_config_file_requested(client_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
+signal config_remove_requested(config_type: String, filepath: String, client_name: String)
+signal config_validate_requested(platform_id: String)
 signal copy_requested(text: String, source: String)
 
 @onready var _status_indicator: ColorRect = %StatusIndicator
@@ -67,6 +77,10 @@ func _ready() -> void:
 			_server_tab.central_server_start_requested.connect(_on_server_tab_central_server_start_requested)
 		if _server_tab.has_signal("central_server_stop_requested"):
 			_server_tab.central_server_stop_requested.connect(_on_server_tab_central_server_stop_requested)
+		if _server_tab.has_signal("central_server_open_install_dir_requested"):
+			_server_tab.central_server_open_install_dir_requested.connect(_on_server_tab_central_server_open_install_dir_requested)
+		if _server_tab.has_signal("central_server_open_logs_requested"):
+			_server_tab.central_server_open_logs_requested.connect(_on_server_tab_central_server_open_logs_requested)
 		if _server_tab.has_signal("clear_self_diagnostics_requested"):
 			_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
 		if _server_tab.has_signal("copy_requested"):
@@ -83,7 +97,15 @@ func _ready() -> void:
 	if _config_tab:
 		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
 		_config_tab.config_platform_changed.connect(_on_config_tab_platform_changed)
+		_config_tab.config_client_action_requested.connect(_on_config_tab_client_action_requested)
+		_config_tab.config_client_launch_requested.connect(_on_config_tab_client_launch_requested)
+		_config_tab.config_client_path_pick_requested.connect(_on_config_tab_client_path_pick_requested)
+		_config_tab.config_client_path_clear_requested.connect(_on_config_tab_client_path_clear_requested)
+		_config_tab.config_client_open_config_dir_requested.connect(_on_config_tab_client_open_config_dir_requested)
+		_config_tab.config_client_open_config_file_requested.connect(_on_config_tab_client_open_config_file_requested)
 		_config_tab.config_write_requested.connect(_on_config_tab_config_write_requested)
+		_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
+		_config_tab.config_validate_requested.connect(_on_config_tab_config_validate_requested)
 		_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
 
 
@@ -109,16 +131,24 @@ func apply_model(model: Dictionary) -> void:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
 		_tab_container.set_tab_title(1, localization.get_text("tab_tools"))
 		_tab_container.set_tab_title(2, localization.get_text("tab_config"))
-	if _server_tab and _server_tab.has_method("apply_model"):
-		_server_tab.apply_model(model)
-	if _tools_tab and _tools_tab.has_method("apply_model"):
-		_tools_tab.apply_model(model)
-	if _config_tab and _config_tab.has_method("apply_model"):
-		_config_tab.apply_model(model)
 
 	var current_tab = int(model.get("current_tab", 0))
 	if current_tab >= 0 and current_tab < _tab_container.get_tab_count():
 		_tab_container.current_tab = current_tab
+
+	match current_tab:
+		0:
+			if _server_tab and _server_tab.has_method("apply_model"):
+				_server_tab.apply_model(model)
+		1:
+			if _tools_tab and _tools_tab.has_method("apply_model"):
+				_tools_tab.apply_model(model)
+		2:
+			if _config_tab and _config_tab.has_method("apply_model"):
+				_config_tab.apply_model(model)
+		_:
+			if _server_tab and _server_tab.has_method("apply_model"):
+				_server_tab.apply_model(model)
 
 
 func show_message(title: String, message: String) -> void:
@@ -128,6 +158,20 @@ func show_message(title: String, message: String) -> void:
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(dialog.queue_free)
+
+
+func show_confirmation(title: String, message: String, on_confirmed: Callable) -> void:
+	var dialog = ConfirmationDialog.new()
+	dialog.title = title
+	dialog.dialog_text = message
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(func() -> void:
+		if on_confirmed.is_valid():
+			on_confirmed.call()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
 
 
 func get_current_tab() -> int:
@@ -273,6 +317,14 @@ func _on_server_tab_central_server_stop_requested() -> void:
 	central_server_stop_requested.emit()
 
 
+func _on_server_tab_central_server_open_install_dir_requested() -> void:
+	central_server_open_install_dir_requested.emit()
+
+
+func _on_server_tab_central_server_open_logs_requested() -> void:
+	central_server_open_logs_requested.emit()
+
+
 func _on_server_tab_clear_self_diagnostics_requested() -> void:
 	clear_self_diagnostics_requested.emit()
 
@@ -309,8 +361,40 @@ func _on_config_tab_platform_changed(platform_id: String) -> void:
 	config_platform_changed.emit(platform_id)
 
 
+func _on_config_tab_client_action_requested(client_id: String) -> void:
+	config_client_action_requested.emit(client_id)
+
+
+func _on_config_tab_client_launch_requested(client_id: String) -> void:
+	config_client_launch_requested.emit(client_id)
+
+
+func _on_config_tab_client_path_pick_requested(client_id: String) -> void:
+	config_client_path_pick_requested.emit(client_id)
+
+
+func _on_config_tab_client_path_clear_requested(client_id: String) -> void:
+	config_client_path_clear_requested.emit(client_id)
+
+
+func _on_config_tab_client_open_config_dir_requested(client_id: String) -> void:
+	config_client_open_config_dir_requested.emit(client_id)
+
+
+func _on_config_tab_client_open_config_file_requested(client_id: String) -> void:
+	config_client_open_config_file_requested.emit(client_id)
+
+
 func _on_config_tab_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
 	config_write_requested.emit(config_type, filepath, config, client_name)
+
+
+func _on_config_tab_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
+	config_remove_requested.emit(config_type, filepath, client_name)
+
+
+func _on_config_tab_config_validate_requested(platform_id: String) -> void:
+	config_validate_requested.emit(platform_id)
 
 
 func _on_config_tab_copy_requested(text: String, source: String) -> void:
