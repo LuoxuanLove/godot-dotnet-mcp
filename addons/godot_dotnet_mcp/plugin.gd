@@ -3,7 +3,7 @@ extends EditorPlugin
 
 const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
-const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
+const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
 const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
@@ -12,6 +12,15 @@ const CentralServerProcessServiceScript = preload("res://addons/godot_dotnet_mcp
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
+const ServerFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/server_feature.gd")
+const ConfigFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/config_feature.gd")
+const UserToolFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/user_tool_feature.gd")
+const ReloadFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/reload_feature.gd")
+const ToolProfileFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/tool_profile_feature.gd")
+const ToolAccessFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/tool_access_feature.gd")
+const SelfDiagnosticFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/self_diagnostic_feature.gd")
+const UIStateFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/ui_state_feature.gd")
+const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
@@ -31,6 +40,15 @@ var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
 var _client_install_detection_service := ClientInstallDetectionService.new()
+var _server_feature = ServerFeatureScript.new()
+var _config_feature = ConfigFeatureScript.new()
+var _user_tool_feature = UserToolFeatureScript.new()
+var _reload_feature = ReloadFeatureScript.new()
+var _tool_profile_feature = ToolProfileFeatureScript.new()
+var _tool_access_feature = ToolAccessFeatureScript.new()
+var _self_diagnostic_feature = SelfDiagnosticFeatureScript.new()
+var _ui_state_feature = UIStateFeatureScript.new()
+var _dock_presenter = DockPresenterScript.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
 var _central_server_attach_service: CentralServerAttachService
@@ -38,10 +56,8 @@ var _central_server_process_service: CentralServerProcessService
 var _localization: LocalizationService
 var _dock: Control
 var _client_executable_dialog: FileDialog
-var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
-var _pending_runtime_reload_action := ""
 var _last_central_server_endpoint_reachable := false
 
 
@@ -63,6 +79,7 @@ func _enter_tree() -> void:
 	_install_editor_debugger_bridge()
 	_configure_central_server_process_service()
 	_configure_central_server_attach_service()
+	_configure_feature_workflows()
 
 	_create_dock()
 	_apply_initial_tool_profile_if_needed()
@@ -102,6 +119,15 @@ func _exit_tree() -> void:
 	_last_central_server_endpoint_reachable = false
 	_config_service = null
 	_client_install_detection_service = null
+	_server_feature = null
+	_config_feature = null
+	_user_tool_feature = null
+	_reload_feature = null
+	_tool_profile_feature = null
+	_tool_access_feature = null
+	_self_diagnostic_feature = null
+	_ui_state_feature = null
+	_dock_presenter = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
@@ -120,7 +146,7 @@ func _disable_plugin() -> void:
 
 
 func _validate_permission_configuration() -> void:
-	for issue in PluginRuntimeState.get_domain_category_consistency_issues():
+	for issue in ToolPermissionPolicy.get_domain_category_consistency_issues():
 		push_warning("[Godot MCP] Permission configuration issue: %s" % issue)
 		MCPDebugBuffer.record("warning", "plugin", "Permission config issue: %s" % issue)
 
@@ -386,98 +412,47 @@ func _remove_client_executable_dialog() -> void:
 	if is_instance_valid(_client_executable_dialog):
 		_client_executable_dialog.queue_free()
 	_client_executable_dialog = null
-	_pending_client_path_request = {}
+	if _config_feature != null:
+		_config_feature.reset_client_path_request()
+
+
+func _get_client_executable_dialog():
+	return _client_executable_dialog
 
 
 func _on_central_server_detect_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var status = _central_server_process_service.refresh_detection()
-	_refresh_dock()
-	_show_message(_resolve_central_server_process_feedback(status, "detect"))
+	if _server_feature != null:
+		_server_feature.handle_detect_requested()
 
 
 func _on_central_server_install_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var preview = _central_server_process_service.refresh_detection()
-	if not bool(preview.get("install_available", false)):
-		_show_message(_resolve_central_server_process_feedback(preview, "detect"))
-		return
-	_show_confirmation(_build_central_server_install_confirmation(preview), Callable(self, "_perform_central_server_install"))
-
-
-func _perform_central_server_install() -> void:
-	if _central_server_process_service == null:
-		return
-	var status = _central_server_process_service.install_or_update_service()
-	_refresh_dock()
-	if not bool(status.get("success", false)):
-		_show_message(_resolve_central_server_process_feedback(status, "install_error"))
-		return
-	var running_status = _central_server_process_service.ensure_service_running()
-	if _central_server_attach_service != null:
-		_central_server_attach_service.request_attach_soon()
-	var success_message = _resolve_central_server_process_feedback(status, "install_success")
-	var install_details = _build_central_server_install_details(status)
-	if install_details.is_empty():
-		_show_message(success_message)
-	else:
-		_show_message("%s\n\n%s" % [success_message, install_details])
-	if str(running_status.get("status", "")) == "launch_error":
-		_show_message(_resolve_central_server_process_feedback(running_status, "start"))
+	if _server_feature != null:
+		_server_feature.handle_install_requested()
 
 
 func _on_central_server_start_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var status = _central_server_process_service.start_service()
-	_refresh_dock()
-	if str(status.get("status", "")) == "launch_error":
-		_show_message(_resolve_central_server_process_feedback(status, "start"))
-		return
-	if _central_server_attach_service != null:
-		_central_server_attach_service.request_attach_soon()
-	_show_message(_resolve_central_server_process_feedback(status, "start"))
+	if _server_feature != null:
+		_server_feature.handle_start_requested()
 
 
 func _on_central_server_stop_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var status = _central_server_process_service.stop_service()
-	_refresh_dock()
-	if str(status.get("status", "")) == "launch_error":
-		_show_message(_resolve_central_server_process_feedback(status, "stop_error"))
-		return
-	_show_message(_resolve_central_server_process_feedback(status, "stop_success"))
+	if _server_feature != null:
+		_server_feature.handle_stop_requested()
 
 
 func _on_central_server_open_install_dir_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var result = _central_server_process_service.open_install_directory()
-	if not bool(result.get("success", false)):
-		_show_message(_localization.get_text("central_server_open_install_dir_failed"))
-		return
-	_show_message(_localization.get_text("central_server_open_install_dir_success"))
+	if _server_feature != null:
+		_server_feature.handle_open_install_dir_requested()
 
 
 func _on_central_server_open_logs_requested() -> void:
-	if _central_server_process_service == null:
-		return
-	var result = _central_server_process_service.open_log_location()
-	if not bool(result.get("success", false)):
-		_show_message(_localization.get_text("central_server_open_logs_failed"))
-		return
-	_show_message(_localization.get_text("central_server_open_logs_success"))
+	if _server_feature != null:
+		_server_feature.handle_open_logs_requested()
 
 
 func _on_clear_self_diagnostics_requested() -> void:
-	var result = clear_self_diagnostics_from_tools()
-	if bool(result.get("success", false)):
-		_show_message(_localization.get_text("self_diag_cleared"))
-		return
-	_show_message(str(result.get("error", _localization.get_text("self_diag_clear_failed"))))
+	if _self_diagnostic_feature != null:
+		_self_diagnostic_feature.handle_clear_requested()
 
 
 func _remove_stale_docks() -> void:
@@ -520,11 +495,11 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 		_record_self_incident("error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal wiring was requested before the dock instance was ready", "plugin", "_wire_dock_signals", MCP_DOCK_SCRIPT_PATH, "", operation_id, true, "Inspect dock creation order.")
 		return false
 	var connected = true
-	connected = _connect_dock_signal("current_tab_changed", _on_current_tab_changed, operation_id) and connected
-	connected = _connect_dock_signal("port_changed", _on_port_changed, operation_id) and connected
+	connected = _connect_dock_signal("current_tab_changed", Callable(_ui_state_feature, "handle_current_tab_changed"), operation_id) and connected
+	connected = _connect_dock_signal("port_changed", Callable(_ui_state_feature, "handle_port_changed"), operation_id) and connected
 	connected = _connect_dock_signal("log_level_changed", _on_log_level_changed, operation_id) and connected
 	connected = _connect_dock_signal("permission_level_changed", _on_permission_level_changed, operation_id) and connected
-	connected = _connect_dock_signal("language_changed", _on_language_changed, operation_id) and connected
+	connected = _connect_dock_signal("language_changed", Callable(_ui_state_feature, "handle_language_changed"), operation_id) and connected
 	connected = _connect_dock_signal("start_requested", _on_start_requested, operation_id) and connected
 	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
 	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
@@ -540,9 +515,9 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
 	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
 	connected = _connect_dock_signal("domain_toggled", _on_domain_toggled, operation_id) and connected
-	connected = _connect_dock_signal("tree_collapse_changed", _on_tree_collapse_changed, operation_id) and connected
-	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
-	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
+	connected = _connect_dock_signal("tree_collapse_changed", Callable(_ui_state_feature, "handle_tree_collapse_changed"), operation_id) and connected
+	connected = _connect_dock_signal("cli_scope_changed", Callable(_ui_state_feature, "handle_cli_scope_changed"), operation_id) and connected
+	connected = _connect_dock_signal("config_platform_changed", Callable(_ui_state_feature, "handle_config_platform_changed"), operation_id) and connected
 	connected = _connect_dock_signal("config_validate_requested", _on_config_validate_requested, operation_id) and connected
 	connected = _connect_dock_signal("config_client_action_requested", _on_config_client_action_requested, operation_id) and connected
 	connected = _connect_dock_signal("config_client_launch_requested", _on_config_client_launch_requested, operation_id) and connected
@@ -552,7 +527,7 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("config_client_open_config_file_requested", _on_config_client_open_config_file_requested, operation_id) and connected
 	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
 	connected = _connect_dock_signal("config_remove_requested", _on_config_remove_requested, operation_id) and connected
-	connected = _connect_dock_signal("copy_requested", _on_copy_requested, operation_id) and connected
+	connected = _connect_dock_signal("copy_requested", Callable(_ui_state_feature, "handle_copy_requested"), operation_id) and connected
 	return connected
 
 
@@ -563,6 +538,8 @@ func _build_dock_model() -> Dictionary:
 		LocalizationService.reset_instance()
 		_localization = LocalizationService.get_instance()
 		_localization.set_language(str(_state.settings.get("language", "")))
+	if _dock_presenter == null:
+		_dock_presenter = DockPresenterScript.new()
 	if _user_tool_service == null:
 		_user_tool_service = UserToolService.new()
 
@@ -571,78 +548,41 @@ func _build_dock_model() -> Dictionary:
 	for category in tools_by_category.keys():
 		if not is_tool_category_visible_for_permission(str(category)):
 			tools_by_category.erase(category)
-	var tool_names = _tool_catalog.build_tool_name_index(all_tools_by_category)
-	var profile_id = str(_state.settings.get("tool_profile_id", "default"))
 	var current_tab = int(_state.current_tab)
-
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		profile_id = _tool_catalog.find_matching_profile_id(
-			_state.settings.get("disabled_tools", []),
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names
-		)
-		if profile_id.is_empty():
-			profile_id = "default"
-		_state.settings["tool_profile_id"] = profile_id
 
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var central_server_attach = _get_central_server_attach_status()
 	var central_server_process = _get_central_server_process_status()
 	var user_tool_watch = _get_user_tool_watch_status()
-	var user_tools: Array = []
-	var desktop_clients: Array[Dictionary] = []
-	var cli_clients: Array[Dictionary] = []
-	var config_platforms: Array[Dictionary] = []
-	var config_connection_mode := {}
-
-	if current_tab == 1:
-		user_tools = _user_tool_service.list_user_tools()
+	var client_install_statuses := {}
 
 	if current_tab == 2:
-		var client_install_statuses = _get_client_install_statuses()
-		desktop_clients = _build_desktop_client_models(central_server_process, client_install_statuses)
-		cli_clients = _build_cli_client_models(central_server_process, client_install_statuses)
-		config_platforms = _build_config_platform_models(desktop_clients, cli_clients)
-		_state.current_config_platform = _resolve_current_config_platform(config_platforms)
-		_state.settings["current_config_platform"] = _state.current_config_platform
-		config_connection_mode = _build_config_connection_mode(central_server_process)
-	return {
-		"localization": _localization,
+		client_install_statuses = _get_client_install_statuses()
+	return _dock_presenter.build_model({
+		"state": _state,
 		"settings": _state.settings,
-		"current_language": _state.resolve_active_language(_localization),
-		"current_tab": _state.current_tab,
-		"permission_levels": PluginRuntimeState.PERMISSION_LEVELS,
-		"current_permission_level": _get_permission_level(),
-		"log_levels": MCPDebugBuffer.get_available_levels(),
-		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
-		"current_cli_scope": _state.current_cli_scope,
-		"current_config_platform": _state.current_config_platform,
-		"tool_profile_id": profile_id,
-		"editor_scale": _get_editor_scale(),
-		"is_running": _server_controller.is_running(),
-		"stats": _server_controller.get_connection_stats(),
-		"domain_states": _server_controller.get_domain_states(),
-		"reload_status": _server_controller.get_reload_status(),
-		"performance": _server_controller.get_performance_summary(),
-		"languages": _localization.get_available_languages(),
+		"localization": _localization,
+		"server_controller": _server_controller,
+		"tool_catalog": _tool_catalog,
+		"user_tool_service": _user_tool_service,
+		"config_service": _config_service,
+		"all_tools_by_category": all_tools_by_category,
 		"tools_by_category": tools_by_category,
-		"tool_load_errors": _server_controller.get_tool_load_errors(),
 		"self_diagnostics": self_diagnostics,
 		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
 		"central_server_attach": central_server_attach,
 		"central_server_process": central_server_process,
+		"user_tool_watch": user_tool_watch,
+		"editor_scale": _get_editor_scale(),
+		"permission_levels": ToolPermissionPolicy.PERMISSION_LEVELS,
+		"current_permission_level": _get_permission_level(),
+		"log_levels": MCPDebugBuffer.get_available_levels(),
+		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
 		"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
-		"profile_description": _get_tool_profile_description(profile_id, tool_names),
-		"user_tools": user_tools,
-		"user_tool_watch": user_tool_watch,
-		"desktop_clients": desktop_clients,
-		"cli_clients": cli_clients,
-		"config_platforms": config_platforms,
-		"config_connection_mode": config_connection_mode
-	}
+		"client_install_statuses": client_install_statuses
+	})
 
 
 func _refresh_dock() -> void:
@@ -654,382 +594,8 @@ func _refresh_dock() -> void:
 
 
 func _apply_initial_tool_profile_if_needed() -> void:
-	if not _state.needs_initial_tool_profile_apply:
-		return
-
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-	if tool_names.is_empty():
-		return
-
-	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-		str(_state.settings.get("tool_profile_id", "default")),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names,
-		_state.settings.get("disabled_tools", [])
-	)
-	_state.needs_initial_tool_profile_apply = false
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
-
-
-func _get_tool_profile_description(profile_id: String, tool_names: Array) -> String:
-	var description = ""
-	for profile in PluginRuntimeState.BUILTIN_TOOL_PROFILES:
-		if str(profile.get("id", "")) == profile_id:
-			description = _localization.get_text(str(profile.get("desc_key", "")))
-			break
-
-	if description.is_empty() and _state.custom_tool_profiles.has(profile_id):
-		description = _localization.get_text("tool_profile_custom_desc") % [str(_state.custom_tool_profiles[profile_id].get("name", profile_id))]
-
-	if description.is_empty():
-		description = _localization.get_text("tool_profile_default_desc")
-
-	if not _tool_catalog.profile_matches_state(
-		profile_id,
-		_state.settings.get("disabled_tools", []),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names
-	):
-		description = "%s %s" % [description, _localization.get_text("tool_profile_modified_desc")]
-
-	return description
-
-
-func _build_desktop_client_models(central_server_process: Dictionary = {}, client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	var transport = _build_client_transport_model(central_server_process, host, port)
-	return [
-		_build_client_ui_model("claude_desktop", {
-			"id": "claude_desktop",
-			"name_key": "config_client_claude_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("claude_desktop", transport), transport),
-			"path": _config_service.get_claude_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("cursor", {
-			"id": "cursor",
-			"name_key": "config_client_cursor",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("cursor", transport), transport),
-			"path": _config_service.get_cursor_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("trae", {
-			"id": "trae",
-			"name_key": "config_client_trae",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("trae", transport), transport),
-			"path": _config_service.get_trae_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("codex_desktop", {
-			"id": "codex_desktop",
-			"name_key": "config_client_codex_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("codex_desktop", transport), transport),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses),
-		_build_client_ui_model("opencode_desktop", {
-			"id": "opencode_desktop",
-			"name_key": "config_client_opencode_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("opencode_desktop", transport), transport),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses),
-		_build_client_ui_model("gemini", {
-			"id": "gemini",
-			"name_key": "config_client_gemini",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("gemini", transport), transport),
-			"path": _config_service.get_gemini_config_path(),
-			"content": _build_gemini_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses)
-	]
-
-
-func _build_cli_client_models(central_server_process: Dictionary = {}, client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	var transport = _build_client_transport_model(central_server_process, host, port)
-	return [
-		_build_client_ui_model("claude_code", {
-			"id": "claude_code",
-			"name_key": "config_client_claude_code",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("claude_code", transport), transport),
-			"content": _build_claude_code_cli_content(transport),
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses),
-		_build_client_ui_model("codex", {
-			"id": "codex",
-			"name_key": "config_client_codex",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("codex", transport), transport),
-			"content": _build_codex_cli_content(transport),
-			"primary_action_label_key": "config_client_action_add",
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses),
-		_build_client_ui_model("opencode", {
-			"id": "opencode",
-			"name_key": "config_client_opencode",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("opencode", transport), transport),
-			"path": _config_service.get_opencode_config_path(),
-			"content": _build_opencode_cli_content(transport),
-			"writeable": true,
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses)
-	]
-
-
-func _build_client_transport_model(central_server_process: Dictionary, host: String, port: int) -> Dictionary:
-	var launch_available = bool(central_server_process.get("client_launch_available", false))
-	var executable_path = str(central_server_process.get("client_executable_path", "")).strip_edges()
-	var arguments = central_server_process.get("client_arguments", [])
-	var argument_list: Array = []
-	if arguments is Array:
-		argument_list.assign(arguments)
-	elif arguments is PackedStringArray:
-		argument_list.assign(Array(arguments))
-
-	if launch_available and not executable_path.is_empty():
-		return {
-			"mode": "stdio",
-			"command": executable_path,
-			"args": argument_list,
-			"mode_label_key": "config_transport_local_stdio"
-		}
-
-	return {
-		"mode": "http",
-		"host": host,
-		"port": port,
-		"mode_label_key": "config_transport_http_fallback"
-	}
-
-
-func _build_client_summary_text(base_key: String, transport: Dictionary) -> String:
-	var base_text = _localization.get_text(base_key)
-	var transport_text = _localization.get_text(str(transport.get("mode_label_key", "")))
-	if transport_text.is_empty() or transport_text == str(transport.get("mode_label_key", "")):
-		return base_text
-	return "%s\n%s" % [base_text, transport_text]
-
-
-func _build_desktop_client_config_content(transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		return _config_service.get_command_config(
-			str(transport.get("command", "")),
-			Array(transport.get("args", []))
-		)
-	return _config_service.get_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
-
-
-func _build_gemini_client_config_content(transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		return _config_service.get_command_config(
-			str(transport.get("command", "")),
-			Array(transport.get("args", []))
-		)
-	return _config_service.get_http_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
-
-
-func _build_claude_code_cli_content(transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		return _config_service.get_claude_code_stdio_command(
-			_state.current_cli_scope,
-			str(transport.get("command", "")),
-			Array(transport.get("args", []))
-		)
-	return _config_service.get_claude_code_command(
-		_state.current_cli_scope,
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _build_codex_cli_content(transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		return _config_service.get_codex_stdio_command(
-			str(transport.get("command", "")),
-			Array(transport.get("args", []))
-		)
-	return _config_service.get_codex_command(
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _build_opencode_cli_content(transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		return _config_service.get_opencode_local_config(
-			str(transport.get("command", "")),
-			Array(transport.get("args", []))
-		)
-	return _config_service.get_opencode_remote_config(
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		match client_id:
-			"claude_code":
-				return "config_client_claude_code_stdio_desc"
-			"codex":
-				return "config_client_codex_stdio_desc"
-			"opencode":
-				return "config_client_opencode_stdio_desc"
-	return "config_client_%s_desc" % client_id
-
-
-func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> String:
-	if str(transport.get("mode", "")) == "stdio":
-		match client_id:
-			"claude_desktop":
-				return "config_client_claude_desktop_stdio_desc"
-			"cursor":
-				return "config_client_cursor_stdio_desc"
-			"trae":
-				return "config_client_trae_stdio_desc"
-			"gemini":
-				return "config_client_gemini_stdio_desc"
-	return "config_client_%s_desc" % client_id
-
-
-func _build_config_connection_mode(central_server_process: Dictionary) -> Dictionary:
-	var transport = _build_client_transport_model(
-		central_server_process,
-		str(_state.settings.get("host", "127.0.0.1")),
-		int(_state.settings.get("port", 3000))
-	)
-	var description = _localization.get_text(str(transport.get("mode_label_key", "")))
-	if str(transport.get("mode", "")) == "stdio":
-		var command = str(central_server_process.get("client_command", "")).strip_edges()
-		return {
-			"mode": "stdio",
-			"label": _localization.get_text("config_mode_local_stdio_title"),
-			"description": "%s\n%s" % [_localization.get_text("config_mode_local_stdio_desc"), command],
-			"validate_enabled": not command.is_empty()
-		}
-	var endpoint = "http://%s:%d/mcp" % [str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000))]
-	return {
-		"mode": "http",
-		"label": description,
-		"description": "%s\n%s" % [_localization.get_text("config_mode_http_fallback_desc"), endpoint],
-		"validate_enabled": true
-	}
-
-
-func _build_client_ui_model(client_id: String, client: Dictionary, client_install_statuses: Dictionary) -> Dictionary:
-	var model = client.duplicate(true)
-	var detection: Dictionary = client_install_statuses.get(client_id, {})
-	var codex_cli_detection: Dictionary = client_install_statuses.get("codex", {})
-	var opencode_cli_detection: Dictionary = client_install_statuses.get("opencode", {})
-	model["path_label_text"] = _localization.get_text("config_client_write_path_label")
-	if detection.is_empty():
-		return model
-
-	var status = str(detection.get("status", ""))
-	if not status.is_empty():
-		model["install_status_text"] = _get_client_install_status_text(status)
-		model["install_message_text"] = _get_client_install_message_text(client_id, status)
-	if bool(detection.get("manual_path_invalid", false)):
-		model["install_message_text"] = _localization.get_text("config_client_manual_path_invalid_msg")
-
-	var runtime_status = str(detection.get("runtime_status", {}).get("status", ""))
-	if not runtime_status.is_empty():
-		model["runtime_status_text"] = _get_client_runtime_status_text(runtime_status)
-
-	var entry_status = str(detection.get("config_entry_status", {}).get("status", ""))
-	if not entry_status.is_empty():
-		model["entry_status_text"] = _get_client_entry_status_text(entry_status)
-
-	var config_path = str(detection.get("config_path", "")).strip_edges()
-	if not config_path.is_empty():
-		model["path"] = config_path
-
-	var executable_path = str(detection.get("executable_path", "")).strip_edges()
-	var using_manual_path = bool(detection.get("using_manual_path", false))
-	var has_manual_path = bool(detection.get("has_manual_path", false))
-	model["path_source_text"] = _get_client_path_source_text(
-		str(detection.get("detected_via", "")),
-		using_manual_path,
-		not executable_path.is_empty()
-	)
-	if not executable_path.is_empty():
-		if client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
-			model["detail_label_text"] = _localization.get_text("config_client_cli_entry_label")
-			model["explanation_text"] = _localization.get_text("config_client_cli_detected_explainer")
-		else:
-			model["detail_label_text"] = _localization.get_text("config_client_program_entry_label")
-			model["explanation_text"] = _localization.get_text("config_client_desktop_path_explainer")
-		model["detail_value"] = executable_path
-	elif client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
-		model["detail_label_text"] = _localization.get_text("config_client_cli_path_label")
-		model["detail_value"] = executable_path
-		model["explanation_text"] = _localization.get_text("config_client_cli_missing_explainer")
-	elif client_id == "claude_desktop" or client_id == "cursor" or client_id == "trae":
-		model["explanation_text"] = _localization.get_text("config_client_desktop_write_only_explainer")
-	else:
-		model["explanation_text"] = _localization.get_text("config_client_pick_path_explainer")
-
-	if using_manual_path:
-		model["explanation_text"] = _localization.get_text("config_client_custom_path_explainer")
-
-	match client_id:
-		"codex_desktop":
-			model["guidance_text"] = _localization.get_text(
-				"config_client_codex_desktop_cli_recommendation_ready"
-				if str(codex_cli_detection.get("status", "")) == "ready"
-				else "config_client_codex_desktop_cli_recommendation_missing"
-			)
-			if str(detection.get("detected_via", "")) == "windows_store":
-				var store_note = _localization.get_text("config_client_codex_desktop_store_notice")
-				if not store_note.is_empty():
-					model["guidance_text"] = "%s\n%s" % [model["guidance_text"], store_note]
-		"opencode_desktop":
-			model["guidance_text"] = _localization.get_text(
-				"config_client_opencode_desktop_cli_recommendation_ready"
-				if str(opencode_cli_detection.get("status", "")) == "ready"
-				else "config_client_opencode_desktop_cli_recommendation_missing"
-			)
-
-	model["launch_supported"] = bool(detection.get("launch_supported", false))
-	model["launch_enabled"] = bool(detection.get("launch_supported", false))
-	if client_id == "cursor" or client_id == "trae":
-		model["launch_action_label_key"] = "config_client_action_open_project"
-	elif client_id == "claude_code" or client_id == "codex" or client_id == "opencode":
-		model["launch_action_label_key"] = "config_client_action_open_terminal"
-
-	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
-	model["path_pick_enabled"] = bool(detection.get("path_pick_supported", false))
-	model["path_pick_action_label_key"] = "config_client_action_reselect_path" if has_manual_path else (
-		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "opencode" else "config_client_action_choose_program_path"
-	)
-	model["path_clear_supported"] = bool(detection.get("path_clear_supported", false))
-	model["path_clear_enabled"] = bool(detection.get("path_clear_supported", false))
-	if not config_path.is_empty():
-		model["open_config_dir_supported"] = true
-		model["open_config_dir_enabled"] = not config_path.get_base_dir().is_empty()
-		model["open_config_file_supported"] = true
-		model["open_config_file_enabled"] = FileAccess.file_exists(config_path)
-
-	match client_id:
-		"claude_desktop", "cursor", "trae", "opencode":
-			model["writeable"] = bool(detection.get("write_supported", false))
-			model["remove_supported"] = bool(detection.get("write_supported", false))
-			model["remove_enabled"] = entry_status == "present"
-		"codex":
-			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
-			if not bool(detection.get("auto_add_supported", false)):
-				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status)
-		"claude_code", "codex_desktop", "opencode_desktop", "opencode":
-			model["writeable"] = false
-	return model
+	if _tool_profile_feature != null:
+		_tool_profile_feature.apply_initial_tool_profile_if_needed()
 
 
 func _get_client_install_statuses() -> Dictionary:
@@ -1051,122 +617,6 @@ func _configure_client_install_detection_service() -> void:
 	_client_install_detection_service.configure(_state.settings)
 
 
-func _get_client_install_status_text(status: String) -> String:
-	match status:
-		"ready":
-			return _localization.get_text("config_client_status_ready")
-		"config_only":
-			return _localization.get_text("config_client_status_config_only")
-		"missing":
-			return _localization.get_text("config_client_status_missing")
-		_:
-			return _localization.get_text("config_client_status_error")
-
-
-func _get_client_runtime_status_text(status: String) -> String:
-	match status:
-		"running":
-			return _localization.get_text("config_client_runtime_running")
-		"not_running":
-			return _localization.get_text("config_client_runtime_not_running")
-		_:
-			return _localization.get_text("config_client_runtime_unknown")
-
-
-func _get_client_entry_status_text(status: String) -> String:
-	match status:
-		"present":
-			return _localization.get_text("config_client_entry_present")
-		"missing_file":
-			return _localization.get_text("config_client_entry_missing_file")
-		"empty":
-			return _localization.get_text("config_client_entry_empty")
-		"missing_server":
-			return _localization.get_text("config_client_entry_missing_server")
-		"invalid_json":
-			return _localization.get_text("config_client_entry_invalid_json")
-		"incompatible_root", "incompatible_mcp_servers":
-			return _localization.get_text("config_client_entry_incompatible")
-		_:
-			return _localization.get_text("config_client_status_error")
-
-
-func _get_client_install_message_text(client_id: String, status: String) -> String:
-	var key := "config_client_%s_%s_msg" % [client_id, status]
-	var localized = _localization.get_text(key)
-	if localized == key:
-		return ""
-	return localized
-
-
-func _get_client_path_source_text(detected_via: String, using_manual_path: bool, has_detected_path: bool) -> String:
-	if using_manual_path:
-		return _localization.get_text("config_client_path_source_manual")
-	if detected_via == "windows_store":
-		return _localization.get_text("config_client_path_source_store")
-	if has_detected_path:
-		return _localization.get_text("config_client_path_source_auto")
-	if not detected_via.is_empty():
-		return _localization.get_text("config_client_path_source_auto")
-	return _localization.get_text("config_client_path_source_missing")
-
-
-func _build_config_platform_models(desktop_clients: Array[Dictionary], cli_clients: Array[Dictionary]) -> Array[Dictionary]:
-	var platforms: Array[Dictionary] = []
-	for client in desktop_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "desktop",
-			"display_name_key": "config_platform_desktop_prefix"
-		})
-	for client in cli_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "cli",
-			"display_name_key": "config_platform_cli_prefix"
-		})
-	return platforms
-
-
-func _resolve_current_config_platform(platforms: Array[Dictionary]) -> String:
-	if platforms.is_empty():
-		return ""
-
-	for platform in platforms:
-		var platform_id = str(platform.get("id", ""))
-		if platform_id == _state.current_config_platform:
-			return platform_id
-
-	return str(platforms[0].get("id", ""))
-
-
-func _on_current_tab_changed(index: int) -> void:
-	_state.current_tab = index
-	if _state.current_tab == 2:
-		_invalidate_client_install_status_cache()
-	_refresh_dock()
-
-
-func _on_port_changed(value: int) -> void:
-	_state.settings["port"] = value
-	_save_settings()
-	_refresh_dock()
-
-
-func _on_language_changed(language_code: String) -> void:
-	var focus_snapshot := {}
-	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
-		focus_snapshot = _dock.capture_focus_snapshot()
-	_state.settings["language"] = language_code
-	_localization.set_language(language_code)
-	_save_settings()
-	_refresh_dock()
-	if _dock and is_instance_valid(_dock) and _dock.has_method("restore_focus_snapshot"):
-		_dock.restore_focus_snapshot(focus_snapshot)
-
-
 func _on_start_requested() -> void:
 	_server_controller.start(_state.settings, "ui_start")
 	_refresh_dock()
@@ -1182,606 +632,84 @@ func _on_stop_requested() -> void:
 	_refresh_dock()
 
 
-func _on_full_reload_requested() -> void:
-	var focus_snapshot := {}
-	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
-		focus_snapshot = _dock.capture_focus_snapshot()
-	_store_pending_focus_snapshot(focus_snapshot)
-	_save_settings()
-	_schedule_plugin_reenable()
-
-
 func _on_log_level_changed(level: String) -> void:
-	_state.settings["log_level"] = level
-	MCPDebugBuffer.set_minimum_level(level)
-	_save_settings()
-	_refresh_dock()
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_log_level_changed(level)
 
 
 func _on_permission_level_changed(level: String) -> void:
-	_state.settings["permission_level"] = PluginRuntimeState.normalize_permission_level(level)
-	_save_settings()
-	_refresh_dock()
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_permission_level_changed(level)
 
 
 func _on_show_user_tools_changed(enabled: bool) -> void:
-	_state.settings["show_user_tools"] = true
-	_save_settings()
-	_refresh_dock()
-
-
-func _apply_tool_profile(profile_id: String) -> void:
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-	_state.settings["tool_profile_id"] = profile_id
-	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-		profile_id,
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names,
-		_state.settings.get("disabled_tools", [])
-	)
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
-	_refresh_dock()
-
-
-func _save_custom_profile(profile_name: String) -> Dictionary:
-	if profile_name.is_empty():
-		return {
-			"success": false,
-			"error": _localization.get_text("tool_profile_name_required")
-		}
-
-	var result = _settings_store.save_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
-		profile_name,
-		_state.settings.get("disabled_tools", [])
-	)
-	if not result.get("success", false):
-		return {
-			"success": false,
-			"error": _localization.get_text("tool_profile_save_failed")
-		}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
-	_state.settings["tool_profile_id"] = "custom:%s" % str(result.get("slug", ""))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": str(_state.settings.get("tool_profile_id", "")),
-		"message": _localization.get_text("tool_profile_saved") % profile_name
-	}
-
-
-func _rename_custom_profile(profile_id: String, profile_name: String) -> Dictionary:
-	if _is_builtin_profile_id(profile_id):
-		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
-
-	var result = _settings_store.rename_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
-		profile_id,
-		profile_name
-	)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "rename_failed")))}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
-	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
-		_state.settings["tool_profile_id"] = str(result.get("profile_id", profile_id))
-	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": str(result.get("profile_id", profile_id)),
-		"message": _localization.get_text("tool_profile_renamed") % str(result.get("profile_name", profile_name.strip_edges()))
-	}
-
-
-func _delete_custom_profile(profile_id: String) -> Dictionary:
-	if _is_builtin_profile_id(profile_id):
-		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
-
-	var result = _settings_store.delete_custom_profile(PluginRuntimeState.TOOL_PROFILE_DIR, profile_id)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "delete_failed")))}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
-	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
-		var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-		_state.settings["tool_profile_id"] = "default"
-		_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-			"default",
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names,
-			_state.settings.get("disabled_tools", [])
-		)
-	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": "default" if str(_state.settings.get("tool_profile_id", "")) == "default" else profile_id,
-		"message": _localization.get_text("tool_profile_deleted")
-	}
-
-
-func _is_builtin_profile_id(profile_id: String) -> bool:
-	return not profile_id.begins_with("custom:")
-
-
-func _get_custom_profile_error_text(error_code: String) -> String:
-	match error_code:
-		"empty_profile_name":
-			return _localization.get_text("tool_profile_name_required")
-		"profile_name_conflict":
-			return _localization.get_text("tool_profile_name_conflict")
-		"profile_not_found", "invalid_profile_id":
-			return _localization.get_text("tool_profile_not_found")
-		_:
-			if error_code.begins_with("rename"):
-				return _localization.get_text("tool_profile_rename_failed")
-			return _localization.get_text("tool_profile_delete_failed")
-
-
-func _get_tool_config_error_text(error_code: String) -> String:
-	match error_code:
-		"config_path_required":
-			return _localization.get_text("tool_config_path_required")
-		"config_not_found":
-			return _localization.get_text("tool_config_not_found")
-		"config_profile_required", "config_disabled_tools_invalid", "config_parse_failed":
-			return _localization.get_text("tool_config_validation_failed")
-		"config_dir_create_failed", "config_write_failed", "config_open_failed":
-			return _localization.get_text("tool_config_write_failed")
-		_:
-			return _localization.get_text("tool_config_validation_failed")
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_show_user_tools_changed(enabled)
 
 
 func _on_delete_user_tool_requested(script_path: String) -> void:
-	var result = _user_tool_service.delete_tool(script_path, true)
-	if not bool(result.get("success", false)):
-		_show_message(str(result.get("error", "Failed to delete user tool")))
-		return
-	_server_controller.reload_all_domains()
-	_cleanup_disabled_tools()
-	_save_settings()
-	_show_message(str(result.get("message", "User tool deleted")))
-	_refresh_dock()
+	if _user_tool_feature != null:
+		_user_tool_feature.handle_delete_requested(script_path)
 
 
 func _on_tool_toggled(tool_name: String, enabled: bool) -> void:
-	_apply_tool_enabled(tool_name, enabled)
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_tool_toggled(tool_name, enabled)
 
 
 func _on_category_toggled(category: String, enabled: bool) -> void:
-	if not enabled and _is_plugin_category_restricted(category):
-		for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-			if str(tool_name).begins_with(category + "_"):
-				_set_tool_enabled(str(tool_name), false)
-		_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-		_save_settings()
-		_refresh_dock()
-		return
-
-	if enabled and not _can_enable_category(category):
-		_show_message(get_permission_denied_message_for_category(category))
-		_refresh_dock()
-		return
-
-	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-		if str(tool_name).begins_with(category + "_"):
-			_set_tool_enabled(str(tool_name), enabled)
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
-	_refresh_dock()
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_category_toggled(category, enabled)
 
 
 func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
-	if enabled and not _can_enable_domain(domain_key):
-		_show_message(get_permission_denied_message_for_domain(domain_key))
-		_refresh_dock()
-		return
-
-	var target_categories: Array = []
-	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
-		if str(domain_def.get("key", "")) != domain_key:
-			continue
-		target_categories = domain_def.get("categories", []).duplicate()
-		break
-
-	if target_categories.is_empty():
-		for category in _server_controller.get_all_tools_by_category().keys():
-			var known_domain = _tool_catalog.find_domain_key_for_category(PluginRuntimeState.TOOL_DOMAIN_DEFS, str(category))
-			if known_domain.is_empty():
-				target_categories.append(str(category))
-
-	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-		for category in target_categories:
-			if _tool_catalog.tool_belongs_to_category(str(tool_name), str(category)):
-				_set_tool_enabled(str(tool_name), enabled)
-				break
-
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
-	_refresh_dock()
-
-
-func _on_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
-	TreeCollapseState.set_node_collapsed(_state.settings, kind, key, collapsed)
-	_save_settings()
-
-
-func _on_cli_scope_changed(scope: String) -> void:
-	_state.current_cli_scope = scope
-	_state.settings["current_cli_scope"] = scope
-	_save_settings()
-	_refresh_dock()
-
-
-func _on_config_platform_changed(platform_id: String) -> void:
-	_state.current_config_platform = platform_id
-	_state.settings["current_config_platform"] = platform_id
-	_save_settings()
-	_refresh_dock()
+	if _tool_access_feature != null:
+		_tool_access_feature.handle_domain_toggled(domain_key, enabled)
 
 
 func _on_config_validate_requested(_platform_id: String) -> void:
-	if _central_server_process_service == null:
-		return
-	var result = _central_server_process_service.validate_client_transport(
-		str(_state.settings.get("host", "127.0.0.1")),
-		int(_state.settings.get("port", 3000))
-	)
-	if not bool(result.get("success", false)):
-		_show_message("%s\n\n%s" % [
-			_localization.get_text("config_validate_failed"),
-			str(result.get("message", ""))
-		])
-		return
-	var mode = str(result.get("mode", "http"))
-	var success_key = "config_validate_success_stdio" if mode == "stdio" else "config_validate_success_http"
-	_show_message("%s\n\n%s" % [
-		_localization.get_text(success_key),
-		str(result.get("message", ""))
-	])
+	if _config_feature != null:
+		_config_feature.handle_validate_requested()
 
 
 func _on_config_client_action_requested(client_id: String) -> void:
-	var client_statuses = _get_client_install_statuses()
-	match client_id:
-		"codex":
-			_apply_codex_mcp_config(client_statuses.get("codex", {}))
-		_:
-			pass
+	if _config_feature != null:
+		_config_feature.handle_client_action_requested(client_id)
 
 
 func _on_config_client_launch_requested(client_id: String) -> void:
-	var client_statuses = _get_client_install_statuses()
-	match client_id:
-		"cursor":
-			_launch_cursor_for_current_project(client_statuses.get("cursor", {}))
-		"trae":
-			_launch_desktop_agent_for_current_project(
-				_localization.get_text("config_client_trae"),
-				client_statuses.get("trae", {})
-			)
-		"claude_code":
-			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_claude_code"), client_statuses.get("claude_code", {}))
-		"codex":
-			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_codex"), client_statuses.get("codex", {}))
-		"opencode":
-			_launch_cli_agent_for_current_project(client_id, _localization.get_text("config_client_opencode"), client_statuses.get("opencode", {}))
-		_:
-			_show_message(_localization.get_text("msg_client_launch_unsupported"))
+	if _config_feature != null:
+		_config_feature.handle_client_launch_requested(client_id)
 
 
 func _on_config_client_path_pick_requested(client_id: String) -> void:
-	var client_statuses = _get_client_install_statuses()
-	_open_client_executable_dialog(client_id, client_statuses.get(client_id, {}))
+	if _config_feature != null:
+		_config_feature.handle_client_path_pick_requested(client_id)
 
 
 func _on_config_client_path_clear_requested(client_id: String) -> void:
-	var manual_paths = _get_client_manual_paths()
-	if not manual_paths.has(client_id):
-		_show_message(_localization.get_text("msg_client_manual_path_missing"))
-		return
-	manual_paths.erase(client_id)
-	_state.settings["client_manual_paths"] = manual_paths
-	_save_settings()
-	_configure_client_install_detection_service()
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-	_show_message(_localization.get_text("msg_client_path_cleared") % _get_client_display_name(client_id))
+	if _config_feature != null:
+		_config_feature.handle_client_path_clear_requested(client_id)
 
 
 func _on_config_client_open_config_dir_requested(client_id: String) -> void:
-	var client_statuses = _get_client_install_statuses()
-	var detection: Dictionary = client_statuses.get(client_id, {})
-	var config_path = str(detection.get("config_path", "")).strip_edges()
-	if config_path.is_empty():
-		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
-		return
-	var dir_path = config_path.get_base_dir()
-	if dir_path.is_empty():
-		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
-		return
-	if not DirAccess.dir_exists_absolute(dir_path):
-		var dir_error = DirAccess.make_dir_recursive_absolute(dir_path)
-		if dir_error != OK:
-			_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
-			return
-	var result = _config_service.open_target_path(dir_path)
-	if not bool(result.get("success", false)):
-		_show_message(_localization.get_text("msg_client_open_config_dir_failed") % _get_client_display_name(client_id))
-		return
-	_show_message(_localization.get_text("msg_client_open_config_dir_success") % _get_client_display_name(client_id))
+	if _config_feature != null:
+		_config_feature.handle_client_open_config_dir_requested(client_id)
 
 
 func _on_config_client_open_config_file_requested(client_id: String) -> void:
-	var client_statuses = _get_client_install_statuses()
-	var detection: Dictionary = client_statuses.get(client_id, {})
-	var config_path = str(detection.get("config_path", "")).strip_edges()
-	if config_path.is_empty() or not FileAccess.file_exists(config_path):
-		_show_message(_localization.get_text("msg_client_open_config_file_missing") % _get_client_display_name(client_id))
-		return
-	var result = _config_service.open_text_file(config_path)
-	if not bool(result.get("success", false)):
-		_show_message(_localization.get_text("msg_client_open_config_file_failed") % _get_client_display_name(client_id))
-		return
-	_show_message(_localization.get_text("msg_client_open_config_file_success") % _get_client_display_name(client_id))
+	if _config_feature != null:
+		_config_feature.handle_client_open_config_file_requested(client_id)
 
 
 func _on_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
-	var preflight = _config_service.preflight_write_config(config_type, filepath, config)
-	if not bool(preflight.get("success", false)):
-		_show_message(_build_config_write_failure_message(preflight, filepath))
-		return
-
-	if bool(preflight.get("requires_confirmation", false)):
-		_show_confirmation(
-			_build_config_write_confirmation_message(client_name, preflight),
-			func() -> void:
-				_perform_config_write(config_type, filepath, config, client_name, preflight, true)
-		)
-		return
-
-	_perform_config_write(config_type, filepath, config, client_name, preflight, false)
-
-
-func _perform_config_write(
-	config_type: String,
-	filepath: String,
-	config: String,
-	client_name: String,
-	preflight: Dictionary,
-	allow_incompatible_overwrite: bool
-) -> void:
-	var result = _config_service.write_config_file(
-		config_type,
-		filepath,
-		config,
-		{
-			"preflight": preflight,
-			"allow_incompatible_overwrite": allow_incompatible_overwrite
-		}
-	)
-	if not bool(result.get("success", false)):
-		_show_message(_build_config_write_failure_message(result, filepath))
-		return
-
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-
-	var success_lines: PackedStringArray = PackedStringArray([
-		_localization.get_text("msg_config_success") % client_name,
-		_localization.get_text("msg_config_verified") % str(result.get("path", filepath))
-	])
-	var backup_path = str(result.get("backup_path", "")).strip_edges()
-	if not backup_path.is_empty():
-		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
-	success_lines.append(_localization.get_text("msg_config_effect_hint"))
-	success_lines.append(_build_client_runtime_followup_message(config_type))
-	_show_message("\n\n".join(success_lines))
+	if _config_feature != null:
+		_config_feature.handle_write_requested(config_type, filepath, config, client_name)
 
 
 func _on_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
-	var inspection = _config_service.inspect_config_entry(config_type, filepath)
-	if not bool(inspection.get("success", false)):
-		_show_message(_build_config_remove_failure_message(inspection, filepath))
-		return
-
-	var status = str(inspection.get("status", "missing_file"))
-	if status != "present":
-		_show_message(_build_config_remove_noop_message(inspection, client_name))
-		return
-
-	_show_confirmation(
-		_build_config_remove_confirmation_message(client_name, inspection),
-		func() -> void:
-			_perform_config_remove(config_type, filepath, client_name, inspection)
-	)
-
-
-func _perform_config_remove(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
-	var result = _config_service.remove_config_entry(config_type, filepath, {"inspection": inspection})
-	if not bool(result.get("success", false)):
-		_show_message(_build_config_remove_failure_message(result, filepath))
-		return
-
-	if not bool(result.get("removed", false)):
-		_show_message(_build_config_remove_noop_message(result, client_name))
-		return
-
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-
-	var success_lines: PackedStringArray = PackedStringArray([
-		_localization.get_text("msg_config_remove_success") % client_name
-	])
-	var backup_path = str(result.get("backup_path", "")).strip_edges()
-	if not backup_path.is_empty():
-		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
-	success_lines.append(_build_client_runtime_followup_message(config_type))
-	_show_message("\n\n".join(success_lines))
-
-
-func _build_config_write_confirmation_message(client_name: String, preflight: Dictionary) -> String:
-	var lines: PackedStringArray = PackedStringArray([
-		_localization.get_text("msg_config_overwrite_confirm") % client_name
-	])
-	var filepath = str(preflight.get("path", ""))
-	match str(preflight.get("status", "")):
-		"invalid_json":
-			lines.append(_localization.get_text("msg_config_precheck_invalid_json") % filepath)
-		"incompatible_root":
-			lines.append(_localization.get_text("msg_config_precheck_incompatible_root") % filepath)
-		"incompatible_mcp_servers":
-			lines.append(_localization.get_text("msg_config_precheck_incompatible_servers") % filepath)
-		"incompatible_mcp":
-			lines.append(_localization.get_text("msg_config_precheck_incompatible_mcp") % filepath)
-		_:
-			lines.append(_localization.get_text("msg_write_error"))
-
-	var backup_path = str(preflight.get("backup_path", "")).strip_edges()
-	if not backup_path.is_empty():
-		lines.append(_localization.get_text("msg_config_backup_notice") % backup_path)
-	return "\n\n".join(lines)
-
-
-func _build_config_remove_confirmation_message(client_name: String, inspection: Dictionary) -> String:
-	var lines: PackedStringArray = PackedStringArray([
-		_localization.get_text("msg_config_remove_confirm") % client_name,
-		_localization.get_text("msg_config_remove_safe_scope")
-	])
-	var backup_path = str(inspection.get("backup_path", "")).strip_edges()
-	if not backup_path.is_empty():
-		lines.append(_localization.get_text("msg_config_backup_notice") % backup_path)
-	return "\n\n".join(lines)
-
-
-func _build_config_write_failure_message(result: Dictionary, filepath: String) -> String:
-	var message := ""
-	match str(result.get("error", "")):
-		"parse_error":
-			message = _localization.get_text("msg_parse_error")
-		"dir_error":
-			message = _localization.get_text("msg_dir_error") + str(result.get("path", ""))
-		"precheck_read_error":
-			message = _localization.get_text("msg_config_precheck_read_error") % str(result.get("path", filepath))
-		"precheck_confirmation_required":
-			message = _build_config_write_confirmation_message("MCP", result)
-		"backup_error":
-			message = _localization.get_text("msg_config_backup_failed") % str(result.get("backup_path", filepath + ".bak"))
-		"readback_missing_file":
-			message = "%s\n\n%s" % [
-				_localization.get_text("msg_config_readback_failed"),
-				_localization.get_text("msg_config_readback_missing_file") % str(result.get("path", filepath))
-			]
-		"readback_open_error":
-			message = "%s\n\n%s" % [
-				_localization.get_text("msg_config_readback_failed"),
-				_localization.get_text("msg_config_readback_open_error") % str(result.get("path", filepath))
-			]
-		"readback_parse_error", "readback_missing_servers":
-			message = "%s\n\n%s" % [
-				_localization.get_text("msg_config_readback_failed"),
-				_localization.get_text("msg_config_readback_parse_error") % str(result.get("path", filepath))
-			]
-		"readback_missing_server":
-			message = "%s\n\n%s" % [
-				_localization.get_text("msg_config_readback_failed"),
-				_localization.get_text("msg_config_readback_missing_server") % [
-					str(result.get("server_name", "godot-mcp")),
-					str(result.get("path", filepath))
-				]
-			]
-		"readback_mismatch":
-			message = "%s\n\n%s" % [
-				_localization.get_text("msg_config_readback_failed"),
-				_localization.get_text("msg_config_readback_mismatch") % [
-					str(result.get("server_name", "godot-mcp")),
-					str(result.get("path", filepath))
-				]
-			]
-		_:
-			message = _localization.get_text("msg_write_error")
-
-	if bool(result.get("rollback_restored", false)):
-		message = "%s\n\n%s" % [message, _localization.get_text("msg_config_restored_backup")]
-	elif str(result.get("rollback_error", "")) == "restore_failed":
-		message = "%s\n\n%s" % [
-			message,
-			_localization.get_text("msg_config_restore_failed") % str(result.get("backup_path", filepath + ".bak"))
-		]
-	return message
-
-
-func _build_config_remove_failure_message(result: Dictionary, filepath: String) -> String:
-	var message := ""
-	match str(result.get("error", "")):
-		"precheck_read_error":
-			message = _localization.get_text("msg_config_precheck_read_error") % str(result.get("path", filepath))
-		"backup_error":
-			message = _localization.get_text("msg_config_backup_failed") % str(result.get("backup_path", filepath + ".bak"))
-		"remove_blocked_invalid_json":
-			message = _localization.get_text("msg_config_remove_blocked_invalid_json") % str(result.get("path", filepath))
-		"remove_blocked_incompatible_root", "remove_blocked_incompatible_mcp_servers", "remove_blocked_incompatible_mcp":
-			message = _localization.get_text("msg_config_remove_blocked_incompatible") % str(result.get("path", filepath))
-		"readback_missing_file":
-			message = _localization.get_text("msg_config_remove_readback_failed") % str(result.get("path", filepath))
-		"readback_open_error", "readback_parse_error", "readback_missing_servers":
-			message = _localization.get_text("msg_config_remove_readback_failed") % str(result.get("path", filepath))
-		"readback_remove_mismatch":
-			message = _localization.get_text("msg_config_remove_readback_mismatch") % [
-				str(result.get("server_name", "godot-mcp")),
-				str(result.get("path", filepath))
-			]
-		_:
-			message = _localization.get_text("msg_config_remove_failed")
-
-	if bool(result.get("rollback_restored", false)):
-		message = "%s\n\n%s" % [message, _localization.get_text("msg_config_restored_backup")]
-	elif str(result.get("rollback_error", "")) == "restore_failed":
-		message = "%s\n\n%s" % [
-			message,
-			_localization.get_text("msg_config_restore_failed") % str(result.get("backup_path", filepath + ".bak"))
-		]
-	return message
-
-
-func _build_config_remove_noop_message(result: Dictionary, client_name: String) -> String:
-	match str(result.get("status", result.get("noop_reason", ""))):
-		"missing_file":
-			return _localization.get_text("msg_config_remove_noop_missing_file") % client_name
-		"empty", "missing_server":
-			return _localization.get_text("msg_config_remove_noop_missing_entry") % client_name
-		_:
-			return _localization.get_text("msg_config_remove_failed")
-
-
-func _build_client_runtime_followup_message(client_id: String) -> String:
-	var detection = _get_client_install_statuses().get(client_id, {})
-	var runtime_status = str(detection.get("runtime_status", {}).get("status", "unknown"))
-	if runtime_status == "running":
-		match client_id:
-			"claude_desktop":
-				return _localization.get_text("msg_config_restart_claude")
-			"cursor":
-				return _localization.get_text("msg_config_restart_cursor")
-			"trae":
-				return _localization.get_text("msg_config_restart_trae")
-			"opencode", "opencode_desktop":
-				return _localization.get_text("msg_config_restart_opencode")
-			_:
-				return _localization.get_text("msg_config_effect_hint")
-	if runtime_status == "not_running":
-		return _localization.get_text("msg_config_client_not_running")
-	return _localization.get_text("msg_config_effect_hint")
-
-
-func _on_copy_requested(text: String, source: String) -> void:
-	DisplayServer.clipboard_set(text)
-	_show_message(_localization.get_text("msg_copied") % source)
+	if _config_feature != null:
+		_config_feature.handle_remove_requested(config_type, filepath, client_name)
 
 
 func _on_server_started() -> void:
@@ -1794,26 +722,6 @@ func _on_server_stopped() -> void:
 
 func _on_request_received(_method: String, _params: Dictionary) -> void:
 	_refresh_dock()
-
-
-func _apply_tool_enabled(tool_name: String, enabled: bool) -> void:
-	if enabled and not _can_enable_tool(tool_name):
-		_show_message(get_permission_denied_message_for_tool(tool_name))
-		_refresh_dock()
-		return
-	_set_tool_enabled(tool_name, enabled)
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
-	_refresh_dock()
-
-
-func _set_tool_enabled(tool_name: String, enabled: bool) -> void:
-	var disabled_tools: Array = _state.settings.get("disabled_tools", [])
-	if enabled:
-		disabled_tools.erase(tool_name)
-	elif not disabled_tools.has(tool_name):
-		disabled_tools.append(tool_name)
-	_state.settings["disabled_tools"] = disabled_tools
 
 
 func _show_message(message: String) -> void:
@@ -1831,244 +739,45 @@ func _show_confirmation(message: String, on_confirmed: Callable) -> void:
 		on_confirmed.call()
 
 
-func _open_client_executable_dialog(client_id: String, detection: Dictionary) -> void:
-	_ensure_client_executable_dialog()
-	if _client_executable_dialog == null or not is_instance_valid(_client_executable_dialog):
-		_show_message(_localization.get_text("msg_client_path_dialog_unavailable"))
-		return
-
-	var current_path = str(detection.get("executable_path", detection.get("manual_path", ""))).strip_edges()
-	_pending_client_path_request = {
-		"client_id": client_id
-	}
-	_client_executable_dialog.title = _localization.get_text("msg_client_path_dialog_title") % _get_client_display_name(client_id)
-	if not current_path.is_empty():
-		_client_executable_dialog.current_path = current_path
-		_client_executable_dialog.current_dir = current_path.get_base_dir()
-	else:
-		_client_executable_dialog.current_dir = ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
-	_client_executable_dialog.popup_centered_ratio(0.75)
-
-
 func _on_client_executable_file_selected(path: String) -> void:
-	var client_id = str(_pending_client_path_request.get("client_id", "")).strip_edges()
-	_pending_client_path_request = {}
-	if client_id.is_empty():
-		return
-
-	var normalized_path = path.replace("\\", "/").strip_edges()
-	if normalized_path.is_empty() or not FileAccess.file_exists(normalized_path):
-		_show_message(_localization.get_text("msg_client_path_invalid"))
-		return
-
-	var manual_paths = _get_client_manual_paths()
-	manual_paths[client_id] = normalized_path
-	_state.settings["client_manual_paths"] = manual_paths
-	_save_settings()
-	_configure_client_install_detection_service()
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-	_show_message("%s\n\n%s" % [
-		_localization.get_text("msg_client_path_saved") % _get_client_display_name(client_id),
-		normalized_path
-	])
-
-
-func _get_client_manual_paths() -> Dictionary:
-	var manual_paths = _state.settings.get("client_manual_paths", {})
-	if manual_paths is Dictionary:
-		return manual_paths.duplicate(true)
-	return {}
-
-
-func _get_client_display_name(client_id: String) -> String:
-	match client_id:
-		"claude_desktop":
-			return _localization.get_text("config_client_claude_desktop")
-		"claude_code":
-			return _localization.get_text("config_client_claude_code")
-		"cursor":
-			return _localization.get_text("config_client_cursor")
-		"trae":
-			return _localization.get_text("config_client_trae")
-		"codex_desktop":
-			return _localization.get_text("config_client_codex_desktop")
-		"codex":
-			return _localization.get_text("config_client_codex")
-		"opencode_desktop":
-			return _localization.get_text("config_client_opencode_desktop")
-		"opencode":
-			return _localization.get_text("config_client_opencode")
-		"gemini":
-			return _localization.get_text("config_client_gemini")
-		_:
-			return client_id
-
-
-func _apply_codex_mcp_config(detection: Dictionary) -> void:
-	if detection.is_empty() or str(detection.get("status", "")) != "ready":
-		_show_message(_get_client_install_message_text("codex", str(detection.get("status", "missing"))))
-		return
-
-	var executable_path = str(detection.get("executable_path", "")).strip_edges()
-	if executable_path.is_empty():
-		_show_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_codex"))
-		return
-
-	var transport = _build_client_transport_model(
-		_get_central_server_process_status(),
-		str(_state.settings.get("host", "127.0.0.1")),
-		int(_state.settings.get("port", 3000))
-	)
-
-	var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", "godot-mcp"]))
-	if not bool(remove_result.get("success", false)):
-		var remove_message = str(remove_result.get("message", ""))
-		if remove_message.find("No MCP server named 'godot-mcp' found.") == -1:
-			_show_message("%s\n\n%s" % [
-				_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
-				remove_message
-			])
-			return
-
-	var add_result = _config_service.execute_cli_command(executable_path, _build_codex_add_arguments(transport))
-	if not bool(add_result.get("success", false)):
-		_show_message("%s\n\n%s" % [
-			_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
-			str(add_result.get("message", ""))
-		])
-		return
-
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-	_show_message(_localization.get_text("msg_client_action_success") % _localization.get_text("config_client_codex"))
-
-
-func _launch_cursor_for_current_project(detection: Dictionary) -> void:
-	_launch_desktop_agent_for_current_project(_localization.get_text("config_client_cursor"), detection)
-
-
-func _launch_desktop_agent_for_current_project(client_name: String, detection: Dictionary) -> void:
-	var executable_path = str(detection.get("executable_path", "")).strip_edges()
-	if executable_path.is_empty():
-		_show_message(_localization.get_text("msg_client_action_missing_executable") % client_name)
-		return
-
-	var project_root = _get_current_project_root()
-	var result = _config_service.launch_desktop_client(
-		executable_path,
-		PackedStringArray([project_root]),
-		project_root
-	)
-	if not bool(result.get("success", false)):
-		_show_message("%s\n\n%s" % [
-			_localization.get_text("msg_client_launch_failed") % client_name,
-			str(result.get("message", ""))
-		])
-		return
-
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-	_show_message("%s\n\n%s" % [
-		_localization.get_text("msg_client_launch_success") % client_name,
-		_localization.get_text("msg_client_launch_workdir") % project_root
-	])
-
-
-func _launch_cli_agent_for_current_project(client_id: String, client_name: String, detection: Dictionary) -> void:
-	var executable_path = str(detection.get("executable_path", "")).strip_edges()
-	if executable_path.is_empty():
-		_show_message(_localization.get_text("msg_client_action_missing_executable") % client_name)
-		return
-
-	var project_root = _get_current_project_root()
-	var arguments := PackedStringArray()
-	match client_id:
-		"claude_code", "codex":
-			arguments = PackedStringArray()
-		"opencode":
-			arguments = PackedStringArray([project_root])
-		_:
-			_show_message(_localization.get_text("msg_client_launch_unsupported"))
-			return
-
-	var result = _config_service.launch_cli_client_in_terminal(executable_path, arguments, project_root)
-	if not bool(result.get("success", false)):
-		_show_message("%s\n\n%s" % [
-			_localization.get_text("msg_client_launch_failed") % client_name,
-			str(result.get("message", ""))
-		])
-		return
-
-	_invalidate_client_install_status_cache()
-	_refresh_dock()
-	_show_message("%s\n\n%s" % [
-		_localization.get_text("msg_client_launch_success") % client_name,
-		"%s\n%s" % [
-			_localization.get_text("msg_client_launch_workdir") % project_root,
-			_localization.get_text("msg_client_launch_terminal_hint")
-		]
-	])
-
-
-func _get_current_project_root() -> String:
-	return ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
-
-
-func _build_codex_add_arguments(transport: Dictionary) -> PackedStringArray:
-	if str(transport.get("mode", "")) == "stdio":
-		var args := PackedStringArray(["mcp", "add", "godot-mcp", "--", str(transport.get("command", ""))])
-		for value in transport.get("args", []):
-			args.append(str(value))
-		return args
-
-	return PackedStringArray([
-		"mcp",
-		"add",
-		"godot-mcp",
-		"--url",
-		"http://%s:%d/mcp" % [str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000))]
-	])
+	if _config_feature != null:
+		_config_feature.handle_client_executable_file_selected(path)
 
 
 func set_log_level_for_tools(level: String) -> Dictionary:
-	_on_log_level_changed(level)
-	return {"success": true, "log_level": str(_state.settings.get("log_level", level))}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_log_level_for_tools(level)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func get_log_level_for_tools() -> String:
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_log_level_for_tools()
 	return str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level()))
 
 
 func get_user_tool_summaries() -> Array[Dictionary]:
-	return _user_tool_service.list_user_tools()
+	if _user_tool_feature != null:
+		return _user_tool_feature.get_user_tool_summaries()
+	return []
 
 
 func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
-	var result = _user_tool_service.create_tool_scaffold(
-		str(args.get("tool_name", "")),
-		str(args.get("display_name", "")),
-		str(args.get("description", "")),
-		bool(args.get("authorized", false)),
-		str(args.get("agent_hint", ""))
-	)
-	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "create_user_tool")
-	return result
+	if _user_tool_feature != null:
+		return _user_tool_feature.create_user_tool_from_tools(args)
+	return {"success": false, "error": "User tool feature is unavailable"}
 
 
 func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
-	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
-	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", script_path)), "delete_user_tool")
-	return result
+	if _user_tool_feature != null:
+		return _user_tool_feature.delete_user_tool_from_tools(script_path, authorized, agent_hint)
+	return {"success": false, "error": "User tool feature is unavailable"}
 
 
 func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
-	var result = _user_tool_service.restore_latest_backup(authorized, agent_hint)
-	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "restore_user_tool")
-	return result
+	if _user_tool_feature != null:
+		return _user_tool_feature.restore_user_tool_from_tools(authorized, agent_hint)
+	return {"success": false, "error": "User tool feature is unavailable"}
 
 
 func _schedule_user_tool_catalog_refresh() -> void:
@@ -2076,175 +785,88 @@ func _schedule_user_tool_catalog_refresh() -> void:
 
 
 func _apply_user_tool_catalog_refresh(script_path: String = "", reason: String = "user_tool_catalog_refresh") -> void:
-	_refresh_user_tool_registry()
-	_reload_user_tool_runtime(script_path, reason)
-	_rebuild_user_tool_ui_model()
+	if _user_tool_feature != null:
+		_user_tool_feature.apply_user_tool_catalog_refresh(script_path, reason)
 
 
 func _apply_external_user_tool_catalog_refresh(changed_paths: Array[String], reason: String = "external_watch") -> void:
-	_refresh_user_tool_registry()
-	if changed_paths.is_empty():
-		_reload_user_tool_runtime("", reason)
-	else:
-		for script_path in changed_paths:
-			_reload_user_tool_runtime(str(script_path), reason)
-	_rebuild_user_tool_ui_model()
+	if _user_tool_feature != null:
+		_user_tool_feature.apply_external_user_tool_catalog_refresh(changed_paths, reason)
 
 
 func _refresh_user_tool_registry() -> Array[Dictionary]:
-	return _user_tool_service.list_user_tools()
+	if _user_tool_feature != null:
+		return _user_tool_feature.refresh_user_tool_registry()
+	return []
 
 
 func _reload_user_tool_runtime(script_path: String, reason: String) -> Dictionary:
-	var coordinator = _create_reload_coordinator()
-	if coordinator == null:
-		return {"success": false, "error": "Reload coordinator is unavailable"}
-	if not script_path.is_empty():
-		return coordinator.request_reload_by_script(script_path, reason)
-	return coordinator.request_reload("user", reason)
+	if _user_tool_feature != null:
+		return _user_tool_feature.reload_user_tool_runtime(script_path, reason)
+	return {"success": false, "error": "User tool feature is unavailable"}
 
 
 func _rebuild_user_tool_ui_model() -> void:
-	_cleanup_disabled_tools()
-	_save_settings()
-	_refresh_dock()
+	if _user_tool_feature != null:
+		_user_tool_feature.rebuild_user_tool_ui_model()
 
 
 func get_user_tool_audit(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
-	return _user_tool_service.get_audit_entries(limit, filter_action, filter_session)
+	if _user_tool_feature != null:
+		return _user_tool_feature.get_user_tool_audit(limit, filter_action, filter_session)
+	return []
 
 
 func get_user_tool_compatibility_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": _user_tool_service.get_compatibility_report()
-	}
+	if _user_tool_feature != null:
+		return _user_tool_feature.get_user_tool_compatibility_from_tools()
+	return {"success": false, "error": "User tool feature is unavailable"}
 
 
 func runtime_restart_server() -> Dictionary:
-	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_restart_server", "runtime_restart_server")
-	if not _pending_runtime_reload_action.is_empty():
-		_finish_self_operation(operation, false, "plugin", "runtime_restart_server", ["runtime_reload_pending"])
-		return {
-			"success": false,
-			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
-		}
-
-	_pending_runtime_reload_action = "runtime_restart_server"
-	_schedule_runtime_reload("_complete_runtime_server_restart", [str(operation.get("operation_id", ""))])
-	return {
-		"success": true,
-		"message": "Runtime server restart scheduled",
-		"running": _server_controller.is_running(),
-		"deferred": true
-	}
+	if _reload_feature != null:
+		return _reload_feature.runtime_restart_server()
+	return {"success": false, "error": "Reload feature is unavailable"}
 
 
 func runtime_soft_reload() -> Dictionary:
-	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_soft_reload", "runtime_soft_reload")
-	if not _pending_runtime_reload_action.is_empty():
-		_finish_self_operation(operation, false, "plugin", "runtime_soft_reload", ["runtime_reload_pending"])
-		return {
-			"success": false,
-			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
-		}
-
-	var was_running = _server_controller.is_running()
-	var focus_snapshot := _capture_dock_focus_snapshot()
-	_pending_runtime_reload_action = "runtime_soft_reload"
-	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
-	return {
-		"success": true,
-		"message": "Plugin soft reload scheduled",
-		"running": was_running,
-		"deferred": true
-	}
+	if _reload_feature != null:
+		return _reload_feature.runtime_soft_reload()
+	return {"success": false, "error": "Reload feature is unavailable"}
 
 
 func runtime_full_reload() -> Dictionary:
-	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_full_reload", "runtime_full_reload")
-	var was_running := _server_controller != null and _server_controller.is_running()
-	var focus_snapshot := _capture_dock_focus_snapshot()
-	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
-	return {"success": true, "message": "Plugin full reload scheduled"}
+	if _reload_feature != null:
+		return _reload_feature.runtime_full_reload()
+	return {"success": false, "error": "Reload feature is unavailable"}
 
 
-func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
-	var callback = Callable(self, method_name)
-	if not bound_args.is_empty():
-		callback = callback.bindv(bound_args)
-
-	var tree := get_tree()
-	if tree == null:
-		callback.call_deferred()
-		return
-
-	var timer = tree.create_timer(0.05)
-	timer.timeout.connect(callback, CONNECT_ONE_SHOT)
+func _runtime_reload_is_server_running() -> bool:
+	return _server_controller != null and _server_controller.is_running()
 
 
-func _complete_runtime_server_restart(operation_id: String) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		success = _server_controller.start(_state.settings, "tool_runtime_restart")
-		_refresh_dock()
-	_pending_runtime_reload_action = ""
-	_finish_self_operation(
-		{"operation_id": operation_id},
-		success,
-		"plugin",
-		"runtime_restart_server"
-	)
+func _runtime_reload_start_server(reason: String) -> bool:
+	if _server_controller == null:
+		return false
+	return _server_controller.start(_state.settings, reason)
 
 
-func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		_refresh_service_instances()
-		_recreate_server_controller()
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
-		if was_running:
-			success = _server_controller.start(_state.settings, "tool_soft_reload")
-		else:
-			success = _server_controller.reinitialize(_state.settings, "tool_soft_reload")
-		_recreate_dock()
-		_refresh_dock()
-		_restore_runtime_dock_focus_snapshot(focus_snapshot)
-	_pending_runtime_reload_action = ""
-	_finish_self_operation(
-		{"operation_id": operation_id},
-		success,
-		"plugin",
-		"runtime_soft_reload"
-	)
+func _runtime_reload_reinitialize_server(reason: String) -> bool:
+	if _server_controller == null:
+		return false
+	return _server_controller.reinitialize(_state.settings, reason)
 
 
-func _complete_runtime_full_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		_refresh_service_instances()
-		_recreate_server_controller()
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
-		if was_running:
-			success = _server_controller.start(_state.settings, "tool_full_reload")
-		else:
-			success = _server_controller.reinitialize(_state.settings, "tool_full_reload")
-		_recreate_dock()
-		_refresh_dock()
-		_restore_runtime_dock_focus_snapshot(focus_snapshot)
-	_pending_runtime_reload_action = ""
-	_finish_self_operation(
-		{"operation_id": operation_id},
-		success,
-		"plugin",
-		"runtime_full_reload"
-	)
+func _runtime_reload_reset_localization() -> void:
+	LocalizationService.reset_instance()
+	_localization = LocalizationService.get_instance()
+	_localization.set_language(str(_state.settings.get("language", "")))
+
+
+func _reload_all_tool_domains() -> Dictionary:
+	if _server_controller == null:
+		return {"success": false, "error": "Server controller is unavailable"}
+	return _server_controller.reload_all_domains()
 
 
 func _capture_dock_focus_snapshot() -> Dictionary:
@@ -2263,231 +885,111 @@ func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": _build_self_diagnostic_health_snapshot()
-	}
+	if _self_diagnostic_feature != null:
+		return _self_diagnostic_feature.get_self_diagnostic_health_from_tools()
+	return {"success": false, "error": "Self diagnostic feature is unavailable"}
 
 
 func get_self_diagnostic_errors_from_tools(severity: String = "", category: String = "", limit: int = 20) -> Dictionary:
-	var incidents = PluginSelfDiagnosticStore.get_incidents(severity, category, limit)
-	return {
-		"success": true,
-		"data": {
-			"count": incidents.size(),
-			"incidents": incidents
-		}
-	}
+	if _self_diagnostic_feature != null:
+		return _self_diagnostic_feature.get_self_diagnostic_errors_from_tools(severity, category, limit)
+	return {"success": false, "error": "Self diagnostic feature is unavailable"}
 
 
 func get_self_diagnostic_timeline_from_tools(limit: int = 20) -> Dictionary:
-	var timeline = PluginSelfDiagnosticStore.get_timeline(limit)
-	return {
-		"success": true,
-		"data": {
-			"count": timeline.size(),
-			"timeline": timeline
-		}
-	}
+	if _self_diagnostic_feature != null:
+		return _self_diagnostic_feature.get_self_diagnostic_timeline_from_tools(limit)
+	return {"success": false, "error": "Self diagnostic feature is unavailable"}
 
 
 func clear_self_diagnostics_from_tools() -> Dictionary:
-	if _get_permission_level() != PluginRuntimeState.PERMISSION_DEVELOPER:
-		return {"success": false, "error": "Developer permission level is required to clear self diagnostics"}
-	PluginSelfDiagnosticStore.clear()
-	_refresh_dock()
-	return {"success": true, "message": "Plugin self diagnostics cleared"}
+	if _self_diagnostic_feature != null:
+		return _self_diagnostic_feature.clear_self_diagnostics_from_tools()
+	return {"success": false, "error": "Self diagnostic feature is unavailable"}
 
 
 func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_tool(tool_name):
-		return {"success": false, "error": get_permission_denied_message_for_tool(tool_name)}
-	_apply_tool_enabled(tool_name, enabled)
-	return {"success": true, "tool_name": tool_name, "enabled": enabled}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_tool_enabled_from_tools(tool_name, enabled)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func set_category_enabled_from_tools(category: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_category(category):
-		return {"success": false, "error": get_permission_denied_message_for_category(category)}
-	_on_category_toggled(category, enabled)
-	return {"success": true, "category": category, "enabled": enabled}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_category_enabled_from_tools(category, enabled)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_domain(domain_key):
-		return {"success": false, "error": get_permission_denied_message_for_domain(domain_key)}
-	_on_domain_toggled(domain_key, enabled)
-	return {"success": true, "domain": domain_key, "enabled": enabled}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_domain_enabled_from_tools(domain_key, enabled)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
-	_state.settings["show_user_tools"] = true
-	_save_settings()
-	_refresh_dock()
-	return {"success": true, "show_user_tools": true}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_show_user_tools_from_tools(enabled)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func get_developer_settings_for_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"permission_level": _get_permission_level(),
-			"log_level": get_log_level_for_tools(),
-			"show_user_tools": true,
-			"language": str(_state.settings.get("language", "")),
-			"resolved_language": _state.resolve_active_language(_localization),
-			"tool_profile_id": str(_state.settings.get("tool_profile_id", "default"))
-		}
-	}
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_developer_settings_for_tools()
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func set_language_from_tools(language_code: String) -> Dictionary:
-	if language_code.is_empty():
-		return {"success": false, "error": "Language code is required"}
-	if not _localization.get_available_languages().has(language_code):
-		return {"success": false, "error": "Unsupported language: %s" % language_code}
-	_on_language_changed(language_code)
-	return {
-		"success": true,
-		"language": _state.resolve_active_language(_localization)
-	}
+	if _tool_access_feature != null:
+		return _tool_access_feature.set_language_from_tools(language_code)
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func get_languages_for_tools() -> Dictionary:
-	var languages: Array[Dictionary] = []
-	var active_language = _state.resolve_active_language(_localization)
-	var codes: Array = _localization.get_available_language_codes()
-	for code in codes:
-		languages.append({
-			"code": str(code),
-			"name": _localization.get_language_display_name(str(code), active_language)
-		})
-	return {
-		"success": true,
-		"data": {
-			"current_language": active_language,
-			"languages": languages
-		}
-	}
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_languages_for_tools()
+	return {"success": false, "error": "Tool access feature is unavailable"}
 
 
 func list_profiles_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			"custom_profiles": _state.custom_tool_profiles
-		}
-	}
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.list_profiles_from_tools()
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func apply_profile_from_tools(profile_id: String) -> Dictionary:
-	if profile_id.is_empty():
-		return {"success": false, "error": "Profile id is required"}
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		return {"success": false, "error": "Unknown profile id: %s" % profile_id}
-	_apply_tool_profile(profile_id)
-	return {
-		"success": true,
-		"profile_id": str(_state.settings.get("tool_profile_id", profile_id))
-	}
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.apply_profile_from_tools(profile_id)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func save_profile_from_tools(profile_name: String) -> Dictionary:
-	var result = _save_custom_profile(profile_name)
-	if bool(result.get("success", false)):
-		_refresh_dock()
-	return result
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.save_profile_from_tools(profile_name)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func rename_profile_from_tools(profile_id: String, profile_name: String) -> Dictionary:
-	var result = _rename_custom_profile(profile_id, profile_name)
-	if bool(result.get("success", false)):
-		_refresh_dock()
-	return result
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.rename_profile_from_tools(profile_id, profile_name)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func delete_profile_from_tools(profile_id: String) -> Dictionary:
-	var result = _delete_custom_profile(profile_id)
-	if bool(result.get("success", false)):
-		_refresh_dock()
-	return result
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.delete_profile_from_tools(profile_id)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func export_config_from_tools(file_path: String) -> Dictionary:
-	var disabled_tools: Array = _state.settings.get("disabled_tools", [])
-	var result = _settings_store.export_tool_config(
-		file_path,
-		str(_state.settings.get("tool_profile_id", "default")),
-		disabled_tools
-	)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_write_failed")))}
-
-	return {
-		"success": true,
-		"data": {
-			"path": str(result.get("file_path", file_path)),
-			"profile_id": str(_state.settings.get("tool_profile_id", "default")),
-			"disabled_tools": disabled_tools.duplicate(),
-			"disabled_tool_count": disabled_tools.size()
-		},
-		"message": _localization.get_text("tool_config_exported")
-	}
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.export_config_from_tools(file_path)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func import_config_from_tools(file_path: String) -> Dictionary:
-	var result = _settings_store.import_tool_config(file_path)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_parse_failed")))}
-
-	var imported_data: Dictionary = result.get("data", {})
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-	var valid_tools := {}
-	for tool_name in tool_names:
-		valid_tools[str(tool_name)] = true
-
-	var imported_disabled: Array[String] = []
-	var ignored_tools: Array[String] = []
-	for tool_name in imported_data.get("disabled_tools", []):
-		var normalized_tool_name = str(tool_name)
-		if valid_tools.has(normalized_tool_name):
-			imported_disabled.append(normalized_tool_name)
-		else:
-			ignored_tools.append(normalized_tool_name)
-	imported_disabled.sort()
-	ignored_tools.sort()
-
-	var requested_profile_id = str(imported_data.get("profile_id", "default"))
-	var resolved_profile_id = requested_profile_id
-	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		resolved_profile_id = _tool_catalog.find_matching_profile_id(
-			imported_disabled,
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names
-		)
-		if resolved_profile_id.is_empty():
-			resolved_profile_id = "default"
-
-	_state.settings["tool_profile_id"] = resolved_profile_id
-	_state.settings["disabled_tools"] = imported_disabled
-	_cleanup_disabled_tools()
-	_save_settings()
-	_refresh_dock()
-
-	return {
-		"success": true,
-		"data": {
-			"path": str(result.get("file_path", file_path)),
-			"requested_profile_id": requested_profile_id,
-			"resolved_profile_id": resolved_profile_id,
-			"disabled_tools": _state.settings.get("disabled_tools", []).duplicate(),
-			"disabled_tool_count": _state.settings.get("disabled_tools", []).size(),
-			"ignored_tools": ignored_tools
-		},
-		"message": _localization.get_text("tool_config_imported")
-	}
+	if _tool_profile_feature != null:
+		return _tool_profile_feature.import_config_from_tools(file_path)
+	return {"success": false, "error": "Tool profile feature is unavailable"}
 
 
 func get_runtime_usage_guide_from_tools() -> Dictionary:
@@ -2580,52 +1082,70 @@ func get_usage_guide_from_tools() -> Dictionary:
 
 
 func _get_permission_level() -> String:
-	return PluginRuntimeState.normalize_permission_level(str(_state.settings.get("permission_level", PluginRuntimeState.PERMISSION_EVOLUTION)))
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_permission_level()
+	return ToolPermissionPolicy.normalize_permission_level(str(_state.settings.get("permission_level", ToolPermissionPolicy.PERMISSION_EVOLUTION)))
 
 
 func is_tool_category_visible_for_permission(category: String) -> bool:
+	if _tool_access_feature != null:
+		return _tool_access_feature.is_tool_category_visible_for_permission(category)
 	if category == "user":
-		return true
+		return bool(_state.settings.get("show_user_tools", true))
 	if category == "plugin":
-		return _get_permission_level() == PluginRuntimeState.PERMISSION_DEVELOPER
+		return _get_permission_level() == ToolPermissionPolicy.PERMISSION_DEVELOPER
 	return is_tool_category_executable_for_permission(category)
 
 
 func is_tool_category_executable_for_permission(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
+	if _tool_access_feature != null:
+		return _tool_access_feature.is_tool_category_executable_for_permission(category)
+	return ToolPermissionPolicy.permission_allows_category(_get_permission_level(), category)
 
 
 func get_permission_denied_message_for_category(category: String) -> String:
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_permission_denied_message_for_category(category)
 	return _localization.get_text("permission_denied_category") % [_get_permission_level(), category]
 
 
 func get_permission_denied_message_for_tool(tool_name: String) -> String:
-	var category = PluginRuntimeState.extract_category_from_tool_name(tool_name)
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_permission_denied_message_for_tool(tool_name)
+	var category = ToolPermissionPolicy.extract_category_from_tool_name(tool_name)
 	if category.is_empty():
 		return _localization.get_text("permission_denied_tool") % [_get_permission_level(), tool_name]
 	return get_permission_denied_message_for_category(category)
 
 
 func get_permission_denied_message_for_domain(domain_key: String) -> String:
+	if _tool_access_feature != null:
+		return _tool_access_feature.get_permission_denied_message_for_domain(domain_key)
 	return _localization.get_text("permission_denied_domain") % [_get_permission_level(), domain_key]
 
 
 func _can_enable_tool(tool_name: String) -> bool:
-	if not PluginRuntimeState.permission_allows_tool(_get_permission_level(), tool_name):
-		return false
-	return true
+	if _tool_access_feature != null:
+		return _tool_access_feature.can_enable_tool(tool_name)
+	return ToolPermissionPolicy.permission_allows_tool(_get_permission_level(), tool_name)
 
 
 func _can_enable_category(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
+	if _tool_access_feature != null:
+		return _tool_access_feature.can_enable_category(category)
+	return ToolPermissionPolicy.permission_allows_category(_get_permission_level(), category)
 
 
 func _can_enable_domain(domain_key: String) -> bool:
-	return PluginRuntimeState.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
+	if _tool_access_feature != null:
+		return _tool_access_feature.can_enable_domain(domain_key)
+	return ToolPermissionPolicy.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
 
 
 func _is_plugin_category_restricted(category: String) -> bool:
-	return PluginRuntimeState.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
+	if _tool_access_feature != null:
+		return _tool_access_feature.is_plugin_category_restricted(category)
+	return ToolPermissionPolicy.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
 
 
 func _get_editor_scale() -> float:
@@ -2636,33 +1156,9 @@ func _get_editor_scale() -> float:
 
 
 func _build_self_diagnostic_health_snapshot() -> Dictionary:
-	var bridge_status = MCPRuntimeDebugStore.get_bridge_status()
-	var dock_count = _count_dock_instances()
-	var tool_load_errors = _server_controller.get_tool_load_errors()
-	return PluginSelfDiagnosticStore.get_health_snapshot({
-		"autoload": {
-			"installed": bool(bridge_status.get("installed", false)),
-			"autoload_name": str(bridge_status.get("autoload_name", RUNTIME_BRIDGE_AUTOLOAD_NAME)),
-			"autoload_path": str(bridge_status.get("autoload_path", "")),
-			"message": str(bridge_status.get("message", "")),
-			"root_instance_present": _has_runtime_bridge_root_instance()
-		},
-		"server": {
-			"running": _server_controller.is_running(),
-			"connection_stats": _server_controller.get_connection_stats()
-		},
-		"dock": {
-			"present": _dock != null and is_instance_valid(_dock),
-			"dock_count": dock_count,
-			"stale_dock_count": maxi(dock_count - 1, 0)
-		},
-		"tool_loader": {
-			"tool_load_error_count": tool_load_errors.size(),
-			"tool_load_errors": tool_load_errors,
-			"reload_status": _server_controller.get_reload_status(),
-			"performance": _server_controller.get_performance_summary()
-		}
-	})
+	if _self_diagnostic_feature != null:
+		return _self_diagnostic_feature.build_self_diagnostic_health_snapshot()
+	return PluginSelfDiagnosticStore.get_health_snapshot({})
 
 
 func _record_self_incident(
@@ -2738,6 +1234,10 @@ func _count_dock_instances() -> int:
 		if child.name == "MCPDock" or script_path == MCP_DOCK_SCRIPT_PATH:
 			count += 1
 	return count
+
+
+func _is_live_dock_present() -> bool:
+	return _dock != null and is_instance_valid(_dock)
 
 
 func _has_runtime_bridge_root_instance() -> bool:
@@ -2855,10 +1355,151 @@ func _configure_central_server_attach_service() -> void:
 	_central_server_attach_service.start()
 
 
+func _configure_feature_workflows() -> void:
+	if _server_feature == null:
+		_server_feature = ServerFeatureScript.new()
+	_server_feature.configure(
+		_central_server_process_service,
+		_central_server_attach_service,
+		_localization,
+		_dock_presenter,
+		{
+			"show_message": Callable(self, "_show_message"),
+			"show_confirmation": Callable(self, "_show_confirmation"),
+			"refresh_dock": Callable(self, "_refresh_dock")
+		}
+	)
+
+	if _config_feature == null:
+		_config_feature = ConfigFeatureScript.new()
+	_config_feature.configure(
+		_state.settings,
+		_localization,
+		_config_service,
+		_dock_presenter,
+		_central_server_process_service,
+		{
+			"show_message": Callable(self, "_show_message"),
+			"show_confirmation": Callable(self, "_show_confirmation"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"save_settings": Callable(self, "_save_settings"),
+			"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
+			"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
+			"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
+			"ensure_client_executable_dialog": Callable(self, "_ensure_client_executable_dialog"),
+			"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
+		}
+	)
+
+	if _ui_state_feature == null:
+		_ui_state_feature = UIStateFeatureScript.new()
+	_ui_state_feature.configure(
+		_state,
+		_localization,
+		{
+			"save_settings": Callable(self, "_save_settings"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"show_message": Callable(self, "_show_message"),
+			"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
+			"capture_dock_focus_snapshot": Callable(self, "_capture_dock_focus_snapshot"),
+			"restore_dock_focus_snapshot": Callable(self, "_restore_runtime_dock_focus_snapshot")
+		}
+	)
+
+	if _tool_access_feature == null:
+		_tool_access_feature = ToolAccessFeatureScript.new()
+	_tool_access_feature.configure(
+		_state,
+		_localization,
+		_tool_catalog,
+		{
+			"get_all_tools_by_category": Callable(_server_controller, "get_all_tools_by_category"),
+			"set_disabled_tools": Callable(_server_controller, "set_disabled_tools"),
+			"save_settings": Callable(self, "_save_settings"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"show_message": Callable(self, "_show_message"),
+			"change_language": Callable(_ui_state_feature, "handle_language_changed")
+		}
+	)
+
+	if _user_tool_feature == null:
+		_user_tool_feature = UserToolFeatureScript.new()
+	_user_tool_feature.configure(
+		_user_tool_service,
+		{
+			"show_message": Callable(self, "_show_message"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"save_settings": Callable(self, "_save_settings"),
+			"cleanup_disabled_tools": Callable(_tool_access_feature, "cleanup_disabled_tools"),
+			"create_reload_coordinator": Callable(self, "_create_reload_coordinator"),
+			"reload_all_domains": Callable(self, "_reload_all_tool_domains")
+		}
+	)
+
+	if _reload_feature == null:
+		_reload_feature = ReloadFeatureScript.new()
+	_reload_feature.configure(
+		self,
+		{
+			"is_server_running": Callable(self, "_runtime_reload_is_server_running"),
+			"start_server": Callable(self, "_runtime_reload_start_server"),
+			"reinitialize_server": Callable(self, "_runtime_reload_reinitialize_server"),
+			"refresh_service_instances": Callable(self, "_refresh_service_instances"),
+			"reset_localization": Callable(self, "_runtime_reload_reset_localization"),
+			"recreate_server_controller": Callable(self, "_recreate_server_controller"),
+			"configure_central_server_process_service": Callable(self, "_configure_central_server_process_service"),
+			"configure_central_server_attach_service": Callable(self, "_configure_central_server_attach_service"),
+			"configure_feature_workflows": Callable(self, "_configure_feature_workflows"),
+			"recreate_dock": Callable(self, "_recreate_dock"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"capture_dock_focus_snapshot": Callable(self, "_capture_dock_focus_snapshot"),
+			"restore_runtime_dock_focus_snapshot": Callable(self, "_restore_runtime_dock_focus_snapshot"),
+			"finish_self_operation": Callable(self, "_finish_self_operation")
+		}
+	)
+
+	if _tool_profile_feature == null:
+		_tool_profile_feature = ToolProfileFeatureScript.new()
+	_tool_profile_feature.configure(
+		_state,
+		_localization,
+		_settings_store,
+		_tool_catalog,
+		{
+			"get_all_tools_by_category": Callable(_server_controller, "get_all_tools_by_category"),
+			"set_disabled_tools": Callable(_server_controller, "set_disabled_tools"),
+			"cleanup_disabled_tools": Callable(_tool_access_feature, "cleanup_disabled_tools"),
+			"save_settings": Callable(self, "_save_settings"),
+			"refresh_dock": Callable(self, "_refresh_dock")
+		}
+	)
+
+	if _self_diagnostic_feature == null:
+		_self_diagnostic_feature = SelfDiagnosticFeatureScript.new()
+	_self_diagnostic_feature.configure(
+		_localization,
+		RUNTIME_BRIDGE_AUTOLOAD_NAME,
+		RUNTIME_BRIDGE_AUTOLOAD_PATH,
+		{
+			"count_dock_instances": Callable(self, "_count_dock_instances"),
+			"has_runtime_bridge_root_instance": Callable(self, "_has_runtime_bridge_root_instance"),
+			"is_server_running": Callable(_server_controller, "is_running"),
+			"get_connection_stats": Callable(_server_controller, "get_connection_stats"),
+			"get_tool_load_errors": Callable(_server_controller, "get_tool_load_errors"),
+			"get_reload_status": Callable(_server_controller, "get_reload_status"),
+			"get_performance_summary": Callable(_server_controller, "get_performance_summary"),
+			"get_permission_level": Callable(self, "_get_permission_level"),
+			"refresh_dock": Callable(self, "_refresh_dock"),
+			"show_message": Callable(self, "_show_message"),
+			"is_dock_present": Callable(self, "_is_live_dock_present")
+		}
+	)
+
+
 func _get_central_server_attach_status() -> Dictionary:
 	if _central_server_attach_service == null:
 		return {}
-	return _localize_central_server_attach_status(_central_server_attach_service.get_status())
+	return _dock_presenter.localize_central_server_attach_status(_central_server_attach_service.get_status(), _localization)
 
 
 func _get_central_server_process_status() -> Dictionary:
@@ -2867,99 +1508,16 @@ func _get_central_server_process_status() -> Dictionary:
 	return _central_server_process_service.get_status()
 
 
-func _localize_central_server_attach_status(status: Dictionary) -> Dictionary:
-	var localized = status.duplicate(true)
-	if _localization == null:
-		return localized
-
-	var last_error = str(localized.get("last_error", "")).strip_edges()
-	if not last_error.is_empty():
-		return localized
-
-	var message_key = "central_server_message_idle"
-	match str(localized.get("status", "idle")):
-		"disabled":
-			message_key = "central_server_message_disabled"
-		"configured":
-			message_key = "central_server_message_configured"
-		"attaching":
-			message_key = "central_server_message_attaching"
-		"attached":
-			message_key = "central_server_message_attached"
-		"heartbeat_pending":
-			message_key = "central_server_message_heartbeat_pending"
-		"stopped":
-			message_key = "central_server_message_stopped"
-	localized["message"] = _localization.get_text(message_key)
-	return localized
-
-
 func _resolve_central_server_process_feedback(status: Dictionary, action: String) -> String:
-	if _localization == null:
-		return str(status.get("message", ""))
-
-	match action:
-		"detect":
-			if bool(status.get("endpoint_reachable", false)):
-				return _localization.get_text("central_server_process_message_endpoint_reachable")
-			if bool(status.get("local_install_ready", false)):
-				return _localization.get_text("central_server_process_message_install_ready")
-			if bool(status.get("install_available", false)):
-				return _localization.get_text("central_server_process_message_install_available")
-			return _localization.get_text("central_server_process_detect_missing")
-		"install_error":
-			var install_error = str(status.get("message", "")).strip_edges()
-			if install_error.is_empty():
-				return _localization.get_text("central_server_process_install_failed")
-			return "%s\n\n%s" % [_localization.get_text("central_server_process_install_failed"), install_error]
-		"install_success":
-			if str(status.get("launch_source", "")) == "local_install":
-				return _localization.get_text("central_server_process_install_completed")
-			return _localization.get_text("central_server_process_install_completed_pending_restart")
-		"start":
-			if str(status.get("status", "")) == "launch_error":
-				return _localization.get_text("central_server_process_start_failed")
-			if bool(status.get("endpoint_reachable", false)):
-				return _localization.get_text("central_server_process_message_endpoint_reachable")
-			return _localization.get_text("central_server_process_starting")
-		"stop_error":
-			return _localization.get_text("central_server_process_stop_failed")
-		"stop_success":
-			return _localization.get_text("central_server_process_stopped_message")
-	return str(status.get("message", ""))
+	return _dock_presenter.resolve_central_server_process_feedback(status, action, _localization)
 
 
 func _build_central_server_install_confirmation(status: Dictionary) -> String:
-	var action_key = "central_server_install_confirm_upgrade" if bool(status.get("local_install_ready", false)) else "central_server_install_confirm_install"
-	var summary = _localization.get_text(action_key)
-	if int(status.get("pid", 0)) > 0 and str(status.get("launch_source", "")) == "local_install":
-		summary += "\n%s" % _localization.get_text("central_server_install_confirm_auto_restart")
-	var details = _build_central_server_install_details(status, true)
-	if details.is_empty():
-		return summary
-	return "%s\n\n%s" % [summary, details]
+	return _dock_presenter.build_central_server_install_confirmation(status, _localization)
 
 
 func _build_central_server_install_details(status: Dictionary, include_source_fallback: bool = false) -> String:
-	if _localization == null:
-		return ""
-
-	var lines: PackedStringArray = PackedStringArray()
-	var install_version = str(status.get("install_version", "")).strip_edges()
-	var source_version = str(status.get("source_runtime_version", "")).strip_edges()
-	var install_dir = str(status.get("local_install_dir", "")).strip_edges()
-	var install_source = str(status.get("install_source_dir", "")).strip_edges()
-	if install_source.is_empty() and include_source_fallback:
-		install_source = str(status.get("source_runtime_dir", "")).strip_edges()
-
-	var resolved_version = install_version if not install_version.is_empty() else source_version
-	if not resolved_version.is_empty():
-		lines.append("%s %s" % [_localization.get_text("central_server_install_version_label"), resolved_version])
-	if not install_dir.is_empty():
-		lines.append("%s %s" % [_localization.get_text("central_server_install_dir_label"), install_dir])
-	if not install_source.is_empty():
-		lines.append("%s %s" % [_localization.get_text("central_server_install_source_label"), install_source])
-	return "\n".join(lines)
+	return _dock_presenter.build_central_server_install_details(status, _localization, include_source_fallback)
 
 
 func _get_user_tool_watch_status() -> Dictionary:
@@ -2968,24 +1526,20 @@ func _get_user_tool_watch_status() -> Dictionary:
 	return _user_tool_watch_service.get_status()
 
 
-func _cleanup_disabled_tools() -> void:
-	var valid_tools := {}
-	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-		valid_tools[str(tool_name)] = true
-
-	var filtered: Array = []
-	for tool_name in _state.settings.get("disabled_tools", []):
-		if valid_tools.has(str(tool_name)):
-			filtered.append(str(tool_name))
-	_state.settings["disabled_tools"] = filtered
-	_server_controller.set_disabled_tools(filtered)
-
-
 func _refresh_service_instances() -> void:
 	_settings_store = SettingsStore.new()
 	_tool_catalog = ToolCatalogService.new()
 	_config_service = ClientConfigService.new()
 	_client_install_detection_service = ClientInstallDetectionService.new()
+	_server_feature = ServerFeatureScript.new()
+	_config_feature = ConfigFeatureScript.new()
+	_user_tool_feature = UserToolFeatureScript.new()
+	_reload_feature = ReloadFeatureScript.new()
+	_tool_profile_feature = ToolProfileFeatureScript.new()
+	_tool_access_feature = ToolAccessFeatureScript.new()
+	_self_diagnostic_feature = SelfDiagnosticFeatureScript.new()
+	_ui_state_feature = UIStateFeatureScript.new()
+	_dock_presenter = DockPresenterScript.new()
 	_user_tool_service = UserToolService.new()
 	_user_tool_watch_service = UserToolWatchService.new()
 	_central_server_attach_service = CentralServerAttachServiceScript.new()

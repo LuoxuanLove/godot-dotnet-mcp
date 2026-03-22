@@ -350,8 +350,6 @@ func _ensure_stdio_server_node(settings: Dictionary) -> void:
 	# Inject tool_loader from the HTTP server
 	if _server != null and is_instance_valid(_server) and _server.has_method("get_tool_loader"):
 		_stdio_server.initialize(_server.get_tool_loader(), _as_bool(settings.get("debug_mode", false)))
-	elif _server != null and is_instance_valid(_server) and "_tool_loader" in _server:
-		_stdio_server.initialize(_server._tool_loader, _as_bool(settings.get("debug_mode", false)))
 
 	if _stdio_server.has_method("set_disabled_tools"):
 		_stdio_server.set_disabled_tools(settings.get("disabled_tools", []))
@@ -389,8 +387,6 @@ func _resolve_tool_loader():
 		return null
 	if _server.has_method("get_tool_loader"):
 		return _server.get_tool_loader()
-	if "_tool_loader" in _server:
-		return _server._tool_loader
 	return null
 
 

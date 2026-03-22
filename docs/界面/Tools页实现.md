@@ -209,4 +209,6 @@ root
 | `ui/tools_tab.tscn` | Tools 页节点树与布局 |
 | `ui/tools_tab.gd` | Tools 页控制器 |
 | `tools/system_tools.gd` | 系统高层工具实现 |
-| `plugin/runtime/plugin_runtime_state.gd` | 默认工具暴露策略 |
+| `tools/tool_manifest.gd` | 默认工具暴露策略与 domain/category 事实源 |
+| `plugin/runtime/plugin_runtime_state.gd` | profile 与默认设置 |
+| `plugin/runtime/tool_permission_policy.gd` | permission 规则 |

@@ -1,6 +1,8 @@
 @tool
 extends VBoxContainer
 
+const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
+
 signal port_changed(value: int)
 signal log_level_changed(level: String)
 signal permission_level_changed(level: String)
@@ -361,7 +363,7 @@ func _build_overview_central_server_text(central_server_attach: Dictionary, cent
 
 func _build_overview_config_text(model: Dictionary, localization) -> String:
 	var profile_id = str(model.get("tool_profile_id", "default"))
-	var permission_level = str(model.get("current_permission_level", PluginRuntimeState.PERMISSION_EVOLUTION))
+	var permission_level = str(model.get("current_permission_level", ToolPermissionPolicy.PERMISSION_EVOLUTION))
 	var log_level = str(model.get("current_log_level", "info"))
 	var current_language = str(model.get("current_language", "en"))
 	var profile_text = _get_overview_profile_text(profile_id, localization)
