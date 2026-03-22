@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 ## English translations for MCP Server
@@ -16,7 +16,6 @@ const TRANSLATIONS: Dictionary = {
 	"plugin_overview_title": "Plugin Service Overview",
 	"plugin_overview_health_label": "Health:",
 	"plugin_overview_service_label": "Service:",
-	"plugin_overview_bridge_label": "Bridge:",
 	"plugin_overview_config_label": "Config:",
 	"plugin_overview_activity_label": "Activity:",
 	"status_running": "Running",
@@ -53,7 +52,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Dock scene load failed",
 	"self_diag_code_dock_duplicate_instance": "Duplicate dock instance",
 	"self_diag_code_dock_signal_binding_failed": "Dock signal binding failed",
-	"self_diag_code_editor_debugger_bridge_install_failed": "Debugger bridge install failed",
+	"self_diag_code_editor_debugger_bridge_create_failed": "Debugger bridge creation failed",
 	"self_diag_code_server_listen_failed": "Server listen failed",
 	"self_diag_code_server_start_failed": "Server start failed",
 	"self_diag_code_tool_domain_load_failed": "Tool domain load failed",
@@ -136,20 +135,6 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "Stopped",
 	"central_server_process_status_exited": "Exited",
 	"central_server_process_status_launch_error": "Launch Error",
-	"bridge_section_title": "Bridge Installation",
-	"bridge_install_status_label": "Install Status:",
-	"bridge_install_path_label": "Executable:",
-	"bridge_install_version_label": "Version:",
-	"bridge_install_message_label": "Message:",
-	"bridge_install_command_label": "Launch Command:",
-	"bridge_install_not_configured": "Not Configured",
-	"bridge_install_installed": "Installed",
-	"bridge_install_invalid": "Invalid",
-	"bridge_install_validating": "Validating",
-	"bridge_install_select_button": "Select Bridge Executable",
-	"bridge_install_validate_button": "Validate",
-	"bridge_install_clear_button": "Clear",
-	"bridge_install_dialog_title": "Select Bridge Executable",
 
 	# About section
 	"about": "About",

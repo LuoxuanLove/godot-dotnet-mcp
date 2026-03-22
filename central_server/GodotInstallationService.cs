@@ -2,6 +2,11 @@ namespace GodotDotnetMcp.CentralServer;
 
 internal sealed class GodotInstallationService
 {
+    private static readonly string[] IgnoredExecutableTokens =
+    [
+        "CentralServer",
+    ];
+
     private static readonly HashSet<string> IgnoredDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "WindowsApps",
@@ -30,9 +35,9 @@ internal sealed class GodotInstallationService
 
             foreach (var file in EnumerateExecutableCandidates(root))
             {
-                if (file.Contains("DotnetBridge", StringComparison.OrdinalIgnoreCase) ||
-                    file.Contains("CentralServer", StringComparison.OrdinalIgnoreCase))
+                if (IgnoredExecutableTokens.Any(token => file.Contains(token, StringComparison.OrdinalIgnoreCase)))
                 {
+                    // These binaries are MCP host tools, not actual Godot editor executables.
                     continue;
                 }
 

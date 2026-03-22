@@ -5,6 +5,7 @@ internal enum CentralServerMode
     Stdio,
     AttachOnly,
     ProxyCall,
+    InstallPlugin,
     Health,
     Version,
     Help,
@@ -34,6 +35,9 @@ internal sealed record CentralServerOptions(CentralServerMode Mode, string[] Rem
                     break;
                 case "--proxy-call":
                     mode = CentralServerMode.ProxyCall;
+                    break;
+                case "--install-plugin":
+                    mode = CentralServerMode.InstallPlugin;
                     break;
                 case "--health":
                     mode = CentralServerMode.Health;

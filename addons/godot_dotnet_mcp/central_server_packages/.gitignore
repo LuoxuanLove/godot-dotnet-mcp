@@ -1,0 +1,4 @@
+*.zip
+*.sha256
+!.gitignore
+!README.md

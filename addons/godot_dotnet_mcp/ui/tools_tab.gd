@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends VBoxContainer
 
 signal tool_toggled(tool_name: String, enabled: bool)

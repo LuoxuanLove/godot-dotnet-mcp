@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
@@ -44,7 +44,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Das Laden der Dock-Szene ist fehlgeschlagen",
 	"self_diag_code_dock_duplicate_instance": "Doppelte Dock-Instanz",
 	"self_diag_code_dock_signal_binding_failed": "Die Bindung des Dock-Signals ist fehlgeschlagen",
-	"self_diag_code_editor_debugger_bridge_install_failed": "Die Installation der Debugger-Brücke ist fehlgeschlagen",
+	"self_diag_code_editor_debugger_bridge_create_failed": "Die Erstellung der Debugger-Brücke ist fehlgeschlagen",
 	"self_diag_code_server_listen_failed": "Die Serverüberwachung ist fehlgeschlagen",
 	"self_diag_code_server_start_failed": "Der Serverstart ist fehlgeschlagen",
 	"self_diag_code_tool_domain_load_failed": "Das Laden der Tooldomäne ist fehlgeschlagen",
@@ -126,27 +126,12 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "Angehalten",
 	"central_server_process_status_exited": "Beendet",
 	"central_server_process_status_launch_error": "Startfehler",
-	"bridge_section_title": "Brückeninstallation",
-	"bridge_install_status_label": "Installationsstatus:",
-	"bridge_install_path_label": "Ausführbar:",
-	"bridge_install_version_label": "Version:",
-	"bridge_install_message_label": "Nachricht:",
-	"bridge_install_command_label": "Startbefehl:",
-	"bridge_install_not_configured": "Nicht konfiguriert",
-	"bridge_install_installed": "Installiert",
-	"bridge_install_invalid": "Ungültig",
-	"bridge_install_validating": "Validierung",
-	"bridge_install_select_button": "Bridge-Ausführbare Datei auswählen",
-	"bridge_install_validate_button": "Validieren",
-	"bridge_install_clear_button": "Löschen",
-	"bridge_install_dialog_title": "Bridge-Ausführbare Datei auswählen",
 	"about": "Über",
 	"author": "Autor:",
 	"wechat": "WeChat:",
 	"plugin_overview_title": "Plugin-Übersicht",
 	"plugin_overview_health_label": "Zustand:",
 	"plugin_overview_service_label": "Dienst:",
-	"plugin_overview_bridge_label": "Brücke:",
 	"plugin_overview_config_label": "Konfiguration:",
 	"plugin_overview_activity_label": "Aktivität:",
 	"tools_enabled": "Tools: %d/%d aktiviert",

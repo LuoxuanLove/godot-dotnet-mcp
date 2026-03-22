@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using GodotDotnetMcp.HostShared;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -25,6 +26,7 @@ internal static class CentralServerApplication
                 CentralServerMode.Health => await PrintHealthAsync(output, cancellationToken),
                 CentralServerMode.AttachOnly => await RunAttachOnlyAsync(options.RemainingArguments, output, error, cancellationToken),
                 CentralServerMode.ProxyCall => await RunProxyCallAsync(options.RemainingArguments, output, error, cancellationToken),
+                CentralServerMode.InstallPlugin => await PluginInstaller.RunAsync(options.RemainingArguments, output, error, cancellationToken),
                 _ => await RunStdioAsync(input, output, error, cancellationToken),
             };
         }
@@ -44,6 +46,7 @@ Usage:
   GodotDotnetMcp.CentralServer [--stdio]
   GodotDotnetMcp.CentralServer --attach-only [--attach-host HOST] [--attach-port PORT] [--log-file PATH]
   GodotDotnetMcp.CentralServer --proxy-call --tool TOOL [--server-host HOST] [--server-port PORT] [--args-json JSON] [--arg key=value]
+  GodotDotnetMcp.CentralServer --install-plugin --project-path <path> [--source-path <path>] [--force]
   GodotDotnetMcp.CentralServer --health
   GodotDotnetMcp.CentralServer --version
 
@@ -53,6 +56,8 @@ Modes:
                  Optional: --log-file PATH writes attach-only logs to a local file
   --proxy-call   Forward one tool call directly to a Godot editor MCP HTTP endpoint
                  Use --arg key=value for simple arguments, or --args-json for a full JSON object
+  --install-plugin
+                 Copy the plugin into a Godot project addons folder
   --health       Print a JSON health snapshot and exit
   --version      Print the central server version and exit
 """).ContinueWith(_ => 0);

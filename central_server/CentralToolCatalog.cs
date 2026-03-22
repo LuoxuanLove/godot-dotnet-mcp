@@ -1,3 +1,5 @@
+using GodotDotnetMcp.HostShared;
+
 namespace GodotDotnetMcp.CentralServer;
 
 internal static class CentralToolCatalog
@@ -21,6 +23,7 @@ internal static class CentralToolCatalog
             CreateGodotManagerListProjectsTool(),
             CreateGodotManagerGetStatusTool(),
             CreateGodotManagerImportProjectsTool(),
+            ..BridgeToolCatalog.GetTools(),
         ];
     }
 

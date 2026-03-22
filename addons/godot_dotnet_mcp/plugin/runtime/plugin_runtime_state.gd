@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 class_name PluginRuntimeState
 
@@ -131,12 +131,7 @@ const DEFAULT_SETTINGS = {
 	"central_server_release_url": "",
 	"client_manual_paths": {},
 	"current_cli_scope": "user",
-	"current_config_platform": "claude_desktop",
-	"bridge_executable_path": "",
-	"bridge_install_source": "",
-	"bridge_install_state": "not_configured",
-	"bridge_install_version": "",
-	"bridge_install_message": ""
+	"current_config_platform": "claude_desktop"
 }
 
 var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)

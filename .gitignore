@@ -3,7 +3,17 @@
 .mono/
 bin/
 obj/
+dist/
+release_dist/
+tmp/
+.tmp_appdata/
+.tmp_central_home/
+.tmp_central_home_proxy/
+.tmp_central_home_status/
+.dotnet_home/
 *.tmp
 *.log
+tmp_*.log
 agent_workflow/
 custom_tools/
+history_rewrite_messages.ps1

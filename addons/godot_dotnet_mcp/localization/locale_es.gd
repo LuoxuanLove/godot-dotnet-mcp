@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
@@ -44,7 +44,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Error al cargar la escena del muelle",
 	"self_diag_code_dock_duplicate_instance": "Instancia de muelle duplicada",
 	"self_diag_code_dock_signal_binding_failed": "Error al vincular la señal del muelle",
-	"self_diag_code_editor_debugger_bridge_install_failed": "La instalación del puente del depurador falló",
+	"self_diag_code_editor_debugger_bridge_create_failed": "La creación del puente del depurador falló",
 	"self_diag_code_server_listen_failed": "La escucha del servidor falló",
 	"self_diag_code_server_start_failed": "Error al iniciar el servidor",
 	"self_diag_code_tool_domain_load_failed": "Error al cargar el dominio de herramientas",
@@ -126,27 +126,12 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "Detenido",
 	"central_server_process_status_exited": "Salido",
 	"central_server_process_status_launch_error": "Error de inicio",
-	"bridge_section_title": "Instalación de puente",
-	"bridge_install_status_label": "Estado de instalación:",
-	"bridge_install_path_label": "Ejecutable:",
-	"bridge_install_version_label": "Versión:",
-	"bridge_install_message_label": "Mensaje:",
-	"bridge_install_command_label": "Comando de lanzamiento:",
-	"bridge_install_not_configured": "No configurado",
-	"bridge_install_installed": "Instalado",
-	"bridge_install_invalid": "Inválido",
-	"bridge_install_validating": "Validando",
-	"bridge_install_select_button": "Seleccionar puente ejecutable",
-	"bridge_install_validate_button": "Validar",
-	"bridge_install_clear_button": "Borrar",
-	"bridge_install_dialog_title": "Seleccionar puente ejecutable",
 	"about": "Acerca de",
 	"author": "Autor:",
 	"wechat": "WeChat:",
 	"plugin_overview_title": "Resumen del complemento",
 	"plugin_overview_health_label": "Salud:",
 	"plugin_overview_service_label": "Servicio:",
-	"plugin_overview_bridge_label": "Puente:",
 	"plugin_overview_config_label": "Configuración:",
 	"plugin_overview_activity_label": "Actividad:",
 	"tools_enabled": "Herramientas: %d/%d habilitado",

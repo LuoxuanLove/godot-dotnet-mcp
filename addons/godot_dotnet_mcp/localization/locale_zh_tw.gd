@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 ## 繁體中文翻譯
@@ -43,7 +43,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Dock 場景加載失敗",
 	"self_diag_code_dock_duplicate_instance": "存在重複 Dock 實例",
 	"self_diag_code_dock_signal_binding_failed": "Dock 信號接線失敗",
-	"self_diag_code_editor_debugger_bridge_install_failed": "調試橋安裝失敗",
+	"self_diag_code_editor_debugger_bridge_create_failed": "調試橋建立失敗",
 	"self_diag_code_server_listen_failed": "服務監聽失敗",
 	"self_diag_code_server_start_failed": "服務啓動失敗",
 	"self_diag_code_tool_domain_load_failed": "工具域加載失敗",
@@ -54,7 +54,6 @@ const TRANSLATIONS: Dictionary = {
 	"plugin_overview_title": "插件服務總覽",
 	"plugin_overview_health_label": "健康：",
 	"plugin_overview_service_label": "服務：",
-	"plugin_overview_bridge_label": "Bridge：",
 	"plugin_overview_config_label": "配置：",
 	"plugin_overview_activity_label": "活動：",
 	"server_status": "伺服器狀態",
@@ -131,20 +130,6 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "已停止",
 	"central_server_process_status_exited": "已退出",
 	"central_server_process_status_launch_error": "啓動失敗",
-	"bridge_section_title": "Bridge 安裝",
-	"bridge_install_status_label": "安裝狀態：",
-	"bridge_install_path_label": "可執行文件：",
-	"bridge_install_version_label": "版本：",
-	"bridge_install_message_label": "提示：",
-	"bridge_install_command_label": "啓動命令：",
-	"bridge_install_not_configured": "未配置",
-	"bridge_install_installed": "已安裝",
-	"bridge_install_invalid": "無效",
-	"bridge_install_validating": "驗證中",
-	"bridge_install_select_button": "選擇 Bridge 可執行文件",
-	"bridge_install_validate_button": "驗證",
-	"bridge_install_clear_button": "清除",
-	"bridge_install_dialog_title": "選擇 Bridge 可執行文件",
 	"about": "關於",
 	"author": "作者：",
 	"wechat": "微信：",

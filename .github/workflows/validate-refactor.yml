@@ -1,0 +1,35 @@
+name: validate-refactor
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "v*-dev"
+
+jobs:
+  build-host:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build central server
+        shell: pwsh
+        run: dotnet build .\central_server\CentralServer.csproj -c Release
+
+      - name: Build host shared library
+        shell: pwsh
+        run: dotnet build .\host_shared\HostShared.csproj -c Release
+
+      - name: Validate refactor guardrails
+        shell: pwsh
+        run: .\scripts\validate_refactor_guardrails.ps1

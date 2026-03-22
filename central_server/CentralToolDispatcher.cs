@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GodotDotnetMcp.HostShared;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -56,10 +57,14 @@ internal sealed class CentralToolDispatcher
                 "workspace_godot_manager_list_projects" => ListGodotManagerProjects(),
                 "workspace_godot_manager_get_status" => GetGodotManagerStatus(),
                 "workspace_godot_manager_import_projects" => ImportGodotManagerProjects(arguments),
-                _ => CentralToolCallResponse.Error($"Unknown tool: {toolName}", new { toolName }),
+                _ => await ExecuteDotnetToolAsync(toolName, arguments, cancellationToken),
             };
         }
         catch (CentralToolException ex)
+        {
+            return CentralToolCallResponse.Error(ex.Message, new { error = ex.Message });
+        }
+        catch (BridgeToolException ex)
         {
             return CentralToolCallResponse.Error(ex.Message, new { error = ex.Message });
         }
@@ -382,5 +387,16 @@ internal sealed class CentralToolDispatcher
             importedProjects = imported,
             duplicateProjectRoots = duplicates,
         });
+    }
+
+    private static async Task<CentralToolCallResponse> ExecuteDotnetToolAsync(
+        string toolName,
+        JsonElement arguments,
+        CancellationToken cancellationToken)
+    {
+        var response = await BridgeToolDispatcher.ExecuteAsync(toolName, arguments, cancellationToken);
+        return response.IsError
+            ? CentralToolCallResponse.Error(response.TextContent, response.StructuredContent)
+            : CentralToolCallResponse.Success(response.StructuredContent);
     }
 }

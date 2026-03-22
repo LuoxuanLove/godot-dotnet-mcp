@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends VBoxContainer
 
 signal port_changed(value: int)
@@ -9,9 +9,6 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
-signal bridge_install_requested
-signal bridge_validate_requested
-signal bridge_clear_requested
 signal central_server_detect_requested
 signal central_server_install_requested
 signal central_server_start_requested
@@ -28,21 +25,6 @@ signal copy_requested(text: String, source: String)
 @onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
 @onready var _self_diag_details: Label = %SelfDiagnosticsDetails
 @onready var _self_diag_divider: HSeparator = %SelfDiagnosticsDivider
-@onready var _bridge_section_divider: HSeparator = %BridgeSectionDivider
-@onready var _bridge_section_title: Label = %BridgeSectionTitle
-@onready var _bridge_status_title: Label = %BridgeStatusTitle
-@onready var _bridge_status_value: Label = %BridgeStatusValue
-@onready var _bridge_path_title: Label = %BridgePathTitle
-@onready var _bridge_path_value: Label = %BridgePathValue
-@onready var _bridge_version_title: Label = %BridgeVersionTitle
-@onready var _bridge_version_value: Label = %BridgeVersionValue
-@onready var _bridge_message_title: Label = %BridgeMessageTitle
-@onready var _bridge_message_value: Label = %BridgeMessageValue
-@onready var _bridge_command_title: Label = %BridgeCommandTitle
-@onready var _bridge_command_value: Label = %BridgeCommandValue
-@onready var _bridge_install_button: Button = %BridgeInstallButton
-@onready var _bridge_validate_button: Button = %BridgeValidateButton
-@onready var _bridge_clear_button: Button = %BridgeClearButton
 @onready var _central_server_section_divider: HSeparator = %CentralServerSectionDivider
 @onready var _central_server_section_title: Label = %CentralServerSectionTitle
 @onready var _central_server_status_title: Label = %CentralServerStatusTitle
@@ -116,9 +98,6 @@ func _ready() -> void:
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_full_reload_button.pressed.connect(_on_full_reload_button_pressed)
-	_bridge_install_button.pressed.connect(_on_bridge_install_button_pressed)
-	_bridge_validate_button.pressed.connect(_on_bridge_validate_button_pressed)
-	_bridge_clear_button.pressed.connect(_on_bridge_clear_button_pressed)
 	_central_server_detect_button.pressed.connect(_on_central_server_detect_button_pressed)
 	_central_server_install_button.pressed.connect(_on_central_server_install_button_pressed)
 	_central_server_start_button.pressed.connect(_on_central_server_start_button_pressed)
@@ -135,7 +114,6 @@ func apply_model(model: Dictionary) -> void:
 	var languages: Dictionary = model.get("languages", {})
 	var stats: Dictionary = model.get("stats", {})
 	var self_diagnostics: Dictionary = model.get("self_diagnostics", {})
-	var bridge_install: Dictionary = model.get("bridge_install", {})
 	var central_server_attach: Dictionary = model.get("central_server_attach", {})
 	var central_server_process: Dictionary = model.get("central_server_process", {})
 	var is_running = bool(model.get("is_running", false))
@@ -148,7 +126,6 @@ func apply_model(model: Dictionary) -> void:
 		_apply_responsive_layout()
 
 	_apply_self_diagnostics(model, localization)
-	_apply_bridge_install(bridge_install, localization)
 	_apply_central_server_attach(central_server_attach, localization)
 	_apply_central_server_process(central_server_process, localization)
 	_status_section_title.text = localization.get_text("plugin_overview_title")
@@ -156,7 +133,7 @@ func apply_model(model: Dictionary) -> void:
 	_advanced_section_title.text = localization.get_text("advanced_settings")
 	_server_state_title.text = localization.get_text("plugin_overview_health_label")
 	_endpoint_title.text = localization.get_text("plugin_overview_service_label")
-	_connections_title.text = localization.get_text("plugin_overview_bridge_label")
+	_connections_title.text = localization.get_text("central_server_section_title")
 	_requests_title.text = localization.get_text("plugin_overview_config_label")
 	_last_request_title.text = localization.get_text("plugin_overview_activity_label")
 	_port_label.text = localization.get_text("port")
@@ -166,7 +143,7 @@ func apply_model(model: Dictionary) -> void:
 
 	_state_value.text = _build_overview_health_text(self_diagnostics, localization)
 	_endpoint_value.text = _build_overview_service_text(is_running, settings, localization)
-	_connections_value.text = _build_overview_bridge_text(bridge_install, localization)
+	_connections_value.text = _build_overview_central_server_text(central_server_attach, central_server_process, localization)
 	_requests_value.text = _build_overview_config_text(model, localization)
 	_last_request_value.text = _build_overview_activity_text(stats, localization)
 
@@ -235,46 +212,6 @@ func apply_model(model: Dictionary) -> void:
 	if selected_index >= 0:
 		_language_option.select(selected_index)
 	_language_syncing = false
-
-
-func _apply_bridge_install(bridge_install: Dictionary, localization) -> void:
-	var bridge_state = str(bridge_install.get("install_state", "not_configured"))
-	var bridge_path = str(bridge_install.get("executable_path", ""))
-	var bridge_version = str(bridge_install.get("install_version", ""))
-	var bridge_message = str(bridge_install.get("install_message", ""))
-	var launch_command = str(bridge_install.get("launch_command", ""))
-
-	_bridge_section_title.text = localization.get_text("bridge_section_title")
-	_bridge_status_title.text = localization.get_text("bridge_install_status_label")
-	_bridge_path_title.text = localization.get_text("bridge_install_path_label")
-	_bridge_version_title.text = localization.get_text("bridge_install_version_label")
-	_bridge_message_title.text = localization.get_text("bridge_install_message_label")
-	_bridge_command_title.text = localization.get_text("bridge_install_command_label")
-	_bridge_install_button.text = localization.get_text("bridge_install_select_button")
-	_bridge_validate_button.text = localization.get_text("bridge_install_validate_button")
-	_bridge_clear_button.text = localization.get_text("bridge_install_clear_button")
-
-	_bridge_status_value.text = _resolve_bridge_state_text(bridge_state, localization)
-	_bridge_path_value.text = bridge_path if not bridge_path.is_empty() else localization.get_text("bridge_install_not_configured")
-	_bridge_version_value.text = bridge_version if not bridge_version.is_empty() else "-"
-	_bridge_message_value.text = bridge_message if not bridge_message.is_empty() else "-"
-	_bridge_command_value.text = launch_command if not launch_command.is_empty() else "-"
-
-	var has_path = not bridge_path.is_empty()
-	_bridge_validate_button.disabled = not has_path
-	_bridge_clear_button.disabled = not has_path
-
-
-func _resolve_bridge_state_text(bridge_state: String, localization) -> String:
-	match bridge_state:
-		"installed":
-			return localization.get_text("bridge_install_installed")
-		"validating":
-			return localization.get_text("bridge_install_validating")
-		"invalid":
-			return localization.get_text("bridge_install_invalid")
-		_:
-			return localization.get_text("bridge_install_not_configured")
 
 
 func _apply_central_server_attach(central_server_attach: Dictionary, localization) -> void:
@@ -400,14 +337,26 @@ func _build_overview_service_text(is_running: bool, settings: Dictionary, locali
 	return "%s · %s" % [service_state, endpoint]
 
 
-func _build_overview_bridge_text(bridge_install: Dictionary, localization) -> String:
-	var bridge_state = _resolve_bridge_state_text(str(bridge_install.get("install_state", "not_configured")), localization)
-	var bridge_version = str(bridge_install.get("install_version", ""))
-	var bridge_path = str(bridge_install.get("executable_path", ""))
-	var path_summary = bridge_path.get_file() if not bridge_path.is_empty() else localization.get_text("bridge_install_not_configured")
-	if not bridge_version.is_empty():
-		return "%s · %s · %s" % [bridge_state, bridge_version, path_summary]
-	return "%s · %s" % [bridge_state, path_summary]
+func _build_overview_central_server_text(central_server_attach: Dictionary, central_server_process: Dictionary, localization) -> String:
+	var attach_text = _resolve_central_server_status_text(
+		str(central_server_attach.get("status", "idle")),
+		bool(central_server_attach.get("enabled", true)),
+		localization
+	)
+	var process_text = _resolve_central_server_process_status_text(
+		str(central_server_process.get("status", "idle")),
+		localization
+	)
+	if bool(central_server_process.get("local_install_ready", false)):
+		process_text += " / %s" % localization.get_text("central_server_process_install_ready")
+	elif bool(central_server_process.get("install_available", false)):
+		process_text += " / %s" % localization.get_text("central_server_process_install_available")
+
+	var summary_parts: Array[String] = [attach_text, process_text]
+	var session_id = str(central_server_attach.get("session_id", ""))
+	if not session_id.is_empty():
+		summary_parts.append(session_id)
+	return " · ".join(summary_parts)
 
 
 func _build_overview_config_text(model: Dictionary, localization) -> String:
@@ -500,18 +449,6 @@ func _on_full_reload_button_pressed() -> void:
 	full_reload_requested.emit()
 
 
-func _on_bridge_install_button_pressed() -> void:
-	bridge_install_requested.emit()
-
-
-func _on_bridge_validate_button_pressed() -> void:
-	bridge_validate_requested.emit()
-
-
-func _on_bridge_clear_button_pressed() -> void:
-	bridge_clear_requested.emit()
-
-
 func _on_central_server_detect_button_pressed() -> void:
 	central_server_detect_requested.emit()
 
@@ -562,9 +499,6 @@ func _apply_editor_scale(scale: float) -> void:
 	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
 	var overview_buttons = get_node("Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons") as GridContainer
 	var self_diag_header = get_node("Scroll/Margin/Content/SelfDiagnosticsHeader") as HBoxContainer
-	var bridge_content = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent") as VBoxContainer
-	var bridge_status_row = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeStatusRow") as GridContainer
-	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as GridContainer
 	var central_server_content = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent") as VBoxContainer
 	var central_server_status_row = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow") as GridContainer
 	var central_server_buttons = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons") as GridContainer
@@ -573,11 +507,6 @@ func _apply_editor_scale(scale: float) -> void:
 	overview_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
 	overview_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
 	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
-	bridge_content.add_theme_constant_override("separation", int(round(8 * scale)))
-	bridge_status_row.add_theme_constant_override("h_separation", int(round(12 * scale)))
-	bridge_status_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-	bridge_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	bridge_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
 	central_server_content.add_theme_constant_override("separation", int(round(8 * scale)))
 	central_server_status_row.add_theme_constant_override("h_separation", int(round(12 * scale)))
 	central_server_status_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
@@ -642,19 +571,14 @@ func _apply_responsive_layout() -> void:
 	var status_center = get_node("Scroll/Margin/Content/StatusCenter") as CenterContainer
 	var overview_buttons_center = get_node("Scroll/Margin/Content/OverviewButtonsCenter") as CenterContainer
 	var overview_buttons = get_node("Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons") as GridContainer
-	var bridge_center = get_node("Scroll/Margin/Content/BridgeContentCenter") as CenterContainer
-	var bridge_content = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent") as VBoxContainer
-	var bridge_buttons = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeButtons") as GridContainer
 	var central_server_center = get_node("Scroll/Margin/Content/CentralServerContentCenter") as CenterContainer
 	var central_server_content = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent") as VBoxContainer
 	var central_server_buttons = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerButtons") as GridContainer
 	var settings_center = get_node("Scroll/Margin/Content/SettingsCenter") as CenterContainer
 	var settings_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent") as VBoxContainer
 	var section_divider = get_node("Scroll/Margin/Content/SectionDivider") as HSeparator
-	var bridge_divider = get_node("Scroll/Margin/Content/BridgeSectionDivider") as HSeparator
 	var central_server_divider = get_node("Scroll/Margin/Content/CentralServerSectionDivider") as HSeparator
 	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
-	var bridge_status_row = get_node("Scroll/Margin/Content/BridgeContentCenter/BridgeContent/BridgeStatusRow") as GridContainer
 	var central_server_status_row = get_node("Scroll/Margin/Content/CentralServerContentCenter/CentralServerContent/CentralServerStatusRow") as GridContainer
 	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
 	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
@@ -670,15 +594,10 @@ func _apply_responsive_layout() -> void:
 	content.add_theme_constant_override("separation", int(round(section_spacing)))
 	overview_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
 	overview_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	bridge_content.add_theme_constant_override("separation", int(round(section_spacing)))
 	central_server_content.add_theme_constant_override("separation", int(round(section_spacing)))
 	settings_content.add_theme_constant_override("separation", int(round(section_spacing)))
 	status_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
 	status_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
-	bridge_status_row.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
-	bridge_status_row.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
-	bridge_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	bridge_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
 	central_server_status_row.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
 	central_server_status_row.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
 	central_server_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
@@ -696,21 +615,15 @@ func _apply_responsive_layout() -> void:
 	status_center.custom_minimum_size.x = status_grid_width
 	overview_buttons_center.custom_minimum_size.x = content_width
 	overview_buttons.custom_minimum_size.x = content_width
-	bridge_center.custom_minimum_size.x = content_width
-	bridge_content.custom_minimum_size.x = content_width
-	bridge_buttons.custom_minimum_size.x = content_width
 	central_server_center.custom_minimum_size.x = content_width
 	central_server_content.custom_minimum_size.x = content_width
 	central_server_buttons.custom_minimum_size.x = content_width
 	settings_center.custom_minimum_size.x = content_width
 	settings_content.custom_minimum_size.x = content_width
 	section_divider.custom_minimum_size.x = content_width
-	bridge_divider.custom_minimum_size.x = content_width
 	central_server_divider.custom_minimum_size.x = content_width
 	status_grid.columns = status_columns
 	overview_buttons.columns = 1 if narrow_layout else (2 if compact_layout else 3)
-	bridge_status_row.columns = 2 if not narrow_layout else 1
-	bridge_buttons.columns = 1 if ultra_narrow_layout else 2
 	central_server_status_row.columns = 2 if not narrow_layout else 1
 	central_server_buttons.columns = 1 if ultra_narrow_layout else 2
 	settings_grid.columns = settings_columns
@@ -739,15 +652,6 @@ func _apply_responsive_layout() -> void:
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x = field_width if status_columns == 2 else content_width
 
-	for title_label in [_bridge_status_title, _bridge_path_title, _bridge_version_title, _bridge_message_title, _bridge_command_title]:
-		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		title_label.custom_minimum_size.x = label_width if bridge_status_row.columns == 2 else 0.0
-
-	for value_label in [_bridge_status_value, _bridge_path_value, _bridge_version_value, _bridge_message_value, _bridge_command_value]:
-		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		value_label.custom_minimum_size.x = field_width if bridge_status_row.columns == 2 else content_width
-
 	for title_label in [_central_server_local_status_title, _central_server_install_version_title, _central_server_install_dir_title, _central_server_install_source_title, _central_server_status_title, _central_server_endpoint_title, _central_server_project_title, _central_server_session_title, _central_server_message_title, _central_server_local_command_title]:
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		title_label.custom_minimum_size.x = label_width if central_server_status_row.columns == 2 else 0.0
@@ -767,17 +671,12 @@ func _apply_responsive_layout() -> void:
 	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 
 	var button_width = content_width if overview_buttons.columns == 1 else (content_width - row_spacing * float(overview_buttons.columns - 1)) / float(overview_buttons.columns)
-	var bridge_button_width = content_width if bridge_buttons.columns == 1 else (content_width - row_spacing * float(bridge_buttons.columns - 1)) / float(bridge_buttons.columns)
 	var central_server_button_width = content_width if central_server_buttons.columns == 1 else (content_width - row_spacing * float(central_server_buttons.columns - 1)) / float(central_server_buttons.columns)
 	for button in [_start_button, _restart_button, _full_reload_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = button_width
 		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
 
-	for button in [_bridge_install_button, _bridge_validate_button, _bridge_clear_button]:
-		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.custom_minimum_size.x = bridge_button_width
-		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
 	for button in [_central_server_detect_button, _central_server_install_button, _central_server_start_button, _central_server_stop_button, _central_server_open_install_dir_button, _central_server_open_logs_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.custom_minimum_size.x = central_server_button_width

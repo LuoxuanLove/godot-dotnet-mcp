@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
@@ -14,7 +14,6 @@ const TRANSLATIONS: Dictionary = {
 	"plugin_overview_title": "Обзор служб плагина",
 	"plugin_overview_health_label": "Состояние:",
 	"plugin_overview_service_label": "Служба:",
-	"plugin_overview_bridge_label": "Мост:",
 	"plugin_overview_config_label": "Конфигурация:",
 	"plugin_overview_activity_label": "Активность:",
 	"status_running": "Запущен",
@@ -51,7 +50,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Не удалось загрузить сцену док-панели",
 	"self_diag_code_dock_duplicate_instance": "Дублирующийся экземпляр док-панели",
 	"self_diag_code_dock_signal_binding_failed": "Не удалось привязать сигнал док-панели",
-	"self_diag_code_editor_debugger_bridge_install_failed": "Не удалось установить мост отладчика",
+	"self_diag_code_editor_debugger_bridge_create_failed": "Не удалось создать мост отладчика",
 	"self_diag_code_server_listen_failed": "Не удалось начать прослушивание сервера",
 	"self_diag_code_server_start_failed": "Не удалось запустить сервер",
 	"self_diag_code_tool_domain_load_failed": "Не удалось загрузить домен инструмента",
@@ -132,20 +131,6 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "Остановлен",
 	"central_server_process_status_exited": "Завершён",
 	"central_server_process_status_launch_error": "Ошибка запуска",
-	"bridge_section_title": "Установка моста",
-	"bridge_install_status_label": "Статус установки:",
-	"bridge_install_path_label": "Исполняемый файл:",
-	"bridge_install_version_label": "Версия:",
-	"bridge_install_message_label": "Сообщение:",
-	"bridge_install_command_label": "Команда запуска:",
-	"bridge_install_not_configured": "Не настроено",
-	"bridge_install_installed": "Установлено",
-	"bridge_install_invalid": "Недействительный",
-	"bridge_install_validating": "Проверка",
-	"bridge_install_select_button": "Выберите исполняемый файл моста",
-	"bridge_install_validate_button": "Подтвердить",
-	"bridge_install_clear_button": "Очистить",
-	"bridge_install_dialog_title": "Выберите исполняемый файл моста",
 	"about": "О программе",
 	"author": "Автор:",
 	"wechat": "WeChat:",

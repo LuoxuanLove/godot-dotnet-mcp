@@ -23,19 +23,39 @@ jobs:
         shell: pwsh
         run: .\scripts\publish_central_server.ps1
 
-      - name: Upload workflow artifact
+      - name: Upload central server artifact
         uses: actions/upload-artifact@v4
         with:
           name: central-server-win-x64
           path: |
-            release_dist/central_server/*.zip
-            release_dist/central_server/*.sha256
+            dist/central-server-win-x64/*.zip
+            dist/central-server-win-x64/*.sha256
+
+      - name: Upload plugin lean artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-lean
+          path: |
+            dist/plugin-lean/*.zip
+            dist/plugin-lean/*.sha256
+
+      - name: Upload plugin bundled artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-bundled-win-x64
+          path: |
+            dist/plugin-bundled-win-x64/*.zip
+            dist/plugin-bundled-win-x64/*.sha256
 
       - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release_dist/central_server/*.zip
-            release_dist/central_server/*.sha256
+            dist/central-server-win-x64/*.zip
+            dist/central-server-win-x64/*.sha256
+            dist/plugin-lean/*.zip
+            dist/plugin-lean/*.sha256
+            dist/plugin-bundled-win-x64/*.zip
+            dist/plugin-bundled-win-x64/*.sha256
           generate_release_notes: true

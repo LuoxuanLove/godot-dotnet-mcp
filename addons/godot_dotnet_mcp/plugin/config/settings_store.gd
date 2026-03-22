@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 class_name SettingsStore
 

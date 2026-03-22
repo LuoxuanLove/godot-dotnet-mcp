@@ -1,0 +1,10 @@
+root = true
+
+[*]
+charset = utf-8
+
+[*.ps1]
+charset = utf-8-bom
+
+[agent_workflow/**/*.md]
+charset = utf-8-bom

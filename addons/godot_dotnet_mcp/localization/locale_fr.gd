@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
@@ -44,7 +44,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "Échec du chargement de la scène Dock",
 	"self_diag_code_dock_duplicate_instance": "Instance de quai en double",
 	"self_diag_code_dock_signal_binding_failed": "La liaison du signal Dock a échoué",
-	"self_diag_code_editor_debugger_bridge_install_failed": "L'installation du pont du débogueur a échoué",
+	"self_diag_code_editor_debugger_bridge_create_failed": "La création du pont du débogueur a échoué",
 	"self_diag_code_server_listen_failed": "Échec de l'écoute du serveur",
 	"self_diag_code_server_start_failed": "Le démarrage du serveur a échoué",
 	"self_diag_code_tool_domain_load_failed": "Échec du chargement du domaine d'outil",
@@ -126,27 +126,12 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "Arrêté",
 	"central_server_process_status_exited": "Quitté",
 	"central_server_process_status_launch_error": "Erreur de lancement",
-	"bridge_section_title": "Installation du pont",
-	"bridge_install_status_label": "Statut d'installation :",
-	"bridge_install_path_label": "Exécutable :",
-	"bridge_install_version_label": "Version :",
-	"bridge_install_message_label": "Message :",
-	"bridge_install_command_label": "Commande de lancement :",
-	"bridge_install_not_configured": "Non configuré",
-	"bridge_install_installed": "Installé",
-	"bridge_install_invalid": "Invalide",
-	"bridge_install_validating": "Validation",
-	"bridge_install_select_button": "Sélectionnez l'exécutable Bridge",
-	"bridge_install_validate_button": "Valider",
-	"bridge_install_clear_button": "Effacer",
-	"bridge_install_dialog_title": "Sélectionnez l'exécutable Bridge",
 	"about": "À propos",
 	"author": "Auteur :",
 	"wechat": "WeChat :",
 	"plugin_overview_title": "Aperçu du plugin",
 	"plugin_overview_health_label": "Santé :",
 	"plugin_overview_service_label": "Service :",
-	"plugin_overview_bridge_label": "Pont :",
 	"plugin_overview_config_label": "Configuration :",
 	"plugin_overview_activity_label": "Activité :",
 	"tools_enabled": "Outils : %d/%d activé",

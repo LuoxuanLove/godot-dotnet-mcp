@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
@@ -44,7 +44,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_dock_scene_load_failed": "ドックシーンのロードに失敗しました",
 	"self_diag_code_dock_duplicate_instance": "ドックインスタンスの重複",
 	"self_diag_code_dock_signal_binding_failed": "ドック信号バインディングに失敗しました",
-	"self_diag_code_editor_debugger_bridge_install_failed": "デバッガーブリッジのインストールに失敗しました",
+	"self_diag_code_editor_debugger_bridge_create_failed": "デバッガーブリッジの生成に失敗しました",
 	"self_diag_code_server_listen_failed": "サーバーのリッスンに失敗しました",
 	"self_diag_code_server_start_failed": "サーバーの起動に失敗しました",
 	"self_diag_code_tool_domain_load_failed": "ツールドメインのロードに失敗しました",
@@ -55,7 +55,6 @@ const TRANSLATIONS: Dictionary = {
 	"plugin_overview_title": "プラグイン サービス概要",
 	"plugin_overview_health_label": "状態:",
 	"plugin_overview_service_label": "サービス:",
-	"plugin_overview_bridge_label": "Bridge:",
 	"plugin_overview_config_label": "設定:",
 	"plugin_overview_activity_label": "アクティビティ:",
 	"server_status": "サーバーステータス",
@@ -132,20 +131,6 @@ const TRANSLATIONS: Dictionary = {
 	"central_server_process_status_stopped": "停止しました",
 	"central_server_process_status_exited": "終了しました",
 	"central_server_process_status_launch_error": "起動エラー",
-	"bridge_section_title": "Bridge のインストール",
-	"bridge_install_status_label": "インストールステータス:",
-	"bridge_install_path_label": "実行可能ファイル:",
-	"bridge_install_version_label": "バージョン:",
-	"bridge_install_message_label": "メッセージ:",
-	"bridge_install_command_label": "起動コマンド:",
-	"bridge_install_not_configured": "未構成",
-	"bridge_install_installed": "インストール済み",
-	"bridge_install_invalid": "無効です",
-	"bridge_install_validating": "検証中",
-	"bridge_install_select_button": "Bridge 実行ファイルを選択",
-	"bridge_install_validate_button": "検証",
-	"bridge_install_clear_button": "クリア",
-	"bridge_install_dialog_title": "Bridge 実行ファイルを選択",
 	"about": "概要",
 	"author": "著者:",
 	"wechat": "ウィーチャット:",
