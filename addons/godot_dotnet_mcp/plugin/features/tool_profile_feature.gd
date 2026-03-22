@@ -1,6 +1,6 @@
 extends RefCounted
 
-const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
 
 var _state
 var _localization
@@ -34,7 +34,7 @@ func apply_initial_tool_profile_if_needed() -> void:
 
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 		str(_state.settings.get("tool_profile_id", "default")),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+		ToolProfileCatalog.get_builtin_profiles(),
 		_state.custom_tool_profiles,
 		tool_names,
 		_state.settings.get("disabled_tools", [])
@@ -48,7 +48,7 @@ func list_profiles_from_tools() -> Dictionary:
 	return {
 		"success": true,
 		"data": {
-			"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 			"custom_profiles": _state.custom_tool_profiles
 		}
 	}
@@ -57,7 +57,7 @@ func list_profiles_from_tools() -> Dictionary:
 func apply_profile_from_tools(profile_id: String) -> Dictionary:
 	if profile_id.is_empty():
 		return {"success": false, "error": "Profile id is required"}
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+	if not _tool_catalog.has_tool_profile(profile_id, ToolProfileCatalog.get_builtin_profiles(), _state.custom_tool_profiles):
 		return {"success": false, "error": "Unknown profile id: %s" % profile_id}
 	_apply_tool_profile(profile_id, true)
 	return {
@@ -133,10 +133,10 @@ func import_config_from_tools(file_path: String) -> Dictionary:
 
 	var requested_profile_id = str(imported_data.get("profile_id", "default"))
 	var resolved_profile_id = requested_profile_id
-	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+	if not _tool_catalog.has_tool_profile(resolved_profile_id, ToolProfileCatalog.get_builtin_profiles(), _state.custom_tool_profiles):
 		resolved_profile_id = _tool_catalog.find_matching_profile_id(
 			imported_disabled,
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			ToolProfileCatalog.get_builtin_profiles(),
 			_state.custom_tool_profiles,
 			tool_names
 		)
@@ -168,7 +168,7 @@ func _apply_tool_profile(profile_id: String, refresh_ui: bool = true) -> void:
 	_state.settings["tool_profile_id"] = profile_id
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 		profile_id,
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+		ToolProfileCatalog.get_builtin_profiles(),
 		_state.custom_tool_profiles,
 		tool_names,
 		_state.settings.get("disabled_tools", [])
@@ -187,7 +187,7 @@ func _save_custom_profile(profile_name: String) -> Dictionary:
 		}
 
 	var result = _settings_store.save_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
+		ToolProfileCatalog.PROFILE_STORAGE_DIR,
 		profile_name,
 		_state.settings.get("disabled_tools", [])
 	)
@@ -197,7 +197,7 @@ func _save_custom_profile(profile_name: String) -> Dictionary:
 			"error": _get_text("tool_profile_save_failed")
 		}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(ToolProfileCatalog.PROFILE_STORAGE_DIR)
 	_state.settings["tool_profile_id"] = "custom:%s" % str(result.get("slug", ""))
 	_call_save_settings()
 	return {
@@ -212,14 +212,14 @@ func _rename_custom_profile(profile_id: String, profile_name: String) -> Diction
 		return {"success": false, "error": _get_text("tool_profile_builtin_protected")}
 
 	var result = _settings_store.rename_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
+		ToolProfileCatalog.PROFILE_STORAGE_DIR,
 		profile_id,
 		profile_name
 	)
 	if not bool(result.get("success", false)):
 		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "rename_failed")))}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(ToolProfileCatalog.PROFILE_STORAGE_DIR)
 	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
 		_state.settings["tool_profile_id"] = str(result.get("profile_id", profile_id))
 	_call_set_disabled_tools(_state.settings.get("disabled_tools", []))
@@ -235,17 +235,17 @@ func _delete_custom_profile(profile_id: String) -> Dictionary:
 	if _is_builtin_profile_id(profile_id):
 		return {"success": false, "error": _get_text("tool_profile_builtin_protected")}
 
-	var result = _settings_store.delete_custom_profile(PluginRuntimeState.TOOL_PROFILE_DIR, profile_id)
+	var result = _settings_store.delete_custom_profile(ToolProfileCatalog.PROFILE_STORAGE_DIR, profile_id)
 	if not bool(result.get("success", false)):
 		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "delete_failed")))}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(ToolProfileCatalog.PROFILE_STORAGE_DIR)
 	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
 		var tool_names = _build_tool_name_index()
 		_state.settings["tool_profile_id"] = "default"
 		_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 			"default",
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			ToolProfileCatalog.get_builtin_profiles(),
 			_state.custom_tool_profiles,
 			tool_names,
 			_state.settings.get("disabled_tools", [])

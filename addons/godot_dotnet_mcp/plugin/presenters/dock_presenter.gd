@@ -64,7 +64,7 @@ func build_model(context: Dictionary) -> Dictionary:
 	return {
 		"localization": localization,
 		"settings": settings,
-		"current_language": state.resolve_active_language(localization),
+		"current_language": _resolve_current_language(state, localization),
 		"current_tab": state.current_tab,
 		"permission_levels": context.get("permission_levels", []),
 		"current_permission_level": str(context.get("current_permission_level", "")),
@@ -105,6 +105,17 @@ func build_model(context: Dictionary) -> Dictionary:
 		"config_platforms": config_platforms,
 		"config_connection_mode": config_connection_mode
 	}
+
+
+func _resolve_current_language(state, localization) -> String:
+	if state != null:
+		var settings = state.settings if state.settings is Dictionary else {}
+		var configured_language = str(settings.get("language", ""))
+		if not configured_language.is_empty():
+			return configured_language
+	if localization != null:
+		return str(localization.get_language())
+	return "en"
 
 
 func build_client_transport_model(settings: Dictionary, central_server_process: Dictionary) -> Dictionary:

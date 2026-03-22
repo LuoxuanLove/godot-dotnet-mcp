@@ -151,36 +151,8 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	match tool_name:
-		"settings":
-			return _call_plugin_method("get_developer_settings_for_tools", [], "Plugin developer bridge is unavailable")
-		"log_level":
-			return _call_plugin_method("set_log_level_for_tools", [str(args.get("level", "info"))], "Plugin developer bridge is unavailable")
-		"user_visibility":
-			return _call_plugin_method("set_show_user_tools_from_tools", [bool(args.get("enabled", false))], "Plugin developer bridge is unavailable")
-		"list_languages":
-			return _call_plugin_method("get_languages_for_tools", [], "Plugin developer bridge is unavailable")
-		"set_language":
-			return _call_plugin_method("set_language_from_tools", [str(args.get("language", ""))], "Plugin developer bridge is unavailable")
-		"list_profiles":
-			return _call_plugin_method("list_profiles_from_tools", [], "Plugin developer bridge is unavailable")
-		"apply_profile":
-			return _call_plugin_method("apply_profile_from_tools", [str(args.get("profile_id", ""))], "Plugin developer bridge is unavailable")
-		"save_profile":
-			return _call_plugin_method("save_profile_from_tools", [str(args.get("profile_name", ""))], "Plugin developer bridge is unavailable")
-		"rename_profile":
-			return _call_plugin_method(
-				"rename_profile_from_tools",
-				[str(args.get("profile_id", "")), str(args.get("profile_name", ""))],
-				"Plugin developer bridge is unavailable"
-			)
-		"delete_profile":
-			return _call_plugin_method("delete_profile_from_tools", [str(args.get("profile_id", ""))], "Plugin developer bridge is unavailable")
-		"export_config":
-			return _call_plugin_method("export_config_from_tools", [str(args.get("path", ""))], "Plugin developer bridge is unavailable")
-		"import_config":
-			return _call_plugin_method("import_config_from_tools", [str(args.get("path", ""))], "Plugin developer bridge is unavailable")
-		"usage_guide":
-			return _call_plugin_method("get_usage_guide_from_tools", [], "Plugin developer bridge is unavailable")
-		_:
-			return _error("Unknown plugin developer tool: %s" % tool_name)
+	return _call_plugin_method(
+		"execute_plugin_developer_tool",
+		[tool_name, args],
+		"Plugin developer bridge is unavailable"
+	)

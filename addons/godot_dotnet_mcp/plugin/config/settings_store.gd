@@ -2,7 +2,7 @@
 extends RefCounted
 class_name SettingsStore
 
-const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const PluginSettingsSchema = preload("res://addons/godot_dotnet_mcp/plugin/config/plugin_settings_schema.gd")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 const TOOL_CONFIG_EXCHANGE_ROOT := "user://godot_dotnet_mcp/config_exchange"
@@ -25,7 +25,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 		settings["collapsed_nodes"] = {
 			TreeCollapseState.KIND_DOMAIN: default_domains.duplicate(),
 			TreeCollapseState.KIND_CATEGORY: all_categories.duplicate(),
-			TreeCollapseState.KIND_TOOL: PluginRuntimeState.DEFAULT_COLLAPSED_SYSTEM_TOOLS.duplicate(),
+			TreeCollapseState.KIND_TOOL: PluginSettingsSchema.DEFAULT_COLLAPSED_SYSTEM_TOOLS.duplicate(),
 			TreeCollapseState.KIND_ATOMIC: SystemTreeCatalog.get_default_collapsed_atomic_tools()
 		}
 
@@ -36,7 +36,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 		settings,
 		all_categories,
 		default_domains,
-		PluginRuntimeState.DEFAULT_COLLAPSED_SYSTEM_TOOLS
+		PluginSettingsSchema.DEFAULT_COLLAPSED_SYSTEM_TOOLS
 	)
 
 	return {

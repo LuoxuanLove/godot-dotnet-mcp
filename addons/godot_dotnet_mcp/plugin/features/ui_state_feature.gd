@@ -4,21 +4,21 @@ const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 
 var _state
 var _localization
+var _client_install_detection_service
 var _save_settings := Callable()
 var _refresh_dock := Callable()
 var _show_message := Callable()
-var _invalidate_client_install_status_cache := Callable()
 var _capture_dock_focus_snapshot := Callable()
 var _restore_dock_focus_snapshot := Callable()
 
 
-func configure(state, localization, callbacks: Dictionary) -> void:
+func configure(state, localization, client_install_detection_service, callbacks: Dictionary) -> void:
 	_state = state
 	_localization = localization
+	_client_install_detection_service = client_install_detection_service
 	_save_settings = callbacks.get("save_settings", Callable())
 	_refresh_dock = callbacks.get("refresh_dock", Callable())
 	_show_message = callbacks.get("show_message", Callable())
-	_invalidate_client_install_status_cache = callbacks.get("invalidate_client_install_status_cache", Callable())
 	_capture_dock_focus_snapshot = callbacks.get("capture_dock_focus_snapshot", Callable())
 	_restore_dock_focus_snapshot = callbacks.get("restore_dock_focus_snapshot", Callable())
 
@@ -115,5 +115,5 @@ func _call_show_message(message: String) -> void:
 
 
 func _call_invalidate_client_install_status_cache() -> void:
-	if _invalidate_client_install_status_cache.is_valid():
-		_invalidate_client_install_status_cache.call()
+	if _client_install_detection_service != null:
+		_client_install_detection_service.invalidate_cache()

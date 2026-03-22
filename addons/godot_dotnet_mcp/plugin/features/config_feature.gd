@@ -5,13 +5,11 @@ var _localization
 var _config_service
 var _dock_presenter
 var _central_server_process_service
+var _client_install_detection_service
 var _show_message := Callable()
 var _show_confirmation := Callable()
 var _refresh_dock := Callable()
 var _save_settings := Callable()
-var _invalidate_client_install_status_cache := Callable()
-var _configure_client_install_detection_service := Callable()
-var _get_client_install_statuses := Callable()
 var _ensure_client_executable_dialog := Callable()
 var _get_client_executable_dialog := Callable()
 var _pending_client_path_request := {}
@@ -23,6 +21,7 @@ func configure(
 	config_service,
 	dock_presenter,
 	central_server_process_service,
+	client_install_detection_service,
 	callbacks: Dictionary
 ) -> void:
 	_settings = settings
@@ -30,13 +29,11 @@ func configure(
 	_config_service = config_service
 	_dock_presenter = dock_presenter
 	_central_server_process_service = central_server_process_service
+	_client_install_detection_service = client_install_detection_service
 	_show_message = callbacks.get("show_message", Callable())
 	_show_confirmation = callbacks.get("show_confirmation", Callable())
 	_refresh_dock = callbacks.get("refresh_dock", Callable())
 	_save_settings = callbacks.get("save_settings", Callable())
-	_invalidate_client_install_status_cache = callbacks.get("invalidate_client_install_status_cache", Callable())
-	_configure_client_install_detection_service = callbacks.get("configure_client_install_detection_service", Callable())
-	_get_client_install_statuses = callbacks.get("get_client_install_statuses", Callable())
 	_ensure_client_executable_dialog = callbacks.get("ensure_client_executable_dialog", Callable())
 	_get_client_executable_dialog = callbacks.get("get_client_executable_dialog", Callable())
 
@@ -612,10 +609,12 @@ func _get_client_manual_paths() -> Dictionary:
 
 
 func _get_statuses() -> Dictionary:
-	if _get_client_install_statuses.is_valid():
-		var result = _get_client_install_statuses.call()
-		if result is Dictionary:
-			return result
+	if _client_install_detection_service == null:
+		return {}
+	_client_install_detection_service.configure(_settings)
+	var result = _client_install_detection_service.detect_all()
+	if result is Dictionary:
+		return result
 	return {}
 
 
@@ -655,13 +654,13 @@ func _call_save_settings() -> void:
 
 
 func _call_invalidate_client_install_status_cache() -> void:
-	if _invalidate_client_install_status_cache.is_valid():
-		_invalidate_client_install_status_cache.call()
+	if _client_install_detection_service != null:
+		_client_install_detection_service.invalidate_cache()
 
 
 func _call_configure_detection_service() -> void:
-	if _configure_client_install_detection_service.is_valid():
-		_configure_client_install_detection_service.call()
+	if _client_install_detection_service != null:
+		_client_install_detection_service.configure(_settings)
 
 
 func _call_ensure_client_executable_dialog() -> void:

@@ -209,6 +209,8 @@ root
 | `ui/tools_tab.tscn` | Tools 页节点树与布局 |
 | `ui/tools_tab.gd` | Tools 页控制器 |
 | `tools/system_tools.gd` | 系统高层工具实现 |
-| `tools/tool_manifest.gd` | 默认工具暴露策略与 domain/category 事实源 |
-| `plugin/runtime/plugin_runtime_state.gd` | profile 与默认设置 |
+| `tools/tool_manifest_data.gd` | 默认工具暴露策略与 domain/category 纯静态数据层 |
+| `tools/tool_manifest.gd` | 默认工具暴露策略与 manifest 访问层 |
+| `plugin/runtime/plugin_runtime_state.gd` | 当前 settings / custom profile 状态 |
 | `plugin/runtime/tool_permission_policy.gd` | permission 规则 |
+| `plugin/runtime/tool_profile_catalog.gd` | builtin profile 目录 |

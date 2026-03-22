@@ -1,7 +1,7 @@
 extends RefCounted
 
-const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var _state
@@ -84,7 +84,7 @@ func handle_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 	var all_tools_by_category = _get_all_tools_by_category_safe()
 	var target_categories: Array = []
-	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
+	for domain_def in MCPToolManifest.TOOL_DOMAIN_DEFS:
 		if str(domain_def.get("key", "")) != domain_key:
 			continue
 		target_categories = domain_def.get("categories", []).duplicate()
@@ -92,7 +92,7 @@ func handle_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 	if target_categories.is_empty():
 		for category in all_tools_by_category.keys():
-			var known_domain = _tool_catalog.find_domain_key_for_category(PluginRuntimeState.TOOL_DOMAIN_DEFS, str(category))
+			var known_domain = _tool_catalog.find_domain_key_for_category(MCPToolManifest.TOOL_DOMAIN_DEFS, str(category))
 			if known_domain.is_empty():
 				target_categories.append(str(category))
 
@@ -229,7 +229,7 @@ func can_enable_category(category: String) -> bool:
 
 
 func can_enable_domain(domain_key: String) -> bool:
-	return ToolPermissionPolicy.permission_allows_domain(get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
+	return ToolPermissionPolicy.permission_allows_domain(get_permission_level(), domain_key, MCPToolManifest.TOOL_DOMAIN_DEFS)
 
 
 func is_plugin_category_restricted(category: String) -> bool:
@@ -295,8 +295,9 @@ func _get_settings() -> Dictionary:
 
 
 func _resolve_active_language() -> String:
-	if _has_state() and _localization != null:
-		return _state.resolve_active_language(_localization)
+	var configured_language = str(_get_settings().get("language", ""))
+	if not configured_language.is_empty():
+		return configured_language
 	if _localization != null:
 		return _localization.get_language()
 	return ""

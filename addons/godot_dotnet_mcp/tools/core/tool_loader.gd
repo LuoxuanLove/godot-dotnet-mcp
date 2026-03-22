@@ -2,16 +2,17 @@
 extends RefCounted
 class_name MCPToolLoader
 
-const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const MCPToolDiagnosticService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_diagnostic_service.gd")
 const MCPToolExposureService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_exposure_service.gd")
+const MCPToolMetricsService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_metrics_service.gd")
 const MCPToolRuntimeService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_service.gd")
 const MCPToolReloadService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_reload_service.gd")
-const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 
-var _registry := MCPToolRegistry.new()
+var _diagnostic_service := MCPToolDiagnosticService.new()
 var _exposure_service := MCPToolExposureService.new()
+var _metrics_service := MCPToolMetricsService.new()
 var _runtime_service := MCPToolRuntimeService.new()
 var _reload_service := MCPToolReloadService.new()
 var _server_context: Object
@@ -20,23 +21,22 @@ var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
 var _disabled_tools: Dictionary = {}
-var _load_errors: Array[Dictionary] = []
 var _reload_status: Dictionary = {}
 var _gdscript_lsp_diagnostics_service
 var _gdscript_lsp_diagnostics_generation := 0
 var _force_reload_script_load := false
-var _performance: Dictionary = {
-	"startup_ms": 0.0,
-	"definition_scan_ms": 0.0,
-	"preload_ms": 0.0,
-	"reload_total_ms": 0.0,
-	"reload_count": 0,
-	"tool_calls": {}
-}
 
 
 func configure(server_context: Object) -> void:
 	_server_context = server_context
+	if _diagnostic_service == null:
+		_diagnostic_service = MCPToolDiagnosticService.new()
+	_diagnostic_service.configure({
+		"get_entry": Callable(self, "_get_entry_by_category")
+	})
+	if _metrics_service == null:
+		_metrics_service = MCPToolMetricsService.new()
+	_metrics_service.reset()
 	if _exposure_service == null:
 		_exposure_service = MCPToolExposureService.new()
 	_exposure_service.configure({
@@ -77,12 +77,12 @@ func configure(server_context: Object) -> void:
 		"erase_tool_definitions": Callable(self, "_erase_tool_definitions_by_category"),
 		"instantiate_executor": Callable(self, "_instantiate_executor"),
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
-		"sync_load_error_incidents": Callable(self, "_sync_load_error_incidents"),
+		"sync_load_error_incidents": Callable(_diagnostic_service, "sync_load_error_incidents"),
 		"refresh_runtime_context": Callable(self, "_refresh_runtime_context"),
 		"reset_lsp_diagnostics": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
 		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
 		"unload_runtime": Callable(self, "_unload_runtime"),
-		"record_reload_incident": Callable(self, "_record_reload_incident"),
+		"record_reload_incident": Callable(_diagnostic_service, "record_reload_incident"),
 		"as_bool": Callable(self, "_as_bool")
 	})
 	if Engine.has_singleton("MCPRuntimeBridge"):
@@ -97,22 +97,23 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 	_force_reload_script_load = force_reload_scripts
 	_set_disabled_tools(disabled_tools)
 	_reset_state()
+	_metrics_service.reset()
 	_reset_gdscript_lsp_diagnostics_service()
 	_refresh_entries()
 
 	var definition_started = Time.get_ticks_usec()
 	for category in _ordered_categories:
 		_ensure_tool_definitions(category)
-	_performance["definition_scan_ms"] = _elapsed_ms(definition_started)
+	_metrics_service.set_definition_scan_ms(_elapsed_ms(definition_started))
 
 	var preload_started = Time.get_ticks_usec()
 	for category in _ordered_categories:
 		if _category_has_enabled_tools(category):
 			_ensure_runtime_loaded(category, "preload")
-	_performance["preload_ms"] = _elapsed_ms(preload_started)
-	_performance["startup_ms"] = _elapsed_ms(started_usec)
+	_metrics_service.set_preload_ms(_elapsed_ms(preload_started))
+	_metrics_service.set_startup_ms(_elapsed_ms(started_usec))
 	_reload_status = _make_reload_status("initialize")
-	_sync_load_error_incidents("initialize")
+	_diagnostic_service.sync_load_error_incidents("initialize")
 	_refresh_runtime_context()
 	_force_reload_script_load = false
 
@@ -120,7 +121,7 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 		"tool_count": get_tool_definitions().size(),
 		"exposed_tool_count": get_exposed_tool_definitions().size(),
 		"category_count": _ordered_categories.size(),
-		"tool_load_error_count": _load_errors.size()
+		"tool_load_error_count": _diagnostic_service.get_tool_load_error_count()
 	}
 
 
@@ -171,7 +172,7 @@ func is_tool_exposed(tool_name: String) -> bool:
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
-	return _load_errors.duplicate(true)
+	return _diagnostic_service.get_tool_load_errors()
 
 
 func get_domain_states() -> Array[Dictionary]:
@@ -191,39 +192,15 @@ func get_reload_status() -> Dictionary:
 
 
 func get_tool_loader_status() -> Dictionary:
-	return _exposure_service.build_tool_loader_status(_ordered_categories, _load_errors.size())
+	return _exposure_service.build_tool_loader_status(_ordered_categories, _diagnostic_service.get_tool_load_error_count())
 
 
 func get_performance_summary() -> Dictionary:
-	var per_tool: Array[Dictionary] = []
-	for tool_name in _performance.get("tool_calls", {}).keys():
-		per_tool.append(_performance["tool_calls"][tool_name].duplicate(true))
-	per_tool.sort_custom(Callable(self, "_sort_tool_metric"))
-	return {
-		"startup_ms": _performance.get("startup_ms", 0.0),
-		"definition_scan_ms": _performance.get("definition_scan_ms", 0.0),
-		"preload_ms": _performance.get("preload_ms", 0.0),
-		"reload_total_ms": _performance.get("reload_total_ms", 0.0),
-		"reload_count": _performance.get("reload_count", 0),
-		"tool_calls": per_tool
-	}
+	return _metrics_service.build_performance_summary()
 
 
 func get_tool_usage_stats() -> Array[Dictionary]:
-	var stats: Array[Dictionary] = []
-	for tool_name in _performance.get("tool_calls", {}).keys():
-		var metric: Dictionary = _performance["tool_calls"][tool_name]
-		stats.append({
-			"tool_name": str(metric.get("tool_name", tool_name)),
-			"category": str(metric.get("category", "")),
-			"call_count": int(metric.get("count", 0)),
-			"last_called_at_unix": int(metric.get("last_called_at_unix", 0)),
-			"total_ms": float(metric.get("total_ms", 0.0)),
-			"avg_ms": float(metric.get("avg_ms", 0.0)),
-			"last_ms": float(metric.get("last_ms", 0.0))
-		})
-	stats.sort_custom(Callable(self, "_sort_tool_usage_stats"))
-	return stats
+	return _metrics_service.build_tool_usage_stats()
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
@@ -249,7 +226,7 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 	var started_usec = Time.get_ticks_usec()
 	var result = executor.execute(tool_name, args)
 	var elapsed_ms = _elapsed_ms(started_usec)
-	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
+	_metrics_service.record_tool_call("%s_%s" % [category, tool_name], category, elapsed_ms)
 
 	if result is Dictionary and _as_bool(result.get("success", true)):
 		MCPDebugBuffer.record("info", "tool_loader",
@@ -362,7 +339,7 @@ func _refresh_runtime_context() -> void:
 func reload_domain(category: String) -> Dictionary:
 	MCPDebugBuffer.record("info", "tool_loader", "Reloading domain: %s" % category)
 	var status = _reload_service.reload_domain(category)
-	_apply_reload_metrics(status)
+	_metrics_service.apply_reload_metrics(status)
 	var failed_domains: Array = status.get("failed_domains", [])
 	var reloaded_domains: Array = status.get("reloaded_domains", [])
 	var skipped_domains: Array = status.get("skipped_domains", [])
@@ -392,7 +369,7 @@ func reload_domain(category: String) -> Dictionary:
 
 func reload_all_domains() -> Dictionary:
 	var status = _reload_service.reload_all_domains()
-	_apply_reload_metrics(status)
+	_metrics_service.apply_reload_metrics(status)
 	return _update_reload_status(_make_reload_status(
 		"reload_all_domains",
 		status.get("reloaded_domains", []),
@@ -448,27 +425,25 @@ func _reset_state() -> void:
 	_ordered_categories.clear()
 	_runtime_by_category.clear()
 	_tool_definitions_by_category.clear()
-	_load_errors.clear()
+	_diagnostic_service.clear_load_errors()
 
 
 func _refresh_entries() -> void:
-	_load_errors.clear()
-	var collected = _registry.collect_entries()
+	_diagnostic_service.clear_load_errors()
+	var collected = MCPToolManifest.collect_entries()
 	var new_entries: Dictionary = {}
 	var new_order: Array[String] = []
-	for error_info in collected.get("errors", []):
-		_load_errors.append(error_info.duplicate(true))
+	_diagnostic_service.append_load_errors(collected.get("errors", []))
 	for entry in collected.get("entries", []):
 		var category = str(entry.get("category", ""))
 		if category.is_empty():
 			continue
 		if new_entries.has(category):
-			_load_errors.append({
-				"category": category,
-				"path": str(entry.get("path", "")),
-				"message": "Duplicate tool category registered",
-				"source": str(entry.get("source", "builtin"))
-			})
+			_diagnostic_service.append_duplicate_category_error(
+				category,
+				str(entry.get("path", "")),
+				str(entry.get("source", "builtin"))
+			)
 			continue
 		new_entries[category] = entry.duplicate(true)
 		new_order.append(category)
@@ -480,7 +455,7 @@ func _refresh_entries() -> void:
 
 	_entries_by_category = new_entries
 	_ordered_categories = new_order
-	_sync_load_error_incidents("refresh_entries")
+	_diagnostic_service.sync_load_error_incidents("refresh_entries")
 
 
 func _set_disabled_tools(disabled_tools: Array) -> void:
@@ -546,16 +521,11 @@ func _extract_tool_definitions(category: String, executor) -> Array:
 
 
 func _record_load_error(category: String, path: String, message: String) -> void:
-	var error_info = {
-		"category": category,
-		"path": path,
-		"message": message
-	}
-	_load_errors.append(error_info)
+	var error_info = _diagnostic_service.record_load_error(category, path, message)
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
 	runtime["last_error"] = error_info
 	_runtime_by_category[category] = runtime
-	_sync_load_error_incidents("record_load_error")
+	_diagnostic_service.sync_load_error_incidents("record_load_error")
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
@@ -573,31 +543,6 @@ func _category_has_enabled_tools(category: String) -> bool:
 
 func _unload_runtime(category: String, reason: String) -> void:
 	_runtime_service.unload_runtime(category, reason)
-
-
-func _record_tool_call_metric(full_name: String, category: String, elapsed_ms: float) -> void:
-	var per_tool: Dictionary = _performance.get("tool_calls", {})
-	var metric: Dictionary = per_tool.get(full_name, {
-		"tool_name": full_name,
-		"category": category,
-		"count": 0,
-		"total_ms": 0.0,
-		"avg_ms": 0.0,
-		"last_ms": 0.0,
-		"last_called_at_unix": 0
-	})
-	metric["count"] = int(metric.get("count", 0)) + 1
-	metric["total_ms"] = float(metric.get("total_ms", 0.0)) + elapsed_ms
-	metric["last_ms"] = elapsed_ms
-	metric["last_called_at_unix"] = int(Time.get_unix_time_from_system())
-	metric["avg_ms"] = metric["total_ms"] / float(metric["count"])
-	per_tool[full_name] = metric
-	_performance["tool_calls"] = per_tool
-
-
-func _apply_reload_metrics(status: Dictionary) -> void:
-	_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + float(status.get("reload_total_ms_delta", 0.0))
-	_performance["reload_count"] = int(_performance.get("reload_count", 0)) + int(status.get("reload_count_delta", 0))
 
 
 func _failure(error_type: String, category: String, tool_name: String, message: String, data: Dictionary = {}) -> Dictionary:
@@ -635,24 +580,6 @@ func _update_reload_status(status: Dictionary) -> Dictionary:
 
 func _elapsed_ms(started_usec: int) -> float:
 	return float(Time.get_ticks_usec() - started_usec) / 1000.0
-
-
-func _sort_tool_metric(a: Dictionary, b: Dictionary) -> bool:
-	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
-
-
-func _sort_tool_usage_stats(a: Dictionary, b: Dictionary) -> bool:
-	var left_count = int(a.get("call_count", 0))
-	var right_count = int(b.get("call_count", 0))
-	if left_count != right_count:
-		return left_count > right_count
-
-	var left_time = int(a.get("last_called_at_unix", 0))
-	var right_time = int(b.get("last_called_at_unix", 0))
-	if left_time != right_time:
-		return left_time > right_time
-
-	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
 
 
 func _sync_user_tool_runtime_definitions(executor) -> void:
@@ -736,46 +663,3 @@ func _current_load_state(category: String) -> String:
 	if defs.is_empty():
 		return "uninitialized"
 	return "definitions_only"
-
-
-func _sync_load_error_incidents(phase: String) -> void:
-	for error_info in _load_errors:
-		if not (error_info is Dictionary):
-			continue
-		var info := error_info as Dictionary
-		PluginSelfDiagnosticStore.record_incident(
-			"error",
-			"tool_load_error",
-			"tool_domain_load_failed",
-			str(info.get("message", "Tool domain load failed")),
-			"tool_loader",
-			phase,
-			str(info.get("path", "")),
-			"",
-			"",
-			true,
-			"Inspect the tool domain script and the editor output for the failing category.",
-			{
-				"category": str(info.get("category", "")),
-				"source": str(info.get("source", "builtin"))
-			}
-		)
-
-
-func _record_reload_incident(category: String, message: String, phase: String) -> void:
-	PluginSelfDiagnosticStore.record_incident(
-		"error",
-		"reload_conflict",
-		"tool_reload_failed",
-		message,
-		"tool_loader",
-		phase,
-		str(_entries_by_category.get(category, {}).get("path", "")),
-		"",
-		"",
-		true,
-		"Inspect the last reload status and the failing tool domain script.",
-		{
-			"category": category
-		}
-	)

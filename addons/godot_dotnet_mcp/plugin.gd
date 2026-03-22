@@ -3,6 +3,8 @@ extends EditorPlugin
 
 const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const PluginRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state_service.gd")
+const PluginToolBridgeServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_tool_bridge_service.gd")
 const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
 const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
@@ -21,6 +23,7 @@ const ToolAccessFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/fe
 const SelfDiagnosticFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/self_diagnostic_feature.gd")
 const UIStateFeatureScript = preload("res://addons/godot_dotnet_mcp/plugin/features/ui_state_feature.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
+const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
@@ -35,6 +38,8 @@ const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
 
 var _state := PluginRuntimeState.new()
+var _runtime_state_service = PluginRuntimeStateServiceScript.new()
+var _tool_bridge_service = PluginToolBridgeServiceScript.new()
 var _settings_store := SettingsStore.new()
 var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
@@ -49,6 +54,7 @@ var _tool_access_feature = ToolAccessFeatureScript.new()
 var _self_diagnostic_feature = SelfDiagnosticFeatureScript.new()
 var _ui_state_feature = UIStateFeatureScript.new()
 var _dock_presenter = DockPresenterScript.new()
+var _dock_model_service = DockModelServiceScript.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
 var _central_server_attach_service: CentralServerAttachService
@@ -128,6 +134,7 @@ func _exit_tree() -> void:
 	_self_diagnostic_feature = null
 	_ui_state_feature = null
 	_dock_presenter = null
+	_dock_model_service = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
@@ -167,6 +174,10 @@ func _process(delta: float) -> void:
 
 func get_server() -> Node:
 	return _server_controller.get_server()
+
+
+func get_tool_access_provider():
+	return _tool_access_feature
 
 
 func start_server() -> void:
@@ -222,25 +233,19 @@ func _recreate_server_controller() -> void:
 
 
 func _load_state() -> void:
-	var load_result = _settings_store.load_plugin_settings(
-		PluginRuntimeState.DEFAULT_SETTINGS,
-		PluginRuntimeState.SETTINGS_PATH,
-		PluginRuntimeState.ALL_TOOL_CATEGORIES,
-		PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS
-	)
-	_state.settings = load_result["settings"]
-	_state.settings["auto_start"] = true
-	if not (_state.settings.get("client_manual_paths", {}) is Dictionary):
-		_state.settings["client_manual_paths"] = {}
-	_state.current_cli_scope = str(_state.settings.get("current_cli_scope", _state.current_cli_scope))
-	_state.current_config_platform = str(_state.settings.get("current_config_platform", _state.current_config_platform))
-	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
-	_configure_client_install_detection_service()
+	if _runtime_state_service == null:
+		_runtime_state_service = PluginRuntimeStateServiceScript.new()
+	_runtime_state_service.configure(_settings_store)
+	_runtime_state_service.load_into(_state)
+	if _client_install_detection_service != null:
+		_client_install_detection_service.configure(_state.settings)
 
 
 func _save_settings() -> void:
-	_settings_store.save_plugin_settings(PluginRuntimeState.SETTINGS_PATH, _state.settings)
+	if _runtime_state_service == null:
+		_runtime_state_service = PluginRuntimeStateServiceScript.new()
+	_runtime_state_service.configure(_settings_store)
+	_runtime_state_service.save_settings(_state)
 
 
 func _ensure_runtime_bridge_autoload() -> void:
@@ -532,57 +537,11 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 
 
 func _build_dock_model() -> Dictionary:
-	if _tool_catalog == null:
-		_tool_catalog = ToolCatalogService.new()
-	if _localization == null:
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-	if _dock_presenter == null:
-		_dock_presenter = DockPresenterScript.new()
-	if _user_tool_service == null:
-		_user_tool_service = UserToolService.new()
-
-	var all_tools_by_category = _server_controller.get_all_tools_by_category().duplicate(true)
-	var tools_by_category = all_tools_by_category.duplicate(true)
-	for category in tools_by_category.keys():
-		if not is_tool_category_visible_for_permission(str(category)):
-			tools_by_category.erase(category)
-	var current_tab = int(_state.current_tab)
-
-	var self_diagnostics = _build_self_diagnostic_health_snapshot()
-	var central_server_attach = _get_central_server_attach_status()
-	var central_server_process = _get_central_server_process_status()
-	var user_tool_watch = _get_user_tool_watch_status()
-	var client_install_statuses := {}
-
-	if current_tab == 2:
-		client_install_statuses = _get_client_install_statuses()
-	return _dock_presenter.build_model({
-		"state": _state,
-		"settings": _state.settings,
-		"localization": _localization,
-		"server_controller": _server_controller,
-		"tool_catalog": _tool_catalog,
-		"user_tool_service": _user_tool_service,
-		"config_service": _config_service,
-		"all_tools_by_category": all_tools_by_category,
-		"tools_by_category": tools_by_category,
-		"self_diagnostics": self_diagnostics,
-		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
-		"central_server_attach": central_server_attach,
-		"central_server_process": central_server_process,
-		"user_tool_watch": user_tool_watch,
-		"editor_scale": _get_editor_scale(),
-		"permission_levels": ToolPermissionPolicy.PERMISSION_LEVELS,
-		"current_permission_level": _get_permission_level(),
-		"log_levels": MCPDebugBuffer.get_available_levels(),
-		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
-		"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
-		"client_install_statuses": client_install_statuses
-	})
+	if _dock_model_service == null:
+		_configure_dock_model_service()
+	if _dock_model_service == null:
+		return {}
+	return _dock_model_service.build_model()
 
 
 func _refresh_dock() -> void:
@@ -596,25 +555,6 @@ func _refresh_dock() -> void:
 func _apply_initial_tool_profile_if_needed() -> void:
 	if _tool_profile_feature != null:
 		_tool_profile_feature.apply_initial_tool_profile_if_needed()
-
-
-func _get_client_install_statuses() -> Dictionary:
-	if _client_install_detection_service == null:
-		_client_install_detection_service = ClientInstallDetectionService.new()
-	_configure_client_install_detection_service()
-	return _client_install_detection_service.detect_all()
-
-
-func _invalidate_client_install_status_cache() -> void:
-	if _client_install_detection_service == null:
-		return
-	_client_install_detection_service.invalidate_cache()
-
-
-func _configure_client_install_detection_service() -> void:
-	if _client_install_detection_service == null or _state == null:
-		return
-	_client_install_detection_service.configure(_state.settings)
 
 
 func _on_start_requested() -> void:
@@ -744,42 +684,6 @@ func _on_client_executable_file_selected(path: String) -> void:
 		_config_feature.handle_client_executable_file_selected(path)
 
 
-func set_log_level_for_tools(level: String) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_log_level_for_tools(level)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func get_log_level_for_tools() -> String:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_log_level_for_tools()
-	return str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level()))
-
-
-func get_user_tool_summaries() -> Array[Dictionary]:
-	if _user_tool_feature != null:
-		return _user_tool_feature.get_user_tool_summaries()
-	return []
-
-
-func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
-	if _user_tool_feature != null:
-		return _user_tool_feature.create_user_tool_from_tools(args)
-	return {"success": false, "error": "User tool feature is unavailable"}
-
-
-func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
-	if _user_tool_feature != null:
-		return _user_tool_feature.delete_user_tool_from_tools(script_path, authorized, agent_hint)
-	return {"success": false, "error": "User tool feature is unavailable"}
-
-
-func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
-	if _user_tool_feature != null:
-		return _user_tool_feature.restore_user_tool_from_tools(authorized, agent_hint)
-	return {"success": false, "error": "User tool feature is unavailable"}
-
-
 func _schedule_user_tool_catalog_refresh() -> void:
 	call_deferred("_apply_user_tool_catalog_refresh")
 
@@ -811,34 +715,22 @@ func _rebuild_user_tool_ui_model() -> void:
 		_user_tool_feature.rebuild_user_tool_ui_model()
 
 
-func get_user_tool_audit(limit: int = 20, filter_action: String = "", filter_session: String = "") -> Array[Dictionary]:
-	if _user_tool_feature != null:
-		return _user_tool_feature.get_user_tool_audit(limit, filter_action, filter_session)
-	return []
+func execute_plugin_evolution_tool(tool_name: String, args: Dictionary = {}) -> Dictionary:
+	if _tool_bridge_service != null:
+		return _tool_bridge_service.execute_evolution_tool(tool_name, args)
+	return {"success": false, "error": "Plugin evolution bridge is unavailable"}
 
 
-func get_user_tool_compatibility_from_tools() -> Dictionary:
-	if _user_tool_feature != null:
-		return _user_tool_feature.get_user_tool_compatibility_from_tools()
-	return {"success": false, "error": "User tool feature is unavailable"}
+func execute_plugin_runtime_tool(tool_name: String, args: Dictionary = {}) -> Dictionary:
+	if _tool_bridge_service != null:
+		return _tool_bridge_service.execute_runtime_tool(tool_name, args)
+	return {"success": false, "error": "Plugin runtime bridge is unavailable"}
 
 
-func runtime_restart_server() -> Dictionary:
-	if _reload_feature != null:
-		return _reload_feature.runtime_restart_server()
-	return {"success": false, "error": "Reload feature is unavailable"}
-
-
-func runtime_soft_reload() -> Dictionary:
-	if _reload_feature != null:
-		return _reload_feature.runtime_soft_reload()
-	return {"success": false, "error": "Reload feature is unavailable"}
-
-
-func runtime_full_reload() -> Dictionary:
-	if _reload_feature != null:
-		return _reload_feature.runtime_full_reload()
-	return {"success": false, "error": "Reload feature is unavailable"}
+func execute_plugin_developer_tool(tool_name: String, args: Dictionary = {}) -> Dictionary:
+	if _tool_bridge_service != null:
+		return _tool_bridge_service.execute_developer_tool(tool_name, args)
+	return {"success": false, "error": "Plugin developer bridge is unavailable"}
 
 
 func _runtime_reload_is_server_running() -> bool:
@@ -884,281 +776,11 @@ func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 		_dock.restore_focus_snapshot(snapshot)
 
 
-func get_self_diagnostic_health_from_tools() -> Dictionary:
-	if _self_diagnostic_feature != null:
-		return _self_diagnostic_feature.get_self_diagnostic_health_from_tools()
-	return {"success": false, "error": "Self diagnostic feature is unavailable"}
-
-
-func get_self_diagnostic_errors_from_tools(severity: String = "", category: String = "", limit: int = 20) -> Dictionary:
-	if _self_diagnostic_feature != null:
-		return _self_diagnostic_feature.get_self_diagnostic_errors_from_tools(severity, category, limit)
-	return {"success": false, "error": "Self diagnostic feature is unavailable"}
-
-
-func get_self_diagnostic_timeline_from_tools(limit: int = 20) -> Dictionary:
-	if _self_diagnostic_feature != null:
-		return _self_diagnostic_feature.get_self_diagnostic_timeline_from_tools(limit)
-	return {"success": false, "error": "Self diagnostic feature is unavailable"}
-
-
-func clear_self_diagnostics_from_tools() -> Dictionary:
-	if _self_diagnostic_feature != null:
-		return _self_diagnostic_feature.clear_self_diagnostics_from_tools()
-	return {"success": false, "error": "Self diagnostic feature is unavailable"}
-
-
-func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_tool_enabled_from_tools(tool_name, enabled)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func set_category_enabled_from_tools(category: String, enabled: bool) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_category_enabled_from_tools(category, enabled)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_domain_enabled_from_tools(domain_key, enabled)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_show_user_tools_from_tools(enabled)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func get_developer_settings_for_tools() -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_developer_settings_for_tools()
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func set_language_from_tools(language_code: String) -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.set_language_from_tools(language_code)
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func get_languages_for_tools() -> Dictionary:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_languages_for_tools()
-	return {"success": false, "error": "Tool access feature is unavailable"}
-
-
-func list_profiles_from_tools() -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.list_profiles_from_tools()
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func apply_profile_from_tools(profile_id: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.apply_profile_from_tools(profile_id)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func save_profile_from_tools(profile_name: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.save_profile_from_tools(profile_name)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func rename_profile_from_tools(profile_id: String, profile_name: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.rename_profile_from_tools(profile_id, profile_name)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func delete_profile_from_tools(profile_id: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.delete_profile_from_tools(profile_id)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func export_config_from_tools(file_path: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.export_config_from_tools(file_path)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func import_config_from_tools(file_path: String) -> Dictionary:
-	if _tool_profile_feature != null:
-		return _tool_profile_feature.import_config_from_tools(file_path)
-	return {"success": false, "error": "Tool profile feature is unavailable"}
-
-
-func get_runtime_usage_guide_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"summary": [
-				"Start with plugin_runtime_state before changing toggles or reload state.",
-				"Prefer reload_domain or reload_all_domains first, then soft_reload_plugin, and keep full_reload_plugin for editor-side lifecycle resets only.",
-				"Use debug_runtime_bridge to read the latest project session state and captured lifecycle events, even after the project has stopped.",
-				"Use runtime toggles to disable tools freely, but enabling plugin_evolution or plugin_developer targets requires the matching permission level."
-			],
-			"recommended_flow": [
-				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and the active permission mode."},
-				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable anything when isolating faults; only enable targets allowed by the current permission level."},
-				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
-				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
-				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
-				{"step": 6, "name": "Verify", "tools": ["debug_log", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
-			],
-			"warnings": [
-				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
-				"Enabling plugin_evolution or plugin_developer targets from runtime toggles is permission-gated and cannot bypass the user-selected mode.",
-				"debug_runtime_bridge is the MCP tool name; runtime state remains readable after stop, but real-time observation still requires the project to be running.",
-				"Full plugin reload should be reserved for Dock wiring or plugin lifecycle recreation, not routine executor edits."
-			]
-		},
-		"message": "Plugin runtime usage guide fetched"
-	}
-
-
-func get_evolution_usage_guide_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"summary": [
-				"Self-evolution only manages User-category tools and never writes into builtin categories.",
-				"Create, delete and restore actions must pass explicit authorization; otherwise they return preview-only results.",
-				"Audit entries should be checked after every authorized change.",
-				"Use debug_runtime_bridge if a new User tool is expected to affect the running project and you need to inspect the latest session or lifecycle result."
-			],
-			"recommended_flow": [
-				{"step": 1, "name": "Inspect current User tools", "tools": ["plugin_evolution_list_user_tools"], "purpose": "Read existing User tools before adding or removing scripts."},
-				{"step": 2, "name": "Preview scaffold or deletion", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool", "plugin_evolution_restore_user_tool"], "purpose": "Run without authorization first to inspect the pending change or the latest restorable backup."},
-				{"step": 3, "name": "Authorize and apply", "tools": ["plugin_evolution_scaffold_user_tool", "plugin_evolution_delete_user_tool", "plugin_evolution_restore_user_tool"], "purpose": "Repeat the action with explicit authorization only after user approval."},
-				{"step": 4, "name": "Reload and verify", "tools": ["plugin_runtime_reload", "plugin_runtime_state"], "purpose": "Refresh tool domains and verify the updated User tool inventory."},
-				{"step": 5, "name": "Audit", "tools": ["plugin_evolution_user_tool_audit"], "purpose": "Confirm that the authorized change has been recorded."}
-			],
-			"warnings": [
-				"Stable mode hides and denies the entire plugin_evolution category.",
-				"User tools must stay inside the User category even when generated through MCP.",
-				"Deletion and restore requests should be previewed before authorization to avoid mutating the wrong script."
-			]
-		},
-		"message": "Plugin evolution usage guide fetched"
-	}
-
-
-func get_usage_guide_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"summary": [
-				"Developer mode is the only permission level that exposes plugin_developer tools and the legacy plugin compatibility category.",
-				"Use this category for Dock-facing settings such as language, preset selection, log level and permission-mode inspection.",
-				"Permission level itself is user-controlled from the Dock and is intentionally not mutable through MCP.",
-				"Use debug_runtime_bridge for the latest project session and lifecycle readback; it remains readable after the project stops."
-			],
-			"recommended_flow": [
-				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read permission level, log level, language, active preset and reload status before making changes."},
-				{"step": 2, "name": "Tune the session", "tools": ["plugin_developer_log_level", "plugin_developer_set_language", "plugin_developer_apply_profile"], "purpose": "Adjust Dock-facing developer settings for the current debugging session."},
-				{"step": 3, "name": "Inspect project runtime result", "tools": ["debug_runtime_bridge"], "purpose": "Read the latest captured project session state and lifecycle events after each run."},
-				{"step": 4, "name": "Coordinate with runtime and evolution", "tools": ["plugin_runtime_usage_guide", "plugin_evolution_usage_guide"], "purpose": "Use the sibling guide tools to choose the correct reload or self-evolution flow."},
-				{"step": 5, "name": "Save reusable presets", "tools": ["plugin_developer_save_profile"], "purpose": "Persist a known-good tool selection after manual tuning."}
-			],
-			"permission_levels": {
-				"developer": "Shows and allows plugin_runtime, plugin_evolution and plugin_developer.",
-				"evolution": "Shows and allows plugin_runtime and plugin_evolution, but hides and denies plugin_developer.",
-				"stable": "Shows and allows only plugin_runtime, and hides and denies plugin_evolution and plugin_developer."
-			},
-			"warnings": [
-				"Changing permission level is intentionally restricted to the Dock so external agents cannot raise their own privileges.",
-				"Evolution mode hides the developer category at both UI and execution levels.",
-				"Use the exact MCP tool name debug_runtime_bridge when reading recent project runtime state.",
-				"Stable mode denies both plugin_evolution and plugin_developer, including direct calls from cached wrappers."
-			]
-		},
-		"message": "Plugin usage guide fetched"
-	}
-
-
-func _get_permission_level() -> String:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_permission_level()
-	return ToolPermissionPolicy.normalize_permission_level(str(_state.settings.get("permission_level", ToolPermissionPolicy.PERMISSION_EVOLUTION)))
-
-
-func is_tool_category_visible_for_permission(category: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.is_tool_category_visible_for_permission(category)
-	if category == "user":
-		return bool(_state.settings.get("show_user_tools", true))
-	if category == "plugin":
-		return _get_permission_level() == ToolPermissionPolicy.PERMISSION_DEVELOPER
-	return is_tool_category_executable_for_permission(category)
-
-
-func is_tool_category_executable_for_permission(category: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.is_tool_category_executable_for_permission(category)
-	return ToolPermissionPolicy.permission_allows_category(_get_permission_level(), category)
-
-
-func get_permission_denied_message_for_category(category: String) -> String:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_permission_denied_message_for_category(category)
-	return _localization.get_text("permission_denied_category") % [_get_permission_level(), category]
-
-
-func get_permission_denied_message_for_tool(tool_name: String) -> String:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_permission_denied_message_for_tool(tool_name)
-	var category = ToolPermissionPolicy.extract_category_from_tool_name(tool_name)
-	if category.is_empty():
-		return _localization.get_text("permission_denied_tool") % [_get_permission_level(), tool_name]
-	return get_permission_denied_message_for_category(category)
-
-
-func get_permission_denied_message_for_domain(domain_key: String) -> String:
-	if _tool_access_feature != null:
-		return _tool_access_feature.get_permission_denied_message_for_domain(domain_key)
-	return _localization.get_text("permission_denied_domain") % [_get_permission_level(), domain_key]
-
-
-func _can_enable_tool(tool_name: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.can_enable_tool(tool_name)
-	return ToolPermissionPolicy.permission_allows_tool(_get_permission_level(), tool_name)
-
-
-func _can_enable_category(category: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.can_enable_category(category)
-	return ToolPermissionPolicy.permission_allows_category(_get_permission_level(), category)
-
-
-func _can_enable_domain(domain_key: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.can_enable_domain(domain_key)
-	return ToolPermissionPolicy.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
-
-
-func _is_plugin_category_restricted(category: String) -> bool:
-	if _tool_access_feature != null:
-		return _tool_access_feature.is_plugin_category_restricted(category)
-	return ToolPermissionPolicy.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
-
-
 func _get_editor_scale() -> float:
 	var editor_interface = get_editor_interface()
 	if editor_interface:
 		return float(editor_interface.get_editor_scale())
 	return 1.0
-
-
-func _build_self_diagnostic_health_snapshot() -> Dictionary:
-	if _self_diagnostic_feature != null:
-		return _self_diagnostic_feature.build_self_diagnostic_health_snapshot()
-	return PluginSelfDiagnosticStore.get_health_snapshot({})
 
 
 func _record_self_incident(
@@ -1378,14 +1000,12 @@ func _configure_feature_workflows() -> void:
 		_config_service,
 		_dock_presenter,
 		_central_server_process_service,
+		_client_install_detection_service,
 		{
 			"show_message": Callable(self, "_show_message"),
 			"show_confirmation": Callable(self, "_show_confirmation"),
 			"refresh_dock": Callable(self, "_refresh_dock"),
 			"save_settings": Callable(self, "_save_settings"),
-			"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
-			"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
-			"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
 			"ensure_client_executable_dialog": Callable(self, "_ensure_client_executable_dialog"),
 			"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
 		}
@@ -1396,11 +1016,11 @@ func _configure_feature_workflows() -> void:
 	_ui_state_feature.configure(
 		_state,
 		_localization,
+		_client_install_detection_service,
 		{
 			"save_settings": Callable(self, "_save_settings"),
 			"refresh_dock": Callable(self, "_refresh_dock"),
 			"show_message": Callable(self, "_show_message"),
-			"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
 			"capture_dock_focus_snapshot": Callable(self, "_capture_dock_focus_snapshot"),
 			"restore_dock_focus_snapshot": Callable(self, "_restore_runtime_dock_focus_snapshot")
 		}
@@ -1488,46 +1108,55 @@ func _configure_feature_workflows() -> void:
 			"get_tool_load_errors": Callable(_server_controller, "get_tool_load_errors"),
 			"get_reload_status": Callable(_server_controller, "get_reload_status"),
 			"get_performance_summary": Callable(_server_controller, "get_performance_summary"),
-			"get_permission_level": Callable(self, "_get_permission_level"),
+			"get_permission_level": Callable(_tool_access_feature, "get_permission_level"),
 			"refresh_dock": Callable(self, "_refresh_dock"),
 			"show_message": Callable(self, "_show_message"),
 			"is_dock_present": Callable(self, "_is_live_dock_present")
 		}
 	)
 
+	if _tool_bridge_service == null:
+		_tool_bridge_service = PluginToolBridgeServiceScript.new()
+	_tool_bridge_service.configure(
+		_server_controller,
+		_reload_feature,
+		_self_diagnostic_feature,
+		_tool_access_feature,
+		_tool_profile_feature,
+		_user_tool_feature
+	)
 
-func _get_central_server_attach_status() -> Dictionary:
-	if _central_server_attach_service == null:
-		return {}
-	return _dock_presenter.localize_central_server_attach_status(_central_server_attach_service.get_status(), _localization)
-
-
-func _get_central_server_process_status() -> Dictionary:
-	if _central_server_process_service == null:
-		return {}
-	return _central_server_process_service.get_status()
-
-
-func _resolve_central_server_process_feedback(status: Dictionary, action: String) -> String:
-	return _dock_presenter.resolve_central_server_process_feedback(status, action, _localization)
+	_configure_dock_model_service()
 
 
-func _build_central_server_install_confirmation(status: Dictionary) -> String:
-	return _dock_presenter.build_central_server_install_confirmation(status, _localization)
-
-
-func _build_central_server_install_details(status: Dictionary, include_source_fallback: bool = false) -> String:
-	return _dock_presenter.build_central_server_install_details(status, _localization, include_source_fallback)
-
-
-func _get_user_tool_watch_status() -> Dictionary:
-	if _user_tool_watch_service == null:
-		return {}
-	return _user_tool_watch_service.get_status()
+func _configure_dock_model_service() -> void:
+	if _dock_model_service == null:
+		_dock_model_service = DockModelServiceScript.new()
+	_dock_model_service.configure(
+		_state,
+		_localization,
+		_server_controller,
+		_tool_catalog,
+		_config_service,
+		_dock_presenter,
+		_user_tool_service,
+		_client_install_detection_service,
+		_central_server_attach_service,
+		_central_server_process_service,
+		_user_tool_watch_service,
+		_tool_access_feature,
+		_self_diagnostic_feature,
+		{
+			"get_editor_scale": Callable(self, "_get_editor_scale")
+		}
+	)
 
 
 func _refresh_service_instances() -> void:
 	_settings_store = SettingsStore.new()
+	_runtime_state_service = PluginRuntimeStateServiceScript.new()
+	_runtime_state_service.configure(_settings_store)
+	_tool_bridge_service = PluginToolBridgeServiceScript.new()
 	_tool_catalog = ToolCatalogService.new()
 	_config_service = ClientConfigService.new()
 	_client_install_detection_service = ClientInstallDetectionService.new()
@@ -1540,6 +1169,7 @@ func _refresh_service_instances() -> void:
 	_self_diagnostic_feature = SelfDiagnosticFeatureScript.new()
 	_ui_state_feature = UIStateFeatureScript.new()
 	_dock_presenter = DockPresenterScript.new()
+	_dock_model_service = DockModelServiceScript.new()
 	_user_tool_service = UserToolService.new()
 	_user_tool_watch_service = UserToolWatchService.new()
 	_central_server_attach_service = CentralServerAttachServiceScript.new()

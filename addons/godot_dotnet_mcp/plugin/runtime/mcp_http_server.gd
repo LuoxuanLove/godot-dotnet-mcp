@@ -720,7 +720,12 @@ func _handle_initialize(params: Dictionary, id) -> Dictionary:
 
 
 func get_plugin_permission_provider():
-	return get_parent()
+	var plugin = get_parent()
+	if plugin != null and plugin.has_method("get_tool_access_provider"):
+		var provider = plugin.get_tool_access_provider()
+		if provider != null:
+			return provider
+	return plugin
 
 
 func _handle_tools_list(_params: Dictionary, id) -> Dictionary:

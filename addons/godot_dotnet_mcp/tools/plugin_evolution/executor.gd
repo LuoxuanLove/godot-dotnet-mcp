@@ -91,44 +91,8 @@ func get_tools() -> Array[Dictionary]:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
-	match tool_name:
-		"list_user_tools":
-			var plugin = _get_plugin()
-			if plugin == null or not plugin.has_method("get_user_tool_summaries"):
-				return _error("Plugin evolution bridge is unavailable")
-			return _success({"user_tools": plugin.get_user_tool_summaries()}, "User tools listed")
-		"scaffold_user_tool":
-			return _call_plugin_method("create_user_tool_from_tools", [args], "Plugin evolution bridge is unavailable")
-		"delete_user_tool":
-			return _call_plugin_method(
-				"delete_user_tool_from_tools",
-				[str(args.get("script_path", "")), bool(args.get("authorized", false)), str(args.get("agent_hint", ""))],
-				"Plugin evolution bridge is unavailable"
-			)
-		"restore_user_tool":
-			return _call_plugin_method(
-				"restore_user_tool_from_tools",
-				[bool(args.get("authorized", false)), str(args.get("agent_hint", ""))],
-				"Plugin evolution restore bridge is unavailable"
-			)
-		"user_tool_audit":
-			var plugin = _get_plugin()
-			if plugin == null or not plugin.has_method("get_user_tool_audit"):
-				return _error("Plugin evolution bridge is unavailable")
-			return _success({
-				"entries": plugin.get_user_tool_audit(
-					int(args.get("limit", 20)),
-					str(args.get("filter_action", "")),
-					str(args.get("filter_session", ""))
-				)
-			}, "User tool audit fetched")
-		"check_compatibility":
-			return _call_plugin_method(
-				"get_user_tool_compatibility_from_tools",
-				[],
-				"Plugin evolution compatibility bridge is unavailable"
-			)
-		"usage_guide":
-			return _call_plugin_method("get_evolution_usage_guide_from_tools", [], "Plugin evolution guide bridge is unavailable")
-		_:
-			return _error("Unknown plugin evolution tool: %s" % tool_name)
+	return _call_plugin_method(
+		"execute_plugin_evolution_tool",
+		[tool_name, args],
+		"Plugin evolution bridge is unavailable"
+	)
