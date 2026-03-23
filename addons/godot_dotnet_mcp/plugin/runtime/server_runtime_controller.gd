@@ -9,6 +9,8 @@ signal request_received(method: String, params: Dictionary)
 const SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd"
 const STDIO_SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd"
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const ENV_RUNTIME_SERVER_HOST := "GODOT_DOTNET_MCP_SERVER_HOST"
+const ENV_RUNTIME_SERVER_PORT := "GODOT_DOTNET_MCP_SERVER_PORT"
 
 var _plugin: EditorPlugin
 var _server: Node
@@ -18,7 +20,7 @@ var _stdio_server: Node
 func attach(plugin: EditorPlugin, settings: Dictionary) -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_attach", "attach")
 	_plugin = plugin
-	_ensure_server_node(settings)
+	_ensure_server_node(_build_runtime_settings(settings))
 	_finish_operation(operation, _server != null, "server_runtime_controller", "attach")
 
 
@@ -33,12 +35,13 @@ func detach() -> void:
 
 func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
+	var runtime_settings := _build_runtime_settings(settings)
 	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload"
 	if force_reload_server:
 		stop()
 		_dispose_server_node()
 
-	_ensure_server_node(settings, force_reload_server)
+	_ensure_server_node(runtime_settings, force_reload_server)
 	if _server == null:
 		PluginSelfDiagnosticStore.record_incident(
 			"error",
@@ -58,10 +61,10 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 
 	if _has_server_method("reinitialize"):
 		_server.reinitialize(
-			int(settings.get("port", 3000)),
-			str(settings.get("host", "127.0.0.1")),
-			_as_bool(settings.get("debug_mode", true)),
-			settings.get("disabled_tools", []),
+			int(runtime_settings.get("port", 3000)),
+			str(runtime_settings.get("host", "127.0.0.1")),
+			_as_bool(runtime_settings.get("debug_mode", true)),
+			runtime_settings.get("disabled_tools", []),
 			reason
 		)
 	else:
@@ -69,12 +72,12 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 			_server.stop()
 		if _has_server_method("initialize"):
 			_server.initialize(
-				int(settings.get("port", 3000)),
-				str(settings.get("host", "127.0.0.1")),
-				_as_bool(settings.get("debug_mode", true))
+				int(runtime_settings.get("port", 3000)),
+				str(runtime_settings.get("host", "127.0.0.1")),
+				_as_bool(runtime_settings.get("debug_mode", true))
 			)
 		if _has_server_method("set_disabled_tools"):
-			_server.set_disabled_tools(settings.get("disabled_tools", []))
+			_server.set_disabled_tools(runtime_settings.get("disabled_tools", []))
 
 	_finish_operation(operation, true, "server_runtime_controller", reason)
 	return true
@@ -82,7 +85,8 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 
 func start(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_start", reason, {"reason": reason})
-	if not reinitialize(settings, reason):
+	var runtime_settings := _build_runtime_settings(settings)
+	if not reinitialize(runtime_settings, reason):
 		_finish_operation(operation, false, "server_runtime_controller", reason)
 		return false
 	if _has_server_method("start"):
@@ -100,12 +104,12 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 				str(operation.get("operation_id", "")),
 				true,
 				"Inspect the server listen error and port configuration.",
-				{"port": int(settings.get("port", 3000))}
+				{"port": int(runtime_settings.get("port", 3000))}
 			)
 		# Start stdio server if transport_mode includes stdio
-		var transport_mode := str(settings.get("transport_mode", "http"))
+		var transport_mode := str(runtime_settings.get("transport_mode", "http"))
 		if transport_mode in ["stdio", "both"]:
-			_ensure_stdio_server_node(settings)
+			_ensure_stdio_server_node(runtime_settings)
 		_finish_operation(operation, started, "server_runtime_controller", reason)
 		return started
 	_finish_operation(operation, false, "server_runtime_controller", reason)
@@ -284,6 +288,21 @@ func set_debug_mode(enabled: bool) -> void:
 func set_disabled_tools(disabled_tools: Array) -> void:
 	if _has_server_method("set_disabled_tools"):
 		_server.set_disabled_tools(disabled_tools)
+
+
+func _build_runtime_settings(settings: Dictionary) -> Dictionary:
+	var runtime_settings := settings.duplicate(true)
+	if OS.has_environment(ENV_RUNTIME_SERVER_HOST):
+		var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
+		if not env_host.is_empty():
+			runtime_settings["host"] = env_host
+	if OS.has_environment(ENV_RUNTIME_SERVER_PORT):
+		var env_port := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
+		if env_port.is_valid_int():
+			var parsed_port := int(env_port)
+			if parsed_port > 0:
+				runtime_settings["port"] = parsed_port
+	return runtime_settings
 
 
 func _ensure_server_node(settings: Dictionary, force_reload: bool = false) -> void:

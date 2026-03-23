@@ -3,7 +3,8 @@ namespace GodotDotnetMcp.CentralServer;
 internal sealed class EditorSessionService
 {
     private readonly ProjectRegistryService _registry;
-    private readonly Dictionary<string, EditorSessionEntry> _sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, EditorSessionEntry> _sessionsById = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _activeSessionIdsByProject = new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeSpan _staleTimeout = TimeSpan.FromSeconds(30);
 
     public EditorSessionService(ProjectRegistryService registry)
@@ -18,6 +19,12 @@ internal sealed class EditorSessionService
         var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
             ? Guid.NewGuid().ToString("N")
             : request.SessionId.Trim();
+
+        if (_activeSessionIdsByProject.TryGetValue(project.ProjectId, out var existingSessionId)
+            && !string.Equals(existingSessionId, sessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            _sessionsById.Remove(existingSessionId);
+        }
 
         var entry = new EditorSessionEntry
         {
@@ -38,7 +45,8 @@ internal sealed class EditorSessionService
             ServerRunning = request.ServerRunning ?? false,
         };
 
-        _sessions[project.ProjectId] = entry;
+        _sessionsById[sessionId] = entry;
+        _activeSessionIdsByProject[project.ProjectId] = sessionId;
 
         return new EditorSessionAttachResult
         {
@@ -76,7 +84,12 @@ internal sealed class EditorSessionService
     public EditorSessionDetachResult Detach(EditorSessionDetachRequest request)
     {
         var entry = ResolveSession(request.ProjectId, request.ProjectRoot, request.SessionId);
-        _sessions.Remove(entry.ProjectId);
+        _sessionsById.Remove(entry.SessionId);
+        if (_activeSessionIdsByProject.TryGetValue(entry.ProjectId, out var activeSessionId)
+            && string.Equals(activeSessionId, entry.SessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            _activeSessionIdsByProject.Remove(entry.ProjectId);
+        }
 
         return new EditorSessionDetachResult
         {
@@ -91,7 +104,8 @@ internal sealed class EditorSessionService
     public EditorSessionStatus GetStatus(string projectId)
     {
         PruneStaleSessions();
-        if (!_sessions.TryGetValue(projectId, out var entry))
+        if (!_activeSessionIdsByProject.TryGetValue(projectId, out var sessionId)
+            || !_sessionsById.TryGetValue(sessionId, out var entry))
         {
             return new EditorSessionStatus
             {
@@ -104,27 +118,83 @@ internal sealed class EditorSessionService
         return BuildStatus(entry, attached: true);
     }
 
+    public EditorSessionStatus? GetStatusBySessionId(string? sessionId)
+    {
+        PruneStaleSessions();
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return null;
+        }
+
+        return _sessionsById.TryGetValue(sessionId.Trim(), out var entry)
+            ? BuildStatus(entry, attached: true)
+            : null;
+    }
+
     public IReadOnlyList<EditorSessionStatus> ListSessions()
     {
         PruneStaleSessions();
-        return _sessions.Values
+        return _sessionsById.Values
             .OrderBy(entry => entry.ProjectName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(entry => entry.ProjectRoot, StringComparer.OrdinalIgnoreCase)
             .Select(entry => BuildStatus(entry, attached: true))
             .ToArray();
     }
 
+    public async Task<EditorSessionStatus> WaitForReadyHttpSessionAsync(string projectId, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        while (DateTimeOffset.UtcNow - startedAt < timeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = GetStatus(projectId);
+            if (IsHttpReady(status))
+            {
+                return status;
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+
+        return GetStatus(projectId);
+    }
+
+    public static bool IsHttpTransportSupported(EditorSessionStatus status)
+    {
+        var transportMode = status.TransportMode.Trim();
+        return string.Equals(transportMode, "http", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(transportMode, "both", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsHttpReady(EditorSessionStatus status)
+    {
+        return status.Attached
+               && IsHttpTransportSupported(status)
+               && status.ServerRunning
+               && !string.IsNullOrWhiteSpace(status.ServerHost)
+               && status.ServerPort is > 0;
+    }
+
     private void PruneStaleSessions()
     {
         var cutoff = DateTimeOffset.UtcNow - _staleTimeout;
-        var staleProjectIds = _sessions.Values
+        var staleSessionIds = _sessionsById.Values
             .Where(entry => entry.LastHeartbeatAtUtc < cutoff)
-            .Select(entry => entry.ProjectId)
+            .Select(entry => entry.SessionId)
             .ToArray();
 
-        foreach (var projectId in staleProjectIds)
+        foreach (var sessionId in staleSessionIds)
         {
-            _sessions.Remove(projectId);
+            if (!_sessionsById.Remove(sessionId, out var removedEntry))
+            {
+                continue;
+            }
+
+            if (_activeSessionIdsByProject.TryGetValue(removedEntry.ProjectId, out var activeSessionId)
+                && string.Equals(activeSessionId, sessionId, StringComparison.OrdinalIgnoreCase))
+            {
+                _activeSessionIdsByProject.Remove(removedEntry.ProjectId);
+            }
         }
     }
 
@@ -148,13 +218,33 @@ internal sealed class EditorSessionService
     {
         PruneStaleSessions();
 
+        if (!string.IsNullOrWhiteSpace(sessionId) && _sessionsById.TryGetValue(sessionId.Trim(), out var sessionEntry))
+        {
+            if (string.IsNullOrWhiteSpace(projectId) && string.IsNullOrWhiteSpace(projectRoot))
+            {
+                return sessionEntry;
+            }
+
+            var sessionProject = _registry.ResolveProject(sessionEntry.ProjectId, null);
+            var requestedProject = _registry.ResolveProject(projectId, projectRoot);
+            if (requestedProject is null
+                || sessionProject is null
+                || !string.Equals(requestedProject.ProjectId, sessionProject.ProjectId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new CentralToolException("Editor session id does not match the active session.");
+            }
+
+            return sessionEntry;
+        }
+
         var project = _registry.ResolveProject(projectId, projectRoot);
         if (project is null)
         {
             throw new CentralToolException("Registered project not found for editor session.");
         }
 
-        if (!_sessions.TryGetValue(project.ProjectId, out var entry))
+        if (!_activeSessionIdsByProject.TryGetValue(project.ProjectId, out var activeSessionId)
+            || !_sessionsById.TryGetValue(activeSessionId, out var entry))
         {
             throw new CentralToolException("Active editor session not found.");
         }

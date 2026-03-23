@@ -61,6 +61,21 @@ internal static class CentralArgumentReader
         };
     }
 
+    public static int? GetOptionalPositiveInt(JsonElement arguments, string name)
+    {
+        if (!TryGetProperty(arguments, name, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var number) && number > 0)
+        {
+            return number;
+        }
+
+        return null;
+    }
+
     public static IReadOnlyList<string> GetStringArray(JsonElement arguments, string name)
     {
         if (!TryGetProperty(arguments, name, out var property))

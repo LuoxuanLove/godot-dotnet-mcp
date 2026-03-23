@@ -30,6 +30,10 @@ jobs:
         shell: pwsh
         run: dotnet build .\host_shared\HostShared.csproj -c Release
 
+      - name: Run reuse session smoke
+        shell: pwsh
+        run: .\scripts\smoke_central_server_system_session.ps1 -SkipBuild
+
       - name: Validate refactor guardrails
         shell: pwsh
         run: .\scripts\validate_refactor_guardrails.ps1

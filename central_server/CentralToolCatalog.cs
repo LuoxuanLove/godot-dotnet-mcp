@@ -23,6 +23,7 @@ internal static class CentralToolCatalog
             CreateGodotManagerListProjectsTool(),
             CreateGodotManagerGetStatusTool(),
             CreateGodotManagerImportProjectsTool(),
+            ..SystemToolCatalog.GetTools(),
             ..BridgeToolCatalog.GetTools(),
         ];
     }

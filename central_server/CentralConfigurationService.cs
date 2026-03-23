@@ -84,7 +84,8 @@ internal sealed class CentralConfigurationService
         var normalizedPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(executablePath));
         if (!File.Exists(normalizedPath))
         {
-            throw new CentralToolException($"Godot executable not found: {executablePath}");
+            throw new CentralToolException(
+                $"Godot executable not found: {executablePath}. Ask the user to provide the correct Godot editor path before calling workspace_godot_set_default_executable.");
         }
 
         return normalizedPath;

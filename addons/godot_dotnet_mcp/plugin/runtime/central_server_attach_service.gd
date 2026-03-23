@@ -8,6 +8,10 @@ const DETACH_PATH := "/api/editor/detach"
 const ATTACH_RETRY_INTERVAL_MS := 10000
 const HEARTBEAT_INTERVAL_MS := 5000
 const CAPABILITIES := ["editor_plugin", "editor_attach", "runtime_bridge"]
+const ENV_CENTRAL_SERVER_HOST := "GODOT_DOTNET_MCP_CENTRAL_SERVER_HOST"
+const ENV_CENTRAL_SERVER_PORT := "GODOT_DOTNET_MCP_CENTRAL_SERVER_PORT"
+const ENV_RUNTIME_SERVER_HOST := "GODOT_DOTNET_MCP_SERVER_HOST"
+const ENV_RUNTIME_SERVER_PORT := "GODOT_DOTNET_MCP_SERVER_PORT"
 
 var _plugin: EditorPlugin
 var _settings: Dictionary = {}
@@ -154,8 +158,8 @@ func _send_attach() -> void:
 		"godotVersion": _get_godot_version(),
 		"capabilities": CAPABILITIES,
 		"transportMode": str(_settings.get("transport_mode", "http")),
-		"serverHost": str(_settings.get("host", "127.0.0.1")),
-		"serverPort": int(_settings.get("port", 3000)),
+		"serverHost": _resolve_runtime_server_host(),
+		"serverPort": _resolve_runtime_server_port(),
 		"serverRunning": _is_embedded_mcp_server_running()
 	}
 	var error := _attach_request.request(
@@ -190,8 +194,8 @@ func _send_heartbeat() -> void:
 		"projectRoot": _get_project_root(),
 		"sessionId": _session_id,
 		"transportMode": str(_settings.get("transport_mode", "http")),
-		"serverHost": str(_settings.get("host", "127.0.0.1")),
-		"serverPort": int(_settings.get("port", 3000)),
+		"serverHost": _resolve_runtime_server_host(),
+		"serverPort": _resolve_runtime_server_port(),
 		"serverRunning": _is_embedded_mcp_server_running()
 	}
 	var error := _heartbeat_request.request(
@@ -275,13 +279,53 @@ func _on_detach_request_completed(_result: int, _response_code: int, _headers: P
 
 
 func _build_url(path: String) -> String:
-	var host := str(_settings.get("central_server_host", "127.0.0.1")).strip_edges()
-	var port := int(_settings.get("central_server_port", 3020))
-	if host.is_empty():
-		host = "127.0.0.1"
-	if port <= 0:
-		port = 3020
+	var host := _resolve_central_server_host()
+	var port := _resolve_central_server_port()
 	return "http://%s:%d%s" % [host, port, path]
+
+
+func _resolve_central_server_host() -> String:
+	var env_host := OS.get_environment(ENV_CENTRAL_SERVER_HOST).strip_edges()
+	if not env_host.is_empty():
+		return env_host
+	var configured_host := str(_settings.get("central_server_host", "127.0.0.1")).strip_edges()
+	if configured_host.is_empty():
+		return "127.0.0.1"
+	return configured_host
+
+
+func _resolve_central_server_port() -> int:
+	var env_port_text := OS.get_environment(ENV_CENTRAL_SERVER_PORT).strip_edges()
+	if not env_port_text.is_empty():
+		var env_port := int(env_port_text)
+		if env_port > 0:
+			return env_port
+	var configured_port := int(_settings.get("central_server_port", 3020))
+	if configured_port <= 0:
+		return 3020
+	return configured_port
+
+
+func _resolve_runtime_server_host() -> String:
+	var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
+	if not env_host.is_empty():
+		return env_host
+	var configured_host := str(_settings.get("host", "127.0.0.1")).strip_edges()
+	if configured_host.is_empty():
+		return "127.0.0.1"
+	return configured_host
+
+
+func _resolve_runtime_server_port() -> int:
+	var env_port_text := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
+	if env_port_text.is_valid_int():
+		var env_port := int(env_port_text)
+		if env_port > 0:
+			return env_port
+	var configured_port := int(_settings.get("port", 3000))
+	if configured_port <= 0:
+		return 3000
+	return configured_port
 
 
 func _parse_json_body(body: PackedByteArray):

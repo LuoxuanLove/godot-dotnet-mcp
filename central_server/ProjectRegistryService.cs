@@ -84,10 +84,39 @@ internal sealed class ProjectRegistryService
         var normalizedPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(executablePath));
         if (!File.Exists(normalizedPath))
         {
-            throw new CentralToolException($"Godot executable not found: {executablePath}");
+            throw new CentralToolException(
+                $"Godot executable not found: {executablePath}. Ask the user to provide the correct Godot editor path before calling workspace_project_set_godot_path.");
         }
 
         project.GodotExecutablePath = normalizedPath;
+        project.LastVerifiedAtUtc = DateTimeOffset.UtcNow;
+        Save();
+        return project;
+    }
+
+    public RegisteredProject UpdateGodotExecutablePath(string projectId, string? executablePath)
+    {
+        if (!_projects.TryGetValue(projectId, out var project))
+        {
+            throw new CentralToolException("Registered project not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            project.GodotExecutablePath = null;
+        }
+        else
+        {
+            var normalizedPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(executablePath));
+            if (!File.Exists(normalizedPath))
+            {
+                throw new CentralToolException(
+                    $"Godot executable not found: {executablePath}. Ask the user to provide the correct Godot editor path before calling workspace_project_set_godot_path.");
+            }
+
+            project.GodotExecutablePath = normalizedPath;
+        }
+
         project.LastVerifiedAtUtc = DateTimeOffset.UtcNow;
         Save();
         return project;

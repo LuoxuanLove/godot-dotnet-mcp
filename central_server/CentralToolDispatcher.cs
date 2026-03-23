@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using GodotDotnetMcp.HostShared;
 
 namespace GodotDotnetMcp.CentralServer;
@@ -8,6 +9,7 @@ internal sealed class CentralToolDispatcher
     private readonly CentralConfigurationService _configuration;
     private readonly EditorProxyService _editorProxy;
     private readonly EditorProcessService _editorProcesses;
+    private readonly EditorSessionCoordinator _editorSessionCoordinator;
     private readonly EditorSessionService _editorSessions;
     private readonly GodotInstallationService _godotInstallations;
     private readonly GodotProjectManagerProvider _godotProjectManager;
@@ -18,6 +20,7 @@ internal sealed class CentralToolDispatcher
         CentralConfigurationService configuration,
         EditorProxyService editorProxy,
         EditorProcessService editorProcesses,
+        EditorSessionCoordinator editorSessionCoordinator,
         EditorSessionService editorSessions,
         GodotInstallationService godotInstallations,
         GodotProjectManagerProvider godotProjectManager,
@@ -27,6 +30,7 @@ internal sealed class CentralToolDispatcher
         _configuration = configuration;
         _editorProxy = editorProxy;
         _editorProcesses = editorProcesses;
+        _editorSessionCoordinator = editorSessionCoordinator;
         _editorSessions = editorSessions;
         _godotInstallations = godotInstallations;
         _godotProjectManager = godotProjectManager;
@@ -57,6 +61,7 @@ internal sealed class CentralToolDispatcher
                 "workspace_godot_manager_list_projects" => ListGodotManagerProjects(),
                 "workspace_godot_manager_get_status" => GetGodotManagerStatus(),
                 "workspace_godot_manager_import_projects" => ImportGodotManagerProjects(arguments),
+                _ when SystemToolCatalog.IsSystemTool(toolName) => await ExecuteSystemToolAsync(toolName, arguments, cancellationToken),
                 _ => await ExecuteDotnetToolAsync(toolName, arguments, cancellationToken),
             };
         }
@@ -82,6 +87,7 @@ internal sealed class CentralToolDispatcher
         return CentralToolCallResponse.Success(new
         {
             activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
             projects,
             count = projects.Count,
         });
@@ -97,6 +103,7 @@ internal sealed class CentralToolDispatcher
             registered = true,
             project,
             activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
         });
     }
 
@@ -119,11 +126,19 @@ internal sealed class CentralToolDispatcher
             _sessionState.ActiveProjectId = string.Empty;
         }
 
+        var activeEditorSession = _editorSessions.GetStatusBySessionId(_sessionState.ActiveEditorSessionId);
+        if (activeEditorSession is not null
+            && string.Equals(activeEditorSession.ProjectId, removedProject.ProjectId, StringComparison.OrdinalIgnoreCase))
+        {
+            _sessionState.ActiveEditorSessionId = string.Empty;
+        }
+
         return CentralToolCallResponse.Success(new
         {
             removed = true,
             project = removedProject,
             activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
         });
     }
 
@@ -147,6 +162,7 @@ internal sealed class CentralToolDispatcher
         {
             selected = true,
             activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
             project,
         });
     }
@@ -164,6 +180,7 @@ internal sealed class CentralToolDispatcher
         var editorSessionStatus = project is null
             ? null
             : _editorSessions.GetStatus(project.ProjectId);
+        var activeEditorSession = _editorSessions.GetStatusBySessionId(_sessionState.ActiveEditorSessionId);
 
         return CentralToolCallResponse.Success(new
         {
@@ -172,6 +189,8 @@ internal sealed class CentralToolDispatcher
             project,
             editor = editorStatus,
             editorSession = editorSessionStatus,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeEditorSession,
         });
     }
 
@@ -193,6 +212,7 @@ internal sealed class CentralToolDispatcher
             result.ImportedProjects,
             result.DuplicateProjectRoots,
             activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
         });
     }
 
@@ -203,6 +223,8 @@ internal sealed class CentralToolDispatcher
         {
             count = sessions.Count,
             sessions,
+            activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
         });
     }
 
@@ -210,79 +232,18 @@ internal sealed class CentralToolDispatcher
     {
         var requestedToolName = CentralArgumentReader.GetRequiredString(arguments, "toolName");
         var projectId = CentralArgumentReader.GetOptionalString(arguments, "projectId");
-        var path = CentralArgumentReader.GetOptionalString(arguments, "path");
+        var projectPath = CentralArgumentReader.GetOptionalString(arguments, "path");
         var forwardedArguments = CentralArgumentReader.GetObjectElementOrEmpty(arguments, "arguments");
-        var project = _registry.ResolveProject(projectId, path)
-                      ?? _registry.ResolveProject(_sessionState.ActiveProjectId, null);
-        if (project is null)
-        {
-            throw new CentralToolException("Registered project not found or no active project is selected.");
-        }
-
-        var session = _editorSessions.GetStatus(project.ProjectId);
-        if (!session.Attached)
-        {
-            return CentralToolCallResponse.Error(
-                "Editor-attached tool requires an active editor session.",
-                new
-                {
-                    error = "editor_required",
-                    requiredState = "editor_attached",
-                    projectId = project.ProjectId,
-                    projectName = project.ProjectName,
-                    toolName = requestedToolName,
-                    editorSession = session,
-                });
-        }
-
-        if (!string.Equals(session.TransportMode, "http", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(session.TransportMode, "both", StringComparison.OrdinalIgnoreCase))
-        {
-            return CentralToolCallResponse.Error(
-                "Editor-attached tool requires an HTTP-capable editor session.",
-                new
-                {
-                    error = "editor_transport_unavailable",
-                    requiredTransport = "http",
-                    actualTransport = session.TransportMode,
-                    projectId = project.ProjectId,
-                    projectName = project.ProjectName,
-                    toolName = requestedToolName,
-                    editorSession = session,
-                });
-        }
-
-        if (!session.ServerRunning || string.IsNullOrWhiteSpace(session.ServerHost) || session.ServerPort is null or <= 0)
-        {
-            return CentralToolCallResponse.Error(
-                "Editor session is attached but its HTTP MCP endpoint is not available.",
-                new
-                {
-                    error = "editor_endpoint_unavailable",
-                    projectId = project.ProjectId,
-                    projectName = project.ProjectName,
-                    toolName = requestedToolName,
-                    editorSession = session,
-                });
-        }
-
-        var forwarded = await _editorProxy.ForwardToolCallAsync(session, requestedToolName, forwardedArguments, cancellationToken);
-        var payload = new
-        {
-            forwarded = true,
-            status = forwarded.Success ? "forwarded" : "forwarded_error",
-            endpoint = forwarded.Endpoint,
-            project,
-            editorSession = session,
-            toolName = requestedToolName,
-            arguments = JsonSerializer.Deserialize<object>(forwardedArguments.GetRawText(), CentralServerSerialization.JsonOptions),
-            forwardedResult = forwarded.ToolResult,
-            message = forwarded.Message,
-        };
-
-        return forwarded.Success
-            ? CentralToolCallResponse.Success(payload)
-            : CentralToolCallResponse.Error("Forwarded editor tool failed.", payload);
+        var autoLaunchEditor = CentralArgumentReader.GetBooleanOrDefault(arguments, "autoLaunchEditor", true);
+        var attachTimeoutMs = CentralArgumentReader.GetOptionalPositiveInt(arguments, "editorAttachTimeoutMs");
+        return await ForwardEditorToolWithEnvelopeAsync(
+            requestedToolName,
+            forwardedArguments,
+            projectId,
+            projectPath,
+            autoLaunchEditor,
+            attachTimeoutMs,
+            cancellationToken);
     }
 
     private CentralToolCallResponse SetProjectGodotPath(JsonElement arguments)
@@ -309,7 +270,7 @@ internal sealed class CentralToolDispatcher
         }
 
         var resolution = _godotInstallations.ResolveExecutable(project, explicitExecutablePath, _configuration);
-        var launch = _editorProcesses.OpenProject(project, resolution.ExecutablePath, resolution.Source);
+        var launch = _editorProcesses.OpenProject(project, resolution.ExecutablePath, resolution.Source, _editorSessionCoordinator.AttachEndpoint);
         return CentralToolCallResponse.Success(new
         {
             launch,
@@ -398,5 +359,167 @@ internal sealed class CentralToolDispatcher
         return response.IsError
             ? CentralToolCallResponse.Error(response.TextContent, response.StructuredContent)
             : CentralToolCallResponse.Success(response.StructuredContent);
+    }
+
+    private async Task<CentralToolCallResponse> ExecuteSystemToolAsync(
+        string toolName,
+        JsonElement arguments,
+        CancellationToken cancellationToken)
+    {
+        var projectId = CentralArgumentReader.GetOptionalString(arguments, "projectId");
+        var projectPath = CentralArgumentReader.GetOptionalString(arguments, "projectPath");
+        var autoLaunchEditor = CentralArgumentReader.GetBooleanOrDefault(arguments, "autoLaunchEditor", true);
+        var attachTimeoutMs = CentralArgumentReader.GetOptionalPositiveInt(arguments, "editorAttachTimeoutMs");
+        return await ForwardEditorToolDirectAsync(
+            toolName,
+            arguments,
+            projectId,
+            projectPath,
+            autoLaunchEditor,
+            attachTimeoutMs,
+            cancellationToken);
+    }
+
+    private async Task<CentralToolCallResponse> ForwardEditorToolDirectAsync(
+        string toolName,
+        JsonElement forwardedArguments,
+        string? projectId,
+        string? projectPath,
+        bool autoLaunchEditor,
+        int? attachTimeoutMs,
+        CancellationToken cancellationToken)
+    {
+        var coordination = await _editorSessionCoordinator.EnsureHttpReadySessionAsync(
+            toolName,
+            projectId,
+            projectPath,
+            autoLaunchEditor,
+            attachTimeoutMs,
+            cancellationToken);
+
+        if (!coordination.Success || coordination.Project is null || coordination.Session is null)
+        {
+            return CentralToolCallResponse.Error(coordination.Message, coordination.ToErrorPayload());
+        }
+
+        var forwarded = await _editorProxy.ForwardToolCallAsync(coordination.Session, toolName, forwardedArguments, cancellationToken);
+        var centralHostSession = BuildCentralHostSession(coordination, forwarded.Endpoint, toolName);
+        if (forwarded.Success)
+        {
+            return CentralToolCallResponse.Success(
+                AttachCentralHostSession(forwarded.ToolResult ?? new { success = true }, centralHostSession));
+        }
+
+        return CentralToolCallResponse.Error(
+            "Forwarded editor tool failed.",
+            AttachCentralHostSession(
+                forwarded.ToolResult ?? new
+                {
+                    error = "editor_tool_failed",
+                    toolName,
+                    project = coordination.Project,
+                    editorSession = coordination.Session,
+                    launch = coordination.Launch,
+                },
+                centralHostSession));
+    }
+
+    private async Task<CentralToolCallResponse> ForwardEditorToolWithEnvelopeAsync(
+        string toolName,
+        JsonElement forwardedArguments,
+        string? projectId,
+        string? projectPath,
+        bool autoLaunchEditor,
+        int? attachTimeoutMs,
+        CancellationToken cancellationToken)
+    {
+        var coordination = await _editorSessionCoordinator.EnsureHttpReadySessionAsync(
+            toolName,
+            projectId,
+            projectPath,
+            autoLaunchEditor,
+            attachTimeoutMs,
+            cancellationToken);
+
+        if (!coordination.Success || coordination.Project is null || coordination.Session is null)
+        {
+            return CentralToolCallResponse.Error(coordination.Message, coordination.ToErrorPayload());
+        }
+
+        var forwarded = await _editorProxy.ForwardToolCallAsync(coordination.Session, toolName, forwardedArguments, cancellationToken);
+        var centralHostSession = BuildCentralHostSession(coordination, forwarded.Endpoint, toolName);
+        var payload = new
+        {
+            forwarded = true,
+            status = forwarded.Success ? "forwarded" : "forwarded_error",
+            endpoint = forwarded.Endpoint,
+            centralHostSession,
+            project = coordination.Project,
+            editorSession = coordination.Session,
+            editorLaunch = coordination.Launch,
+            toolName,
+            arguments = JsonSerializer.Deserialize<object>(forwardedArguments.GetRawText(), CentralServerSerialization.JsonOptions),
+            forwardedResult = forwarded.ToolResult,
+            message = forwarded.Message,
+        };
+
+        return forwarded.Success
+            ? CentralToolCallResponse.Success(payload)
+            : CentralToolCallResponse.Error("Forwarded editor tool failed.", payload);
+    }
+
+    private object BuildCentralHostSession(
+        EditorSessionCoordinator.EnsureEditorSessionResult coordination,
+        string endpoint,
+        string toolName)
+    {
+        var resolution = coordination.ReusedRunningEditor
+            || coordination.Launch?.AlreadyRunning == true
+                ? "reused_running_editor"
+                : coordination.AutoLaunchAttempted
+                    ? "launched_editor"
+                    : "reused_ready_session";
+
+        return new
+        {
+            toolName,
+            resolution,
+            activeProjectId = _sessionState.ActiveProjectId,
+            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            projectId = coordination.Project?.ProjectId ?? string.Empty,
+            projectPath = coordination.Project?.ProjectRoot ?? string.Empty,
+            sessionId = coordination.Session?.SessionId ?? string.Empty,
+            sessionStatus = coordination.Session?.Status ?? string.Empty,
+            transportMode = coordination.Session?.TransportMode ?? string.Empty,
+            endpoint,
+            attachHost = _editorSessionCoordinator.AttachEndpoint.Host,
+            attachPort = _editorSessionCoordinator.AttachEndpoint.Port,
+            attachTimeoutMs = coordination.AttachTimeoutMs,
+            autoLaunchAttempted = coordination.AutoLaunchAttempted,
+            reusedRunningEditor = coordination.ReusedRunningEditor,
+            launchAlreadyRunning = coordination.Launch?.AlreadyRunning ?? false,
+            launchProcessId = coordination.Launch?.ProcessId ?? 0,
+            launchExecutablePath = coordination.Launch?.ExecutablePath ?? string.Empty,
+            launchExecutableSource = coordination.Launch?.ExecutableSource ?? string.Empty,
+            launchServerHost = coordination.Launch?.ServerHost ?? string.Empty,
+            launchServerPort = coordination.Launch?.ServerPort ?? 0,
+        };
+    }
+
+    private static object AttachCentralHostSession(object toolResult, object centralHostSession)
+    {
+        var centralHostSessionNode = JsonSerializer.SerializeToNode(centralHostSession, CentralServerSerialization.JsonOptions);
+        var resultNode = JsonSerializer.SerializeToNode(toolResult, CentralServerSerialization.JsonOptions);
+        if (resultNode is JsonObject resultObject)
+        {
+            resultObject["centralHostSession"] = centralHostSessionNode;
+            return resultObject;
+        }
+
+        return new JsonObject
+        {
+            ["result"] = resultNode,
+            ["centralHostSession"] = centralHostSessionNode,
+        };
     }
 }

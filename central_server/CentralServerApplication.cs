@@ -26,8 +26,9 @@ internal static class CentralServerApplication
                 CentralServerMode.Health => await PrintHealthAsync(output, cancellationToken),
                 CentralServerMode.AttachOnly => await RunAttachOnlyAsync(options.RemainingArguments, output, error, cancellationToken),
                 CentralServerMode.ProxyCall => await RunProxyCallAsync(options.RemainingArguments, output, error, cancellationToken),
+                CentralServerMode.SmokeSystemSession => await SmokeSystemSessionRunner.RunAsync(options.RemainingArguments, output, error, cancellationToken),
                 CentralServerMode.InstallPlugin => await PluginInstaller.RunAsync(options.RemainingArguments, output, error, cancellationToken),
-                _ => await RunStdioAsync(input, output, error, cancellationToken),
+                _ => await RunStdioAsync(options.RemainingArguments, input, output, error, cancellationToken),
             };
         }
         catch (CentralToolException ex)
@@ -43,19 +44,26 @@ internal static class CentralServerApplication
 Godot .NET MCP Central Server
 
 Usage:
-  GodotDotnetMcp.CentralServer [--stdio]
+  GodotDotnetMcp.CentralServer [--stdio] [--attach-host HOST] [--attach-port PORT]
   GodotDotnetMcp.CentralServer --attach-only [--attach-host HOST] [--attach-port PORT] [--log-file PATH]
   GodotDotnetMcp.CentralServer --proxy-call --tool TOOL [--server-host HOST] [--server-port PORT] [--args-json JSON] [--arg key=value]
+  GodotDotnetMcp.CentralServer --smoke-system-session [--auto-launch] [--require-auto-launch] [--project-root PATH] [--godot-executable-path PATH] [--attach-host HOST] [--attach-port PORT]
   GodotDotnetMcp.CentralServer --install-plugin --project-path <path> [--source-path <path>] [--force]
   GodotDotnetMcp.CentralServer --health
   GodotDotnetMcp.CentralServer --version
 
 Modes:
   --stdio        Start the MCP stdio server (default)
+                 Optional: --attach-host HOST / --attach-port PORT override the local editor attach listener
   --attach-only  Start only the local editor attach HTTP server and keep running
                  Optional: --log-file PATH writes attach-only logs to a local file
   --proxy-call   Forward one tool call directly to a Godot editor MCP HTTP endpoint
                  Use --arg key=value for simple arguments, or --args-json for a full JSON object
+  --smoke-system-session
+                 Run a local host smoke test for system_* session orchestration and print JSON
+                 Optional: --auto-launch switches to the real Godot auto-launch path
+                 Optional: --require-auto-launch treats skipped auto-launch smoke as a failure
+                 Optional: --project-root PATH / --godot-executable-path PATH override the default smoke project and editor
   --install-plugin
                  Copy the plugin into a Godot project addons folder
   --health       Print a JSON health snapshot and exit
@@ -89,7 +97,7 @@ Modes:
         return 0;
     }
 
-    private static async Task<int> RunStdioAsync(Stream input, Stream output, TextWriter error, CancellationToken cancellationToken)
+    private static async Task<int> RunStdioAsync(string[] args, Stream input, Stream output, TextWriter error, CancellationToken cancellationToken)
     {
         var configuration = new CentralConfigurationService();
         var editorProcesses = new EditorProcessService();
@@ -100,10 +108,11 @@ Modes:
         var editorSessions = new EditorSessionService(registry);
         using var editorProxy = new EditorProxyService();
         var sessionState = new SessionState();
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
+        var attachEndpoint = ResolveAttachEndpoint(args, configuration);
+        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
+        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
         var server = new CentralStdioMcpServer(output, error, dispatcher);
         using var attachServerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var attachEndpoint = ResolveAttachEndpoint(options: null, configuration);
         await using var attachServer = new EditorAttachHttpServer(
             attachEndpoint.Host,
             attachEndpoint.Port,
@@ -232,17 +241,16 @@ Modes:
 
     private static bool RequiresNoExtraArguments(CentralServerMode mode)
     {
-        return mode is CentralServerMode.Stdio
-            or CentralServerMode.Health
+        return mode is CentralServerMode.Health
             or CentralServerMode.Version
             or CentralServerMode.Help;
     }
 
-    private static AttachEndpoint ResolveAttachEndpoint(string[]? options, CentralConfigurationService configuration)
+    private static EditorAttachEndpoint ResolveAttachEndpoint(string[]? options, CentralConfigurationService configuration)
     {
         var host = GetOptionValue(options, "--attach-host") ?? configuration.EditorAttachHost;
         var port = ParseIntOption(options, "--attach-port", configuration.EditorAttachPort);
-        return new AttachEndpoint(host, port);
+        return new EditorAttachEndpoint(host, port);
     }
 
     private static string? GetOptionValue(string[]? args, string optionName)
@@ -407,8 +415,6 @@ Modes:
         string TargetFramework,
         string Protocol,
         DateTimeOffset TimestampUtc);
-
-    private sealed record AttachEndpoint(string Host, int Port);
 
     private sealed class CompositeTextWriter : TextWriter
     {

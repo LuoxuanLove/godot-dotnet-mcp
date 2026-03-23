@@ -2,6 +2,9 @@ namespace GodotDotnetMcp.CentralServer;
 
 internal sealed class GodotInstallationService
 {
+    private const string MissingExecutableSuggestedQuestion =
+        "Please provide the full path to your Godot editor executable so I can configure this project.";
+
     private static readonly string[] IgnoredExecutableTokens =
     [
         "CentralServer",
@@ -105,7 +108,41 @@ internal sealed class GodotInstallationService
             };
         }
 
-        throw new CentralToolException("No Godot executable is configured or discoverable.");
+        throw new CentralToolException(BuildMissingExecutableMessage(project?.ProjectId));
+    }
+
+    public static object BuildMissingExecutableGuidance(string? projectId = null)
+    {
+        return new
+        {
+            askUserForGodotPath = true,
+            suggestedUserPrompt = MissingExecutableSuggestedQuestion,
+            searchedCommonRootsOnly = true,
+            commonRoots = new[]
+            {
+                "ProgramFiles",
+                "ProgramFilesX86",
+                "Downloads",
+                "LocalApplicationData",
+            },
+            configureWith = new[]
+            {
+                new
+                {
+                    tool = "workspace_project_set_godot_path",
+                    useWhen = "Configure a project-specific Godot executable path.",
+                    projectId = projectId ?? string.Empty,
+                },
+                new
+                {
+                    tool = "workspace_godot_set_default_executable",
+                    useWhen = "Configure a default Godot executable path for the current user profile.",
+                    projectId = string.Empty,
+                },
+            },
+            optionalDiscoveryTool = "workspace_godot_installation_list",
+            releasePolicy = "Do not embed a machine-specific Godot path in release artifacts or repository defaults.",
+        };
     }
 
     private static IEnumerable<string> EnumerateExecutableCandidates(string root)
@@ -167,10 +204,19 @@ internal sealed class GodotInstallationService
         var normalizedPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(executablePath));
         if (!File.Exists(normalizedPath))
         {
-            throw new CentralToolException($"Godot executable not found: {executablePath}");
+            throw new CentralToolException(
+                $"Godot executable not found: {executablePath}. Ask the user to provide the correct Godot editor path, then configure it with workspace_project_set_godot_path or workspace_godot_set_default_executable.");
         }
 
         return normalizedPath;
+    }
+
+    private static string BuildMissingExecutableMessage(string? projectId)
+    {
+        var configurationHint = string.IsNullOrWhiteSpace(projectId)
+            ? "Configure it with workspace_godot_set_default_executable, or provide a project path and then call workspace_project_set_godot_path."
+            : $"Ask the user for a Godot editor path, then configure project '{projectId}' with workspace_project_set_godot_path or set a user default with workspace_godot_set_default_executable.";
+        return $"No Godot executable is configured or discoverable. {configurationHint} Releases must not embed a machine-specific Godot path.";
     }
 
     internal sealed class GodotInstallationCandidate

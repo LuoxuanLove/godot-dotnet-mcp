@@ -13,6 +13,7 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
     private readonly string _prefix;
     private readonly Func<Task>? _shutdownRequested;
     private Task? _loopTask;
+    private volatile bool _disposing;
 
     public EditorAttachHttpServer(string host, int port, EditorSessionService sessions, TextWriter error, Func<Task>? shutdownRequested = null)
     {
@@ -33,6 +34,7 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _disposing = true;
         try
         {
             _listener.Stop();
@@ -76,6 +78,11 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
             }
             catch (Exception ex)
             {
+                if (_disposing || cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 await _error.WriteLineAsync($"[CentralServer] Editor attach listener failed: {ex.Message}");
                 continue;
             }
