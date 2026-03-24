@@ -62,13 +62,15 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "script_edit_gd",  "actions": ["add_function", "add_variable", "add_signal", "add_export"]},
 		{"tool": "script_edit_cs",  "actions": ["add_method", "add_field"]}
 	],
-	"system_project_index_build": [
+	"system_project_symbol_search": [
 		{"tool": "filesystem_directory", "actions": ["get_files"]},
 		{"tool": "script_inspect",       "actions": ["path"]},
 		{"tool": "resource_query",       "actions": ["get_dependencies"]}
 	],
-	"system_project_symbol_search":  [{"tool": "filesystem_directory", "actions": ["get_files"]}],
-	"system_scene_dependency_graph": [{"tool": "resource_query",       "actions": ["get_dependencies"]}]
+	"system_scene_dependency_graph": [
+		{"tool": "filesystem_directory", "actions": ["get_files"]},
+		{"tool": "resource_query",       "actions": ["get_dependencies"]}
+	]
 }
 
 

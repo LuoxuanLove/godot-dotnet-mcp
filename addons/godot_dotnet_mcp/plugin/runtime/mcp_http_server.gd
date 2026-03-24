@@ -8,6 +8,7 @@ class_name MCPHttpServer
 const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPToolLoaderSupervisorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd")
 const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
+const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
@@ -26,6 +27,7 @@ var _running: bool = false
 var _debug_mode: bool = false
 var _clients: Array[StreamPeerTCP] = []
 var _pending_data: Dictionary = {}  # client -> accumulated data
+var _processing_clients: Dictionary = {}
 var _total_connections: int = 0
 var _total_requests: int = 0
 var _last_request_method: String = ""
@@ -33,6 +35,7 @@ var _last_request_at_unix: int = 0
 
 var _tool_loader_supervisor = MCPToolLoaderSupervisorScript.new()
 var _tool_rpc_router = MCPToolRpcRouterScript.new()
+var _runtime_control_service = MCPRuntimeControlServiceScript.new()
 var _gdscript_lsp_diagnostics_service
 
 # MCP Protocol info
@@ -73,6 +76,8 @@ func _process(_delta: float) -> void:
 		var status = client.get_status()
 
 		if status == StreamPeerTCP.STATUS_CONNECTED:
+			if _processing_clients.has(client):
+				continue
 			var available = client.get_available_bytes()
 			if available > 0:
 				var data = client.get_data(available)
@@ -91,6 +96,7 @@ func _process(_delta: float) -> void:
 	for client in clients_to_remove:
 		_clients.erase(client)
 		_pending_data.erase(client)
+		_processing_clients.erase(client)
 		_log("Client disconnected", "info")
 		client_disconnected.emit()
 
@@ -175,6 +181,9 @@ func stop() -> void:
 		client.disconnect_from_host()
 	_clients.clear()
 	_pending_data.clear()
+	_processing_clients.clear()
+	if _runtime_control_service != null and _runtime_control_service.has_method("reset"):
+		_runtime_control_service.reset()
 
 	_tcp_server.stop()
 	_running = false
@@ -243,6 +252,11 @@ func get_tools_by_category() -> Dictionary:
 func get_tool_loader() -> MCPToolLoader:
 	_ensure_tool_loader_supervisor()
 	return _tool_loader_supervisor.get_tool_loader()
+
+
+func get_runtime_control_service():
+	_ensure_runtime_control_service()
+	return _runtime_control_service
 
 
 func get_tool_loader_status() -> Dictionary:
@@ -331,6 +345,7 @@ func _ensure_initialized() -> void:
 	if _tcp_server == null:
 		_tcp_server = TCPServer.new()
 	_ensure_tool_loader_supervisor()
+	_ensure_runtime_control_service()
 	if not bool(get_tool_loader_status().get("initialized", false)):
 		_register_tools()
 
@@ -348,6 +363,18 @@ func _ensure_tool_loader_supervisor() -> void:
 		"record_registration_issue": Callable(self, "_record_tool_loader_registration_issue")
 	})
 	_ensure_tool_rpc_router()
+
+
+func _ensure_runtime_control_service() -> void:
+	if _runtime_control_service == null:
+		_runtime_control_service = MCPRuntimeControlServiceScript.new()
+	var plugin = get_parent()
+	var debugger_bridge = null
+	if plugin != null and plugin.has_method("get_editor_debugger_bridge"):
+		debugger_bridge = plugin.get_editor_debugger_bridge()
+	_runtime_control_service.configure(plugin, debugger_bridge, {
+		"log": Callable(self, "_log")
+	})
 
 
 func _ensure_tool_rpc_router() -> void:
@@ -406,6 +433,8 @@ func _record_tool_loader_registration_issue(level: String, reason: String, statu
 func _process_http_request(client: StreamPeerTCP) -> void:
 	var data = _pending_data.get(client, "")
 	if data.is_empty():
+		return
+	if _processing_clients.has(client):
 		return
 
 	# Check for complete HTTP request (headers end with \r\n\r\n)
@@ -470,6 +499,8 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 		else:
 			_pending_data[client] = ""
 
+	_processing_clients[client] = true
+
 	# Route request
 	var method = headers.get("method", "GET")
 	var path = headers.get("path", "/")
@@ -479,11 +510,11 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	_last_request_method = method
 	_last_request_at_unix = int(Time.get_unix_time_from_system())
 
-	var response: Dictionary
+	var response: Dictionary = {}
 	var no_body := false
 
 	if method == "POST" and path == "/mcp":
-		response = _handle_mcp_request(request_body)
+		response = await _handle_mcp_request_async(request_body)
 		no_body = response.get("_no_body", false)
 		if response.has("_no_body"):
 			response.erase("_no_body")
@@ -505,7 +536,9 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	else:
 		response = {"error": "Not found", "status": 404}
 
-	_send_http_response(client, response, no_body)
+	if client in _clients and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		_send_http_response(client, response, no_body)
+	_processing_clients.erase(client)
 
 
 func _decode_chunked_body_bytes(data: PackedByteArray) -> Dictionary:
@@ -580,6 +613,7 @@ func _close_client(client: StreamPeerTCP) -> void:
 		client.disconnect_from_host()
 		_clients.erase(client)
 		_pending_data.erase(client)
+		_processing_clients.erase(client)
 		_log("Client connection closed", "debug")
 
 
@@ -608,7 +642,7 @@ func _parse_http_headers(header_section: String) -> Dictionary:
 	return result
 
 
-func _handle_mcp_request(body: String) -> Dictionary:
+func _handle_mcp_request_async(body: String) -> Dictionary:
 	_log("Parsing request body (%d bytes)" % body.length(), "trace")
 	var json = JSON.new()
 	var error = json.parse(body)
@@ -661,7 +695,7 @@ func _handle_mcp_request(body: String) -> Dictionary:
 		"tools/list":
 			response = _handle_tools_list(params, id)
 		"tools/call":
-			response = _handle_tools_call(params, id)
+			response = await _handle_tools_call_async(params, id)
 		"ping":
 			response = _create_json_rpc_response({}, id)
 		_:
@@ -712,9 +746,9 @@ func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
 	return _create_json_rpc_response(_tool_rpc_router.build_tools_list_result(), id)
 
 
-func _handle_tools_call(params: Dictionary, id) -> Dictionary:
+func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 	_ensure_tool_rpc_router()
-	return _create_json_rpc_response(_tool_rpc_router.build_tool_call_result(params), id)
+	return _create_json_rpc_response(await _tool_rpc_router.build_tool_call_result_async(params), id)
 
 
 func _create_json_rpc_response(result, id) -> Dictionary:

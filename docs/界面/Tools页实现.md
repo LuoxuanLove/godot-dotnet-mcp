@@ -9,7 +9,7 @@
 `Tools` 页当前聚焦四类能力：
 
 1. 显示当前已启用的 系统工具数
-2. 以根级平铺方式展示 8 个 系统工具
+2. 以根级平铺方式展示当前公开的 `system_*` 高层工具
 3. 展开查看每个 系统工具依赖的原子工具链路
 4. 展示当前选中项的描述、参数与原子工具预览
 
@@ -83,14 +83,15 @@ root
   ├─ system_scene_validate
   │   ├─ scene_audit
   │   └─ resource_query
-  ├─ system_project_index_build
+  ├─ system_runtime_capture
+  │   └─ （运行时 capture 由 runtime control service + runtime bridge 协调，不再拆成两个公开工具）
+  ├─ system_project_symbol_search
   │   ├─ filesystem_directory
   │   ├─ script_inspect
   │   └─ resource_query
-  ├─ system_project_symbol_search
-  │   └─ system_project_index_build
   └─ system_scene_dependency_graph
-      └─ system_project_index_build
+      ├─ filesystem_directory
+      └─ resource_query
 ```
 
 说明：

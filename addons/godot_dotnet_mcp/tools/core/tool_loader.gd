@@ -204,6 +204,10 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	return await execute_tool_async(category, tool_name, args)
+
+
+func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
 			"%s_%s denied: %s" % [category, tool_name, _get_permission_error(category)],
@@ -224,7 +228,11 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
 
 	var started_usec = Time.get_ticks_usec()
-	var result = executor.execute(tool_name, args)
+	var result
+	if executor.has_method("execute_async"):
+		result = await executor.execute_async(tool_name, args)
+	else:
+		result = executor.execute(tool_name, args)
 	var elapsed_ms = _elapsed_ms(started_usec)
 	_metrics_service.record_tool_call("%s_%s" % [category, tool_name], category, elapsed_ms)
 

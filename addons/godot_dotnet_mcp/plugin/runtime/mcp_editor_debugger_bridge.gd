@@ -2,14 +2,20 @@
 extends EditorDebuggerPlugin
 class_name MCPEditorDebuggerBridge
 
+signal runtime_reply_received(session_id: int, payload: Dictionary)
+signal session_state_changed(session_id: int, state: String, metadata: Dictionary)
+
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 
 const MESSAGE_PREFIX := "godot_mcp/"
 const EVENT_CHANNEL := "godot_mcp/runtime_event"
 const LOG_CHANNEL := "godot_mcp/runtime_log"
+const REPLY_CHANNEL := "godot_mcp/runtime_reply"
+const COMMAND_MESSAGE := "godot_mcp/runtime_command:call"
 
 var _wired_sessions: Dictionary = {}
+var _last_active_session_id := -1
 
 
 func _has_capture(message: String) -> bool:
@@ -35,6 +41,14 @@ func _capture(message: String, data, session_id: int) -> bool:
 				"session_id": session_id,
 				"payload": payload.duplicate(true)
 			})
+			return true
+		REPLY_CHANNEL:
+			MCPRuntimeDebugStore.record_runtime_event("runtime_reply", payload, session_id)
+			MCPDebugBuffer.record("debug", "runtime_bridge", "runtime_reply", "", {
+				"session_id": session_id,
+				"payload": payload.duplicate(true)
+			})
+			runtime_reply_received.emit(session_id, payload.duplicate(true))
 			return true
 		_:
 			return false
@@ -92,6 +106,8 @@ func _record_session_state(session_id: int, session: EditorDebuggerSession, stat
 			payload[key] = metadata[key]
 	MCPRuntimeDebugStore.record_session_state(session_id, state, payload)
 	MCPDebugBuffer.record("info", "editor_debugger", "Session %d %s" % [session_id, state], "", payload)
+	_update_last_active_session_id(session_id, session, state)
+	session_state_changed.emit(session_id, state, payload.duplicate(true))
 
 
 func _record_runtime_session_event(session_id: int, event_name: String) -> void:
@@ -115,3 +131,51 @@ func _extract_payload(data) -> Dictionary:
 	if data is Dictionary:
 		return (data as Dictionary).duplicate(true)
 	return {}
+
+
+func get_preferred_runtime_session_id() -> int:
+	if is_session_commandable(_last_active_session_id):
+		return _last_active_session_id
+	for session_id in _wired_sessions.keys():
+		var resolved_session_id := int(session_id)
+		if is_session_commandable(resolved_session_id):
+			_last_active_session_id = resolved_session_id
+			return _last_active_session_id
+	return -1
+
+
+func is_session_commandable(session_id: int) -> bool:
+	if session_id < 0:
+		return false
+	var session := get_session(session_id)
+	if session == null or not is_instance_valid(session):
+		return false
+	return session.is_active() and session.is_debuggable()
+
+
+func send_runtime_command(session_id: int, payload: Dictionary) -> Dictionary:
+	if not is_session_commandable(session_id):
+		return {
+			"success": false,
+			"error": "runtime_session_lost",
+			"message": "The target runtime debugger session is unavailable."
+		}
+	var session := get_session(session_id)
+	session.send_message(COMMAND_MESSAGE, [payload.duplicate(true)])
+	return {
+		"success": true,
+		"session_id": session_id
+	}
+
+
+func _update_last_active_session_id(session_id: int, session: EditorDebuggerSession, state: String) -> void:
+	if state in ["attached", "started", "continued", "breaked"] and session != null and is_instance_valid(session) and session.is_active():
+		_last_active_session_id = session_id
+		return
+	if state == "stopped" and _last_active_session_id == session_id:
+		_last_active_session_id = -1
+		for other_session_id in _wired_sessions.keys():
+			var resolved_session_id := int(other_session_id)
+			if is_session_commandable(resolved_session_id):
+				_last_active_session_id = resolved_session_id
+				break

@@ -87,6 +87,86 @@ internal static class SystemToolCatalog
             }
             """),
         new(
+            "system_runtime_control",
+            "RUNTIME CONTROL: Session-scoped safety gate for runtime automation in the running editor game instance. Actions: status, enable, disable. Disabled by default; enable only arms the current debugger runtime session and automatically expires when the runtime session stops or the plugin reloads.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": ["status", "enable", "disable"],
+                  "description": "Runtime control action to perform"
+                }
+              },
+              "required": ["action"]
+            }
+            """),
+        new(
+            "system_runtime_capture",
+            "RUNTIME CAPTURE: Capture one or more PNG frames from the current running editor game viewport. Requires system_runtime_control enable first. Defaults to one frame when frame_count is omitted. For multi-frame capture, set frame_count > 1 and interval_frames. Single-frame results return file_path, width, height, scene, session_id, captured_at, runtime_state; multi-frame results return frames[] and runtime_state.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "frame_count": { "type": "integer", "description": "How many frames to capture (default: 1)" },
+                "interval_frames": { "type": "integer", "description": "How many process frames to wait between captures when frame_count > 1 (default: 1)" }
+              }
+            }
+            """),
+        new(
+            "system_runtime_input",
+            "RUNTIME INPUT: Inject action-based or raw key input into the current running editor game session. Requires system_runtime_control enable first. inputs[] entries use kind=action|key, target, op=press|release|tap|hold, duration_ms?.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["action", "key"], "description": "Inject an InputMap action or a raw key event" },
+                      "target": { "type": "string", "description": "InputMap action name or a Godot key name" },
+                      "op": { "type": "string", "enum": ["press", "release", "tap", "hold"], "description": "Input operation to apply" },
+                      "duration_ms": { "type": "integer", "description": "Optional hold/tap duration in milliseconds" }
+                    },
+                    "required": ["kind", "target", "op"]
+                  },
+                  "description": "Input operations to inject into the running project"
+                }
+              },
+              "required": ["inputs"]
+            }
+            """),
+        new(
+            "system_runtime_step",
+            "RUNTIME STEP: Closed-loop helper that injects inputs, waits a fixed number of frames, optionally captures a frame, and returns the latest runtime_state. Requires system_runtime_control enable first. Requires: wait_frames. Optional: inputs[], capture=true.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["action", "key"], "description": "Inject an InputMap action or a raw key event" },
+                      "target": { "type": "string", "description": "InputMap action name or a Godot key name" },
+                      "op": { "type": "string", "enum": ["press", "release", "tap", "hold"], "description": "Input operation to apply" },
+                      "duration_ms": { "type": "integer", "description": "Optional hold/tap duration in milliseconds" }
+                    },
+                    "required": ["kind", "target", "op"]
+                  },
+                  "description": "Optional input operations to inject before waiting"
+                },
+                "wait_frames": { "type": "integer", "description": "How many process frames to wait after input injection" },
+                "capture": { "type": "boolean", "description": "Whether to capture a frame after waiting (default: true)" }
+              },
+              "required": ["wait_frames"]
+            }
+            """),
+        new(
             "system_scene_validate",
             "SCENE VALIDATE: Quick integrity check of a .tscn file — structural errors and missing file references. Lighter than scene_analyze; use first to confirm a scene is loadable. Returns: valid, issues[]{severity, type, message}, missing_dependencies[]. Requires: scene (.tscn path).",
             """
@@ -203,37 +283,28 @@ internal static class SystemToolCatalog
             }
             """),
         new(
-            "system_project_index_build",
-            "PROJECT INDEX BUILD: Build an in-memory symbol index over all scripts, scenes, and resources. MUST be called before project_symbol_search or scene_dependency_graph. Index is session-scoped — call again after plugin reload. Returns: script_count, scene_count, resource_count, symbol_count. Optional: include_resources=false to skip .tres/.res files.",
-            """
-            {
-              "type": "object",
-              "properties": {
-                "include_resources": { "type": "boolean", "description": "Whether to include .tres/.res resources in the index (default: true)" }
-              }
-            }
-            """),
-        new(
             "system_project_symbol_search",
-            "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name in the project index. REQUIRES project_index_build first. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
+            "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use and can be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
             """
             {
               "type": "object",
               "properties": {
-                "symbol": { "type": "string", "description": "Symbol name to search for (class name, script basename, or scene name)" }
+                "symbol": { "type": "string", "description": "Symbol name to search for (class name, script basename, or scene name)" },
+                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before searching (default: false)" }
               },
               "required": ["symbol"]
             }
             """),
         new(
             "system_scene_dependency_graph",
-            "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. REQUIRES project_index_build first. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path → [dep_paths]}, count.",
+            "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use and can be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
             """
             {
               "type": "object",
               "properties": {
                 "root_scene": { "type": "string", "description": "Optional root scene path. If omitted, returns the full dependency map." },
-                "max_depth": { "type": "integer", "description": "Optional max traversal depth when a root_scene is provided (default: 4)" }
+                "max_depth": { "type": "integer", "description": "Optional max traversal depth when a root_scene is provided (default: 4)" },
+                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before generating the graph (default: false)" }
               }
             }
             """)

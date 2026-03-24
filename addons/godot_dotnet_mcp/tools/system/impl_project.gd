@@ -378,8 +378,8 @@ func _execute_project_advise(args: Dictionary) -> Dictionary:
 				"tool_hint": "bindings_audit"})
 		if scene_count_val > 0:
 			suggestions.append({"category": "index", "severity": "info",
-				"message": "Build the project index to unlock symbol search and dependency navigation.",
-				"tool_hint": "project_index_build"})
+				"message": "Use project_symbol_search or scene_dependency_graph to build and reuse the internal project index on demand.",
+				"tool_hint": "project_symbol_search"})
 		if warning_count > 0 and error_count == 0:
 			suggestions.append({"category": "runtime", "severity": "warning",
 				"message": "Recent runtime warnings detected. Review scene setup before patching.",
@@ -396,8 +396,6 @@ func _execute_project_advise(args: Dictionary) -> Dictionary:
 			next_tools.append("bindings_audit")
 			next_tools.append("scene_validate")
 		if _goal_contains(goal, ["symbol", "index", "search", "class"]):
-			if not ("project_index_build" in next_tools):
-				next_tools.append("project_index_build")
 			if not ("project_symbol_search" in next_tools):
 				next_tools.append("project_symbol_search")
 		if _goal_contains(goal, ["scene", "dependency"]):

@@ -180,6 +180,10 @@ func get_tool_access_provider():
 	return _tool_access_feature
 
 
+func get_editor_debugger_bridge():
+	return _editor_debugger_bridge
+
+
 func start_server() -> void:
 	_on_start_requested()
 

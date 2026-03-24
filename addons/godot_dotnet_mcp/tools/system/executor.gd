@@ -16,7 +16,7 @@ func _init() -> void:
 		return
 	_bridge = bridge_script.new()
 
-	for impl_name in ["impl_project", "impl_scene", "impl_script", "impl_index"]:
+	for impl_name in ["impl_project", "impl_scene", "impl_script", "impl_index", "impl_runtime"]:
 		var path = _BASE + impl_name + ".gd"
 		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var can_inst = script != null and (script as Script).can_instantiate()
@@ -46,6 +46,19 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	for impl in _impls:
 		if impl.handles(tool_name):
 			return impl.execute(tool_name, args)
+	MCPDebugBuffer.record("warning", "system", "No handler for tool: %s" % tool_name)
+	if _bridge != null:
+		return _bridge.error("Unknown tool: %s" % tool_name)
+	return {"success": false, "error": "Unknown tool: %s" % tool_name}
+
+
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	for impl in _impls:
+		if not impl.handles(tool_name):
+			continue
+		if impl.has_method("execute_async"):
+			return await impl.execute_async(tool_name, args)
+		return impl.execute(tool_name, args)
 	MCPDebugBuffer.record("warning", "system", "No handler for tool: %s" % tool_name)
 	if _bridge != null:
 		return _bridge.error("Unknown tool: %s" % tool_name)

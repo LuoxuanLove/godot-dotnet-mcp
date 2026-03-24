@@ -1,5 +1,5 @@
 # 系统工具层
-系统工具层是插件的高层工具入口，统一暴露 15 个内置工具，用于读取项目状态、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
+系统工具层是插件的高层工具入口，统一暴露 18 个公开内置工具，用于读取项目状态、驱动编辑器内运行态、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
 
 默认 `system` 预设只启用这一层，适合先理解上下文，再决定是否下钻到底层原子工具。
 
@@ -9,12 +9,13 @@
 
 ```text
 tools/system/
-├─ executor.gd        # 调度器：初始化 impl 并扫描 custom_tools/，统一路由 execute
+├─ executor.gd        # 调度器：初始化 impl 并扫描 custom_tools/，统一路由 execute / execute_async
 ├─ atomic_bridge.gd   # 原子桥：call_atomic() 调用下层原子 executor，附带写保护逻辑
 ├─ impl_project.gd    # 项目级工具实现（6 个）
+├─ impl_runtime.gd    # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
 ├─ impl_scene.gd      # 场景级工具实现（3 个）
 ├─ impl_script.gd     # 脚本级工具实现（3 个）
-├─ impl_index.gd      # 索引与搜索实现（3 个）
+├─ impl_index.gd      # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 └─ lsp_client.gd      # Godot LSP 客户端，供脚本诊断相关工具调用
 ```
 
@@ -30,6 +31,12 @@ tools/system/
 - `system_project_run`：运行主场景或指定场景。
 - `system_project_stop`：停止当前运行中的项目。
 
+### 运行时自动化级
+- `system_runtime_control`：查询、启用或关闭当前编辑器调试会话的 runtime control 安全闸。
+- `system_runtime_capture`：统一截图入口；默认抓取单帧，传 `frame_count > 1` 时按 `interval_frames` 抓取低频多帧序列。
+- `system_runtime_input`：注入 `InputMap action` 或原始键盘输入，支持 `press/release/tap/hold`。
+- `system_runtime_step`：标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环。
+
 ### 场景级
 - `system_scene_validate`：做场景完整性检查与依赖缺失检测。
 - `system_scene_analyze`：分析节点、脚本、绑定和结构问题。
@@ -41,9 +48,15 @@ tools/system/
 - `system_script_patch`：以成员级方式补丁脚本内容。
 
 ### 索引级
-- `system_project_index_build`：构建项目级符号索引。
-- `system_project_symbol_search`：基于索引搜索类、脚本和场景符号。
-- `system_scene_dependency_graph`：生成场景依赖图。
+- `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，必要时可 `refresh_index=true` 强制刷新。
+- `system_scene_dependency_graph`：生成场景依赖图；同样复用内部项目索引并支持按需刷新。
+
+运行时自动化工具的边界固定为：
+
+- 仅支持通过 Godot 编辑器启动的运行态。
+- 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
+- 控制权限只对当前 debugger session 生效，不持久化。
+- 项目停止、会话断开、插件重载后会自动失效。
 
 ---
 
@@ -59,6 +72,17 @@ system_project_state
 ```
 
 这条链路适合先获取全局上下文，再进入局部修改，避免一开始就落到过细的原子操作上。
+
+如果目标是编辑器内运行态自动化，推荐顺序改为：
+
+```text
+system_project_run
+  -> system_runtime_control(action=enable)
+  -> system_runtime_step
+  -> system_runtime_capture / system_runtime_input
+```
+
+其中 `system_runtime_step` 是长期主闭环；更复杂的循环应由 Agent 或客户端在外层多次调用完成。
 
 ---
 

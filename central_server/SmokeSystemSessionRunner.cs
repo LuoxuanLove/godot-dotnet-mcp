@@ -318,6 +318,11 @@ internal static class SmokeSystemSessionRunner
         var executablePath = string.Empty;
         var executableSource = string.Empty;
         var systemPayload = default(JsonElement);
+        var projectRunPayload = default(JsonElement);
+        var runtimeControlPayload = default(JsonElement);
+        var runtimeStepPayload = default(JsonElement);
+        var projectStopPayload = default(JsonElement);
+        var captureFilePath = string.Empty;
 
         try
         {
@@ -429,6 +434,60 @@ internal static class SmokeSystemSessionRunner
                 cancellationToken);
             EnsureSuccess(statusResponse, "workspace_project_status");
 
+            var projectRunResponse = await dispatcher.ExecuteAsync(
+                "system_project_run",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(projectRunResponse, "system_project_run");
+            projectRunPayload = SerializeToElement(projectRunResponse.StructuredContent);
+
+            var runtimeControlResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_control",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    action = "enable",
+                    timeout_ms = 10_000,
+                }),
+                cancellationToken);
+            EnsureSuccess(runtimeControlResponse, "system_runtime_control");
+            runtimeControlPayload = SerializeToElement(runtimeControlResponse.StructuredContent);
+
+            var runtimeStepResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_step",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    wait_frames = 3,
+                    capture = true,
+                }),
+                cancellationToken);
+            EnsureSuccess(runtimeStepResponse, "system_runtime_step");
+            runtimeStepPayload = SerializeToElement(runtimeStepResponse.StructuredContent);
+            captureFilePath = ExtractRuntimeCaptureFilePath(runtimeStepPayload);
+            EnsureRuntimeCaptureFile(captureFilePath);
+
+            var projectStopResponse = await dispatcher.ExecuteAsync(
+                "system_project_stop",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = false,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(projectStopResponse, "system_project_stop");
+            projectStopPayload = SerializeToElement(projectStopResponse.StructuredContent);
+
             var summary = new
             {
                 success = true,
@@ -442,6 +501,11 @@ internal static class SmokeSystemSessionRunner
                 centralHostSession = DeserializeToObject(centralHostSession),
                 systemResult = DeserializeToObject(systemPayload),
                 workspaceStatus = DeserializeToObject(SerializeToElement(statusResponse.StructuredContent)),
+                projectRunResult = DeserializeToObject(projectRunPayload),
+                runtimeControlResult = DeserializeToObject(runtimeControlPayload),
+                runtimeStepResult = DeserializeToObject(runtimeStepPayload),
+                projectStopResult = DeserializeToObject(projectStopPayload),
+                captureFilePath,
             };
 
             await WritePlainJsonAsync(output, summary, cancellationToken);
@@ -461,6 +525,7 @@ internal static class SmokeSystemSessionRunner
                 projectRoot,
                 executablePath,
                 executableSource,
+                captureFilePath,
                 launchedProcessId,
                 launchedAlreadyRunning,
                 activeProjectId = sessionState.ActiveProjectId,
@@ -468,6 +533,18 @@ internal static class SmokeSystemSessionRunner
                 systemPayload = systemPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(systemPayload),
+                projectRunPayload = projectRunPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(projectRunPayload),
+                runtimeControlPayload = runtimeControlPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeControlPayload),
+                runtimeStepPayload = runtimeStepPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeStepPayload),
+                projectStopPayload = projectStopPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(projectStopPayload),
             }, cancellationToken);
             await error.WriteLineAsync($"[CentralServerSmoke] {ex.Message}");
             await error.FlushAsync();
@@ -602,6 +679,66 @@ internal static class SmokeSystemSessionRunner
         return string.Equals(resolution, "launched_editor", StringComparison.OrdinalIgnoreCase)
                || string.Equals(resolution, "reused_running_editor", StringComparison.OrdinalIgnoreCase)
                || string.Equals(resolution, "reused_ready_session", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ExtractRuntimeCaptureFilePath(JsonElement runtimeStepPayload)
+    {
+        if (runtimeStepPayload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException("system_runtime_step did not return an object payload.");
+        }
+
+        if (!runtimeStepPayload.TryGetProperty("data", out var dataElement) || dataElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException("system_runtime_step did not return a data object.");
+        }
+
+        if (dataElement.TryGetProperty("file_path", out var directFilePath)
+            && directFilePath.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(directFilePath.GetString()))
+        {
+            return directFilePath.GetString()!;
+        }
+
+        if (dataElement.TryGetProperty("frame", out var frameElement)
+            && frameElement.ValueKind == JsonValueKind.Object
+            && frameElement.TryGetProperty("file_path", out var nestedFilePath)
+            && nestedFilePath.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(nestedFilePath.GetString()))
+        {
+            return nestedFilePath.GetString()!;
+        }
+
+        throw new CentralToolException("system_runtime_step did not return a capture file path.");
+    }
+
+    private static void EnsureRuntimeCaptureFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            throw new CentralToolException("Runtime capture file path is empty.");
+        }
+
+        if (!File.Exists(filePath))
+        {
+            throw new CentralToolException($"Runtime capture file was not created: {filePath}");
+        }
+
+        using var stream = File.OpenRead(filePath);
+        Span<byte> signature = stackalloc byte[8];
+        var read = stream.Read(signature);
+        if (read < 8
+            || signature[0] != 0x89
+            || signature[1] != 0x50
+            || signature[2] != 0x4E
+            || signature[3] != 0x47
+            || signature[4] != 0x0D
+            || signature[5] != 0x0A
+            || signature[6] != 0x1A
+            || signature[7] != 0x0A)
+        {
+            throw new CentralToolException($"Runtime capture file is not a valid PNG: {filePath}");
+        }
     }
 
     private static void TrackLaunchFromPayload(JsonElement payload, ref int launchedProcessId, ref bool launchedAlreadyRunning)

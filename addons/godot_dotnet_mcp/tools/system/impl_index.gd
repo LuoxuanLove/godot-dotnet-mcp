@@ -1,13 +1,13 @@
 @tool
 extends RefCounted
 
-## System implementation: project_index_build, project_symbol_search, scene_dependency_graph
-## Holds _project_index shared state -- legitimate memory sharing, not system->system calls.
+## System implementation: project_symbol_search, scene_dependency_graph
+## Holds _index_cache shared state -- legitimate memory sharing, not system->system calls.
 
 var bridge
-var _project_index: Dictionary = {}
+var _index_cache: Dictionary = {}
 
-const HANDLED_TOOLS := ["project_index_build", "project_symbol_search", "scene_dependency_graph"]
+const HANDLED_TOOLS := ["project_symbol_search", "scene_dependency_graph"]
 
 
 func handles(tool_name: String) -> bool:
@@ -17,27 +17,18 @@ func handles(tool_name: String) -> bool:
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
-			"name": "project_index_build",
-			"description": "PROJECT INDEX BUILD: Build an in-memory symbol index over all scripts, scenes, and resources. MUST be called before project_symbol_search or scene_dependency_graph. Index is session-scoped — call again after plugin reload. Returns: script_count, scene_count, resource_count, symbol_count. Optional: include_resources=false to skip .tres/.res files.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"include_resources": {
-						"type": "boolean",
-						"description": "Whether to include .tres/.res resources in the index (default: true)"
-					}
-				}
-			}
-		},
-		{
 			"name": "project_symbol_search",
-			"description": "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name in the project index. REQUIRES project_index_build first. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
+			"description": "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use and can be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"symbol": {
 						"type": "string",
 						"description": "Symbol name to search for (class name, script basename, or scene name)"
+					},
+					"refresh_index": {
+						"type": "boolean",
+						"description": "Force rebuilding the internal project index before searching (default: false)"
 					}
 				},
 				"required": ["symbol"]
@@ -45,7 +36,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "scene_dependency_graph",
-			"description": "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. REQUIRES project_index_build first. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path → [dep_paths]}, count.",
+			"description": "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use and can be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -56,6 +47,10 @@ func get_tools() -> Array[Dictionary]:
 					"max_depth": {
 						"type": "integer",
 						"description": "Optional max traversal depth when a root_scene is provided (default: 4)"
+					},
+					"refresh_index": {
+						"type": "boolean",
+						"description": "Force rebuilding the internal project index before generating the graph (default: false)"
 					}
 				}
 			}
@@ -66,7 +61,6 @@ func get_tools() -> Array[Dictionary]:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
-		"project_index_build":    return _execute_project_index_build(args)
 		"project_symbol_search":  return _execute_project_symbol_search(args)
 		"scene_dependency_graph": return _execute_scene_dependency_graph(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
@@ -146,7 +140,7 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 		var resource_entry := {"path": resource_path, "name": str(resource_path).get_file().get_basename()}
 		_index_symbol(symbols, str(resource_entry.get("name", "")), "resource", resource_path, resource_entry)
 
-	_project_index = {
+	_index_cache = {
 		"built_at_unix": int(Time.get_unix_time_from_system()),
 		"include_resources": include_resources,
 		"scripts": scripts,
@@ -157,15 +151,24 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 		"scene_dependencies": scene_dependencies,
 		"dependency_records": dependency_records
 	}
-	return _project_index
+	return _index_cache
 
 
-func _ensure_project_index(include_resources: bool = true) -> Dictionary:
-	if _project_index.is_empty():
-		return _build_project_index(include_resources)
-	if include_resources and not bool(_project_index.get("include_resources", true)):
-		return _build_project_index(true)
-	return _project_index
+func _ensure_index_cache(include_resources: bool = true, force_rebuild: bool = false) -> Dictionary:
+	var state := "reused"
+	if _index_cache.is_empty():
+		_index_cache = _build_project_index(include_resources)
+		state = "built"
+	elif force_rebuild:
+		_index_cache = _build_project_index(include_resources)
+		state = "refreshed"
+	elif include_resources and not bool(_index_cache.get("include_resources", true)):
+		_index_cache = _build_project_index(true)
+		state = "refreshed"
+	return {
+		"state": state,
+		"index": _index_cache
+	}
 
 
 func _traverse_scene_deps(current: String, max_depth: int, dep_map: Dictionary, visited: Dictionary, result: Dictionary, depth: int) -> void:
@@ -180,35 +183,15 @@ func _traverse_scene_deps(current: String, max_depth: int, dep_map: Dictionary, 
 		_traverse_scene_deps(str(child), max_depth, dep_map, visited, result, depth + 1)
 
 
-# --- tool implementations ---
-
-func _execute_project_index_build(args: Dictionary) -> Dictionary:
-	var include_resources := bool(args.get("include_resources", true))
-	MCPDebugBuffer.record("debug", "system",
-		"index_build: include_resources=%s" % str(include_resources))
-	var index := _build_project_index(include_resources)
-	MCPDebugBuffer.record("debug", "system",
-		"index_build: %d scripts, %d scenes, %d symbols" % [
-			int((index.get("script_paths", []) as Array).size()),
-			int((index.get("scenes", []) as Array).size()),
-			int((index.get("symbols", {}) as Dictionary).size())
-		])
-	return bridge.success({
-		"built_at_unix": int(index.get("built_at_unix", 0)),
-		"include_resources": include_resources,
-		"script_count": int((index.get("script_paths", []) as Array).size()),
-		"scene_count": int((index.get("scenes", []) as Array).size()),
-		"resource_count": int((index.get("resources", []) as Array).size()),
-		"symbol_count": int((index.get("symbols", {}) as Dictionary).size())
-	})
-
-
 func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 	var symbol := str(args.get("symbol", "")).strip_edges()
 	if symbol.is_empty():
 		return bridge.error("symbol is required")
 
-	var index := _ensure_project_index(true)
+	var refresh_index := bool(args.get("refresh_index", false))
+	var index_result := _ensure_index_cache(true, refresh_index)
+	var index: Dictionary = index_result.get("index", {})
+	var index_state := str(index_result.get("state", "reused"))
 	var exact_matches: Array = []
 	var partial_matches: Array = []
 	var lowered := symbol.to_lower()
@@ -234,6 +217,8 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 		"symbol_search: '%s' → %d exact, %d partial" % [symbol, exact_matches.size(), partial_matches.size()])
 	return bridge.success({
 		"symbol": symbol,
+		"index_state": index_state,
+		"index_built_at_unix": int(index.get("built_at_unix", 0)),
 		"exact_match_count": exact_matches.size(),
 		"partial_match_count": partial_matches.size(),
 		"match_count": matches.size(),
@@ -242,7 +227,10 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 
 
 func _execute_scene_dependency_graph(args: Dictionary) -> Dictionary:
-	var index := _ensure_project_index(true)
+	var refresh_index := bool(args.get("refresh_index", false))
+	var index_result := _ensure_index_cache(true, refresh_index)
+	var index: Dictionary = index_result.get("index", {})
+	var index_state := str(index_result.get("state", "reused"))
 	var root_scene := str(args.get("root_scene", "")).strip_edges()
 	var max_depth := max(int(args.get("max_depth", 4)), 0)
 	var dep_map: Dictionary = index.get("scene_dependencies", {})
@@ -250,6 +238,8 @@ func _execute_scene_dependency_graph(args: Dictionary) -> Dictionary:
 	if root_scene.is_empty():
 		return bridge.success({
 			"root": "", "max_depth": max_depth,
+			"index_state": index_state,
+			"index_built_at_unix": int(index.get("built_at_unix", 0)),
 			"count": dep_map.size(), "dependencies": dep_map
 		})
 
@@ -257,4 +247,6 @@ func _execute_scene_dependency_graph(args: Dictionary) -> Dictionary:
 	var visited: Dictionary = {}
 	_traverse_scene_deps(root_scene, max_depth, dep_map, visited, result, 0)
 	return bridge.success({"root": root_scene, "max_depth": max_depth,
+		"index_state": index_state,
+		"index_built_at_unix": int(index.get("built_at_unix", 0)),
 		"count": result.size(), "dependencies": result})

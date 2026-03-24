@@ -44,6 +44,10 @@ func build_tools_list_result() -> Dictionary:
 
 
 func build_tool_call_result(params: Dictionary) -> Dictionary:
+	return await build_tool_call_result_async(params)
+
+
+func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var tool_name = params.get("name", "")
 	var arguments = params.get("arguments", {})
 
@@ -69,7 +73,7 @@ func build_tool_call_result(params: Dictionary) -> Dictionary:
 	if loader == null:
 		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
 
-	var result: Dictionary = loader.execute_tool(category, actual_tool_name, arguments)
+	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)
 	if not result.get("success", false):
 		MCPDebugBuffer.record(

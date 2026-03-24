@@ -12,6 +12,10 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array = [
 	"system_project_state",
 	"system_project_advise",
 	"system_runtime_diagnose",
+	"system_runtime_control",
+	"system_runtime_capture",
+	"system_runtime_input",
+	"system_runtime_step",
 	"system_project_configure",
 	"system_project_run",
 	"system_project_stop",
@@ -21,7 +25,6 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array = [
 	"system_scene_patch",
 	"system_script_analyze",
 	"system_script_patch",
-	"system_project_index_build",
 	"system_project_symbol_search",
 	"system_scene_dependency_graph"
 ]
