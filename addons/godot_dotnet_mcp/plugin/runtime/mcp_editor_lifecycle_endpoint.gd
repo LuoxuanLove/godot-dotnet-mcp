@@ -17,6 +17,14 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_error = callbacks.get("error", Callable())
 
 
+func dispose() -> void:
+	_build_state = Callable()
+	_execute_close = Callable()
+	_execute_restart = Callable()
+	_success = Callable()
+	_error = Callable()
+
+
 func handle_post_request(body: String) -> Dictionary:
 	var parsed = JSON.parse_string(body)
 	if not (parsed is Dictionary):

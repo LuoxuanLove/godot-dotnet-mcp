@@ -95,6 +95,20 @@ func refresh_status_from_loader() -> void:
 	_apply_status(status, summary)
 
 
+func dispose() -> void:
+	if _tool_loader != null and _tool_loader.has_method("shutdown"):
+		_tool_loader.shutdown()
+	_tool_loader = null
+	_server_context = null
+	_tool_loader_initialized = false
+	_tool_loader_healthy = false
+	_tool_loader_status = "disposed"
+	_tool_loader_last_summary = {}
+	_disabled_tools.clear()
+	_log = Callable()
+	_record_registration_issue = Callable()
+
+
 func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Dictionary:
 	_replace_tool_loader()
 	var summary = _tool_loader.initialize(get_disabled_tools(), force_reload_scripts)
@@ -105,10 +119,8 @@ func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Diction
 
 
 func _replace_tool_loader() -> void:
-	if _tool_loader != null and _tool_loader.has_method("get_gdscript_lsp_diagnostics_service"):
-		var previous_service = _tool_loader.get_gdscript_lsp_diagnostics_service()
-		if previous_service != null and previous_service.has_method("clear"):
-			previous_service.clear()
+	if _tool_loader != null and _tool_loader.has_method("shutdown"):
+		_tool_loader.shutdown()
 	_tool_loader = MCPToolLoader.new()
 	if _server_context != null:
 		_tool_loader.configure(_server_context)

@@ -9,6 +9,10 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_get_plugin_host = callbacks.get("get_plugin_host", Callable())
 
 
+func dispose() -> void:
+	_get_plugin_host = Callable()
+
+
 func build_state() -> Dictionary:
 	var plugin = _get_plugin_host_safe()
 	if plugin == null:

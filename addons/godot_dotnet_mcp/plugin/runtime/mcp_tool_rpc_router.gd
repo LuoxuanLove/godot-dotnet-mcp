@@ -19,6 +19,14 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_sanitize_for_json = callbacks.get("sanitize_for_json", Callable())
 
 
+func dispose() -> void:
+	_get_tool_loader = Callable()
+	_is_tool_enabled = Callable()
+	_is_tool_exposed = Callable()
+	_log = Callable()
+	_sanitize_for_json = Callable()
+
+
 func build_tools_list_result() -> Dictionary:
 	var tools_list: Array[Dictionary] = []
 	var loader = _get_loader()

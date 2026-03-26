@@ -14,6 +14,9 @@ class FakeServerContext extends RefCounted:
 		return _permission_provider
 
 
+var _loader = null
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var permission_provider = DefaultPermissionProviderScript.new()
 	permission_provider.configure({
@@ -21,9 +24,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"show_user_tools": true
 	})
 
-	var loader = ToolLoaderScript.new()
-	loader.configure(FakeServerContext.new(permission_provider))
-	var summary: Dictionary = loader.initialize([])
+	_loader = ToolLoaderScript.new()
+	_loader.configure(FakeServerContext.new(permission_provider))
+	var summary: Dictionary = _loader.initialize([])
 
 	if int(summary.get("category_count", 0)) <= 0:
 		return _failure("Tool loader initialize() did not report any categories.")
@@ -32,11 +35,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(summary.get("exposed_tool_count", 0)) <= 0:
 		return _failure("Tool loader initialize() did not report any exposed tools.")
 
-	var status: Dictionary = loader.get_tool_loader_status()
+	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):
 		return _failure("Tool loader status should be healthy after initialization.")
 
-	var exposed_tools: Array[Dictionary] = loader.get_exposed_tool_definitions()
+	var exposed_tools: Array[Dictionary] = _loader.get_exposed_tool_definitions()
 	if exposed_tools.is_empty():
 		return _failure("Tool loader did not return any exposed tool definitions.")
 
@@ -46,11 +49,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default permission provider.")
 
-	loader.set_disabled_tools(["system_project_state"])
-	if loader.is_tool_exposed("system_project_state"):
+	_loader.set_disabled_tools(["system_project_state"])
+	if _loader.is_tool_exposed("system_project_state"):
 		return _failure("Disabled tool system_project_state should no longer be exposed.")
 
-	var disabled_status: Dictionary = loader.get_tool_loader_status()
+	var disabled_status: Dictionary = _loader.get_tool_loader_status()
 	if int(disabled_status.get("exposed_tool_count", 0)) >= int(status.get("exposed_tool_count", 0)):
 		return _failure("Disabling system_project_state did not reduce the exposed tool count.")
 
@@ -65,6 +68,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"healthy_status": str(status.get("status", ""))
 		}
 	}
+
+
+func cleanup_case(_tree: SceneTree) -> void:
+	if _loader != null and _loader.has_method("shutdown"):
+		_loader.shutdown()
+	_loader = null
 
 
 func _failure(message: String) -> Dictionary:

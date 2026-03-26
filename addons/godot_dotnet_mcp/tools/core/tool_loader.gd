@@ -204,6 +204,29 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 	return _metrics_service.build_tool_usage_stats()
 
 
+func shutdown() -> void:
+	_release_all_runtimes("shutdown")
+	_release_gdscript_lsp_diagnostics_service()
+	if _reload_service != null and _reload_service.has_method("dispose"):
+		_reload_service.dispose()
+	if _runtime_service != null and _runtime_service.has_method("dispose"):
+		_runtime_service.dispose()
+	if _exposure_service != null and _exposure_service.has_method("dispose"):
+		_exposure_service.dispose()
+	if _diagnostic_service != null and _diagnostic_service.has_method("dispose"):
+		_diagnostic_service.dispose()
+	if _metrics_service != null:
+		_metrics_service.reset()
+	_server_context = null
+	_entries_by_category.clear()
+	_ordered_categories.clear()
+	_runtime_by_category.clear()
+	_tool_definitions_by_category.clear()
+	_disabled_tools.clear()
+	_reload_status.clear()
+	_force_reload_script_load = false
+
+
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	return await execute_tool_async(category, tool_name, args)
 
@@ -430,6 +453,7 @@ func is_tool_enabled(tool_name: String) -> bool:
 
 
 func _reset_state() -> void:
+	_release_all_runtimes("reset_state")
 	_entries_by_category.clear()
 	_ordered_categories.clear()
 	_runtime_by_category.clear()
@@ -459,6 +483,7 @@ func _refresh_entries() -> void:
 
 	for existing_category in _runtime_by_category.keys():
 		if not new_entries.has(existing_category):
+			_unload_runtime(existing_category, "refresh_entries_removed")
 			_runtime_by_category.erase(existing_category)
 			_tool_definitions_by_category.erase(existing_category)
 
@@ -607,6 +632,7 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 	var defs: Array = _tool_definitions_by_category.get("user", [])
 	if executor == null:
 		if defs.is_empty() and not runtime.is_empty():
+			_unload_runtime("user", "idle_runtime_missing_executor")
 			_runtime_by_category.erase("user")
 			_tool_definitions_by_category.erase("user")
 			_refresh_runtime_context()
@@ -615,9 +641,31 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 		return
 	if not _as_bool(executor.should_unload_runtime()):
 		return
+	_unload_runtime("user", "idle_runtime")
 	_runtime_by_category.erase("user")
 	_tool_definitions_by_category.erase("user")
 	_refresh_runtime_context()
+
+
+func _release_all_runtimes(reason: String) -> void:
+	if _runtime_service == null:
+		return
+	for category in _runtime_by_category.keys():
+		_runtime_service.unload_runtime(category, reason)
+
+
+func _release_gdscript_lsp_diagnostics_service() -> void:
+	if _gdscript_lsp_diagnostics_service != null and is_instance_valid(_gdscript_lsp_diagnostics_service):
+		if _gdscript_lsp_diagnostics_service.has_method("clear"):
+			_gdscript_lsp_diagnostics_service.clear()
+	_gdscript_lsp_diagnostics_service = null
+	if Engine.has_singleton("MCPRuntimeBridge"):
+		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
+		if runtime_bridge != null:
+			if runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
+				runtime_bridge.set_gdscript_lsp_diagnostics_service(null)
+			if runtime_bridge.has_method("set_tool_loader"):
+				runtime_bridge.set_tool_loader(null)
 
 
 func _get_permission_provider():

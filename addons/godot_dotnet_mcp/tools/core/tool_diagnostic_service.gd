@@ -12,6 +12,11 @@ func configure(options: Dictionary = {}) -> void:
 	_get_entry = options.get("get_entry", Callable())
 
 
+func dispose() -> void:
+	_load_errors.clear()
+	_get_entry = Callable()
+
+
 func clear_load_errors() -> void:
 	_load_errors.clear()
 

@@ -19,6 +19,15 @@ func configure(callbacks: Dictionary = {}, server_info: Dictionary = {}) -> void
 	_server_version = str(server_info.get("server_version", ""))
 
 
+func dispose() -> void:
+	_get_tool_loader = Callable()
+	_get_tool_loader_status = Callable()
+	_get_server_stats = Callable()
+	_log = Callable()
+	_server_name = ""
+	_server_version = ""
+
+
 func build_json_rpc_response(result, id) -> Dictionary:
 	return {
 		"jsonrpc": "2.0",

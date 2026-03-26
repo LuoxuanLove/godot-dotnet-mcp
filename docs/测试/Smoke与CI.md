@@ -54,10 +54,12 @@ scripts/
 
 ## 3. 当前进度
 
-截至 `2026-03-26`：
+截至 `2026-03-27`：
 
 - `SmokeSystemSessionRunner.cs` 已完成两轮拆分
 - 主文件已降到 `659` 行
+- `SmokeSystemSessionReuseScenario.cs` 当前约 `380` 行
+- `SmokeSystemSessionAutoLaunchScenario.cs` 当前约 `608` 行
 - `reuse session` smoke 当前稳定可跑
 - `validate-refactor.yml` 已接入 reuse smoke
 
@@ -77,11 +79,7 @@ scripts/
 都仍然持有较长的顺序化编排逻辑。  
 主要问题不是功能错误，而是后续继续加 case 时，维护成本会偏高。
 
-### 2. smoke 与 Host contract support 仍有边界交叉
-
-当前 Host contracts 仍复用了一部分 smoke support，这说明 smoke support 仍在扮演“临时共享测试底座”的角色。
-
-### 3. auto-launch 仍属于更强环境依赖场景
+### 2. auto-launch 仍属于更强环境依赖场景
 
 reuse smoke 当前已经稳定进入 CI，而 auto-launch 相关链路仍更适合作为：
 

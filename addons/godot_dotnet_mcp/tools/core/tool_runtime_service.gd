@@ -27,6 +27,19 @@ func configure(tool_loader: Object, server_context: Object, options: Dictionary 
 	_record_load_error = options.get("record_load_error", Callable())
 
 
+func dispose() -> void:
+	_tool_loader = null
+	_server_context = null
+	_get_entry = Callable()
+	_get_runtime = Callable()
+	_set_runtime = Callable()
+	_has_tool_definitions_cache = Callable()
+	_get_tool_definitions = Callable()
+	_set_tool_definitions = Callable()
+	_get_force_reload_script_load = Callable()
+	_record_load_error = Callable()
+
+
 func ensure_tool_definitions(category: String) -> Array:
 	if _call_has_tool_definitions_cache(category):
 		return _call_get_tool_definitions(category)
@@ -174,10 +187,27 @@ func unload_runtime(category: String, reason: String) -> void:
 	var runtime = _call_get_runtime(category)
 	if runtime.is_empty():
 		return
+	var executor = runtime.get("instance", null)
+	_teardown_executor(executor)
 	runtime["instance"] = null
 	runtime["state"] = "definitions_only"
 	runtime["last_unloaded_reason"] = reason
 	_call_set_runtime(category, runtime)
+
+
+func _teardown_executor(executor) -> void:
+	if executor == null:
+		return
+	if executor.has_method("dispose"):
+		executor.dispose()
+	elif executor.has_method("shutdown"):
+		executor.shutdown()
+	if executor is Node:
+		var node: Node = executor
+		if is_instance_valid(node):
+			if node.get_parent() != null:
+				node.get_parent().remove_child(node)
+			node.queue_free()
 
 
 func _load_script_resource(path: String, force_reload: bool) -> Resource:

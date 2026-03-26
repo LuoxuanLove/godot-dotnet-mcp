@@ -29,6 +29,17 @@ func configure(options: Dictionary = {}) -> void:
 		_exposed_categories = PackedStringArray(exposed_categories)
 
 
+func dispose() -> void:
+	_ensure_tool_definitions = Callable()
+	_get_cached_tool_definitions = Callable()
+	_get_entry = Callable()
+	_get_runtime = Callable()
+	_is_category_visible = Callable()
+	_is_tool_enabled = Callable()
+	_current_load_state = Callable()
+	_exposed_categories = PackedStringArray()
+
+
 func build_tools_by_category(ordered_categories: Array[String], visible_only: bool) -> Dictionary:
 	var result: Dictionary = {}
 	for category in ordered_categories:

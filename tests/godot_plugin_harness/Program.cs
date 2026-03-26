@@ -5,6 +5,11 @@ using System.Text.Json;
 internal static class Program
 {
     private const int HarnessTimeoutMs = 120_000;
+    private static readonly string[] LeakWarningMarkers =
+    [
+        "ObjectDB instances leaked at exit",
+        "resources still in use at exit",
+    ];
 
     private static async Task<int> Main(string[] args)
     {
@@ -68,12 +73,16 @@ internal static class Program
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
-            preserveStageRoot = keepStageRoot && process.ExitCode != 0;
+            var leakWarningsDetected = ContainsLeakWarnings(stderr);
+            var succeeded = process.ExitCode == 0 && !leakWarningsDetected;
+            preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
             {
-                success = process.ExitCode == 0,
+                success = succeeded,
                 skipped = false,
                 exitCode = process.ExitCode,
+                leakWarningsDetected,
+                reason = leakWarningsDetected ? "godot_exit_leaks_detected" : string.Empty,
                 godotPath = explicitGodotPath,
                 stageRoot,
                 stageKept = preserveStageRoot,
@@ -82,7 +91,7 @@ internal static class Program
             };
 
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
-            return process.ExitCode == 0 ? 0 : 1;
+            return succeeded ? 0 : 1;
         }
         catch (OperationCanceledException)
         {
@@ -252,5 +261,15 @@ internal static class Program
         }
 
         return null;
+    }
+
+    private static bool ContainsLeakWarnings(string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return false;
+        }
+
+        return LeakWarningMarkers.Any(stderr.Contains);
     }
 }

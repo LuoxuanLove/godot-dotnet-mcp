@@ -58,7 +58,7 @@ tests/host_contracts/
 这些用例覆盖的重点是：
 
 - 工具目录结构
-- 已删除旧 `workspace_editor_proxy_call` 后的目录收口
+- Host 工具目录当前只暴露正式 `workspace / system / dotnet` 入口
 - `EditorProcessService` 的 external probe seam 可注入且不再硬绑在 WMI 实现上
 - `CentralWorkspaceState` 驱动的 active project / active session 清理
 - 编辑器缺席时的错误分支
@@ -126,7 +126,7 @@ tests/host_contracts/
 
 截至当前状态，Host contracts 已经连续覆盖并守住了以下结构性变化：
 
-- `workspace_editor_proxy_call` 从目录与实现中删除
+- 工具目录已收口为正式 `workspace / system / dotnet` 入口
 - `SessionState` 替换为 `CentralWorkspaceState`
 - `EditorProcessService` 拆为 façade + residency / launch / termination
 - `EditorSessionCoordinator` 拆为 façade + acquisition service

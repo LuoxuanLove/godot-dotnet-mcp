@@ -24,6 +24,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var events = bridge.read_fallback_events()
 
 	tree.root.remove_child(bridge)
+	if bridge.has_method("dispose"):
+		bridge.dispose()
 	bridge.queue_free()
 	await tree.process_frame
 

@@ -52,12 +52,15 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-26`，当前有 `11` 个 case：
+截至 `2026-03-27`，当前有 `14` 个 case：
 
 | 用例 | 目标 |
 |---|---|
 | `runtime_bridge_invalid_action_fallback` | 验证 `mcp_runtime_bridge` 对非法 action 的 fallback reply |
 | `runtime_control_contracts` | 验证 `runtime_control_service` 在无 session 时的状态和参数错误模型 |
+| `runtime_control_reply_resolver_contracts` | 验证 `mcp_runtime_control_reply_resolver` 对 fallback reply 的归一化与错误映射 |
+| `runtime_fallback_store_contracts` | 验证 `mcp_runtime_fallback_store` 的持久化、裁剪与读取语义 |
+| `runtime_reply_service_contracts` | 验证 `mcp_runtime_reply_service` 的 success/error payload、`runtime_context`、`runtime_state` 与 hint |
 | `http_server_contracts` | 验证 `mcp_http_server` 的 lifecycle、`tools/list`、`tools/call` 结构契约 |
 | `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、CORS 与 404 语义 |
 | `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影与 JSON 清洗 |
@@ -70,7 +73,8 @@ tests/godot_plugin_harness_fixture/
 
 当前实测状态：
 
-- suite：`11/11` 通过
+- suite：`14/14` 通过
+- harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
 - `tool_count=118`
@@ -102,6 +106,7 @@ tests/godot_plugin_harness_fixture/
 - case 级开始/结束日志
 - 通过环境变量筛选单 case
 - 逐 case `cleanup_case()` 钩子
+- suite 级 `_suite_final_cleanup()` 收尾
 
 这对排查卡死、性能问题和资源清理问题很有帮助。
 
@@ -124,6 +129,9 @@ tests/godot_plugin_harness_fixture/
 - `mcp_http_response_service.gd`
 - `mcp_json_rpc_router.gd`
 - `mcp_tools_api_service.gd`
+- `mcp_runtime_fallback_store.gd`
+- `mcp_runtime_reply_service.gd`
+- `mcp_runtime_control_reply_resolver.gd`
 - `mcp_http_server.gd` 的公共测试入口
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
 
@@ -131,41 +139,16 @@ tests/godot_plugin_harness_fixture/
 
 ---
 
-## 当前已知问题
+## 当前边界与后续收口点
 
 ### 1. 已摆脱私有方法名耦合，但 seam 仍可继续独立
 
 当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。  
 这显著降低了“内部方法改名或拆分导致测试先碎”的风险。
 
-不过当前 seam 仍然主要挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上，后续仍建议继续往更独立的 helper 模块收口。
+不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮虽然已经把 runtime fallback / reply 行为抽到独立 helper，但后续仍建议继续把 command adapter 和 step 执行器进一步外提。
 
-### 2. 退出阶段仍有资源清理告警
-
-当前 suite 成功退出时，Godot 仍会输出：
-
-- `ObjectDB instances leaked at exit`
-- `resources still in use at exit`
-
-这说明：
-
-- fixture 生命周期
-- 节点释放顺序
-- fallback 文件清理
-- 资源引用释放
-
-仍然没有完全收口。
-
-当前已经新增第一轮统一 cleanup 钩子，用于：
-
-- 每个 case 执行后显式 cleanup
-- 额外推进两帧，给 `queue_free` / deferred cleanup 收尾
-- 清理 runtime fallback 文件
-- 释放测试中显式创建的临时 `Node`
-
-但截至本轮，退出告警数量没有明显下降，说明剩余问题更接近脚本资源缓存、tool loader 图谱或 GDScript 运行时持有，而不只是简单的测试尾巴未扫净。
-
-### 3. 当前仍偏“结构契约 + 局部 fake”混合模式
+### 2. 当前仍偏“结构契约 + 局部 fake”混合模式
 
 这是当前阶段可以接受的折中，但后续应继续往“稳定 seam + 明确 fixture”方向收口。
 
@@ -215,13 +198,26 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 建议目标：
 
 - `RuntimeCommandAdapter`
+- `RuntimeCaptureExecutor / RuntimeInputExecutor / RuntimeStepExecutor`
 - `RuntimeFallbackStore`
-- `RuntimeReplyAssembler`
+- `RuntimeReplyWriter`
 
-当前已经完成 command capture / fallback 入口的公共化。  
-下一步目标是让 fallback 与 reply 行为可以更独立地测试，而不必总通过 bridge 节点本身。
+当前已经完成 command capture、fallback store、reply writer 的第一轮公共化。  
+下一步目标是让 capture / input / step 三类执行逻辑也可以更独立地测试，而不必总通过 bridge 节点本身。
 
-### 3. 补更多负例
+### 3. 继续把 `runtime_control_service.gd` seam 从 service 本体往外收口
+
+建议目标：
+
+- `SessionSelector`
+- `EditorErrorMapper`
+- `RuntimeReplyResolver`
+- `RequestCoordinator / ReplyWaiter`
+
+当前已经完成 session selector、error mapper、reply resolver 的第一轮外提。  
+下一步目标是继续把 pending request 生命周期与 request dispatch 边界从 service 本体中拆开。
+
+### 4. 补更多负例
 
 优先补充：
 
@@ -230,14 +226,6 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 - `runtime_session_lost`
 - `runtime_control` enable / disable / step 的更多失败路径
 - 更贴近 transport 的 HTTP 请求路径
-
-### 4. 收口清理链
-
-后续需要建立统一 teardown helper，处理：
-
-- 节点移除
-- `queue_free`
-- fallback 事件文件
 - 临时资源
 - 测试状态清理
 

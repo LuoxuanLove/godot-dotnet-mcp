@@ -107,6 +107,8 @@ func cleanup_case(tree: SceneTree) -> void:
 		return
 	if _server.has_method("stop"):
 		_server.stop()
+	if _server.has_method("dispose"):
+		_server.dispose()
 	_server.free()
 	_server = null
 	await tree.process_frame

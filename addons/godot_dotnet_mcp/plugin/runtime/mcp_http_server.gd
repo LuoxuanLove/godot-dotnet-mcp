@@ -65,6 +65,11 @@ func _ready() -> void:
 	_ensure_initialized()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		dispose()
+
+
 func _log(message: String, level: String = "debug") -> void:
 	MCPDebugBuffer.record(level, "server", message)
 	if _debug_mode:
@@ -205,6 +210,35 @@ func stop() -> void:
 	_running = false
 	_log("Server stopped", "info")
 	server_stopped.emit()
+
+
+func dispose() -> void:
+	stop()
+	if _runtime_control_service != null and _runtime_control_service.has_method("reset"):
+		_runtime_control_service.reset()
+	if _tool_loader_supervisor != null and _tool_loader_supervisor.has_method("dispose"):
+		_tool_loader_supervisor.dispose()
+	_dispose_helper(_tool_rpc_router)
+	_dispose_helper(_editor_lifecycle_endpoint)
+	_dispose_helper(_editor_lifecycle_action_service)
+	_dispose_helper(_editor_lifecycle_state_builder)
+	_dispose_helper(_http_request_router)
+	_dispose_helper(_json_rpc_router)
+	_dispose_helper(_tools_api_service)
+	_dispose_helper(_http_response_service)
+	_tool_loader_supervisor = null
+	_tool_rpc_router = null
+	_editor_lifecycle_endpoint = null
+	_editor_lifecycle_action_service = null
+	_editor_lifecycle_state_builder = null
+	_http_request_router = null
+	_json_rpc_router = null
+	_tools_api_service = null
+	_http_response_service = null
+	_runtime_control_service = null
+	_gdscript_lsp_diagnostics_service = null
+	_default_permission_provider = null
+	_tcp_server = null
 
 
 func is_running() -> bool:
@@ -800,6 +834,13 @@ func _handle_mcp_request_async(body: String) -> Dictionary:
 	request_received.emit(method, params)
 	_ensure_json_rpc_router()
 	return await _json_rpc_router.route_request_async(method, params, id, has_id)
+
+
+func _dispose_helper(service) -> void:
+	if service == null:
+		return
+	if service.has_method("dispose"):
+		service.dispose()
 
 
 func _handle_notification(method: String, _params: Dictionary) -> void:

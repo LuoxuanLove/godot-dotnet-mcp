@@ -21,6 +21,16 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_log = callbacks.get("log", Callable())
 
 
+func dispose() -> void:
+	_handle_initialize = Callable()
+	_handle_tools_list = Callable()
+	_handle_tools_call_async = Callable()
+	_handle_notification = Callable()
+	_build_json_rpc_response = Callable()
+	_build_json_rpc_error = Callable()
+	_log = Callable()
+
+
 func route_request_async(method: String, params: Dictionary, id, has_id: bool) -> Dictionary:
 	if not has_id:
 		_call_notification(method, params)

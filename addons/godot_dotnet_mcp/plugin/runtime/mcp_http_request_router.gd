@@ -19,6 +19,15 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_build_cors_response = callbacks.get("build_cors_response", Callable())
 
 
+func dispose() -> void:
+	_handle_mcp_request_async = Callable()
+	_build_health_response = Callable()
+	_build_tools_list_response = Callable()
+	_handle_editor_lifecycle_request = Callable()
+	_handle_editor_lifecycle_post_request = Callable()
+	_build_cors_response = Callable()
+
+
 func route_request_async(method: String, path: String, request_body: String) -> Dictionary:
 	if method == "POST" and path == "/mcp":
 		return await _call_async(_handle_mcp_request_async, [request_body], {"error": "MCP request handler is unavailable", "status": 500})

@@ -1,12 +1,16 @@
 extends SceneTree
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const HttpServerContractTest = preload("res://tests/http_server_contract_test.gd")
 const HttpRequestRouterContractTest = preload("res://tests/http_request_router_contract_test.gd")
 const HttpResponseServiceContractTest = preload("res://tests/http_response_service_contract_test.gd")
 const JsonRpcRouterContractTest = preload("res://tests/json_rpc_router_contract_test.gd")
 const EditorLifecycleActionServiceContractTest = preload("res://tests/editor_lifecycle_action_service_contract_test.gd")
 const RuntimeControlContractTest = preload("res://tests/runtime_control_contract_test.gd")
+const RuntimeControlReplyResolverContractTest = preload("res://tests/runtime_control_reply_resolver_contract_test.gd")
 const RuntimeBridgeContractTest = preload("res://tests/runtime_bridge_contract_test.gd")
+const RuntimeFallbackStoreContractTest = preload("res://tests/runtime_fallback_store_contract_test.gd")
+const RuntimeReplyServiceContractTest = preload("res://tests/runtime_reply_service_contract_test.gd")
 const EditorLifecycleStateBuilderContractTest = preload("res://tests/editor_lifecycle_state_builder_contract_test.gd")
 const SystemIndexImplContractTest = preload("res://tests/system_index_impl_contract_test.gd")
 const SystemRuntimeImplContractTest = preload("res://tests/system_runtime_impl_contract_test.gd")
@@ -28,6 +32,18 @@ func _run_suite() -> void:
 		{
 			"name": "runtime_control_contracts",
 			"script": RuntimeControlContractTest
+		},
+		{
+			"name": "runtime_control_reply_resolver_contracts",
+			"script": RuntimeControlReplyResolverContractTest
+		},
+		{
+			"name": "runtime_fallback_store_contracts",
+			"script": RuntimeFallbackStoreContractTest
+		},
+		{
+			"name": "runtime_reply_service_contracts",
+			"script": RuntimeReplyServiceContractTest
 		},
 		{
 			"name": "http_server_contracts",
@@ -87,8 +103,15 @@ func _run_suite() -> void:
 			success = false
 		print("HARNESS_CASE_DONE:%s:%s" % [case_name, str(bool(result.get("success", false)))])
 
+	await _suite_final_cleanup()
 	print(JSON.stringify({
 		"success": success,
 		"results": results
 	}))
 	quit(0 if success else 1)
+
+
+func _suite_final_cleanup() -> void:
+	MCPDebugBuffer.clear()
+	await process_frame
+	await process_frame

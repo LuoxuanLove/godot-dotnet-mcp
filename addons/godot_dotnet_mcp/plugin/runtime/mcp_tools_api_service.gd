@@ -11,6 +11,11 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_get_tool_loader_status = callbacks.get("get_tool_loader_status", Callable())
 
 
+func dispose() -> void:
+	_get_tool_loader = Callable()
+	_get_tool_loader_status = Callable()
+
+
 func build_tools_list_response() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:

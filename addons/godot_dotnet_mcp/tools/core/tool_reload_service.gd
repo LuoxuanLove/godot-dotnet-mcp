@@ -47,6 +47,29 @@ func configure(options: Dictionary = {}) -> void:
 	_as_bool = options.get("as_bool", Callable())
 
 
+func dispose() -> void:
+	_refresh_entries = Callable()
+	_get_entry = Callable()
+	_get_ordered_categories = Callable()
+	_get_disabled_tools = Callable()
+	_set_disabled_tools = Callable()
+	_get_runtime = Callable()
+	_set_runtime = Callable()
+	_erase_runtime = Callable()
+	_get_tool_definitions = Callable()
+	_set_tool_definitions = Callable()
+	_erase_tool_definitions = Callable()
+	_instantiate_executor = Callable()
+	_extract_tool_definitions = Callable()
+	_sync_load_error_incidents = Callable()
+	_refresh_runtime_context = Callable()
+	_reset_lsp_diagnostics = Callable()
+	_category_has_enabled_tools = Callable()
+	_unload_runtime = Callable()
+	_record_reload_incident = Callable()
+	_as_bool = Callable()
+
+
 func reload_domain(category: String) -> Dictionary:
 	return _reload_domain_internal(category, true)
 

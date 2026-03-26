@@ -21,6 +21,16 @@ func configure(callbacks: Dictionary = {}) -> void:
 	_log = callbacks.get("log", Callable())
 
 
+func dispose() -> void:
+	_build_state = Callable()
+	_build_state_with_hint = Callable()
+	_success = Callable()
+	_error = Callable()
+	_schedule_action = Callable()
+	_get_plugin_host = Callable()
+	_log = Callable()
+
+
 func execute_close(args: Dictionary) -> Dictionary:
 	return _execute_action(
 		"close",
