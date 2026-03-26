@@ -18,7 +18,7 @@ internal static partial class SmokeSystemSessionRunner
         CentralToolDispatcher dispatcher,
         GodotInstallationService godotInstallations,
         ProjectRegistryService registry,
-        SessionState sessionState,
+        CentralWorkspaceState workspaceState,
         string? projectRootOption,
         string? explicitGodotExecutablePath,
         int attachTimeoutMs,
@@ -70,7 +70,7 @@ internal static partial class SmokeSystemSessionRunner
         var executablePath = string.Empty;
         var executableSource = string.Empty;
         using var interruptEditorProxy = new EditorProxyService();
-        var interruptEditorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, interruptEditorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
+        var interruptEditorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, interruptEditorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
         var interruptDispatcher = new CentralToolDispatcher(
             configuration,
             interruptEditorProxy,
@@ -81,7 +81,7 @@ internal static partial class SmokeSystemSessionRunner
             godotInstallations,
             godotProjectManager,
             registry,
-            sessionState);
+            workspaceState);
         var systemPayload = default(JsonElement);
         var runtimeNotRunningPayload = default(JsonElement);
         var projectRunPayload = default(JsonElement);
@@ -523,8 +523,8 @@ internal static partial class SmokeSystemSessionRunner
                 launchedAlreadyRunning,
                 cleanupRequested = cleanupLaunchedEditor,
                 cleanupApplied,
-                activeProjectId = sessionState.ActiveProjectId,
-                activeEditorSessionId = sessionState.ActiveEditorSessionId,
+                activeProjectId = workspaceState.ActiveProjectId,
+                activeEditorSessionId = workspaceState.ActiveEditorSessionId,
                 systemPayload = systemPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(systemPayload),

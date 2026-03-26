@@ -107,11 +107,11 @@ Modes:
         var registry = new ProjectRegistryService();
         var editorSessions = new EditorSessionService(registry);
         using var editorProxy = new EditorProxyService();
-        var sessionState = new SessionState();
+        var workspaceState = new CentralWorkspaceState();
         var attachEndpoint = ResolveAttachEndpoint(args, configuration);
-        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
-        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
+        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
+        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
+        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
         var server = new CentralStdioMcpServer(output, error, dispatcher);
         using var attachServerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         await using var attachServer = new EditorAttachHttpServer(

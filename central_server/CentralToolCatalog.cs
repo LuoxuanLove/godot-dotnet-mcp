@@ -15,7 +15,6 @@ internal static class CentralToolCatalog
             CreateProjectStatusTool(),
             CreateProjectRescanTool(),
             CreateEditorSessionListTool(),
-            CreateEditorProxyCallTool(),
             CreateProjectSetGodotPathTool(),
             CreateProjectOpenEditorTool(),
             CreateProjectCloseEditorTool(),
@@ -157,28 +156,6 @@ internal static class CentralToolCatalog
             {
                 type = "object",
                 properties = new { },
-                additionalProperties = false,
-            },
-        };
-    }
-
-    private static object CreateEditorProxyCallTool()
-    {
-        return new
-        {
-            name = "workspace_editor_proxy_call",
-            description = "Forward an editor-required tool call to the attached Godot editor MCP HTTP endpoint for the target project.",
-            inputSchema = new
-            {
-                type = "object",
-                properties = new
-                {
-                    toolName = new { type = "string", description = "The editor-required tool id that should be forwarded." },
-                    projectId = new { type = "string", description = "Optional registered project id." },
-                    path = new { type = "string", description = "Optional registered project path." },
-                    arguments = new { type = "object", description = "Optional tool arguments that will later be forwarded to the editor agent." },
-                },
-                required = new[] { "toolName" },
                 additionalProperties = false,
             },
         };

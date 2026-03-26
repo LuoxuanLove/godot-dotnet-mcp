@@ -13,6 +13,8 @@ internal static class Program
         var testCases = new (string Name, Func<Task> Execute)[]
         {
             ("tool_catalog_exposes_workspace_system_dotnet", VerifyToolCatalogAsync),
+            ("editor_process_service_supports_injected_external_probe", VerifyInjectedExternalProbeContractAsync),
+            ("workspace_project_remove_clears_active_context", VerifyProjectRemoveClearsActiveContextAsync),
             ("system_project_state_returns_editor_required_when_auto_launch_disabled", VerifyEditorRequiredContractAsync),
             ("workspace_project_open_editor_returns_missing_executable_guidance", VerifyMissingExecutableContractAsync),
             ("workspace_project_close_editor_reports_editor_lifecycle_unsupported", VerifyLifecycleUnsupportedContractAsync),
@@ -61,6 +63,11 @@ internal static class Program
         AssertContains(toolNames, "workspace_project_list");
         AssertContains(toolNames, "system_project_state");
         AssertContains(toolNames, "dotnet_build");
+        var removedProxyToolName = string.Concat("workspace_editor_", "proxy_call");
+        if (toolNames.Contains(removedProxyToolName, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException($"{removedProxyToolName} should not remain in the central tool catalog.");
+        }
 
         var workspaceCount = toolNames.Count(name => name.StartsWith("workspace_", StringComparison.Ordinal));
         var systemCount = toolNames.Count(name => name.StartsWith("system_", StringComparison.Ordinal));
@@ -75,6 +82,73 @@ internal static class Program
         }
 
         return Task.CompletedTask;
+    }
+
+    private static async Task VerifyInjectedExternalProbeContractAsync()
+    {
+        await using var harness = ContractHarness.Create("external_probe_injection");
+        var projectId = await harness.RegisterProjectAsync();
+        var normalizedProjectRoot = Path.GetFullPath(harness.ProjectRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var processService = new EditorProcessService(
+            new EditorResidencyStore(),
+            new FakeExternalEditorProcessProbe(
+                new ExternalEditorProcessInfo(
+                    4242,
+                    normalizedProjectRoot,
+                    @"C:\Godot\Godot.exe",
+                    $@"Godot_v4.exe --editor --path ""{normalizedProjectRoot}""")));
+
+        var status = processService.FindUntrackedEditorStatus(projectId, harness.ProjectRoot)
+            ?? throw new InvalidOperationException("Expected injected external probe to surface an untracked editor status.");
+
+        if (!string.Equals(status.Ownership, "external_untracked", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Expected ownership=external_untracked but got {status.Ownership}.");
+        }
+
+        if (status.ProcessId != 4242)
+        {
+            throw new InvalidOperationException($"Expected processId=4242 but got {status.ProcessId}.");
+        }
+    }
+
+    private static async Task VerifyProjectRemoveClearsActiveContextAsync()
+    {
+        await using var harness = ContractHarness.Create("remove_clears_active_context");
+        var projectId = await harness.RegisterProjectAsync();
+
+        EnsureSuccess(
+            await harness.Dispatcher.ExecuteAsync(
+                "workspace_project_select",
+                SerializeToElement(new { projectId }),
+                CancellationToken.None),
+            "workspace_project_select");
+
+        await using var mockServer = await harness.AttachMockEditorAsync(
+            projectId,
+            "contract-remove",
+            ["system_project_state"]);
+        EnsureSuccess(
+            await harness.Dispatcher.ExecuteAsync(
+                "system_project_state",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = false,
+                }),
+                CancellationToken.None),
+            "system_project_state");
+
+        var removeResponse = await harness.Dispatcher.ExecuteAsync(
+            "workspace_project_remove",
+            SerializeToElement(new { projectId }),
+            CancellationToken.None);
+        EnsureSuccess(removeResponse, "workspace_project_remove");
+
+        var payload = SerializeToElement(removeResponse.StructuredContent);
+        AssertNestedString(payload, string.Empty, "activeProjectId");
+        AssertNestedString(payload, string.Empty, "activeEditorSessionId");
     }
 
     private static async Task VerifyEditorRequiredContractAsync()
@@ -240,5 +314,20 @@ internal static class Program
         AssertNestedBoolean(payload, false, "editorSession", "attached");
         AssertNestedBoolean(payload, false, "editorLifecycle", "resident");
         AssertContains(mockServer.LifecycleActions, "close");
+    }
+
+    private sealed class FakeExternalEditorProcessProbe : IExternalEditorProcessProbe
+    {
+        private readonly IReadOnlyList<ExternalEditorProcessInfo> _processes;
+
+        public FakeExternalEditorProcessProbe(params ExternalEditorProcessInfo[] processes)
+        {
+            _processes = processes;
+        }
+
+        public IEnumerable<ExternalEditorProcessInfo> EnumerateEditorProcesses()
+        {
+            return _processes;
+        }
     }
 }

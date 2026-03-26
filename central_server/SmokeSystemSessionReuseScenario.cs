@@ -15,7 +15,7 @@ internal static partial class SmokeSystemSessionRunner
         CancellationToken cancellationToken,
         CentralToolDispatcher dispatcher,
         ProjectRegistryService registry,
-        SessionState sessionState,
+        CentralWorkspaceState workspaceState,
         string attachHost,
         int attachPort)
     {
@@ -346,8 +346,8 @@ internal static partial class SmokeSystemSessionRunner
                 attachPort,
                 mockPort,
                 projectRoot,
-                activeProjectId = sessionState.ActiveProjectId,
-                activeEditorSessionId = sessionState.ActiveEditorSessionId,
+                activeProjectId = workspaceState.ActiveProjectId,
+                activeEditorSessionId = workspaceState.ActiveEditorSessionId,
             }, cancellationToken);
             await error.WriteLineAsync($"[CentralServerSmoke] {ex.Message}");
             await error.FlushAsync();

@@ -66,13 +66,13 @@ internal sealed class ContractHarness : IAsyncDisposable
         var registry = new ProjectRegistryService();
         var editorSessions = new EditorSessionService(registry);
         var editorProxy = new EditorProxyService();
-        var sessionState = new SessionState();
+        var workspaceState = new CentralWorkspaceState();
         var attachHost = "127.0.0.1";
         var attachPort = GetFreeTcpPort();
         var attachEndpoint = new EditorAttachEndpoint(attachHost, attachPort);
-        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
-        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
+        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
+        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
+        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
         var attachServer = new EditorAttachHttpServer(attachHost, attachPort, editorSessions, TextWriter.Null);
 
         var harness = new ContractHarness(tempRoot, previousCentralHome, editorProxy, attachServer, registry, editorSessions, dispatcher, attachHost, attachPort);

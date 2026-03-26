@@ -30,11 +30,11 @@ internal static partial class SmokeSystemSessionRunner
         var registry = new ProjectRegistryService();
         var editorSessions = new EditorSessionService(registry);
         using var editorProxy = new EditorProxyService();
-        var sessionState = new SessionState();
+        var workspaceState = new CentralWorkspaceState();
         var attachEndpoint = new EditorAttachEndpoint(attachHost, attachPort);
-        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
-        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
+        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
+        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
+        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
         using var smokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         await using var attachServer = new EditorAttachHttpServer(
@@ -65,7 +65,7 @@ internal static partial class SmokeSystemSessionRunner
                     dispatcher,
                     godotInstallations,
                     registry,
-                    sessionState,
+                    workspaceState,
                     projectRootOption,
                     explicitGodotExecutablePath,
                     attachTimeoutMs,
@@ -78,7 +78,7 @@ internal static partial class SmokeSystemSessionRunner
                     smokeCts.Token,
                     dispatcher,
                     registry,
-                    sessionState,
+                    workspaceState,
                     attachHost,
                     attachPort);
         }

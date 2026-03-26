@@ -11,7 +11,7 @@ internal sealed class EditorSessionCoordinator
     private readonly EditorSessionService _editorSessions;
     private readonly GodotInstallationService _godotInstallations;
     private readonly ProjectRegistryService _registry;
-    private readonly SessionState _sessionState;
+    private readonly CentralWorkspaceState _workspaceState;
     private readonly EditorAttachEndpoint _attachEndpoint;
 
     public EditorSessionCoordinator(
@@ -20,7 +20,7 @@ internal sealed class EditorSessionCoordinator
         EditorSessionService editorSessions,
         GodotInstallationService godotInstallations,
         ProjectRegistryService registry,
-        SessionState sessionState,
+        CentralWorkspaceState workspaceState,
         EditorAttachEndpoint attachEndpoint)
     {
         _configuration = configuration;
@@ -28,7 +28,7 @@ internal sealed class EditorSessionCoordinator
         _editorSessions = editorSessions;
         _godotInstallations = godotInstallations;
         _registry = registry;
-        _sessionState = sessionState;
+        _workspaceState = workspaceState;
         _attachEndpoint = attachEndpoint;
     }
 
@@ -57,20 +57,20 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 projectResolution.ErrorType,
                 projectResolution.Message,
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project: null,
                 toolName: toolName,
                 requestedExecutablePath: explicitExecutablePath ?? string.Empty);
         }
 
         var project = projectResolution.Project;
-        _sessionState.ActiveProjectId = project.ProjectId;
+        _workspaceState.SetActiveProject(project.ProjectId);
         var requestedExecutablePath = explicitExecutablePath?.Trim() ?? string.Empty;
 
         var session = _editorSessions.GetStatus(project.ProjectId);
         if (EditorSessionService.IsHttpReady(session))
         {
-            _sessionState.ActiveEditorSessionId = session.SessionId;
+            _workspaceState.SetActiveEditorSession(session.SessionId);
             return EnsureEditorSessionResult.FromReady(
                 project,
                 session,
@@ -86,7 +86,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "editor_transport_unavailable",
                 "Attached editor session does not expose an HTTP MCP endpoint.",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 session,
                 null,
@@ -105,14 +105,14 @@ internal sealed class EditorSessionCoordinator
             var reusedSession = await _editorSessions.WaitForReadyHttpSessionAsync(project.ProjectId, TimeSpan.FromMilliseconds(timeout), cancellationToken);
             if (EditorSessionService.IsHttpReady(reusedSession))
             {
-                _sessionState.ActiveEditorSessionId = reusedSession.SessionId;
+                _workspaceState.SetActiveEditorSession(reusedSession.SessionId);
                 return EnsureEditorSessionResult.FromReady(project, reusedSession, null, false, true, timeout, requestedExecutablePath);
             }
 
             return EnsureEditorSessionResult.FromFailure(
                 "editor_attach_timeout",
                 "Timed out waiting for the running Godot editor to attach.",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 reusedSession,
                 null,
@@ -130,14 +130,14 @@ internal sealed class EditorSessionCoordinator
             var externalSession = await _editorSessions.WaitForReadyHttpSessionAsync(project.ProjectId, TimeSpan.FromMilliseconds(timeout), cancellationToken);
             if (EditorSessionService.IsHttpReady(externalSession))
             {
-                _sessionState.ActiveEditorSessionId = externalSession.SessionId;
+                _workspaceState.SetActiveEditorSession(externalSession.SessionId);
                 return EnsureEditorSessionResult.FromReady(project, externalSession, null, false, true, timeout, requestedExecutablePath);
             }
 
             return EnsureEditorSessionResult.FromFailure(
                 "editor_already_running_external",
                 "A Godot editor for this project is already running outside the current host session. Refusing to launch a duplicate editor instance.",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 externalSession,
                 null,
@@ -154,7 +154,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "editor_required",
                 "Editor-attached tool requires an active editor session.",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 session,
                 null,
@@ -176,7 +176,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "godot_executable_not_found",
                 ex.Message,
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 session,
                 null,
@@ -198,7 +198,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "editor_launch_failed",
                 ex.Message,
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 session,
                 null,
@@ -216,7 +216,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "editor_launch_failed",
                 $"Failed to launch Godot editor: {ex.Message}",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 session,
                 null,
@@ -236,7 +236,7 @@ internal sealed class EditorSessionCoordinator
             return EnsureEditorSessionResult.FromFailure(
                 "editor_attach_timeout",
                 "Timed out waiting for Godot editor to attach and expose an HTTP MCP endpoint.",
-                _sessionState.ActiveProjectId,
+                _workspaceState.ActiveProjectId,
                 project,
                 attachedSession,
                 launch,
@@ -250,7 +250,7 @@ internal sealed class EditorSessionCoordinator
                 resolvedExecutableSource: executable.Source);
         }
 
-        _sessionState.ActiveEditorSessionId = attachedSession.SessionId;
+        _workspaceState.SetActiveEditorSession(attachedSession.SessionId);
         return EnsureEditorSessionResult.FromReady(
             project,
             attachedSession,
@@ -286,12 +286,12 @@ internal sealed class EditorSessionCoordinator
             }
         }
 
-        if (string.IsNullOrWhiteSpace(_sessionState.ActiveProjectId))
+        if (string.IsNullOrWhiteSpace(_workspaceState.ActiveProjectId))
         {
             return ProjectResolution.FromFailure("project_not_selected", "No active project is selected for this MCP session.");
         }
 
-        var activeProject = _registry.ResolveProject(_sessionState.ActiveProjectId, null);
+        var activeProject = _registry.ResolveProject(_workspaceState.ActiveProjectId, null);
         return activeProject is null
             ? ProjectResolution.FromFailure("project_not_registered", "The active project for this MCP session is no longer registered.")
             : ProjectResolution.FromProject(activeProject);

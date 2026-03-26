@@ -42,20 +42,25 @@ tests/host_contracts/
 
 ## 当前覆盖范围
 
-截至 `2026-03-26`，当前已覆盖 `8` 个用例：
+截至 `2026-03-26`，当前已覆盖 `10` 个用例：
 
 1. `tool_catalog_exposes_workspace_system_dotnet`
-2. `system_project_state_returns_editor_required_when_auto_launch_disabled`
-3. `workspace_project_open_editor_returns_missing_executable_guidance`
-4. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
-5. `workspace_project_close_editor_force_reports_editor_force_unavailable`
-6. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
-7. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
-8. `workspace_project_close_editor_succeeds_when_lifecycle_available`
+2. `editor_process_service_supports_injected_external_probe`
+3. `workspace_project_remove_clears_active_context`
+4. `system_project_state_returns_editor_required_when_auto_launch_disabled`
+5. `workspace_project_open_editor_returns_missing_executable_guidance`
+6. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
+7. `workspace_project_close_editor_force_reports_editor_force_unavailable`
+8. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
+9. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
+10. `workspace_project_close_editor_succeeds_when_lifecycle_available`
 
 这些用例覆盖的重点是：
 
 - 工具目录结构
+- 已删除旧 `workspace_editor_proxy_call` 后的目录收口
+- `EditorProcessService` 的 external probe seam 可注入且不再硬绑在 WMI 实现上
+- `CentralWorkspaceState` 驱动的 active project / active session 清理
 - 编辑器缺席时的错误分支
 - 缺失可执行文件时的 guidance
 - lifecycle capability 缺失时的错误模型
@@ -80,6 +85,8 @@ tests/host_contracts/
 
 这意味着当前 Host contracts 并不是完全 isolated 的单元测试，而是通过最小 Host 组合验证对外契约。
 
+不过，`EditorProcessService` 当前已经支持注入 external probe，并且已进一步退化为 façade，把 residency / launch / termination 拆到独立协作者；对应契约也已经有独立 case 锁定。
+
 ### 2. 它已经有独立支撑层
 
 相比早期把所有逻辑塞回入口文件的方式，当前结构已经更合理：
@@ -87,6 +94,7 @@ tests/host_contracts/
 - `Program.cs` 不再同时承担 harness、assertion 和全部 fixture
 - 断言逻辑与入口逻辑已经分开
 - mock editor attach 已通过 `ContractHarness` 封装
+- 工具目录契约现在还会反向锁定：旧代理入口不能重新回到 catalog
 
 ---
 

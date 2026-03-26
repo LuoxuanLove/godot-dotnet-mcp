@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using GodotDotnetMcp.HostShared;
 
 namespace GodotDotnetMcp.CentralServer;
@@ -8,37 +7,39 @@ internal sealed class CentralToolDispatcher
 {
     private readonly CentralConfigurationService _configuration;
     private readonly EditorProxyService _editorProxy;
-    private readonly EditorProcessService _editorProcesses;
     private readonly EditorLifecycleCoordinator _editorLifecycleCoordinator;
     private readonly EditorSessionCoordinator _editorSessionCoordinator;
     private readonly EditorSessionService _editorSessions;
     private readonly GodotInstallationService _godotInstallations;
     private readonly GodotProjectManagerProvider _godotProjectManager;
     private readonly ProjectRegistryService _registry;
-    private readonly SessionState _sessionState;
+    private readonly CentralWorkspaceState _workspaceState;
+    private readonly CentralToolHandlerRegistry _handlers;
+    private readonly CentralHostSessionPayloadFactory _hostSessionPayloadFactory;
 
     public CentralToolDispatcher(
         CentralConfigurationService configuration,
         EditorProxyService editorProxy,
-        EditorProcessService editorProcesses,
+        EditorProcessService _,
         EditorLifecycleCoordinator editorLifecycleCoordinator,
         EditorSessionCoordinator editorSessionCoordinator,
         EditorSessionService editorSessions,
         GodotInstallationService godotInstallations,
         GodotProjectManagerProvider godotProjectManager,
         ProjectRegistryService registry,
-        SessionState sessionState)
+        CentralWorkspaceState workspaceState)
     {
         _configuration = configuration;
         _editorProxy = editorProxy;
-        _editorProcesses = editorProcesses;
         _editorLifecycleCoordinator = editorLifecycleCoordinator;
         _editorSessionCoordinator = editorSessionCoordinator;
         _editorSessions = editorSessions;
         _godotInstallations = godotInstallations;
         _godotProjectManager = godotProjectManager;
         _registry = registry;
-        _sessionState = sessionState;
+        _workspaceState = workspaceState;
+        _hostSessionPayloadFactory = new CentralHostSessionPayloadFactory(_editorLifecycleCoordinator, _editorSessionCoordinator, _workspaceState);
+        _handlers = BuildHandlerRegistry();
     }
 
     public async Task<CentralToolCallResponse> ExecuteAsync(string toolName, JsonElement arguments, CancellationToken cancellationToken)
@@ -47,28 +48,14 @@ internal sealed class CentralToolDispatcher
 
         try
         {
-            return toolName switch
+            if (_handlers.TryGetHandler(toolName, out var handler))
             {
-                "workspace_project_list" => ListProjects(),
-                "workspace_project_register" => RegisterProject(arguments),
-                "workspace_project_remove" => RemoveProject(arguments),
-                "workspace_project_select" => SelectProject(arguments),
-                "workspace_project_status" => await GetStatusAsync(arguments, cancellationToken),
-                "workspace_project_rescan" => RescanProjects(arguments),
-                "workspace_editor_session_list" => ListEditorSessions(),
-                "workspace_editor_proxy_call" => await ProxyEditorCallAsync(arguments, cancellationToken),
-                "workspace_project_set_godot_path" => SetProjectGodotPath(arguments),
-                "workspace_project_open_editor" => await OpenProjectEditorAsync(arguments, cancellationToken),
-                "workspace_project_close_editor" => await CloseProjectEditorAsync(arguments, cancellationToken),
-                "workspace_project_restart_editor" => await RestartProjectEditorAsync(arguments, cancellationToken),
-                "workspace_godot_installation_list" => ListGodotInstallations(),
-                "workspace_godot_set_default_executable" => SetDefaultGodotExecutable(arguments),
-                "workspace_godot_manager_list_projects" => ListGodotManagerProjects(),
-                "workspace_godot_manager_get_status" => GetGodotManagerStatus(),
-                "workspace_godot_manager_import_projects" => ImportGodotManagerProjects(arguments),
-                _ when SystemToolCatalog.IsSystemTool(toolName) => await ExecuteSystemToolAsync(toolName, arguments, cancellationToken),
-                _ => await ExecuteDotnetToolAsync(toolName, arguments, cancellationToken),
-            };
+                return await handler(arguments, cancellationToken);
+            }
+
+            return SystemToolCatalog.IsSystemTool(toolName)
+                ? await ExecuteSystemToolAsync(toolName, arguments, cancellationToken)
+                : await ExecuteDotnetToolAsync(toolName, arguments, cancellationToken);
         }
         catch (CentralToolException ex)
         {
@@ -86,13 +73,83 @@ internal sealed class CentralToolDispatcher
         }
     }
 
-    private CentralToolCallResponse ListProjects()
+    private CentralToolHandlerRegistry BuildHandlerRegistry()
+    {
+        return new CentralToolHandlerRegistry()
+            .Register("workspace_project_list", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ListProjects(arguments));
+            })
+            .Register("workspace_project_register", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(RegisterProject(arguments));
+            })
+            .Register("workspace_project_remove", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(RemoveProject(arguments));
+            })
+            .Register("workspace_project_select", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(SelectProject(arguments));
+            })
+            .Register("workspace_project_status", GetStatusAsync)
+            .Register("workspace_project_rescan", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(RescanProjects(arguments));
+            })
+            .Register("workspace_editor_session_list", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ListEditorSessions(arguments));
+            })
+            .Register("workspace_project_set_godot_path", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(SetProjectGodotPath(arguments));
+            })
+            .Register("workspace_project_open_editor", OpenProjectEditorAsync)
+            .Register("workspace_project_close_editor", CloseProjectEditorAsync)
+            .Register("workspace_project_restart_editor", RestartProjectEditorAsync)
+            .Register("workspace_godot_installation_list", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ListGodotInstallations(arguments));
+            })
+            .Register("workspace_godot_set_default_executable", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(SetDefaultGodotExecutable(arguments));
+            })
+            .Register("workspace_godot_manager_list_projects", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ListGodotManagerProjects(arguments));
+            })
+            .Register("workspace_godot_manager_get_status", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(GetGodotManagerStatus(arguments));
+            })
+            .Register("workspace_godot_manager_import_projects", (arguments, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ImportGodotManagerProjects(arguments));
+            });
+    }
+
+    private CentralToolCallResponse ListProjects(JsonElement _)
     {
         var projects = _registry.ListProjects();
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
             projects,
             count = projects.Count,
         });
@@ -103,12 +160,13 @@ internal sealed class CentralToolDispatcher
         var projectPath = CentralArgumentReader.GetRequiredString(arguments, "path");
         var source = CentralArgumentReader.GetOptionalString(arguments, "source") ?? "manual";
         var project = _registry.RegisterProject(projectPath, source);
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
             registered = true,
             project,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
         });
     }
 
@@ -126,24 +184,25 @@ internal sealed class CentralToolDispatcher
             throw new CentralToolException("Registered project not found.");
         }
 
-        if (string.Equals(_sessionState.ActiveProjectId, removedProject.ProjectId, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_workspaceState.ActiveProjectId, removedProject.ProjectId, StringComparison.OrdinalIgnoreCase))
         {
-            _sessionState.ActiveProjectId = string.Empty;
+            _workspaceState.ClearActiveProject();
         }
 
-        var activeEditorSession = _editorSessions.GetStatusBySessionId(_sessionState.ActiveEditorSessionId);
+        var activeEditorSession = _editorSessions.GetStatusBySessionId(_workspaceState.ActiveEditorSessionId);
         if (activeEditorSession is not null
             && string.Equals(activeEditorSession.ProjectId, removedProject.ProjectId, StringComparison.OrdinalIgnoreCase))
         {
-            _sessionState.ActiveEditorSessionId = string.Empty;
+            _workspaceState.ClearActiveEditorSession();
         }
 
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
             removed = true,
             project = removedProject,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
         });
     }
 
@@ -162,12 +221,13 @@ internal sealed class CentralToolDispatcher
             throw new CentralToolException("Registered project not found.");
         }
 
-        _sessionState.ActiveProjectId = project.ProjectId;
+        _workspaceState.SetActiveProject(project.ProjectId);
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
             selected = true,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
             project,
         });
     }
@@ -192,6 +252,7 @@ internal sealed class CentralToolDispatcher
 
         var importDiscovered = CentralArgumentReader.GetBooleanOrDefault(arguments, "importDiscovered", false);
         var result = _registry.RescanProjects(roots, importDiscovered);
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
             importDiscovered,
@@ -199,39 +260,22 @@ internal sealed class CentralToolDispatcher
             result.DiscoveredProjectRoots,
             result.ImportedProjects,
             result.DuplicateProjectRoots,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
         });
     }
 
-    private CentralToolCallResponse ListEditorSessions()
+    private CentralToolCallResponse ListEditorSessions(JsonElement _)
     {
         var sessions = _editorSessions.ListSessions();
+        var workspaceState = _workspaceState.Snapshot();
         return CentralToolCallResponse.Success(new
         {
             count = sessions.Count,
             sessions,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
+            activeProjectId = workspaceState.ActiveProjectId,
+            activeEditorSessionId = workspaceState.ActiveEditorSessionId,
         });
-    }
-
-    private async Task<CentralToolCallResponse> ProxyEditorCallAsync(JsonElement arguments, CancellationToken cancellationToken)
-    {
-        var requestedToolName = CentralArgumentReader.GetRequiredString(arguments, "toolName");
-        var projectId = CentralArgumentReader.GetOptionalString(arguments, "projectId");
-        var projectPath = CentralArgumentReader.GetOptionalString(arguments, "path");
-        var forwardedArguments = CentralArgumentReader.GetObjectElementOrEmpty(arguments, "arguments");
-        var autoLaunchEditor = CentralArgumentReader.GetBooleanOrDefault(arguments, "autoLaunchEditor", true);
-        var attachTimeoutMs = CentralArgumentReader.GetOptionalPositiveInt(arguments, "editorAttachTimeoutMs");
-        return await ForwardEditorToolWithEnvelopeAsync(
-            requestedToolName,
-            forwardedArguments,
-            projectId,
-            projectPath,
-            autoLaunchEditor,
-            attachTimeoutMs,
-            cancellationToken);
     }
 
     private CentralToolCallResponse SetProjectGodotPath(JsonElement arguments)
@@ -264,11 +308,13 @@ internal sealed class CentralToolDispatcher
 
         if (!coordination.Success || coordination.Project is null || coordination.Session is null)
         {
-            return CentralToolCallResponse.Error(coordination.Message, BuildCoordinationFailurePayload(coordination, "workspace_project_open_editor"));
+            return CentralToolCallResponse.Error(coordination.Message, _hostSessionPayloadFactory.BuildFailurePayload(coordination, "workspace_project_open_editor"));
         }
 
-        var resolution = ResolveCoordinationResolution(coordination);
-        var centralHostSession = BuildCentralHostSession(coordination, coordination.Session is null ? string.Empty : $"http://{coordination.Session.ServerHost}:{coordination.Session.ServerPort ?? 0}/mcp", "workspace_project_open_editor");
+        var centralHostSession = _hostSessionPayloadFactory.Build(
+            coordination,
+            coordination.Session is null ? string.Empty : $"http://{coordination.Session.ServerHost}:{coordination.Session.ServerPort ?? 0}/mcp",
+            "workspace_project_open_editor");
         var editorLifecycle = coordination.Project is null
             ? null
             : _editorLifecycleCoordinator.BuildLifecycleSummary(
@@ -276,7 +322,7 @@ internal sealed class CentralToolDispatcher
                 coordination.Project,
                 coordination.Session,
                 _editorLifecycleCoordinator.GetEffectiveProcessStatus(coordination.Project.ProjectId, coordination.Project.ProjectRoot, coordination.Session),
-                resolution);
+                _hostSessionPayloadFactory.GetResolution(coordination));
         return CentralToolCallResponse.Success(new
         {
             project = coordination.Project,
@@ -317,7 +363,7 @@ internal sealed class CentralToolDispatcher
             : CentralToolCallResponse.Error(result.Message, result.ToPayload());
     }
 
-    private CentralToolCallResponse ListGodotInstallations()
+    private CentralToolCallResponse ListGodotInstallations(JsonElement _)
     {
         var candidates = _godotInstallations.ListCandidates();
         return CentralToolCallResponse.Success(new
@@ -338,7 +384,7 @@ internal sealed class CentralToolDispatcher
         });
     }
 
-    private CentralToolCallResponse ListGodotManagerProjects()
+    private CentralToolCallResponse ListGodotManagerProjects(JsonElement _)
     {
         var candidates = _godotProjectManager.ListProjects(_registry.GetRegisteredProjectRoots());
         return CentralToolCallResponse.Success(new
@@ -348,7 +394,7 @@ internal sealed class CentralToolDispatcher
         });
     }
 
-    private CentralToolCallResponse GetGodotManagerStatus()
+    private CentralToolCallResponse GetGodotManagerStatus(JsonElement _)
     {
         var status = _godotProjectManager.GetStatus(_registry.GetRegisteredProjectRoots());
         return CentralToolCallResponse.Success(new
@@ -440,20 +486,20 @@ internal sealed class CentralToolDispatcher
 
         if (!coordination.Success || coordination.Project is null || coordination.Session is null)
         {
-            return CentralToolCallResponse.Error(coordination.Message, BuildCoordinationFailurePayload(coordination, toolName));
+            return CentralToolCallResponse.Error(coordination.Message, _hostSessionPayloadFactory.BuildFailurePayload(coordination, toolName));
         }
 
         var forwarded = await _editorProxy.ForwardToolCallAsync(coordination.Session, toolName, forwardedArguments, cancellationToken);
-        var centralHostSession = BuildCentralHostSession(coordination, forwarded.Endpoint, toolName);
+        var centralHostSession = _hostSessionPayloadFactory.Build(coordination, forwarded.Endpoint, toolName);
         if (forwarded.Success)
         {
             return CentralToolCallResponse.Success(
-                AttachCentralHostSession(forwarded.ToolResult ?? new { success = true }, centralHostSession));
+                _hostSessionPayloadFactory.AttachToResult(forwarded.ToolResult ?? new { success = true }, centralHostSession));
         }
 
         return CentralToolCallResponse.Error(
             "Forwarded editor tool failed.",
-            AttachCentralHostSession(
+            _hostSessionPayloadFactory.AttachToResult(
                 forwarded.ToolResult ?? new
                 {
                     error = "editor_tool_failed",
@@ -465,125 +511,4 @@ internal sealed class CentralToolDispatcher
                 centralHostSession));
     }
 
-    private async Task<CentralToolCallResponse> ForwardEditorToolWithEnvelopeAsync(
-        string toolName,
-        JsonElement forwardedArguments,
-        string? projectId,
-        string? projectPath,
-        bool autoLaunchEditor,
-        int? attachTimeoutMs,
-        CancellationToken cancellationToken)
-    {
-        var coordination = await _editorSessionCoordinator.EnsureHttpReadySessionAsync(
-            toolName,
-            projectId,
-            projectPath,
-            autoLaunchEditor,
-            attachTimeoutMs,
-            explicitExecutablePath: null,
-            launchReason: "workspace_proxy_call",
-            cancellationToken: cancellationToken);
-
-        if (!coordination.Success || coordination.Project is null || coordination.Session is null)
-        {
-            return CentralToolCallResponse.Error(coordination.Message, BuildCoordinationFailurePayload(coordination, toolName));
-        }
-
-        var forwarded = await _editorProxy.ForwardToolCallAsync(coordination.Session, toolName, forwardedArguments, cancellationToken);
-        var centralHostSession = BuildCentralHostSession(coordination, forwarded.Endpoint, toolName);
-        var payload = new
-        {
-            forwarded = true,
-            status = forwarded.Success ? "forwarded" : "forwarded_error",
-            endpoint = forwarded.Endpoint,
-            centralHostSession,
-            project = coordination.Project,
-            editorSession = coordination.Session,
-            editorLaunch = coordination.Launch,
-            toolName,
-            arguments = JsonSerializer.Deserialize<object>(forwardedArguments.GetRawText(), CentralServerSerialization.JsonOptions),
-            forwardedResult = forwarded.ToolResult,
-            message = forwarded.Message,
-        };
-
-        return forwarded.Success
-            ? CentralToolCallResponse.Success(payload)
-            : CentralToolCallResponse.Error("Forwarded editor tool failed.", payload);
-    }
-
-    private object BuildCentralHostSession(
-        EditorSessionCoordinator.EnsureEditorSessionResult coordination,
-        string endpoint,
-        string toolName)
-    {
-        var resolution = ResolveCoordinationResolution(coordination);
-        var process = coordination.Project is null
-            ? coordination.Editor
-            : coordination.Editor
-              ?? _editorLifecycleCoordinator.GetEffectiveProcessStatus(
-                  coordination.Project.ProjectId,
-                  coordination.Project.ProjectRoot,
-                  coordination.Session);
-
-        return new
-        {
-            toolName,
-            activeProjectId = _sessionState.ActiveProjectId,
-            activeEditorSessionId = _sessionState.ActiveEditorSessionId,
-            endpoint,
-            attachHost = _editorSessionCoordinator.AttachEndpoint.Host,
-            attachPort = _editorSessionCoordinator.AttachEndpoint.Port,
-            attachTimeoutMs = coordination.AttachTimeoutMs,
-            autoLaunchAttempted = coordination.AutoLaunchAttempted,
-            editorLifecycle = _editorLifecycleCoordinator.BuildLifecycleSummary(
-                toolName,
-                coordination.Project,
-                coordination.Session,
-                process,
-                resolution),
-        };
-    }
-
-    private object BuildCoordinationFailurePayload(
-        EditorSessionCoordinator.EnsureEditorSessionResult coordination,
-        string toolName)
-    {
-        return AttachCentralHostSession(
-            coordination.ToErrorPayload(),
-            BuildCentralHostSession(coordination, string.Empty, toolName));
-    }
-
-    private static string ResolveCoordinationResolution(EditorSessionCoordinator.EnsureEditorSessionResult coordination)
-    {
-        if (!coordination.Success)
-        {
-            return string.IsNullOrWhiteSpace(coordination.ErrorType)
-                ? "editor_unavailable"
-                : coordination.ErrorType;
-        }
-
-        return coordination.ReusedRunningEditor
-               || coordination.Launch?.AlreadyRunning == true
-            ? "reused_running_editor"
-            : coordination.AutoLaunchAttempted
-                ? "launched_editor"
-                : "reused_ready_session";
-    }
-
-    private static object AttachCentralHostSession(object toolResult, object centralHostSession)
-    {
-        var centralHostSessionNode = JsonSerializer.SerializeToNode(centralHostSession, CentralServerSerialization.JsonOptions);
-        var resultNode = JsonSerializer.SerializeToNode(toolResult, CentralServerSerialization.JsonOptions);
-        if (resultNode is JsonObject resultObject)
-        {
-            resultObject["centralHostSession"] = centralHostSessionNode;
-            return resultObject;
-        }
-
-        return new JsonObject
-        {
-            ["result"] = resultNode,
-            ["centralHostSession"] = centralHostSessionNode,
-        };
-    }
 }
