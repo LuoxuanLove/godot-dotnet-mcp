@@ -1,15 +1,14 @@
-using System.Text.Json;
-
 namespace GodotDotnetMcp.CentralServer;
 
 internal sealed class EditorLifecycleStatusService
 {
     private readonly CentralConfigurationService _configuration;
     private readonly EditorProcessService _editorProcesses;
-    private readonly EditorProxyService _editorProxy;
     private readonly EditorSessionService _editorSessions;
     private readonly ProjectRegistryService _registry;
     private readonly CentralWorkspaceState _workspaceState;
+    private readonly EditorLifecycleRemoteStateService _remoteStateService;
+    private readonly EditorLifecycleSummaryBuilder _summaryBuilder;
 
     public EditorLifecycleStatusService(
         CentralConfigurationService configuration,
@@ -21,10 +20,11 @@ internal sealed class EditorLifecycleStatusService
     {
         _configuration = configuration;
         _editorProcesses = editorProcesses;
-        _editorProxy = editorProxy;
         _editorSessions = editorSessions;
         _registry = registry;
         _workspaceState = workspaceState;
+        _remoteStateService = new EditorLifecycleRemoteStateService(editorProxy);
+        _summaryBuilder = new EditorLifecycleSummaryBuilder(editorProcesses.StorePath);
     }
 
     public async Task<ProjectStatusSnapshot> GetProjectStatusAsync(
@@ -73,7 +73,7 @@ internal sealed class EditorLifecycleStatusService
                 project,
                 session,
                 process,
-                ResolveStatusResolution(session, process),
+                EditorLifecycleSummaryBuilder.ResolveStatusResolution(session, process),
                 editorState),
         };
     }
@@ -105,97 +105,14 @@ internal sealed class EditorLifecycleStatusService
         string resolution,
         Dictionary<string, object?>? editorState = null)
     {
-        var processStatus = process ?? EditorProcessService.EditorProcessStatus.Empty(project?.ProjectId ?? string.Empty, _editorProcesses.StorePath);
-        var attached = session?.Attached ?? false;
-        var httpReady = session is not null && EditorSessionService.IsHttpReady(session);
-        var supportsEditorLifecycle = session is not null && EditorSessionService.SupportsEditorLifecycle(session);
-        var resident = processStatus.Running || attached;
-        var ownership = processStatus.Running
-            ? processStatus.Ownership
-            : attached
-                ? "external_attached"
-                : "none";
-        var processId = processStatus.ProcessId ?? session?.ProcessId ?? 0;
-        var startedAtUtc = processStatus.StartedAtUtc ?? session?.AttachedAtUtc;
-
-        var summary = new Dictionary<string, object?>
-        {
-            ["policy"] = "persistent_background_editor",
-            ["toolName"] = toolName,
-            ["resolution"] = resolution,
-            ["resident"] = resident,
-            ["ownership"] = ownership,
-            ["attached"] = attached,
-            ["httpReady"] = httpReady,
-            ["supportsEditorLifecycle"] = supportsEditorLifecycle,
-            ["sessionId"] = session?.SessionId ?? string.Empty,
-            ["processId"] = processId,
-            ["startedAtUtc"] = startedAtUtc?.ToString("O") ?? string.Empty,
-            ["launchReason"] = processStatus.LaunchReason,
-            ["canGracefulClose"] = httpReady && supportsEditorLifecycle,
-            ["canForceClose"] = processStatus.Running
-                && string.Equals(processStatus.Ownership, "host_managed", StringComparison.OrdinalIgnoreCase),
-            ["storePath"] = processStatus.StorePath,
-        };
-
-        if (project is not null)
-        {
-            summary["projectId"] = project.ProjectId;
-            summary["projectPath"] = project.ProjectRoot;
-        }
-
-        if (editorState is not null && editorState.Count > 0)
-        {
-            summary["editorState"] = editorState;
-        }
-
-        return summary;
+        return _summaryBuilder.BuildLifecycleSummary(toolName, project, session, process, resolution, editorState);
     }
 
-    public async Task<Dictionary<string, object?>?> TryGetRemoteStatusAsync(
+    public Task<Dictionary<string, object?>?> TryGetRemoteStatusAsync(
         EditorSessionService.EditorSessionStatus? session,
         CancellationToken cancellationToken)
     {
-        if (session is null || !EditorSessionService.IsHttpReady(session))
-        {
-            return null;
-        }
-
-        if (!EditorSessionService.SupportsEditorLifecycle(session))
-        {
-            return BuildUnsupportedEditorLifecycleState(session);
-        }
-
-        try
-        {
-            var response = await _editorProxy.GetEditorLifecycleStatusAsync(session, cancellationToken);
-            if (!response.Success)
-            {
-                return new Dictionary<string, object?>
-                {
-                    ["available"] = false,
-                    ["error"] = response.ErrorType,
-                    ["message"] = response.Message,
-                    ["endpoint"] = response.Endpoint,
-                };
-            }
-
-            return ExtractDataDictionary(response.Payload)
-                ?? new Dictionary<string, object?>
-                {
-                    ["available"] = true,
-                    ["endpoint"] = response.Endpoint,
-                };
-        }
-        catch (Exception ex)
-        {
-            return new Dictionary<string, object?>
-            {
-                ["available"] = false,
-                ["error"] = "editor_status_unavailable",
-                ["message"] = ex.Message,
-            };
-        }
+        return _remoteStateService.TryGetRemoteStatusAsync(session, cancellationToken);
     }
 
     public ProjectRegistryService.RegisteredProject? ResolveProject(string? explicitProjectId, string? explicitProjectPath)
@@ -225,60 +142,6 @@ internal sealed class EditorLifecycleStatusService
 
     internal static Dictionary<string, object?> BuildUnsupportedEditorLifecycleState(EditorSessionService.EditorSessionStatus session)
     {
-        return new Dictionary<string, object?>
-        {
-            ["available"] = false,
-            ["error"] = "editor_lifecycle_unsupported",
-            ["message"] = "Attached editor session does not advertise internal editor lifecycle support.",
-            ["endpoint"] = string.IsNullOrWhiteSpace(session.ServerHost) || session.ServerPort is null or <= 0
-                ? string.Empty
-                : $"http://{session.ServerHost}:{session.ServerPort}/api/editor/lifecycle",
-            ["capabilities"] = session.Capabilities,
-        };
-    }
-
-    private static string ResolveStatusResolution(
-        EditorSessionService.EditorSessionStatus? session,
-        EditorProcessService.EditorProcessStatus? process)
-    {
-        var attached = session?.Attached ?? false;
-        var httpReady = session is not null && EditorSessionService.IsHttpReady(session);
-        var running = process?.Running ?? false;
-        if (httpReady && running)
-        {
-            return "resident_ready_session";
-        }
-
-        if (httpReady)
-        {
-            return "attached_ready_session";
-        }
-
-        if (attached)
-        {
-            return "attached_without_http";
-        }
-
-        if (running)
-        {
-            return "resident_waiting_attach";
-        }
-
-        return "editor_unavailable";
-    }
-
-    private static Dictionary<string, object?>? ExtractDataDictionary(JsonElement payload)
-    {
-        if (payload.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        if (payload.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Object)
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, object?>>(dataElement.GetRawText(), CentralServerSerialization.JsonOptions);
-        }
-
-        return JsonSerializer.Deserialize<Dictionary<string, object?>>(payload.GetRawText(), CentralServerSerialization.JsonOptions);
+        return EditorLifecycleRemoteStateService.BuildUnsupportedEditorLifecycleState(session);
     }
 }

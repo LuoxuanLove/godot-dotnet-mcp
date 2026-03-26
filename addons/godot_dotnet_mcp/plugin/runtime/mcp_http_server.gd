@@ -9,7 +9,12 @@ const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loa
 const MCPToolLoaderSupervisorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd")
 const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
 const MCPEditorLifecycleEndpointScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_endpoint.gd")
+const MCPEditorLifecycleActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_action_service.gd")
+const MCPEditorLifecycleStateBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_state_builder.gd")
+const MCPHttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
+const MCPJsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router.gd")
 const MCPToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
+const MCPHttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
 const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPDefaultToolPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
@@ -39,7 +44,12 @@ var _last_request_at_unix: int = 0
 var _tool_loader_supervisor = MCPToolLoaderSupervisorScript.new()
 var _tool_rpc_router = MCPToolRpcRouterScript.new()
 var _editor_lifecycle_endpoint = MCPEditorLifecycleEndpointScript.new()
+var _editor_lifecycle_action_service = MCPEditorLifecycleActionServiceScript.new()
+var _editor_lifecycle_state_builder = MCPEditorLifecycleStateBuilderScript.new()
+var _http_request_router = MCPHttpRequestRouterScript.new()
+var _json_rpc_router = MCPJsonRpcRouterScript.new()
 var _tools_api_service = MCPToolsApiServiceScript.new()
+var _http_response_service = MCPHttpResponseServiceScript.new()
 var _runtime_control_service = MCPRuntimeControlServiceScript.new()
 var _gdscript_lsp_diagnostics_service
 var _default_permission_provider = MCPDefaultToolPermissionProviderScript.new()
@@ -370,6 +380,8 @@ func _ensure_initialized() -> void:
 	if _tcp_server == null:
 		_tcp_server = TCPServer.new()
 	_ensure_tool_loader_supervisor()
+	_ensure_http_response_service()
+	_ensure_http_request_router()
 	_ensure_tools_api_service()
 	_ensure_editor_lifecycle_endpoint()
 	_ensure_runtime_control_service()
@@ -407,22 +419,52 @@ func _ensure_runtime_control_service() -> void:
 func _ensure_tool_rpc_router() -> void:
 	if _tool_rpc_router == null:
 		_tool_rpc_router = MCPToolRpcRouterScript.new()
+	_ensure_http_response_service()
 	_tool_rpc_router.configure({
 		"get_tool_loader": Callable(self, "get_tool_loader"),
 		"is_tool_enabled": Callable(self, "is_tool_enabled"),
 		"is_tool_exposed": Callable(self, "is_tool_exposed"),
 		"log": Callable(self, "_log"),
-		"sanitize_for_json": Callable(self, "_sanitize_for_json")
+		"sanitize_for_json": Callable(_http_response_service, "sanitize_for_json")
+	})
+
+
+func _ensure_http_request_router() -> void:
+	if _http_request_router == null:
+		_http_request_router = MCPHttpRequestRouterScript.new()
+	_http_request_router.configure({
+		"handle_mcp_request_async": Callable(self, "_handle_mcp_request_async"),
+		"build_health_response": Callable(self, "_build_health_response"),
+		"build_tools_list_response": Callable(self, "_create_tools_list_response"),
+		"handle_editor_lifecycle_request": Callable(self, "_handle_editor_lifecycle_request"),
+		"handle_editor_lifecycle_post_request": Callable(self, "_handle_editor_lifecycle_post_request"),
+		"build_cors_response": Callable(self, "_build_cors_response")
+	})
+
+
+func _ensure_json_rpc_router() -> void:
+	if _json_rpc_router == null:
+		_json_rpc_router = MCPJsonRpcRouterScript.new()
+	_json_rpc_router.configure({
+		"handle_initialize": Callable(self, "_handle_initialize"),
+		"handle_tools_list": Callable(self, "_handle_tools_list"),
+		"handle_tools_call_async": Callable(self, "_handle_tools_call_async"),
+		"handle_notification": Callable(self, "_handle_notification"),
+		"build_json_rpc_response": Callable(self, "_build_json_rpc_response"),
+		"build_json_rpc_error": Callable(self, "_build_json_rpc_error"),
+		"log": Callable(self, "_log")
 	})
 
 
 func _ensure_editor_lifecycle_endpoint() -> void:
 	if _editor_lifecycle_endpoint == null:
 		_editor_lifecycle_endpoint = MCPEditorLifecycleEndpointScript.new()
+	_ensure_editor_lifecycle_action_service()
+	_ensure_editor_lifecycle_state_builder()
 	_editor_lifecycle_endpoint.configure({
-		"build_state": Callable(self, "_build_editor_lifecycle_state"),
-		"execute_close": Callable(self, "_execute_editor_lifecycle_close"),
-		"execute_restart": Callable(self, "_execute_editor_lifecycle_restart"),
+		"build_state": Callable(_editor_lifecycle_state_builder, "build_state"),
+		"execute_close": Callable(_editor_lifecycle_action_service, "execute_close"),
+		"execute_restart": Callable(_editor_lifecycle_action_service, "execute_restart"),
 		"success": Callable(self, "_editor_lifecycle_success"),
 		"error": Callable(self, "_editor_lifecycle_error")
 	})
@@ -435,6 +477,54 @@ func _ensure_tools_api_service() -> void:
 		"get_tool_loader": Callable(self, "get_tool_loader"),
 		"get_tool_loader_status": Callable(self, "get_tool_loader_status")
 	})
+
+
+func _ensure_editor_lifecycle_state_builder() -> void:
+	if _editor_lifecycle_state_builder == null:
+		_editor_lifecycle_state_builder = MCPEditorLifecycleStateBuilderScript.new()
+	_editor_lifecycle_state_builder.configure({
+		"get_plugin_host": Callable(self, "_get_editor_plugin_host")
+	})
+
+
+func _ensure_editor_lifecycle_action_service() -> void:
+	if _editor_lifecycle_action_service == null:
+		_editor_lifecycle_action_service = MCPEditorLifecycleActionServiceScript.new()
+	_ensure_editor_lifecycle_state_builder()
+	_editor_lifecycle_action_service.configure({
+		"build_state": Callable(_editor_lifecycle_state_builder, "build_state"),
+		"build_state_with_hint": Callable(_editor_lifecycle_state_builder, "build_state_with_hint"),
+		"success": Callable(self, "_editor_lifecycle_success"),
+		"error": Callable(self, "_editor_lifecycle_error"),
+		"schedule_action": Callable(self, "_schedule_editor_lifecycle_action"),
+		"get_plugin_host": Callable(self, "_get_editor_plugin_host"),
+		"log": Callable(self, "_log")
+	})
+
+
+func _ensure_http_response_service() -> void:
+	if _http_response_service == null:
+		_http_response_service = MCPHttpResponseServiceScript.new()
+	_http_response_service.configure({
+		"get_tool_loader": Callable(self, "get_tool_loader"),
+		"get_tool_loader_status": Callable(self, "get_tool_loader_status"),
+		"get_server_stats": Callable(self, "_build_server_stats"),
+		"log": Callable(self, "_log")
+	}, {
+		"server_name": SERVER_NAME,
+		"server_version": SERVER_VERSION
+	})
+
+
+func _build_server_stats() -> Dictionary:
+	return {
+		"running": _running,
+		"connections": _clients.size(),
+		"total_connections": _total_connections,
+		"total_requests": _total_requests,
+		"last_request_method": _last_request_method,
+		"last_request_at_unix": _last_request_at_unix
+	}
 
 
 func _record_tool_loader_registration_issue(level: String, reason: String, status: Dictionary, summary: Dictionary) -> void:
@@ -558,38 +648,14 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	_last_request_method = method
 	_last_request_at_unix = int(Time.get_unix_time_from_system())
 
-	var response: Dictionary = {}
-	var no_body := false
-
-	if method == "POST" and path == "/mcp":
-		response = await _handle_mcp_request_async(request_body)
-		no_body = response.get("_no_body", false)
-		if response.has("_no_body"):
-			response.erase("_no_body")
-	elif method == "GET" and path == "/mcp":
-		response = {
-			"status": 405,
-			"_no_body": true,
-			"_headers": {
-				"Allow": "POST, OPTIONS"
-			}
-		}
-		no_body = true
-	elif method == "GET" and path == "/health":
-		response = _create_health_response()
-	elif method == "GET" and path == "/api/tools":
-		response = _create_tools_list_response()
-	elif method == "GET" and path == "/api/editor/lifecycle":
-		response = _handle_editor_lifecycle_request("status", {})
-	elif method == "POST" and path == "/api/editor/lifecycle":
-		response = _handle_editor_lifecycle_post_request(request_body)
-	elif method == "OPTIONS":
-		response = _create_cors_response()
-	else:
-		response = {"error": "Not found", "status": 404}
+	_ensure_http_request_router()
+	var response: Dictionary = await _http_request_router.route_request_async(method, path, request_body)
+	var no_body := bool(response.get("_no_body", false))
+	if response.has("_no_body"):
+		response.erase("_no_body")
 
 	if client in _clients and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-		_send_http_response(client, response, no_body)
+		_write_http_response(client, response, no_body)
 	_processing_clients.erase(client)
 
 
@@ -718,44 +784,22 @@ func _handle_mcp_request_async(body: String) -> Dictionary:
 				"body_length": body.length()
 			}
 		)
-		return _create_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null)
+		return _build_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null)
 
 	var request = json.get_data()
 	if not request is Dictionary:
-		return _create_json_rpc_error(-32600, "Invalid Request", null)
+		return _build_json_rpc_error(-32600, "Invalid Request", null)
 
 	var method = request.get("method", "")
 	var params = request.get("params", {})
 	var has_id = request.has("id")
-	var id = _normalize_json_rpc_id(request.get("id"))
+	var id = request.get("id")
 
 	_log("Method: %s, ID: %s" % [method, id], "debug")
 
 	request_received.emit(method, params)
-
-	if not has_id:
-		_handle_notification(method, params)
-		return {"status": 202, "_no_body": true}
-
-	var response: Dictionary
-
-	match method:
-		"initialize":
-			response = _handle_initialize(params, id)
-		"initialized", "notifications/initialized":
-			response = _create_json_rpc_response({}, id)
-		"tools/list":
-			response = _handle_tools_list(params, id)
-		"tools/call":
-			response = await _handle_tools_call_async(params, id)
-		"ping":
-			response = _create_json_rpc_response({}, id)
-		_:
-			response = _create_json_rpc_error(-32601, "Method not found: %s" % method, id)
-
-	_log("Response ready for method: %s" % method, "debug")
-
-	return response
+	_ensure_json_rpc_router()
+	return await _json_rpc_router.route_request_async(method, params, id, has_id)
 
 
 func _handle_notification(method: String, _params: Dictionary) -> void:
@@ -781,7 +825,7 @@ func _handle_initialize(params: Dictionary, id) -> Dictionary:
 			"version": SERVER_VERSION
 		}
 	}
-	return _create_json_rpc_response(result, id)
+	return _build_json_rpc_response(result, id)
 
 
 func get_plugin_permission_provider():
@@ -802,76 +846,36 @@ func get_plugin_permission_provider():
 
 func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
 	_ensure_tool_rpc_router()
-	return _create_json_rpc_response(_tool_rpc_router.build_tools_list_result(), id)
+	return _build_json_rpc_response(_tool_rpc_router.build_tools_list_result(), id)
 
 
 func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 	_ensure_tool_rpc_router()
-	return _create_json_rpc_response(await _tool_rpc_router.build_tool_call_result_async(params), id)
+	return _build_json_rpc_response(await _tool_rpc_router.build_tool_call_result_async(params), id)
 
 
-func _create_json_rpc_response(result, id) -> Dictionary:
-	return {
-		"jsonrpc": "2.0",
-		"result": result,
-		"id": _normalize_json_rpc_id(id)
-	}
-
-
-func _create_json_rpc_error(code: int, message: String, id) -> Dictionary:
-	return {
-		"jsonrpc": "2.0",
-		"error": {
-			"code": code,
-			"message": message
-		},
-		"id": _normalize_json_rpc_id(id)
-	}
-
-
-func _create_health_response() -> Dictionary:
-	var loader = get_tool_loader()
-	var exposed_tools: Array = []
-	var tool_count := 0
-	var domain_states: Array = []
-	var reload_status := {}
-	var performance := {}
-	if loader != null:
-		exposed_tools = loader.get_exposed_tool_definitions()
-		tool_count = loader.get_tool_definitions().size()
-		domain_states = loader.get_domain_states()
-		reload_status = loader.get_reload_status()
-		performance = loader.get_performance_summary()
-	var loader_status := get_tool_loader_status()
-	var status_text := "ok" if bool(loader_status.get("healthy", false)) else str(loader_status.get("status", "degraded"))
-	return {
-		"status": status_text,
-		"server": SERVER_NAME,
-		"version": SERVER_VERSION,
-		"running": _running,
-		"connections": _clients.size(),
-		"total_connections": _total_connections,
-		"total_requests": _total_requests,
-		"last_request_method": _last_request_method,
-		"last_request_at_unix": _last_request_at_unix,
-		"tool_count": tool_count,
-		"exposed_tool_count": exposed_tools.size(),
-		"tool_loader_status": loader_status,
-		"domain_states": domain_states,
-		"reload_status": reload_status,
-		"performance": performance
-	}
+func _build_json_rpc_response(result, id) -> Dictionary:
+	_ensure_http_response_service()
+	return _http_response_service.build_json_rpc_response(result, id)
 
 
 func _create_tools_list_response() -> Dictionary:
 	return build_tools_api_snapshot()
 
 
-func _create_cors_response() -> Dictionary:
-	return {
-		"status": 204,
-		"cors": true
-	}
+func _build_json_rpc_error(code: int, message: String, id) -> Dictionary:
+	_ensure_http_response_service()
+	return _http_response_service.build_json_rpc_error(code, message, id)
+
+
+func _build_health_response() -> Dictionary:
+	_ensure_http_response_service()
+	return _http_response_service.build_health_response()
+
+
+func _build_cors_response() -> Dictionary:
+	_ensure_http_response_service()
+	return _http_response_service.build_cors_response()
 
 
 func _handle_editor_lifecycle_post_request(body: String) -> Dictionary:
@@ -882,156 +886,13 @@ func _handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dicti
 	return handle_editor_lifecycle_request(action, args)
 
 
-func _execute_editor_lifecycle_close(args: Dictionary) -> Dictionary:
-	var save := bool(args.get("save", false))
-	var force := bool(args.get("force", false))
-	if not save and not force:
-		return _editor_lifecycle_error("editor_confirmation_required", "Explicit confirmation is required before closing the editor.", _build_editor_lifecycle_state_with_hint("Pass save=true for a graceful close or force=true for host-managed fallback."))
-	if not save:
-		return _editor_lifecycle_error("editor_confirmation_required", "Graceful editor close requires save=true when called from the editor lifecycle bridge.", _build_editor_lifecycle_state_with_hint("Force fallback is handled by the host and should not be routed through the editor lifecycle bridge."))
-
-	call_deferred("_deferred_editor_lifecycle_action", "close")
-	return _editor_lifecycle_success({
-		"accepted": true,
-		"action": "close",
-		"save": true,
-		"force": false,
-		"editor_state": _build_editor_lifecycle_state()
-	}, "Editor close accepted")
+func _schedule_editor_lifecycle_action(action: String) -> void:
+	call_deferred("_run_deferred_editor_lifecycle_action", action)
 
 
-func _execute_editor_lifecycle_restart(args: Dictionary) -> Dictionary:
-	var save := bool(args.get("save", false))
-	var force := bool(args.get("force", false))
-	if not save and not force:
-		return _editor_lifecycle_error("editor_confirmation_required", "Explicit confirmation is required before restarting the editor.", _build_editor_lifecycle_state_with_hint("Pass save=true for a graceful restart or force=true for host-managed fallback."))
-	if not save:
-		return _editor_lifecycle_error("editor_confirmation_required", "Graceful editor restart requires save=true when called from the editor lifecycle bridge.", _build_editor_lifecycle_state_with_hint("Force fallback is handled by the host and should not be routed through the editor lifecycle bridge."))
-
-	call_deferred("_deferred_editor_lifecycle_action", "restart")
-	return _editor_lifecycle_success({
-		"accepted": true,
-		"action": "restart",
-		"save": true,
-		"force": false,
-		"editor_state": _build_editor_lifecycle_state()
-	}, "Editor restart accepted")
-
-
-func _deferred_editor_lifecycle_action(action: String) -> void:
-	_prepare_editor_lifecycle_shutdown(action)
-	var tree := get_tree()
-	if tree == null:
-		_finalize_editor_lifecycle_action(action)
-		return
-	var timer := tree.create_timer(0.2)
-	timer.timeout.connect(Callable(self, "_finalize_editor_lifecycle_action").bind(action), CONNECT_ONE_SHOT)
-
-
-func _prepare_editor_lifecycle_shutdown(action: String) -> void:
-	var plugin = _get_editor_plugin_host()
-	if plugin == null:
-		return
-	var editor_interface = plugin.get_editor_interface()
-	if editor_interface != null and editor_interface.has_method("save_all_scenes"):
-		editor_interface.save_all_scenes()
-	if plugin.has_method("get_central_server_attach_service"):
-		var attach_service = plugin.get_central_server_attach_service()
-		if attach_service != null and attach_service.has_method("stop"):
-			attach_service.stop()
-	_log("Editor lifecycle %s scheduled" % action, "info")
-
-
-func _finalize_editor_lifecycle_action(action: String) -> void:
-	var plugin = _get_editor_plugin_host()
-	if plugin == null:
-		return
-	if action == "close":
-		var tree: SceneTree = plugin.get_tree()
-		if tree != null:
-			tree.quit()
-		return
-
-	var editor_interface = plugin.get_editor_interface()
-	if editor_interface != null and editor_interface.has_method("restart_editor"):
-		editor_interface.restart_editor(true)
-
-
-func _build_editor_lifecycle_state() -> Dictionary:
-	var plugin = _get_editor_plugin_host()
-	if plugin == null:
-		return {
-			"isPlayingScene": false,
-			"openScenes": [],
-			"dirtySceneCount": 0,
-			"dirtyScenes": [],
-			"currentScenePath": ""
-		}
-
-	var editor_interface = plugin.get_editor_interface()
-	var open_scenes: Array[String] = []
-	var dirty_scenes: Array[String] = []
-	var current_scene_path := ""
-	var is_playing_scene := false
-	if editor_interface != null:
-		if editor_interface.has_method("get_open_scenes"):
-			for path in editor_interface.get_open_scenes():
-				open_scenes.append(str(path))
-		dirty_scenes = _collect_dirty_editor_scenes(editor_interface)
-		if editor_interface.has_method("get_edited_scene_root"):
-			current_scene_path = _resolve_editor_scene_root_path(editor_interface.get_edited_scene_root())
-		if editor_interface.has_method("is_playing_scene"):
-			is_playing_scene = bool(editor_interface.is_playing_scene())
-	open_scenes.sort()
-	dirty_scenes.sort()
-	return {
-		"isPlayingScene": is_playing_scene,
-		"openScenes": open_scenes,
-		"dirtySceneCount": dirty_scenes.size(),
-		"dirtyScenes": dirty_scenes,
-		"currentScenePath": current_scene_path
-	}
-
-
-func _build_editor_lifecycle_state_with_hint(hint: String) -> Dictionary:
-	var state := _build_editor_lifecycle_state()
-	state["hint"] = hint
-	return state
-
-
-func _resolve_editor_scene_root_path(root) -> String:
-	if root == null:
-		return ""
-	if root is Node:
-		var node: Node = root
-		if not node.scene_file_path.is_empty():
-			return node.scene_file_path
-		if not node.name.is_empty():
-			return "<unsaved:%s>" % node.name
-	return str(root)
-
-
-func _collect_dirty_editor_scenes(editor_interface) -> Array[String]:
-	var dirty_scenes: Array[String] = []
-	if editor_interface == null:
-		return dirty_scenes
-	if not editor_interface.has_method("get_open_scene_roots"):
-		return dirty_scenes
-	if not editor_interface.has_method("is_object_edited"):
-		return dirty_scenes
-
-	for root in editor_interface.get_open_scene_roots():
-		if root == null:
-			continue
-		if not bool(editor_interface.is_object_edited(root)):
-			continue
-		var scene_path := _resolve_editor_scene_root_path(root)
-		if scene_path.is_empty():
-			continue
-		if not dirty_scenes.has(scene_path):
-			dirty_scenes.append(scene_path)
-
-	return dirty_scenes
+func _run_deferred_editor_lifecycle_action(action: String) -> void:
+	_ensure_editor_lifecycle_action_service()
+	_editor_lifecycle_action_service.run_deferred_action(action)
 
 
 func _get_editor_plugin_host():
@@ -1061,95 +922,6 @@ func _editor_lifecycle_error(error: String, message: String, data: Dictionary = 
 	return result
 
 
-func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
-	# Sanitize data before JSON serialization
-	var response_data = data.duplicate(true)
-	var extra_headers = response_data.get("_headers", {})
-	if response_data.has("_headers"):
-		response_data.erase("_headers")
-
-	var status_code = 200
-	if response_data.has("_status_code"):
-		if typeof(response_data["_status_code"]) == TYPE_INT:
-			status_code = int(response_data["_status_code"])
-		response_data.erase("_status_code")
-	elif response_data.has("status") and typeof(response_data["status"]) == TYPE_INT:
-		status_code = int(response_data["status"])
-
-	var sanitized = _sanitize_for_json(response_data)
-	var body = "" if no_body else JSON.stringify(sanitized)
-	var body_bytes = body.to_utf8_buffer()
-	var status_text = "OK" if status_code == 200 else "Error"
-
-	var status_texts = {200: "OK", 202: "Accepted", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}
-	status_text = status_texts.get(status_code, "OK")
-
-	var headers = "HTTP/1.1 %d %s\r\n" % [status_code, status_text]
-	if not no_body:
-		headers += "Content-Type: application/json; charset=utf-8\r\n"
-	headers += "Content-Length: %d\r\n" % body_bytes.size()
-	headers += "Access-Control-Allow-Origin: *\r\n"
-	headers += "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-	headers += "Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With, Authorization\r\n"
-	headers += "Access-Control-Max-Age: 86400\r\n"
-	headers += "Connection: keep-alive\r\n"
-	for header_name in extra_headers:
-		headers += "%s: %s\r\n" % [header_name, extra_headers[header_name]]
-	headers += "\r\n"
-
-	# Send headers and body
-	var header_bytes = headers.to_utf8_buffer()
-	var err1 = client.put_data(header_bytes)
-	var err2 = client.put_data(body_bytes)
-
-	_log("Response sent: status=%d, size=%d bytes, errors=(h:%s, b:%s)" % [status_code, body_bytes.size(), err1, err2], "trace")
-
-
-func _normalize_json_rpc_id(id):
-	if typeof(id) == TYPE_FLOAT and not is_nan(id) and not is_inf(id) and floor(id) == id:
-		return int(id)
-	return id
-
-
-func _sanitize_for_json(value):
-	"""Recursively sanitize values to ensure valid JSON serialization"""
-	match typeof(value):
-		TYPE_DICTIONARY:
-			var result = {}
-			for key in value:
-				# Ensure key is a string
-				var str_key = str(key)
-				result[str_key] = _sanitize_for_json(value[key])
-			return result
-		TYPE_ARRAY:
-			var result = []
-			for item in value:
-				result.append(_sanitize_for_json(item))
-			return result
-		TYPE_FLOAT:
-			# Handle NaN and Infinity which are not valid JSON
-			if is_nan(value):
-				return 0.0
-			if is_inf(value):
-				return 999999999.0 if value > 0 else -999999999.0
-			return value
-		TYPE_STRING:
-			# Ensure string is valid
-			return value
-		TYPE_STRING_NAME:
-			return str(value)
-		TYPE_NODE_PATH:
-			return str(value)
-		TYPE_OBJECT:
-			# Convert objects to string representation
-			if value == null:
-				return null
-			return str(value)
-		TYPE_VECTOR2, TYPE_VECTOR3, TYPE_VECTOR4:
-			return str(value)
-		TYPE_COLOR:
-			return {"r": value.r, "g": value.g, "b": value.b, "a": value.a}
-		TYPE_NIL:
-			return null
-		_:
-			return value
+func _write_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
+	_ensure_http_response_service()
+	_http_response_service.send_http_response(client, data, no_body)

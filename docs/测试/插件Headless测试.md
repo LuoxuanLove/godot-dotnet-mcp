@@ -29,6 +29,11 @@ tests/godot_plugin_harness_fixture/
    ├─ runtime_bridge_contract_test.gd
    ├─ runtime_control_contract_test.gd
    ├─ http_server_contract_test.gd
+   ├─ http_request_router_contract_test.gd
+   ├─ http_response_service_contract_test.gd
+   ├─ json_rpc_router_contract_test.gd
+   ├─ editor_lifecycle_action_service_contract_test.gd
+   ├─ editor_lifecycle_state_builder_contract_test.gd
    ├─ system_runtime_impl_contract_test.gd
    ├─ system_index_impl_contract_test.gd
    └─ tool_loader_contract_test.gd
@@ -47,20 +52,25 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-26`，当前有 `6` 个 case：
+截至 `2026-03-26`，当前有 `11` 个 case：
 
 | 用例 | 目标 |
 |---|---|
 | `runtime_bridge_invalid_action_fallback` | 验证 `mcp_runtime_bridge` 对非法 action 的 fallback reply |
 | `runtime_control_contracts` | 验证 `runtime_control_service` 在无 session 时的状态和参数错误模型 |
 | `http_server_contracts` | 验证 `mcp_http_server` 的 lifecycle、`tools/list`、`tools/call` 结构契约 |
+| `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、CORS 与 404 语义 |
+| `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影与 JSON 清洗 |
+| `json_rpc_router_contracts` | 验证 `mcp_json_rpc_router` 的 initialize、notification 无响应与 method-not-found 语义 |
+| `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
+| `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
 
 当前实测状态：
 
-- suite：`6/6` 通过
+- suite：`11/11` 通过
 - `tool_loader_status=ready`
 - `category_count=26`
 - `tool_count=118`
@@ -91,6 +101,7 @@ tests/godot_plugin_harness_fixture/
 
 - case 级开始/结束日志
 - 通过环境变量筛选单 case
+- 逐 case `cleanup_case()` 钩子
 
 这对排查卡死、性能问题和资源清理问题很有帮助。
 
@@ -107,6 +118,11 @@ tests/godot_plugin_harness_fixture/
 当前插件侧已经加入以下测试 seam：
 
 - `mcp_editor_lifecycle_endpoint.gd`
+- `mcp_editor_lifecycle_action_service.gd`
+- `mcp_editor_lifecycle_state_builder.gd`
+- `mcp_http_request_router.gd`
+- `mcp_http_response_service.gd`
+- `mcp_json_rpc_router.gd`
 - `mcp_tools_api_service.gd`
 - `mcp_http_server.gd` 的公共测试入口
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
@@ -139,6 +155,15 @@ tests/godot_plugin_harness_fixture/
 - 资源引用释放
 
 仍然没有完全收口。
+
+当前已经新增第一轮统一 cleanup 钩子，用于：
+
+- 每个 case 执行后显式 cleanup
+- 额外推进两帧，给 `queue_free` / deferred cleanup 收尾
+- 清理 runtime fallback 文件
+- 释放测试中显式创建的临时 `Node`
+
+但截至本轮，退出告警数量没有明显下降，说明剩余问题更接近脚本资源缓存、tool loader 图谱或 GDScript 运行时持有，而不只是简单的测试尾巴未扫净。
 
 ### 3. 当前仍偏“结构契约 + 局部 fake”混合模式
 
@@ -176,7 +201,11 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 
 - `McpRequestRouter`
 - `EditorLifecycleEndpoint`
+- `EditorLifecycleActionService`
 - `ToolListResponseBuilder`
+- `JsonRpcRouter`
+- `HttpResponseService`
+- `EditorLifecycleStateBuilder`
 
 当前已经完成“从私有方法名迁移到公共测试入口”的第一步。  
 下一步目标是让 lifecycle、tools snapshot 和 JSON-RPC 入口更自然地落在独立 helper 上。

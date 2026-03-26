@@ -2,12 +2,14 @@ extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 
+var _server
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	var server = HttpServerScript.new()
-	server.initialize(0, "127.0.0.1", false)
+	_server = HttpServerScript.new()
+	_server.initialize(0, "127.0.0.1", false)
 
-	var loader_status: Dictionary = server.get_tool_loader_status()
+	var loader_status: Dictionary = _server.get_tool_loader_status()
 	var loader_required_keys := ["initialized", "healthy", "status", "tool_count", "exposed_tool_count", "category_count", "tool_load_error_count", "last_summary"]
 	for key in loader_required_keys:
 		if not loader_status.has(key):
@@ -23,26 +25,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(loader_status.get("healthy", false)):
 		return _failure("Tool loader should be healthy when the default permission provider is active.")
 
-	var invalid_json: Dictionary = server.handle_editor_lifecycle_post(JSON.stringify([]))
+	var invalid_json: Dictionary = _server.handle_editor_lifecycle_post(JSON.stringify([]))
 	if str(invalid_json.get("error", "")) != "invalid_argument":
 		return _failure("Editor lifecycle POST did not reject a non-object JSON body.")
 
-	var missing_action: Dictionary = server.handle_editor_lifecycle_post(JSON.stringify({}))
+	var missing_action: Dictionary = _server.handle_editor_lifecycle_post(JSON.stringify({}))
 	if str(missing_action.get("error", "")) != "invalid_argument":
 		return _failure("Editor lifecycle POST did not require an action field.")
 
-	var unknown_action: Dictionary = server.handle_editor_lifecycle_request("bogus", {})
+	var unknown_action: Dictionary = _server.handle_editor_lifecycle_request("bogus", {})
 	if str(unknown_action.get("error", "")) != "invalid_argument":
 		return _failure("Editor lifecycle request did not reject an unknown action.")
 	var unknown_data = unknown_action.get("data", {})
 	if not (unknown_data is Dictionary) or str((unknown_data as Dictionary).get("hint", "")).find("status|close|restart") == -1:
 		return _failure("Unknown lifecycle action response is missing a recovery hint.")
 
-	var close_confirmation: Dictionary = server.handle_editor_lifecycle_request("close", {})
+	var close_confirmation: Dictionary = _server.handle_editor_lifecycle_request("close", {})
 	if str(close_confirmation.get("error", "")) != "editor_confirmation_required":
 		return _failure("Lifecycle close did not require save=true confirmation.")
 
-	var tools_list: Dictionary = server.build_tools_api_snapshot()
+	var tools_list: Dictionary = _server.build_tools_api_snapshot()
 	var required_keys := ["tools", "domain_states", "tool_count", "exposed_tool_count", "tool_loader_status", "performance"]
 	for key in required_keys:
 		if not tools_list.has(key):
@@ -54,7 +56,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if (tools_list.get("tools", []) as Array).is_empty():
 		return _failure("Tools list response did not return any exposed tools.")
 
-	var rpc_tools_list: Dictionary = await server.handle_jsonrpc_request_async(JSON.stringify({
+	var rpc_tools_list: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "tools/list",
@@ -69,7 +71,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if (rpc_tools as Array).is_empty():
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
 
-	var rpc_missing_tool: Dictionary = await server.handle_jsonrpc_request_async(JSON.stringify({
+	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 2,
 		"method": "tools/call",
@@ -87,8 +89,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if rpc_error_text.find("Missing tool name") == -1:
 		return _failure("JSON-RPC tools/call missing-name response did not preserve the router error text.")
 
-	server.free()
-
 	return {
 		"name": "http_server_contracts",
 		"success": true,
@@ -100,6 +100,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"rpc_tools_count": (rpc_tools as Array).size()
 		}
 	}
+
+
+func cleanup_case(tree: SceneTree) -> void:
+	if _server == null:
+		return
+	if _server.has_method("stop"):
+		_server.stop()
+	_server.free()
+	_server = null
+	await tree.process_frame
+	await tree.process_frame
 
 
 func _failure(message: String) -> Dictionary:

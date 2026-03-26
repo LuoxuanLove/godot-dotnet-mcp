@@ -1,8 +1,13 @@
 extends SceneTree
 
 const HttpServerContractTest = preload("res://tests/http_server_contract_test.gd")
+const HttpRequestRouterContractTest = preload("res://tests/http_request_router_contract_test.gd")
+const HttpResponseServiceContractTest = preload("res://tests/http_response_service_contract_test.gd")
+const JsonRpcRouterContractTest = preload("res://tests/json_rpc_router_contract_test.gd")
+const EditorLifecycleActionServiceContractTest = preload("res://tests/editor_lifecycle_action_service_contract_test.gd")
 const RuntimeControlContractTest = preload("res://tests/runtime_control_contract_test.gd")
 const RuntimeBridgeContractTest = preload("res://tests/runtime_bridge_contract_test.gd")
+const EditorLifecycleStateBuilderContractTest = preload("res://tests/editor_lifecycle_state_builder_contract_test.gd")
 const SystemIndexImplContractTest = preload("res://tests/system_index_impl_contract_test.gd")
 const SystemRuntimeImplContractTest = preload("res://tests/system_runtime_impl_contract_test.gd")
 const ToolLoaderContractTest = preload("res://tests/tool_loader_contract_test.gd")
@@ -18,39 +23,65 @@ func _run_suite() -> void:
 	var cases := [
 		{
 			"name": "runtime_bridge_invalid_action_fallback",
-			"instance": RuntimeBridgeContractTest.new()
+			"script": RuntimeBridgeContractTest
 		},
 		{
 			"name": "runtime_control_contracts",
-			"instance": RuntimeControlContractTest.new()
+			"script": RuntimeControlContractTest
 		},
 		{
 			"name": "http_server_contracts",
-			"instance": HttpServerContractTest.new()
+			"script": HttpServerContractTest
+		},
+		{
+			"name": "http_request_router_contracts",
+			"script": HttpRequestRouterContractTest
+		},
+		{
+			"name": "http_response_service_contracts",
+			"script": HttpResponseServiceContractTest
+		},
+		{
+			"name": "json_rpc_router_contracts",
+			"script": JsonRpcRouterContractTest
+		},
+		{
+			"name": "editor_lifecycle_action_service_contracts",
+			"script": EditorLifecycleActionServiceContractTest
+		},
+		{
+			"name": "editor_lifecycle_state_builder_contracts",
+			"script": EditorLifecycleStateBuilderContractTest
 		},
 		{
 			"name": "system_runtime_impl_contracts",
-			"instance": SystemRuntimeImplContractTest.new()
+			"script": SystemRuntimeImplContractTest
 		},
 		{
 			"name": "system_index_impl_contracts",
-			"instance": SystemIndexImplContractTest.new()
+			"script": SystemIndexImplContractTest
 		},
 		{
 			"name": "tool_loader_contracts",
-			"instance": ToolLoaderContractTest.new()
+			"script": ToolLoaderContractTest
 		}
 	]
 	var only_case := OS.get_environment("GODOT_PLUGIN_HARNESS_ONLY_CASE").strip_edges()
 	for case_info in cases:
 		if only_case != "" and str(case_info.get("name", "")) != only_case:
 			continue
-		var case_instance = case_info.get("instance", null)
-		if case_instance == null:
+		var case_script = case_info.get("script", null)
+		if case_script == null:
 			continue
 		var case_name := str(case_info.get("name", "unknown_case"))
+		var case_instance = case_script.new()
 		print("HARNESS_CASE_START:%s" % case_name)
 		var result: Dictionary = await case_instance.run_case(self)
+		if case_instance.has_method("cleanup_case"):
+			await case_instance.cleanup_case(self)
+		case_instance = null
+		await process_frame
+		await process_frame
 		results.append(result)
 		if not bool(result.get("success", false)):
 			success = false

@@ -115,3 +115,22 @@ internal sealed class LifecycleActionResult
         };
     }
 }
+
+internal sealed class LifecycleActionContext
+{
+    public string ToolName { get; init; } = string.Empty;
+
+    public string Action { get; init; } = string.Empty;
+
+    public ProjectRegistryService.RegisteredProject Project { get; init; } = null!;
+
+    public EditorSessionService.EditorSessionStatus Session { get; init; } = null!;
+
+    public EditorProcessService.EditorProcessStatus Process { get; init; } = null!;
+
+    public Dictionary<string, object?>? EditorState { get; init; }
+
+    public bool SaveRequested { get; init; }
+
+    public bool ForceRequested { get; init; }
+}

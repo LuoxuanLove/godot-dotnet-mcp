@@ -86,6 +86,7 @@ tests/host_contracts/
 这意味着当前 Host contracts 并不是完全 isolated 的单元测试，而是通过最小 Host 组合验证对外契约。
 
 不过，`EditorProcessService` 当前已经支持注入 external probe，并且已进一步退化为 façade，把 residency / launch / termination 拆到独立协作者；对应契约也已经有独立 case 锁定。
+同一轮 Host 主链收口里，`CentralToolDispatcher`、`EditorSessionCoordinator` 与 `EditorLifecycleCoordinator` 也都已经退化为 façade；当前 contracts 继续保持全绿，说明这些切层没有破坏对外契约。
 
 ### 2. 它已经有独立支撑层
 
@@ -95,6 +96,12 @@ tests/host_contracts/
 - 断言逻辑与入口逻辑已经分开
 - mock editor attach 已通过 `ContractHarness` 封装
 - 工具目录契约现在还会反向锁定：旧代理入口不能重新回到 catalog
+- Host 主链的再切层目前已经被持续覆盖：
+  - `CentralToolDispatcher` -> `WorkspaceToolHandlerService / EditorToolHandlerService`
+  - `EditorToolHandlerService` -> `WorkspaceEditorSessionToolHandlerService / EditorAttachedToolForwardingService`
+  - `EditorSessionCoordinator` -> `EditorSessionAcquisitionService`
+  - `EditorLifecycleStatusService` -> `EditorLifecycleRemoteStateService / EditorLifecycleSummaryBuilder`
+  - `EditorLifecycleActionService` -> `EditorLifecycleGracefulActionExecutor / EditorLifecycleForceActionExecutor / EditorLifecycleActionResultFactory`
 
 ---
 
@@ -114,6 +121,20 @@ tests/host_contracts/
 - 面向对外契约的 Host 侧轻量集成测试
 
 这不是问题本身，但后续继续扩充时，仍建议把 host、fixture、payload assertion 的层级进一步明确。
+
+### 2. 当前 contracts 已开始承担“重构不回退”职责
+
+截至当前状态，Host contracts 已经连续覆盖并守住了以下结构性变化：
+
+- `workspace_editor_proxy_call` 从目录与实现中删除
+- `SessionState` 替换为 `CentralWorkspaceState`
+- `EditorProcessService` 拆为 façade + residency / launch / termination
+- `EditorSessionCoordinator` 拆为 façade + acquisition service
+- `CentralToolDispatcher` 拆为 façade + workspace / editor handler services
+- `EditorLifecycleStatusService` 拆为 façade + remote state / summary builder
+- `EditorLifecycleActionService` 再拆为编排层 + graceful / force 执行器 + result factory
+
+这意味着 Host contracts 现在不只是“检查功能能不能用”，而是在实际承担 Host 主链重构的安全护栏。
 
 ---
 

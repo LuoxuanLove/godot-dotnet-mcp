@@ -20,7 +20,7 @@ internal sealed class CentralHostSessionPayloadFactory
     }
 
     public object Build(
-        EditorSessionCoordinator.EnsureEditorSessionResult coordination,
+        EnsureEditorSessionResult coordination,
         string endpoint,
         string toolName)
     {
@@ -53,13 +53,13 @@ internal sealed class CentralHostSessionPayloadFactory
         };
     }
 
-    public string GetResolution(EditorSessionCoordinator.EnsureEditorSessionResult coordination)
+    public string GetResolution(EnsureEditorSessionResult coordination)
     {
         return ResolveCoordinationResolution(coordination);
     }
 
     public object BuildFailurePayload(
-        EditorSessionCoordinator.EnsureEditorSessionResult coordination,
+        EnsureEditorSessionResult coordination,
         string toolName)
     {
         return AttachToResult(
@@ -84,7 +84,7 @@ internal sealed class CentralHostSessionPayloadFactory
         };
     }
 
-    private static string ResolveCoordinationResolution(EditorSessionCoordinator.EnsureEditorSessionResult coordination)
+    private static string ResolveCoordinationResolution(EnsureEditorSessionResult coordination)
     {
         if (!coordination.Success)
         {

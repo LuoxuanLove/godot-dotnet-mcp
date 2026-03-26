@@ -70,6 +70,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	}
 
 
+func cleanup_case(_tree: SceneTree) -> void:
+	_cleanup_fallback_file()
+
+
 func _find_reply_event(events: Array) -> Dictionary:
 	for index in range(events.size() - 1, -1, -1):
 		var item = events[index]
