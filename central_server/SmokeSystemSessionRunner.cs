@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using static GodotDotnetMcp.CentralServer.SmokeAssertionSupport;
+using static GodotDotnetMcp.CentralServer.SmokeHttpSupport;
+using static GodotDotnetMcp.CentralServer.SmokePayloadSupport;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -16,6 +19,7 @@ internal static class SmokeSystemSessionRunner
         var attachPort = ParsePositiveIntOption(args, "--attach-port") ?? GetFreeTcpPort();
         var autoLaunch = HasOption(args, "--auto-launch");
         var requireAutoLaunch = HasOption(args, "--require-auto-launch");
+        var cleanupLaunchedEditor = HasOption(args, "--cleanup-launched-editor");
         var projectRootOption = GetOptionValue(args, "--project-root");
         var explicitGodotExecutablePath = GetOptionValue(args, "--godot-executable-path");
         var attachTimeoutMs = ParsePositiveIntOption(args, "--editor-attach-timeout-ms") ?? DefaultAutoLaunchAttachTimeoutMs;
@@ -30,7 +34,8 @@ internal static class SmokeSystemSessionRunner
         var sessionState = new SessionState();
         var attachEndpoint = new EditorAttachEndpoint(attachHost, attachPort);
         var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
+        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
+        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
         using var smokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         await using var attachServer = new EditorAttachHttpServer(
@@ -54,6 +59,10 @@ internal static class SmokeSystemSessionRunner
                     error,
                     smokeCts.Token,
                     configuration,
+                    editorProcesses,
+                    editorSessionCoordinator,
+                    editorSessions,
+                    godotProjectManager,
                     dispatcher,
                     godotInstallations,
                     registry,
@@ -61,7 +70,8 @@ internal static class SmokeSystemSessionRunner
                     projectRootOption,
                     explicitGodotExecutablePath,
                     attachTimeoutMs,
-                    requireAutoLaunch)
+                    requireAutoLaunch,
+                    cleanupLaunchedEditor)
                 : await RunReuseSessionAsync(
                     args,
                     output,
@@ -94,6 +104,14 @@ internal static class SmokeSystemSessionRunner
         var projectRoot = GetOptionValue(args, "--project-root")
                           ?? Path.Combine(Path.GetTempPath(), "GodotDotnetMcp", "central_server_session_smoke_" + Guid.NewGuid().ToString("N"));
         var attachedProjectId = string.Empty;
+        var missingExecutableProjectId = string.Empty;
+        var closeEditorForceUnavailablePayload = default(JsonElement);
+        var closeEditorGracefulUnsupportedPayload = default(JsonElement);
+        var openEditorMissingExecutablePayload = default(JsonElement);
+        var lifecycleStatusPayload = default(JsonElement);
+        var restartEditorPayload = default(JsonElement);
+        var restartStatusPayload = default(JsonElement);
+        var closeEditorSuccessPayload = default(JsonElement);
 
         try
         {
@@ -106,9 +124,6 @@ internal static class SmokeSystemSessionRunner
                 """,
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                 cancellationToken);
-
-            await using var mockServer = new MockEditorMcpServer("127.0.0.1", mockPort);
-            mockServer.Start(cancellationToken);
 
             var registerResponse = await dispatcher.ExecuteAsync(
                 "workspace_project_register",
@@ -127,24 +142,65 @@ internal static class SmokeSystemSessionRunner
                 throw new CentralToolException("Smoke register response did not include a projectId.");
             }
 
+            var missingExecutableProjectRoot = Path.Combine(projectRoot, "missing_executable_project");
+            Directory.CreateDirectory(missingExecutableProjectRoot);
+            await File.WriteAllTextAsync(
+                Path.Combine(missingExecutableProjectRoot, "project.godot"),
+                """
+                [application]
+                config/name="CentralServerSmokeMissingExecutable"
+                """,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
+
+            var registerMissingExecutableResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_register",
+                SerializeToElement(new
+                {
+                    path = missingExecutableProjectRoot,
+                    source = "smoke_open_editor_missing_executable",
+                }),
+                cancellationToken);
+            EnsureSuccess(registerMissingExecutableResponse, "workspace_project_register");
+            var registerMissingExecutablePayload = SerializeToElement(registerMissingExecutableResponse.StructuredContent);
+            missingExecutableProjectId = registerMissingExecutablePayload.GetProperty("project").GetProperty("projectId").GetString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(missingExecutableProjectId))
+            {
+                throw new CentralToolException("Missing-executable smoke register response did not include a projectId.");
+            }
+
+            var invalidExecutablePath = Path.Combine(missingExecutableProjectRoot, "Godot-does-not-exist.exe");
+            var openEditorMissingExecutableResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_open_editor",
+                SerializeToElement(new
+                {
+                    projectId = missingExecutableProjectId,
+                    executablePath = invalidExecutablePath,
+                    attachTimeoutMs = 2_000,
+                }),
+                cancellationToken);
+            openEditorMissingExecutablePayload = EnsureExpectedError(
+                openEditorMissingExecutableResponse,
+                "workspace_project_open_editor",
+                "godot_executable_not_found");
+            EnsureOpenEditorMissingExecutablePayload(
+                openEditorMissingExecutablePayload,
+                "workspace_project_open_editor",
+                missingExecutableProjectId,
+                invalidExecutablePath,
+                attachHost,
+                attachPort);
+
+            await using var mockServer = new MockEditorMcpServer("127.0.0.1", mockPort, attachHost, attachPort, projectRoot);
+            mockServer.SetSession(attachedProjectId, "smoke-session", ["system_project_state"]);
+            mockServer.Start(cancellationToken);
+
             var attachResponse = await SendJsonRequestAsync(
                 attachHost,
                 attachPort,
                 "POST",
                 "/api/editor/attach",
-                new EditorSessionService.EditorSessionAttachRequest
-                {
-                    ProjectId = attachedProjectId,
-                    ProjectRoot = projectRoot,
-                    SessionId = "smoke-session",
-                    PluginVersion = "smoke",
-                    GodotVersion = "smoke",
-                    Capabilities = ["system_project_state"],
-                    TransportMode = "http",
-                    ServerHost = "127.0.0.1",
-                    ServerPort = mockPort,
-                    ServerRunning = true,
-                },
+                BuildMockAttachRequest(attachedProjectId, projectRoot, "smoke-session", ["system_project_state"], mockPort),
                 cancellationToken);
             if (!attachResponse.TryGetProperty("success", out var attachSuccess)
                 || attachSuccess.ValueKind != JsonValueKind.True)
@@ -170,13 +226,23 @@ internal static class SmokeSystemSessionRunner
                 throw new CentralToolException("system_project_state result is missing centralHostSession.");
             }
 
-            var sessionId = centralHostSession.GetProperty("sessionId").GetString() ?? string.Empty;
+            var lifecycleSummary = centralHostSession.TryGetProperty("editorLifecycle", out var lifecycleElement)
+                                   && lifecycleElement.ValueKind == JsonValueKind.Object
+                ? lifecycleElement
+                : centralHostSession;
+            var sessionId = lifecycleSummary.TryGetProperty("sessionId", out var sessionIdElement)
+                            && sessionIdElement.ValueKind == JsonValueKind.String
+                ? sessionIdElement.GetString() ?? string.Empty
+                : string.Empty;
             if (!string.Equals(sessionId, "smoke-session", StringComparison.OrdinalIgnoreCase))
             {
                 throw new CentralToolException("system_project_state returned an unexpected sessionId.");
             }
 
-            var resolution = centralHostSession.GetProperty("resolution").GetString() ?? string.Empty;
+            var resolution = lifecycleSummary.TryGetProperty("resolution", out var resolutionElement)
+                             && resolutionElement.ValueKind == JsonValueKind.String
+                ? resolutionElement.GetString() ?? string.Empty
+                : string.Empty;
             if (!string.Equals(resolution, "reused_ready_session", StringComparison.OrdinalIgnoreCase))
             {
                 throw new CentralToolException($"Unexpected centralHostSession.resolution: {resolution}");
@@ -187,6 +253,103 @@ internal static class SmokeSystemSessionRunner
                 SerializeToElement(new { projectId = attachedProjectId }),
                 cancellationToken);
             EnsureSuccess(statusResponse, "workspace_project_status");
+            var statusPayload = SerializeToElement(statusResponse.StructuredContent);
+            EnsureLifecycleCapabilityUnavailable(statusPayload, "workspace_project_status");
+
+            var closeEditorForceUnavailableResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_close_editor",
+                SerializeToElement(new
+                {
+                    projectId = attachedProjectId,
+                    force = true,
+                    shutdownTimeoutMs = 5_000,
+                }),
+                cancellationToken);
+            closeEditorForceUnavailablePayload = EnsureExpectedError(
+                closeEditorForceUnavailableResponse,
+                "workspace_project_close_editor",
+                "editor_force_unavailable");
+
+            var closeEditorGracefulUnsupportedResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_close_editor",
+                SerializeToElement(new
+                {
+                    projectId = attachedProjectId,
+                    save = true,
+                    shutdownTimeoutMs = 5_000,
+                }),
+                cancellationToken);
+            closeEditorGracefulUnsupportedPayload = EnsureExpectedError(
+                closeEditorGracefulUnsupportedResponse,
+                "workspace_project_close_editor",
+                "editor_lifecycle_unsupported");
+
+            mockServer.SetSession(
+                attachedProjectId,
+                "smoke-lifecycle",
+                ["system_project_state", EditorSessionService.EditorLifecycleCapability]);
+            var lifecycleAttachResponse = await SendJsonRequestAsync(
+                attachHost,
+                attachPort,
+                "POST",
+                "/api/editor/attach",
+                BuildMockAttachRequest(
+                    attachedProjectId,
+                    projectRoot,
+                    "smoke-lifecycle",
+                    ["system_project_state", EditorSessionService.EditorLifecycleCapability],
+                    mockPort),
+                cancellationToken);
+            if (!lifecycleAttachResponse.TryGetProperty("success", out var lifecycleAttachSuccess)
+                || lifecycleAttachSuccess.ValueKind != JsonValueKind.True)
+            {
+                throw new CentralToolException("Lifecycle-capable attach smoke request did not return success=true.");
+            }
+
+            var lifecycleStatusResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_status",
+                SerializeToElement(new { projectId = attachedProjectId }),
+                cancellationToken);
+            EnsureSuccess(lifecycleStatusResponse, "workspace_project_status");
+            lifecycleStatusPayload = SerializeToElement(lifecycleStatusResponse.StructuredContent);
+            EnsureLifecycleCapabilityAvailable(lifecycleStatusPayload, "workspace_project_status");
+            EnsurePayloadSessionId(lifecycleStatusPayload, "workspace_project_status", "smoke-lifecycle");
+
+            var restartEditorResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_restart_editor",
+                SerializeToElement(new
+                {
+                    projectId = attachedProjectId,
+                    save = true,
+                    shutdownTimeoutMs = 5_000,
+                    attachTimeoutMs = 5_000,
+                }),
+                cancellationToken);
+            EnsureSuccess(restartEditorResponse, "workspace_project_restart_editor");
+            restartEditorPayload = SerializeToElement(restartEditorResponse.StructuredContent);
+            EnsureLifecycleToolSessionReady(restartEditorPayload, "workspace_project_restart_editor");
+            EnsurePayloadSessionIdChanged(restartEditorPayload, "workspace_project_restart_editor", "smoke-lifecycle");
+
+            var restartStatusResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_status",
+                SerializeToElement(new { projectId = attachedProjectId }),
+                cancellationToken);
+            EnsureSuccess(restartStatusResponse, "workspace_project_status");
+            restartStatusPayload = SerializeToElement(restartStatusResponse.StructuredContent);
+            EnsureLifecycleCapabilityAvailable(restartStatusPayload, "workspace_project_status");
+
+            var closeEditorSuccessResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_close_editor",
+                SerializeToElement(new
+                {
+                    projectId = attachedProjectId,
+                    save = true,
+                    shutdownTimeoutMs = 5_000,
+                }),
+                cancellationToken);
+            EnsureSuccess(closeEditorSuccessResponse, "workspace_project_close_editor");
+            closeEditorSuccessPayload = SerializeToElement(closeEditorSuccessResponse.StructuredContent);
+            EnsureLifecycleToolClosed(closeEditorSuccessPayload, "workspace_project_close_editor");
 
             var removeResponse = await dispatcher.ExecuteAsync(
                 "workspace_project_remove",
@@ -203,14 +366,45 @@ internal static class SmokeSystemSessionRunner
                 attachHost,
                 attachPort,
                 mockPort,
-                projectId = centralHostSession.GetProperty("projectId").GetString(),
-                projectPath = centralHostSession.GetProperty("projectPath").GetString(),
+                projectId = lifecycleSummary.TryGetProperty("projectId", out var lifecycleProjectId)
+                    && lifecycleProjectId.ValueKind == JsonValueKind.String
+                        ? lifecycleProjectId.GetString()
+                        : attachedProjectId,
+                projectPath = lifecycleSummary.TryGetProperty("projectPath", out var lifecycleProjectPath)
+                    && lifecycleProjectPath.ValueKind == JsonValueKind.String
+                        ? lifecycleProjectPath.GetString()
+                        : projectRoot,
                 sessionId,
                 resolution,
-                endpoint = centralHostSession.GetProperty("endpoint").GetString(),
+                endpoint = centralHostSession.TryGetProperty("endpoint", out var endpointElement)
+                    && endpointElement.ValueKind == JsonValueKind.String
+                        ? endpointElement.GetString()
+                        : string.Empty,
                 centralHostSession = DeserializeToObject(centralHostSession),
                 systemResult = DeserializeToObject(systemPayload),
-                workspaceStatus = DeserializeToObject(SerializeToElement(statusResponse.StructuredContent)),
+                workspaceStatus = DeserializeToObject(statusPayload),
+                forceCloseUnavailableResult = closeEditorForceUnavailablePayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(closeEditorForceUnavailablePayload),
+                gracefulCloseUnsupportedResult = closeEditorGracefulUnsupportedPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(closeEditorGracefulUnsupportedPayload),
+                openEditorMissingExecutableResult = openEditorMissingExecutablePayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(openEditorMissingExecutablePayload),
+                lifecycleStatus = lifecycleStatusPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(lifecycleStatusPayload),
+                restartEditorResult = restartEditorPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(restartEditorPayload),
+                restartStatus = restartStatusPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(restartStatusPayload),
+                closeEditorResult = closeEditorSuccessPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(closeEditorSuccessPayload),
+                mockLifecycleActions = mockServer.LifecycleActions,
                 mockForwardRequest = mockServer.LastRequestPayload is null
                     ? null
                     : DeserializeToObject(JsonDocument.Parse(mockServer.LastRequestPayload).RootElement),
@@ -242,6 +436,11 @@ internal static class SmokeSystemSessionRunner
         }
         finally
         {
+            if (!string.IsNullOrWhiteSpace(missingExecutableProjectId))
+            {
+                registry.RemoveProject(missingExecutableProjectId, null, out _);
+            }
+
             if (!string.IsNullOrWhiteSpace(attachedProjectId))
             {
                 registry.RemoveProject(attachedProjectId, null, out _);
@@ -265,6 +464,10 @@ internal static class SmokeSystemSessionRunner
         TextWriter error,
         CancellationToken cancellationToken,
         CentralConfigurationService configuration,
+        EditorProcessService editorProcesses,
+        EditorSessionCoordinator editorSessionCoordinator,
+        EditorSessionService editorSessions,
+        GodotProjectManagerProvider godotProjectManager,
         CentralToolDispatcher dispatcher,
         GodotInstallationService godotInstallations,
         ProjectRegistryService registry,
@@ -272,7 +475,8 @@ internal static class SmokeSystemSessionRunner
         string? projectRootOption,
         string? explicitGodotExecutablePath,
         int attachTimeoutMs,
-        bool requireAutoLaunch)
+        bool requireAutoLaunch,
+        bool cleanupLaunchedEditor)
     {
         var projectResolution = ResolveAutoLaunchProjectRoot(projectRootOption);
         if (projectResolution.ShouldSkip)
@@ -315,13 +519,39 @@ internal static class SmokeSystemSessionRunner
         var cleanupProjectId = string.Empty;
         var launchedProcessId = 0;
         var launchedAlreadyRunning = false;
+        var cleanupApplied = false;
         var executablePath = string.Empty;
         var executableSource = string.Empty;
+        using var interruptEditorProxy = new EditorProxyService();
+        var interruptEditorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, interruptEditorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
+        var interruptDispatcher = new CentralToolDispatcher(
+            configuration,
+            interruptEditorProxy,
+            editorProcesses,
+            interruptEditorLifecycleCoordinator,
+            editorSessionCoordinator,
+            editorSessions,
+            godotInstallations,
+            godotProjectManager,
+            registry,
+            sessionState);
         var systemPayload = default(JsonElement);
+        var runtimeNotRunningPayload = default(JsonElement);
         var projectRunPayload = default(JsonElement);
+        var runtimeControlDisabledPayload = default(JsonElement);
         var runtimeControlPayload = default(JsonElement);
+        var invalidRuntimeCapturePayload = default(JsonElement);
+        var invalidRuntimeInputPayload = default(JsonElement);
+        var runtimeSessionLostPayload = default(JsonElement);
+        var runtimeSessionLostStopPayload = default(JsonElement);
+        var projectRerunPayload = default(JsonElement);
+        var runtimeControlReenabledPayload = default(JsonElement);
         var runtimeStepPayload = default(JsonElement);
         var projectStopPayload = default(JsonElement);
+        var residentStatusPayload = default(JsonElement);
+        var restartEditorPayload = default(JsonElement);
+        var reopenEditorPayload = default(JsonElement);
+        var closeEditorPayload = default(JsonElement);
         var captureFilePath = string.Empty;
 
         try
@@ -410,22 +640,17 @@ internal static class SmokeSystemSessionRunner
                 throw new CentralToolException("system_project_state result is missing centralHostSession.");
             }
 
-            var resolution = centralHostSession.GetProperty("resolution").GetString() ?? string.Empty;
+            var lifecycleSummary = centralHostSession.TryGetProperty("editorLifecycle", out var lifecycleElement)
+                                   && lifecycleElement.ValueKind == JsonValueKind.Object
+                ? lifecycleElement
+                : centralHostSession;
+            var resolution = lifecycleSummary.TryGetProperty("resolution", out var resolutionElement)
+                             && resolutionElement.ValueKind == JsonValueKind.String
+                ? resolutionElement.GetString() ?? string.Empty
+                : string.Empty;
             if (!IsExpectedAutoLaunchResolution(resolution))
             {
                 throw new CentralToolException($"Unexpected centralHostSession.resolution: {resolution}");
-            }
-
-            if (centralHostSession.TryGetProperty("launchProcessId", out var launchProcessIdElement)
-                && launchProcessIdElement.ValueKind == JsonValueKind.Number)
-            {
-                launchedProcessId = launchProcessIdElement.GetInt32();
-            }
-
-            if (centralHostSession.TryGetProperty("launchAlreadyRunning", out var launchAlreadyRunningElement)
-                && launchAlreadyRunningElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
-            {
-                launchedAlreadyRunning = launchAlreadyRunningElement.GetBoolean();
             }
 
             var statusResponse = await dispatcher.ExecuteAsync(
@@ -433,6 +658,24 @@ internal static class SmokeSystemSessionRunner
                 SerializeToElement(new { projectId }),
                 cancellationToken);
             EnsureSuccess(statusResponse, "workspace_project_status");
+
+            var runtimeNotRunningResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_control",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    action = "enable",
+                    timeout_ms = 500,
+                }),
+                cancellationToken);
+            runtimeNotRunningPayload = EnsureExpectedError(
+                runtimeNotRunningResponse,
+                "system_runtime_control",
+                "runtime_not_running");
+            EnsurePayloadDataObject(runtimeNotRunningPayload, "editor_context", JsonValueKind.Object, "system_runtime_control");
+            EnsurePayloadDataObject(runtimeNotRunningPayload, "hint", JsonValueKind.String, "system_runtime_control");
 
             var projectRunResponse = await dispatcher.ExecuteAsync(
                 "system_project_run",
@@ -446,6 +689,25 @@ internal static class SmokeSystemSessionRunner
             EnsureSuccess(projectRunResponse, "system_project_run");
             projectRunPayload = SerializeToElement(projectRunResponse.StructuredContent);
 
+            var runtimeControlDisabledResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_step",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    wait_frames = 0,
+                    capture = false,
+                }),
+                cancellationToken);
+            runtimeControlDisabledPayload = EnsureExpectedError(
+                runtimeControlDisabledResponse,
+                "system_runtime_step",
+                "runtime_control_disabled");
+            EnsurePayloadDataObject(runtimeControlDisabledPayload, "editor_context", JsonValueKind.Object, "system_runtime_step");
+            EnsurePayloadDataObject(runtimeControlDisabledPayload, "hint", JsonValueKind.String, "system_runtime_step");
+
+            var runtimeControlTimeoutMs = Math.Min(attachTimeoutMs, 60_000);
             var runtimeControlResponse = await dispatcher.ExecuteAsync(
                 "system_runtime_control",
                 SerializeToElement(new
@@ -454,11 +716,125 @@ internal static class SmokeSystemSessionRunner
                     autoLaunchEditor = true,
                     editorAttachTimeoutMs = attachTimeoutMs,
                     action = "enable",
-                    timeout_ms = 10_000,
+                    timeout_ms = runtimeControlTimeoutMs,
                 }),
                 cancellationToken);
             EnsureSuccess(runtimeControlResponse, "system_runtime_control");
             runtimeControlPayload = SerializeToElement(runtimeControlResponse.StructuredContent);
+
+            var invalidRuntimeCaptureResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_capture",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    frame_count = 0,
+                }),
+                cancellationToken);
+            invalidRuntimeCapturePayload = EnsureExpectedError(
+                invalidRuntimeCaptureResponse,
+                "system_runtime_capture",
+                "invalid_argument");
+            EnsurePayloadDataObject(invalidRuntimeCapturePayload, "tool_name", JsonValueKind.String, "system_runtime_capture", "system_runtime_capture");
+            EnsurePayloadDataObject(invalidRuntimeCapturePayload, "hint", JsonValueKind.String, "system_runtime_capture");
+
+            var invalidRuntimeInputResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_input",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    timeout_ms = 2_000,
+                    inputs = new[]
+                    {
+                        new
+                        {
+                            kind = "action",
+                            target = "__missing_runtime_action__",
+                            op = "tap",
+                        }
+                    },
+                }),
+                cancellationToken);
+            invalidRuntimeInputPayload = EnsureExpectedError(
+                invalidRuntimeInputResponse,
+                "system_runtime_input",
+                "invalid_argument");
+            EnsurePayloadDataObject(invalidRuntimeInputPayload, "editor_context", JsonValueKind.Object, "system_runtime_input");
+            EnsurePayloadDataObject(invalidRuntimeInputPayload, "runtime_context", JsonValueKind.Object, "system_runtime_input");
+            EnsurePayloadDataObject(invalidRuntimeInputPayload, "runtime_state", JsonValueKind.Object, "system_runtime_input");
+            EnsurePayloadDataObject(invalidRuntimeInputPayload, "hint", JsonValueKind.String, "system_runtime_input");
+
+            var runtimeSessionLostTask = dispatcher.ExecuteAsync(
+                "system_runtime_step",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    wait_frames = 3_000,
+                    capture = false,
+                    timeout_ms = 30_000,
+                }),
+                cancellationToken);
+
+            await Task.Delay(500, cancellationToken);
+            if (runtimeSessionLostTask.IsCompleted)
+            {
+                var completedRuntimeSessionLostResponse = await runtimeSessionLostTask;
+                throw new CentralToolException(
+                    "runtime session loss smoke step completed before project_stop. Payload: "
+                    + TrySerializeForDiagnostic(completedRuntimeSessionLostResponse.StructuredContent));
+            }
+
+            var runtimeSessionLostStopResponse = await interruptDispatcher.ExecuteAsync(
+                "system_project_stop",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = false,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(runtimeSessionLostStopResponse, "system_project_stop");
+            runtimeSessionLostStopPayload = SerializeToElement(runtimeSessionLostStopResponse.StructuredContent);
+
+            var runtimeSessionLostResponse = await runtimeSessionLostTask;
+            runtimeSessionLostPayload = EnsureExpectedError(
+                runtimeSessionLostResponse,
+                "system_runtime_step",
+                "runtime_session_lost");
+            EnsurePayloadDataObject(runtimeSessionLostPayload, "editor_context", JsonValueKind.Object, "system_runtime_step");
+            EnsurePayloadDataObject(runtimeSessionLostPayload, "hint", JsonValueKind.String, "system_runtime_step");
+            EnsurePayloadDataObject(runtimeSessionLostPayload, "session_id", JsonValueKind.Number, "system_runtime_step");
+
+            var projectRerunResponse = await dispatcher.ExecuteAsync(
+                "system_project_run",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(projectRerunResponse, "system_project_run");
+            projectRerunPayload = SerializeToElement(projectRerunResponse.StructuredContent);
+
+            var runtimeControlReenabledResponse = await dispatcher.ExecuteAsync(
+                "system_runtime_control",
+                SerializeToElement(new
+                {
+                    projectId,
+                    autoLaunchEditor = true,
+                    editorAttachTimeoutMs = attachTimeoutMs,
+                    action = "enable",
+                    timeout_ms = runtimeControlTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(runtimeControlReenabledResponse, "system_runtime_control");
+            runtimeControlReenabledPayload = SerializeToElement(runtimeControlReenabledResponse.StructuredContent);
 
             var runtimeStepResponse = await dispatcher.ExecuteAsync(
                 "system_runtime_step",
@@ -488,6 +864,60 @@ internal static class SmokeSystemSessionRunner
             EnsureSuccess(projectStopResponse, "system_project_stop");
             projectStopPayload = SerializeToElement(projectStopResponse.StructuredContent);
 
+            var residentStatusResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_status",
+                SerializeToElement(new { projectId }),
+                cancellationToken);
+            EnsureSuccess(residentStatusResponse, "workspace_project_status");
+            residentStatusPayload = SerializeToElement(residentStatusResponse.StructuredContent);
+            EnsureResidentEditorAfterStop(residentStatusPayload);
+
+            var restartEditorResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_restart_editor",
+                SerializeToElement(new
+                {
+                    projectId,
+                    save = true,
+                    attachTimeoutMs,
+                    shutdownTimeoutMs = 60_000,
+                }),
+                cancellationToken);
+            EnsureSuccess(restartEditorResponse, "workspace_project_restart_editor");
+            restartEditorPayload = SerializeToElement(restartEditorResponse.StructuredContent);
+            TrackCurrentProcessFromPayload(restartEditorPayload, ref launchedProcessId);
+            EnsureLifecycleToolSessionReady(restartEditorPayload, "workspace_project_restart_editor");
+
+            var reopenEditorResponse = await dispatcher.ExecuteAsync(
+                "workspace_project_open_editor",
+                SerializeToElement(new
+                {
+                    projectId,
+                    attachTimeoutMs,
+                }),
+                cancellationToken);
+            EnsureSuccess(reopenEditorResponse, "workspace_project_open_editor");
+            reopenEditorPayload = SerializeToElement(reopenEditorResponse.StructuredContent);
+            TrackCurrentProcessFromPayload(reopenEditorPayload, ref launchedProcessId);
+            EnsureLifecycleToolSessionReady(reopenEditorPayload, "workspace_project_open_editor");
+
+            if (cleanupLaunchedEditor)
+            {
+                var closeEditorResponse = await dispatcher.ExecuteAsync(
+                    "workspace_project_close_editor",
+                    SerializeToElement(new
+                    {
+                        projectId,
+                        save = true,
+                        shutdownTimeoutMs = 60_000,
+                    }),
+                    cancellationToken);
+                EnsureSuccess(closeEditorResponse, "workspace_project_close_editor");
+                closeEditorPayload = SerializeToElement(closeEditorResponse.StructuredContent);
+                EnsureLifecycleToolClosed(closeEditorPayload, "workspace_project_close_editor");
+                cleanupApplied = true;
+                launchedProcessId = 0;
+            }
+
             var summary = new
             {
                 success = true,
@@ -501,11 +931,27 @@ internal static class SmokeSystemSessionRunner
                 centralHostSession = DeserializeToObject(centralHostSession),
                 systemResult = DeserializeToObject(systemPayload),
                 workspaceStatus = DeserializeToObject(SerializeToElement(statusResponse.StructuredContent)),
+                runtimeNotRunningResult = DeserializeToObject(runtimeNotRunningPayload),
                 projectRunResult = DeserializeToObject(projectRunPayload),
+                runtimeControlDisabledResult = DeserializeToObject(runtimeControlDisabledPayload),
                 runtimeControlResult = DeserializeToObject(runtimeControlPayload),
+                invalidRuntimeCaptureResult = DeserializeToObject(invalidRuntimeCapturePayload),
+                invalidRuntimeInputResult = DeserializeToObject(invalidRuntimeInputPayload),
+                runtimeSessionLostStopResult = DeserializeToObject(runtimeSessionLostStopPayload),
+                runtimeSessionLostResult = DeserializeToObject(runtimeSessionLostPayload),
+                projectRerunResult = DeserializeToObject(projectRerunPayload),
+                runtimeControlReenabledResult = DeserializeToObject(runtimeControlReenabledPayload),
                 runtimeStepResult = DeserializeToObject(runtimeStepPayload),
                 projectStopResult = DeserializeToObject(projectStopPayload),
+                residentStatusAfterStop = DeserializeToObject(residentStatusPayload),
+                restartEditorResult = DeserializeToObject(restartEditorPayload),
+                reopenEditorResult = DeserializeToObject(reopenEditorPayload),
+                closeEditorResult = closeEditorPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(closeEditorPayload),
                 captureFilePath,
+                cleanupRequested = cleanupLaunchedEditor,
+                cleanupApplied,
             };
 
             await WritePlainJsonAsync(output, summary, cancellationToken);
@@ -528,23 +974,61 @@ internal static class SmokeSystemSessionRunner
                 captureFilePath,
                 launchedProcessId,
                 launchedAlreadyRunning,
+                cleanupRequested = cleanupLaunchedEditor,
+                cleanupApplied,
                 activeProjectId = sessionState.ActiveProjectId,
                 activeEditorSessionId = sessionState.ActiveEditorSessionId,
                 systemPayload = systemPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(systemPayload),
+                runtimeNotRunningPayload = runtimeNotRunningPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeNotRunningPayload),
                 projectRunPayload = projectRunPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(projectRunPayload),
+                runtimeControlDisabledPayload = runtimeControlDisabledPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeControlDisabledPayload),
                 runtimeControlPayload = runtimeControlPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(runtimeControlPayload),
+                invalidRuntimeCapturePayload = invalidRuntimeCapturePayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(invalidRuntimeCapturePayload),
+                invalidRuntimeInputPayload = invalidRuntimeInputPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(invalidRuntimeInputPayload),
+                runtimeSessionLostStopPayload = runtimeSessionLostStopPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeSessionLostStopPayload),
+                runtimeSessionLostPayload = runtimeSessionLostPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeSessionLostPayload),
+                projectRerunPayload = projectRerunPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(projectRerunPayload),
+                runtimeControlReenabledPayload = runtimeControlReenabledPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(runtimeControlReenabledPayload),
                 runtimeStepPayload = runtimeStepPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(runtimeStepPayload),
                 projectStopPayload = projectStopPayload.ValueKind == JsonValueKind.Undefined
                     ? null
                     : DeserializeToObject(projectStopPayload),
+                residentStatusPayload = residentStatusPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(residentStatusPayload),
+                restartEditorPayload = restartEditorPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(restartEditorPayload),
+                reopenEditorPayload = reopenEditorPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(reopenEditorPayload),
+                closeEditorPayload = closeEditorPayload.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : DeserializeToObject(closeEditorPayload),
             }, cancellationToken);
             await error.WriteLineAsync($"[CentralServerSmoke] {ex.Message}");
             await error.FlushAsync();
@@ -552,9 +1036,10 @@ internal static class SmokeSystemSessionRunner
         }
         finally
         {
-            if (launchedProcessId > 0 && !launchedAlreadyRunning)
+            if (cleanupLaunchedEditor && launchedProcessId > 0 && !launchedAlreadyRunning)
             {
                 TryKillProcessTree(launchedProcessId);
+                cleanupApplied = true;
             }
 
             if (projectPreviouslyRegistered && !string.IsNullOrWhiteSpace(projectId))
@@ -567,7 +1052,7 @@ internal static class SmokeSystemSessionRunner
                 {
                 }
             }
-            else if (!string.IsNullOrWhiteSpace(cleanupProjectId))
+            else if (cleanupLaunchedEditor && !string.IsNullOrWhiteSpace(cleanupProjectId))
             {
                 registry.RemoveProject(cleanupProjectId, null, out _);
             }
@@ -741,8 +1226,316 @@ internal static class SmokeSystemSessionRunner
         }
     }
 
+    private static void EnsureResidentEditorAfterStop(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException("workspace_project_status after stop did not return an object payload.");
+        }
+
+        if (!payload.TryGetProperty("editorLifecycle", out var lifecycle)
+            || lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException("workspace_project_status after stop is missing editorLifecycle.");
+        }
+
+        if (!lifecycle.TryGetProperty("resident", out var residentElement)
+            || residentElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !residentElement.GetBoolean())
+        {
+            throw new CentralToolException("workspace_project_status after stop did not report a resident background editor.");
+        }
+    }
+
+    private static void EnsureLifecycleCapabilityUnavailable(JsonElement payload, string toolName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} did not return an object payload.");
+        }
+
+        if (!payload.TryGetProperty("editorLifecycle", out var lifecycle)
+            || lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorLifecycle.");
+        }
+
+        if (!lifecycle.TryGetProperty("supportsEditorLifecycle", out var supportsElement)
+            || supportsElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || supportsElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} unexpectedly reported editor lifecycle support.");
+        }
+
+        if (!lifecycle.TryGetProperty("canGracefulClose", out var gracefulElement)
+            || gracefulElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || gracefulElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} unexpectedly reported graceful close availability.");
+        }
+
+        if (!payload.TryGetProperty("editorState", out var editorState)
+            || editorState.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorState.");
+        }
+
+        if (!editorState.TryGetProperty("error", out var errorElement)
+            || errorElement.ValueKind != JsonValueKind.String
+            || !string.Equals(errorElement.GetString(), "editor_lifecycle_unsupported", StringComparison.Ordinal))
+        {
+            throw new CentralToolException($"{toolName} did not expose editor_lifecycle_unsupported in editorState.");
+        }
+    }
+
+    private static void EnsureLifecycleCapabilityAvailable(JsonElement payload, string toolName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} did not return an object payload.");
+        }
+
+        if (!payload.TryGetProperty("editorLifecycle", out var lifecycle)
+            || lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorLifecycle.");
+        }
+
+        if (!lifecycle.TryGetProperty("supportsEditorLifecycle", out var supportsElement)
+            || supportsElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !supportsElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} did not report editor lifecycle support.");
+        }
+
+        if (!lifecycle.TryGetProperty("canGracefulClose", out var gracefulElement)
+            || gracefulElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !gracefulElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} did not report graceful close availability.");
+        }
+
+        if (!payload.TryGetProperty("editorState", out var editorState)
+            || editorState.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorState.");
+        }
+
+        if (editorState.TryGetProperty("error", out var errorElement)
+            && errorElement.ValueKind == JsonValueKind.String
+            && string.Equals(errorElement.GetString(), "editor_lifecycle_unsupported", StringComparison.Ordinal))
+        {
+            throw new CentralToolException($"{toolName} still reported editor_lifecycle_unsupported after lifecycle capability attach.");
+        }
+    }
+
+    private static void EnsureOpenEditorMissingExecutablePayload(
+        JsonElement payload,
+        string toolName,
+        string expectedProjectId,
+        string requestedExecutablePath,
+        string expectedAttachHost,
+        int expectedAttachPort)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload is not an object.");
+        }
+
+        if (!payload.TryGetProperty("project", out var projectElement)
+            || projectElement.ValueKind != JsonValueKind.Object
+            || !projectElement.TryGetProperty("projectId", out var projectIdElement)
+            || projectIdElement.ValueKind != JsonValueKind.String
+            || !string.Equals(projectIdElement.GetString(), expectedProjectId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload did not preserve the expected project id.");
+        }
+
+        if (!payload.TryGetProperty("requestedExecutablePath", out var requestedExecutableElement)
+            || requestedExecutableElement.ValueKind != JsonValueKind.String
+            || !string.Equals(requestedExecutableElement.GetString(), requestedExecutablePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload did not preserve the requested executable path.");
+        }
+
+        if (!payload.TryGetProperty("guidance", out var guidanceElement)
+            || guidanceElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload is missing guidance.");
+        }
+
+        if (!guidanceElement.TryGetProperty("askUserForGodotPath", out var askUserElement)
+            || askUserElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !askUserElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} missing-executable guidance did not request a Godot path.");
+        }
+
+        if (!guidanceElement.TryGetProperty("configureWith", out var configureWithElement)
+            || configureWithElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new CentralToolException($"{toolName} missing-executable guidance is missing configureWith.");
+        }
+
+        var configureTools = configureWithElement.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.Object
+                           && item.TryGetProperty("tool", out var toolElement)
+                           && toolElement.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetProperty("tool").GetString() ?? string.Empty)
+            .ToArray();
+        if (!configureTools.Contains("workspace_project_set_godot_path", StringComparer.Ordinal)
+            || !configureTools.Contains("workspace_godot_set_default_executable", StringComparer.Ordinal))
+        {
+            throw new CentralToolException($"{toolName} missing-executable guidance did not include the expected configuration tools.");
+        }
+
+        if (!payload.TryGetProperty("centralHostSession", out var centralHostSession)
+            || centralHostSession.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload is missing centralHostSession.");
+        }
+
+        if (!centralHostSession.TryGetProperty("attachHost", out var attachHostElement)
+            || attachHostElement.ValueKind != JsonValueKind.String
+            || !string.Equals(attachHostElement.GetString(), expectedAttachHost, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload returned an unexpected attachHost.");
+        }
+
+        if (!centralHostSession.TryGetProperty("attachPort", out var attachPortElement)
+            || attachPortElement.ValueKind != JsonValueKind.Number
+            || !attachPortElement.TryGetInt32(out var attachPort)
+            || attachPort != expectedAttachPort)
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload returned an unexpected attachPort.");
+        }
+
+        if (!centralHostSession.TryGetProperty("editorLifecycle", out var lifecycle)
+            || lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload is missing centralHostSession.editorLifecycle.");
+        }
+
+        if (!lifecycle.TryGetProperty("resolution", out var resolutionElement)
+            || resolutionElement.ValueKind != JsonValueKind.String
+            || !string.Equals(resolutionElement.GetString(), "godot_executable_not_found", StringComparison.Ordinal))
+        {
+            throw new CentralToolException($"{toolName} missing-executable payload did not expose resolution=godot_executable_not_found.");
+        }
+    }
+
+    private static void EnsurePayloadSessionId(JsonElement payload, string toolName, string expectedSessionId)
+    {
+        var actualSessionId = ExtractPayloadSessionId(payload, toolName);
+        if (!string.Equals(actualSessionId, expectedSessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CentralToolException($"{toolName} returned unexpected sessionId '{actualSessionId}', expected '{expectedSessionId}'.");
+        }
+    }
+
+    private static void EnsurePayloadSessionIdChanged(JsonElement payload, string toolName, string previousSessionId)
+    {
+        var actualSessionId = ExtractPayloadSessionId(payload, toolName);
+        if (string.Equals(actualSessionId, previousSessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CentralToolException($"{toolName} did not switch to a new session id.");
+        }
+    }
+
+    private static string ExtractPayloadSessionId(JsonElement payload, string toolName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} did not return an object payload.");
+        }
+
+        if (payload.TryGetProperty("editorSession", out var sessionElement)
+            && sessionElement.ValueKind == JsonValueKind.Object
+            && sessionElement.TryGetProperty("sessionId", out var sessionIdElement)
+            && sessionIdElement.ValueKind == JsonValueKind.String)
+        {
+            return sessionIdElement.GetString() ?? string.Empty;
+        }
+
+        if (payload.TryGetProperty("editorLifecycle", out var lifecycleElement)
+            && lifecycleElement.ValueKind == JsonValueKind.Object
+            && lifecycleElement.TryGetProperty("sessionId", out var lifecycleSessionIdElement)
+            && lifecycleSessionIdElement.ValueKind == JsonValueKind.String)
+        {
+            return lifecycleSessionIdElement.GetString() ?? string.Empty;
+        }
+
+        throw new CentralToolException($"{toolName} did not include a sessionId in editorSession or editorLifecycle.");
+    }
+
+    private static void EnsureLifecycleToolSessionReady(JsonElement payload, string toolName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} did not return an object payload.");
+        }
+
+        var lifecycle = payload.TryGetProperty("editorLifecycle", out var directLifecycle)
+                       && directLifecycle.ValueKind == JsonValueKind.Object
+            ? directLifecycle
+            : payload.TryGetProperty("centralHostSession", out var centralHostSession)
+              && centralHostSession.ValueKind == JsonValueKind.Object
+              && centralHostSession.TryGetProperty("editorLifecycle", out var nestedLifecycle)
+              && nestedLifecycle.ValueKind == JsonValueKind.Object
+                ? nestedLifecycle
+                : default;
+        if (lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorLifecycle.");
+        }
+
+        if (!lifecycle.TryGetProperty("attached", out var attachedElement)
+            || attachedElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !attachedElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} did not report an attached editor session.");
+        }
+
+        if (!lifecycle.TryGetProperty("httpReady", out var readyElement)
+            || readyElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !readyElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} did not report an HTTP-ready editor session.");
+        }
+    }
+
+    private static void EnsureLifecycleToolClosed(JsonElement payload, string toolName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} did not return an object payload.");
+        }
+
+        if (!payload.TryGetProperty("editorLifecycle", out var lifecycle)
+            || lifecycle.ValueKind != JsonValueKind.Object)
+        {
+            throw new CentralToolException($"{toolName} is missing editorLifecycle.");
+        }
+
+        if (lifecycle.TryGetProperty("resident", out var residentElement)
+            && residentElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && residentElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} still reported a resident editor.");
+        }
+
+        if (lifecycle.TryGetProperty("attached", out var attachedElement)
+            && attachedElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && attachedElement.GetBoolean())
+        {
+            throw new CentralToolException($"{toolName} still reported an attached editor session.");
+        }
+    }
+
     private static void TrackLaunchFromPayload(JsonElement payload, ref int launchedProcessId, ref bool launchedAlreadyRunning)
     {
+        TrackCurrentProcessFromPayload(payload, ref launchedProcessId);
+
         if (payload.ValueKind != JsonValueKind.Object)
         {
             return;
@@ -751,33 +1544,62 @@ internal static class SmokeSystemSessionRunner
         if (payload.TryGetProperty("centralHostSession", out var centralHostSession)
             && centralHostSession.ValueKind == JsonValueKind.Object)
         {
-            if (centralHostSession.TryGetProperty("launchProcessId", out var processIdElement)
-                && processIdElement.ValueKind == JsonValueKind.Number)
+            if (centralHostSession.TryGetProperty("editorLifecycle", out var lifecycleElement)
+                && lifecycleElement.ValueKind == JsonValueKind.Object)
             {
-                launchedProcessId = processIdElement.GetInt32();
-            }
-
-            if (centralHostSession.TryGetProperty("launchAlreadyRunning", out var alreadyRunningElement)
-                && alreadyRunningElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
-            {
-                launchedAlreadyRunning = alreadyRunningElement.GetBoolean();
+                if (lifecycleElement.TryGetProperty("resolution", out var resolutionElement)
+                    && resolutionElement.ValueKind == JsonValueKind.String)
+                {
+                    launchedAlreadyRunning = !string.Equals(
+                        resolutionElement.GetString(),
+                        "launched_editor",
+                        StringComparison.OrdinalIgnoreCase);
+                }
             }
         }
 
         if (payload.TryGetProperty("launch", out var launchElement)
             && launchElement.ValueKind == JsonValueKind.Object)
         {
-            if (launchElement.TryGetProperty("processId", out var processIdElement)
-                && processIdElement.ValueKind == JsonValueKind.Number)
-            {
-                launchedProcessId = processIdElement.GetInt32();
-            }
-
             if (launchElement.TryGetProperty("alreadyRunning", out var alreadyRunningElement)
                 && alreadyRunningElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
             {
                 launchedAlreadyRunning = alreadyRunningElement.GetBoolean();
             }
+        }
+    }
+
+    private static void TrackCurrentProcessFromPayload(JsonElement payload, ref int processId)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (payload.TryGetProperty("centralHostSession", out var centralHostSession)
+            && centralHostSession.ValueKind == JsonValueKind.Object
+            && centralHostSession.TryGetProperty("editorLifecycle", out var lifecycleElement)
+            && lifecycleElement.ValueKind == JsonValueKind.Object
+            && lifecycleElement.TryGetProperty("processId", out var lifecycleProcessIdElement)
+            && lifecycleProcessIdElement.ValueKind == JsonValueKind.Number)
+        {
+            processId = lifecycleProcessIdElement.GetInt32();
+        }
+
+        if (payload.TryGetProperty("launch", out var launchElement)
+            && launchElement.ValueKind == JsonValueKind.Object
+            && launchElement.TryGetProperty("processId", out var launchProcessIdElement)
+            && launchProcessIdElement.ValueKind == JsonValueKind.Number)
+        {
+            processId = launchProcessIdElement.GetInt32();
+        }
+
+        if (payload.TryGetProperty("editorLifecycle", out var directLifecycle)
+            && directLifecycle.ValueKind == JsonValueKind.Object
+            && directLifecycle.TryGetProperty("processId", out var directProcessIdElement)
+            && directProcessIdElement.ValueKind == JsonValueKind.Number)
+        {
+            processId = directProcessIdElement.GetInt32();
         }
     }
 
@@ -797,368 +1619,6 @@ internal static class SmokeSystemSessionRunner
         }
     }
 
-    private static void EnsureSuccess(CentralToolCallResponse response, string toolName)
-    {
-        if (response.IsError)
-        {
-            throw new CentralToolException($"{toolName} failed during smoke test: {response.TextContent}");
-        }
-    }
-
-    private static JsonElement SerializeToElement(object value)
-    {
-        return JsonSerializer.SerializeToElement(value, CentralServerSerialization.JsonOptions);
-    }
-
-    private static object? DeserializeToObject(JsonElement value)
-    {
-        return JsonSerializer.Deserialize<object>(value.GetRawText(), CentralServerSerialization.JsonOptions);
-    }
-
-    private static async Task WritePlainJsonAsync<T>(Stream output, T payload, CancellationToken cancellationToken)
-    {
-        var json = JsonSerializer.Serialize(payload, CentralServerSerialization.JsonOptions);
-        await using var writer = new StreamWriter(output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
-        await writer.WriteAsync(json.AsMemory(), cancellationToken);
-        await writer.WriteLineAsync();
-        await writer.FlushAsync(cancellationToken);
-    }
-
-    private static int GetFreeTcpPort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
-
-    private static string? GetOptionValue(string[] args, string optionName)
-    {
-        for (var index = 0; index < args.Length; index++)
-        {
-            if (!string.Equals(args[index], optionName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (index + 1 >= args.Length)
-            {
-                throw new CentralToolException($"Missing value for option {optionName}.");
-            }
-
-            return args[index + 1];
-        }
-
-        return null;
-    }
-
-    private static bool HasOption(string[] args, string optionName)
-    {
-        return args.Any(arg => string.Equals(arg, optionName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static int? ParsePositiveIntOption(string[] args, string optionName)
-    {
-        var raw = GetOptionValue(args, optionName);
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        if (!int.TryParse(raw, out var value) || value <= 0)
-        {
-            throw new CentralToolException($"Option {optionName} must be a positive integer.");
-        }
-
-        return value;
-    }
-
-    private static async Task WaitForAttachServerReadyAsync(string host, int port, CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; attempt < 30; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var response = await SendJsonRequestAsync(host, port, "GET", "/api/server/health", null, cancellationToken);
-                if (response.TryGetProperty("success", out var successElement) && successElement.ValueKind == JsonValueKind.True)
-                {
-                    return;
-                }
-            }
-            catch
-            {
-            }
-
-            await Task.Delay(100, cancellationToken);
-        }
-
-        throw new CentralToolException("Attach server did not become healthy before the smoke test attach step.");
-    }
-
-    private static async Task<JsonElement> SendJsonRequestAsync(
-        string host,
-        int port,
-        string method,
-        string path,
-        object? body,
-        CancellationToken cancellationToken)
-    {
-        using var client = new TcpClient();
-        await client.ConnectAsync(host, port, cancellationToken);
-        await using var stream = client.GetStream();
-
-        byte[] bodyBytes = [];
-        if (body is not null)
-        {
-            var bodyJson = JsonSerializer.Serialize(body, CentralServerSerialization.JsonOptions);
-            bodyBytes = Encoding.UTF8.GetBytes(bodyJson);
-        }
-
-        var requestBuilder = new StringBuilder()
-            .Append(method)
-            .Append(' ')
-            .Append(path)
-            .Append(" HTTP/1.1\r\n")
-            .Append("Host: ")
-            .Append(host)
-            .Append(':')
-            .Append(port)
-            .Append("\r\nConnection: close\r\n");
-
-        if (bodyBytes.Length > 0)
-        {
-            requestBuilder
-                .Append("Content-Type: application/json\r\n")
-                .Append("Content-Length: ")
-                .Append(bodyBytes.Length)
-                .Append("\r\n");
-        }
-
-        requestBuilder.Append("\r\n");
-        var headerBytes = Encoding.ASCII.GetBytes(requestBuilder.ToString());
-        await stream.WriteAsync(headerBytes, cancellationToken);
-        if (bodyBytes.Length > 0)
-        {
-            await stream.WriteAsync(bodyBytes, cancellationToken);
-        }
-
-        await stream.FlushAsync(cancellationToken);
-
-        var header = await ReadHttpHeadersAsync(stream, cancellationToken);
-        var statusCode = ParseStatusCode(header);
-        var contentLength = ParseContentLength(header);
-        var responseBody = contentLength > 0
-            ? await ReadExactAsync(stream, contentLength, cancellationToken)
-            : [];
-
-        if (statusCode < 200 || statusCode >= 300)
-        {
-            throw new CentralToolException($"HTTP request {method} {path} failed with status {statusCode}.");
-        }
-
-        if (responseBody.Length == 0)
-        {
-            return JsonDocument.Parse("{}").RootElement.Clone();
-        }
-
-        return JsonDocument.Parse(responseBody).RootElement.Clone();
-    }
-
-    private static async Task<string> ReadHttpHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        var buffer = new List<byte>(256);
-        var recent = new Queue<byte>(4);
-        var singleByte = new byte[1];
-
-        while (true)
-        {
-            var read = await stream.ReadAsync(singleByte.AsMemory(0, 1), cancellationToken);
-            if (read == 0)
-            {
-                throw new CentralToolException("Unexpected end of stream while reading HTTP response headers.");
-            }
-
-            var current = singleByte[0];
-            buffer.Add(current);
-            recent.Enqueue(current);
-            if (recent.Count > 4)
-            {
-                recent.Dequeue();
-            }
-
-            if (recent.Count == 4
-                && recent.ElementAt(0) == '\r'
-                && recent.ElementAt(1) == '\n'
-                && recent.ElementAt(2) == '\r'
-                && recent.ElementAt(3) == '\n')
-            {
-                return Encoding.ASCII.GetString(buffer.ToArray());
-            }
-        }
-    }
-
-    private static int ParseStatusCode(string header)
-    {
-        var firstLine = header.Split("\r\n", StringSplitOptions.None).FirstOrDefault() ?? string.Empty;
-        var parts = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2 && int.TryParse(parts[1], out var statusCode)
-            ? statusCode
-            : throw new CentralToolException("Malformed HTTP status line in smoke response.");
-    }
-
-    private static int ParseContentLength(string header)
-    {
-        foreach (var line in header.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var rawValue = line["Content-Length:".Length..].Trim();
-            if (int.TryParse(rawValue, out var contentLength) && contentLength >= 0)
-            {
-                return contentLength;
-            }
-        }
-
-        return 0;
-    }
-
-    private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int length, CancellationToken cancellationToken)
-    {
-        var buffer = new byte[length];
-        var offset = 0;
-        while (offset < length)
-        {
-            var read = await stream.ReadAsync(buffer.AsMemory(offset, length - offset), cancellationToken);
-            if (read == 0)
-            {
-                throw new CentralToolException("Unexpected end of stream while reading HTTP response body.");
-            }
-
-            offset += read;
-        }
-
-        return buffer;
-    }
-
-    private static async Task<IncomingHttpRequest> ReadIncomingRequestAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        var header = await ReadHttpHeadersAsync(stream, cancellationToken);
-        var lines = header.Split("\r\n", StringSplitOptions.None);
-        if (lines.Length == 0 || string.IsNullOrWhiteSpace(lines[0]))
-        {
-            throw new CentralToolException("Mock MCP request line is missing.");
-        }
-
-        var requestLine = lines[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (requestLine.Length < 2)
-        {
-            throw new CentralToolException("Mock MCP request line is malformed.");
-        }
-
-        byte[] body;
-        if (HasChunkedTransferEncoding(header))
-        {
-            body = await ReadChunkedBodyAsync(stream, cancellationToken);
-        }
-        else
-        {
-            var contentLength = ParseContentLength(header);
-            body = contentLength > 0
-                ? await ReadExactAsync(stream, contentLength, cancellationToken)
-                : [];
-        }
-
-        return new IncomingHttpRequest
-        {
-            Method = requestLine[0],
-            Path = requestLine[1],
-            Body = body,
-        };
-    }
-
-    private static bool HasChunkedTransferEncoding(string header)
-    {
-        foreach (var line in header.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var rawValue = line["Transfer-Encoding:".Length..].Trim();
-            if (rawValue.Contains("chunked", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static async Task<byte[]> ReadChunkedBodyAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        using var bodyStream = new MemoryStream();
-        while (true)
-        {
-            var sizeLine = await ReadAsciiLineAsync(stream, cancellationToken);
-            var sizeToken = sizeLine.Split(';', 2)[0].Trim();
-            if (!int.TryParse(sizeToken, System.Globalization.NumberStyles.HexNumber, null, out var chunkSize) || chunkSize < 0)
-            {
-                throw new CentralToolException("Mock MCP request used an invalid chunk size.");
-            }
-
-            if (chunkSize == 0)
-            {
-                await ReadAsciiLineAsync(stream, cancellationToken);
-                break;
-            }
-
-            var chunk = await ReadExactAsync(stream, chunkSize, cancellationToken);
-            await bodyStream.WriteAsync(chunk, cancellationToken);
-            await ReadExactAsync(stream, 2, cancellationToken);
-        }
-
-        return bodyStream.ToArray();
-    }
-
-    private static async Task<string> ReadAsciiLineAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        var buffer = new List<byte>(64);
-        var singleByte = new byte[1];
-
-        while (true)
-        {
-            var read = await stream.ReadAsync(singleByte.AsMemory(0, 1), cancellationToken);
-            if (read == 0)
-            {
-                throw new CentralToolException("Unexpected end of stream while reading a chunked HTTP line.");
-            }
-
-            var current = singleByte[0];
-            if (current == '\n')
-            {
-                if (buffer.Count > 0 && buffer[^1] == '\r')
-                {
-                    buffer.RemoveAt(buffer.Count - 1);
-                }
-
-                return Encoding.ASCII.GetString(buffer.ToArray());
-            }
-
-            buffer.Add(current);
-        }
-    }
-
     private sealed record AutoLaunchProjectResolution(bool ShouldSkip, string? Message, string? ProjectRoot)
     {
         public static AutoLaunchProjectResolution FromProject(string projectRoot)
@@ -1166,149 +1626,5 @@ internal static class SmokeSystemSessionRunner
 
         public static AutoLaunchProjectResolution Skip(string message, string? projectRoot)
             => new(true, message, projectRoot);
-    }
-
-    private sealed class MockEditorMcpServer : IAsyncDisposable
-    {
-        private readonly TcpListener _listener;
-        private Task? _serverTask;
-
-        public MockEditorMcpServer(string host, int port)
-        {
-            _listener = new TcpListener(ParseAddress(host), port);
-        }
-
-        public string? LastRequestPayload { get; private set; }
-
-        public void Start(CancellationToken cancellationToken)
-        {
-            _listener.Start();
-            _serverTask = Task.Run(() => ServeOnceAsync(cancellationToken), cancellationToken);
-        }
-
-        private async Task ServeOnceAsync(CancellationToken cancellationToken)
-        {
-            try
-            {
-                using var client = await _listener.AcceptTcpClientAsync(cancellationToken);
-                await using var stream = client.GetStream();
-                var request = await ReadIncomingRequestAsync(stream, cancellationToken);
-                LastRequestPayload = request.Body.Length == 0
-                    ? string.Empty
-                    : Encoding.UTF8.GetString(request.Body);
-
-                string toolName = "unknown";
-                object? forwardedArguments = null;
-                if (!string.IsNullOrWhiteSpace(LastRequestPayload))
-                {
-                    using var document = JsonDocument.Parse(LastRequestPayload);
-                    if (document.RootElement.TryGetProperty("params", out var paramsElement))
-                    {
-                        if (paramsElement.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String)
-                        {
-                            toolName = nameElement.GetString() ?? toolName;
-                        }
-
-                        if (paramsElement.TryGetProperty("arguments", out var argumentsElement))
-                        {
-                            forwardedArguments = DeserializeToObject(argumentsElement.Clone());
-                        }
-                    }
-                }
-
-                var payloadText = JsonSerializer.Serialize(new
-                {
-                    mockForwarded = true,
-                    toolName,
-                    echoArguments = forwardedArguments,
-                }, CentralServerSerialization.JsonOptions);
-
-                var responseText = JsonSerializer.Serialize(new
-                {
-                    jsonrpc = "2.0",
-                    id = "mock-response",
-                    result = new
-                    {
-                        content = new[]
-                        {
-                            new
-                            {
-                                type = "text",
-                                text = payloadText,
-                            }
-                        },
-                        isError = false,
-                    },
-                }, CentralServerSerialization.JsonOptions);
-
-                var bytes = Encoding.UTF8.GetBytes(responseText);
-                var header = Encoding.ASCII.GetBytes(
-                    "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: application/json; charset=utf-8\r\n" +
-                    $"Content-Length: {bytes.Length}\r\n" +
-                    "Connection: close\r\n\r\n");
-
-                await stream.WriteAsync(header, cancellationToken);
-                await stream.WriteAsync(bytes, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-            catch when (cancellationToken.IsCancellationRequested)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (SocketException)
-            {
-            }
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            try
-            {
-                _listener.Stop();
-            }
-            catch
-            {
-            }
-
-            if (_serverTask is not null)
-            {
-                try
-                {
-                    await _serverTask;
-                }
-                catch
-                {
-                }
-            }
-        }
-    }
-
-    private sealed class IncomingHttpRequest
-    {
-        public string Method { get; set; } = string.Empty;
-
-        public string Path { get; set; } = string.Empty;
-
-        public byte[] Body { get; set; } = [];
-    }
-
-    private static IPAddress ParseAddress(string host)
-    {
-        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
-        {
-            return IPAddress.Loopback;
-        }
-
-        if (IPAddress.TryParse(host, out var address))
-        {
-            return address;
-        }
-
-        return Dns.GetHostAddresses(host)
-            .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork)
-               ?? IPAddress.Loopback;
     }
 }

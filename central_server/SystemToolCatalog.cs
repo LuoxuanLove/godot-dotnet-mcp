@@ -284,27 +284,27 @@ internal static class SystemToolCatalog
             """),
         new(
             "system_project_symbol_search",
-            "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use and can be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
+            "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use, auto-refreshes when tracked project files change, and can also be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
             """
             {
               "type": "object",
               "properties": {
                 "symbol": { "type": "string", "description": "Symbol name to search for (class name, script basename, or scene name)" },
-                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before searching (default: false)" }
+                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before searching, even when the cached index still looks fresh (default: false)" }
               },
               "required": ["symbol"]
             }
             """),
         new(
             "system_scene_dependency_graph",
-            "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use and can be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
+            "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use, auto-refreshes when tracked project files change, and can also be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
             """
             {
               "type": "object",
               "properties": {
                 "root_scene": { "type": "string", "description": "Optional root scene path. If omitted, returns the full dependency map." },
                 "max_depth": { "type": "integer", "description": "Optional max traversal depth when a root_scene is provided (default: 4)" },
-                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before generating the graph (default: false)" }
+                "refresh_index": { "type": "boolean", "description": "Force rebuilding the internal project index before generating the graph, even when the cached index still looks fresh (default: false)" }
               }
             }
             """)

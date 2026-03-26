@@ -7,7 +7,7 @@ const HEARTBEAT_PATH := "/api/editor/heartbeat"
 const DETACH_PATH := "/api/editor/detach"
 const ATTACH_RETRY_INTERVAL_MS := 10000
 const HEARTBEAT_INTERVAL_MS := 5000
-const CAPABILITIES := ["editor_plugin", "editor_attach", "runtime_bridge"]
+const CAPABILITIES := ["editor_plugin", "editor_attach", "editor_lifecycle", "runtime_bridge"]
 const ENV_CENTRAL_SERVER_HOST := "GODOT_DOTNET_MCP_CENTRAL_SERVER_HOST"
 const ENV_CENTRAL_SERVER_PORT := "GODOT_DOTNET_MCP_CENTRAL_SERVER_PORT"
 const ENV_RUNTIME_SERVER_HOST := "GODOT_DOTNET_MCP_SERVER_HOST"
@@ -15,6 +15,7 @@ const ENV_RUNTIME_SERVER_PORT := "GODOT_DOTNET_MCP_SERVER_PORT"
 
 var _plugin: EditorPlugin
 var _settings: Dictionary = {}
+var _save_settings := Callable()
 var _session_id := ""
 var _project_id := ""
 var _status := "idle"
@@ -30,14 +31,16 @@ var _heartbeat_request: HTTPRequest
 var _detach_request: HTTPRequest
 
 
-func configure(plugin: EditorPlugin, settings: Dictionary) -> void:
+func configure(plugin: EditorPlugin, settings: Dictionary, callbacks: Dictionary = {}) -> void:
 	_plugin = plugin
 	_settings = settings
+	_save_settings = callbacks.get("save_settings", Callable())
 
 
 func start() -> void:
 	if not _can_host_request_nodes():
 		return
+	_persist_central_server_endpoint_from_env()
 	_ensure_request_nodes()
 	if _session_id.is_empty():
 		_session_id = _build_session_id()
@@ -160,7 +163,8 @@ func _send_attach() -> void:
 		"transportMode": str(_settings.get("transport_mode", "http")),
 		"serverHost": _resolve_runtime_server_host(),
 		"serverPort": _resolve_runtime_server_port(),
-		"serverRunning": _is_embedded_mcp_server_running()
+		"serverRunning": _is_embedded_mcp_server_running(),
+		"processId": OS.get_process_id()
 	}
 	var error := _attach_request.request(
 		_build_url(ATTACH_PATH),
@@ -196,7 +200,8 @@ func _send_heartbeat() -> void:
 		"transportMode": str(_settings.get("transport_mode", "http")),
 		"serverHost": _resolve_runtime_server_host(),
 		"serverPort": _resolve_runtime_server_port(),
-		"serverRunning": _is_embedded_mcp_server_running()
+		"serverRunning": _is_embedded_mcp_server_running(),
+		"processId": OS.get_process_id()
 	}
 	var error := _heartbeat_request.request(
 		_build_url(HEARTBEAT_PATH),
@@ -276,6 +281,7 @@ func _on_heartbeat_request_completed(result: int, response_code: int, _headers: 
 
 func _on_detach_request_completed(_result: int, _response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	_detach_in_flight = false
+	_reset_runtime_state("stopped")
 
 
 func _build_url(path: String) -> String:
@@ -304,6 +310,28 @@ func _resolve_central_server_port() -> int:
 	if configured_port <= 0:
 		return 3020
 	return configured_port
+
+
+func _persist_central_server_endpoint_from_env() -> void:
+	if not (_settings is Dictionary):
+		return
+	var env_host := OS.get_environment(ENV_CENTRAL_SERVER_HOST).strip_edges()
+	var env_port_text := OS.get_environment(ENV_CENTRAL_SERVER_PORT).strip_edges()
+	if env_host.is_empty() or not env_port_text.is_valid_int():
+		return
+	var env_port := int(env_port_text)
+	if env_port <= 0:
+		return
+
+	var changed := false
+	if str(_settings.get("central_server_host", "")).strip_edges() != env_host:
+		_settings["central_server_host"] = env_host
+		changed = true
+	if int(_settings.get("central_server_port", 0)) != env_port:
+		_settings["central_server_port"] = env_port
+		changed = true
+	if changed and _save_settings.is_valid():
+		_save_settings.call()
 
 
 func _resolve_runtime_server_host() -> String:

@@ -531,6 +531,10 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 		response = _create_health_response()
 	elif method == "GET" and path == "/api/tools":
 		response = _create_tools_list_response()
+	elif method == "GET" and path == "/api/editor/lifecycle":
+		response = _handle_editor_lifecycle_request("status", {})
+	elif method == "POST" and path == "/api/editor/lifecycle":
+		response = _handle_editor_lifecycle_post_request(request_body)
 	elif method == "OPTIONS":
 		response = _create_cors_response()
 	else:
@@ -832,6 +836,222 @@ func _create_cors_response() -> Dictionary:
 	}
 
 
+func _handle_editor_lifecycle_post_request(body: String) -> Dictionary:
+	var parsed = JSON.parse_string(body)
+	if not (parsed is Dictionary):
+		return {
+			"success": false,
+			"error": "invalid_argument",
+			"message": "Editor lifecycle request body must be a JSON object.",
+			"status": 400
+		}
+
+	var args: Dictionary = (parsed as Dictionary).duplicate(true)
+	var action := str(args.get("action", "")).strip_edges()
+	if action.is_empty():
+		return {
+			"success": false,
+			"error": "invalid_argument",
+			"message": "Editor lifecycle action is required.",
+			"status": 400
+		}
+	args.erase("action")
+	return _handle_editor_lifecycle_request(action, args)
+
+
+func _handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dictionary:
+	match action:
+		"status":
+			return _editor_lifecycle_success(_build_editor_lifecycle_state(), "Editor lifecycle status fetched")
+		"close":
+			return _execute_editor_lifecycle_close(args)
+		"restart":
+			return _execute_editor_lifecycle_restart(args)
+		_:
+			return _editor_lifecycle_error("invalid_argument", "Unknown editor lifecycle action: %s" % action, {
+				"hint": "Use action=status|close|restart."
+			})
+
+
+func _execute_editor_lifecycle_close(args: Dictionary) -> Dictionary:
+	var save := bool(args.get("save", false))
+	var force := bool(args.get("force", false))
+	if not save and not force:
+		return _editor_lifecycle_error("editor_confirmation_required", "Explicit confirmation is required before closing the editor.", _build_editor_lifecycle_state_with_hint("Pass save=true for a graceful close or force=true for host-managed fallback."))
+	if not save:
+		return _editor_lifecycle_error("editor_confirmation_required", "Graceful editor close requires save=true when called from the editor lifecycle bridge.", _build_editor_lifecycle_state_with_hint("Force fallback is handled by the host and should not be routed through the editor lifecycle bridge."))
+
+	call_deferred("_deferred_editor_lifecycle_action", "close")
+	return _editor_lifecycle_success({
+		"accepted": true,
+		"action": "close",
+		"save": true,
+		"force": false,
+		"editor_state": _build_editor_lifecycle_state()
+	}, "Editor close accepted")
+
+
+func _execute_editor_lifecycle_restart(args: Dictionary) -> Dictionary:
+	var save := bool(args.get("save", false))
+	var force := bool(args.get("force", false))
+	if not save and not force:
+		return _editor_lifecycle_error("editor_confirmation_required", "Explicit confirmation is required before restarting the editor.", _build_editor_lifecycle_state_with_hint("Pass save=true for a graceful restart or force=true for host-managed fallback."))
+	if not save:
+		return _editor_lifecycle_error("editor_confirmation_required", "Graceful editor restart requires save=true when called from the editor lifecycle bridge.", _build_editor_lifecycle_state_with_hint("Force fallback is handled by the host and should not be routed through the editor lifecycle bridge."))
+
+	call_deferred("_deferred_editor_lifecycle_action", "restart")
+	return _editor_lifecycle_success({
+		"accepted": true,
+		"action": "restart",
+		"save": true,
+		"force": false,
+		"editor_state": _build_editor_lifecycle_state()
+	}, "Editor restart accepted")
+
+
+func _deferred_editor_lifecycle_action(action: String) -> void:
+	_prepare_editor_lifecycle_shutdown(action)
+	var tree := get_tree()
+	if tree == null:
+		_finalize_editor_lifecycle_action(action)
+		return
+	var timer := tree.create_timer(0.2)
+	timer.timeout.connect(Callable(self, "_finalize_editor_lifecycle_action").bind(action), CONNECT_ONE_SHOT)
+
+
+func _prepare_editor_lifecycle_shutdown(action: String) -> void:
+	var plugin = _get_editor_plugin_host()
+	if plugin == null:
+		return
+	var editor_interface = plugin.get_editor_interface()
+	if editor_interface != null and editor_interface.has_method("save_all_scenes"):
+		editor_interface.save_all_scenes()
+	if plugin.has_method("get_central_server_attach_service"):
+		var attach_service = plugin.get_central_server_attach_service()
+		if attach_service != null and attach_service.has_method("stop"):
+			attach_service.stop()
+	_log("Editor lifecycle %s scheduled" % action, "info")
+
+
+func _finalize_editor_lifecycle_action(action: String) -> void:
+	var plugin = _get_editor_plugin_host()
+	if plugin == null:
+		return
+	if action == "close":
+		var tree: SceneTree = plugin.get_tree()
+		if tree != null:
+			tree.quit()
+		return
+
+	var editor_interface = plugin.get_editor_interface()
+	if editor_interface != null and editor_interface.has_method("restart_editor"):
+		editor_interface.restart_editor(true)
+
+
+func _build_editor_lifecycle_state() -> Dictionary:
+	var plugin = _get_editor_plugin_host()
+	if plugin == null:
+		return {
+			"isPlayingScene": false,
+			"openScenes": [],
+			"dirtySceneCount": 0,
+			"dirtyScenes": [],
+			"currentScenePath": ""
+		}
+
+	var editor_interface = plugin.get_editor_interface()
+	var open_scenes: Array[String] = []
+	var dirty_scenes: Array[String] = []
+	var current_scene_path := ""
+	var is_playing_scene := false
+	if editor_interface != null:
+		if editor_interface.has_method("get_open_scenes"):
+			for path in editor_interface.get_open_scenes():
+				open_scenes.append(str(path))
+		dirty_scenes = _collect_dirty_editor_scenes(editor_interface)
+		if editor_interface.has_method("get_edited_scene_root"):
+			current_scene_path = _resolve_editor_scene_root_path(editor_interface.get_edited_scene_root())
+		if editor_interface.has_method("is_playing_scene"):
+			is_playing_scene = bool(editor_interface.is_playing_scene())
+	open_scenes.sort()
+	dirty_scenes.sort()
+	return {
+		"isPlayingScene": is_playing_scene,
+		"openScenes": open_scenes,
+		"dirtySceneCount": dirty_scenes.size(),
+		"dirtyScenes": dirty_scenes,
+		"currentScenePath": current_scene_path
+	}
+
+
+func _build_editor_lifecycle_state_with_hint(hint: String) -> Dictionary:
+	var state := _build_editor_lifecycle_state()
+	state["hint"] = hint
+	return state
+
+
+func _resolve_editor_scene_root_path(root) -> String:
+	if root == null:
+		return ""
+	if root is Node:
+		var node: Node = root
+		if not node.scene_file_path.is_empty():
+			return node.scene_file_path
+		if not node.name.is_empty():
+			return "<unsaved:%s>" % node.name
+	return str(root)
+
+
+func _collect_dirty_editor_scenes(editor_interface) -> Array[String]:
+	var dirty_scenes: Array[String] = []
+	if editor_interface == null:
+		return dirty_scenes
+	if not editor_interface.has_method("get_open_scene_roots"):
+		return dirty_scenes
+	if not editor_interface.has_method("is_object_edited"):
+		return dirty_scenes
+
+	for root in editor_interface.get_open_scene_roots():
+		if root == null:
+			continue
+		if not bool(editor_interface.is_object_edited(root)):
+			continue
+		var scene_path := _resolve_editor_scene_root_path(root)
+		if scene_path.is_empty():
+			continue
+		if not dirty_scenes.has(scene_path):
+			dirty_scenes.append(scene_path)
+
+	return dirty_scenes
+
+
+func _get_editor_plugin_host():
+	var plugin = get_parent()
+	if plugin == null or not is_instance_valid(plugin):
+		return null
+	return plugin
+
+
+func _editor_lifecycle_success(data, message: String) -> Dictionary:
+	return {
+		"success": true,
+		"data": data,
+		"message": message
+	}
+
+
+func _editor_lifecycle_error(error: String, message: String, data: Dictionary = {}) -> Dictionary:
+	var result := {
+		"success": false,
+		"error": error,
+		"message": message,
+		"status": 400
+	}
+	if not data.is_empty():
+		result["data"] = data
+	return result
+
+
 func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
 	# Sanitize data before JSON serialization
 	var response_data = data.duplicate(true)
@@ -852,7 +1072,7 @@ func _send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool 
 	var body_bytes = body.to_utf8_buffer()
 	var status_text = "OK" if status_code == 200 else "Error"
 
-	var status_texts = {200: "OK", 202: "Accepted", 204: "No Content", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}
+	var status_texts = {200: "OK", 202: "Accepted", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}
 	status_text = status_texts.get(status_code, "OK")
 
 	var headers = "HTTP/1.1 %d %s\r\n" % [status_code, status_text]

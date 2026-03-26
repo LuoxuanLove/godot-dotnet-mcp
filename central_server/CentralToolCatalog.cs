@@ -18,6 +18,8 @@ internal static class CentralToolCatalog
             CreateEditorProxyCallTool(),
             CreateProjectSetGodotPathTool(),
             CreateProjectOpenEditorTool(),
+            CreateProjectCloseEditorTool(),
+            CreateProjectRestartEditorTool(),
             CreateGodotInstallationListTool(),
             CreateGodotInstallationSetDefaultTool(),
             CreateGodotManagerListProjectsTool(),
@@ -216,6 +218,52 @@ internal static class CentralToolCatalog
                     projectId = new { type = "string", description = "Registered project id." },
                     path = new { type = "string", description = "Alternative registered project path." },
                     executablePath = new { type = "string", description = "Optional explicit Godot executable path override." },
+                    attachTimeoutMs = new { type = "integer", description = "Optional attach timeout in milliseconds while waiting for the editor to become ready." },
+                },
+                additionalProperties = false,
+            },
+        };
+    }
+
+    private static object CreateProjectCloseEditorTool()
+    {
+        return new
+        {
+            name = "workspace_project_close_editor",
+            description = "Close a resident Godot editor for a registered project. Requires save=true for graceful close or force=true for host-managed fallback.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    projectId = new { type = "string", description = "Registered project id." },
+                    path = new { type = "string", description = "Alternative registered project path." },
+                    save = new { type = "boolean", description = "Gracefully save open scenes and close the editor." },
+                    force = new { type = "boolean", description = "Force close only when the editor process is host-managed." },
+                    shutdownTimeoutMs = new { type = "integer", description = "Optional shutdown timeout in milliseconds." },
+                },
+                additionalProperties = false,
+            },
+        };
+    }
+
+    private static object CreateProjectRestartEditorTool()
+    {
+        return new
+        {
+            name = "workspace_project_restart_editor",
+            description = "Restart a resident Godot editor for a registered project. Requires save=true for graceful restart or force=true for host-managed fallback.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    projectId = new { type = "string", description = "Registered project id." },
+                    path = new { type = "string", description = "Alternative registered project path." },
+                    save = new { type = "boolean", description = "Gracefully save open scenes and restart the editor." },
+                    force = new { type = "boolean", description = "Force restart only when the editor process is host-managed." },
+                    shutdownTimeoutMs = new { type = "integer", description = "Optional shutdown timeout in milliseconds." },
+                    attachTimeoutMs = new { type = "integer", description = "Optional attach timeout in milliseconds while waiting for the restarted editor." },
                 },
                 additionalProperties = false,
             },

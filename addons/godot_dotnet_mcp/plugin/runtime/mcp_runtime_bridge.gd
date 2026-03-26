@@ -106,6 +106,8 @@ func _emit_event(event_name: String, metadata: Dictionary = {}) -> void:
 func _send(channel: String, payload: Dictionary) -> void:
 	_append_fallback_event(channel, payload)
 	_last_runtime_event_at = Time.get_datetime_string_from_system(true, true)
+	if channel == REPLY_CHANNEL:
+		_flush_to_disk()
 	if not EngineDebugger.is_active():
 		return
 	EngineDebugger.send_message(channel, [payload])
@@ -122,10 +124,15 @@ func _get_current_scene_path() -> String:
 
 
 func _append_fallback_event(channel: String, payload: Dictionary) -> void:
+	var event_kind := "runtime_log"
+	if channel == EVENT_CHANNEL:
+		event_kind = "runtime_event"
+	elif channel == REPLY_CHANNEL:
+		event_kind = "runtime_reply"
 	var event := {
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
 		"timestamp_text": Time.get_datetime_string_from_system(true, true),
-		"kind": "runtime_event" if channel == EVENT_CHANNEL else "runtime_log",
+		"kind": event_kind,
 		"session_id": -1,
 		"payload": payload.duplicate(true)
 	}
@@ -244,29 +251,59 @@ func _execute_runtime_command_async(payload: Dictionary) -> void:
 	if request_id.is_empty():
 		return
 	if action.is_empty():
-		_reply_error(request_id, session_id, "invalid_argument", "Runtime command is missing an action.")
+		_reply_error(request_id, session_id, "invalid_argument", "Runtime command is missing an action.", {}, action)
 		return
 	if not (args is Dictionary):
 		args = {}
 
 	match action:
-		"capture_frame":
-			var frame_result: Dictionary = await _capture_frame_async(session_id, args)
-			_reply_result(request_id, session_id, frame_result)
-		"capture_sequence":
-			var sequence_result: Dictionary = await _capture_sequence_async(session_id, args)
-			_reply_result(request_id, session_id, sequence_result)
+		"status":
+			_reply_result(request_id, session_id, _success({
+				"runtime_state": _build_runtime_state(session_id)
+			}, "Runtime bridge ready"), action)
+		"capture":
+			var capture_result: Dictionary = await _capture_async(session_id, args)
+			_reply_result(request_id, session_id, capture_result, action)
 		"input":
 			var input_result: Dictionary = await _apply_inputs_async(session_id, args)
-			_reply_result(request_id, session_id, input_result)
+			_reply_result(request_id, session_id, input_result, action)
 		"step":
 			var step_result: Dictionary = await _run_step_async(session_id, args)
-			_reply_result(request_id, session_id, step_result)
+			_reply_result(request_id, session_id, step_result, action)
 		_:
-			_reply_error(request_id, session_id, "invalid_argument", "Unknown runtime action: %s" % action)
+			_reply_error(request_id, session_id, "invalid_argument", "Unknown runtime action: %s" % action, {}, action)
 
 
-func _capture_frame_async(session_id: int, args: Dictionary) -> Dictionary:
+func _capture_async(session_id: int, args: Dictionary) -> Dictionary:
+	var frame_count := int(args.get("frame_count", 1))
+	var interval_frames := int(args.get("interval_frames", 1))
+	if frame_count <= 0:
+		return _failure("invalid_argument", "frame_count must be greater than 0.")
+	if interval_frames < 0:
+		return _failure("invalid_argument", "interval_frames must be 0 or greater.")
+	if frame_count <= 1:
+		return await _capture_single_frame_async(session_id, args)
+
+	var frames: Array[Dictionary] = []
+	for index in range(frame_count):
+		if index > 0 and interval_frames > 0:
+			await _await_process_frames(interval_frames)
+		var frame_result: Dictionary = await _capture_single_frame_async(session_id, args)
+		if not bool(frame_result.get("success", false)):
+			return frame_result
+		var frame_data = frame_result.get("data", {})
+		if frame_data is Dictionary:
+			var frame_dict: Dictionary = (frame_data as Dictionary).duplicate(true)
+			frame_dict["index"] = index
+			frames.append(frame_dict)
+	return _success({
+		"frame_count": frames.size(),
+		"frames": frames,
+		"runtime_state": frames[-1].get("runtime_state", {}) if not frames.is_empty() else _build_runtime_state(session_id)
+	}, "Runtime capture sequence completed")
+
+
+func _capture_single_frame_async(session_id: int, args: Dictionary) -> Dictionary:
 	var include_runtime_state := bool(args.get("include_runtime_state", true))
 	var capture_label := str(args.get("capture_label", ""))
 	await _await_capture_ready()
@@ -315,28 +352,6 @@ func _capture_frame_async(session_id: int, args: Dictionary) -> Dictionary:
 		"captured_at": Time.get_datetime_string_from_system(true, true),
 		"runtime_state": runtime_state
 	}, "Runtime frame captured")
-
-
-func _capture_sequence_async(session_id: int, args: Dictionary) -> Dictionary:
-	var frame_count := maxi(int(args.get("frame_count", 1)), 1)
-	var interval_frames := maxi(int(args.get("interval_frames", 1)), 0)
-	var frames: Array[Dictionary] = []
-	for index in range(frame_count):
-		if index > 0 and interval_frames > 0:
-			await _await_process_frames(interval_frames)
-		var frame_result: Dictionary = await _capture_frame_async(session_id, args)
-		if not bool(frame_result.get("success", false)):
-			return frame_result
-		var frame_data = frame_result.get("data", {})
-		if frame_data is Dictionary:
-			var frame_dict: Dictionary = (frame_data as Dictionary).duplicate(true)
-			frame_dict["index"] = index
-			frames.append(frame_dict)
-	return _success({
-		"frame_count": frames.size(),
-		"frames": frames,
-		"runtime_state": frames[-1].get("runtime_state", {}) if not frames.is_empty() else _build_runtime_state(session_id)
-	}, "Runtime capture sequence completed")
 
 
 func _apply_inputs_async(session_id: int, args: Dictionary) -> Dictionary:
@@ -443,7 +458,7 @@ func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
 	var capture := bool(args.get("capture", true))
 	var frame := {}
 	if capture:
-		var capture_result: Dictionary = await _capture_frame_async(session_id, args)
+		var capture_result: Dictionary = await _capture_single_frame_async(session_id, args)
 		if not bool(capture_result.get("success", false)):
 			return capture_result
 		frame = capture_result.get("data", {})
@@ -497,7 +512,7 @@ func _dispatch_key_event(keycode: int, pressed: bool) -> void:
 	Input.parse_input_event(event)
 
 
-func _reply_result(request_id: String, session_id: int, result: Dictionary) -> void:
+func _reply_result(request_id: String, session_id: int, result: Dictionary, action: String = "") -> void:
 	if bool(result.get("success", false)):
 		_send(REPLY_CHANNEL, {
 			"request_id": request_id,
@@ -512,19 +527,58 @@ func _reply_result(request_id: String, session_id: int, result: Dictionary) -> v
 		session_id,
 		str(result.get("error", "runtime_command_failed")),
 		str(result.get("message", result.get("error", "Runtime command failed"))),
-		result.get("data", {})
+		result.get("data", {}),
+		action
 	)
 
 
-func _reply_error(request_id: String, session_id: int, error_type: String, message: String, data = {}) -> void:
+func _reply_error(request_id: String, session_id: int, error_type: String, message: String, data = {}, action: String = "") -> void:
+	var payload_data := {}
+	if data is Dictionary:
+		payload_data = (data as Dictionary).duplicate(true)
+	elif data != null:
+		payload_data = {"details": data}
+	if not payload_data.has("runtime_context"):
+		payload_data["runtime_context"] = _build_runtime_error_context(session_id, action)
+	if not payload_data.has("runtime_state"):
+		payload_data["runtime_state"] = _build_runtime_state(session_id)
+	if not payload_data.has("hint"):
+		var hint := _build_runtime_error_hint(error_type, action)
+		if not hint.is_empty():
+			payload_data["hint"] = hint
 	_send(REPLY_CHANNEL, {
 		"request_id": request_id,
 		"ok": false,
 		"error": error_type,
 		"message": message,
-		"data": data if data is Dictionary else {"details": data},
+		"data": payload_data,
 		"session_id": session_id
 	})
+
+
+func _build_runtime_error_context(session_id: int, action: String = "") -> Dictionary:
+	return {
+		"layer": "runtime_bridge",
+		"action": action,
+		"session_id": session_id,
+		"scene": _get_current_scene_path()
+	}
+
+
+func _build_runtime_error_hint(error_type: String, action: String = "") -> String:
+	match error_type:
+		"runtime_capture_failed":
+			return "Ensure the game viewport is rendering normally, then retry the runtime capture command."
+		"invalid_argument":
+			if action == "capture":
+				return "Check frame_count / interval_frames and retry the runtime capture command."
+			if action == "input":
+				return "Check kind, target, op, and duration_ms for each runtime input entry."
+			if action == "step":
+				return "Check wait_frames and the optional inputs array before retrying the runtime step."
+			return "Fix the runtime command arguments and retry."
+		_:
+			return ""
 
 
 func _build_runtime_state(session_id: int) -> Dictionary:

@@ -8,6 +8,7 @@ var bridge
 var _index_cache: Dictionary = {}
 
 const HANDLED_TOOLS := ["project_symbol_search", "scene_dependency_graph"]
+const INDEX_SIGNATURE_VERSION := 1
 
 
 func handles(tool_name: String) -> bool:
@@ -18,7 +19,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_symbol_search",
-			"description": "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use and can be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
+			"description": "PROJECT SYMBOL SEARCH: Find scripts, scenes, or classes by name using the internal project index. The index is built lazily on first use, auto-refreshes when tracked project files change, and can also be refreshed on demand. Matches class names, script filenames, scene filenames (exact and partial). Returns: matches[]{symbol, kind, path, class_name, base_type}, exact_match_count, partial_match_count. Requires: symbol (name to search).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -28,7 +29,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"refresh_index": {
 						"type": "boolean",
-						"description": "Force rebuilding the internal project index before searching (default: false)"
+						"description": "Force rebuilding the internal project index before searching, even when the cached index still looks fresh (default: false)"
 					}
 				},
 				"required": ["symbol"]
@@ -36,7 +37,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "scene_dependency_graph",
-			"description": "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use and can be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
+			"description": "SCENE DEPENDENCY GRAPH: Scene-to-scene dependency map from ExtResource references. Uses the internal project index, which is built lazily on first use, auto-refreshes when tracked project files change, and can also be refreshed on demand. Omit root_scene for full project map; set root_scene (.tscn) to traverse from a specific scene. Optional: max_depth (default 4). Returns: dependencies{scene_path -> [dep_paths]}, count.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -50,7 +51,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"refresh_index": {
 						"type": "boolean",
-						"description": "Force rebuilding the internal project index before generating the graph (default: false)"
+						"description": "Force rebuilding the internal project index before generating the graph, even when the cached index still looks fresh (default: false)"
 					}
 				}
 			}
@@ -82,15 +83,67 @@ func _index_symbol(symbols: Dictionary, symbol: String, kind: String, path: Stri
 	symbols[key] = entries
 
 
-func _build_project_index(include_resources: bool) -> Dictionary:
+func _collect_project_sources(include_resources: bool) -> Dictionary:
 	var gd_scripts: Array = bridge.collect_files("*.gd")
 	var cs_scripts: Array = bridge.collect_files("*.cs")
 	var scene_paths: Array = bridge.collect_files("*.tscn")
 	var resource_paths: Array = []
+	gd_scripts.sort()
+	cs_scripts.sort()
+	scene_paths.sort()
 	if include_resources:
 		resource_paths.append_array(bridge.collect_files("*.tres"))
 		resource_paths.append_array(bridge.collect_files("*.res"))
 		resource_paths.sort()
+
+	var signature_components: Array = ["version:%d" % INDEX_SIGNATURE_VERSION]
+	var latest_modified_unix := 0
+	latest_modified_unix = _append_source_signature(signature_components, "res://project.godot", latest_modified_unix)
+	for path in gd_scripts:
+		latest_modified_unix = _append_source_signature(signature_components, str(path), latest_modified_unix)
+	for path in cs_scripts:
+		latest_modified_unix = _append_source_signature(signature_components, str(path), latest_modified_unix)
+	for path in scene_paths:
+		latest_modified_unix = _append_source_signature(signature_components, str(path), latest_modified_unix)
+	for path in resource_paths:
+		latest_modified_unix = _append_source_signature(signature_components, str(path), latest_modified_unix)
+
+	return {
+		"gd_scripts": gd_scripts,
+		"cs_scripts": cs_scripts,
+		"scene_paths": scene_paths,
+		"resource_paths": resource_paths,
+		"include_resources": include_resources,
+		"source_file_count": gd_scripts.size() + cs_scripts.size() + scene_paths.size() + resource_paths.size() + 1,
+		"latest_modified_unix": latest_modified_unix,
+		"signature": hash(signature_components)
+	}
+
+
+func _append_source_signature(signature_components: Array, path: String, latest_modified_unix: int) -> int:
+	var modified_unix := _get_source_modified_unix(path)
+	signature_components.append("%s|%d" % [path, modified_unix])
+	return maxi(latest_modified_unix, modified_unix)
+
+
+func _get_source_modified_unix(path: String) -> int:
+	var resolved_path := path
+	if path.begins_with("res://") or path.begins_with("user://"):
+		resolved_path = ProjectSettings.globalize_path(path)
+	if not FileAccess.file_exists(resolved_path):
+		return 0
+	return int(FileAccess.get_modified_time(resolved_path))
+
+
+func _build_project_index(include_resources: bool, sources: Dictionary = {}) -> Dictionary:
+	var effective_sources: Dictionary = sources
+	if effective_sources.is_empty():
+		effective_sources = _collect_project_sources(include_resources)
+
+	var gd_scripts: Array = effective_sources.get("gd_scripts", [])
+	var cs_scripts: Array = effective_sources.get("cs_scripts", [])
+	var scene_paths: Array = effective_sources.get("scene_paths", [])
+	var resource_paths: Array = effective_sources.get("resource_paths", [])
 
 	var scripts := []
 	var symbols := {}
@@ -142,7 +195,11 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 
 	_index_cache = {
 		"built_at_unix": int(Time.get_unix_time_from_system()),
-		"include_resources": include_resources,
+		"include_resources": bool(effective_sources.get("include_resources", include_resources)),
+		"source_signature_version": INDEX_SIGNATURE_VERSION,
+		"source_signature": int(effective_sources.get("signature", 0)),
+		"source_file_count": int(effective_sources.get("source_file_count", 0)),
+		"source_latest_modified_unix": int(effective_sources.get("latest_modified_unix", 0)),
 		"scripts": scripts,
 		"script_paths": gd_scripts + cs_scripts,
 		"scenes": scene_paths,
@@ -156,19 +213,31 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 
 func _ensure_index_cache(include_resources: bool = true, force_rebuild: bool = false) -> Dictionary:
 	var state := "reused"
+	var sources := _collect_project_sources(include_resources)
 	if _index_cache.is_empty():
-		_index_cache = _build_project_index(include_resources)
+		_index_cache = _build_project_index(include_resources, sources)
 		state = "built"
 	elif force_rebuild:
-		_index_cache = _build_project_index(include_resources)
+		_index_cache = _build_project_index(include_resources, sources)
 		state = "refreshed"
 	elif include_resources and not bool(_index_cache.get("include_resources", true)):
-		_index_cache = _build_project_index(true)
+		_index_cache = _build_project_index(true, sources)
 		state = "refreshed"
+	elif _is_index_cache_stale(sources):
+		_index_cache = _build_project_index(include_resources, sources)
+		state = "stale_refreshed"
 	return {
 		"state": state,
 		"index": _index_cache
 	}
+
+
+func _is_index_cache_stale(sources: Dictionary) -> bool:
+	if int(_index_cache.get("source_signature_version", 0)) != INDEX_SIGNATURE_VERSION:
+		return true
+	if bool(_index_cache.get("include_resources", true)) != bool(sources.get("include_resources", true)):
+		return true
+	return int(_index_cache.get("source_signature", 0)) != int(sources.get("signature", 0))
 
 
 func _traverse_scene_deps(current: String, max_depth: int, dep_map: Dictionary, visited: Dictionary, result: Dictionary, depth: int) -> void:

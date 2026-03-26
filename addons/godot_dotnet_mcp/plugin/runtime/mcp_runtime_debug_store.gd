@@ -10,6 +10,7 @@ static var _sessions: Dictionary = {}
 static var _fallback_cache: Array[Dictionary] = []
 static var _fallback_dirty := true
 static var _fallback_modified_unix := -1
+static var _fallback_size_bytes := -1
 static var _bridge_status := {
 	"installed": false,
 	"autoload_name": "MCPRuntimeBridge",
@@ -98,6 +99,7 @@ static func clear() -> void:
 	_fallback_cache.clear()
 	_fallback_dirty = true
 	_fallback_modified_unix = -1
+	_fallback_size_bytes = -1
 	_clear_fallback_events()
 
 
@@ -306,14 +308,17 @@ static func _read_fallback_events_cached() -> Array[Dictionary]:
 		_fallback_cache.clear()
 		_fallback_dirty = false
 		_fallback_modified_unix = -1
+		_fallback_size_bytes = -1
 		return []
 
 	var modified_unix := int(FileAccess.get_modified_time(global_path))
-	if not _fallback_dirty and modified_unix == _fallback_modified_unix:
+	var size_bytes := _get_fallback_file_size()
+	if not _fallback_dirty and modified_unix == _fallback_modified_unix and size_bytes == _fallback_size_bytes:
 		return _fallback_cache.duplicate(true)
 
 	_fallback_cache = _read_fallback_events()
 	_fallback_modified_unix = modified_unix
+	_fallback_size_bytes = size_bytes
 	_fallback_dirty = false
 	return _fallback_cache.duplicate(true)
 
@@ -325,3 +330,13 @@ static func _clear_fallback_events() -> void:
 	_fallback_cache.clear()
 	_fallback_dirty = false
 	_fallback_modified_unix = -1
+	_fallback_size_bytes = -1
+
+
+static func _get_fallback_file_size() -> int:
+	var file := FileAccess.open(FALLBACK_FILE_PATH, FileAccess.READ)
+	if file == null:
+		return -1
+	var size := int(file.get_length())
+	file.close()
+	return size

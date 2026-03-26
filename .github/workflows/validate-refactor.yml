@@ -30,6 +30,14 @@ jobs:
         shell: pwsh
         run: dotnet build .\host_shared\HostShared.csproj -c Release
 
+      - name: Run host contract tests
+        shell: pwsh
+        run: dotnet run --project .\tests\host_contracts\HostContracts.csproj -c Release
+
+      - name: Run plugin headless harness
+        shell: pwsh
+        run: dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --allow-skip-missing-godot
+
       - name: Run reuse session smoke
         shell: pwsh
         run: .\scripts\smoke_central_server_system_session.ps1 -SkipBuild

@@ -2,7 +2,9 @@
     [switch]$SkipBuild,
     [switch]$AutoLaunch,
     [switch]$RequireAutoLaunch,
+    [switch]$CleanupLaunchedEditor,
     [switch]$UseUserProfileState,
+    [string]$StateRoot,
     [string]$ProjectRoot,
     [string]$GodotExecutablePath,
     [string]$AttachHost,
@@ -13,12 +15,41 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Get-IsolatedStateRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseRoot,
+        [string]$ExplicitStateRoot
+    )
+
+    if ($ExplicitStateRoot) {
+        $stateItem = New-Item -ItemType Directory -Force -Path $ExplicitStateRoot
+        return $stateItem.FullName
+    }
+
+    $runId = '{0:yyyyMMddTHHmmssfff}-{1}-{2}' -f [DateTime]::UtcNow, $PID, ([Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $runRoot = Join-Path $BaseRoot $runId
+    $stateItem = New-Item -ItemType Directory -Force -Path $runRoot
+    return $stateItem.FullName
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $projectFile = Join-Path $repoRoot 'central_server/CentralServer.csproj'
 $outputDll = Join-Path $repoRoot 'central_server/bin/Release/net8.0/GodotDotnetMcp.CentralServer.dll'
 
+if ($AutoLaunch -and -not $UseUserProfileState) {
+    if (-not $CleanupLaunchedEditor) {
+        if (-not $StateRoot) {
+            $StateRoot = Join-Path $repoRoot '.tmp/central_server_smoke/persistent_auto_launch'
+        }
+        if ($AttachPort -le 0) {
+            $AttachPort = 3020
+        }
+    }
+}
+
 if (-not $UseUserProfileState) {
-    $smokeStateRoot = Join-Path $repoRoot '.tmp/central_server_smoke'
+    $smokeStateRoot = Get-IsolatedStateRoot -BaseRoot (Join-Path $repoRoot '.tmp/central_server_smoke/runs') -ExplicitStateRoot $StateRoot
     $centralHome = Join-Path $smokeStateRoot 'CentralHome'
     $dotnetCliHome = Join-Path $smokeStateRoot 'DotnetCli'
 
@@ -49,6 +80,9 @@ if ($AutoLaunch) {
 }
 if ($RequireAutoLaunch) {
     $arguments += '--require-auto-launch'
+}
+if ($CleanupLaunchedEditor) {
+    $arguments += '--cleanup-launched-editor'
 }
 if ($ProjectRoot) {
     $arguments += @('--project-root', $ProjectRoot)

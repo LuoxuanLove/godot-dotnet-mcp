@@ -2,6 +2,8 @@ namespace GodotDotnetMcp.CentralServer;
 
 internal sealed class EditorSessionService
 {
+    public const string EditorLifecycleCapability = "editor_lifecycle";
+
     private readonly ProjectRegistryService _registry;
     private readonly Dictionary<string, EditorSessionEntry> _sessionsById = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _activeSessionIdsByProject = new(StringComparer.OrdinalIgnoreCase);
@@ -43,6 +45,7 @@ internal sealed class EditorSessionService
             ServerHost = request.ServerHost ?? string.Empty,
             ServerPort = request.ServerPort,
             ServerRunning = request.ServerRunning ?? false,
+            ProcessId = request.ProcessId,
         };
 
         _sessionsById[sessionId] = entry;
@@ -70,6 +73,7 @@ internal sealed class EditorSessionService
         entry.ServerHost = request.ServerHost ?? entry.ServerHost;
         entry.ServerPort = request.ServerPort ?? entry.ServerPort;
         entry.ServerRunning = request.ServerRunning ?? entry.ServerRunning;
+        entry.ProcessId = request.ProcessId ?? entry.ProcessId;
 
         return new EditorSessionHeartbeatResult
         {
@@ -141,6 +145,25 @@ internal sealed class EditorSessionService
             .ToArray();
     }
 
+    public void InvalidateSession(string projectId, string? sessionId = null)
+    {
+        PruneStaleSessions();
+
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            _sessionsById.Remove(sessionId.Trim());
+        }
+
+        if (_activeSessionIdsByProject.TryGetValue(projectId, out var activeSessionId))
+        {
+            if (string.IsNullOrWhiteSpace(sessionId)
+                || string.Equals(activeSessionId, sessionId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                _activeSessionIdsByProject.Remove(projectId);
+            }
+        }
+    }
+
     public async Task<EditorSessionStatus> WaitForReadyHttpSessionAsync(string projectId, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var startedAt = DateTimeOffset.UtcNow;
@@ -149,6 +172,58 @@ internal sealed class EditorSessionService
             cancellationToken.ThrowIfCancellationRequested();
             var status = GetStatus(projectId);
             if (IsHttpReady(status))
+            {
+                return status;
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+
+        return GetStatus(projectId);
+    }
+
+    public async Task<EditorSessionStatus> WaitForSessionLossAsync(
+        string projectId,
+        string? previousSessionId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        while (DateTimeOffset.UtcNow - startedAt < timeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = GetStatus(projectId);
+            if (!status.Attached)
+            {
+                return status;
+            }
+
+            if (!string.IsNullOrWhiteSpace(previousSessionId)
+                && !string.Equals(status.SessionId, previousSessionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return status;
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+
+        return GetStatus(projectId);
+    }
+
+    public async Task<EditorSessionStatus> WaitForDifferentReadyHttpSessionAsync(
+        string projectId,
+        string? previousSessionId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        while (DateTimeOffset.UtcNow - startedAt < timeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = GetStatus(projectId);
+            if (IsHttpReady(status)
+                && (string.IsNullOrWhiteSpace(previousSessionId)
+                    || !string.Equals(status.SessionId, previousSessionId, StringComparison.OrdinalIgnoreCase)))
             {
                 return status;
             }
@@ -173,6 +248,25 @@ internal sealed class EditorSessionService
                && status.ServerRunning
                && !string.IsNullOrWhiteSpace(status.ServerHost)
                && status.ServerPort is > 0;
+    }
+
+    public static bool SupportsCapability(EditorSessionStatus status, string capability)
+    {
+        if (status.Capabilities is null
+            || status.Capabilities.Length == 0
+            || string.IsNullOrWhiteSpace(capability))
+        {
+            return false;
+        }
+
+        return status.Capabilities.Any(item =>
+            !string.IsNullOrWhiteSpace(item)
+            && string.Equals(item.Trim(), capability, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool SupportsEditorLifecycle(EditorSessionStatus status)
+    {
+        return SupportsCapability(status, EditorLifecycleCapability);
     }
 
     private void PruneStaleSessions()
@@ -278,6 +372,7 @@ internal sealed class EditorSessionService
             ServerHost = entry.ServerHost,
             ServerPort = entry.ServerPort,
             ServerRunning = entry.ServerRunning,
+            ProcessId = entry.ProcessId,
         };
     }
 
@@ -302,6 +397,8 @@ internal sealed class EditorSessionService
         public int? ServerPort { get; set; }
 
         public bool? ServerRunning { get; set; }
+
+        public int? ProcessId { get; set; }
     }
 
     internal sealed class EditorSessionHeartbeatRequest
@@ -319,6 +416,8 @@ internal sealed class EditorSessionService
         public int? ServerPort { get; set; }
 
         public bool? ServerRunning { get; set; }
+
+        public int? ProcessId { get; set; }
     }
 
     internal sealed class EditorSessionDetachRequest
@@ -406,6 +505,8 @@ internal sealed class EditorSessionService
         public int? ServerPort { get; set; }
 
         public bool ServerRunning { get; set; }
+
+        public int? ProcessId { get; set; }
     }
 
     private sealed class EditorSessionEntry
@@ -435,6 +536,8 @@ internal sealed class EditorSessionService
         public int? ServerPort { get; set; }
 
         public bool ServerRunning { get; set; }
+
+        public int? ProcessId { get; set; }
 
         public DateTimeOffset AttachedAtUtc { get; set; }
 

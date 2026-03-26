@@ -48,8 +48,8 @@ tools/system/
 - `system_script_patch`：以成员级方式补丁脚本内容。
 
 ### 索引级
-- `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，必要时可 `refresh_index=true` 强制刷新。
-- `system_scene_dependency_graph`：生成场景依赖图；同样复用内部项目索引并支持按需刷新。
+- `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，长会话中文件变化时会自动重建，必要时仍可 `refresh_index=true` 强制刷新。
+- `system_scene_dependency_graph`：生成场景依赖图；同样复用内部项目索引，支持自动失效重建与按需刷新。
 
 运行时自动化工具的边界固定为：
 
@@ -57,6 +57,7 @@ tools/system/
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
 - 项目停止、会话断开、插件重载后会自动失效。
+- 失败响应统一保留 `error` / `message` 主字段，并按来源补充 `data.editor_context`、`data.runtime_context`、`data.runtime_state`、`data.hint`。
 
 ---
 

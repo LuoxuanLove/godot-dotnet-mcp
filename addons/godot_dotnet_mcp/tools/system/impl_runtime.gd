@@ -172,7 +172,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 	var service = _get_runtime_control_service()
 	if service == null:
-		return _failure("runtime_control_unavailable", "Runtime control service is unavailable.")
+		return _failure("runtime_control_unavailable", "Runtime control service is unavailable.", {}, "system_%s" % tool_name)
 
 	match tool_name:
 		"runtime_control":
@@ -185,7 +185,7 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 				"disable":
 					return service.disable_control()
 				_:
-					return _failure("invalid_argument", "Unknown runtime control action: %s" % action)
+					return _failure("invalid_argument", "Unknown runtime control action: %s" % action, {}, "system_runtime_control")
 		"runtime_capture":
 			return await _execute_runtime_capture(service, args)
 		"runtime_input":
@@ -193,7 +193,7 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 		"runtime_step":
 			return await service.step(args)
 		_:
-			return _failure("invalid_argument", "Unknown runtime tool: %s" % tool_name)
+			return _failure("invalid_argument", "Unknown runtime tool: %s" % tool_name, {}, "system_%s" % tool_name)
 
 
 func _get_runtime_control_service():
@@ -206,7 +206,7 @@ func _get_runtime_control_service():
 func _build_status_response() -> Dictionary:
 	var service = _get_runtime_control_service()
 	if service == null:
-		return _failure("runtime_control_unavailable", "Runtime control service is unavailable.")
+		return _failure("runtime_control_unavailable", "Runtime control service is unavailable.", {}, "system_runtime_control")
 	var status = service.get_status()
 	return bridge.success(status, str(status.get("message", "Runtime control status")))
 
@@ -215,33 +215,22 @@ func _execute_runtime_capture(service, args: Dictionary) -> Dictionary:
 	var frame_count := int(args.get("frame_count", 1))
 	var interval_frames := int(args.get("interval_frames", 1))
 	if frame_count <= 0:
-		return _failure("invalid_argument", "frame_count must be greater than 0")
+		return _failure("invalid_argument", "frame_count must be greater than 0", {}, "system_runtime_capture")
 	if interval_frames < 0:
-		return _failure("invalid_argument", "interval_frames must be 0 or greater")
-	if frame_count <= 1:
-		var single_args := {
-			"capture_label": str(args.get("capture_label", "")),
-			"include_runtime_state": bool(args.get("include_runtime_state", true))
-		}
-		if args.has("timeout_ms"):
-			single_args["timeout_ms"] = int(args.get("timeout_ms", 0))
-		var single_result: Dictionary = await service.capture_frame(single_args)
-		if not bool(single_result.get("success", false)):
-			return single_result
-		return _annotate_capture_result(single_result, "single", 1, interval_frames)
-
-	var sequence_args := {
+		return _failure("invalid_argument", "interval_frames must be 0 or greater", {}, "system_runtime_capture")
+	var capture_args := {
 		"frame_count": frame_count,
 		"interval_frames": interval_frames,
 		"capture_label": str(args.get("capture_label", "")),
 		"include_runtime_state": bool(args.get("include_runtime_state", true))
 	}
 	if args.has("timeout_ms"):
-		sequence_args["timeout_ms"] = int(args.get("timeout_ms", 0))
-	var sequence_result: Dictionary = await service.capture_sequence(sequence_args)
-	if not bool(sequence_result.get("success", false)):
-		return sequence_result
-	return _annotate_capture_result(sequence_result, "sequence", frame_count, interval_frames)
+		capture_args["timeout_ms"] = int(args.get("timeout_ms", 0))
+	var capture_result: Dictionary = await service.capture(capture_args)
+	if not bool(capture_result.get("success", false)):
+		return capture_result
+	var capture_mode := "single" if frame_count <= 1 else "sequence"
+	return _annotate_capture_result(capture_result, capture_mode, frame_count, interval_frames)
 
 
 func _annotate_capture_result(result: Dictionary, capture_mode: String, frame_count: int, interval_frames: int) -> Dictionary:
@@ -257,12 +246,33 @@ func _annotate_capture_result(result: Dictionary, capture_mode: String, frame_co
 	return normalized
 
 
-func _failure(error_type: String, message: String, data = {}) -> Dictionary:
+func _build_tool_error_hint(error_type: String, tool_name: String) -> String:
+	if error_type == "invalid_argument" and tool_name == "system_runtime_capture":
+		return "Check frame_count / interval_frames before retrying system_runtime_capture."
+	if error_type == "invalid_argument" and tool_name == "system_runtime_control":
+		return "Check the action value. Allowed values are status, enable, disable."
+	if error_type == "runtime_control_unavailable":
+		return "Ensure the editor plugin runtime services are loaded before retrying the runtime tool."
+	return ""
+
+
+func _failure(error_type: String, message: String, data = {}, tool_name: String = "") -> Dictionary:
+	var payload := {}
+	if data is Dictionary:
+		payload = (data as Dictionary).duplicate(true)
+	elif data != null:
+		payload = {"details": data}
+	if not tool_name.is_empty():
+		payload["tool_name"] = tool_name
+	if not payload.has("hint"):
+		var hint := _build_tool_error_hint(error_type, tool_name)
+		if not hint.is_empty():
+			payload["hint"] = hint
 	var result := {
 		"success": false,
 		"error": error_type,
 		"message": message
 	}
-	if data is Dictionary and not (data as Dictionary).is_empty():
-		result["data"] = data
+	if not payload.is_empty():
+		result["data"] = payload
 	return result

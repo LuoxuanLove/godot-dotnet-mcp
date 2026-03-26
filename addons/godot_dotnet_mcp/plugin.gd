@@ -184,6 +184,10 @@ func get_editor_debugger_bridge():
 	return _editor_debugger_bridge
 
 
+func get_central_server_attach_service():
+	return _central_server_attach_service
+
+
 func start_server() -> void:
 	_on_start_requested()
 
@@ -977,7 +981,9 @@ func _ensure_local_central_server_if_needed() -> void:
 func _configure_central_server_attach_service() -> void:
 	if _central_server_attach_service == null:
 		_central_server_attach_service = CentralServerAttachServiceScript.new()
-	_central_server_attach_service.configure(self, _state.settings)
+	_central_server_attach_service.configure(self, _state.settings, {
+		"save_settings": Callable(self, "_save_settings")
+	})
 	_central_server_attach_service.start()
 
 
