@@ -43,11 +43,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if exposed_tools.is_empty():
 		return _failure("Tool loader did not return any exposed tool definitions.")
 
+	var all_tools: Array[Dictionary] = _loader.get_tool_definitions()
+	for tool_def in all_tools:
+		if bool(tool_def.get("compatibility_alias", false)):
+			return _failure("Tool loader should no longer surface compatibility_alias definitions.")
+
+	var tools_by_category: Dictionary = _loader.get_tools_by_category()
+	if tools_by_category.has("plugin"):
+		return _failure("Tool loader should no longer expose the legacy plugin category.")
+
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
 		exposed_names.append(str(tool_def.get("name", "")))
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default permission provider.")
+	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
+		if exposed_names.has(deprecated_name):
+			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):

@@ -7,14 +7,22 @@ const HttpResponseServiceContractTest = preload("res://tests/http_response_servi
 const JsonRpcRouterContractTest = preload("res://tests/json_rpc_router_contract_test.gd")
 const EditorLifecycleActionServiceContractTest = preload("res://tests/editor_lifecycle_action_service_contract_test.gd")
 const RuntimeControlContractTest = preload("res://tests/runtime_control_contract_test.gd")
+const RuntimeControlRequestCoordinatorContractTest = preload("res://tests/runtime_control_request_coordinator_contract_test.gd")
 const RuntimeControlReplyResolverContractTest = preload("res://tests/runtime_control_reply_resolver_contract_test.gd")
 const RuntimeBridgeContractTest = preload("res://tests/runtime_bridge_contract_test.gd")
 const RuntimeFallbackStoreContractTest = preload("res://tests/runtime_fallback_store_contract_test.gd")
 const RuntimeReplyServiceContractTest = preload("res://tests/runtime_reply_service_contract_test.gd")
+const ClientConfigSerializerContractTest = preload("res://tests/client_config_serializer_contract_test.gd")
+const ClientConfigInspectionServiceContractTest = preload("res://tests/client_config_inspection_service_contract_test.gd")
+const ClientConfigFileTransactionContractTest = preload("res://tests/client_config_file_transaction_contract_test.gd")
+const ClientConfigLauncherAdapterContractTest = preload("res://tests/client_config_launcher_adapter_contract_test.gd")
 const EditorLifecycleStateBuilderContractTest = preload("res://tests/editor_lifecycle_state_builder_contract_test.gd")
 const SystemIndexImplContractTest = preload("res://tests/system_index_impl_contract_test.gd")
 const SystemRuntimeImplContractTest = preload("res://tests/system_runtime_impl_contract_test.gd")
 const ToolLoaderContractTest = preload("res://tests/tool_loader_contract_test.gd")
+const ToolsTabInteractionSupportContractTest = preload("res://tests/tools_tab_interaction_support_contract_test.gd")
+const ToolsTabSearchServiceContractTest = preload("res://tests/tools_tab_search_service_contract_test.gd")
+const ToolsTabPreviewBuilderContractTest = preload("res://tests/tools_tab_preview_builder_contract_test.gd")
 
 
 func _initialize() -> void:
@@ -34,6 +42,10 @@ func _run_suite() -> void:
 			"script": RuntimeControlContractTest
 		},
 		{
+			"name": "runtime_control_request_coordinator_contracts",
+			"script": RuntimeControlRequestCoordinatorContractTest
+		},
+		{
 			"name": "runtime_control_reply_resolver_contracts",
 			"script": RuntimeControlReplyResolverContractTest
 		},
@@ -44,6 +56,22 @@ func _run_suite() -> void:
 		{
 			"name": "runtime_reply_service_contracts",
 			"script": RuntimeReplyServiceContractTest
+		},
+		{
+			"name": "client_config_serializer_contracts",
+			"script": ClientConfigSerializerContractTest
+		},
+		{
+			"name": "client_config_inspection_service_contracts",
+			"script": ClientConfigInspectionServiceContractTest
+		},
+		{
+			"name": "client_config_file_transaction_contracts",
+			"script": ClientConfigFileTransactionContractTest
+		},
+		{
+			"name": "client_config_launcher_adapter_contracts",
+			"script": ClientConfigLauncherAdapterContractTest
 		},
 		{
 			"name": "http_server_contracts",
@@ -80,6 +108,18 @@ func _run_suite() -> void:
 		{
 			"name": "tool_loader_contracts",
 			"script": ToolLoaderContractTest
+		},
+		{
+			"name": "tools_tab_interaction_support_contracts",
+			"script": ToolsTabInteractionSupportContractTest
+		},
+		{
+			"name": "tools_tab_search_service_contracts",
+			"script": ToolsTabSearchServiceContractTest
+		},
+		{
+			"name": "tools_tab_preview_builder_contracts",
+			"script": ToolsTabPreviewBuilderContractTest
 		}
 	]
 	var only_case := OS.get_environment("GODOT_PLUGIN_HARNESS_ONLY_CASE").strip_edges()

@@ -132,5 +132,5 @@ plugin.gd
 | `ui/server_tab.gd` | Server 页控制器 |
 | `ui/config_panel.tscn` | Config 页场景 |
 | `ui/config_tab.gd` | Config 页控制器 |
-| `plugin/config/client_config_service.gd` | 客户端配置生成与写入 |
+| `plugin/config/client_config_service.gd` | Config 页配置服务门面，统一委托 serializer / inspection / transaction / launcher adapter |
 | `plugin/config/config_paths.gd` | 各客户端路径与命令模板 |

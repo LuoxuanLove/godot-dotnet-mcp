@@ -6,6 +6,7 @@ const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runti
 const MCPRuntimeControlSessionSelectorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_session_selector.gd")
 const MCPRuntimeControlErrorMapperScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_error_mapper.gd")
 const MCPRuntimeControlReplyResolverScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_reply_resolver.gd")
+const MCPRuntimeControlRequestCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_request_coordinator.gd")
 const DEFAULT_COMMAND_TIMEOUT_MS := 5000
 const DEFAULT_SEQUENCE_TIMEOUT_MS := 15000
 const DEFAULT_ENABLE_TIMEOUT_MS := 5000
@@ -15,18 +16,17 @@ var _debugger_bridge: EditorDebuggerPlugin
 var _log := Callable()
 var _armed_session_id := -1
 var _armed_at_unix := 0
-var _last_reply_at_unix := 0
-var _pending_requests: Dictionary = {}
 var _session_selector = MCPRuntimeControlSessionSelectorScript.new()
 var _error_mapper = MCPRuntimeControlErrorMapperScript.new()
 var _reply_resolver = MCPRuntimeControlReplyResolverScript.new()
+var _request_coordinator = MCPRuntimeControlRequestCoordinatorScript.new()
 
 
 func configure(plugin: EditorPlugin, debugger_bridge: EditorDebuggerPlugin, callbacks: Dictionary = {}) -> void:
 	_plugin = plugin
 	if _debugger_bridge != debugger_bridge:
 		if _debugger_bridge != null:
-			_mark_all_pending_requests("runtime_session_lost", "Runtime control bridge changed before the command completed")
+			_request_coordinator.mark_all_pending_requests("runtime_session_lost", "Runtime control bridge changed before the command completed")
 		_disconnect_debugger_bridge()
 		_debugger_bridge = debugger_bridge
 		_connect_debugger_bridge()
@@ -40,18 +40,25 @@ func configure(plugin: EditorPlugin, debugger_bridge: EditorDebuggerPlugin, call
 		"get_recent_runtime_events": Callable(self, "_get_recent_runtime_events"),
 		"build_error": Callable(self, "_build_runtime_control_error")
 	})
+	_request_coordinator.configure({
+		"send_runtime_command": Callable(self, "_send_runtime_command"),
+		"resolve_fallback_reply": Callable(_reply_resolver, "resolve_fallback_reply"),
+		"build_reply_from_runtime_payload": Callable(_reply_resolver, "build_reply_from_runtime_payload"),
+		"build_error": Callable(self, "_build_runtime_control_error"),
+		"get_scene_tree": Callable(self, "_get_scene_tree")
+	})
 	_validate_armed_session()
 
 
 func reset() -> void:
-	_mark_all_pending_requests("runtime_session_lost", "Runtime control service reset before the command completed")
+	_request_coordinator.mark_all_pending_requests("runtime_session_lost", "Runtime control service reset before the command completed")
 	_armed_session_id = -1
 	_armed_at_unix = 0
-	_last_reply_at_unix = 0
 	_disconnect_debugger_bridge()
 	_debugger_bridge = null
 	_plugin = null
 	_log = Callable()
+	_request_coordinator.reset()
 	_session_selector.reset()
 	_error_mapper.reset()
 	_reply_resolver.reset()
@@ -83,8 +90,8 @@ func get_status() -> Dictionary:
 		"session_snapshot": session_snapshot,
 		"armed_session_id": _armed_session_id,
 		"armed_at_unix": _armed_at_unix,
-		"last_reply_at_unix": _last_reply_at_unix,
-		"pending_request_count": _pending_requests.size(),
+		"last_reply_at_unix": _request_coordinator.get_last_reply_at_unix(),
+		"pending_request_count": _request_coordinator.get_pending_request_count(),
 		"message": message
 	}
 
@@ -115,7 +122,7 @@ func disable_control() -> Dictionary:
 	var previous_session_id := _armed_session_id
 	_armed_session_id = -1
 	_armed_at_unix = 0
-	_mark_all_pending_requests("runtime_control_disabled", "Runtime control was disabled before the command completed")
+	_request_coordinator.mark_all_pending_requests("runtime_control_disabled", "Runtime control was disabled before the command completed")
 	return _success({
 		"armed": false,
 		"session_id": previous_session_id
@@ -185,60 +192,7 @@ func _request_runtime_command_on_session(session_id: int, action: String, payloa
 			"session_id": previous_session_id
 		}, action)
 
-	var request_id := _build_request_id(action)
-	var command_payload := {
-		"request_id": request_id,
-		"action": action,
-		"session_id": session_id,
-		"payload": payload.duplicate(true)
-	}
-	_pending_requests[request_id] = {
-		"action": action,
-		"session_id": session_id,
-		"completed": false,
-		"reply": {}
-	}
-
-	var send_result := _send_runtime_command(session_id, command_payload)
-	if not bool(send_result.get("success", false)):
-		_pending_requests.erase(request_id)
-		return send_result
-
-	var wait_result: Dictionary = await _await_runtime_reply(request_id, timeout_ms)
-	if not bool(wait_result.get("success", false)):
-		return wait_result
-
-	var response_data = wait_result.get("data", {})
-	if not (response_data is Dictionary):
-		response_data = {}
-	return _success(response_data, str(wait_result.get("message", "Runtime command completed")))
-
-
-func _await_runtime_reply(request_id: String, timeout_ms: int) -> Dictionary:
-	var deadline := Time.get_ticks_msec() + maxi(timeout_ms, 1)
-	while Time.get_ticks_msec() <= deadline:
-		var pending = _pending_requests.get(request_id, null)
-		if pending is Dictionary and bool((pending as Dictionary).get("completed", false)):
-			var reply: Dictionary = ((pending as Dictionary).get("reply", {}) as Dictionary).duplicate(true)
-			_pending_requests.erase(request_id)
-			return reply
-		if pending is Dictionary:
-			var fallback_reply := _reply_resolver.resolve_fallback_reply(request_id, pending as Dictionary)
-			if not fallback_reply.is_empty():
-				_pending_requests.erase(request_id)
-				_last_reply_at_unix = int(Time.get_unix_time_from_system())
-				return fallback_reply
-		var tree = _session_selector.get_scene_tree()
-		if tree == null:
-			break
-		await tree.process_frame
-
-	var pending_timeout = _pending_requests.get(request_id, {})
-	_pending_requests.erase(request_id)
-	return _error_mapper.error("runtime_command_timeout", "Timed out waiting for the runtime command reply.", {
-		"request_id": request_id,
-		"timeout_ms": timeout_ms
-	}, str((pending_timeout as Dictionary).get("action", "")))
+	return await _request_coordinator.request_runtime_command(session_id, action, payload, timeout_ms)
 
 
 func _connect_debugger_bridge() -> void:
@@ -260,23 +214,7 @@ func _disconnect_debugger_bridge() -> void:
 
 
 func _on_runtime_reply_received(session_id: int, payload: Dictionary) -> void:
-	var request_id := str(payload.get("request_id", ""))
-	if request_id.is_empty():
-		return
-	if not _pending_requests.has(request_id):
-		return
-	var pending: Dictionary = _pending_requests.get(request_id, {})
-	if int(pending.get("session_id", -1)) != session_id:
-		return
-
-	var reply := _reply_resolver.build_reply_from_runtime_payload(payload, str(pending.get("action", "")))
-	if reply.is_empty():
-		return
-
-	pending["completed"] = true
-	pending["reply"] = reply
-	_pending_requests[request_id] = pending
-	_last_reply_at_unix = int(Time.get_unix_time_from_system())
+	_request_coordinator.handle_runtime_reply(session_id, payload)
 
 
 func _on_session_state_changed(session_id: int, state: String, _metadata: Dictionary) -> void:
@@ -284,7 +222,7 @@ func _on_session_state_changed(session_id: int, state: String, _metadata: Dictio
 		if _armed_session_id == session_id:
 			_armed_session_id = -1
 			_armed_at_unix = 0
-		_mark_pending_requests_for_session(session_id, "runtime_session_lost", "The runtime debugger session stopped before the command completed.")
+		_request_coordinator.mark_pending_requests_for_session(session_id, "runtime_session_lost", "The runtime debugger session stopped before the command completed.")
 	elif state in ["started", "continued", "breaked", "attached"]:
 		_validate_armed_session()
 
@@ -293,26 +231,6 @@ func _validate_armed_session() -> void:
 	if _armed_session_id >= 0 and not _session_selector.is_session_commandable(_armed_session_id):
 		_armed_session_id = -1
 		_armed_at_unix = 0
-
-
-func _mark_all_pending_requests(error_type: String, message: String) -> void:
-	for request_id in _pending_requests.keys():
-		var pending: Dictionary = _pending_requests.get(request_id, {})
-		pending["completed"] = true
-		pending["reply"] = _error_mapper.error(error_type, message, {}, str(pending.get("action", "")))
-		_pending_requests[request_id] = pending
-
-
-func _mark_pending_requests_for_session(session_id: int, error_type: String, message: String) -> void:
-	for request_id in _pending_requests.keys():
-		var pending: Dictionary = _pending_requests.get(request_id, {})
-		if int(pending.get("session_id", -1)) != session_id:
-			continue
-		pending["completed"] = true
-		pending["reply"] = _error_mapper.error(error_type, message, {
-			"session_id": session_id
-		}, str(pending.get("action", "")))
-		_pending_requests[request_id] = pending
 
 
 func _send_runtime_command(session_id: int, payload: Dictionary) -> Dictionary:
@@ -332,10 +250,6 @@ func _send_runtime_command(session_id: int, payload: Dictionary) -> Dictionary:
 			action
 		)
 	return _error_mapper.error("runtime_bridge_unavailable", "Runtime command dispatch failed", {}, action)
-
-
-func _build_request_id(action: String) -> String:
-	return "runtime-%s-%d" % [action, Time.get_ticks_usec()]
 
 
 func _await_runtime_ready(initial_session_id: int, timeout_ms: int) -> Dictionary:
@@ -421,9 +335,13 @@ func _build_editor_error_context(action: String = "") -> Dictionary:
 		"armed": _armed_session_id >= 0,
 		"armed_session_id": _armed_session_id,
 		"armed_at_unix": _armed_at_unix,
-		"last_reply_at_unix": _last_reply_at_unix,
-		"pending_request_count": _pending_requests.size()
+		"last_reply_at_unix": _request_coordinator.get_last_reply_at_unix(),
+		"pending_request_count": _request_coordinator.get_pending_request_count()
 	}
+
+
+func _get_scene_tree() -> SceneTree:
+	return _session_selector.get_scene_tree()
 
 
 func _get_debugger_session_snapshot() -> Dictionary:

@@ -164,8 +164,6 @@ func _count_enabled_tools_in_category(category: String, defs: Array) -> int:
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
-	if _as_bool(tool_def.get("compatibility_alias", false)):
-		return false
 	return _exposed_categories.has(str(tool_def.get("category", "")))
 
 

@@ -33,7 +33,7 @@ const BUILTIN_TOOL_ENTRIES: Array[Dictionary] = [
 
 const ALL_TOOL_CATEGORIES: Array[String] = [
 	"scene", "node", "script", "resource", "filesystem", "project", "editor", "debug",
-	"plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "group", "signal",
+	"plugin_runtime", "plugin_evolution", "plugin_developer", "group", "signal",
 	"animation", "material", "shader", "lighting", "particle", "tilemap", "geometry",
 	"physics", "navigation", "audio", "ui", "user", "system"
 ]

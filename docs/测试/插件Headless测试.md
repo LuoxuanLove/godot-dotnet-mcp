@@ -28,6 +28,14 @@ tests/godot_plugin_harness_fixture/
    ├─ headless_suite_runner.gd
    ├─ runtime_bridge_contract_test.gd
    ├─ runtime_control_contract_test.gd
+   ├─ runtime_control_request_coordinator_contract_test.gd
+   ├─ runtime_control_reply_resolver_contract_test.gd
+   ├─ runtime_fallback_store_contract_test.gd
+   ├─ runtime_reply_service_contract_test.gd
+   ├─ client_config_serializer_contract_test.gd
+   ├─ client_config_inspection_service_contract_test.gd
+   ├─ client_config_file_transaction_contract_test.gd
+   ├─ client_config_launcher_adapter_contract_test.gd
    ├─ http_server_contract_test.gd
    ├─ http_request_router_contract_test.gd
    ├─ http_response_service_contract_test.gd
@@ -36,7 +44,9 @@ tests/godot_plugin_harness_fixture/
    ├─ editor_lifecycle_state_builder_contract_test.gd
    ├─ system_runtime_impl_contract_test.gd
    ├─ system_index_impl_contract_test.gd
-   └─ tool_loader_contract_test.gd
+   ├─ tool_loader_contract_test.gd
+   ├─ tools_tab_search_service_contract_test.gd
+   └─ tools_tab_preview_builder_contract_test.gd
 ```
 
 职责分布如下：
@@ -52,15 +62,20 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-27`，当前有 `14` 个 case：
+截至 `2026-03-27`，当前有 `22` 个 case：
 
 | 用例 | 目标 |
 |---|---|
 | `runtime_bridge_invalid_action_fallback` | 验证 `mcp_runtime_bridge` 对非法 action 的 fallback reply |
 | `runtime_control_contracts` | 验证 `runtime_control_service` 在无 session 时的状态和参数错误模型 |
+| `runtime_control_request_coordinator_contracts` | 验证 `mcp_runtime_control_request_coordinator` 的请求往返、pending request 清理与 session-lost 失效路径 |
 | `runtime_control_reply_resolver_contracts` | 验证 `mcp_runtime_control_reply_resolver` 对 fallback reply 的归一化与错误映射 |
 | `runtime_fallback_store_contracts` | 验证 `mcp_runtime_fallback_store` 的持久化、裁剪与读取语义 |
 | `runtime_reply_service_contracts` | 验证 `mcp_runtime_reply_service` 的 success/error payload、`runtime_context`、`runtime_state` 与 hint |
+| `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
+| `client_config_inspection_service_contracts` | 验证 `client_config_inspection_service.gd` 的 `inspect/preflight` 状态归类 |
+| `client_config_file_transaction_contracts` | 验证 `client_config_file_transaction.gd` 的 merge、remove、backup 与 opencode 阻断写入 |
+| `client_config_launcher_adapter_contracts` | 验证 `client_config_launcher_adapter.gd` 的 CLI invocation 与 Windows command line 包装 |
 | `http_server_contracts` | 验证 `mcp_http_server` 的 lifecycle、`tools/list`、`tools/call` 结构契约 |
 | `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、CORS 与 404 语义 |
 | `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影与 JSON 清洗 |
@@ -70,14 +85,17 @@ tests/godot_plugin_harness_fixture/
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
+| `tools_tab_interaction_support_contracts` | 验证 `tools_tab_context_menu_support.gd` 与 `tools_tab_selection_support.gd` 的 metadata、菜单项与选择状态语义 |
+| `tools_tab_search_service_contracts` | 验证 `tools_tab_search_service.gd` 的直接命中与系统原子工具递归搜索 |
+| `tools_tab_preview_builder_contracts` | 验证 `tools_tab_preview_builder.gd` 的工具预览文本、参数摘要与原子工具提示 |
 
 当前实测状态：
 
-- suite：`14/14` 通过
+- suite：`22/22` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
-- `tool_count=118`
+- `tool_count=115`
 - `exposed_tool_count=18`
 
 ---
@@ -131,7 +149,18 @@ tests/godot_plugin_harness_fixture/
 - `mcp_tools_api_service.gd`
 - `mcp_runtime_fallback_store.gd`
 - `mcp_runtime_reply_service.gd`
+- `mcp_runtime_control_request_coordinator.gd`
 - `mcp_runtime_control_reply_resolver.gd`
+- `client_config_serializer.gd`
+- `client_config_inspection_service.gd`
+- `client_config_file_transaction.gd`
+- `client_config_file_support.gd`
+- `client_config_launcher_adapter.gd`
+- `tools_tab_context_menu_support.gd`
+- `tools_tab_model_support.gd`
+- `tools_tab_selection_support.gd`
+- `tools_tab_search_service.gd`
+- `tools_tab_preview_builder.gd`
 - `mcp_http_server.gd` 的公共测试入口
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
 
@@ -146,7 +175,7 @@ tests/godot_plugin_harness_fixture/
 当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。  
 这显著降低了“内部方法改名或拆分导致测试先碎”的风险。
 
-不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮虽然已经把 runtime fallback / reply 行为抽到独立 helper，但后续仍建议继续把 command adapter 和 step 执行器进一步外提。
+不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮虽然已经把 runtime fallback / reply 行为抽到独立 helper，并把 `client_config_service.gd` 收成门面，但后续仍建议继续把 command adapter 和 step 执行器进一步外提。
 
 ### 2. 当前仍偏“结构契约 + 局部 fake”混合模式
 
@@ -205,17 +234,17 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 当前已经完成 command capture、fallback store、reply writer 的第一轮公共化。  
 下一步目标是让 capture / input / step 三类执行逻辑也可以更独立地测试，而不必总通过 bridge 节点本身。
 
-### 3. 继续把 `runtime_control_service.gd` seam 从 service 本体往外收口
+### 3. `runtime_control_service.gd` 已完成第二轮 seam 外提
 
 建议目标：
 
 - `SessionSelector`
 - `EditorErrorMapper`
 - `RuntimeReplyResolver`
-- `RequestCoordinator / ReplyWaiter`
+- `RequestCoordinator`
 
-当前已经完成 session selector、error mapper、reply resolver 的第一轮外提。  
-下一步目标是继续把 pending request 生命周期与 request dispatch 边界从 service 本体中拆开。
+当前已经完成 session selector、error mapper、reply resolver 与 request coordinator 的外提。  
+下一步目标不再是继续拆 reply waiter，而是补更具体的负例覆盖，例如 `runtime_session_lost`、bridge unavailable 与 request cleanup 边界。
 
 ### 4. 补更多负例
 

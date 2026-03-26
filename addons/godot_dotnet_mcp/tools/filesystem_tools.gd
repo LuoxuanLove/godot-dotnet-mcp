@@ -50,22 +50,6 @@ EXAMPLES:
 			}
 		},
 		{
-			"name": "file",
-			"description": "COMPATIBILITY ALIAS: Legacy filesystem_file entry kept for existing MCP wrappers.",
-			"compatibility_alias": true,
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"action": {"type": "string"},
-					"path": {"type": "string"},
-					"content": {"type": "string"},
-					"source": {"type": "string"},
-					"dest": {"type": "string"}
-				},
-				"required": ["action"]
-			}
-		},
-		{
 			"name": "file_read",
 			"description": """FILE READ: Read file content and inspect file presence or metadata.
 
@@ -75,7 +59,7 @@ ACTIONS:
 - get_info: Get file information
 
 NOTE: For script files, prefer using script_read, script_inspect, or script_edit_gd tools.
-For resources, prefer using resource_manage tools.
+For resources, prefer using resource_query, resource_file_ops, or resource_create tools.
 
 EXAMPLES:
 - Read file: {"action": "read", "path": "res://data/config.json"}
@@ -261,8 +245,6 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"directory":
 			return _execute_directory(args)
-		"file":
-			return _execute_file_compat(args)
 		"file_read":
 			return _execute_file_read(args)
 		"file_write":
@@ -453,15 +435,6 @@ func _execute_file_manage(args: Dictionary) -> Dictionary:
 			return _move_file(args.get("source", ""), args.get("dest", ""))
 		_:
 			return _error("Unknown action: %s" % str(args.get("action", "")))
-
-
-func _execute_file_compat(args: Dictionary) -> Dictionary:
-	var action = str(args.get("action", ""))
-	if action in ["read", "exists", "get_info"]:
-		return _execute_file_read(args)
-	if action in ["write", "append"]:
-		return _execute_file_write(args)
-	return _execute_file_manage(args)
 
 
 func _read_file(path: String) -> Dictionary:

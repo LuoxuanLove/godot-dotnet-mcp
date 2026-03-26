@@ -31,8 +31,6 @@ func execute_runtime_tool(tool_name: String, args: Dictionary) -> Dictionary:
 			return _execute_runtime_toggle_action(str(args.get("action", "")), args)
 		"usage_guide":
 			return _build_runtime_usage_guide()
-		"runtime":
-			return _execute_runtime_compat_action(str(args.get("action", "")), args)
 		_:
 			return _error("Unknown plugin runtime tool: %s" % tool_name)
 
@@ -65,8 +63,6 @@ func execute_developer_tool(tool_name: String, args: Dictionary) -> Dictionary:
 			return _call_feature_method(_tool_profile_feature, "import_config_from_tools", [str(args.get("path", ""))], "Plugin developer bridge is unavailable")
 		"usage_guide":
 			return _build_plugin_usage_guide()
-		"developer":
-			return _execute_developer_compat_action(str(args.get("action", "")), args)
 		_:
 			return _error("Unknown plugin developer tool: %s" % tool_name)
 
@@ -93,8 +89,6 @@ func execute_evolution_tool(tool_name: String, args: Dictionary) -> Dictionary:
 			return _call_feature_method(_user_tool_feature, "get_user_tool_compatibility_from_tools", [], "Plugin evolution compatibility bridge is unavailable")
 		"usage_guide":
 			return _build_evolution_usage_guide()
-		"evolution":
-			return _execute_evolution_compat_action(str(args.get("action", "")), args)
 		_:
 			return _error("Unknown plugin evolution tool: %s" % tool_name)
 
@@ -173,52 +167,6 @@ func _execute_runtime_toggle_action(action: String, args: Dictionary) -> Diction
 			return _error("Unknown action: %s" % action)
 
 
-func _execute_runtime_compat_action(action: String, args: Dictionary) -> Dictionary:
-	match action:
-		"list_loaded_domains", "get_reload_status":
-			return _execute_runtime_state_action(action, args)
-		"reload_domain", "reload_all_domains", "soft_reload_plugin", "full_reload_plugin":
-			return _execute_runtime_reload_action(action, args)
-		"restart_server":
-			return _call_feature_method(_reload_feature, "runtime_restart_server", [], "Plugin runtime bridge is unavailable")
-		"set_tool_enabled", "set_category_enabled", "set_domain_enabled":
-			return _execute_runtime_toggle_action(action, args)
-		_:
-			return _error("Unknown action: %s" % action)
-
-
-func _execute_developer_compat_action(action: String, args: Dictionary) -> Dictionary:
-	match action:
-		"get_settings":
-			return execute_developer_tool("settings", args)
-		"set_log_level":
-			return execute_developer_tool("log_level", {"level": str(args.get("level", "info"))})
-		"set_show_user_tools":
-			return execute_developer_tool("user_visibility", {"enabled": bool(args.get("enabled", false))})
-		"list_profiles":
-			return execute_developer_tool("list_profiles", args)
-		_:
-			return _error("Unknown action: %s" % action)
-
-
-func _execute_evolution_compat_action(action: String, args: Dictionary) -> Dictionary:
-	match action:
-		"list_user_tools":
-			return execute_evolution_tool("list_user_tools", args)
-		"create_user_tool":
-			return execute_evolution_tool("scaffold_user_tool", args)
-		"delete_user_tool":
-			return execute_evolution_tool("delete_user_tool", {
-				"script_path": str(args.get("script_path", "")),
-				"authorized": bool(args.get("authorized", false)),
-				"agent_hint": str(args.get("agent_hint", ""))
-			})
-		"get_audit_log":
-			return execute_evolution_tool("user_tool_audit", {"limit": int(args.get("limit", 20))})
-		_:
-			return _error("Unknown action: %s" % action)
-
-
 func _build_runtime_usage_guide() -> Dictionary:
 	return {
 		"success": true,
@@ -235,7 +183,7 @@ func _build_runtime_usage_guide() -> Dictionary:
 				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
 				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
 				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
-				{"step": 6, "name": "Verify", "tools": ["debug_log", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
+				{"step": 6, "name": "Verify", "tools": ["debug_log_write", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
 			],
 			"warnings": [
 				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
@@ -290,7 +238,7 @@ func _build_plugin_usage_guide() -> Dictionary:
 				{"step": 2, "name": "Tune developer settings", "tools": ["plugin_developer_settings", "plugin_developer_log_level", "plugin_developer_list_profiles"], "purpose": "Adjust Dock-facing settings or load the correct profile for the session."},
 				{"step": 3, "name": "Change tool availability", "tools": ["plugin_runtime_toggle", "plugin_developer_apply_profile"], "purpose": "Disable or enable only the domains needed for the current debugging task."},
 				{"step": 4, "name": "Evolve User tools when needed", "tools": ["plugin_evolution_list_user_tools", "plugin_evolution_scaffold_user_tool", "plugin_evolution_user_tool_audit"], "purpose": "Create or maintain User-category tools only after the runtime is understood."},
-				{"step": 5, "name": "Verify and diagnose", "tools": ["plugin_runtime_state", "debug_runtime_bridge", "debug_log"], "purpose": "Confirm the runtime is healthy and collect diagnostics after each change."}
+				{"step": 5, "name": "Verify and diagnose", "tools": ["plugin_runtime_state", "debug_runtime_bridge", "debug_log_write"], "purpose": "Confirm the runtime is healthy and collect diagnostics after each change."}
 			],
 			"warnings": [
 				"Full plugin reload is more disruptive than domain reload and should be kept for lifecycle-level issues.",
