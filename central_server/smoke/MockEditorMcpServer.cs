@@ -19,6 +19,8 @@ internal sealed class MockEditorMcpServer : IAsyncDisposable
     private string _projectId = string.Empty;
     private string _currentSessionId = string.Empty;
     private string[] _currentCapabilities = [];
+    private bool _restartReattaches = true;
+    private bool _closeDetaches = true;
     private int _restartCounter;
 
     public MockEditorMcpServer(string host, int port, string attachHost, int attachPort, string projectRoot)
@@ -50,6 +52,15 @@ internal sealed class MockEditorMcpServer : IAsyncDisposable
             _projectId = projectId;
             _currentSessionId = sessionId;
             _currentCapabilities = capabilities.ToArray();
+        }
+    }
+
+    public void ConfigureLifecycleBehavior(bool restartReattaches = true, bool closeDetaches = true)
+    {
+        lock (_gate)
+        {
+            _restartReattaches = restartReattaches;
+            _closeDetaches = closeDetaches;
         }
     }
 
@@ -284,6 +295,11 @@ internal sealed class MockEditorMcpServer : IAsyncDisposable
     {
         try
         {
+            if (!ShouldCloseDetach())
+            {
+                return;
+            }
+
             var snapshot = GetSessionSnapshot();
             if (string.IsNullOrWhiteSpace(snapshot.ProjectId) || string.IsNullOrWhiteSpace(snapshot.SessionId))
             {
@@ -343,6 +359,20 @@ internal sealed class MockEditorMcpServer : IAsyncDisposable
                 },
                 cancellationToken);
 
+            if (!ShouldRestartReattach())
+            {
+                lock (_gate)
+                {
+                    if (string.Equals(_currentSessionId, snapshot.SessionId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _currentSessionId = string.Empty;
+                        _currentCapabilities = [];
+                    }
+                }
+
+                return;
+            }
+
             lock (_gate)
             {
                 if (string.Equals(_currentSessionId, snapshot.SessionId, StringComparison.OrdinalIgnoreCase))
@@ -379,6 +409,22 @@ internal sealed class MockEditorMcpServer : IAsyncDisposable
         lock (_gate)
         {
             return _currentSessionId;
+        }
+    }
+
+    private bool ShouldRestartReattach()
+    {
+        lock (_gate)
+        {
+            return _restartReattaches;
+        }
+    }
+
+    private bool ShouldCloseDetach()
+    {
+        lock (_gate)
+        {
+            return _closeDetaches;
         }
     }
 

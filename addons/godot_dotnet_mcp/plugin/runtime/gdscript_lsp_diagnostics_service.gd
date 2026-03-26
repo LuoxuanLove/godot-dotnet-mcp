@@ -3,6 +3,7 @@ extends RefCounted
 class_name GDScriptLspDiagnosticsService
 
 const LspClientPath := "res://addons/godot_dotnet_mcp/tools/system/lsp_client.gd"
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 const CACHE_LIMIT := 32
 const DEFAULT_TIMEOUT_MS := 15000
@@ -37,12 +38,12 @@ var _request_count := 0
 var _last_completed_status: Dictionary = {}
 var _last_completed_key := ""
 var _last_started_script_path := ""
-static var _singleton: GDScriptLspDiagnosticsService
+static var _singleton = null
 
 
-static func get_singleton() -> GDScriptLspDiagnosticsService:
+static func get_singleton():
 	if _singleton == null or not is_instance_valid(_singleton):
-		_singleton = GDScriptLspDiagnosticsService.new()
+		_singleton = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd").new()
 	return _singleton
 
 

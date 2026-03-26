@@ -9,14 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="GodotDotnetMcp.CentralServer">
-      <HintPath>..\..\central_server\bin\Release\net8.0\GodotDotnetMcp.CentralServer.dll</HintPath>
-    </Reference>
-    <Reference Include="GodotDotnetMcp.HostShared">
-      <HintPath>..\..\host_shared\bin\Release\net8.0\GodotDotnetMcp.HostShared.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Management">
-      <HintPath>C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Management.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\..\central_server\CentralServer.csproj" />
+    <ProjectReference Include="..\..\host_shared\HostShared.csproj" />
   </ItemGroup>
 </Project>

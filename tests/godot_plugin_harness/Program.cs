@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 internal static class Program
@@ -7,8 +8,11 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
+        Console.OutputEncoding = Encoding.UTF8;
+
         var repoRoot = ResolveRepoRoot();
         var allowSkipMissingGodot = args.Any(arg => string.Equals(arg, "--allow-skip-missing-godot", StringComparison.OrdinalIgnoreCase));
+        var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
@@ -28,13 +32,17 @@ internal static class Program
 
         var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stageRoot);
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        var preserveStageRoot = false;
 
         try
         {
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
 
-            var process = new Process
+            process = new Process
             {
                 StartInfo = new ProcessStartInfo(explicitGodotPath)
                 {
@@ -52,14 +60,15 @@ internal static class Program
             process.StartInfo.ArgumentList.Add("res://tests/headless_suite_runner.gd");
 
             process.Start();
-            var stdoutTask = process.StandardOutput.ReadToEndAsync();
-            var stderrTask = process.StandardError.ReadToEndAsync();
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
 
             using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
             await process.WaitForExitAsync(timeoutCts.Token);
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
+            preserveStageRoot = keepStageRoot && process.ExitCode != 0;
             var summary = new
             {
                 success = process.ExitCode == 0,
@@ -67,6 +76,7 @@ internal static class Program
                 exitCode = process.ExitCode,
                 godotPath = explicitGodotPath,
                 stageRoot,
+                stageKept = preserveStageRoot,
                 suite = TryParseLastJsonLine(stdout),
                 stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
@@ -76,6 +86,10 @@ internal static class Program
         }
         catch (OperationCanceledException)
         {
+            preserveStageRoot = keepStageRoot;
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
             var summary = new
             {
                 success = false,
@@ -83,6 +97,9 @@ internal static class Program
                 reason = "plugin_harness_timeout",
                 timeoutMs = HarnessTimeoutMs,
                 stageRoot,
+                stageKept = preserveStageRoot,
+                suite = TryParseLastJsonLine(stdout),
+                stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
             return 1;
@@ -91,7 +108,7 @@ internal static class Program
         {
             try
             {
-                if (Directory.Exists(stageRoot))
+                if (!preserveStageRoot && Directory.Exists(stageRoot))
                 {
                     Directory.Delete(stageRoot, recursive: true);
                 }
@@ -144,6 +161,43 @@ internal static class Program
         }
     }
 
+    private static async Task<string> TryReadOutputAsync(Task<string>? task)
+    {
+        if (task is null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return await task;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void TryKillProcessTree(Process? process)
+    {
+        if (process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5_000);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private static void CopyDirectory(string sourceRoot, string destinationRoot)
     {
         Directory.CreateDirectory(destinationRoot);
@@ -165,7 +219,27 @@ internal static class Program
 
     private static string ResolveRepoRoot()
     {
-        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+        var candidates = new[]
+        {
+            Directory.GetCurrentDirectory(),
+            AppContext.BaseDirectory,
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var resolved = TryResolveRepoRoot(candidate);
+            if (!string.IsNullOrWhiteSpace(resolved))
+            {
+                return resolved;
+            }
+        }
+
+        throw new InvalidOperationException("Could not resolve repository root for the Godot plugin harness.");
+    }
+
+    private static string? TryResolveRepoRoot(string startPath)
+    {
+        var current = new DirectoryInfo(startPath);
         while (current is not null)
         {
             if (Directory.Exists(Path.Combine(current.FullName, "addons"))
@@ -177,6 +251,6 @@ internal static class Program
             current = current.Parent;
         }
 
-        throw new InvalidOperationException("Could not resolve repository root for the Godot plugin harness.");
+        return null;
     }
 }

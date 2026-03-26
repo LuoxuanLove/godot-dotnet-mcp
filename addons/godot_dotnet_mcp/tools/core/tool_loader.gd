@@ -8,6 +8,7 @@ const MCPToolExposureService = preload("res://addons/godot_dotnet_mcp/tools/core
 const MCPToolMetricsService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_metrics_service.gd")
 const MCPToolRuntimeService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_service.gd")
 const MCPToolReloadService = preload("res://addons/godot_dotnet_mcp/tools/core/tool_reload_service.gd")
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 
 var _diagnostic_service := MCPToolDiagnosticService.new()

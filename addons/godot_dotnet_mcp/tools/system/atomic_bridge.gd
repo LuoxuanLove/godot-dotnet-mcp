@@ -24,6 +24,7 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
 	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd"
 }
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 const PROJECT_FILE_PATTERNS := {

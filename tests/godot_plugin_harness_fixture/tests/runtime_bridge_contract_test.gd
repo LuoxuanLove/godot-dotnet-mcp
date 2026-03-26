@@ -12,7 +12,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	tree.root.add_child(bridge)
 	await tree.process_frame
 
-	var accepted := bridge._capture_runtime_command("call", [{
+	var accepted := bridge.handle_runtime_command_capture("call", [{
 		"request_id": REQUEST_ID,
 		"action": "unknown",
 		"session_id": 17,
@@ -20,8 +20,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	}])
 	await tree.process_frame
 	await tree.process_frame
-	bridge._flush_to_disk()
-	var events = bridge._read_fallback_events()
+	bridge.flush_fallback_events()
+	var events = bridge.read_fallback_events()
 
 	tree.root.remove_child(bridge)
 	bridge.queue_free()

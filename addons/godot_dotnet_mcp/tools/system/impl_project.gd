@@ -4,6 +4,8 @@ extends RefCounted
 ## System implementation: project_state, project_advise, project_configure,
 ## project_run, project_stop, runtime_diagnose
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+
 var bridge
 
 const HANDLED_TOOLS := [

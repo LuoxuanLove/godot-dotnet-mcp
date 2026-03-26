@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.CentralServer;
-using static GodotDotnetMcp.CentralServer.SmokeAssertionSupport;
-using static GodotDotnetMcp.CentralServer.SmokePayloadSupport;
+using static ContractAssertions;
+using static ContractPayloadSupport;
 
 internal static class Program
 {
@@ -16,6 +16,10 @@ internal static class Program
             ("system_project_state_returns_editor_required_when_auto_launch_disabled", VerifyEditorRequiredContractAsync),
             ("workspace_project_open_editor_returns_missing_executable_guidance", VerifyMissingExecutableContractAsync),
             ("workspace_project_close_editor_reports_editor_lifecycle_unsupported", VerifyLifecycleUnsupportedContractAsync),
+            ("workspace_project_close_editor_force_reports_editor_force_unavailable", VerifyForceUnavailableContractAsync),
+            ("workspace_project_restart_editor_reattaches_when_lifecycle_available", VerifyLifecycleRestartContractAsync),
+            ("workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing", VerifyLifecycleRestartAttachTimeoutContractAsync),
+            ("workspace_project_close_editor_succeeds_when_lifecycle_available", VerifyLifecycleCloseContractAsync),
         };
 
         var results = new List<object>();
@@ -75,7 +79,7 @@ internal static class Program
 
     private static async Task VerifyEditorRequiredContractAsync()
     {
-        using var harness = ContractHarness.Create("editor_required");
+        await using var harness = ContractHarness.Create("editor_required");
         await harness.RegisterProjectAsync();
 
         var response = await harness.Dispatcher.ExecuteAsync(
@@ -94,7 +98,7 @@ internal static class Program
 
     private static async Task VerifyMissingExecutableContractAsync()
     {
-        using var harness = ContractHarness.Create("missing_executable");
+        await using var harness = ContractHarness.Create("missing_executable");
         var projectId = await harness.RegisterProjectAsync();
 
         var response = await harness.Dispatcher.ExecuteAsync(
@@ -118,7 +122,7 @@ internal static class Program
 
     private static async Task VerifyLifecycleUnsupportedContractAsync()
     {
-        using var harness = ContractHarness.Create("lifecycle_unsupported");
+        await using var harness = ContractHarness.Create("lifecycle_unsupported");
         var projectId = await harness.RegisterProjectAsync();
         harness.EditorSessions.Attach(BuildMockAttachRequest(projectId, harness.ProjectRoot, "contract-session", ["system_project_state"], 4100));
 
@@ -136,179 +140,105 @@ internal static class Program
         AssertNestedBoolean(payload, false, "editorLifecycle", "supportsEditorLifecycle");
     }
 
-    private static void AssertContains(IEnumerable<string> values, string expected)
+    private static async Task VerifyForceUnavailableContractAsync()
     {
-        if (!values.Any(value => string.Equals(value, expected, StringComparison.Ordinal)))
-        {
-            throw new InvalidOperationException($"Expected value '{expected}' was not found.");
-        }
+        await using var harness = ContractHarness.Create("force_unavailable");
+        var projectId = await harness.RegisterProjectAsync();
+        harness.EditorSessions.Attach(BuildMockAttachRequest(projectId, harness.ProjectRoot, "contract-force", ["system_project_state"], 4101));
+
+        var response = await harness.Dispatcher.ExecuteAsync(
+            "workspace_project_close_editor",
+            SerializeToElement(new
+            {
+                projectId,
+                force = true,
+            }),
+            CancellationToken.None);
+
+        var payload = EnsureExpectedError(response, "workspace_project_close_editor", "editor_force_unavailable");
+        AssertNestedString(payload, "editor_force_unavailable", "error");
+        AssertNestedBoolean(payload, false, "editorLifecycle", "canForceClose");
     }
 
-    private static void AssertNestedString(JsonElement root, string expected, params string[] path)
+    private static async Task VerifyLifecycleRestartContractAsync()
     {
-        var current = GetNestedElement(root, path);
-        if (current.ValueKind != JsonValueKind.String)
-        {
-            throw new InvalidOperationException($"Expected string at path '{string.Join(".", path)}', got {current.ValueKind}.");
-        }
+        await using var harness = ContractHarness.Create("lifecycle_restart_success");
+        var projectId = await harness.RegisterProjectAsync();
+        await using var mockServer = await harness.AttachMockEditorAsync(
+            projectId,
+            "contract-restart",
+            ["system_project_state", EditorSessionService.EditorLifecycleCapability]);
 
-        var actual = current.GetString() ?? string.Empty;
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Expected '{expected}' at path '{string.Join(".", path)}', got '{actual}'.");
-        }
+        var response = await harness.Dispatcher.ExecuteAsync(
+            "workspace_project_restart_editor",
+            SerializeToElement(new
+            {
+                projectId,
+                save = true,
+                shutdownTimeoutMs = 5_000,
+                attachTimeoutMs = 5_000,
+            }),
+            CancellationToken.None);
+        EnsureSuccess(response, "workspace_project_restart_editor");
+
+        var payload = SerializeToElement(response.StructuredContent);
+        AssertNestedString(payload, "contract-restart", "previousEditorSession", "sessionId");
+        AssertNestedBoolean(payload, true, "editorLifecycle", "supportsEditorLifecycle");
+        AssertContains(mockServer.LifecycleActions, "restart");
+
+        var restartedSessionId = GetNestedString(payload, "editorSession", "sessionId");
+        AssertDifferentStrings(restartedSessionId, "contract-restart", "restarted session id");
     }
 
-    private static void AssertNestedBoolean(JsonElement root, bool expected, params string[] path)
+    private static async Task VerifyLifecycleRestartAttachTimeoutContractAsync()
     {
-        var current = GetNestedElement(root, path);
-        var actual = current.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => throw new InvalidOperationException($"Expected boolean at path '{string.Join(".", path)}', got {current.ValueKind}."),
-        };
+        await using var harness = ContractHarness.Create("lifecycle_restart_timeout");
+        var projectId = await harness.RegisterProjectAsync();
+        await using var mockServer = await harness.AttachMockEditorAsync(
+            projectId,
+            "contract-restart-timeout",
+            ["system_project_state", EditorSessionService.EditorLifecycleCapability],
+            server => server.ConfigureLifecycleBehavior(restartReattaches: false));
 
-        if (actual != expected)
-        {
-            throw new InvalidOperationException($"Expected '{expected}' at path '{string.Join(".", path)}', got '{actual}'.");
-        }
+        var response = await harness.Dispatcher.ExecuteAsync(
+            "workspace_project_restart_editor",
+            SerializeToElement(new
+            {
+                projectId,
+                save = true,
+                shutdownTimeoutMs = 1_000,
+                attachTimeoutMs = 500,
+            }),
+            CancellationToken.None);
+
+        var payload = EnsureExpectedError(response, "workspace_project_restart_editor", "editor_restart_attach_timeout");
+        AssertNestedString(payload, "editor_restart_attach_timeout", "error");
+        AssertContains(mockServer.LifecycleActions, "restart");
     }
 
-    private static JsonElement GetNestedElement(JsonElement root, params string[] path)
+    private static async Task VerifyLifecycleCloseContractAsync()
     {
-        var current = root;
-        foreach (var segment in path)
-        {
-            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out current))
+        await using var harness = ContractHarness.Create("lifecycle_close_success");
+        var projectId = await harness.RegisterProjectAsync();
+        await using var mockServer = await harness.AttachMockEditorAsync(
+            projectId,
+            "contract-close",
+            ["system_project_state", EditorSessionService.EditorLifecycleCapability]);
+
+        var response = await harness.Dispatcher.ExecuteAsync(
+            "workspace_project_close_editor",
+            SerializeToElement(new
             {
-                throw new InvalidOperationException($"Missing property '{segment}' while resolving path '{string.Join(".", path)}'.");
-            }
-        }
+                projectId,
+                save = true,
+                shutdownTimeoutMs = 5_000,
+            }),
+            CancellationToken.None);
+        EnsureSuccess(response, "workspace_project_close_editor");
 
-        return current;
-    }
-
-    private sealed class ContractHarness : IDisposable
-    {
-        private readonly string? _previousCentralHome;
-        private readonly string _repoRoot;
-        private readonly string _tempRoot;
-        private readonly EditorProxyService _editorProxy;
-
-        private ContractHarness(
-            string repoRoot,
-            string tempRoot,
-            string? previousCentralHome,
-            EditorProxyService editorProxy,
-            ProjectRegistryService registry,
-            EditorSessionService editorSessions,
-            CentralToolDispatcher dispatcher)
-        {
-            _repoRoot = repoRoot;
-            _tempRoot = tempRoot;
-            _previousCentralHome = previousCentralHome;
-            _editorProxy = editorProxy;
-            Registry = registry;
-            EditorSessions = editorSessions;
-            Dispatcher = dispatcher;
-            ProjectRoot = Path.Combine(tempRoot, "project");
-        }
-
-        public string ProjectRoot { get; }
-
-        public ProjectRegistryService Registry { get; }
-
-        public EditorSessionService EditorSessions { get; }
-
-        public CentralToolDispatcher Dispatcher { get; }
-
-        public static ContractHarness Create(string name)
-        {
-            var repoRoot = ResolveRepoRoot();
-            var tempRoot = Path.Combine(repoRoot, ".tmp", "host_contracts", $"{name}_{Guid.NewGuid():N}");
-            Directory.CreateDirectory(tempRoot);
-
-            var previousCentralHome = Environment.GetEnvironmentVariable("GODOT_DOTNET_MCP_CENTRAL_HOME");
-            var centralHome = Path.Combine(tempRoot, "CentralHome");
-            Directory.CreateDirectory(centralHome);
-            Environment.SetEnvironmentVariable("GODOT_DOTNET_MCP_CENTRAL_HOME", centralHome);
-
-            var configuration = new CentralConfigurationService();
-            var editorProcesses = new EditorProcessService();
-            var godotInstallations = new GodotInstallationService();
-            var godotProjectManager = new GodotProjectManagerProvider(configuration);
-            var registry = new ProjectRegistryService();
-            var editorSessions = new EditorSessionService(registry);
-            var editorProxy = new EditorProxyService();
-            var sessionState = new SessionState();
-            var attachEndpoint = new EditorAttachEndpoint("127.0.0.1", GetFreeTcpPort());
-            var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, sessionState, attachEndpoint);
-            var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, sessionState);
-            var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, sessionState);
-            var harness = new ContractHarness(repoRoot, tempRoot, previousCentralHome, editorProxy, registry, editorSessions, dispatcher);
-            harness.CreateProjectFixture();
-            return harness;
-        }
-
-        public async Task<string> RegisterProjectAsync()
-        {
-            var response = await Dispatcher.ExecuteAsync(
-                "workspace_project_register",
-                SerializeToElement(new { path = ProjectRoot }),
-                CancellationToken.None);
-            EnsureSuccess(response, "workspace_project_register");
-
-            var payload = SerializeToElement(response.StructuredContent);
-            return payload.GetProperty("project").GetProperty("projectId").GetString()
-                   ?? throw new InvalidOperationException("Registered project payload did not include projectId.");
-        }
-
-        public void Dispose()
-        {
-            _editorProxy.Dispose();
-            Environment.SetEnvironmentVariable("GODOT_DOTNET_MCP_CENTRAL_HOME", _previousCentralHome);
-            try
-            {
-                if (Directory.Exists(_tempRoot))
-                {
-                    Directory.Delete(_tempRoot, recursive: true);
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        private void CreateProjectFixture()
-        {
-            Directory.CreateDirectory(ProjectRoot);
-            File.WriteAllText(
-                Path.Combine(ProjectRoot, "project.godot"),
-                """
-                ; Engine configuration file.
-                config_version=5
-
-                [application]
-                config/name="Host Contracts"
-                """);
-        }
-
-        private static string ResolveRepoRoot()
-        {
-            var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-            while (current is not null)
-            {
-                if (Directory.Exists(Path.Combine(current.FullName, "central_server"))
-                    && Directory.Exists(Path.Combine(current.FullName, "addons")))
-                {
-                    return current.FullName;
-                }
-
-                current = current.Parent;
-            }
-
-            throw new InvalidOperationException("Could not resolve repository root for host contract tests.");
-        }
+        var payload = SerializeToElement(response.StructuredContent);
+        AssertNestedBoolean(payload, false, "editorSession", "attached");
+        AssertNestedBoolean(payload, false, "editorLifecycle", "resident");
+        AssertContains(mockServer.LifecycleActions, "close");
     }
 }

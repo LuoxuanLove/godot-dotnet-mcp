@@ -9,6 +9,7 @@ var _index_cache: Dictionary = {}
 
 const HANDLED_TOOLS := ["project_symbol_search", "scene_dependency_graph"]
 const INDEX_SIGNATURE_VERSION := 1
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 
 func handles(tool_name: String) -> bool:

@@ -8,8 +8,11 @@ class_name MCPHttpServer
 const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPToolLoaderSupervisorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd")
 const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
+const MCPEditorLifecycleEndpointScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_endpoint.gd")
+const MCPToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
 const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPDefaultToolPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -35,8 +38,11 @@ var _last_request_at_unix: int = 0
 
 var _tool_loader_supervisor = MCPToolLoaderSupervisorScript.new()
 var _tool_rpc_router = MCPToolRpcRouterScript.new()
+var _editor_lifecycle_endpoint = MCPEditorLifecycleEndpointScript.new()
+var _tools_api_service = MCPToolsApiServiceScript.new()
 var _runtime_control_service = MCPRuntimeControlServiceScript.new()
 var _gdscript_lsp_diagnostics_service
+var _default_permission_provider = MCPDefaultToolPermissionProviderScript.new()
 
 # MCP Protocol info
 const MCP_VERSION = "2025-06-18"
@@ -259,6 +265,25 @@ func get_runtime_control_service():
 	return _runtime_control_service
 
 
+func build_tools_api_snapshot() -> Dictionary:
+	_ensure_tools_api_service()
+	return _tools_api_service.build_tools_list_response()
+
+
+func handle_editor_lifecycle_post(body: String) -> Dictionary:
+	_ensure_editor_lifecycle_endpoint()
+	return _editor_lifecycle_endpoint.handle_post_request(body)
+
+
+func handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dictionary:
+	_ensure_editor_lifecycle_endpoint()
+	return _editor_lifecycle_endpoint.handle_request(action, args)
+
+
+func handle_jsonrpc_request_async(body: String) -> Dictionary:
+	return await _handle_mcp_request_async(body)
+
+
 func get_tool_loader_status() -> Dictionary:
 	_ensure_tool_loader_supervisor()
 	return _tool_loader_supervisor.get_status()
@@ -345,6 +370,8 @@ func _ensure_initialized() -> void:
 	if _tcp_server == null:
 		_tcp_server = TCPServer.new()
 	_ensure_tool_loader_supervisor()
+	_ensure_tools_api_service()
+	_ensure_editor_lifecycle_endpoint()
 	_ensure_runtime_control_service()
 	if not bool(get_tool_loader_status().get("initialized", false)):
 		_register_tools()
@@ -386,6 +413,27 @@ func _ensure_tool_rpc_router() -> void:
 		"is_tool_exposed": Callable(self, "is_tool_exposed"),
 		"log": Callable(self, "_log"),
 		"sanitize_for_json": Callable(self, "_sanitize_for_json")
+	})
+
+
+func _ensure_editor_lifecycle_endpoint() -> void:
+	if _editor_lifecycle_endpoint == null:
+		_editor_lifecycle_endpoint = MCPEditorLifecycleEndpointScript.new()
+	_editor_lifecycle_endpoint.configure({
+		"build_state": Callable(self, "_build_editor_lifecycle_state"),
+		"execute_close": Callable(self, "_execute_editor_lifecycle_close"),
+		"execute_restart": Callable(self, "_execute_editor_lifecycle_restart"),
+		"success": Callable(self, "_editor_lifecycle_success"),
+		"error": Callable(self, "_editor_lifecycle_error")
+	})
+
+
+func _ensure_tools_api_service() -> void:
+	if _tools_api_service == null:
+		_tools_api_service = MCPToolsApiServiceScript.new()
+	_tools_api_service.configure({
+		"get_tool_loader": Callable(self, "get_tool_loader"),
+		"get_tool_loader_status": Callable(self, "get_tool_loader_status")
 	})
 
 
@@ -742,7 +790,14 @@ func get_plugin_permission_provider():
 		var provider = plugin.get_tool_access_provider()
 		if provider != null:
 			return provider
-	return plugin
+	if plugin != null and plugin.has_method("is_tool_category_visible_for_permission"):
+		return plugin
+	if _default_permission_provider != null and _default_permission_provider.has_method("configure"):
+		_default_permission_provider.configure({
+			"permission_level": "evolution",
+			"show_user_tools": true
+		})
+	return _default_permission_provider
 
 
 func _handle_tools_list(_params: Dictionary, id) -> Dictionary:
@@ -809,24 +864,7 @@ func _create_health_response() -> Dictionary:
 
 
 func _create_tools_list_response() -> Dictionary:
-	var loader = get_tool_loader()
-	if loader == null:
-		return {
-			"tools": [],
-			"domain_states": [],
-			"tool_count": 0,
-			"exposed_tool_count": 0,
-			"tool_loader_status": get_tool_loader_status(),
-			"performance": {}
-		}
-	return {
-		"tools": loader.get_exposed_tool_definitions(),
-		"domain_states": loader.get_domain_states(),
-		"tool_count": loader.get_tool_definitions().size(),
-		"exposed_tool_count": loader.get_exposed_tool_definitions().size(),
-		"tool_loader_status": get_tool_loader_status(),
-		"performance": loader.get_performance_summary()
-	}
+	return build_tools_api_snapshot()
 
 
 func _create_cors_response() -> Dictionary:
@@ -837,40 +875,11 @@ func _create_cors_response() -> Dictionary:
 
 
 func _handle_editor_lifecycle_post_request(body: String) -> Dictionary:
-	var parsed = JSON.parse_string(body)
-	if not (parsed is Dictionary):
-		return {
-			"success": false,
-			"error": "invalid_argument",
-			"message": "Editor lifecycle request body must be a JSON object.",
-			"status": 400
-		}
-
-	var args: Dictionary = (parsed as Dictionary).duplicate(true)
-	var action := str(args.get("action", "")).strip_edges()
-	if action.is_empty():
-		return {
-			"success": false,
-			"error": "invalid_argument",
-			"message": "Editor lifecycle action is required.",
-			"status": 400
-		}
-	args.erase("action")
-	return _handle_editor_lifecycle_request(action, args)
+	return handle_editor_lifecycle_post(body)
 
 
 func _handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dictionary:
-	match action:
-		"status":
-			return _editor_lifecycle_success(_build_editor_lifecycle_state(), "Editor lifecycle status fetched")
-		"close":
-			return _execute_editor_lifecycle_close(args)
-		"restart":
-			return _execute_editor_lifecycle_restart(args)
-		_:
-			return _editor_lifecycle_error("invalid_argument", "Unknown editor lifecycle action: %s" % action, {
-				"hint": "Use action=status|close|restart."
-			})
+	return handle_editor_lifecycle_request(action, args)
 
 
 func _execute_editor_lifecycle_close(args: Dictionary) -> Dictionary:

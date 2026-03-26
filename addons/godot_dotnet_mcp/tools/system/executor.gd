@@ -4,6 +4,7 @@ extends RefCounted
 ## System layer dispatcher for built-in system tools.
 
 const _BASE = "res://addons/godot_dotnet_mcp/tools/system/"
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var _bridge
 var _impls: Array = []

@@ -79,6 +79,18 @@ func emit_event(event_name: String, metadata: Dictionary = {}) -> void:
 	_emit_event(event_name, metadata)
 
 
+func handle_runtime_command_capture(message: String, data: Array) -> bool:
+	return _capture_runtime_command(message, data)
+
+
+func flush_fallback_events() -> void:
+	_flush_to_disk()
+
+
+func read_fallback_events() -> Array[Dictionary]:
+	return _read_fallback_events()
+
+
 func set_tool_loader(tool_loader) -> void:
 	_tool_loader = tool_loader
 
@@ -138,7 +150,7 @@ func _append_fallback_event(channel: String, payload: Dictionary) -> void:
 	}
 	_pending_events.append(event)
 	_trim_cached_events()
-	if _flush_timer != null and _flush_timer.is_stopped():
+	if _flush_timer != null and _flush_timer.is_inside_tree() and _flush_timer.is_stopped():
 		_flush_timer.start()
 
 
