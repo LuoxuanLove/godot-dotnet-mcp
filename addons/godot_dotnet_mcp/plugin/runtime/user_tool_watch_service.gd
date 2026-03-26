@@ -11,6 +11,7 @@ const SETTLE_DELAY_MSEC := 300
 var _plugin: Object
 var _reload_coordinator = null
 var _user_tool_service = null
+var _apply_external_user_tool_catalog_refresh := Callable()
 var _watching := false
 var _last_poll_msec := 0
 var _last_scan_unix := 0
@@ -22,10 +23,11 @@ var _last_change_reason := ""
 var _last_error := ""
 
 
-func configure(plugin: Object, reload_coordinator, user_tool_service) -> void:
+func configure(plugin: Object, reload_coordinator, user_tool_service, callbacks: Dictionary = {}) -> void:
 	_plugin = plugin
 	_reload_coordinator = reload_coordinator
 	_user_tool_service = user_tool_service
+	_apply_external_user_tool_catalog_refresh = callbacks.get("apply_external_user_tool_catalog_refresh", Callable())
 
 
 func start() -> void:
@@ -112,19 +114,17 @@ func get_status() -> Dictionary:
 func _apply_pending_changes(changes: Dictionary) -> Dictionary:
 	if _plugin == null or not is_instance_valid(_plugin):
 		return {"success": false, "error": "Plugin reference is unavailable"}
-	var removed_paths: Array[String] = changes.get("removed", [])
-	var added_paths: Array[String] = changes.get("added", [])
-	var changed_paths: Array[String] = changes.get("changed", [])
-	if _plugin.has_method("_apply_external_user_tool_catalog_refresh"):
+	var removed_paths := _to_string_array(changes.get("removed", []))
+	var added_paths := _to_string_array(changes.get("added", []))
+	var changed_paths := _to_string_array(changes.get("changed", []))
+	if _apply_external_user_tool_catalog_refresh.is_valid():
 		if not removed_paths.is_empty():
-			_plugin._apply_external_user_tool_catalog_refresh(removed_paths, "watcher_file_removed")
+			_apply_external_user_tool_catalog_refresh.call(removed_paths, "watcher_file_removed")
 		if not added_paths.is_empty():
-			_plugin._apply_external_user_tool_catalog_refresh(added_paths, "watcher_file_added")
+			_apply_external_user_tool_catalog_refresh.call(added_paths, "watcher_file_added")
 		if not changed_paths.is_empty():
-			_plugin._apply_external_user_tool_catalog_refresh(changed_paths, "watcher_file_changed")
+			_apply_external_user_tool_catalog_refresh.call(changed_paths, "watcher_file_changed")
 		return {"success": true, "reason": _summarize_change_reason(removed_paths, added_paths, changed_paths)}
-	if _plugin.has_method("_refresh_user_tool_registry"):
-		_plugin._refresh_user_tool_registry()
 	if _reload_coordinator == null:
 		return {"success": false, "error": "Reload coordinator is unavailable"}
 	for script_path in removed_paths:
@@ -133,8 +133,6 @@ func _apply_pending_changes(changes: Dictionary) -> Dictionary:
 		_reload_coordinator.request_reload_by_script(script_path, "watcher_file_added")
 	for script_path in changed_paths:
 		_reload_coordinator.request_reload_by_script(script_path, "watcher_file_changed")
-	if _plugin.has_method("_rebuild_user_tool_ui_model"):
-		_plugin._rebuild_user_tool_ui_model()
 	return {"success": true, "reason": _summarize_change_reason(removed_paths, added_paths, changed_paths)}
 
 
@@ -254,3 +252,11 @@ func _as_bool(value) -> bool:
 		var normalized = value.strip_edges().to_lower()
 		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
 	return value != null
+
+
+func _to_string_array(value) -> Array[String]:
+	var result: Array[String] = []
+	if value is Array:
+		for item in value:
+			result.append(str(item))
+	return result

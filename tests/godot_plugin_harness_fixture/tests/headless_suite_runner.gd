@@ -12,6 +12,11 @@ const RuntimeControlReplyResolverContractTest = preload("res://tests/runtime_con
 const RuntimeBridgeContractTest = preload("res://tests/runtime_bridge_contract_test.gd")
 const RuntimeFallbackStoreContractTest = preload("res://tests/runtime_fallback_store_contract_test.gd")
 const RuntimeReplyServiceContractTest = preload("res://tests/runtime_reply_service_contract_test.gd")
+const UserToolWatchServiceContractTest = preload("res://tests/user_tool_watch_service_contract_test.gd")
+const ScriptToolExecutorContractTest = preload("res://tests/script_tool_executor_contract_test.gd")
+const NodeToolExecutorContractTest = preload("res://tests/node_tool_executor_contract_test.gd")
+const AnimationToolExecutorContractTest = preload("res://tests/animation_tool_executor_contract_test.gd")
+const PluginDockCoordinatorContractTest = preload("res://tests/plugin_dock_coordinator_contract_test.gd")
 const ClientConfigSerializerContractTest = preload("res://tests/client_config_serializer_contract_test.gd")
 const ClientConfigInspectionServiceContractTest = preload("res://tests/client_config_inspection_service_contract_test.gd")
 const ClientConfigFileTransactionContractTest = preload("res://tests/client_config_file_transaction_contract_test.gd")
@@ -56,6 +61,26 @@ func _run_suite() -> void:
 		{
 			"name": "runtime_reply_service_contracts",
 			"script": RuntimeReplyServiceContractTest
+		},
+		{
+			"name": "user_tool_watch_service_contracts",
+			"script": UserToolWatchServiceContractTest
+		},
+		{
+			"name": "script_tool_executor_contracts",
+			"script": ScriptToolExecutorContractTest
+		},
+		{
+			"name": "node_tool_executor_contracts",
+			"script": NodeToolExecutorContractTest
+		},
+		{
+			"name": "animation_tool_executor_contracts",
+			"script": AnimationToolExecutorContractTest
+		},
+		{
+			"name": "plugin_dock_coordinator_contracts",
+			"script": PluginDockCoordinatorContractTest
 		},
 		{
 			"name": "client_config_serializer_contracts",
