@@ -1,9 +1,9 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const CSharpSemanticProvider = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_semantic_provider.gd")
+const CSharpEditHelper = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
 
-var _semantic_provider := CSharpSemanticProvider.new()
+var _edit_helper := CSharpEditHelper.new()
 
 
 func create_script(path: String, args: Dictionary) -> Dictionary:
@@ -46,7 +46,7 @@ func write_script(path: String, content: String) -> Dictionary:
 	file.store_string(content)
 	file.close()
 	_scan_filesystem_if_available()
-	return _semantic_provider.validate_written_script(path, content)
+	return _edit_helper.validate_written_script(path, content)
 
 
 func add_field(path: String, args: Dictionary) -> Dictionary:
@@ -72,7 +72,7 @@ func replace_method_body(path: String, name: String, new_body: String) -> Dictio
 		return read_result
 
 	var content := str(read_result.get("data", {}).get("content", ""))
-	var masked := _semantic_provider.mask_non_code(content)
+	var masked := _edit_helper.mask_non_code(content)
 	var search_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+%s\\s*\\(" % name
 	var regex := RegEx.new()
 	if regex.compile(search_pattern) != OK:
@@ -82,19 +82,19 @@ func replace_method_body(path: String, name: String, new_body: String) -> Dictio
 	if method_match == null:
 		return _error("Method not found in C# file: %s" % name)
 
-	var open_brace := _semantic_provider.find_next_non_code_brace(masked, method_match.get_end(0))
+	var open_brace := _edit_helper.find_next_non_code_brace(masked, method_match.get_end(0))
 	if open_brace == -1:
 		return _error("Method body opening brace not found for: %s" % name)
 
-	var close_brace := _semantic_provider.find_matching_brace(masked, open_brace)
+	var close_brace := _edit_helper.find_matching_brace(masked, open_brace)
 	if close_brace == -1:
 		return _error("Method body closing brace not found for: %s" % name)
 
 	var line_start := content.rfind("\n", open_brace)
 	var method_line := content.substr(line_start + 1, open_brace - line_start - 1)
-	var body_indent := _semantic_provider.leading_whitespace(method_line) + "\t"
-	var indented_body := _semantic_provider.indent_multiline_block(new_body.strip_edges(), body_indent)
-	var new_content := content.substr(0, open_brace + 1) + "\n" + indented_body + "\n" + _semantic_provider.leading_whitespace(method_line) + content.substr(close_brace)
+	var body_indent := _edit_helper.leading_whitespace(method_line) + "\t"
+	var indented_body := _edit_helper.indent_multiline_block(new_body.strip_edges(), body_indent)
+	var new_content := content.substr(0, open_brace + 1) + "\n" + indented_body + "\n" + _edit_helper.leading_whitespace(method_line) + content.substr(close_brace)
 	return write_script(path, new_content)
 
 
@@ -107,7 +107,7 @@ func remove_member(path: String, name: String, member_type: String) -> Dictionar
 		return read_result
 
 	var content := str(read_result.get("data", {}).get("content", ""))
-	var masked := _semantic_provider.mask_non_code(content)
+	var masked := _edit_helper.mask_non_code(content)
 
 	if member_type in ["method", "function", "auto", ""]:
 		var method_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+%s\\s*\\(" % name
@@ -115,11 +115,11 @@ func remove_member(path: String, name: String, member_type: String) -> Dictionar
 		if method_regex.compile(method_pattern) == OK:
 			var mm := method_regex.search(masked)
 			if mm != null:
-				var open_brace := _semantic_provider.find_next_non_code_brace(masked, mm.get_end(0))
+				var open_brace := _edit_helper.find_next_non_code_brace(masked, mm.get_end(0))
 				if open_brace != -1:
-					var close_brace := _semantic_provider.find_matching_brace(masked, open_brace)
+					var close_brace := _edit_helper.find_matching_brace(masked, open_brace)
 					if close_brace != -1:
-						var member_start := _semantic_provider.find_member_block_start(content, mm.get_start(0))
+						var member_start := _edit_helper.find_member_block_start(content, mm.get_start(0))
 						var member_end := close_brace + 1
 						while member_end < content.length() and content.substr(member_end, 1) == "\n":
 							member_end += 1
@@ -131,7 +131,7 @@ func remove_member(path: String, name: String, member_type: String) -> Dictionar
 		if field_regex.compile(field_pattern) == OK:
 			var fm := field_regex.search(masked)
 			if fm != null:
-				var member_start := _semantic_provider.find_member_block_start(content, fm.get_start(0))
+				var member_start := _edit_helper.find_member_block_start(content, fm.get_start(0))
 				var line_end := content.find("\n", fm.get_end(0))
 				if line_end == -1:
 					line_end = content.length()
@@ -153,7 +153,7 @@ func rename_member(path: String, old_name: String, new_name: String) -> Dictiona
 		return read_result
 
 	var content := str(read_result.get("data", {}).get("content", ""))
-	var masked := _semantic_provider.mask_non_code(content)
+	var masked := _edit_helper.mask_non_code(content)
 
 	var method_pattern := "(?m)^[^\\S\\n]*(?:(?:public|private|protected|internal|static|virtual|override|async|partial|abstract|sealed|new)\\s+)*[A-Za-z_][A-Za-z0-9_<>\\[\\]?,\\s]*\\s+(%s)\\s*\\(" % old_name
 	var regex := RegEx.new()
@@ -256,13 +256,13 @@ func _append_member(path: String, member_code: String) -> Dictionary:
 	if expected_class_name.is_empty():
 		expected_class_name = path.get_file().trim_suffix(".cs")
 
-	var class_close_index = _semantic_provider.find_primary_class_close(content, expected_class_name)
+	var class_close_index = _edit_helper.find_primary_class_close(content, expected_class_name)
 	if class_close_index == -1:
 		return _error("Failed to locate primary C# class body")
 
-	var member_indent = _semantic_provider.detect_member_indent(content, class_close_index)
-	var indented_member = _semantic_provider.indent_multiline_block(member_code, member_indent)
-	var prefix = _semantic_provider.trim_trailing_whitespace(content.substr(0, class_close_index))
+	var member_indent = _edit_helper.detect_member_indent(content, class_close_index)
+	var indented_member = _edit_helper.indent_multiline_block(member_code, member_indent)
+	var prefix = _edit_helper.trim_trailing_whitespace(content.substr(0, class_close_index))
 	var suffix = content.substr(class_close_index)
 	var new_content = "%s\n\n%s\n%s" % [prefix, indented_member, suffix]
 	return write_script(path, new_content)

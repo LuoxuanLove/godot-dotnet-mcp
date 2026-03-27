@@ -7,27 +7,23 @@ const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/
 var _tool_loader: Object
 var _diagnostics_service
 var _generation := 0
+var _runtime_bridge_override: Object
 
 
-func configure(tool_loader: Object) -> void:
+func configure(tool_loader: Object, options: Dictionary = {}) -> void:
 	_tool_loader = tool_loader
+	_runtime_bridge_override = options.get("runtime_bridge", null)
 
 
 func dispose() -> void:
 	release()
 	_tool_loader = null
+	_runtime_bridge_override = null
 
 
 func get_service():
 	if _diagnostics_service != null and is_instance_valid(_diagnostics_service):
 		return _diagnostics_service
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("get_gdscript_lsp_diagnostics_service"):
-			var runtime_service = runtime_bridge.get_gdscript_lsp_diagnostics_service()
-			if runtime_service != null and is_instance_valid(runtime_service):
-				_diagnostics_service = runtime_service
-				return _diagnostics_service
 	reset()
 	return _diagnostics_service
 
@@ -67,13 +63,12 @@ func release() -> void:
 		if _diagnostics_service.has_method("clear"):
 			_diagnostics_service.clear()
 	_diagnostics_service = null
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null:
-			if runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
-				runtime_bridge.set_gdscript_lsp_diagnostics_service(null)
-			if runtime_bridge.has_method("set_tool_loader"):
-				runtime_bridge.set_tool_loader(null)
+	var runtime_bridge = _get_runtime_bridge()
+	if runtime_bridge != null:
+		if runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
+			runtime_bridge.set_gdscript_lsp_diagnostics_service(null)
+		if runtime_bridge.has_method("set_tool_loader"):
+			runtime_bridge.set_tool_loader(null)
 
 
 func tick(delta: float) -> void:
@@ -83,12 +78,18 @@ func tick(delta: float) -> void:
 
 
 func _bind_runtime_bridge() -> void:
-	if not Engine.has_singleton("MCPRuntimeBridge"):
-		return
-	var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
+	var runtime_bridge = _get_runtime_bridge()
 	if runtime_bridge == null:
 		return
 	if runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
 		runtime_bridge.set_gdscript_lsp_diagnostics_service(_diagnostics_service)
 	if _tool_loader != null and runtime_bridge.has_method("set_tool_loader"):
 		runtime_bridge.set_tool_loader(_tool_loader)
+
+
+func _get_runtime_bridge():
+	if _runtime_bridge_override != null:
+		return _runtime_bridge_override
+	if not Engine.has_singleton("MCPRuntimeBridge"):
+		return null
+	return Engine.get_singleton("MCPRuntimeBridge")

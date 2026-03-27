@@ -21,8 +21,6 @@ const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/pl
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPDefaultToolPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
-const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 signal server_started
@@ -49,7 +47,6 @@ var _json_rpc_router = MCPJsonRpcRouterScript.new()
 var _tools_api_service = MCPToolsApiServiceScript.new()
 var _http_response_service = MCPHttpResponseServiceScript.new()
 var _runtime_control_service = MCPRuntimeControlServiceScript.new()
-var _gdscript_lsp_diagnostics_service
 var _default_permission_provider = MCPDefaultToolPermissionProviderScript.new()
 
 func _ready() -> void:
@@ -222,7 +219,6 @@ func dispose() -> void:
 	_tools_api_service = null
 	_http_response_service = null
 	_runtime_control_service = null
-	_gdscript_lsp_diagnostics_service = null
 	_default_permission_provider = null
 	_connection_state = null
 	_tcp_server = null
@@ -354,8 +350,10 @@ func get_tool_load_errors() -> Array[Dictionary]:
 func get_gdscript_lsp_diagnostics_service():
 	var loader = get_tool_loader()
 	if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
-		return loader.get_gdscript_lsp_diagnostics_service()
-	return GDScriptLspDiagnosticsService.get_singleton()
+		var service = loader.get_gdscript_lsp_diagnostics_service()
+		if service != null:
+			return service
+	return null
 
 
 func get_domain_states() -> Array[Dictionary]:

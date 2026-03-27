@@ -2,8 +2,8 @@ extends RefCounted
 
 const GDScriptEditServiceScript = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_service.gd")
 const CSharpEditServiceScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_service.gd")
-const GDScriptSemanticProviderScript = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_semantic_provider.gd")
-const CSharpSemanticProviderScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_semantic_provider.gd")
+const GDScriptEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_helper.gd")
+const CSharpEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
 
 var _temp_paths: Array[String] = []
 
@@ -11,8 +11,8 @@ var _temp_paths: Array[String] = []
 func run_case(_tree: SceneTree) -> Dictionary:
 	var gd_service = GDScriptEditServiceScript.new()
 	var cs_service = CSharpEditServiceScript.new()
-	var gd_provider = GDScriptSemanticProviderScript.new()
-	var cs_provider = CSharpSemanticProviderScript.new()
+	var gd_helper = GDScriptEditHelperScript.new()
+	var cs_helper = CSharpEditHelperScript.new()
 
 	var temp_dir := "res://tests_tmp/script_edit_service_contracts"
 	_ensure_dir(temp_dir)
@@ -44,9 +44,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"path": gd_path
 	})
 	if not bool(gd_functions.get("success", false)):
-		return _failure("Split GDScript semantic provider failed to list functions.")
+		return _failure("Split GDScript edit helper failed to list functions.")
 	if int(gd_functions.get("data", {}).get("count", 0)) < 2:
-		return _failure("GDScript semantic provider should report both _ready and ping functions.")
+		return _failure("GDScript edit helper should report both _ready and ping functions.")
 
 	var cs_create: Dictionary = cs_service.execute("edit_cs", {
 		"action": "create",
@@ -76,16 +76,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(cs_rename.get("success", false)):
 		return _failure("Split C# action service failed to rename a method.")
 
-	var cs_text_result = gd_provider._read_text_file(cs_path)
+	var cs_text_result = gd_helper._read_text_file(cs_path)
 	if not bool(cs_text_result.get("success", false)):
 		return _failure("Failed to read the rewritten C# file after split actions.")
 	var cs_text := str(cs_text_result.get("data", {}).get("content", ""))
 	if "Pong" not in cs_text:
 		return _failure("Renamed C# method should be written back to disk.")
 
-	var cs_validation: Dictionary = cs_provider.validate_written_script(cs_path, cs_text)
+	var cs_validation: Dictionary = cs_helper.validate_written_script(cs_path, cs_text)
 	if not bool(cs_validation.get("success", false)):
-		return _failure("C# semantic provider should validate the rewritten script.")
+		return _failure("C# edit helper should validate the rewritten script.")
 
 	return {
 		"name": "script_edit_service_contracts",

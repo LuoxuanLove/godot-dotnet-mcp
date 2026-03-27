@@ -38,6 +38,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):
 		return _failure("Tool loader status should be healthy after initialization.")
+	var lsp_service = _loader.get_gdscript_lsp_diagnostics_service()
+	if lsp_service == null:
+		return _failure("Tool loader should expose a GDScript LSP diagnostics service through the adapter path.")
+	var lsp_snapshot: Dictionary = _loader.get_lsp_diagnostics_debug_snapshot()
+	if not bool(lsp_snapshot.get("service_available", false)):
+		return _failure("Tool loader LSP diagnostics snapshot should report a live service.")
 
 	var exposed_tools: Array[Dictionary] = _loader.get_exposed_tool_definitions()
 	if exposed_tools.is_empty():
@@ -98,7 +104,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"initial_tool_count": int(summary.get("tool_count", 0)),
 			"initial_exposed_tool_count": int(summary.get("exposed_tool_count", 0)),
 			"disabled_exposed_tool_count": int(disabled_status.get("exposed_tool_count", 0)),
-			"healthy_status": str(status.get("status", ""))
+			"healthy_status": str(status.get("status", "")),
+			"lsp_service_generation": int(lsp_snapshot.get("service_generation", 0))
 		}
 	}
 

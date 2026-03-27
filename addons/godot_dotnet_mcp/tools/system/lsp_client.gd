@@ -17,6 +17,8 @@ const STATE_WAITING_DIAGNOSTICS := "waiting_diagnostics"
 const STATE_READY := "ready"
 const STATE_FAILED := "failed"
 
+var _connect_timeout_msec := CONNECT_TIMEOUT_MS
+var _connect_deadline_msec := 0
 var _read_buffer := PackedByteArray()
 var _request_id := 0
 var _tcp: StreamPeerTCP
@@ -30,6 +32,8 @@ var _init_request_id := 0
 var _state := STATE_IDLE
 var _request_started_msec := 0
 var _request_finished_msec := 0
+var _endpoint_host := HOST
+var _endpoint_port := PORT
 var _status: Dictionary = {
 	"available": false,
 	"pending": false,
@@ -72,14 +76,16 @@ func start_diagnostics(res_path: String, source_code: String, timeout_ms: int = 
 	_source_hash = str(source_code.hash())
 	_request_id = 1
 	_init_request_id = 1
+	_connect_timeout_msec = mini(maxi(timeout_ms, 1), CONNECT_TIMEOUT_MS)
+	_connect_deadline_msec = Time.get_ticks_msec() + _connect_timeout_msec
 	_deadline_msec = Time.get_ticks_msec() + maxi(timeout_ms, 1)
 	_state = STATE_CONNECTING
 	_request_started_msec = Time.get_ticks_msec()
 	_request_finished_msec = 0
 
 	_tcp = StreamPeerTCP.new()
-	if _tcp.connect_to_host(HOST, PORT) != OK:
-		return _finish_failure("Cannot connect to Godot LSP at %s:%d" % [HOST, PORT])
+	if _tcp.connect_to_host(_endpoint_host, _endpoint_port) != OK:
+		return _finish_failure("Cannot connect to Godot LSP at %s:%d" % [_endpoint_host, _endpoint_port])
 
 	_status = {
 		"available": false,
@@ -124,6 +130,11 @@ func get_status() -> Dictionary:
 	return _status.duplicate(true)
 
 
+func set_endpoint_for_testing(host: String, port: int) -> void:
+	_endpoint_host = host
+	_endpoint_port = port
+
+
 func get_debug_snapshot() -> Dictionary:
 	var tcp_status := StreamPeerTCP.STATUS_NONE
 	if _tcp != null:
@@ -140,6 +151,9 @@ func get_debug_snapshot() -> Dictionary:
 		"request_finished_msec": _request_finished_msec,
 		"deadline_msec": _deadline_msec,
 		"deadline_remaining_msec": maxi(_deadline_msec - Time.get_ticks_msec(), 0) if _deadline_msec > 0 else 0,
+		"connect_timeout_msec": _connect_timeout_msec,
+		"connect_deadline_msec": _connect_deadline_msec,
+		"connect_deadline_remaining_msec": maxi(_connect_deadline_msec - Time.get_ticks_msec(), 0) if _connect_deadline_msec > 0 else 0,
 		"tcp_status": tcp_status,
 		"buffered_bytes": _read_buffer.size()
 	}
@@ -158,8 +172,8 @@ func _tick_connecting() -> void:
 
 	var tcp_status := _tcp.get_status()
 	if tcp_status == StreamPeerTCP.STATUS_CONNECTING:
-		if Time.get_ticks_msec() > _deadline_msec:
-			_finish_failure("LSP connection timeout after %dms" % CONNECT_TIMEOUT_MS)
+		if Time.get_ticks_msec() > _connect_deadline_msec:
+			_finish_failure("LSP connection timeout after %dms" % _connect_timeout_msec)
 		return
 
 	if tcp_status != StreamPeerTCP.STATUS_CONNECTED:
@@ -410,6 +424,8 @@ func _reset_session() -> void:
 	_active_uri = ""
 	_active_root_uri = ""
 	_source_hash = ""
+	_connect_timeout_msec = CONNECT_TIMEOUT_MS
+	_connect_deadline_msec = 0
 	_deadline_msec = 0
 	_state = STATE_IDLE
 	_request_started_msec = 0

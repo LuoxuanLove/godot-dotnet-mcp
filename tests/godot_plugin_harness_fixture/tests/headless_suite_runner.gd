@@ -46,6 +46,10 @@ const ClientConfigLauncherAdapterContractTest = "res://tests/client_config_launc
 const EditorLifecycleStateBuilderContractTest = "res://tests/editor_lifecycle_state_builder_contract_test.gd"
 const SystemProjectExecutorContractTest = "res://tests/system_project_executor_contract_test.gd"
 const SystemScriptExecutorContractTest = "res://tests/system_script_executor_contract_test.gd"
+const ToolLspDiagnosticsAdapterContractTest = "res://tests/tool_lsp_diagnostics_adapter_contract_test.gd"
+const GDScriptLspDiagnosticsServiceContractTest = "res://tests/gdscript_lsp_diagnostics_service_contract_test.gd"
+const LspClientContractTest = "res://tests/lsp_client_contract_test.gd"
+const LspServiceAccessContractTest = "res://tests/lsp_service_access_contract_test.gd"
 const SystemIndexImplContractTest = "res://tests/system_index_impl_contract_test.gd"
 const SystemRuntimeImplContractTest = "res://tests/system_runtime_impl_contract_test.gd"
 const ToolLoaderContractTest = "res://tests/tool_loader_contract_test.gd"
@@ -241,6 +245,22 @@ func _run_suite() -> void:
 		{
 			"name": "system_script_executor_contracts",
 			"script": SystemScriptExecutorContractTest
+		},
+		{
+			"name": "tool_lsp_diagnostics_adapter_contracts",
+			"script": ToolLspDiagnosticsAdapterContractTest
+		},
+		{
+			"name": "gdscript_lsp_diagnostics_service_contracts",
+			"script": GDScriptLspDiagnosticsServiceContractTest
+		},
+		{
+			"name": "lsp_client_contracts",
+			"script": LspClientContractTest
+		},
+		{
+			"name": "lsp_service_access_contracts",
+			"script": LspServiceAccessContractTest
 		},
 		{
 			"name": "system_runtime_impl_contracts",

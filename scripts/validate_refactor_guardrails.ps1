@@ -37,7 +37,8 @@ $removedLegacySystemFiles = @(
 $bannedSourcePatterns = @(
     "compatibility_alias",
     "workspace_editor_proxy_call",
-    "SERVER_VERSION"
+    "SERVER_VERSION",
+    "GDScriptLspDiagnosticsService.get_singleton"
 )
 
 $lineCountThresholds = @(

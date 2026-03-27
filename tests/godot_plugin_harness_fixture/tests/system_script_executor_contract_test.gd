@@ -1,28 +1,57 @@
 extends RefCounted
 
+const DefaultPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
 const SystemScriptExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/script/executor.gd")
+const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const TEMP_ROOT := "res://tests_tmp/system_script_executor_contracts"
 
 
-class FakeDiagnosticsService extends RefCounted:
-	func request_diagnostics(script_path: String, _source: String) -> Dictionary:
+class FakeDiagnosticsClient extends RefCounted:
+	func start_diagnostics(script_path: String, source_code: String, _timeout_ms: int) -> Dictionary:
 		return {
 			"available": true,
 			"pending": false,
 			"finished": true,
-			"state": "completed",
+			"state": "ready",
+			"phase": "ready",
 			"script": script_path,
+			"source_hash": str(source_code.hash()),
 			"parse_errors": [],
 			"error_count": 0,
 			"warning_count": 0
 		}
 
+	func has_active_request() -> bool:
+		return false
+
+	func tick(_delta: float) -> void:
+		pass
+
+	func get_status() -> Dictionary:
+		return {}
+
+	func get_debug_snapshot() -> Dictionary:
+		return {"fake": true}
+
+	func cancel() -> void:
+		pass
+
+
+class FakeServerContext extends RefCounted:
+	var _permission_provider
+
+	func _init(permission_provider) -> void:
+		_permission_provider = permission_provider
+
+	func get_plugin_permission_provider():
+		return _permission_provider
+
 
 class FakeBridge extends RefCounted:
-	var diagnostics_service := FakeDiagnosticsService.new()
+	var tool_loader = null
 
-	func get_gdscript_lsp_diagnostics_service():
-		return diagnostics_service
+	func get_tool_loader():
+		return tool_loader
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
@@ -89,6 +118,9 @@ class FakeBridge extends RefCounted:
 		return {"success": false, "error": "bridge_error", "message": message, "data": data}
 
 
+var _loader = null
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/system/impl_script.gd"):
 		return _failure("impl_script.gd should be removed once system/script/executor.gd becomes the only script entry.")
@@ -98,10 +130,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var cs_path := TEMP_ROOT.path_join("ContractScript.cs")
 	_write_text(gd_path, "extends Node\nclass_name ContractScript\n")
 	_write_text(cs_path, "public partial class ContractScript : Godot.Node { }\n")
+	_loader = _build_loader()
+	if _loader == null:
+		return _failure("Failed to build a real tool loader for the system script executor contracts.")
+	var diagnostics_service = _loader.get_gdscript_lsp_diagnostics_service()
+	if diagnostics_service == null:
+		return _failure("Real tool loader did not provide a diagnostics service.")
+	if diagnostics_service.has_method("set_client_factory_for_testing"):
+		diagnostics_service.set_client_factory_for_testing(Callable(self, "_create_fake_diagnostics_client"))
 
 	var executor = SystemScriptExecutorScript.new()
-	executor.bridge = FakeBridge.new()
-	executor.configure_runtime({})
+	var bridge = FakeBridge.new()
+	bridge.tool_loader = _loader
+	executor.bridge = bridge
+	executor.configure_runtime({"tool_loader": _loader})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 3:
@@ -149,7 +191,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(_tree: SceneTree) -> void:
+	if _loader != null and _loader.has_method("shutdown"):
+		_loader.shutdown()
+	_loader = null
 	_remove_tree(TEMP_ROOT)
+
+
+func _create_fake_diagnostics_client():
+	return FakeDiagnosticsClient.new()
+
+
+func _build_loader():
+	var permission_provider = DefaultPermissionProviderScript.new()
+	permission_provider.configure({
+		"permission_level": "evolution",
+		"show_user_tools": true
+	})
+	var loader = ToolLoaderScript.new()
+	loader.configure(FakeServerContext.new(permission_provider))
+	var summary: Dictionary = loader.initialize([])
+	if int(summary.get("tool_count", 0)) <= 0:
+		return null
+	return loader
 
 
 func _prepare_temp_root() -> void:

@@ -25,7 +25,6 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd"
 }
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 const PROJECT_FILE_PATTERNS := {
 	"gd_scripts": "*.gd",
@@ -63,13 +62,7 @@ func get_gdscript_lsp_diagnostics_service():
 		var loader_service = loader.get_gdscript_lsp_diagnostics_service()
 		if loader_service != null:
 			return loader_service
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("get_gdscript_lsp_diagnostics_service"):
-			var service = runtime_bridge.get_gdscript_lsp_diagnostics_service()
-			if service != null:
-				return service
-	return GDScriptLspDiagnosticsService.get_singleton()
+	return null
 
 
 func error(message: String, data = null, hints: Array = []) -> Dictionary:

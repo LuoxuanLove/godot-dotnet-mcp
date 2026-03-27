@@ -38,13 +38,7 @@ var _request_count := 0
 var _last_completed_status: Dictionary = {}
 var _last_completed_key := ""
 var _last_started_script_path := ""
-static var _singleton = null
-
-
-static func get_singleton():
-	if _singleton == null or not is_instance_valid(_singleton):
-		_singleton = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd").new()
-	return _singleton
+var _client_factory: Callable = Callable()
 
 
 func request_diagnostics(script_path: String, source_code: String, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> Dictionary:
@@ -103,6 +97,10 @@ func has_active_request() -> bool:
 	if _client != null and _client.has_method("has_active_request") and _client.has_active_request():
 		return true
 	return not _pending_script_path.is_empty() or not _active_key.is_empty()
+
+
+func set_client_factory_for_testing(factory: Callable) -> void:
+	_client_factory = factory
 
 
 func get_debug_snapshot() -> Dictionary:
@@ -168,11 +166,14 @@ func clear() -> void:
 	if _client != null and _client.has_method("cancel"):
 		_client.cancel()
 	_client = null
+	_client_factory = Callable()
 	_pending_script_path = ""
 	_pending_source_code = ""
 	_pending_source_hash = ""
 	_pending_timeout_ms = DEFAULT_TIMEOUT_MS
 	_queue.clear()
+	_cache_by_key.clear()
+	_cache_order.clear()
 	_active_key = ""
 	_last_completed_status = {}
 	_last_completed_key = ""
@@ -253,6 +254,9 @@ func _commit_status_for_job(job: Dictionary, status: Dictionary) -> void:
 
 func _ensure_client() -> void:
 	if _client != null and _client.has_method("tick"):
+		return
+	if _client_factory.is_valid():
+		_client = _client_factory.call()
 		return
 	var lsp_client_script = ResourceLoader.load(
 		LspClientPath,

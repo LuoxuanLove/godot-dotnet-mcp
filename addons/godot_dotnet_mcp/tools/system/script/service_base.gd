@@ -1,7 +1,6 @@
 @tool
 extends RefCounted
 
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
@@ -14,19 +13,16 @@ func configure_runtime(context: Dictionary) -> void:
 
 
 func _get_gdscript_lsp_diagnostics_service():
+	var loader = null
 	if bridge != null and bridge.has_method("get_tool_loader"):
-		var loader = bridge.get_tool_loader()
-		if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
-			var loader_service = loader.get_gdscript_lsp_diagnostics_service()
-			if loader_service != null:
-				return loader_service
-	if bridge != null and bridge.has_method("get_gdscript_lsp_diagnostics_service"):
-		var service = bridge.get_gdscript_lsp_diagnostics_service()
+		loader = bridge.get_tool_loader()
+	if _tool_loader_context != null and _tool_loader_context.has_method("get_gdscript_lsp_diagnostics_service"):
+		loader = _tool_loader_context
+	if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
+		var service = loader.get_gdscript_lsp_diagnostics_service()
 		if service != null:
 			return service
-	if _tool_loader_context != null and _tool_loader_context.has_method("get_gdscript_lsp_diagnostics_service"):
-		return _tool_loader_context.get_gdscript_lsp_diagnostics_service()
-	return GDScriptLspDiagnosticsService.get_singleton()
+	return null
 
 
 func _build_diagnostics_status_summary(diagnostics_result: Dictionary) -> Dictionary:

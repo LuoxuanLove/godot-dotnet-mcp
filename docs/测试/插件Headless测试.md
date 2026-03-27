@@ -103,7 +103,7 @@ tests/godot_plugin_harness_fixture/
 | `runtime_reply_service_contracts` | 验证 `mcp_runtime_reply_service` 的 success/error payload、`runtime_context`、`runtime_state` 与 hint |
 | `user_tool_watch_service_contracts` | 验证 `user_tool_watch_service.gd` 通过显式 callback 触发外部用户工具刷新 |
 | `script_tool_executor_contracts` | 验证 `script` 域拆分后的 catalog、稳定 executor 入口与代表性 `read / inspect / references / edit_gd` 路径 |
-| `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，C# 写回校验走 Roslyn 语义提供者 |
+| `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，插件侧仅保留 `*EditHelper` 文本编辑辅助；C# 官方语义来源仍是 Host 侧 Roslyn |
 | `node_tool_executor_contracts` | 验证 `node` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / lifecycle / property / metadata / visibility` 路径 |
 | `animation_tool_executor_contracts` | 验证 `animation` 域拆分后的 catalog、稳定 executor 入口与代表性 `player / animation / track / tween / animation_tree / state_machine / blend_space / blend_tree` 路径 |
 | `physics_tool_executor_contracts` | 验证 `physics` 域拆分后的 catalog、稳定 executor 入口与代表性 `physics_body / collision_shape / physics_joint / physics_query` 路径 |
@@ -139,17 +139,21 @@ tests/godot_plugin_harness_fixture/
 | `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
 | `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
 | `system_project_executor_contracts` | 验证 `tools/system/project/` 目录化拆分后的 catalog、稳定 executor 入口与项目级 system 工具路由 |
-| `system_script_executor_contracts` | 验证 `tools/system/script/` 目录化拆分后的 catalog、稳定 executor 入口，以及 `system_script_analyze` 只经由 Godot LSP 的语义边界 |
+| `system_script_executor_contracts` | 验证 `tools/system/script/` 目录化拆分后的 catalog、稳定 executor 入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
+| `tool_lsp_diagnostics_adapter_contracts` | 验证 `tool_lsp_diagnostics_adapter.gd` 的 configure、tick、reset、release 与 runtime bridge 绑定语义 |
+| `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
+| `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
+| `lsp_service_access_contracts` | 验证 `mcp_http_server.gd` 与 `mcp_stdio_server.gd` 只暴露 loader-owned 的 GDScript diagnostics service，不再自行创建或回退 singleton |
 | `tools_tab_interaction_support_contracts` | 验证 `tools_tab_context_menu_support.gd` 与 `tools_tab_selection_support.gd` 的 metadata、菜单项与选择状态语义 |
 | `tools_tab_search_service_contracts` | 验证 `tools_tab_search_service.gd` 的直接命中与系统原子工具递归搜索 |
 | `tools_tab_preview_builder_contracts` | 验证 `tools_tab_preview_builder.gd` 的工具预览文本、参数摘要与原子工具提示 |
 
 当前实测状态：
 
-- suite：`48/48` 通过
+- suite：`52/52` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
@@ -226,6 +230,7 @@ tests/godot_plugin_harness_fixture/
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
 - `initialize / /health` 路径对 `protocolVersion / toolSchemaVersion / serverInfo` 的统一协议字段断言
 - `tool_loader.gd` 的 façade + `tool_registry_store / tool_bootstrap_coordinator / tool_execution_gateway / tool_lsp_diagnostics_adapter` 分层
+- `tool_lsp_diagnostics_adapter.gd` 现已成为 GDScript LSP 诊断服务的唯一主链拥有者，正式源码不再允许 `GDScriptLspDiagnosticsService.get_singleton()` 回退
 - `script/csharp_edit_service.gd` 与 `script/gdscript_edit_service.gd` 的 façade + semantic provider + edit action service 分层
 
 这意味着当前 headless contract tests 已经不再直接依赖生产代码中的下划线方法名。

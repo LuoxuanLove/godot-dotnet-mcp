@@ -1,10 +1,10 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const CSharpSemanticProvider = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_semantic_provider.gd")
+const CSharpEditHelper = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
 const CSharpEditActionService = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_action_service.gd")
 
-var _semantic_provider := CSharpSemanticProvider.new()
+var _edit_helper := CSharpEditHelper.new()
 var _action_service := CSharpEditActionService.new()
 
 

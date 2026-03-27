@@ -1,10 +1,10 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const GDScriptSemanticProvider = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_semantic_provider.gd")
+const GDScriptEditHelper = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_helper.gd")
 const GDScriptEditActionService = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_action_service.gd")
 
-var _semantic_provider := GDScriptSemanticProvider.new()
+var _edit_helper := GDScriptEditHelper.new()
 var _action_service := GDScriptEditActionService.new()
 
 
@@ -34,9 +34,9 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 		"add_export":
 			return _action_service.add_export(path, args)
 		"get_functions":
-			return _semantic_provider.get_functions(path)
+			return _edit_helper.get_functions(path)
 		"get_variables":
-			return _semantic_provider.get_variables(path)
+			return _edit_helper.get_variables(path)
 		"replace_function_body":
 			return _action_service.replace_function_body(path, str(args.get("name", "")), str(args.get("body", "")))
 		"remove_member":

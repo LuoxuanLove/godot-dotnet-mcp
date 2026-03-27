@@ -9,9 +9,7 @@ class_name MCPStdioServer
 ##   godot --headless --path /path/to/project --script res://addons/.../mcp_stdio_entry.gd
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
-const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 
 signal request_received(method: String, params: Dictionary)
 
@@ -54,8 +52,10 @@ func set_disabled_tools(disabled: Array) -> void:
 
 func get_gdscript_lsp_diagnostics_service():
 	if _tool_loader != null and _tool_loader.has_method("get_gdscript_lsp_diagnostics_service"):
-		return _tool_loader.get_gdscript_lsp_diagnostics_service()
-	return GDScriptLspDiagnosticsService.get_singleton()
+		var service = _tool_loader.get_gdscript_lsp_diagnostics_service()
+		if service != null:
+			return service
+	return null
 
 
 func _process(_delta: float) -> void:

@@ -24,6 +24,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not report any exposed tools.")
 	if not bool(loader_status.get("healthy", false)):
 		return _failure("Tool loader should be healthy when the default permission provider is active.")
+	var lsp_service = _server.get_gdscript_lsp_diagnostics_service()
+	var loader = _server.get_tool_loader()
+	if lsp_service == null:
+		return _failure("HTTP server should expose the loader-owned GDScript LSP diagnostics service.")
+	if loader == null or lsp_service != loader.get_gdscript_lsp_diagnostics_service():
+		return _failure("HTTP server should expose the same diagnostics service instance owned by the tool loader.")
 
 	var invalid_json: Dictionary = _server.handle_editor_lifecycle_post(JSON.stringify([]))
 	if str(invalid_json.get("error", "")) != "invalid_argument":

@@ -81,18 +81,34 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 			if diagnostics_result_raw is Dictionary:
 				diagnostics_result = (diagnostics_result_raw as Dictionary).duplicate(true)
 		if diagnostics_result.is_empty():
-			diagnostics_result = {
-				"available": false,
-				"pending": true,
-				"finished": false,
-				"state": "queued",
-				"script": script_path,
-				"source_hash": str(diagnostics_source.hash()),
-				"parse_errors": [],
-				"error_count": 0,
-				"warning_count": 0,
-				"note": "Diagnostics are being resolved in the background from saved file content on disk."
-			}
+			if diagnostics_service == null:
+				diagnostics_result = {
+					"available": false,
+					"pending": false,
+					"finished": true,
+					"state": "unavailable",
+					"phase": "unavailable",
+					"script": script_path,
+					"source_hash": str(diagnostics_source.hash()),
+					"parse_errors": [],
+					"error_count": 0,
+					"warning_count": 0,
+					"error": "GDScript diagnostics service is unavailable."
+				}
+			else:
+				diagnostics_result = {
+					"available": false,
+					"pending": true,
+					"finished": false,
+					"state": "queued",
+					"phase": "queued",
+					"script": script_path,
+					"source_hash": str(diagnostics_source.hash()),
+					"parse_errors": [],
+					"error_count": 0,
+					"warning_count": 0,
+					"note": "Diagnostics are being resolved in the background from saved file content on disk."
+				}
 		result_data["diagnostics"] = diagnostics_result
 		result_data["diagnostics_status"] = _build_diagnostics_status_summary(diagnostics_result)
 

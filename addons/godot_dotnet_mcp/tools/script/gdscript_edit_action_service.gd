@@ -1,9 +1,9 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const GDScriptSemanticProvider = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_semantic_provider.gd")
+const GDScriptEditHelper = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_helper.gd")
 
-var _semantic_provider := GDScriptSemanticProvider.new()
+var _edit_helper := GDScriptEditHelper.new()
 
 
 func create_script(path: String, extends_class: String, class_name_str: String) -> Dictionary:
@@ -101,7 +101,7 @@ func remove_function(path: String, name: String) -> Dictionary:
 
 	for line in lines:
 		var stripped = line.strip_edges()
-		if _semantic_provider.strip_func_modifiers(stripped).begins_with("func %s" % name):
+		if _edit_helper.strip_func_modifiers(stripped).begins_with("func %s" % name):
 			in_function = true
 			func_indent = line.length() - line.strip_edges(true, false).length()
 			continue
@@ -218,7 +218,7 @@ func replace_function_body(path: String, name: String, new_body: String) -> Dict
 	var func_line := -1
 	for i in range(lines.size()):
 		var stripped := lines[i].strip_edges()
-		var core := _semantic_provider.strip_func_modifiers(stripped)
+		var core := _edit_helper.strip_func_modifiers(stripped)
 		if core.begins_with("func %s(" % name) or core.begins_with("func %s (" % name):
 			func_line = i
 			break
@@ -292,7 +292,7 @@ func rename_member(path: String, old_name: String, new_name: String) -> Dictiona
 	for line in lines:
 		var stripped := line.strip_edges()
 		var new_line := line
-		var core := _semantic_provider.strip_func_modifiers(stripped)
+		var core := _edit_helper.strip_func_modifiers(stripped)
 		if core.begins_with("func %s(" % old_name) or core.begins_with("func %s (" % old_name):
 			new_line = line.replace("func %s(" % old_name, "func %s(" % new_name)
 			new_line = new_line.replace("func %s (" % old_name, "func %s (" % new_name)
