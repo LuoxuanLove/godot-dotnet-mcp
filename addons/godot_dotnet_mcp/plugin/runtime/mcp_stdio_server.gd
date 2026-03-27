@@ -10,6 +10,7 @@ class_name MCPStdioServer
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 
 signal request_received(method: String, params: Dictionary)
@@ -19,9 +20,6 @@ var _buffer: PackedByteArray = PackedByteArray()
 var _tool_loader        # injected by server_runtime_controller, shared with HTTP server
 var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
-const MCP_VERSION = "2025-06-18"
-const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.5.0"
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 
 
@@ -132,9 +130,10 @@ func _handle_request(body: String) -> void:
 	match method:
 		"initialize":
 			response = _create_json_rpc_response({
-				"protocolVersion": MCP_VERSION,
+				"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+				"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
 				"capabilities": {"tools": {"listChanged": false}},
-				"serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION}
+				"serverInfo": MCPProtocolFacts.build_server_info()
 			}, id)
 		"initialized", "notifications/initialized":
 			response = _create_json_rpc_response({}, id)

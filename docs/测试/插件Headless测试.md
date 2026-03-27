@@ -39,6 +39,9 @@ tests/godot_plugin_harness_fixture/
    ├─ scene_tool_executor_contract_test.gd
    ├─ debug_tool_executor_contract_test.gd
    ├─ editor_tool_executor_contract_test.gd
+   ├─ lighting_tool_executor_contract_test.gd
+   ├─ geometry_tool_executor_contract_test.gd
+   ├─ plugin_bootstrap_contract_test.gd
    ├─ plugin_dock_coordinator_contract_test.gd
    ├─ plugin_runtime_coordinator_contract_test.gd
    ├─ client_config_serializer_contract_test.gd
@@ -72,7 +75,7 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-27`，当前有 `32` 个 case：
+截至 `2026-03-27`，当前有 `35` 个 case：
 
 | 用例 | 目标 |
 |---|---|
@@ -90,6 +93,9 @@ tests/godot_plugin_harness_fixture/
 | `scene_tool_executor_contracts` | 验证 `scene` 域拆分后的 catalog、稳定 executor 入口与代表性 `management / hierarchy / run / bindings / audit` 路径 |
 | `debug_tool_executor_contracts` | 验证 `debug` 域拆分后的 catalog、稳定 executor 入口与代表性 `log_buffer / runtime_bridge / dotnet / performance / class_db` 路径 |
 | `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / settings / undo_redo / notification / inspector / filesystem / plugin` 路径 |
+| `lighting_tool_executor_contracts` | 验证 `lighting` 域拆分后的 catalog、稳定 executor 入口与代表性 `light / environment / sky` 路径 |
+| `geometry_tool_executor_contracts` | 验证 `geometry` 域拆分后的 catalog、稳定 executor 入口与代表性 `csg / gridmap / multimesh` 路径 |
+| `plugin_bootstrap_contracts` | 验证 `plugin_bootstrap.gd` 的 service bundle 回填、action router 重装配与 dock model service 独立重配能力 |
 | `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的 dock signal wiring、`FileDialog` 创建与 dialog 清理语义 |
 | `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
 | `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
@@ -111,7 +117,7 @@ tests/godot_plugin_harness_fixture/
 
 当前实测状态：
 
-- suite：`32/32` 通过
+- suite：`35/35` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
@@ -166,6 +172,7 @@ tests/godot_plugin_harness_fixture/
 - `mcp_http_request_router.gd`
 - `mcp_http_response_service.gd`
 - `mcp_json_rpc_router.gd`
+- `mcp_protocol_facts.gd`
 - `mcp_tools_api_service.gd`
 - `mcp_runtime_fallback_store.gd`
 - `mcp_runtime_reply_service.gd`
@@ -185,6 +192,7 @@ tests/godot_plugin_harness_fixture/
 - `tools_tab_preview_builder.gd`
 - `mcp_http_server.gd` 的公共测试入口
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
+- `initialize / /health` 路径对 `protocolVersion / toolSchemaVersion / serverInfo` 的统一协议字段断言
 
 这意味着当前 headless contract tests 已经不再直接依赖生产代码中的下划线方法名。
 

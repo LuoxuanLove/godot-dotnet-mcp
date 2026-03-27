@@ -42,22 +42,24 @@ tests/host_contracts/
 
 ## 当前覆盖范围
 
-截至 `2026-03-26`，当前已覆盖 `10` 个用例：
+截至 `2026-03-27`，当前已覆盖 `11` 个用例：
 
 1. `tool_catalog_exposes_workspace_system_dotnet`
-2. `editor_process_service_supports_injected_external_probe`
-3. `workspace_project_remove_clears_active_context`
-4. `system_project_state_returns_editor_required_when_auto_launch_disabled`
-5. `workspace_project_open_editor_returns_missing_executable_guidance`
-6. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
-7. `workspace_project_close_editor_force_reports_editor_force_unavailable`
-8. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
-9. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
-10. `workspace_project_close_editor_succeeds_when_lifecycle_available`
+2. `central_health_reports_unified_protocol_facts`
+3. `editor_process_service_supports_injected_external_probe`
+4. `workspace_project_remove_clears_active_context`
+5. `system_project_state_returns_editor_required_when_auto_launch_disabled`
+6. `workspace_project_open_editor_returns_missing_executable_guidance`
+7. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
+8. `workspace_project_close_editor_force_reports_editor_force_unavailable`
+9. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
+10. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
+11. `workspace_project_close_editor_succeeds_when_lifecycle_available`
 
 这些用例覆盖的重点是：
 
 - 工具目录结构
+- `--health` 输出中的 `serverName / serverVersion / protocolVersion / toolSchemaVersion`
 - Host 工具目录当前只暴露正式 `workspace / system / dotnet` 入口
 - `EditorProcessService` 的 external probe seam 可注入且不再硬绑在 WMI 实现上
 - `CentralWorkspaceState` 驱动的 active project / active session 清理

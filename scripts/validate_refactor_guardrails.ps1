@@ -5,6 +5,24 @@ Set-Location $repoRoot
 
 $errors = New-Object System.Collections.Generic.List[string]
 
+$removedRootToolFiles = @(
+    "addons/godot_dotnet_mcp/tools/script_tools.gd",
+    "addons/godot_dotnet_mcp/tools/node_tools.gd",
+    "addons/godot_dotnet_mcp/tools/animation_tools.gd",
+    "addons/godot_dotnet_mcp/tools/physics_tools.gd",
+    "addons/godot_dotnet_mcp/tools/scene_tools.gd",
+    "addons/godot_dotnet_mcp/tools/debug_tools.gd",
+    "addons/godot_dotnet_mcp/tools/editor_tools.gd",
+    "addons/godot_dotnet_mcp/tools/lighting_tools.gd",
+    "addons/godot_dotnet_mcp/tools/geometry_tools.gd"
+)
+
+$bannedSourcePatterns = @(
+    "compatibility_alias",
+    "workspace_editor_proxy_call",
+    "SERVER_VERSION"
+)
+
 $trackedBundledArtifacts = git ls-files "addons/godot_dotnet_mcp/central_server_packages" | Where-Object {
     $_ -match "\.(zip|sha256)$"
 }
@@ -29,6 +47,22 @@ $expectedDirs = @(
 foreach ($path in $expectedDirs) {
     if (-not (Test-Path $path)) {
         Write-Host "Info: expected dist output not present yet (acceptable before packaging): $path"
+    }
+}
+
+foreach ($removedFile in $removedRootToolFiles) {
+    $absolutePath = Join-Path $repoRoot $removedFile
+    if (Test-Path $absolutePath) {
+        $errors.Add("Removed root tool file must not return: $removedFile")
+    }
+}
+
+foreach ($pattern in $bannedSourcePatterns) {
+    $matches = rg -n --glob "addons/**/*.gd" --glob "central_server/**/*.cs" --glob "host_shared/**/*.cs" $pattern $repoRoot 2>$null
+    foreach ($match in $matches) {
+        if (-not [string]::IsNullOrWhiteSpace($match)) {
+            $errors.Add("Banned source identifier '$pattern' found: $match")
+        }
     }
 }
 

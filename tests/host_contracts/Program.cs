@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.CentralServer;
+using GodotDotnetMcp.HostShared;
 using static ContractAssertions;
 using static ContractPayloadSupport;
 
@@ -13,6 +14,7 @@ internal static class Program
         var testCases = new (string Name, Func<Task> Execute)[]
         {
             ("tool_catalog_exposes_workspace_system_dotnet", VerifyToolCatalogAsync),
+            ("central_health_reports_unified_protocol_facts", VerifyHealthFactsAsync),
             ("editor_process_service_supports_injected_external_probe", VerifyInjectedExternalProbeContractAsync),
             ("workspace_project_remove_clears_active_context", VerifyProjectRemoveClearsActiveContextAsync),
             ("system_project_state_returns_editor_required_when_auto_launch_disabled", VerifyEditorRequiredContractAsync),
@@ -82,6 +84,28 @@ internal static class Program
         }
 
         return Task.CompletedTask;
+    }
+
+    private static async Task VerifyHealthFactsAsync()
+    {
+        await using var output = new MemoryStream();
+        var exitCode = await CentralServerApplication.RunAsync(["--health"], Stream.Null, output, TextWriter.Null, CancellationToken.None);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"Central server --health returned exit code {exitCode}.");
+        }
+
+        output.Position = 0;
+        using var reader = new StreamReader(output, Encoding.UTF8, leaveOpen: true);
+        var json = await reader.ReadToEndAsync();
+        using var document = JsonDocument.Parse(json);
+        var payload = document.RootElement;
+
+        AssertNestedString(payload, McpProtocolFacts.ServerName, "serverName");
+        AssertNestedString(payload, McpProtocolFacts.ServerVersion, "serverVersion");
+        AssertNestedString(payload, McpProtocolFacts.ProtocolVersion, "protocolVersion");
+        AssertNestedString(payload, McpProtocolFacts.ToolSchemaVersion, "toolSchemaVersion");
+        AssertNestedString(payload, "stdio", "transport");
     }
 
     private static async Task VerifyInjectedExternalProbeContractAsync()

@@ -16,6 +16,7 @@ const MCPJsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/run
 const MCPToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
 const MCPHttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
 const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPDefaultToolPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
@@ -53,12 +54,6 @@ var _http_response_service = MCPHttpResponseServiceScript.new()
 var _runtime_control_service = MCPRuntimeControlServiceScript.new()
 var _gdscript_lsp_diagnostics_service
 var _default_permission_provider = MCPDefaultToolPermissionProviderScript.new()
-
-# MCP Protocol info
-const MCP_VERSION = "2025-06-18"
-const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.5.0"
-
 
 func _ready() -> void:
 	set_process(true)
@@ -544,10 +539,7 @@ func _ensure_http_response_service() -> void:
 		"get_tool_loader_status": Callable(self, "get_tool_loader_status"),
 		"get_server_stats": Callable(self, "_build_server_stats"),
 		"log": Callable(self, "_log")
-	}, {
-		"server_name": SERVER_NAME,
-		"server_version": SERVER_VERSION
-	})
+	}, MCPProtocolFacts.build_server_facts())
 
 
 func _build_server_stats() -> Dictionary:
@@ -855,16 +847,14 @@ func _handle_notification(method: String, _params: Dictionary) -> void:
 
 func _handle_initialize(params: Dictionary, id) -> Dictionary:
 	var result = {
-		"protocolVersion": MCP_VERSION,
+		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+		"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
 		"capabilities": {
 			"tools": {
 				"listChanged": false
 			}
 		},
-		"serverInfo": {
-			"name": SERVER_NAME,
-			"version": SERVER_VERSION
-		}
+		"serverInfo": MCPProtocolFacts.build_server_info()
 	}
 	return _build_json_rpc_response(result, id)
 

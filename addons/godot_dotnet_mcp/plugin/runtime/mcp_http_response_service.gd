@@ -8,6 +8,8 @@ var _get_server_stats := Callable()
 var _log := Callable()
 var _server_name := ""
 var _server_version := ""
+var _protocol_version := ""
+var _tool_schema_version := ""
 
 
 func configure(callbacks: Dictionary = {}, server_info: Dictionary = {}) -> void:
@@ -17,6 +19,8 @@ func configure(callbacks: Dictionary = {}, server_info: Dictionary = {}) -> void
 	_log = callbacks.get("log", Callable())
 	_server_name = str(server_info.get("server_name", ""))
 	_server_version = str(server_info.get("server_version", ""))
+	_protocol_version = str(server_info.get("protocol_version", ""))
+	_tool_schema_version = str(server_info.get("tool_schema_version", ""))
 
 
 func dispose() -> void:
@@ -26,6 +30,8 @@ func dispose() -> void:
 	_log = Callable()
 	_server_name = ""
 	_server_version = ""
+	_protocol_version = ""
+	_tool_schema_version = ""
 
 
 func build_json_rpc_response(result, id) -> Dictionary:
@@ -65,8 +71,10 @@ func build_health_response() -> Dictionary:
 	var status_text := "ok" if bool(loader_status.get("healthy", false)) else str(loader_status.get("status", "degraded"))
 	return {
 		"status": status_text,
-		"server": _server_name,
-		"version": _server_version,
+		"server_name": _server_name,
+		"server_version": _server_version,
+		"protocol_version": _protocol_version,
+		"tool_schema_version": _tool_schema_version,
 		"running": bool(server_stats.get("running", false)),
 		"connections": int(server_stats.get("connections", 0)),
 		"total_connections": int(server_stats.get("total_connections", 0)),

@@ -17,5 +17,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GodotDotnetMcp.CentralServer" />
+    <EmbeddedResource Include="..\addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json" Link="Protocol\mcp_protocol_facts.json" />
   </ItemGroup>
 </Project>

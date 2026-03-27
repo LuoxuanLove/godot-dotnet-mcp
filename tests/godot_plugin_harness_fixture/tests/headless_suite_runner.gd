@@ -20,6 +20,9 @@ const PhysicsToolExecutorContractTest = preload("res://tests/physics_tool_execut
 const SceneToolExecutorContractTest = preload("res://tests/scene_tool_executor_contract_test.gd")
 const DebugToolExecutorContractTest = preload("res://tests/debug_tool_executor_contract_test.gd")
 const EditorToolExecutorContractTest = preload("res://tests/editor_tool_executor_contract_test.gd")
+const LightingToolExecutorContractTest = preload("res://tests/lighting_tool_executor_contract_test.gd")
+const GeometryToolExecutorContractTest = preload("res://tests/geometry_tool_executor_contract_test.gd")
+const PluginBootstrapContractTest = preload("res://tests/plugin_bootstrap_contract_test.gd")
 const PluginDockCoordinatorContractTest = preload("res://tests/plugin_dock_coordinator_contract_test.gd")
 const PluginRuntimeCoordinatorContractTest = preload("res://tests/plugin_runtime_coordinator_contract_test.gd")
 const ClientConfigSerializerContractTest = preload("res://tests/client_config_serializer_contract_test.gd")
@@ -98,6 +101,18 @@ func _run_suite() -> void:
 		{
 			"name": "editor_tool_executor_contracts",
 			"script": EditorToolExecutorContractTest
+		},
+		{
+			"name": "lighting_tool_executor_contracts",
+			"script": LightingToolExecutorContractTest
+		},
+		{
+			"name": "geometry_tool_executor_contracts",
+			"script": GeometryToolExecutorContractTest
+		},
+		{
+			"name": "plugin_bootstrap_contracts",
+			"script": PluginBootstrapContractTest
 		},
 		{
 			"name": "plugin_dock_coordinator_contracts",

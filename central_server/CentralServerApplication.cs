@@ -83,10 +83,14 @@ Modes:
     {
         var payload = new CentralHealthSnapshot(
             Status: "ok",
-            Name: CentralServerManifest.ProductName,
-            Version: CentralServerManifest.Version,
+            ServerName: CentralServerManifest.ServerName,
+            ServerVersion: CentralServerManifest.Version,
+            ProtocolVersion: CentralServerManifest.ProtocolVersion,
+            ToolSchemaVersion: CentralServerManifest.ToolSchemaVersion,
+            Transport: CentralServerManifest.Transport,
+            ProductName: CentralServerManifest.ProductName,
+            PackageName: CentralServerManifest.PackageName,
             TargetFramework: CentralServerManifest.TargetFramework,
-            Protocol: CentralServerManifest.Protocol,
             TimestampUtc: DateTimeOffset.UtcNow);
 
         var json = JsonSerializer.Serialize(payload, CentralServerSerialization.JsonOptions);
@@ -411,10 +415,14 @@ Modes:
 
     internal sealed record CentralHealthSnapshot(
         string Status,
-        string Name,
-        string Version,
+        string ServerName,
+        string ServerVersion,
+        string ProtocolVersion,
+        string ToolSchemaVersion,
+        string Transport,
+        string ProductName,
+        string PackageName,
         string TargetFramework,
-        string Protocol,
         DateTimeOffset TimestampUtc);
 
     private sealed class CompositeTextWriter : TextWriter

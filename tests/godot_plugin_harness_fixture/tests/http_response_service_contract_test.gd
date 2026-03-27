@@ -1,6 +1,7 @@
 extends RefCounted
 
 const HttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
 class FakeToolLoader:
@@ -73,10 +74,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"get_tool_loader_status": Callable(callbacks, "get_tool_loader_status"),
 		"get_server_stats": Callable(callbacks, "get_server_stats"),
 		"log": Callable(callbacks, "log")
-	}, {
-		"server_name": "godot-mcp-server",
-		"server_version": "0.5.0"
-	})
+	}, MCPProtocolFacts.build_server_facts())
 
 	var rpc_response: Dictionary = service.build_json_rpc_response({"ok": true}, 7.0)
 	if int(rpc_response.get("id", -1)) != 7:
@@ -94,6 +92,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not project server stats.")
 	if int(health.get("exposed_tool_count", 0)) != 2:
 		return _failure("Health response did not count exposed tools from the loader.")
+	if str(health.get("server_name", "")) != MCPProtocolFacts.get_server_name():
+		return _failure("Health response did not expose the unified server name.")
+	if str(health.get("server_version", "")) != MCPProtocolFacts.get_server_version():
+		return _failure("Health response did not expose the unified server version.")
+	if str(health.get("protocol_version", "")) != MCPProtocolFacts.get_protocol_version():
+		return _failure("Health response did not expose the unified protocol version.")
+	if str(health.get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
+		return _failure("Health response did not expose the unified tool schema version.")
 
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,
@@ -118,7 +124,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"health_status": str(health.get("status", "")),
 			"exposed_tool_count": int(health.get("exposed_tool_count", 0)),
-			"normalized_response_id": int(rpc_response.get("id", -1))
+			"normalized_response_id": int(rpc_response.get("id", -1)),
+			"server_version": str(health.get("server_version", ""))
 		}
 	}
 

@@ -22,6 +22,42 @@ const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/pre
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 
+const SERVICE_BUNDLE_KEYS := [
+	"settings_store",
+	"runtime_state_service",
+	"tool_bridge_service",
+	"tool_catalog",
+	"config_service",
+	"client_install_detection_service",
+	"server_feature",
+	"config_feature",
+	"user_tool_feature",
+	"reload_feature",
+	"tool_profile_feature",
+	"tool_access_feature",
+	"self_diagnostic_feature",
+	"ui_state_feature",
+	"dock_presenter",
+	"dock_model_service",
+	"user_tool_service",
+	"user_tool_watch_service",
+	"central_server_attach_service",
+	"central_server_process_service"
+]
+
+const FEATURE_RESULT_KEYS := [
+	"server_feature",
+	"config_feature",
+	"ui_state_feature",
+	"tool_access_feature",
+	"user_tool_feature",
+	"reload_feature",
+	"tool_profile_feature",
+	"self_diagnostic_feature",
+	"tool_bridge_service",
+	"dock_model_service"
+]
+
 
 func refresh_service_instances() -> Dictionary:
 	var settings_store = SettingsStore.new()
@@ -49,6 +85,34 @@ func refresh_service_instances() -> Dictionary:
 		"central_server_attach_service": CentralServerAttachServiceScript.new(),
 		"central_server_process_service": CentralServerProcessServiceScript.new()
 	}
+
+
+func refresh_plugin_service_instances(plugin) -> void:
+	if plugin == null:
+		return
+	_apply_service_bundle(plugin, refresh_service_instances())
+
+
+func configure_plugin_workflows(plugin, action_router, runtime_bridge_autoload_name: String, runtime_bridge_autoload_path: String) -> void:
+	if plugin == null:
+		return
+	_configure_action_router(action_router, plugin)
+	var result: Dictionary = configure_feature_workflows(
+		_build_feature_workflow_context(plugin, runtime_bridge_autoload_name, runtime_bridge_autoload_path)
+	)
+	_apply_feature_result(plugin, result)
+	_configure_action_router(action_router, plugin)
+
+
+func configure_plugin_dock_model_service(plugin):
+	if plugin == null:
+		return null
+	plugin._dock_model_service = _configure_dock_model_service(
+		_build_dock_model_context(plugin),
+		plugin._tool_access_feature,
+		plugin._self_diagnostic_feature
+	)
+	return plugin._dock_model_service
 
 
 func load_state(runtime_state_service, settings_store, state, client_install_detection_service) -> void:
@@ -250,6 +314,123 @@ func _configure_dock_model_service(context: Dictionary, tool_access_feature, sel
 		}
 	)
 	return dock_model_service
+
+
+func _configure_action_router(action_router, plugin) -> void:
+	if action_router == null or plugin == null:
+		return
+	action_router.configure(_build_action_router_context(plugin))
+
+
+func _build_action_router_context(plugin) -> Dictionary:
+	return {
+		"server_controller": plugin._server_controller,
+		"state": plugin._state,
+		"localization": plugin._localization,
+		"server_feature": plugin._server_feature,
+		"config_feature": plugin._config_feature,
+		"user_tool_feature": plugin._user_tool_feature,
+		"tool_access_feature": plugin._tool_access_feature,
+		"self_diagnostic_feature": plugin._self_diagnostic_feature,
+		"ui_state_feature": plugin._ui_state_feature,
+		"reload_feature": plugin._reload_feature,
+		"build_dock_model": Callable(plugin, "_build_dock_model"),
+		"get_dock": Callable(plugin, "_get_dock")
+	}
+
+
+func _build_feature_workflow_context(plugin, runtime_bridge_autoload_name: String, runtime_bridge_autoload_path: String) -> Dictionary:
+	return {
+		"plugin": plugin,
+		"state": plugin._state,
+		"state_settings": plugin._state.settings,
+		"localization": plugin._localization,
+		"settings_store": plugin._settings_store,
+		"server_controller": plugin._server_controller,
+		"tool_catalog": plugin._tool_catalog,
+		"config_service": plugin._config_service,
+		"dock_presenter": plugin._dock_presenter,
+		"user_tool_service": plugin._user_tool_service,
+		"user_tool_watch_service": plugin._user_tool_watch_service,
+		"client_install_detection_service": plugin._client_install_detection_service,
+		"central_server_attach_service": plugin._central_server_attach_service,
+		"central_server_process_service": plugin._central_server_process_service,
+		"server_feature": plugin._server_feature,
+		"config_feature": plugin._config_feature,
+		"user_tool_feature": plugin._user_tool_feature,
+		"reload_feature": plugin._reload_feature,
+		"tool_profile_feature": plugin._tool_profile_feature,
+		"tool_access_feature": plugin._tool_access_feature,
+		"self_diagnostic_feature": plugin._self_diagnostic_feature,
+		"ui_state_feature": plugin._ui_state_feature,
+		"tool_bridge_service": plugin._tool_bridge_service,
+		"dock_model_service": plugin._dock_model_service,
+		"runtime_bridge_autoload_name": runtime_bridge_autoload_name,
+		"runtime_bridge_autoload_path": runtime_bridge_autoload_path,
+		"show_message": Callable(plugin._action_router, "show_message"),
+		"show_confirmation": Callable(plugin._action_router, "show_confirmation"),
+		"refresh_dock": Callable(plugin._action_router, "refresh_dock"),
+		"save_settings": Callable(plugin, "_save_settings"),
+		"ensure_client_executable_dialog": Callable(plugin, "_ensure_client_executable_dialog"),
+		"get_client_executable_dialog": Callable(plugin, "_get_client_executable_dialog"),
+		"capture_dock_focus_snapshot": Callable(plugin, "_capture_dock_focus_snapshot"),
+		"restore_dock_focus_snapshot": Callable(plugin, "_restore_runtime_dock_focus_snapshot"),
+		"get_all_tools_by_category": Callable(plugin._server_controller, "get_all_tools_by_category"),
+		"set_disabled_tools": Callable(plugin._server_controller, "set_disabled_tools"),
+		"create_reload_coordinator": Callable(plugin, "_create_reload_coordinator"),
+		"reload_all_domains": Callable(plugin._action_router, "reload_all_tool_domains"),
+		"runtime_reload_is_server_running": Callable(plugin, "_runtime_reload_is_server_running"),
+		"runtime_reload_start_server": Callable(plugin, "_runtime_reload_start_server"),
+		"runtime_reload_reinitialize_server": Callable(plugin, "_runtime_reload_reinitialize_server"),
+		"refresh_service_instances": Callable(plugin, "_refresh_service_instances"),
+		"runtime_reload_reset_localization": Callable(plugin, "_runtime_reload_reset_localization"),
+		"recreate_server_controller": Callable(plugin, "_recreate_server_controller"),
+		"configure_central_server_process_service": Callable(plugin, "_configure_central_server_process_service"),
+		"configure_central_server_attach_service": Callable(plugin, "_configure_central_server_attach_service"),
+		"configure_feature_workflows": Callable(plugin, "_configure_feature_workflows"),
+		"recreate_dock": Callable(plugin, "_recreate_dock"),
+		"restore_runtime_dock_focus_snapshot": Callable(plugin, "_restore_runtime_dock_focus_snapshot"),
+		"finish_self_operation": Callable(plugin, "_finish_self_operation"),
+		"count_dock_instances": Callable(plugin, "_count_dock_instances"),
+		"has_runtime_bridge_root_instance": Callable(plugin, "_has_runtime_bridge_root_instance"),
+		"is_server_running": Callable(plugin._server_controller, "is_running"),
+		"get_connection_stats": Callable(plugin._server_controller, "get_connection_stats"),
+		"get_tool_load_errors": Callable(plugin._server_controller, "get_tool_load_errors"),
+		"get_reload_status": Callable(plugin._server_controller, "get_reload_status"),
+		"get_performance_summary": Callable(plugin._server_controller, "get_performance_summary"),
+		"is_dock_present": Callable(plugin, "_is_live_dock_present"),
+		"get_editor_scale": Callable(plugin, "_get_editor_scale")
+	}
+
+
+func _build_dock_model_context(plugin) -> Dictionary:
+	return {
+		"state": plugin._state,
+		"localization": plugin._localization,
+		"server_controller": plugin._server_controller,
+		"tool_catalog": plugin._tool_catalog,
+		"config_service": plugin._config_service,
+		"dock_presenter": plugin._dock_presenter,
+		"user_tool_service": plugin._user_tool_service,
+		"client_install_detection_service": plugin._client_install_detection_service,
+		"central_server_attach_service": plugin._central_server_attach_service,
+		"central_server_process_service": plugin._central_server_process_service,
+		"user_tool_watch_service": plugin._user_tool_watch_service,
+		"dock_model_service": plugin._dock_model_service,
+		"get_editor_scale": Callable(plugin, "_get_editor_scale")
+	}
+
+
+func _apply_service_bundle(plugin, bundle: Dictionary) -> void:
+	for key in SERVICE_BUNDLE_KEYS:
+		var current_value = plugin.get("_%s" % key)
+		plugin.set("_%s" % key, bundle.get(key, current_value))
+
+
+func _apply_feature_result(plugin, result: Dictionary) -> void:
+	for key in FEATURE_RESULT_KEYS:
+		var current_value = plugin.get("_%s" % key)
+		plugin.set("_%s" % key, result.get(key, current_value))
 
 
 func _ensure_instance(instance, script):

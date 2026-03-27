@@ -612,144 +612,22 @@ func _configure_central_server_attach_service() -> void:
 	)
 
 
-func _configure_action_router() -> void:
-	_action_router.configure({
-		"server_controller": _server_controller,
-		"state": _state,
-		"localization": _localization,
-		"server_feature": _server_feature,
-		"config_feature": _config_feature,
-		"user_tool_feature": _user_tool_feature,
-		"tool_access_feature": _tool_access_feature,
-		"self_diagnostic_feature": _self_diagnostic_feature,
-		"ui_state_feature": _ui_state_feature,
-		"reload_feature": _reload_feature,
-		"build_dock_model": Callable(self, "_build_dock_model"),
-		"get_dock": Callable(self, "_get_dock")
-	})
-
-
 func _get_dock():
 	return _dock
 
 
 func _configure_feature_workflows() -> void:
-	_configure_action_router()
-	var result: Dictionary = _bootstrap.configure_feature_workflows({
-		"plugin": self,
-		"state": _state,
-		"state_settings": _state.settings,
-		"localization": _localization,
-		"settings_store": _settings_store,
-		"server_controller": _server_controller,
-		"tool_catalog": _tool_catalog,
-		"config_service": _config_service,
-		"dock_presenter": _dock_presenter,
-		"user_tool_service": _user_tool_service,
-		"user_tool_watch_service": _user_tool_watch_service,
-		"client_install_detection_service": _client_install_detection_service,
-		"central_server_attach_service": _central_server_attach_service,
-		"central_server_process_service": _central_server_process_service,
-		"server_feature": _server_feature,
-		"config_feature": _config_feature,
-		"user_tool_feature": _user_tool_feature,
-		"reload_feature": _reload_feature,
-		"tool_profile_feature": _tool_profile_feature,
-		"tool_access_feature": _tool_access_feature,
-		"self_diagnostic_feature": _self_diagnostic_feature,
-		"ui_state_feature": _ui_state_feature,
-		"tool_bridge_service": _tool_bridge_service,
-		"dock_model_service": _dock_model_service,
-		"runtime_bridge_autoload_name": RUNTIME_BRIDGE_AUTOLOAD_NAME,
-		"runtime_bridge_autoload_path": RUNTIME_BRIDGE_AUTOLOAD_PATH,
-		"show_message": Callable(_action_router, "show_message"),
-		"show_confirmation": Callable(_action_router, "show_confirmation"),
-		"refresh_dock": Callable(_action_router, "refresh_dock"),
-		"save_settings": Callable(self, "_save_settings"),
-		"ensure_client_executable_dialog": Callable(self, "_ensure_client_executable_dialog"),
-		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog"),
-		"capture_dock_focus_snapshot": Callable(self, "_capture_dock_focus_snapshot"),
-		"restore_dock_focus_snapshot": Callable(self, "_restore_runtime_dock_focus_snapshot"),
-		"get_all_tools_by_category": Callable(_server_controller, "get_all_tools_by_category"),
-		"set_disabled_tools": Callable(_server_controller, "set_disabled_tools"),
-		"create_reload_coordinator": Callable(self, "_create_reload_coordinator"),
-		"reload_all_domains": Callable(_action_router, "reload_all_tool_domains"),
-		"runtime_reload_is_server_running": Callable(self, "_runtime_reload_is_server_running"),
-		"runtime_reload_start_server": Callable(self, "_runtime_reload_start_server"),
-		"runtime_reload_reinitialize_server": Callable(self, "_runtime_reload_reinitialize_server"),
-		"refresh_service_instances": Callable(self, "_refresh_service_instances"),
-		"runtime_reload_reset_localization": Callable(self, "_runtime_reload_reset_localization"),
-		"recreate_server_controller": Callable(self, "_recreate_server_controller"),
-		"configure_central_server_process_service": Callable(self, "_configure_central_server_process_service"),
-		"configure_central_server_attach_service": Callable(self, "_configure_central_server_attach_service"),
-		"configure_feature_workflows": Callable(self, "_configure_feature_workflows"),
-		"recreate_dock": Callable(self, "_recreate_dock"),
-		"restore_runtime_dock_focus_snapshot": Callable(self, "_restore_runtime_dock_focus_snapshot"),
-		"finish_self_operation": Callable(self, "_finish_self_operation"),
-		"count_dock_instances": Callable(self, "_count_dock_instances"),
-		"has_runtime_bridge_root_instance": Callable(self, "_has_runtime_bridge_root_instance"),
-		"is_server_running": Callable(_server_controller, "is_running"),
-		"get_connection_stats": Callable(_server_controller, "get_connection_stats"),
-		"get_tool_load_errors": Callable(_server_controller, "get_tool_load_errors"),
-		"get_reload_status": Callable(_server_controller, "get_reload_status"),
-		"get_performance_summary": Callable(_server_controller, "get_performance_summary"),
-		"is_dock_present": Callable(self, "_is_live_dock_present"),
-		"get_editor_scale": Callable(self, "_get_editor_scale")
-	})
-	_server_feature = result.get("server_feature", _server_feature)
-	_config_feature = result.get("config_feature", _config_feature)
-	_ui_state_feature = result.get("ui_state_feature", _ui_state_feature)
-	_tool_access_feature = result.get("tool_access_feature", _tool_access_feature)
-	_user_tool_feature = result.get("user_tool_feature", _user_tool_feature)
-	_reload_feature = result.get("reload_feature", _reload_feature)
-	_tool_profile_feature = result.get("tool_profile_feature", _tool_profile_feature)
-	_self_diagnostic_feature = result.get("self_diagnostic_feature", _self_diagnostic_feature)
-	_tool_bridge_service = result.get("tool_bridge_service", _tool_bridge_service)
-	_dock_model_service = result.get("dock_model_service", _dock_model_service)
-	_configure_action_router()
+	_bootstrap.configure_plugin_workflows(
+		self,
+		_action_router,
+		RUNTIME_BRIDGE_AUTOLOAD_NAME,
+		RUNTIME_BRIDGE_AUTOLOAD_PATH
+	)
 
 
 func _configure_dock_model_service() -> void:
-	_dock_model_service = _bootstrap.configure_dock_model_service({
-		"state": _state,
-		"localization": _localization,
-		"server_controller": _server_controller,
-		"tool_catalog": _tool_catalog,
-		"config_service": _config_service,
-		"dock_presenter": _dock_presenter,
-		"user_tool_service": _user_tool_service,
-		"client_install_detection_service": _client_install_detection_service,
-		"central_server_attach_service": _central_server_attach_service,
-		"central_server_process_service": _central_server_process_service,
-		"user_tool_watch_service": _user_tool_watch_service,
-		"dock_model_service": _dock_model_service,
-		"get_editor_scale": Callable(self, "_get_editor_scale")
-	}, _tool_access_feature, _self_diagnostic_feature)
+	_bootstrap.configure_plugin_dock_model_service(self)
 
 
 func _refresh_service_instances() -> void:
-	var bundle: Dictionary = _bootstrap.refresh_service_instances()
-	_apply_service_bundle(bundle)
-
-
-func _apply_service_bundle(bundle: Dictionary) -> void:
-	_settings_store = bundle.get("settings_store", _settings_store)
-	_runtime_state_service = bundle.get("runtime_state_service", _runtime_state_service)
-	_tool_bridge_service = bundle.get("tool_bridge_service", _tool_bridge_service)
-	_tool_catalog = bundle.get("tool_catalog", _tool_catalog)
-	_config_service = bundle.get("config_service", _config_service)
-	_client_install_detection_service = bundle.get("client_install_detection_service", _client_install_detection_service)
-	_server_feature = bundle.get("server_feature", _server_feature)
-	_config_feature = bundle.get("config_feature", _config_feature)
-	_user_tool_feature = bundle.get("user_tool_feature", _user_tool_feature)
-	_reload_feature = bundle.get("reload_feature", _reload_feature)
-	_tool_profile_feature = bundle.get("tool_profile_feature", _tool_profile_feature)
-	_tool_access_feature = bundle.get("tool_access_feature", _tool_access_feature)
-	_self_diagnostic_feature = bundle.get("self_diagnostic_feature", _self_diagnostic_feature)
-	_ui_state_feature = bundle.get("ui_state_feature", _ui_state_feature)
-	_dock_presenter = bundle.get("dock_presenter", _dock_presenter)
-	_dock_model_service = bundle.get("dock_model_service", _dock_model_service)
-	_user_tool_service = bundle.get("user_tool_service", _user_tool_service)
-	_user_tool_watch_service = bundle.get("user_tool_watch_service", _user_tool_watch_service)
-	_central_server_attach_service = bundle.get("central_server_attach_service", _central_server_attach_service)
-	_central_server_process_service = bundle.get("central_server_process_service", _central_server_process_service)
+	_bootstrap.refresh_plugin_service_instances(self)

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using GodotDotnetMcp.HostShared;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -139,11 +140,12 @@ internal sealed class CentralStdioMcpServer
     {
         return new
         {
-            protocolVersion = "2024-11-05",
+            protocolVersion = McpProtocolFacts.ProtocolVersion,
+            toolSchemaVersion = McpProtocolFacts.ToolSchemaVersion,
             serverInfo = new
             {
-                name = CentralServerManifest.ProductName,
-                version = CentralServerManifest.Version,
+                name = McpProtocolFacts.ServerName,
+                version = McpProtocolFacts.ServerVersion,
             },
             capabilities = new
             {
