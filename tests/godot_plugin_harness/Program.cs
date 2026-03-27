@@ -46,6 +46,10 @@ internal static class Program
         {
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            var appDataRoot = Path.Combine(stageRoot, ".appdata");
+            var localAppDataRoot = Path.Combine(stageRoot, ".localappdata");
+            Directory.CreateDirectory(appDataRoot);
+            Directory.CreateDirectory(localAppDataRoot);
 
             process = new Process
             {
@@ -58,6 +62,8 @@ internal static class Program
                     CreateNoWindow = true,
                 }
             };
+            process.StartInfo.Environment["APPDATA"] = appDataRoot;
+            process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
             process.StartInfo.ArgumentList.Add("--headless");
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);

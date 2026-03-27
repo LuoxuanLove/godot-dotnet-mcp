@@ -17,16 +17,22 @@ func _init() -> void:
 		return
 	_bridge = bridge_script.new()
 
-	for impl_name in ["impl_project", "impl_scene", "impl_script", "impl_index", "impl_runtime"]:
-		var path = _BASE + impl_name + ".gd"
+	var impl_paths := [
+		_BASE + "project/executor.gd",
+		_BASE + "impl_scene.gd",
+		_BASE + "script/executor.gd",
+		_BASE + "impl_index.gd",
+		_BASE + "impl_runtime.gd"
+	]
+	for path in impl_paths:
 		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var can_inst = script != null and (script as Script).can_instantiate()
 		if not can_inst:
-			MCPDebugBuffer.record("warning", "system", "Failed to load impl: %s" % impl_name)
+			MCPDebugBuffer.record("warning", "system", "Failed to load impl: %s" % path)
 			continue
 		var impl = script.new()
 		if impl == null:
-			MCPDebugBuffer.record("warning", "system", "Failed to instantiate impl: %s" % impl_name)
+			MCPDebugBuffer.record("warning", "system", "Failed to instantiate impl: %s" % path)
 			continue
 		impl.bridge = _bridge
 		if impl.has_method("configure_runtime"):

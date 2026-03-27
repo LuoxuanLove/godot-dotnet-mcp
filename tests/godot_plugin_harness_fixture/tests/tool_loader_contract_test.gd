@@ -54,6 +54,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"res://addons/godot_dotnet_mcp/tools/animation_tools.gd",
 		"res://addons/godot_dotnet_mcp/tools/physics_tools.gd",
 		"res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/project_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/material_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/ui_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/particle_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/resource_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/shader_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/tilemap_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/signal_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/group_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/audio_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/navigation_tools.gd",
 	]:
 		if ResourceLoader.exists(removed_wrapper_path):
 			return _failure("Removed legacy root wrapper should not exist: %s" % removed_wrapper_path)

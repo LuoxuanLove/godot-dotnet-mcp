@@ -1,2 +1,2 @@
 @tool
-extends "res://addons/godot_dotnet_mcp/tools/navigation_tools.gd"
+extends "res://addons/godot_dotnet_mcp/tools/navigation/navigation_executor.gd"

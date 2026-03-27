@@ -12,9 +12,11 @@ const MCPEditorLifecycleEndpointScript = preload("res://addons/godot_dotnet_mcp/
 const MCPEditorLifecycleActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_action_service.gd")
 const MCPEditorLifecycleStateBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_state_builder.gd")
 const MCPHttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
+const MCPHttpRequestDecoderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_decoder.gd")
 const MCPJsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router.gd")
 const MCPToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
 const MCPHttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
+const MCPHttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
 const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
@@ -34,13 +36,7 @@ var _port: int = 3000
 var _host: String = "127.0.0.1"
 var _running: bool = false
 var _debug_mode: bool = false
-var _clients: Array[StreamPeerTCP] = []
-var _pending_data: Dictionary = {}  # client -> accumulated data
-var _processing_clients: Dictionary = {}
-var _total_connections: int = 0
-var _total_requests: int = 0
-var _last_request_method: String = ""
-var _last_request_at_unix: int = 0
+var _connection_state = MCPHttpConnectionStateScript.new()
 
 var _tool_loader_supervisor = MCPToolLoaderSupervisorScript.new()
 var _tool_rpc_router = MCPToolRpcRouterScript.new()
@@ -48,6 +44,7 @@ var _editor_lifecycle_endpoint = MCPEditorLifecycleEndpointScript.new()
 var _editor_lifecycle_action_service = MCPEditorLifecycleActionServiceScript.new()
 var _editor_lifecycle_state_builder = MCPEditorLifecycleStateBuilderScript.new()
 var _http_request_router = MCPHttpRequestRouterScript.new()
+var _http_request_decoder = MCPHttpRequestDecoderScript.new()
 var _json_rpc_router = MCPJsonRpcRouterScript.new()
 var _tools_api_service = MCPToolsApiServiceScript.new()
 var _http_response_service = MCPHttpResponseServiceScript.new()
@@ -79,28 +76,27 @@ func _process(_delta: float) -> void:
 	if _tcp_server.is_connection_available():
 		var client = _tcp_server.take_connection()
 		if client:
-			_clients.append(client)
-			_pending_data[client] = ""
-			_total_connections += 1
-			_log("Client connected (total: %d)" % _clients.size(), "info")
+			_connection_state.add_client(client)
+			_log("Client connected (total: %d)" % _connection_state.get_connection_count(), "info")
 			client_connected.emit()
 
 	# Process existing clients
 	var clients_to_remove: Array[StreamPeerTCP] = []
-	for client in _clients:
+	for client in _connection_state.get_clients_snapshot():
 		client.poll()
 		var status = client.get_status()
 
 		if status == StreamPeerTCP.STATUS_CONNECTED:
-			if _processing_clients.has(client):
+			if _connection_state.is_processing(client):
 				continue
 			var available = client.get_available_bytes()
 			if available > 0:
 				var data = client.get_data(available)
 				if data[0] == OK:
 					var request_str = data[1].get_string_from_utf8()
-					_pending_data[client] += request_str
-					_log("Received %d bytes, total pending: %d" % [available, _pending_data[client].length()], "trace")
+					var pending_data = _connection_state.get_pending_data(client) + request_str
+					_connection_state.set_pending_data(client, pending_data)
+					_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "trace")
 					_process_http_request(client)
 				else:
 					_log("Error receiving data: %s" % data[0], "warning")
@@ -110,9 +106,7 @@ func _process(_delta: float) -> void:
 
 	# Remove disconnected clients
 	for client in clients_to_remove:
-		_clients.erase(client)
-		_pending_data.erase(client)
-		_processing_clients.erase(client)
+		_connection_state.remove_client(client)
 		_log("Client disconnected", "info")
 		client_disconnected.emit()
 
@@ -192,12 +186,7 @@ func stop() -> void:
 	if not _running:
 		return
 
-	# Disconnect all clients
-	for client in _clients:
-		client.disconnect_from_host()
-	_clients.clear()
-	_pending_data.clear()
-	_processing_clients.clear()
+	_connection_state.disconnect_all_clients()
 	if _runtime_control_service != null and _runtime_control_service.has_method("reset"):
 		_runtime_control_service.reset()
 
@@ -218,6 +207,7 @@ func dispose() -> void:
 	_dispose_helper(_editor_lifecycle_action_service)
 	_dispose_helper(_editor_lifecycle_state_builder)
 	_dispose_helper(_http_request_router)
+	_dispose_helper(_http_request_decoder)
 	_dispose_helper(_json_rpc_router)
 	_dispose_helper(_tools_api_service)
 	_dispose_helper(_http_response_service)
@@ -227,12 +217,14 @@ func dispose() -> void:
 	_editor_lifecycle_action_service = null
 	_editor_lifecycle_state_builder = null
 	_http_request_router = null
+	_http_request_decoder = null
 	_json_rpc_router = null
 	_tools_api_service = null
 	_http_response_service = null
 	_runtime_control_service = null
 	_gdscript_lsp_diagnostics_service = null
 	_default_permission_provider = null
+	_connection_state = null
 	_tcp_server = null
 
 
@@ -249,17 +241,20 @@ func set_debug_mode(debug: bool) -> void:
 
 
 func get_connection_count() -> int:
-	return _clients.size()
+	return _connection_state.get_connection_count() if _connection_state != null else 0
 
 
 func get_connection_stats() -> Dictionary:
-	return {
-		"active_connections": _clients.size(),
-		"total_connections": _total_connections,
-		"total_requests": _total_requests,
-		"last_request_method": _last_request_method,
-		"last_request_at_unix": _last_request_at_unix
-	}
+	if _connection_state == null:
+		return {
+			"active_connections": 0,
+			"connections": 0,
+			"total_connections": 0,
+			"total_requests": 0,
+			"last_request_method": "",
+			"last_request_at_unix": 0
+		}
+	return _connection_state.get_connection_stats()
 
 
 func set_disabled_tools(disabled: Array) -> void:
@@ -411,6 +406,7 @@ func _ensure_initialized() -> void:
 	_ensure_tool_loader_supervisor()
 	_ensure_http_response_service()
 	_ensure_http_request_router()
+	_ensure_http_request_decoder()
 	_ensure_tools_api_service()
 	_ensure_editor_lifecycle_endpoint()
 	_ensure_runtime_control_service()
@@ -469,6 +465,11 @@ func _ensure_http_request_router() -> void:
 		"handle_editor_lifecycle_post_request": Callable(self, "_handle_editor_lifecycle_post_request"),
 		"build_cors_response": Callable(self, "_build_cors_response")
 	})
+
+
+func _ensure_http_request_decoder() -> void:
+	if _http_request_decoder == null:
+		_http_request_decoder = MCPHttpRequestDecoderScript.new()
 
 
 func _ensure_json_rpc_router() -> void:
@@ -543,13 +544,14 @@ func _ensure_http_response_service() -> void:
 
 
 func _build_server_stats() -> Dictionary:
+	var connection_stats = get_connection_stats()
 	return {
 		"running": _running,
-		"connections": _clients.size(),
-		"total_connections": _total_connections,
-		"total_requests": _total_requests,
-		"last_request_method": _last_request_method,
-		"last_request_at_unix": _last_request_at_unix
+		"connections": int(connection_stats.get("connections", 0)),
+		"total_connections": int(connection_stats.get("total_connections", 0)),
+		"total_requests": int(connection_stats.get("total_requests", 0)),
+		"last_request_method": str(connection_stats.get("last_request_method", "")),
+		"last_request_at_unix": int(connection_stats.get("last_request_at_unix", 0))
 	}
 
 
@@ -595,84 +597,49 @@ func _record_tool_loader_registration_issue(level: String, reason: String, statu
 
 
 func _process_http_request(client: StreamPeerTCP) -> void:
-	var data = _pending_data.get(client, "")
+	var data = _connection_state.get_pending_data(client)
 	if data.is_empty():
 		return
-	if _processing_clients.has(client):
+	if _connection_state.is_processing(client):
 		return
 
-	# Check for complete HTTP request (headers end with \r\n\r\n)
-	var header_end = data.find("\r\n\r\n")
-	if header_end == -1:
-		if data.length() > 0:
+	_ensure_http_request_decoder()
+	var decoded_request: Dictionary = _http_request_decoder.decode_pending_request(data)
+	if not bool(decoded_request.get("ready", false)):
+		var waiting_for := str(decoded_request.get("waiting_for", ""))
+		if waiting_for == "headers" and data.length() > 0:
 			_log("Waiting for headers... current data length: %d" % data.length(), "trace")
+		elif waiting_for == "chunked_body":
+			_log("Waiting for chunked body...", "trace")
+		elif waiting_for == "body":
+			_log(
+				"Waiting for body... need %d bytes, have %d bytes"
+				% [int(decoded_request.get("content_length", 0)), int(decoded_request.get("body_byte_size", 0))],
+				"trace"
+			)
 		return
 
-	# Parse HTTP headers
-	var header_section = data.substr(0, header_end)
-	var headers = _parse_http_headers(header_section)
-
+	var headers: Dictionary = decoded_request.get("headers", {})
 	if headers.is_empty():
-		_pending_data[client] = ""
+		_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
 		return
 
-	# Get content length - support chunked encoding
-	var content_length = 0
-	var is_chunked = false
-
-	if headers.has("content-length"):
-		content_length = int(headers["content-length"])
-	elif headers.has("transfer-encoding") and headers["transfer-encoding"].to_lower().contains("chunked"):
-		is_chunked = true
-
-	# Check if we have complete body
-	var body_start = header_end + 4
-	var body = data.substr(body_start)
-
-	# IMPORTANT: Content-Length is in bytes, not characters!
-	# For UTF-8 strings with multi-byte chars (emojis, Chinese, etc.), we must compare byte sizes
-	var body_bytes = body.to_utf8_buffer()
-	var body_byte_size = body_bytes.size()
-	var request_body := ""
+	var request_body := str(decoded_request.get("request_body", ""))
+	var content_length := int(decoded_request.get("content_length", 0))
+	var body_byte_size := int(decoded_request.get("body_byte_size", 0))
+	var is_chunked := bool(decoded_request.get("is_chunked", false))
+	_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
 
 	_log("Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s" % [headers.get("method", "?"), content_length, body_byte_size, is_chunked], "trace")
 
-	# Handle chunked encoding
-	if is_chunked:
-		var decoded_chunked = _decode_chunked_body_bytes(body_bytes)
-		if not bool(decoded_chunked.get("complete", false)):
-			_log("Waiting for chunked body...", "trace")
-			return  # Wait for more data
-		var request_bytes: PackedByteArray = decoded_chunked.get("body", PackedByteArray())
-		request_body = request_bytes.get_string_from_utf8()
-		var remaining_bytes: PackedByteArray = decoded_chunked.get("remaining", PackedByteArray())
-		_pending_data[client] = remaining_bytes.get_string_from_utf8()
-	elif body_byte_size < content_length:
-		_log("Waiting for body... need %d bytes, have %d bytes" % [content_length, body_byte_size], "trace")
-		return  # Wait for more data
-
-	# Extract the complete request body (by bytes, then convert back to string)
-	if not is_chunked:
-		# Extract exactly content_length bytes and convert to string
-		var request_bytes = body_bytes.slice(0, content_length)
-		request_body = request_bytes.get_string_from_utf8()
-		# Remove processed data (also by bytes)
-		if body_byte_size > content_length:
-			var remaining_bytes = body_bytes.slice(content_length)
-			_pending_data[client] = remaining_bytes.get_string_from_utf8()
-		else:
-			_pending_data[client] = ""
-
-	_processing_clients[client] = true
+	_connection_state.mark_processing(client)
 
 	# Route request
 	var method = headers.get("method", "GET")
 	var path = headers.get("path", "/")
 
 	_log("Processing: %s %s (body: %d bytes)" % [method, path, request_body.length()], "debug")
-	_total_requests += 1
-	_last_request_method = method
-	_last_request_at_unix = int(Time.get_unix_time_from_system())
+	_connection_state.record_request(method)
 
 	_ensure_http_request_router()
 	var response: Dictionary = await _http_request_router.route_request_async(method, path, request_body)
@@ -680,110 +647,16 @@ func _process_http_request(client: StreamPeerTCP) -> void:
 	if response.has("_no_body"):
 		response.erase("_no_body")
 
-	if client in _clients and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+	if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		_write_http_response(client, response, no_body)
-	_processing_clients.erase(client)
-
-
-func _decode_chunked_body_bytes(data: PackedByteArray) -> Dictionary:
-	# Decode chunked transfer encoding with byte offsets.
-	# Returns completion state, decoded body, and any remaining bytes.
-	var result := PackedByteArray()
-	var pos = 0
-
-	while pos < data.size():
-		# Find chunk size line end
-		var line_end = _find_crlf_bytes(data, pos)
-		if line_end == -1:
-			return {"complete": false}  # Need more data
-
-		# Parse chunk size (hex)
-		var size_str = data.slice(pos, line_end).get_string_from_utf8().strip_edges()
-		# Remove any chunk extensions
-		var semicolon = size_str.find(";")
-		if semicolon != -1:
-			size_str = size_str.substr(0, semicolon)
-
-		var chunk_size = size_str.hex_to_int()
-		var chunk_start = line_end + 2
-
-		if chunk_size == 0:
-			if chunk_start + 1 < data.size() and data[chunk_start] == 13 and data[chunk_start + 1] == 10:
-				return {
-					"complete": true,
-					"body": result,
-					"remaining": data.slice(chunk_start + 2, data.size())
-				}
-			var trailer_end = _find_double_crlf_bytes(data, chunk_start)
-			if trailer_end == -1:
-				return {"complete": false}  # Need more data
-			return {
-				"complete": true,
-				"body": result,
-				"remaining": data.slice(trailer_end, data.size())
-			}
-
-		# Check if we have the full chunk
-		var chunk_end = chunk_start + chunk_size
-
-		if chunk_end + 2 > data.size():
-			return {"complete": false}  # Need more data
-		if data[chunk_end] != 13 or data[chunk_end + 1] != 10:
-			return {"complete": false}
-
-		# Extract chunk data
-		result.append_array(data.slice(chunk_start, chunk_end))
-		pos = chunk_end + 2  # Skip chunk data and trailing CRLF
-
-	return {"complete": false}  # Need more data
-
-
-func _find_crlf_bytes(data: PackedByteArray, start: int) -> int:
-	for index in range(start, data.size() - 1):
-		if data[index] == 13 and data[index + 1] == 10:
-			return index
-	return -1
-
-
-func _find_double_crlf_bytes(data: PackedByteArray, start: int) -> int:
-	for index in range(start, data.size() - 3):
-		if data[index] == 13 and data[index + 1] == 10 and data[index + 2] == 13 and data[index + 3] == 10:
-			return index + 4
-	return -1
+	_connection_state.clear_processing(client)
 
 
 func _close_client(client: StreamPeerTCP) -> void:
-	if client in _clients:
+	if _connection_state.has_client(client):
 		client.disconnect_from_host()
-		_clients.erase(client)
-		_pending_data.erase(client)
-		_processing_clients.erase(client)
+		_connection_state.remove_client(client)
 		_log("Client connection closed", "debug")
-
-
-func _parse_http_headers(header_section: String) -> Dictionary:
-	var result: Dictionary = {}
-	var lines = header_section.split("\r\n")
-
-	if lines.size() == 0:
-		return result
-
-	# Parse request line
-	var request_line = lines[0].split(" ")
-	if request_line.size() >= 2:
-		result["method"] = request_line[0]
-		result["path"] = request_line[1]
-
-	# Parse headers
-	for i in range(1, lines.size()):
-		var line = lines[i]
-		var colon_pos = line.find(":")
-		if colon_pos > 0:
-			var key = line.substr(0, colon_pos).strip_edges().to_lower()
-			var value = line.substr(colon_pos + 1).strip_edges()
-			result[key] = value
-
-	return result
 
 
 func _handle_mcp_request_async(body: String) -> Dictionary:

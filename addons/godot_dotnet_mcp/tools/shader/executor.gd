@@ -1,2 +1,2 @@
 @tool
-extends "res://addons/godot_dotnet_mcp/tools/shader_tools.gd"
+extends "res://addons/godot_dotnet_mcp/tools/shader/shader_executor.gd"

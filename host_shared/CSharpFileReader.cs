@@ -1,4 +1,7 @@
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace GodotDotnetMcp.HostShared;
 
@@ -22,72 +25,34 @@ internal sealed record CSharpFileReadModel(
 
 internal static class CSharpFileReader
 {
-    private static readonly Regex NamespaceRegex = new(@"^\s*namespace\s+(?<name>[A-Za-z_][\w\.]*)\s*(?:;|\{)?\s*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex UsingRegex = new(@"^\s*using\s+(?:(?<static>static)\s+)?(?:(?<alias>[A-Za-z_]\w*)\s*=\s*)?(?<name>[A-Za-z_][\w\.]*(?:<[^>]+>)?)(?:\s*;\s*)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex TypeRegex = new(@"^\s*(?:(?<mods>(?:public|private|protected|internal|static|abstract|sealed|partial|readonly|unsafe|new)\s+)+)?(?<kind>class|struct|interface|enum|record(?:\s+(?:class|struct))?)\s+(?<name>[A-Za-z_]\w*(?:<[^>{]+>)?)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex MethodRegex = new(@"^\s*(?:(?<mods>(?:public|private|protected|internal|static|virtual|override|abstract|async|sealed|partial|extern|new|unsafe|readonly)\s+)+)?(?<returnType>[A-Za-z_][\w<>\[\]\.,\?\s]*?)\s+(?<name>[A-Za-z_]\w*)\s*(?:<(?<generic>[^>]+)>)?\s*\((?<parameters>[^\)]*)\)\s*(?:\{|=>|where\b|;)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     public static CSharpFileReadModel Read(string path)
     {
-        var lines = File.ReadAllLines(path);
-        string? namespaceName = null;
-        var usings = new List<string>();
-        var types = new List<CSharpTypeSummary>();
-        var methods = new List<CSharpMethodSummary>();
-        string? currentType = null;
+        var sourceText = File.ReadAllText(path);
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            sourceText,
+            new CSharpParseOptions(LanguageVersion.Preview));
+        var root = syntaxTree.GetCompilationUnitRoot();
 
-        for (var index = 0; index < lines.Length; index++)
-        {
-            var line = lines[index];
-            var trimmed = line.Trim();
+        var namespaceName = root.DescendantNodes()
+            .OfType<BaseNamespaceDeclarationSyntax>()
+            .Select(node => node.Name.ToString())
+            .FirstOrDefault();
 
-            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("//", StringComparison.Ordinal))
-            {
-                continue;
-            }
+        var usings = root.DescendantNodes(descendIntoTrivia: false)
+            .OfType<UsingDirectiveSyntax>()
+            .Select(usingDirective => usingDirective.ToFullString().Trim())
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
 
-            var namespaceMatch = NamespaceRegex.Match(trimmed);
-            if (namespaceMatch.Success)
-            {
-                namespaceName = namespaceMatch.Groups["name"].Value;
-                continue;
-            }
+        var types = root.DescendantNodes(descendIntoTrivia: false)
+            .OfType<BaseTypeDeclarationSyntax>()
+            .Select(typeNode => BuildTypeSummary(syntaxTree, typeNode))
+            .ToArray();
 
-            var usingMatch = UsingRegex.Match(trimmed);
-            if (usingMatch.Success)
-            {
-                usings.Add(trimmed);
-                continue;
-            }
-
-            var typeMatch = TypeRegex.Match(trimmed);
-            if (typeMatch.Success)
-            {
-                var modifiers = ParseModifiers(typeMatch.Groups["mods"].Value);
-                var kind = NormalizeTypeKind(typeMatch.Groups["kind"].Value);
-                var name = typeMatch.Groups["name"].Value;
-                currentType = name;
-                types.Add(new CSharpTypeSummary(kind, name, modifiers, index + 1, line.IndexOf(name, StringComparison.Ordinal) + 1));
-                continue;
-            }
-
-            var methodMatch = MethodRegex.Match(trimmed);
-            if (methodMatch.Success)
-            {
-                var modifiers = ParseModifiers(methodMatch.Groups["mods"].Value);
-                var methodName = methodMatch.Groups["name"].Value;
-                var returnType = methodMatch.Groups["returnType"].Value.Trim();
-                var parameters = methodMatch.Groups["parameters"].Value.Trim();
-                methods.Add(new CSharpMethodSummary(
-                    Name: methodName,
-                    ReturnType: returnType,
-                    Parameters: parameters,
-                    Modifiers: modifiers,
-                    Line: index + 1,
-                    Column: line.IndexOf(methodName, StringComparison.Ordinal) + 1,
-                    ContainingType: currentType));
-            }
-        }
+        var methods = root.DescendantNodes(descendIntoTrivia: false)
+            .OfType<MethodDeclarationSyntax>()
+            .Select(methodNode => BuildMethodSummary(syntaxTree, methodNode))
+            .ToArray();
 
         return new CSharpFileReadModel(
             Path: Path.GetFullPath(path),
@@ -97,18 +62,61 @@ internal static class CSharpFileReader
             Methods: methods);
     }
 
-    private static IReadOnlyList<string> ParseModifiers(string rawModifiers)
+    private static CSharpTypeSummary BuildTypeSummary(SyntaxTree syntaxTree, BaseTypeDeclarationSyntax typeNode)
     {
-        if (string.IsNullOrWhiteSpace(rawModifiers))
-        {
-            return Array.Empty<string>();
-        }
-
-        return rawModifiers.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var (line, column) = GetLineAndColumn(syntaxTree, typeNode.Identifier.Span);
+        return new CSharpTypeSummary(
+            Kind: GetTypeKind(typeNode),
+            Name: GetTypeName(typeNode),
+            Modifiers: typeNode.Modifiers.Select(token => token.Text).ToArray(),
+            Line: line,
+            Column: column);
     }
 
-    private static string NormalizeTypeKind(string kind)
+    private static CSharpMethodSummary BuildMethodSummary(SyntaxTree syntaxTree, MethodDeclarationSyntax methodNode)
     {
-        return kind.Replace("record ", "record", StringComparison.Ordinal).Trim();
+        var (line, column) = GetLineAndColumn(syntaxTree, methodNode.Identifier.Span);
+        var containingType = methodNode.Ancestors()
+            .OfType<BaseTypeDeclarationSyntax>()
+            .Select(GetTypeName)
+            .FirstOrDefault();
+
+        return new CSharpMethodSummary(
+            Name: methodNode.Identifier.Text,
+            ReturnType: methodNode.ReturnType.ToString().Trim(),
+            Parameters: string.Join(", ", methodNode.ParameterList.Parameters.Select(parameter => parameter.ToString().Trim())),
+            Modifiers: methodNode.Modifiers.Select(token => token.Text).ToArray(),
+            Line: line,
+            Column: column,
+            ContainingType: containingType);
+    }
+
+    private static string GetTypeKind(BaseTypeDeclarationSyntax typeNode)
+    {
+        return typeNode switch
+        {
+            ClassDeclarationSyntax => "class",
+            StructDeclarationSyntax => "struct",
+            InterfaceDeclarationSyntax => "interface",
+            EnumDeclarationSyntax => "enum",
+            RecordDeclarationSyntax => "record",
+            _ => typeNode.Kind().ToString(),
+        };
+    }
+
+    private static string GetTypeName(BaseTypeDeclarationSyntax typeNode)
+    {
+        return typeNode switch
+        {
+            TypeDeclarationSyntax declaration when declaration.TypeParameterList is not null
+                => $"{declaration.Identifier.Text}{declaration.TypeParameterList}",
+            _ => typeNode.Identifier.Text,
+        };
+    }
+
+    private static (int Line, int Column) GetLineAndColumn(SyntaxTree syntaxTree, TextSpan span)
+    {
+        var position = syntaxTree.GetLineSpan(span).StartLinePosition;
+        return (position.Line + 1, position.Character + 1);
     }
 }

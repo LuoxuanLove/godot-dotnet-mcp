@@ -14,6 +14,7 @@ internal static class Program
         var testCases = new (string Name, Func<Task> Execute)[]
         {
             ("tool_catalog_exposes_workspace_system_dotnet", VerifyToolCatalogAsync),
+            ("cs_file_read_uses_roslyn_for_modern_csharp", VerifyCsFileReadRoslynContractAsync),
             ("central_health_reports_unified_protocol_facts", VerifyHealthFactsAsync),
             ("editor_process_service_supports_injected_external_probe", VerifyInjectedExternalProbeContractAsync),
             ("workspace_project_remove_clears_active_context", VerifyProjectRemoveClearsActiveContextAsync),
@@ -84,6 +85,74 @@ internal static class Program
         }
 
         return Task.CompletedTask;
+    }
+
+    private static Task VerifyCsFileReadRoslynContractAsync()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "godot_dotnet_mcp_host_contracts", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        var filePath = Path.Combine(tempDirectory, "SampleContract.cs");
+
+        try
+        {
+            File.WriteAllText(filePath, """
+using System;
+using Godot;
+
+namespace Contract.Sample;
+
+public partial record SampleContract<T>(T Value) : Node
+{
+    [Export]
+    public int Speed { get; set; } = 1;
+
+    public async Task<T> PingAsync<U>(U arg)
+    {
+        await Task.Yield();
+        return Value;
+    }
+}
+""");
+
+            var response = CsFileReadTool.Execute(SerializeToElement(new { path = filePath }));
+            if (response.IsError)
+            {
+                throw new InvalidOperationException($"cs_file_read should succeed for modern C# syntax, but returned: {response.TextContent}");
+            }
+
+            var payload = SerializeToElement(response.StructuredContent);
+            AssertNestedString(payload, Path.GetFullPath(filePath), "path");
+            AssertNestedString(payload, "Contract.Sample", "namespace");
+
+            var types = payload.GetProperty("types").EnumerateArray().ToArray();
+            if (types.Length != 1)
+            {
+                throw new InvalidOperationException($"Expected exactly one type from cs_file_read but got {types.Length}.");
+            }
+
+            AssertNestedString(types[0], "record", "kind");
+            AssertNestedString(types[0], "SampleContract<T>", "name");
+
+            var methods = payload.GetProperty("methods").EnumerateArray().ToArray();
+            var pingMethod = methods.FirstOrDefault(method =>
+                string.Equals(method.GetProperty("name").GetString(), "PingAsync", StringComparison.Ordinal));
+            if (pingMethod.ValueKind == JsonValueKind.Undefined)
+            {
+                throw new InvalidOperationException("cs_file_read should include the generic async method parsed by Roslyn.");
+            }
+
+            AssertNestedString(pingMethod, "Task<T>", "returnType");
+            AssertNestedString(pingMethod, "U arg", "parameters");
+            AssertNestedString(pingMethod, "SampleContract<T>", "containingType");
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
     }
 
     private static async Task VerifyHealthFactsAsync()

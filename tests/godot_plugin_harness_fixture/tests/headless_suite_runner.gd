@@ -1,42 +1,57 @@
 extends SceneTree
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const HttpServerContractTest = preload("res://tests/http_server_contract_test.gd")
-const HttpRequestRouterContractTest = preload("res://tests/http_request_router_contract_test.gd")
-const HttpResponseServiceContractTest = preload("res://tests/http_response_service_contract_test.gd")
-const JsonRpcRouterContractTest = preload("res://tests/json_rpc_router_contract_test.gd")
-const EditorLifecycleActionServiceContractTest = preload("res://tests/editor_lifecycle_action_service_contract_test.gd")
-const RuntimeControlContractTest = preload("res://tests/runtime_control_contract_test.gd")
-const RuntimeControlRequestCoordinatorContractTest = preload("res://tests/runtime_control_request_coordinator_contract_test.gd")
-const RuntimeControlReplyResolverContractTest = preload("res://tests/runtime_control_reply_resolver_contract_test.gd")
-const RuntimeBridgeContractTest = preload("res://tests/runtime_bridge_contract_test.gd")
-const RuntimeFallbackStoreContractTest = preload("res://tests/runtime_fallback_store_contract_test.gd")
-const RuntimeReplyServiceContractTest = preload("res://tests/runtime_reply_service_contract_test.gd")
-const UserToolWatchServiceContractTest = preload("res://tests/user_tool_watch_service_contract_test.gd")
-const ScriptToolExecutorContractTest = preload("res://tests/script_tool_executor_contract_test.gd")
-const NodeToolExecutorContractTest = preload("res://tests/node_tool_executor_contract_test.gd")
-const AnimationToolExecutorContractTest = preload("res://tests/animation_tool_executor_contract_test.gd")
-const PhysicsToolExecutorContractTest = preload("res://tests/physics_tool_executor_contract_test.gd")
-const SceneToolExecutorContractTest = preload("res://tests/scene_tool_executor_contract_test.gd")
-const DebugToolExecutorContractTest = preload("res://tests/debug_tool_executor_contract_test.gd")
-const EditorToolExecutorContractTest = preload("res://tests/editor_tool_executor_contract_test.gd")
-const LightingToolExecutorContractTest = preload("res://tests/lighting_tool_executor_contract_test.gd")
-const GeometryToolExecutorContractTest = preload("res://tests/geometry_tool_executor_contract_test.gd")
-const FilesystemToolExecutorContractTest = preload("res://tests/filesystem_tool_executor_contract_test.gd")
-const PluginBootstrapContractTest = preload("res://tests/plugin_bootstrap_contract_test.gd")
-const PluginDockCoordinatorContractTest = preload("res://tests/plugin_dock_coordinator_contract_test.gd")
-const PluginRuntimeCoordinatorContractTest = preload("res://tests/plugin_runtime_coordinator_contract_test.gd")
-const ClientConfigSerializerContractTest = preload("res://tests/client_config_serializer_contract_test.gd")
-const ClientConfigInspectionServiceContractTest = preload("res://tests/client_config_inspection_service_contract_test.gd")
-const ClientConfigFileTransactionContractTest = preload("res://tests/client_config_file_transaction_contract_test.gd")
-const ClientConfigLauncherAdapterContractTest = preload("res://tests/client_config_launcher_adapter_contract_test.gd")
-const EditorLifecycleStateBuilderContractTest = preload("res://tests/editor_lifecycle_state_builder_contract_test.gd")
-const SystemIndexImplContractTest = preload("res://tests/system_index_impl_contract_test.gd")
-const SystemRuntimeImplContractTest = preload("res://tests/system_runtime_impl_contract_test.gd")
-const ToolLoaderContractTest = preload("res://tests/tool_loader_contract_test.gd")
-const ToolsTabInteractionSupportContractTest = preload("res://tests/tools_tab_interaction_support_contract_test.gd")
-const ToolsTabSearchServiceContractTest = preload("res://tests/tools_tab_search_service_contract_test.gd")
-const ToolsTabPreviewBuilderContractTest = preload("res://tests/tools_tab_preview_builder_contract_test.gd")
+const HttpServerContractTest = "res://tests/http_server_contract_test.gd"
+const HttpRequestRouterContractTest = "res://tests/http_request_router_contract_test.gd"
+const HttpRequestDecoderContractTest = "res://tests/http_request_decoder_contract_test.gd"
+const HttpResponseServiceContractTest = "res://tests/http_response_service_contract_test.gd"
+const JsonRpcRouterContractTest = "res://tests/json_rpc_router_contract_test.gd"
+const EditorLifecycleActionServiceContractTest = "res://tests/editor_lifecycle_action_service_contract_test.gd"
+const RuntimeControlContractTest = "res://tests/runtime_control_contract_test.gd"
+const RuntimeControlRequestCoordinatorContractTest = "res://tests/runtime_control_request_coordinator_contract_test.gd"
+const RuntimeControlReplyResolverContractTest = "res://tests/runtime_control_reply_resolver_contract_test.gd"
+const RuntimeBridgeContractTest = "res://tests/runtime_bridge_contract_test.gd"
+const RuntimeFallbackStoreContractTest = "res://tests/runtime_fallback_store_contract_test.gd"
+const RuntimeReplyServiceContractTest = "res://tests/runtime_reply_service_contract_test.gd"
+const UserToolWatchServiceContractTest = "res://tests/user_tool_watch_service_contract_test.gd"
+const ScriptToolExecutorContractTest = "res://tests/script_tool_executor_contract_test.gd"
+const ScriptEditServiceContractTest = "res://tests/script_edit_service_contract_test.gd"
+const NodeToolExecutorContractTest = "res://tests/node_tool_executor_contract_test.gd"
+const AnimationToolExecutorContractTest = "res://tests/animation_tool_executor_contract_test.gd"
+const PhysicsToolExecutorContractTest = "res://tests/physics_tool_executor_contract_test.gd"
+const SceneToolExecutorContractTest = "res://tests/scene_tool_executor_contract_test.gd"
+const DebugToolExecutorContractTest = "res://tests/debug_tool_executor_contract_test.gd"
+const EditorToolExecutorContractTest = "res://tests/editor_tool_executor_contract_test.gd"
+const LightingToolExecutorContractTest = "res://tests/lighting_tool_executor_contract_test.gd"
+const GeometryToolExecutorContractTest = "res://tests/geometry_tool_executor_contract_test.gd"
+const FilesystemToolExecutorContractTest = "res://tests/filesystem_tool_executor_contract_test.gd"
+const ProjectToolExecutorContractTest = "res://tests/project_tool_executor_contract_test.gd"
+const MaterialToolExecutorContractTest = "res://tests/material_tool_executor_contract_test.gd"
+const UIToolExecutorContractTest = "res://tests/ui_tool_executor_contract_test.gd"
+const ParticleToolExecutorContractTest = "res://tests/particle_tool_executor_contract_test.gd"
+const ResourceToolExecutorContractTest = "res://tests/resource_tool_executor_contract_test.gd"
+const ShaderToolExecutorContractTest = "res://tests/shader_tool_executor_contract_test.gd"
+const TilemapToolExecutorContractTest = "res://tests/tilemap_tool_executor_contract_test.gd"
+const SignalToolExecutorContractTest = "res://tests/signal_tool_executor_contract_test.gd"
+const GroupToolExecutorContractTest = "res://tests/group_tool_executor_contract_test.gd"
+const AudioToolExecutorContractTest = "res://tests/audio_tool_executor_contract_test.gd"
+const NavigationToolExecutorContractTest = "res://tests/navigation_tool_executor_contract_test.gd"
+const PluginBootstrapContractTest = "res://tests/plugin_bootstrap_contract_test.gd"
+const PluginDockCoordinatorContractTest = "res://tests/plugin_dock_coordinator_contract_test.gd"
+const PluginRuntimeCoordinatorContractTest = "res://tests/plugin_runtime_coordinator_contract_test.gd"
+const ClientConfigSerializerContractTest = "res://tests/client_config_serializer_contract_test.gd"
+const ClientConfigInspectionServiceContractTest = "res://tests/client_config_inspection_service_contract_test.gd"
+const ClientConfigFileTransactionContractTest = "res://tests/client_config_file_transaction_contract_test.gd"
+const ClientConfigLauncherAdapterContractTest = "res://tests/client_config_launcher_adapter_contract_test.gd"
+const EditorLifecycleStateBuilderContractTest = "res://tests/editor_lifecycle_state_builder_contract_test.gd"
+const SystemProjectExecutorContractTest = "res://tests/system_project_executor_contract_test.gd"
+const SystemScriptExecutorContractTest = "res://tests/system_script_executor_contract_test.gd"
+const SystemIndexImplContractTest = "res://tests/system_index_impl_contract_test.gd"
+const SystemRuntimeImplContractTest = "res://tests/system_runtime_impl_contract_test.gd"
+const ToolLoaderContractTest = "res://tests/tool_loader_contract_test.gd"
+const ToolsTabInteractionSupportContractTest = "res://tests/tools_tab_interaction_support_contract_test.gd"
+const ToolsTabSearchServiceContractTest = "res://tests/tools_tab_search_service_contract_test.gd"
+const ToolsTabPreviewBuilderContractTest = "res://tests/tools_tab_preview_builder_contract_test.gd"
 
 
 func _initialize() -> void:
@@ -80,6 +95,10 @@ func _run_suite() -> void:
 			"script": ScriptToolExecutorContractTest
 		},
 		{
+			"name": "script_edit_service_contracts",
+			"script": ScriptEditServiceContractTest
+		},
+		{
 			"name": "node_tool_executor_contracts",
 			"script": NodeToolExecutorContractTest
 		},
@@ -114,6 +133,50 @@ func _run_suite() -> void:
 		{
 			"name": "filesystem_tool_executor_contracts",
 			"script": FilesystemToolExecutorContractTest
+		},
+		{
+			"name": "project_tool_executor_contracts",
+			"script": ProjectToolExecutorContractTest
+		},
+		{
+			"name": "material_tool_executor_contracts",
+			"script": MaterialToolExecutorContractTest
+		},
+		{
+			"name": "ui_tool_executor_contracts",
+			"script": UIToolExecutorContractTest
+		},
+		{
+			"name": "particle_tool_executor_contracts",
+			"script": ParticleToolExecutorContractTest
+		},
+		{
+			"name": "resource_tool_executor_contracts",
+			"script": ResourceToolExecutorContractTest
+		},
+		{
+			"name": "shader_tool_executor_contracts",
+			"script": ShaderToolExecutorContractTest
+		},
+		{
+			"name": "tilemap_tool_executor_contracts",
+			"script": TilemapToolExecutorContractTest
+		},
+		{
+			"name": "signal_tool_executor_contracts",
+			"script": SignalToolExecutorContractTest
+		},
+		{
+			"name": "group_tool_executor_contracts",
+			"script": GroupToolExecutorContractTest
+		},
+		{
+			"name": "audio_tool_executor_contracts",
+			"script": AudioToolExecutorContractTest
+		},
+		{
+			"name": "navigation_tool_executor_contracts",
+			"script": NavigationToolExecutorContractTest
 		},
 		{
 			"name": "plugin_bootstrap_contracts",
@@ -152,6 +215,10 @@ func _run_suite() -> void:
 			"script": HttpRequestRouterContractTest
 		},
 		{
+			"name": "http_request_decoder_contracts",
+			"script": HttpRequestDecoderContractTest
+		},
+		{
 			"name": "http_response_service_contracts",
 			"script": HttpResponseServiceContractTest
 		},
@@ -166,6 +233,14 @@ func _run_suite() -> void:
 		{
 			"name": "editor_lifecycle_state_builder_contracts",
 			"script": EditorLifecycleStateBuilderContractTest
+		},
+		{
+			"name": "system_project_executor_contracts",
+			"script": SystemProjectExecutorContractTest
+		},
+		{
+			"name": "system_script_executor_contracts",
+			"script": SystemScriptExecutorContractTest
 		},
 		{
 			"name": "system_runtime_impl_contracts",
@@ -196,10 +271,19 @@ func _run_suite() -> void:
 	for case_info in cases:
 		if only_case != "" and str(case_info.get("name", "")) != only_case:
 			continue
-		var case_script = case_info.get("script", null)
-		if case_script == null:
+		var case_script_path := str(case_info.get("script", ""))
+		if case_script_path.is_empty():
 			continue
 		var case_name := str(case_info.get("name", "unknown_case"))
+		var case_script = load(case_script_path)
+		if case_script == null:
+			results.append({
+				"name": case_name,
+				"success": false,
+				"error": "Failed to load test script: %s" % case_script_path
+			})
+			success = false
+			continue
 		var case_instance = case_script.new()
 		print("HARNESS_CASE_START:%s" % case_name)
 		var result: Dictionary = await case_instance.run_case(self)

@@ -9,14 +9,27 @@
 
 ```text
 tools/system/
-├─ executor.gd        # 调度器：初始化 impl 并扫描 custom_tools/，统一路由 execute / execute_async
-├─ atomic_bridge.gd   # 原子桥：call_atomic() 调用下层原子 executor，附带写保护逻辑
-├─ impl_project.gd    # 项目级工具实现（6 个）
-├─ impl_runtime.gd    # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
-├─ impl_scene.gd      # 场景级工具实现（3 个）
-├─ impl_script.gd     # 脚本级工具实现（3 个）
-├─ impl_index.gd      # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
-└─ lsp_client.gd      # Godot LSP 客户端，供脚本诊断相关工具调用
+├─ executor.gd         # 调度器：初始化 system 子域执行器并统一路由 execute / execute_async
+├─ atomic_bridge.gd    # 原子桥：call_atomic() 调用下层原子 executor，附带写保护逻辑
+├─ impl_runtime.gd     # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
+├─ impl_scene.gd       # 场景级工具实现（3 个）
+├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
+├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
+├─ project/
+│  ├─ catalog.gd
+│  ├─ executor.gd
+│  ├─ project_executor.gd
+│  ├─ state_service.gd
+│  ├─ advise_service.gd
+│  ├─ configure_service.gd
+│  └─ runtime_service.gd
+└─ script/
+   ├─ catalog.gd
+   ├─ executor.gd
+   ├─ script_executor.gd
+   ├─ bindings_audit_service.gd
+   ├─ analyze_service.gd
+   └─ patch_service.gd
 ```
 
 ---
@@ -31,6 +44,8 @@ tools/system/
 - `system_project_run`：运行主场景或指定场景。
 - `system_project_stop`：停止当前运行中的项目。
 
+这些工具当前全部落在 `tools/system/project/`，并采用 `catalog + executor + service` 结构，不再保留 `impl_project.gd`。
+
 ### 运行时自动化级
 - `system_runtime_control`：查询、启用或关闭当前编辑器调试会话的 runtime control 安全闸。
 - `system_runtime_capture`：统一截图入口；默认抓取单帧，传 `frame_count > 1` 时按 `interval_frames` 抓取低频多帧序列。
@@ -44,8 +59,10 @@ tools/system/
 
 ### 脚本级
 - `system_bindings_audit`：审计 C# `[Export]` / `[Signal]` 绑定与场景引用一致性。
-- `system_script_analyze`：分析 `.gd` 或 `.cs` 的结构、导出与引用。
+- `system_script_analyze`：分析 `.gd` 或 `.cs` 的结构、导出与引用；其中 GDScript 语义诊断只经由 Godot LSP。
 - `system_script_patch`：以成员级方式补丁脚本内容。
+
+这些工具当前全部落在 `tools/system/script/`，并采用 `catalog + executor + service` 结构，不再保留 `impl_script.gd`。
 
 ### 索引级
 - `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，长会话中文件变化时会自动重建，必要时仍可 `refresh_index=true` 强制刷新。

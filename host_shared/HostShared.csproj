@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GodotDotnetMcp.CentralServer" />
+    <InternalsVisibleTo Include="GodotDotnetMcp.CentralServer.HostContracts" />
     <EmbeddedResource Include="..\addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json" Link="Protocol\mcp_protocol_facts.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" />
   </ItemGroup>
 </Project>

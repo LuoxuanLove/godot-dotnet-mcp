@@ -42,25 +42,28 @@ tests/host_contracts/
 
 ## 当前覆盖范围
 
-截至 `2026-03-27`，当前已覆盖 `11` 个用例：
+截至 `2026-03-28`，当前已覆盖 `12` 个用例：
 
 1. `tool_catalog_exposes_workspace_system_dotnet`
-2. `central_health_reports_unified_protocol_facts`
-3. `editor_process_service_supports_injected_external_probe`
-4. `workspace_project_remove_clears_active_context`
-5. `system_project_state_returns_editor_required_when_auto_launch_disabled`
-6. `workspace_project_open_editor_returns_missing_executable_guidance`
-7. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
-8. `workspace_project_close_editor_force_reports_editor_force_unavailable`
-9. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
-10. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
-11. `workspace_project_close_editor_succeeds_when_lifecycle_available`
+2. `cs_file_read_uses_roslyn_for_modern_csharp`
+3. `central_health_reports_unified_protocol_facts`
+4. `editor_process_service_supports_injected_external_probe`
+5. `workspace_project_remove_clears_active_context`
+6. `system_project_state_returns_editor_required_when_auto_launch_disabled`
+7. `workspace_project_open_editor_returns_missing_executable_guidance`
+8. `workspace_project_close_editor_reports_editor_lifecycle_unsupported`
+9. `workspace_project_close_editor_force_reports_editor_force_unavailable`
+10. `workspace_project_restart_editor_reattaches_when_lifecycle_available`
+11. `workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing`
+12. `workspace_project_close_editor_succeeds_when_lifecycle_available`
 
 这些用例覆盖的重点是：
 
 - 工具目录结构
+- `cs_file_read` 走官方 Roslyn 后，对 file-scoped namespace、record、泛型 async 方法的现代 C# 语法契约
 - `--health` 输出中的 `serverName / serverVersion / protocolVersion / toolSchemaVersion`
 - Host 工具目录当前只暴露正式 `workspace / system / dotnet` 入口
+- `host_shared/CSharpFileReader.cs` 已退出正则伪语义解析路径，当前契约以 Roslyn 解析结果为准
 - `EditorProcessService` 的 external probe seam 可注入且不再硬绑在 WMI 实现上
 - `CentralWorkspaceState` 驱动的 active project / active session 清理
 - 编辑器缺席时的错误分支
