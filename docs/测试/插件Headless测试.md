@@ -41,6 +41,7 @@ tests/godot_plugin_harness_fixture/
    ├─ editor_tool_executor_contract_test.gd
    ├─ lighting_tool_executor_contract_test.gd
    ├─ geometry_tool_executor_contract_test.gd
+   ├─ filesystem_tool_executor_contract_test.gd
    ├─ plugin_bootstrap_contract_test.gd
    ├─ plugin_dock_coordinator_contract_test.gd
    ├─ plugin_runtime_coordinator_contract_test.gd
@@ -75,7 +76,7 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-27`，当前有 `35` 个 case：
+截至 `2026-03-27`，当前有 `36` 个 case：
 
 | 用例 | 目标 |
 |---|---|
@@ -95,6 +96,7 @@ tests/godot_plugin_harness_fixture/
 | `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / settings / undo_redo / notification / inspector / filesystem / plugin` 路径 |
 | `lighting_tool_executor_contracts` | 验证 `lighting` 域拆分后的 catalog、稳定 executor 入口与代表性 `light / environment / sky` 路径 |
 | `geometry_tool_executor_contracts` | 验证 `geometry` 域拆分后的 catalog、稳定 executor 入口与代表性 `csg / gridmap / multimesh` 路径 |
+| `filesystem_tool_executor_contracts` | 验证 `filesystem` 域拆分后的 catalog、稳定 executor 入口与代表性 `directory / file_read / file_write / file_manage / json / search` 路径，并断言旧根文件已删除 |
 | `plugin_bootstrap_contracts` | 验证 `plugin_bootstrap.gd` 的 service bundle 回填、action router 重装配与 dock model service 独立重配能力 |
 | `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的 dock signal wiring、`FileDialog` 创建与 dialog 清理语义 |
 | `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
@@ -117,7 +119,7 @@ tests/godot_plugin_harness_fixture/
 
 当前实测状态：
 
-- suite：`35/35` 通过
+- suite：`36/36` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`

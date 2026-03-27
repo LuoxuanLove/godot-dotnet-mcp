@@ -53,6 +53,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"res://addons/godot_dotnet_mcp/tools/node_tools.gd",
 		"res://addons/godot_dotnet_mcp/tools/animation_tools.gd",
 		"res://addons/godot_dotnet_mcp/tools/physics_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd",
 	]:
 		if ResourceLoader.exists(removed_wrapper_path):
 			return _failure("Removed legacy root wrapper should not exist: %s" % removed_wrapper_path)

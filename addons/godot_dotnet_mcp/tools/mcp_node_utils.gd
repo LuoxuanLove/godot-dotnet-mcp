@@ -4,7 +4,7 @@ class_name MCPNodeUtils
 
 
 func get_editor_interface() -> EditorInterface:
-	if Engine.has_singleton("EditorInterface"):
+	if Engine.is_editor_hint() and Engine.has_singleton("EditorInterface"):
 		return Engine.get_singleton("EditorInterface")
 	return null
 
