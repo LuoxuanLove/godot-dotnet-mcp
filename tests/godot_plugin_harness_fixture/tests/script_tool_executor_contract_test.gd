@@ -1,21 +1,18 @@
 extends RefCounted
 
 const ScriptExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/script/executor.gd")
-const LegacyScriptToolsScript = preload("res://addons/godot_dotnet_mcp/tools/script_tools.gd")
 
 var _temp_paths: Array[String] = []
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = ScriptExecutorScript.new()
-	var legacy_wrapper = LegacyScriptToolsScript.new()
 	var executor_tools: Array[Dictionary] = executor.get_tools()
-	var wrapper_tools: Array[Dictionary] = legacy_wrapper.get_tools()
 
 	if executor_tools.size() != 8:
 		return _failure("Script executor should expose 8 tool definitions after the split.")
-	if wrapper_tools.size() != executor_tools.size():
-		return _failure("Legacy script_tools wrapper should mirror the new executor tool count.")
+	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/script_tools.gd"):
+		return _failure("script_tools.gd should be removed once the split executor becomes the only stable entry.")
 
 	var expected_names := ["read", "open", "inspect", "symbols", "exports", "references", "edit_gd", "edit_cs"]
 	var actual_names: Array[String] = []

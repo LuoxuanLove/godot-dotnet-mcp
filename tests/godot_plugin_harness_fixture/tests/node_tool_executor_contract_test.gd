@@ -1,24 +1,20 @@
 extends RefCounted
 
 const NodeExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/node/executor.gd")
-const LegacyNodeToolsScript = preload("res://addons/godot_dotnet_mcp/tools/node_tools.gd")
 
 var _scene_root: Node2D = null
 
 
 func run_case(tree: SceneTree) -> Dictionary:
 	var executor = NodeExecutorScript.new()
-	var legacy_wrapper = LegacyNodeToolsScript.new()
 	_scene_root = _build_scene_fixture(tree)
 	executor.configure_context({"scene_root": _scene_root})
-	legacy_wrapper.configure_context({"scene_root": _scene_root})
 
 	var executor_tools: Array[Dictionary] = executor.get_tools()
-	var wrapper_tools: Array[Dictionary] = legacy_wrapper.get_tools()
 	if executor_tools.size() != 9:
 		return _failure("Node executor should expose 9 tool definitions after the split.")
-	if wrapper_tools.size() != executor_tools.size():
-		return _failure("Legacy node_tools wrapper should mirror the new executor tool count.")
+	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/node_tools.gd"):
+		return _failure("node_tools.gd should be removed once the split executor becomes the only stable entry.")
 
 	var expected_names := ["query", "lifecycle", "transform", "property", "hierarchy", "process", "metadata", "call", "visibility"]
 	var actual_names: Array[String] = []

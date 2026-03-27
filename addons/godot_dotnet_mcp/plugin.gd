@@ -26,7 +26,6 @@ const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presen
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
-const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginActionRouter = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
@@ -91,8 +90,8 @@ func _enter_tree() -> void:
 
 	_attach_server_controller()
 	_configure_user_tool_watch_service()
-	_ensure_runtime_bridge_autoload()
-	_install_editor_debugger_bridge()
+	_runtime_coordinator.ensure_runtime_bridge_autoload(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	_editor_debugger_bridge = _runtime_coordinator.install_editor_debugger_bridge(self, _editor_debugger_bridge)
 	_configure_central_server_process_service()
 	_configure_central_server_attach_service()
 	_configure_feature_workflows()
@@ -124,7 +123,7 @@ func _exit_tree() -> void:
 		_central_server_process_service.stop_service()
 	_remove_dock()
 	_remove_client_executable_dialog()
-	_uninstall_editor_debugger_bridge()
+	_editor_debugger_bridge = _runtime_coordinator.uninstall_editor_debugger_bridge(self, _editor_debugger_bridge)
 	_dispose_server_controller()
 	LocalizationService.reset_instance()
 	_localization = null
@@ -154,7 +153,10 @@ func _exit_tree() -> void:
 func _disable_plugin() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_disable", "_disable_plugin")
 	MCPRuntimeDebugStore.set_bridge_status(
-		_is_runtime_bridge_autoload_path(str(ProjectSettings.get_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, ""))),
+		_runtime_coordinator.is_runtime_bridge_autoload_path(
+			RUNTIME_BRIDGE_AUTOLOAD_PATH,
+			str(ProjectSettings.get_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, ""))
+		),
 		RUNTIME_BRIDGE_AUTOLOAD_NAME,
 		RUNTIME_BRIDGE_AUTOLOAD_PATH,
 		"Plugin disabled without removing runtime bridge autoload"
@@ -262,104 +264,6 @@ func _load_state() -> void:
 
 func _save_settings() -> void:
 	_bootstrap.save_settings(_runtime_state_service, _settings_store, _state)
-
-
-func _ensure_runtime_bridge_autoload() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_bridge_autoload", "_ensure_runtime_bridge_autoload")
-	if not ResourceLoader.exists(RUNTIME_BRIDGE_AUTOLOAD_PATH):
-		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge script missing")
-		push_error("[Godot MCP] Runtime bridge autoload script not found: %s" % RUNTIME_BRIDGE_AUTOLOAD_PATH)
-		MCPDebugBuffer.record("error", "plugin", "Runtime bridge script not found: %s" % RUNTIME_BRIDGE_AUTOLOAD_PATH)
-		_record_self_incident("error", "resource_missing", "runtime_bridge_script_missing", "Runtime bridge autoload script not found", "plugin", "_ensure_runtime_bridge_autoload", RUNTIME_BRIDGE_AUTOLOAD_PATH, "", str(operation.get("operation_id", "")), true, "Verify that the runtime bridge script exists and is enabled.")
-		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
-		return
-	var setting_key := "autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME
-	var current_path := str(ProjectSettings.get_setting(setting_key, ""))
-	if _is_runtime_bridge_autoload_path(current_path):
-		MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload already installed")
-		_finish_self_operation(operation, true, "plugin", "_ensure_runtime_bridge_autoload")
-		return
-	if not current_path.is_empty():
-		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Autoload name is occupied by another script")
-		push_warning("[Godot MCP] Runtime bridge autoload name is already used: %s" % current_path)
-		MCPDebugBuffer.record("warning", "plugin", "Runtime bridge autoload name conflict: %s" % current_path)
-		_record_self_incident("warning", "autoload_conflict", "autoload_name_occupied", "Runtime bridge autoload name is already occupied", "plugin", "_ensure_runtime_bridge_autoload", current_path, "", str(operation.get("operation_id", "")), true, "Resolve the conflicting autoload entry before enabling the runtime bridge.", {"setting_key": setting_key})
-		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
-		return
-	_clear_runtime_bridge_root_instance()
-	add_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
-	ProjectSettings.save()
-	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
-	_record_runtime_bridge_stale_instance("_ensure_runtime_bridge_autoload", str(operation.get("operation_id", "")))
-	_finish_self_operation(operation, true, "plugin", "_ensure_runtime_bridge_autoload")
-	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload registered")
-
-
-func _remove_runtime_bridge_autoload() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_bridge_remove_autoload", "_remove_runtime_bridge_autoload")
-	var setting_key := "autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME
-	var current_path := str(ProjectSettings.get_setting(setting_key, ""))
-	if not _is_runtime_bridge_autoload_path(current_path):
-		MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, current_path, "Runtime bridge autoload not owned by this plugin")
-		_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
-		return
-	_clear_runtime_bridge_root_instance()
-	remove_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME)
-	ProjectSettings.save()
-	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
-	_record_runtime_bridge_stale_instance("_remove_runtime_bridge_autoload", str(operation.get("operation_id", "")))
-	_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
-	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload removed")
-
-
-func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
-	var normalized := setting_value.trim_prefix("*")
-	if normalized == RUNTIME_BRIDGE_AUTOLOAD_PATH:
-		return true
-	if normalized.is_empty() or not ResourceLoader.exists(normalized):
-		return false
-	var resource := ResourceLoader.load(normalized)
-	return resource != null and str(resource.resource_path) == RUNTIME_BRIDGE_AUTOLOAD_PATH
-
-
-func _clear_runtime_bridge_root_instance() -> void:
-	var tree := get_tree()
-	if tree == null or tree.root == null:
-		return
-
-	var runtime_bridge = tree.root.get_node_or_null(NodePath(RUNTIME_BRIDGE_AUTOLOAD_NAME))
-	if runtime_bridge == null or not is_instance_valid(runtime_bridge):
-		return
-
-	if runtime_bridge.get_parent() != null:
-		runtime_bridge.get_parent().remove_child(runtime_bridge)
-	runtime_bridge.set_script(null)
-	runtime_bridge.free()
-
-
-func _install_editor_debugger_bridge() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("install_editor_debugger_bridge", "_install_editor_debugger_bridge")
-	if _editor_debugger_bridge != null:
-		_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
-		return
-	_editor_debugger_bridge = MCPEditorDebuggerBridge.new()
-	if _editor_debugger_bridge == null:
-		_record_self_incident("error", "lifecycle_error", "editor_debugger_bridge_create_failed", "Failed to instantiate the editor debugger bridge", "plugin", "_install_editor_debugger_bridge", "", "", str(operation.get("operation_id", "")), true, "Inspect the editor debugger bridge script and plugin lifecycle output.")
-		_finish_self_operation(operation, false, "plugin", "_install_editor_debugger_bridge")
-		return
-	add_debugger_plugin(_editor_debugger_bridge)
-	_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
-
-
-func _uninstall_editor_debugger_bridge() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("uninstall_editor_debugger_bridge", "_uninstall_editor_debugger_bridge")
-	if _editor_debugger_bridge == null:
-		_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
-		return
-	remove_debugger_plugin(_editor_debugger_bridge)
-	_editor_debugger_bridge.set_script(null)
-	_editor_debugger_bridge = null
-	_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
 
 
 func _create_dock() -> void:
@@ -610,20 +514,7 @@ func _is_live_dock_present() -> bool:
 
 
 func _has_runtime_bridge_root_instance() -> bool:
-	var tree := get_tree()
-	if tree == null or tree.root == null:
-		return false
-	var runtime_bridge = tree.root.get_node_or_null(NodePath(RUNTIME_BRIDGE_AUTOLOAD_NAME))
-	return runtime_bridge != null and is_instance_valid(runtime_bridge)
-
-
-func _record_runtime_bridge_stale_instance(phase: String, operation_id: String) -> void:
-	var setting_key := "autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME
-	var current_path := str(ProjectSettings.get_setting(setting_key, ""))
-	var root_present = _has_runtime_bridge_root_instance()
-	var autoload_owned = _is_runtime_bridge_autoload_path(current_path)
-	if root_present and not autoload_owned:
-		_record_self_incident("warning", "autoload_conflict", "runtime_bridge_stale_instance", "Runtime bridge root instance is still present after autoload ownership changed", "plugin", phase, RUNTIME_BRIDGE_AUTOLOAD_PATH, "", operation_id, true, "Inspect autoload cleanup and editor reload ordering.", {"current_path": current_path})
+	return _runtime_coordinator.has_runtime_bridge_root_instance(self, RUNTIME_BRIDGE_AUTOLOAD_NAME)
 
 
 func _load_packed_scene(path: String) -> PackedScene:

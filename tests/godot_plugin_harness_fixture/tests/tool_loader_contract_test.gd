@@ -48,6 +48,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if bool(tool_def.get("compatibility_alias", false)):
 			return _failure("Tool loader should no longer surface compatibility_alias definitions.")
 
+	for removed_wrapper_path in [
+		"res://addons/godot_dotnet_mcp/tools/script_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/node_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/animation_tools.gd",
+		"res://addons/godot_dotnet_mcp/tools/physics_tools.gd",
+	]:
+		if ResourceLoader.exists(removed_wrapper_path):
+			return _failure("Removed legacy root wrapper should not exist: %s" % removed_wrapper_path)
+
 	var tools_by_category: Dictionary = _loader.get_tools_by_category()
 	if tools_by_category.has("plugin"):
 		return _failure("Tool loader should no longer expose the legacy plugin category.")

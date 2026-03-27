@@ -35,7 +35,12 @@ tests/godot_plugin_harness_fixture/
    ├─ script_tool_executor_contract_test.gd
    ├─ node_tool_executor_contract_test.gd
    ├─ animation_tool_executor_contract_test.gd
+   ├─ physics_tool_executor_contract_test.gd
+   ├─ scene_tool_executor_contract_test.gd
+   ├─ debug_tool_executor_contract_test.gd
+   ├─ editor_tool_executor_contract_test.gd
    ├─ plugin_dock_coordinator_contract_test.gd
+   ├─ plugin_runtime_coordinator_contract_test.gd
    ├─ client_config_serializer_contract_test.gd
    ├─ client_config_inspection_service_contract_test.gd
    ├─ client_config_file_transaction_contract_test.gd
@@ -67,7 +72,7 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-27`，当前有 `27` 个 case：
+截至 `2026-03-27`，当前有 `32` 个 case：
 
 | 用例 | 目标 |
 |---|---|
@@ -81,7 +86,12 @@ tests/godot_plugin_harness_fixture/
 | `script_tool_executor_contracts` | 验证 `script` 域拆分后的 catalog、稳定 executor 入口与代表性 `read / inspect / references / edit_gd` 路径 |
 | `node_tool_executor_contracts` | 验证 `node` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / lifecycle / property / metadata / visibility` 路径 |
 | `animation_tool_executor_contracts` | 验证 `animation` 域拆分后的 catalog、稳定 executor 入口与代表性 `player / animation / track / tween / animation_tree / state_machine / blend_space / blend_tree` 路径 |
+| `physics_tool_executor_contracts` | 验证 `physics` 域拆分后的 catalog、稳定 executor 入口与代表性 `physics_body / collision_shape / physics_joint / physics_query` 路径 |
+| `scene_tool_executor_contracts` | 验证 `scene` 域拆分后的 catalog、稳定 executor 入口与代表性 `management / hierarchy / run / bindings / audit` 路径 |
+| `debug_tool_executor_contracts` | 验证 `debug` 域拆分后的 catalog、稳定 executor 入口与代表性 `log_buffer / runtime_bridge / dotnet / performance / class_db` 路径 |
+| `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / settings / undo_redo / notification / inspector / filesystem / plugin` 路径 |
 | `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的 dock signal wiring、`FileDialog` 创建与 dialog 清理语义 |
+| `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
 | `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
 | `client_config_inspection_service_contracts` | 验证 `client_config_inspection_service.gd` 的 `inspect/preflight` 状态归类 |
 | `client_config_file_transaction_contracts` | 验证 `client_config_file_transaction.gd` 的 merge、remove、backup 与 opencode 阻断写入 |
@@ -101,7 +111,7 @@ tests/godot_plugin_harness_fixture/
 
 当前实测状态：
 
-- suite：`27/27` 通过
+- suite：`32/32` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
@@ -162,6 +172,7 @@ tests/godot_plugin_harness_fixture/
 - `mcp_runtime_control_request_coordinator.gd`
 - `mcp_runtime_control_reply_resolver.gd`
 - `plugin_dock_coordinator.gd`
+- `plugin_runtime_coordinator.gd`
 - `client_config_serializer.gd`
 - `client_config_inspection_service.gd`
 - `client_config_file_transaction.gd`

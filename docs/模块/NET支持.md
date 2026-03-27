@@ -80,7 +80,7 @@
 
 1. `tools/script/csharp_edit_service.gd` 与 `tools/script/inspect_service.gd` 读取或解析 `.cs` 文件文本。
 2. 共享解析逻辑提取 `namespace`、`class`、`partial class`、`base_type`、`method`、`enum`、`[Export]` 和 `[ExportGroup]`。
-3. `scene_tools.gd` 读取场景中的脚本实例与导出值。
+3. `tools/scene/bindings_service.gd` 读取场景中的脚本实例与导出值。
 4. `scene_bindings` / `scene_audit` 将声明与实际绑定状态关联起来。
 
 ### 适用边界

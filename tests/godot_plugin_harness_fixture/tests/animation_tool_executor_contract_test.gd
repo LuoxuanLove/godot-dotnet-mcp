@@ -1,24 +1,20 @@
 extends RefCounted
 
 const AnimationExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/animation/executor.gd")
-const LegacyAnimationToolsScript = preload("res://addons/godot_dotnet_mcp/tools/animation_tools.gd")
 
 var _scene_root: Node2D = null
 
 
 func run_case(tree: SceneTree) -> Dictionary:
 	var executor = AnimationExecutorScript.new()
-	var legacy_wrapper = LegacyAnimationToolsScript.new()
 	_scene_root = _build_scene_fixture(tree)
 	executor.configure_context({"scene_root": _scene_root})
-	legacy_wrapper.configure_context({"scene_root": _scene_root})
 
 	var executor_tools: Array[Dictionary] = executor.get_tools()
-	var wrapper_tools: Array[Dictionary] = legacy_wrapper.get_tools()
 	if executor_tools.size() != 8:
 		return _failure("Animation executor should expose 8 tool definitions after the split.")
-	if wrapper_tools.size() != executor_tools.size():
-		return _failure("Legacy animation_tools wrapper should mirror the new executor tool count.")
+	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/animation_tools.gd"):
+		return _failure("animation_tools.gd should be removed once the split executor becomes the only stable entry.")
 
 	var expected_names := ["player", "animation", "track", "tween", "animation_tree", "state_machine", "blend_space", "blend_tree"]
 	var actual_names: Array[String] = []
