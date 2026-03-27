@@ -32,7 +32,7 @@ function Find-BannedSourceMatches {
 
     $ripgrep = Get-Command rg -ErrorAction SilentlyContinue
     if ($null -ne $ripgrep) {
-        return @(rg -n --glob "addons/**/*.gd" --glob "central_server/**/*.cs" --glob "host_shared/**/*.cs" $Pattern $RepositoryRoot 2>$null)
+        return @(rg -n --case-sensitive --glob "addons/**/*.gd" --glob "central_server/**/*.cs" --glob "host_shared/**/*.cs" $Pattern $RepositoryRoot 2>$null)
     }
 
     $searchRoots = @(
@@ -51,7 +51,7 @@ function Find-BannedSourceMatches {
 
     $results = New-Object System.Collections.Generic.List[string]
     foreach ($file in $candidateFiles) {
-        $matches = Select-String -LiteralPath $file.FullName -Pattern $Pattern -SimpleMatch -Encoding UTF8
+            $matches = Select-String -LiteralPath $file.FullName -Pattern $Pattern -SimpleMatch -CaseSensitive -Encoding UTF8
         foreach ($match in $matches) {
             $relativePath = [System.IO.Path]::GetRelativePath($RepositoryRoot, $file.FullName)
             $results.Add(("{0}:{1}:{2}" -f $relativePath, $match.LineNumber, $match.Line.Trim()))
