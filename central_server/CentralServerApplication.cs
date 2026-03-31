@@ -104,31 +104,21 @@ Modes:
     private static async Task<int> RunStdioAsync(string[] args, Stream input, Stream output, TextWriter error, CancellationToken cancellationToken)
     {
         var configuration = new CentralConfigurationService();
-        var editorProcesses = new EditorProcessService();
-        var godotInstallations = new GodotInstallationService();
-        var godotProjectManager = new GodotProjectManagerProvider(configuration);
-        godotProjectManager.StartWatcher();
-        var registry = new ProjectRegistryService();
-        var editorSessions = new EditorSessionService(registry);
-        using var editorProxy = new EditorProxyService();
-        var workspaceState = new CentralWorkspaceState();
         var attachEndpoint = ResolveAttachEndpoint(args, configuration);
-        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
-        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
-        var server = new CentralStdioMcpServer(output, error, dispatcher);
         using var attachServerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        await using var attachServer = new EditorAttachHttpServer(
-            attachEndpoint.Host,
-            attachEndpoint.Port,
-            editorSessions,
+
+        var stdioRuntime = CentralServerComposition.CreateStdioRuntime(
+            attachEndpoint,
             error,
             () =>
             {
                 attachServerCts.Cancel();
                 return Task.CompletedTask;
-            });
-        attachServer.Start(attachServerCts.Token);
+            },
+            null);
+
+        var server = new CentralStdioMcpServer(output, error, stdioRuntime.Graph.Dispatcher!);
+        stdioRuntime.AttachServer.Start(attachServerCts.Token);
         try
         {
             await server.RunAsync(input, cancellationToken);
@@ -143,24 +133,22 @@ Modes:
     private static async Task<int> RunAttachOnlyAsync(string[] args, Stream output, TextWriter error, CancellationToken cancellationToken)
     {
         var configuration = new CentralConfigurationService();
-        var registry = new ProjectRegistryService();
-        var editorSessions = new EditorSessionService(registry);
         var attachEndpoint = ResolveAttachEndpoint(args, configuration);
         using var attachOnlyCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         await using var logWriter = await CreateOptionalLogWriterAsync(args, cancellationToken);
         var effectiveError = logWriter is null ? error : TextWriter.Synchronized(new CompositeTextWriter(error, logWriter));
 
-        await using var attachServer = new EditorAttachHttpServer(
-            attachEndpoint.Host,
-            attachEndpoint.Port,
-            editorSessions,
+        var attachOnlyRuntime = CentralServerComposition.CreateAttachOnlyRuntime(
+            attachEndpoint,
             effectiveError,
             () =>
             {
                 attachOnlyCts.Cancel();
                 return Task.CompletedTask;
-            });
-        attachServer.Start(attachOnlyCts.Token);
+            },
+            null);
+
+        attachOnlyRuntime.AttachServer.Start(attachOnlyCts.Token);
 
         await using var writer = new StreamWriter(output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
         await writer.WriteLineAsync($"attach-only listening on http://{attachEndpoint.Host}:{attachEndpoint.Port}/");
@@ -176,6 +164,7 @@ Modes:
         {
         }
 
+        attachOnlyRuntime.Dispose();
         return 0;
     }
 

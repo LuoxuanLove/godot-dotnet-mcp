@@ -19,11 +19,14 @@
 
 ### 控制器职责
 
-`server_tab.gd` 主要做三件事：
+`server_tab.gd` 当前主要做四件事：
 
-1. 读取 model 并填充状态文本
-2. 重建日志等级、权限等级与语言下拉
-3. 把按钮与设置操作转成 signal
+1. 调 `server_tab_model_projection.gd` 将 model 投影成纯展示数据
+2. 把投影结果写回状态文本、按钮状态与下拉框
+3. 维护 `Server` 页自己的响应式布局和缩放逻辑
+4. 把按钮与设置操作转成 signal
+
+状态概览、`Central Server` 摘要、自诊断摘要和日志/权限/语言选项模型不再直接在 `server_tab.gd` 中拼装，而是统一下沉到 `server_tab_model_projection.gd`。
 
 ### 响应式布局
 
@@ -102,7 +105,8 @@ plugin.gd
   -> config_tab.gd
   -> 用户点击 Write / Copy
   -> mcp_dock.gd signal
-  -> plugin.gd
+  -> plugin.gd / config_feature.gd
+  -> config_feature_config_workflow.gd
   -> ClientConfigService.write_config_file()
 ```
 
@@ -129,7 +133,8 @@ plugin.gd
 | 路径 | 作用 |
 |---|---|
 | `ui/server_panel.tscn` | Server 页场景 |
-| `ui/server_tab.gd` | Server 页控制器 |
+| `ui/server_tab.gd` | Server 页控制器，负责投影结果写回、布局与 signal |
+| `ui/server_tab_model_projection.gd` | Server 页纯投影协作者，负责状态摘要、自诊断、`Central Server` 文本和选项模型构建 |
 | `ui/config_panel.tscn` | Config 页场景 |
 | `ui/config_tab.gd` | Config 页控制器 |
 | `plugin/config/client_config_service.gd` | Config 页配置服务门面，统一委托 serializer / inspection / transaction / launcher adapter |

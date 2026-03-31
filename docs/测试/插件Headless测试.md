@@ -32,6 +32,7 @@ tests/godot_plugin_harness_fixture/
    ├─ runtime_control_reply_resolver_contract_test.gd
    ├─ runtime_fallback_store_contract_test.gd
    ├─ runtime_reply_service_contract_test.gd
+   ├─ user_tool_service_contract_test.gd
    ├─ script_tool_executor_contract_test.gd
    ├─ script_edit_service_contract_test.gd
    ├─ node_tool_executor_contract_test.gd
@@ -91,7 +92,7 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-28`，当前有 `48` 个 case：
+截至 `2026-03-28`，当前有 `56` 个 case：
 
 | 用例 | 目标 |
 |---|---|
@@ -102,6 +103,7 @@ tests/godot_plugin_harness_fixture/
 | `runtime_fallback_store_contracts` | 验证 `mcp_runtime_fallback_store` 的持久化、裁剪与读取语义 |
 | `runtime_reply_service_contracts` | 验证 `mcp_runtime_reply_service` 的 success/error payload、`runtime_context`、`runtime_state` 与 hint |
 | `user_tool_watch_service_contracts` | 验证 `user_tool_watch_service.gd` 通过显式 callback 触发外部用户工具刷新 |
+| `user_tool_service_contracts` | 验证 `user_tool_service.gd` 的 scaffold 创建、目录扫描、兼容报告、删除、恢复与审计 |
 | `script_tool_executor_contracts` | 验证 `script` 域拆分后的 catalog、稳定 executor 入口与代表性 `read / inspect / references / edit_gd` 路径 |
 | `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，插件侧仅保留 `*EditHelper` 文本编辑辅助；C# 官方语义来源仍是 Host 侧 Roslyn |
 | `node_tool_executor_contracts` | 验证 `node` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / lifecycle / property / metadata / visibility` 路径 |
@@ -125,8 +127,9 @@ tests/godot_plugin_harness_fixture/
 | `audio_tool_executor_contracts` | 验证 `audio` 域拆分后的 catalog、稳定 executor 入口与代表性 `bus / player` 路径，并断言旧根文件已删除 |
 | `navigation_tool_executor_contracts` | 验证 `navigation` 域拆分后的 catalog、稳定 executor 入口与代表性 `map / region / agent` 路径，并断言旧根文件已删除 |
 | `plugin_bootstrap_contracts` | 验证 `plugin_bootstrap.gd` 的 service bundle 回填、action router 重装配与 dock model service 独立重配能力 |
-| `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的 dock signal wiring、`FileDialog` 创建与 dialog 清理语义 |
+| `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的高阶 dock create/remove/recreate、dock signal wiring、dock instance 计数、`FileDialog` 创建与 dialog 清理语义 |
 | `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
+| `config_feature_config_workflow_contracts` | 验证 `config_feature_config_workflow.gd` 的写入/移除确认流、成功提示、noop 移除和运行后 follow-up 提示 |
 | `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
 | `client_config_inspection_service_contracts` | 验证 `client_config_inspection_service.gd` 的 `inspect/preflight` 状态归类 |
 | `client_config_file_transaction_contracts` | 验证 `client_config_file_transaction.gd` 的 merge、remove、backup 与 opencode 阻断写入 |
@@ -143,6 +146,7 @@ tests/godot_plugin_harness_fixture/
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
+| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、`Central Server` 投影和日志/权限/语言选项模型 |
 | `tool_lsp_diagnostics_adapter_contracts` | 验证 `tool_lsp_diagnostics_adapter.gd` 的 configure、tick、reset、release 与 runtime bridge 绑定语义 |
 | `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
 | `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
@@ -153,7 +157,7 @@ tests/godot_plugin_harness_fixture/
 
 当前实测状态：
 
-- suite：`52/52` 通过
+- suite：`56/56` 通过
 - harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
 - `tool_loader_status=ready`
 - `category_count=26`
