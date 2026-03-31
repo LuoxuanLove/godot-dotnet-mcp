@@ -18,7 +18,6 @@ internal static class CentralServerComposition
         {
             var runtimeGraph = new CentralServerRuntimeGraph(
                 ServiceProvider: serviceProvider,
-                LoggerFactory: serviceProvider.GetRequiredService<ILoggerFactory>(),
                 Configuration: serviceProvider.GetRequiredService<CentralConfigurationService>(),
                 Registry: serviceProvider.GetRequiredService<ProjectRegistryService>(),
                 EditorSessions: serviceProvider.GetRequiredService<EditorSessionService>(),
@@ -56,7 +55,6 @@ internal static class CentralServerComposition
         {
             return new CentralServerRuntimeGraph(
                 ServiceProvider: serviceProvider,
-                LoggerFactory: serviceProvider.GetRequiredService<ILoggerFactory>(),
                 Configuration: serviceProvider.GetRequiredService<CentralConfigurationService>(),
                 Registry: serviceProvider.GetRequiredService<ProjectRegistryService>(),
                 EditorSessions: serviceProvider.GetRequiredService<EditorSessionService>(),
@@ -115,7 +113,6 @@ internal static class CentralServerComposition
 
             var runtimeGraph = new CentralServerRuntimeGraph(
                 ServiceProvider: serviceProvider,
-                LoggerFactory: serviceProvider.GetRequiredService<ILoggerFactory>(),
                 Configuration: serviceProvider.GetRequiredService<CentralConfigurationService>(),
                 Registry: serviceProvider.GetRequiredService<ProjectRegistryService>(),
                 EditorSessions: editorSessions,
@@ -173,10 +170,51 @@ internal static class CentralServerComposition
         }
     }
 
-    public sealed record StdioRuntime(EditorAttachHttpServer AttachServer, CentralServerRuntimeGraph Graph);
-
-    public sealed record AttachOnlyRuntime(EditorAttachHttpServer AttachServer, ServiceProvider ServiceProvider)
+    public sealed class StdioRuntime : IAsyncDisposable, IDisposable
     {
-        public void Dispose() => ServiceProvider.Dispose();
+        public EditorAttachHttpServer AttachServer { get; }
+        public CentralServerRuntimeGraph Graph { get; }
+
+        public StdioRuntime(EditorAttachHttpServer attachServer, CentralServerRuntimeGraph graph)
+        {
+            AttachServer = attachServer;
+            Graph = graph;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await AttachServer.DisposeAsync();
+            Graph.Dispose();
+        }
+
+        public void Dispose()
+        {
+            AttachServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            Graph.Dispose();
+        }
+    }
+
+    public sealed class AttachOnlyRuntime : IAsyncDisposable, IDisposable
+    {
+        public EditorAttachHttpServer AttachServer { get; }
+        private readonly ServiceProvider _serviceProvider;
+
+        public AttachOnlyRuntime(EditorAttachHttpServer attachServer, ServiceProvider serviceProvider)
+        {
+            AttachServer = attachServer;
+            _serviceProvider = serviceProvider;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await AttachServer.DisposeAsync();
+            _serviceProvider.Dispose();
+        }
+
+        public void Dispose()
+        {
+            AttachServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _serviceProvider.Dispose();
+        }
     }
 }

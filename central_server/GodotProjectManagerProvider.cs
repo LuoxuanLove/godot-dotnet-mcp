@@ -1,6 +1,6 @@
 namespace GodotDotnetMcp.CentralServer;
 
-internal sealed class GodotProjectManagerProvider
+internal sealed class GodotProjectManagerProvider : IDisposable
 {
     private readonly CentralConfigurationService _configuration;
     private readonly GodotProjectManagerWatcher _watcher;
@@ -184,5 +184,10 @@ internal sealed class GodotProjectManagerProvider
         public bool DefaultGodotExecutableExists { get; set; }
 
         public GodotProjectManagerWatcher.WatcherStatus? Watcher { get; set; }
+    }
+
+    public void Dispose()
+    {
+        _watcher.Dispose();
     }
 }

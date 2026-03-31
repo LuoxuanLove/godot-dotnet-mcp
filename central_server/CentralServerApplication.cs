@@ -107,7 +107,7 @@ Modes:
         var attachEndpoint = ResolveAttachEndpoint(args, configuration);
         using var attachServerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        var stdioRuntime = CentralServerComposition.CreateStdioRuntime(
+        await using var stdioRuntime = CentralServerComposition.CreateStdioRuntime(
             attachEndpoint,
             error,
             () =>
@@ -138,7 +138,7 @@ Modes:
         await using var logWriter = await CreateOptionalLogWriterAsync(args, cancellationToken);
         var effectiveError = logWriter is null ? error : TextWriter.Synchronized(new CompositeTextWriter(error, logWriter));
 
-        var attachOnlyRuntime = CentralServerComposition.CreateAttachOnlyRuntime(
+        await using var attachOnlyRuntime = CentralServerComposition.CreateAttachOnlyRuntime(
             attachEndpoint,
             effectiveError,
             () =>
@@ -164,7 +164,6 @@ Modes:
         {
         }
 
-        attachOnlyRuntime.Dispose();
         return 0;
     }
 

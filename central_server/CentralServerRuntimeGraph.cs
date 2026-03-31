@@ -1,11 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace GodotDotnetMcp.CentralServer;
 
 internal sealed record CentralServerRuntimeGraph(
     ServiceProvider ServiceProvider,
-    ILoggerFactory LoggerFactory,
     CentralConfigurationService Configuration,
     ProjectRegistryService Registry,
     EditorSessionService EditorSessions,
