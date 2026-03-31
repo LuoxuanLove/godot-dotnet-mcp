@@ -66,6 +66,11 @@ internal static class Program
             process.StartInfo.Environment["APPDATA"] = appDataRoot;
             process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
             process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = listCases ? "1" : "0";
+            // Pre-set runtime environment variables for server_runtime_settings_projection test.
+            // In headless mode, OS.set_environment() does not persist these values,
+            // so they must be inherited from the parent process environment at startup.
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_HOST"] = "10.0.0.8";
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_PORT"] = "4100";
             process.StartInfo.ArgumentList.Add("--headless");
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);
