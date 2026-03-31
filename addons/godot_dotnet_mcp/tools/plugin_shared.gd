@@ -1,7 +1,6 @@
-@tool
+﻿@tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 
 var _runtime_context: Dictionary = {}
 

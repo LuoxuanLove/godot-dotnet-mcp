@@ -13,16 +13,31 @@ var _save_settings := Callable()
 var _refresh_dock := Callable()
 
 
-func configure(state, localization, settings_store, tool_catalog, callbacks: Dictionary) -> void:
-	_state = state
-	_localization = localization
-	_settings_store = settings_store
-	_tool_catalog = tool_catalog
-	_get_all_tools_by_category = callbacks.get("get_all_tools_by_category", Callable())
-	_set_disabled_tools = callbacks.get("set_disabled_tools", Callable())
-	_cleanup_disabled_tools = callbacks.get("cleanup_disabled_tools", Callable())
-	_save_settings = callbacks.get("save_settings", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_state = context.state
+	_localization = context.localization
+	_settings_store = context.settings_store
+	_tool_catalog = context.tool_catalog
+	_get_all_tools_by_category = context.get_all_tools_by_category
+	_set_disabled_tools = context.set_disabled_tools
+	_cleanup_disabled_tools = context.cleanup_disabled_tools
+	_save_settings = context.save_settings
+	_refresh_dock = context.refresh_dock
+
+
+func dispose() -> void:
+	_state = null
+	_localization = null
+	_settings_store = null
+	_tool_catalog = null
+	_get_all_tools_by_category = Callable()
+	_set_disabled_tools = Callable()
+	_cleanup_disabled_tools = Callable()
+	_save_settings = Callable()
+	_refresh_dock = Callable()
 
 
 func apply_initial_tool_profile_if_needed() -> void:

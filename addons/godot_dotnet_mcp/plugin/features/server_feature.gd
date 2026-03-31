@@ -9,20 +9,27 @@ var _show_confirmation := Callable()
 var _refresh_dock := Callable()
 
 
-func configure(
-	process_service,
-	attach_service,
-	localization,
-	dock_presenter,
-	callbacks: Dictionary
-) -> void:
-	_process_service = process_service
-	_attach_service = attach_service
-	_localization = localization
-	_dock_presenter = dock_presenter
-	_show_message = callbacks.get("show_message", Callable())
-	_show_confirmation = callbacks.get("show_confirmation", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_process_service = context.process_service
+	_attach_service = context.attach_service
+	_localization = context.localization
+	_dock_presenter = context.dock_presenter
+	_show_message = context.show_message
+	_show_confirmation = context.show_confirmation
+	_refresh_dock = context.refresh_dock
+
+
+func dispose() -> void:
+	_process_service = null
+	_attach_service = null
+	_localization = null
+	_dock_presenter = null
+	_show_message = Callable()
+	_show_confirmation = Callable()
+	_refresh_dock = Callable()
 
 
 func handle_detect_requested() -> void:

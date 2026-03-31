@@ -20,22 +20,44 @@ var _finish_self_operation := Callable()
 var _pending_runtime_reload_action := ""
 
 
-func configure(owner: Object, callbacks: Dictionary) -> void:
-	_owner = owner
-	_is_server_running = callbacks.get("is_server_running", Callable())
-	_start_server = callbacks.get("start_server", Callable())
-	_reinitialize_server = callbacks.get("reinitialize_server", Callable())
-	_refresh_service_instances = callbacks.get("refresh_service_instances", Callable())
-	_reset_localization = callbacks.get("reset_localization", Callable())
-	_recreate_server_controller = callbacks.get("recreate_server_controller", Callable())
-	_configure_central_server_process_service = callbacks.get("configure_central_server_process_service", Callable())
-	_configure_central_server_attach_service = callbacks.get("configure_central_server_attach_service", Callable())
-	_configure_feature_workflows = callbacks.get("configure_feature_workflows", Callable())
-	_recreate_dock = callbacks.get("recreate_dock", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
-	_capture_dock_focus_snapshot = callbacks.get("capture_dock_focus_snapshot", Callable())
-	_restore_runtime_dock_focus_snapshot = callbacks.get("restore_runtime_dock_focus_snapshot", Callable())
-	_finish_self_operation = callbacks.get("finish_self_operation", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_owner = context.owner
+	_is_server_running = context.is_server_running
+	_start_server = context.start_server
+	_reinitialize_server = context.reinitialize_server
+	_refresh_service_instances = context.refresh_service_instances
+	_reset_localization = context.reset_localization
+	_recreate_server_controller = context.recreate_server_controller
+	_configure_central_server_process_service = context.configure_central_server_process_service
+	_configure_central_server_attach_service = context.configure_central_server_attach_service
+	_configure_feature_workflows = context.configure_feature_workflows
+	_recreate_dock = context.recreate_dock
+	_refresh_dock = context.refresh_dock
+	_capture_dock_focus_snapshot = context.capture_dock_focus_snapshot
+	_restore_runtime_dock_focus_snapshot = context.restore_runtime_dock_focus_snapshot
+	_finish_self_operation = context.finish_self_operation
+
+
+func dispose() -> void:
+	_owner = null
+	_is_server_running = Callable()
+	_start_server = Callable()
+	_reinitialize_server = Callable()
+	_refresh_service_instances = Callable()
+	_reset_localization = Callable()
+	_recreate_server_controller = Callable()
+	_configure_central_server_process_service = Callable()
+	_configure_central_server_attach_service = Callable()
+	_configure_feature_workflows = Callable()
+	_recreate_dock = Callable()
+	_refresh_dock = Callable()
+	_capture_dock_focus_snapshot = Callable()
+	_restore_runtime_dock_focus_snapshot = Callable()
+	_finish_self_operation = Callable()
+	_pending_runtime_reload_action = ""
 
 
 func runtime_restart_server() -> Dictionary:

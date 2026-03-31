@@ -2,7 +2,7 @@
 extends RefCounted
 class_name MCPToolLspDiagnosticsAdapter
 
-const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
+const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/tools/shared/gdscript_lsp_diagnostics_service.gd"
 
 var _tool_loader: Object
 var _diagnostics_service

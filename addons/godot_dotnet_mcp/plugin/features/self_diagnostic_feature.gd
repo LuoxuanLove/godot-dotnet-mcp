@@ -2,7 +2,7 @@ extends RefCounted
 
 const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 
 var _localization
 var _runtime_bridge_autoload_name := ""
@@ -20,21 +20,41 @@ var _show_message := Callable()
 var _is_dock_present := Callable()
 
 
-func configure(localization, autoload_name: String, autoload_path: String, callbacks: Dictionary) -> void:
-	_localization = localization
-	_runtime_bridge_autoload_name = autoload_name
-	_runtime_bridge_autoload_path = autoload_path
-	_count_dock_instances = callbacks.get("count_dock_instances", Callable())
-	_has_runtime_bridge_root_instance = callbacks.get("has_runtime_bridge_root_instance", Callable())
-	_is_server_running = callbacks.get("is_server_running", Callable())
-	_get_connection_stats = callbacks.get("get_connection_stats", Callable())
-	_get_tool_load_errors = callbacks.get("get_tool_load_errors", Callable())
-	_get_reload_status = callbacks.get("get_reload_status", Callable())
-	_get_performance_summary = callbacks.get("get_performance_summary", Callable())
-	_get_permission_level = callbacks.get("get_permission_level", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
-	_show_message = callbacks.get("show_message", Callable())
-	_is_dock_present = callbacks.get("is_dock_present", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_localization = context.localization
+	_runtime_bridge_autoload_name = context.runtime_bridge_autoload_name
+	_runtime_bridge_autoload_path = context.runtime_bridge_autoload_path
+	_count_dock_instances = context.count_dock_instances
+	_has_runtime_bridge_root_instance = context.has_runtime_bridge_root_instance
+	_is_server_running = context.is_server_running
+	_get_connection_stats = context.get_connection_stats
+	_get_tool_load_errors = context.get_tool_load_errors
+	_get_reload_status = context.get_reload_status
+	_get_performance_summary = context.get_performance_summary
+	_get_permission_level = context.get_permission_level
+	_refresh_dock = context.refresh_dock
+	_show_message = context.show_message
+	_is_dock_present = context.is_dock_present
+
+
+func dispose() -> void:
+	_localization = null
+	_runtime_bridge_autoload_name = ""
+	_runtime_bridge_autoload_path = ""
+	_count_dock_instances = Callable()
+	_has_runtime_bridge_root_instance = Callable()
+	_is_server_running = Callable()
+	_get_connection_stats = Callable()
+	_get_tool_load_errors = Callable()
+	_get_reload_status = Callable()
+	_get_performance_summary = Callable()
+	_get_permission_level = Callable()
+	_refresh_dock = Callable()
+	_show_message = Callable()
+	_is_dock_present = Callable()
 
 
 func handle_clear_requested() -> void:

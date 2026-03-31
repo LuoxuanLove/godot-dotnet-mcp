@@ -15,16 +15,31 @@ var _show_message := Callable()
 var _change_language := Callable()
 
 
-func configure(state, localization, tool_catalog, callbacks: Dictionary) -> void:
-	_state = state
-	_localization = localization
-	_tool_catalog = tool_catalog
-	_get_all_tools_by_category = callbacks.get("get_all_tools_by_category", Callable())
-	_set_disabled_tools = callbacks.get("set_disabled_tools", Callable())
-	_save_settings = callbacks.get("save_settings", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
-	_show_message = callbacks.get("show_message", Callable())
-	_change_language = callbacks.get("change_language", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_state = context.state
+	_localization = context.localization
+	_tool_catalog = context.tool_catalog
+	_get_all_tools_by_category = context.get_all_tools_by_category
+	_set_disabled_tools = context.set_disabled_tools
+	_save_settings = context.save_settings
+	_refresh_dock = context.refresh_dock
+	_show_message = context.show_message
+	_change_language = context.change_language
+
+
+func dispose() -> void:
+	_state = null
+	_localization = null
+	_tool_catalog = null
+	_get_all_tools_by_category = Callable()
+	_set_disabled_tools = Callable()
+	_save_settings = Callable()
+	_refresh_dock = Callable()
+	_show_message = Callable()
+	_change_language = Callable()
 
 
 func handle_log_level_changed(level: String) -> void:

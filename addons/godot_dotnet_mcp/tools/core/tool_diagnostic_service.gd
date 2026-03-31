@@ -2,19 +2,22 @@
 extends RefCounted
 class_name MCPToolDiagnosticService
 
-const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
-
 var _load_errors: Array[Dictionary] = []
 var _get_entry: Callable = Callable()
+var _record_incident: Callable = Callable(self, "_noop_record_incident")
 
 
 func configure(options: Dictionary = {}) -> void:
 	_get_entry = options.get("get_entry", Callable())
+	_record_incident = options.get("record_incident", Callable(self, "_noop_record_incident"))
+	if not _record_incident.is_valid():
+		_record_incident = Callable(self, "_noop_record_incident")
 
 
 func dispose() -> void:
 	_load_errors.clear()
 	_get_entry = Callable()
+	_record_incident = Callable(self, "_noop_record_incident")
 
 
 func clear_load_errors() -> void:
@@ -59,7 +62,7 @@ func sync_load_error_incidents(phase: String) -> void:
 		if not (error_info is Dictionary):
 			continue
 		var info := error_info as Dictionary
-		PluginSelfDiagnosticStore.record_incident(
+		_record_incident.call(
 			"error",
 			"tool_load_error",
 			"tool_domain_load_failed",
@@ -79,7 +82,7 @@ func sync_load_error_incidents(phase: String) -> void:
 
 
 func record_reload_incident(category: String, message: String, phase: String) -> void:
-	PluginSelfDiagnosticStore.record_incident(
+	_record_incident.call(
 		"error",
 		"reload_conflict",
 		"tool_reload_failed",
@@ -102,3 +105,20 @@ func _get_entry_by_category(category: String) -> Dictionary:
 		return {}
 	var entry = _get_entry.call(category)
 	return entry if entry is Dictionary else {}
+
+
+func _noop_record_incident(
+	_severity: String,
+	_category: String,
+	_code: String,
+	_message: String,
+	_component: String,
+	_phase: String = "",
+	_file_path: String = "",
+	_line = "",
+	_operation_id: String = "",
+	_recoverable: bool = true,
+	_suggested_action: String = "",
+	_context: Dictionary = {}
+) -> Dictionary:
+	return {}

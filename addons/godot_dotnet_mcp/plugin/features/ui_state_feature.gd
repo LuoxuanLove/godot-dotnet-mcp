@@ -12,15 +12,29 @@ var _capture_dock_focus_snapshot := Callable()
 var _restore_dock_focus_snapshot := Callable()
 
 
-func configure(state, localization, client_install_detection_service, callbacks: Dictionary) -> void:
-	_state = state
-	_localization = localization
-	_client_install_detection_service = client_install_detection_service
-	_save_settings = callbacks.get("save_settings", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
-	_show_message = callbacks.get("show_message", Callable())
-	_capture_dock_focus_snapshot = callbacks.get("capture_dock_focus_snapshot", Callable())
-	_restore_dock_focus_snapshot = callbacks.get("restore_dock_focus_snapshot", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_state = context.state
+	_localization = context.localization
+	_client_install_detection_service = context.client_install_detection_service
+	_save_settings = context.save_settings
+	_refresh_dock = context.refresh_dock
+	_show_message = context.show_message
+	_capture_dock_focus_snapshot = context.capture_dock_focus_snapshot
+	_restore_dock_focus_snapshot = context.restore_dock_focus_snapshot
+
+
+func dispose() -> void:
+	_state = null
+	_localization = null
+	_client_install_detection_service = null
+	_save_settings = Callable()
+	_refresh_dock = Callable()
+	_show_message = Callable()
+	_capture_dock_focus_snapshot = Callable()
+	_restore_dock_focus_snapshot = Callable()
 
 
 func handle_current_tab_changed(index: int) -> void:

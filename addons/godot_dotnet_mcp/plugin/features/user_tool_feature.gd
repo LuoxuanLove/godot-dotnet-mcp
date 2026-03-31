@@ -9,14 +9,27 @@ var _create_reload_coordinator := Callable()
 var _reload_all_domains := Callable()
 
 
-func configure(user_tool_service, callbacks: Dictionary) -> void:
-	_user_tool_service = user_tool_service
-	_show_message = callbacks.get("show_message", Callable())
-	_refresh_dock = callbacks.get("refresh_dock", Callable())
-	_save_settings = callbacks.get("save_settings", Callable())
-	_cleanup_disabled_tools = callbacks.get("cleanup_disabled_tools", Callable())
-	_create_reload_coordinator = callbacks.get("create_reload_coordinator", Callable())
-	_reload_all_domains = callbacks.get("reload_all_domains", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_user_tool_service = context.user_tool_service
+	_show_message = context.show_message
+	_refresh_dock = context.refresh_dock
+	_save_settings = context.save_settings
+	_cleanup_disabled_tools = context.cleanup_disabled_tools
+	_create_reload_coordinator = context.create_reload_coordinator
+	_reload_all_domains = context.reload_all_domains
+
+
+func dispose() -> void:
+	_user_tool_service = null
+	_show_message = Callable()
+	_refresh_dock = Callable()
+	_save_settings = Callable()
+	_cleanup_disabled_tools = Callable()
+	_create_reload_coordinator = Callable()
+	_reload_all_domains = Callable()
 
 
 func handle_delete_requested(script_path: String) -> void:
