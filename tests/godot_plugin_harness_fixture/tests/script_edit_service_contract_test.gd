@@ -48,14 +48,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(gd_functions.get("data", {}).get("count", 0)) < 2:
 		return _failure("GDScript edit helper should report both _ready and ping functions.")
 
+	# C# edit service is READ-ONLY — all mutation actions must return error
 	var cs_create: Dictionary = cs_service.execute("edit_cs", {
 		"action": "create",
 		"path": cs_path,
 		"class_name": "SampleServiceSplit",
 		"base_type": "Node"
 	})
-	if not bool(cs_create.get("success", false)):
-		return _failure("Split C# edit service failed to create a script.")
+	if bool(cs_create.get("success", false)):
+		return _failure("C# create should be disabled but returned success.")
+	if "disabled" not in str(cs_create.get("error", "")).to_lower():
+		return _failure("C# create should report mutation disabled error.")
 
 	var cs_add_method: Dictionary = cs_service.execute("edit_cs", {
 		"action": "add_method",
@@ -64,8 +67,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"return_type": "int",
 		"body": "return 1;"
 	})
-	if not bool(cs_add_method.get("success", false)):
-		return _failure("Split C# action service failed to add a method.")
+	if bool(cs_add_method.get("success", false)):
+		return _failure("C# add_method should be disabled but returned success.")
+	if "disabled" not in str(cs_add_method.get("error", "")).to_lower():
+		return _failure("C# add_method should report mutation disabled error.")
 
 	var cs_rename: Dictionary = cs_service.execute("edit_cs", {
 		"action": "rename_member",
@@ -73,19 +78,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"name": "Ping",
 		"new_name": "Pong"
 	})
-	if not bool(cs_rename.get("success", false)):
-		return _failure("Split C# action service failed to rename a method.")
+	if bool(cs_rename.get("success", false)):
+		return _failure("C# rename_member should be disabled but returned success.")
+	if "disabled" not in str(cs_rename.get("error", "")).to_lower():
+		return _failure("C# rename_member should report mutation disabled error.")
 
-	var cs_text_result = gd_helper._read_text_file(cs_path)
-	if not bool(cs_text_result.get("success", false)):
-		return _failure("Failed to read the rewritten C# file after split actions.")
-	var cs_text := str(cs_text_result.get("data", {}).get("content", ""))
-	if "Pong" not in cs_text:
-		return _failure("Renamed C# method should be written back to disk.")
+	var cs_write: Dictionary = cs_service.execute("edit_cs", {
+		"action": "write",
+		"path": cs_path,
+		"content": "namespace Test { }"
+	})
+	if bool(cs_write.get("success", false)):
+		return _failure("C# write should be disabled but returned success.")
+	if "disabled" not in str(cs_write.get("error", "")).to_lower():
+		return _failure("C# write should report mutation disabled error.")
 
-	var cs_validation: Dictionary = cs_helper.validate_written_script(cs_path, cs_text)
-	if not bool(cs_validation.get("success", false)):
-		return _failure("C# edit helper should validate the rewritten script.")
+	var cs_add_field: Dictionary = cs_service.execute("edit_cs", {
+		"action": "add_field",
+		"path": cs_path,
+		"name": "TestField",
+		"field_type": "int"
+	})
+	if bool(cs_add_field.get("success", false)):
+		return _failure("C# add_field should be disabled but returned success.")
+	if "disabled" not in str(cs_add_field.get("error", "")).to_lower():
+		return _failure("C# add_field should report mutation disabled error.")
 
 	return {
 		"name": "script_edit_service_contracts",
@@ -93,9 +110,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"gd_function_count": int(gd_functions.get("data", {}).get("count", 0)),
-			"cs_class_name": str(cs_validation.get("data", {}).get("class_name", "")),
-			"gd_service_path": gd_path,
-			"cs_service_path": cs_path
+			"gd_service_path": gd_path
 		}
 	}
 

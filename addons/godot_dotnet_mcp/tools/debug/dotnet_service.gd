@@ -1,4 +1,4 @@
-@tool
+﻿@tool
 extends "res://addons/godot_dotnet_mcp/tools/debug/service_base.gd"
 
 
@@ -113,7 +113,7 @@ func _build_dotnet_result_data(action: String, project_path: String, args: Array
 
 
 func _execute_process_with_pipe(executable_name: String, args: Array[String], timeout_sec: int) -> Dictionary:
-	var process = OS.execute_with_pipe(executable_name, PackedStringArray(args), false)
+	var process = OS.execute_with_pipe(executable_name, PackedStringArray(args))
 	if process.is_empty():
 		return _error("Failed to start dotnet process", {
 			"command": args.duplicate()

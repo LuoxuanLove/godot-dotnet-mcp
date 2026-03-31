@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 
 const ScriptExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/script/executor.gd")
 
@@ -9,12 +9,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = ScriptExecutorScript.new()
 	var executor_tools: Array[Dictionary] = executor.get_tools()
 
-	if executor_tools.size() != 8:
-		return _failure("Script executor should expose 8 tool definitions after the split.")
+	if executor_tools.size() != 7:
+		return _failure("Script executor should expose 7 tool definitions after the split.")
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/script_tools.gd"):
 		return _failure("script_tools.gd should be removed once the split executor becomes the only stable entry.")
 
-	var expected_names := ["read", "open", "inspect", "symbols", "exports", "references", "edit_gd", "edit_cs"]
+	var expected_names := ["read", "open", "inspect", "symbols", "exports", "references", "edit_gd"]
 	var actual_names: Array[String] = []
 	for tool_def in executor_tools:
 		actual_names.append(str(tool_def.get("name", "")))
