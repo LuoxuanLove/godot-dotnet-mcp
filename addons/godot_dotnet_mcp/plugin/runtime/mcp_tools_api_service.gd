@@ -6,9 +6,12 @@ var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_get_tool_loader = callbacks.get("get_tool_loader", Callable())
-	_get_tool_loader_status = callbacks.get("get_tool_loader_status", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_get_tool_loader = context.get_tool_loader
+	_get_tool_loader_status = context.get_tool_loader_status
 
 
 func dispose() -> void:

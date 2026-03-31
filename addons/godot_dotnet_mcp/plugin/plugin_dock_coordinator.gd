@@ -1,63 +1,91 @@
 @tool
 extends RefCounted
 
+const PluginDockLifecycleService = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_lifecycle_service.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
-func create_dock(context: Dictionary) -> Dictionary:
-	var plugin = context.get("plugin", null)
-	var dock_scene_path := str(context.get("dock_scene_path", ""))
-	var dock_script_path := str(context.get("dock_script_path", ""))
-	var dock_slot := int(context.get("dock_slot", 0))
-	var operation_id := str(context.get("operation_id", ""))
-	var load_packed_scene: Callable = context.get("load_packed_scene", Callable())
-	var wire_dock_signals: Callable = context.get("wire_dock_signals", Callable())
-	var count_dock_instances: Callable = context.get("count_dock_instances", Callable())
-	var record_self_incident: Callable = context.get("record_self_incident", Callable())
-	if plugin == null or not load_packed_scene.is_valid():
-		return {"success": false, "dock": null}
+const DEFAULT_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
+const DEFAULT_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 
-	var dock_scene = load_packed_scene.call(dock_scene_path)
-	if dock_scene == null:
-		_record_incident(record_self_incident, "error", "resource_missing", "dock_scene_load_failed", "Failed to load dock scene", "plugin", "_create_dock", dock_scene_path, operation_id, "Inspect the dock scene resource and script dependencies.")
-		return {"success": false, "dock": null}
-
-	var dock = dock_scene.instantiate()
-	if dock == null:
-		_record_incident(record_self_incident, "error", "resource_missing", "dock_scene_load_failed", "Dock scene instantiation returned null", "plugin", "_create_dock", dock_scene_path, operation_id, "Inspect the dock scene resource and its script.")
-		return {"success": false, "dock": null}
-
-	if wire_dock_signals.is_valid() and not bool(wire_dock_signals.call(dock, operation_id)):
-		if is_instance_valid(dock):
-			dock.queue_free()
-		return {"success": false, "dock": null}
-
-	plugin.add_control_to_dock(dock_slot, dock)
-	var dock_count := int(count_dock_instances.call()) if count_dock_instances.is_valid() else 0
-	if dock_count > 1:
-		_record_incident(record_self_incident, "warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance is present after dock creation", "plugin", "_create_dock", dock_script_path, operation_id, "Inspect stale dock cleanup and plugin reload ordering.", {"dock_count": dock_count})
-
-	return {"success": true, "dock": dock}
+var _dock_lifecycle = PluginDockLifecycleService.new()
 
 
-func remove_dock(context: Dictionary) -> Dictionary:
-	var plugin = context.get("plugin", null)
-	var dock = context.get("dock", null)
-	var dock_script_path := str(context.get("dock_script_path", ""))
-	var operation_id := str(context.get("operation_id", ""))
-	var count_dock_instances: Callable = context.get("count_dock_instances", Callable())
-	var record_self_incident: Callable = context.get("record_self_incident", Callable())
+func create_plugin_dock(
+	plugin,
+	current_dock,
+	action_router,
+	dock_slot: int,
+	dock_scene_path: String = DEFAULT_DOCK_SCENE_PATH,
+	dock_script_path: String = DEFAULT_DOCK_SCRIPT_PATH,
+	load_packed_scene: Callable = Callable()
+) -> Dictionary:
+	return _dock_lifecycle.create_plugin_dock(
+		plugin,
+		current_dock,
+		dock_slot,
+		dock_scene_path,
+		dock_script_path,
+		load_packed_scene,
+		Callable(self, "_wire_plugin_dock_signals").bind(action_router, dock_script_path)
+	)
 
-	if dock != null and is_instance_valid(dock):
-		if dock.get_parent() != null:
-			plugin.remove_control_from_docks(dock)
-			dock.get_parent().remove_child(dock)
-		dock.set_script(null)
-		dock.free()
 
-	var remaining_count := int(count_dock_instances.call()) if count_dock_instances.is_valid() else 0
-	if remaining_count > 0:
-		_record_incident(record_self_incident, "warning", "reload_conflict", "instance_cleanup_incomplete", "Dock instances remain after dock removal", "plugin", "_remove_dock", dock_script_path, operation_id, "Inspect dock cleanup and plugin reload ordering.", {"remaining_dock_instances": remaining_count})
+func remove_plugin_dock(plugin, current_dock, dock_script_path: String = DEFAULT_DOCK_SCRIPT_PATH) -> Dictionary:
+	return _dock_lifecycle.remove_plugin_dock(plugin, current_dock, dock_script_path)
 
-	return {"dock": null}
+
+func recreate_plugin_dock(
+	plugin,
+	current_dock,
+	action_router,
+	dock_slot: int,
+	dock_scene_path: String = DEFAULT_DOCK_SCENE_PATH,
+	dock_script_path: String = DEFAULT_DOCK_SCRIPT_PATH,
+	load_packed_scene: Callable = Callable()
+) -> Dictionary:
+	return _dock_lifecycle.recreate_plugin_dock(
+		plugin,
+		current_dock,
+		dock_slot,
+		dock_scene_path,
+		dock_script_path,
+		load_packed_scene,
+		Callable(self, "_wire_plugin_dock_signals").bind(action_router, dock_script_path)
+	)
+
+
+func count_plugin_dock_instances(plugin, dock_script_path: String = DEFAULT_DOCK_SCRIPT_PATH) -> int:
+	return _dock_lifecycle.count_plugin_dock_instances(plugin, dock_script_path)
+
+
+func build_dock_signal_bindings(action_router) -> Array[Dictionary]:
+	if action_router != null and action_router.has_method("build_dock_signal_bindings"):
+		var bindings = action_router.build_dock_signal_bindings()
+		if bindings is Array:
+			return bindings
+	return []
+
+
+func ensure_plugin_client_executable_dialog(plugin, current_dialog, file_selected_callback: Callable):
+	if current_dialog != null and is_instance_valid(current_dialog):
+		return current_dialog
+	var base_control = _resolve_base_control(plugin)
+	return ensure_client_executable_dialog(current_dialog, base_control, file_selected_callback)
+
+
+func capture_focus_snapshot(dock, fallback_tab: int) -> Dictionary:
+	if dock != null and is_instance_valid(dock) and dock.has_method("capture_focus_snapshot"):
+		return dock.capture_focus_snapshot()
+	return {"tab_index": fallback_tab, "focus_path": ""}
+
+
+func restore_focus_snapshot(dock, snapshot: Dictionary) -> void:
+	if dock == null or not is_instance_valid(dock):
+		return
+	if dock.has_method("activate_host_dock_tab"):
+		dock.activate_host_dock_tab()
+	if dock.has_method("restore_focus_snapshot"):
+		dock.restore_focus_snapshot(snapshot)
 
 
 func ensure_client_executable_dialog(current_dialog, base_control: Control, file_selected_callback: Callable):
@@ -92,48 +120,9 @@ func remove_client_executable_dialog(current_dialog, reset_client_path_request: 
 	return null
 
 
-func remove_stale_docks(context: Dictionary) -> void:
-	var plugin = context.get("plugin", null)
-	var current_dock = context.get("current_dock", null)
-	var dock_script_path := str(context.get("dock_script_path", ""))
-	var operation_id := str(context.get("operation_id", ""))
-	var count_dock_instances: Callable = context.get("count_dock_instances", Callable())
-	var record_self_incident: Callable = context.get("record_self_incident", Callable())
-	var record_debug: Callable = context.get("record_debug", Callable())
-	var editor_interface = plugin.get_editor_interface() if plugin != null else null
-	if editor_interface == null:
-		return
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return
-
-	for child in base_control.find_children("*", "Control", true, false):
-		if child == null or not is_instance_valid(child):
-			continue
-		if child == current_dock:
-			continue
-		var script = child.get_script()
-		var script_path := ""
-		if script != null:
-			script_path = str(script.resource_path)
-		if child.name != "MCPDock" and script_path != dock_script_path:
-			continue
-		if child.get_parent() != null:
-			plugin.remove_control_from_docks(child)
-			child.get_parent().remove_child(child)
-		child.set_script(null)
-		child.free()
-		if record_debug.is_valid():
-			record_debug.call("Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
-
-	var remaining_count := int(count_dock_instances.call()) if count_dock_instances.is_valid() else 0
-	if remaining_count > 1:
-		_record_incident(record_self_incident, "warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance remains after stale-dock cleanup", "plugin", "_remove_stale_docks", dock_script_path, operation_id, "Inspect stale dock cleanup and editor plugin reload ordering.", {"dock_count": remaining_count})
-
-
 func wire_dock_signals(dock, signal_bindings: Array[Dictionary], operation_id: String, record_self_incident: Callable, dock_script_path: String) -> bool:
 	if dock == null or not is_instance_valid(dock):
-		_record_incident(record_self_incident, "error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal wiring was requested before the dock instance was ready", "plugin", "_wire_dock_signals", dock_script_path, operation_id, "Inspect dock creation order.")
+		_record_incident(record_self_incident, "Dock signal wiring was requested before the dock instance was ready", dock_script_path, operation_id, "Inspect dock creation order.")
 		return false
 
 	for binding in signal_bindings:
@@ -142,28 +131,79 @@ func wire_dock_signals(dock, signal_bindings: Array[Dictionary], operation_id: S
 		if signal_name.is_empty() or not target_callable.is_valid():
 			continue
 		if not dock.has_signal(signal_name):
-			_record_incident(record_self_incident, "error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal is missing: %s" % signal_name, "plugin", "_wire_dock_signals", dock_script_path, operation_id, "Inspect the dock script signal declarations.")
+			_record_incident(record_self_incident, "Dock signal is missing: %s" % signal_name, dock_script_path, operation_id, "Inspect the dock script signal declarations.")
 			return false
 		if dock.is_connected(signal_name, target_callable):
 			continue
 		var error = dock.connect(signal_name, target_callable)
 		if error != OK:
-			_record_incident(record_self_incident, "error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal failed to connect: %s" % signal_name, "plugin", "_wire_dock_signals", dock_script_path, operation_id, "Inspect the dock script signal declarations and connection target.", {"error_code": error})
+			_record_incident(
+				record_self_incident,
+				"Dock signal failed to connect: %s" % signal_name,
+				dock_script_path,
+				operation_id,
+				"Inspect the dock script signal declarations and connection target.",
+				{"error_code": error}
+			)
 			return false
 
 	return true
 
 
-func _record_incident(record_self_incident: Callable, severity: String, category: String, code: String, message: String, component: String, phase: String, resource_path: String, operation_id: String, resolution_hint: String, extra_context: Dictionary = {}) -> void:
-	if not record_self_incident.is_valid():
-		return
-	record_self_incident.call(
+func _wire_plugin_dock_signals(dock, operation_id: String, action_router, dock_script_path: String) -> bool:
+	return wire_dock_signals(
+		dock,
+		build_dock_signal_bindings(action_router),
+		operation_id,
+		Callable(self, "_record_plugin_incident"),
+		dock_script_path
+	)
+
+
+func _resolve_base_control(plugin) -> Control:
+	return _dock_lifecycle.resolve_base_control(plugin)
+
+
+func _record_plugin_incident(
+	severity: String,
+	category: String,
+	code: String,
+	message: String,
+	component: String,
+	phase: String,
+	file_path: String = "",
+	line = "",
+	operation_id: String = "",
+	recoverable: bool = true,
+	suggested_action: String = "",
+	context: Dictionary = {}
+) -> void:
+	PluginSelfDiagnosticStore.record_incident(
 		severity,
 		category,
 		code,
 		message,
 		component,
 		phase,
+		file_path,
+		line,
+		operation_id,
+		recoverable,
+		suggested_action,
+		context
+	)
+
+
+func _record_incident(record_self_incident: Callable, message: String, resource_path: String, operation_id: String, resolution_hint: String, extra_context: Dictionary = {}) -> void:
+	if not record_self_incident.is_valid():
+		return
+	record_self_incident.call(
+		"error",
+		"ui_binding_error",
+		"dock_signal_binding_failed",
+		message,
+		"plugin",
+		"_wire_dock_signals",
 		resource_path,
 		"",
 		operation_id,

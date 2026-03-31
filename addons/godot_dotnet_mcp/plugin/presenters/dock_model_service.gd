@@ -24,36 +24,41 @@ var _self_diagnostic_feature
 var _get_editor_scale := Callable()
 
 
-func configure(
-	state,
-	localization,
-	server_controller,
-	tool_catalog,
-	config_service,
-	dock_presenter,
-	user_tool_service,
-	client_install_detection_service,
-	central_server_attach_service,
-	central_server_process_service,
-	user_tool_watch_service,
-	tool_access_feature,
-	self_diagnostic_feature,
-	callbacks: Dictionary = {}
-) -> void:
-	_state = state
-	_localization = localization
-	_server_controller = server_controller
-	_tool_catalog = tool_catalog
-	_config_service = config_service
-	_dock_presenter = dock_presenter
-	_user_tool_service = user_tool_service
-	_client_install_detection_service = client_install_detection_service
-	_central_server_attach_service = central_server_attach_service
-	_central_server_process_service = central_server_process_service
-	_user_tool_watch_service = user_tool_watch_service
-	_tool_access_feature = tool_access_feature
-	_self_diagnostic_feature = self_diagnostic_feature
-	_get_editor_scale = callbacks.get("get_editor_scale", Callable())
+func configure(context) -> void:
+	if context == null:
+		dispose()
+		return
+	_state = context.state
+	_localization = context.localization
+	_server_controller = context.server_controller
+	_tool_catalog = context.tool_catalog
+	_config_service = context.config_service
+	_dock_presenter = context.dock_presenter
+	_user_tool_service = context.user_tool_service
+	_client_install_detection_service = context.client_install_detection_service
+	_central_server_attach_service = context.central_server_attach_service
+	_central_server_process_service = context.central_server_process_service
+	_user_tool_watch_service = context.user_tool_watch_service
+	_tool_access_feature = context.tool_access_feature
+	_self_diagnostic_feature = context.self_diagnostic_feature
+	_get_editor_scale = context.get_editor_scale
+
+
+func dispose() -> void:
+	_state = null
+	_localization = null
+	_server_controller = null
+	_tool_catalog = null
+	_config_service = null
+	_dock_presenter = null
+	_user_tool_service = null
+	_client_install_detection_service = null
+	_central_server_attach_service = null
+	_central_server_process_service = null
+	_user_tool_watch_service = null
+	_tool_access_feature = null
+	_self_diagnostic_feature = null
+	_get_editor_scale = Callable()
 
 
 func build_model() -> Dictionary:

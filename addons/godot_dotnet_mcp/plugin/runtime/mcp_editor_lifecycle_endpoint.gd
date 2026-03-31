@@ -5,24 +5,27 @@ class_name MCPEditorLifecycleEndpoint
 var _build_state := Callable()
 var _execute_close := Callable()
 var _execute_restart := Callable()
-var _success := Callable()
-var _error := Callable()
+var _build_success := Callable()
+var _build_error := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_build_state = callbacks.get("build_state", Callable())
-	_execute_close = callbacks.get("execute_close", Callable())
-	_execute_restart = callbacks.get("execute_restart", Callable())
-	_success = callbacks.get("success", Callable())
-	_error = callbacks.get("error", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_build_state = context.build_state
+	_execute_close = context.execute_close
+	_execute_restart = context.execute_restart
+	_build_success = context.build_success
+	_build_error = context.build_error
 
 
 func dispose() -> void:
 	_build_state = Callable()
 	_execute_close = Callable()
 	_execute_restart = Callable()
-	_success = Callable()
-	_error = Callable()
+	_build_success = Callable()
+	_build_error = Callable()
 
 
 func handle_post_request(body: String) -> Dictionary:
@@ -75,8 +78,8 @@ func _call_handler(handler: Callable, args: Array, fallback_message: String) -> 
 
 
 func _call_success(data, message: String) -> Dictionary:
-	if _success.is_valid():
-		var result = _success.call(data, message)
+	if _build_success.is_valid():
+		var result = _build_success.call(data, message)
 		if result is Dictionary:
 			return (result as Dictionary).duplicate(true)
 	return {
@@ -87,8 +90,8 @@ func _call_success(data, message: String) -> Dictionary:
 
 
 func _call_error(error: String, message: String, data: Dictionary = {}) -> Dictionary:
-	if _error.is_valid():
-		var result = _error.call(error, message, data)
+	if _build_error.is_valid():
+		var result = _build_error.call(error, message, data)
 		if result is Dictionary:
 			return (result as Dictionary).duplicate(true)
 	var payload := {

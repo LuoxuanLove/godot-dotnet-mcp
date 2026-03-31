@@ -11,12 +11,15 @@ var _log := Callable()
 var _sanitize_for_json := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_get_tool_loader = callbacks.get("get_tool_loader", Callable())
-	_is_tool_enabled = callbacks.get("is_tool_enabled", Callable())
-	_is_tool_exposed = callbacks.get("is_tool_exposed", Callable())
-	_log = callbacks.get("log", Callable())
-	_sanitize_for_json = callbacks.get("sanitize_for_json", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_get_tool_loader = context.get_tool_loader
+	_is_tool_enabled = context.is_tool_enabled
+	_is_tool_exposed = context.is_tool_exposed
+	_log = context.log
+	_sanitize_for_json = context.sanitize_for_json
 
 
 func dispose() -> void:

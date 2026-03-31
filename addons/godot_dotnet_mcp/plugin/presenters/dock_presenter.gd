@@ -5,6 +5,10 @@ const ClientConfigPresenterScript = preload("res://addons/godot_dotnet_mcp/plugi
 var _client_config_presenter = ClientConfigPresenterScript.new()
 
 
+func dispose() -> void:
+	_client_config_presenter = null
+
+
 func build_model(context: Dictionary) -> Dictionary:
 	var state = context.get("state")
 	var settings: Dictionary = context.get("settings", {})

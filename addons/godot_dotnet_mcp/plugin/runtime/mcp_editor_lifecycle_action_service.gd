@@ -4,28 +4,31 @@ class_name MCPEditorLifecycleActionService
 
 var _build_state := Callable()
 var _build_state_with_hint := Callable()
-var _success := Callable()
-var _error := Callable()
+var _build_success := Callable()
+var _build_error := Callable()
 var _schedule_action := Callable()
 var _get_plugin_host := Callable()
 var _log := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_build_state = callbacks.get("build_state", Callable())
-	_build_state_with_hint = callbacks.get("build_state_with_hint", Callable())
-	_success = callbacks.get("success", Callable())
-	_error = callbacks.get("error", Callable())
-	_schedule_action = callbacks.get("schedule_action", Callable())
-	_get_plugin_host = callbacks.get("get_plugin_host", Callable())
-	_log = callbacks.get("log", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_build_state = context.build_state
+	_build_state_with_hint = context.build_state_with_hint
+	_build_success = context.build_success
+	_build_error = context.build_error
+	_schedule_action = context.schedule_action
+	_get_plugin_host = context.get_plugin_host
+	_log = context.log
 
 
 func dispose() -> void:
 	_build_state = Callable()
 	_build_state_with_hint = Callable()
-	_success = Callable()
-	_error = Callable()
+	_build_success = Callable()
+	_build_error = Callable()
 	_schedule_action = Callable()
 	_get_plugin_host = Callable()
 	_log = Callable()
@@ -139,8 +142,8 @@ func _build_state_hint(hint: String) -> Dictionary:
 
 
 func _call_success(data, message: String) -> Dictionary:
-	if _success.is_valid():
-		var result = _success.call(data, message)
+	if _build_success.is_valid():
+		var result = _build_success.call(data, message)
 		if result is Dictionary:
 			return (result as Dictionary).duplicate(true)
 	return {
@@ -151,8 +154,8 @@ func _call_success(data, message: String) -> Dictionary:
 
 
 func _call_error(error: String, message: String, data: Dictionary = {}) -> Dictionary:
-	if _error.is_valid():
-		var result = _error.call(error, message, data)
+	if _build_error.is_valid():
+		var result = _build_error.call(error, message, data)
 		if result is Dictionary:
 			return (result as Dictionary).duplicate(true)
 	var payload := {

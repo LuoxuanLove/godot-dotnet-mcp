@@ -13,23 +13,38 @@ var _tool_access_feature = null
 var _self_diagnostic_feature = null
 var _ui_state_feature = null
 var _reload_feature = null
-var _build_dock_model: Callable
-var _get_dock: Callable
+var _build_dock_model := Callable()
+var _get_dock := Callable()
 
 
-func configure(context: Dictionary) -> void:
-	_server_controller = context.get("server_controller", null)
-	_state = context.get("state", null)
-	_localization = context.get("localization", null)
-	_server_feature = context.get("server_feature", null)
-	_config_feature = context.get("config_feature", null)
-	_user_tool_feature = context.get("user_tool_feature", null)
-	_tool_access_feature = context.get("tool_access_feature", null)
-	_self_diagnostic_feature = context.get("self_diagnostic_feature", null)
-	_ui_state_feature = context.get("ui_state_feature", null)
-	_reload_feature = context.get("reload_feature", null)
-	_build_dock_model = context.get("build_dock_model", Callable())
-	_get_dock = context.get("get_dock", Callable())
+func configure(server_controller, state, localization, server_feature, config_feature, user_tool_feature, tool_access_feature, self_diagnostic_feature, ui_state_feature, reload_feature, build_dock_model: Callable = Callable(), get_dock: Callable = Callable()) -> void:
+	_server_controller = server_controller
+	_state = state
+	_localization = localization
+	_server_feature = server_feature
+	_config_feature = config_feature
+	_user_tool_feature = user_tool_feature
+	_tool_access_feature = tool_access_feature
+	_self_diagnostic_feature = self_diagnostic_feature
+	_ui_state_feature = ui_state_feature
+	_reload_feature = reload_feature
+	_build_dock_model = build_dock_model
+	_get_dock = get_dock
+
+
+func dispose() -> void:
+	_server_controller = null
+	_state = null
+	_localization = null
+	_server_feature = null
+	_config_feature = null
+	_user_tool_feature = null
+	_tool_access_feature = null
+	_self_diagnostic_feature = null
+	_ui_state_feature = null
+	_reload_feature = null
+	_build_dock_model = Callable()
+	_get_dock = Callable()
 
 
 func build_dock_signal_bindings() -> Array[Dictionary]:

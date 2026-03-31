@@ -12,15 +12,18 @@ var _protocol_version := ""
 var _tool_schema_version := ""
 
 
-func configure(callbacks: Dictionary = {}, server_info: Dictionary = {}) -> void:
-	_get_tool_loader = callbacks.get("get_tool_loader", Callable())
-	_get_tool_loader_status = callbacks.get("get_tool_loader_status", Callable())
-	_get_server_stats = callbacks.get("get_server_stats", Callable())
-	_log = callbacks.get("log", Callable())
-	_server_name = str(server_info.get("server_name", ""))
-	_server_version = str(server_info.get("server_version", ""))
-	_protocol_version = str(server_info.get("protocol_version", ""))
-	_tool_schema_version = str(server_info.get("tool_schema_version", ""))
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_get_tool_loader = context.get_tool_loader
+	_get_tool_loader_status = context.get_tool_loader_status
+	_get_server_stats = context.get_server_stats
+	_log = context.log
+	_server_name = str(context.server_name)
+	_server_version = str(context.server_version)
+	_protocol_version = str(context.protocol_version)
+	_tool_schema_version = str(context.tool_schema_version)
 
 
 func dispose() -> void:

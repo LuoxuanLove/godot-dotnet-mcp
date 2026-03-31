@@ -4,18 +4,19 @@ extends RefCounted
 const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const CentralServerAttachServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/central_server_attach_service.gd")
 const CentralServerProcessServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/central_server_process_service.gd")
+const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 
-func configure_user_tool_watch_service(current_service, plugin, create_reload_coordinator: Callable, user_tool_service, callbacks: Dictionary = {}):
+func configure_user_tool_watch_service(current_service, plugin, create_reload_coordinator: Callable, user_tool_service, apply_external_user_tool_catalog_refresh: Callable = Callable()):
 	var service = current_service
 	if service == null:
 		service = UserToolWatchService.new()
 	service.stop()
-	service.configure(plugin, create_reload_coordinator.call(), user_tool_service, callbacks)
+	service.configure(plugin, create_reload_coordinator.call(), user_tool_service, apply_external_user_tool_catalog_refresh)
 	service.start()
 	return service
 
@@ -64,11 +65,33 @@ func configure_central_server_attach_service(current_service, plugin, settings: 
 	var service = current_service
 	if service == null:
 		service = CentralServerAttachServiceScript.new()
-	service.configure(plugin, settings, {
-		"save_settings": save_settings
-	})
+	service.configure(plugin, settings, save_settings)
 	service.start()
 	return service
+
+
+func attach_server_controller(current_controller, plugin, settings: Dictionary, action_router, create_controller: Callable = Callable()):
+	var controller = current_controller
+	if controller == null:
+		controller = create_controller.call() if create_controller.is_valid() else ServerRuntimeController.new()
+	if controller == null:
+		return null
+	controller.attach(plugin, settings)
+	_connect_server_controller_signals(controller, action_router)
+	return controller
+
+
+func dispose_server_controller(current_controller, action_router):
+	if current_controller == null:
+		return null
+	_disconnect_server_controller_signals(current_controller, action_router)
+	current_controller.detach()
+	return null
+
+
+func recreate_server_controller(current_controller, plugin, settings: Dictionary, action_router, create_controller: Callable = Callable()):
+	var controller = dispose_server_controller(current_controller, action_router)
+	return attach_server_controller(controller, plugin, settings, action_router, create_controller)
 
 
 func ensure_runtime_bridge_autoload(plugin, autoload_name: String, autoload_path: String) -> void:
@@ -211,6 +234,34 @@ func _record_runtime_bridge_stale_instance(plugin, autoload_name: String, autolo
 			"Inspect autoload cleanup and editor reload ordering.",
 			{"current_path": current_path}
 		)
+
+
+func _connect_server_controller_signals(controller, action_router) -> void:
+	if controller == null or action_router == null:
+		return
+	var server_started_callable := Callable(action_router, "handle_server_started")
+	var server_stopped_callable := Callable(action_router, "handle_server_stopped")
+	var request_received_callable := Callable(action_router, "handle_request_received")
+	if not controller.server_started.is_connected(server_started_callable):
+		controller.server_started.connect(server_started_callable)
+	if not controller.server_stopped.is_connected(server_stopped_callable):
+		controller.server_stopped.connect(server_stopped_callable)
+	if not controller.request_received.is_connected(request_received_callable):
+		controller.request_received.connect(request_received_callable)
+
+
+func _disconnect_server_controller_signals(controller, action_router) -> void:
+	if controller == null or action_router == null:
+		return
+	var server_started_callable := Callable(action_router, "handle_server_started")
+	var server_stopped_callable := Callable(action_router, "handle_server_stopped")
+	var request_received_callable := Callable(action_router, "handle_request_received")
+	if controller.server_started.is_connected(server_started_callable):
+		controller.server_started.disconnect(server_started_callable)
+	if controller.server_stopped.is_connected(server_stopped_callable):
+		controller.server_stopped.disconnect(server_stopped_callable)
+	if controller.request_received.is_connected(request_received_callable):
+		controller.request_received.disconnect(request_received_callable)
 
 
 func _record_incident(severity: String, category: String, code: String, message: String, component: String, phase: String, file_path: String, operation_id: String, suggested_action: String, context: Dictionary = {}) -> void:

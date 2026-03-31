@@ -10,13 +10,16 @@ var _handle_editor_lifecycle_post_request := Callable()
 var _build_cors_response := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_handle_mcp_request_async = callbacks.get("handle_mcp_request_async", Callable())
-	_build_health_response = callbacks.get("build_health_response", Callable())
-	_build_tools_list_response = callbacks.get("build_tools_list_response", Callable())
-	_handle_editor_lifecycle_request = callbacks.get("handle_editor_lifecycle_request", Callable())
-	_handle_editor_lifecycle_post_request = callbacks.get("handle_editor_lifecycle_post_request", Callable())
-	_build_cors_response = callbacks.get("build_cors_response", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_handle_mcp_request_async = context.handle_mcp_request_async
+	_build_health_response = context.build_health_response
+	_build_tools_list_response = context.build_tools_list_response
+	_handle_editor_lifecycle_request = context.handle_editor_lifecycle_request
+	_handle_editor_lifecycle_post_request = context.handle_editor_lifecycle_post_request
+	_build_cors_response = context.build_cors_response
 
 
 func dispose() -> void:

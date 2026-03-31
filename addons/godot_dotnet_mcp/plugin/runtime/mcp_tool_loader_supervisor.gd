@@ -15,10 +15,14 @@ var _log := Callable()
 var _record_registration_issue := Callable()
 
 
-func configure(server_context, callbacks: Dictionary = {}) -> void:
+func configure(server_context, context = null) -> void:
 	_server_context = server_context
-	_log = callbacks.get("log", Callable())
-	_record_registration_issue = callbacks.get("record_registration_issue", Callable())
+	if context == null:
+		_log = Callable()
+		_record_registration_issue = Callable()
+	else:
+		_log = context.log
+		_record_registration_issue = context.record_registration_issue
 	if _tool_loader == null:
 		_replace_tool_loader()
 
@@ -65,8 +69,21 @@ func is_tool_enabled(tool_name: String) -> bool:
 	return not _disabled_tools.has(tool_name)
 
 
+func is_tool_exposed(tool_name: String) -> bool:
+	if _tool_loader == null:
+		return false
+	if not _tool_loader.has_method("is_tool_exposed"):
+		return false
+	return bool(_tool_loader.is_tool_exposed(tool_name))
+
+
 func get_tool_loader() -> MCPToolLoader:
 	return _tool_loader
+
+
+func tick(delta: float) -> void:
+	if _tool_loader != null and _tool_loader.has_method("tick"):
+		_tool_loader.tick(delta)
 
 
 func get_status() -> Dictionary:

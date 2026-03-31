@@ -11,14 +11,17 @@ var _build_json_rpc_error := Callable()
 var _log := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_handle_initialize = callbacks.get("handle_initialize", Callable())
-	_handle_tools_list = callbacks.get("handle_tools_list", Callable())
-	_handle_tools_call_async = callbacks.get("handle_tools_call_async", Callable())
-	_handle_notification = callbacks.get("handle_notification", Callable())
-	_build_json_rpc_response = callbacks.get("build_json_rpc_response", Callable())
-	_build_json_rpc_error = callbacks.get("build_json_rpc_error", Callable())
-	_log = callbacks.get("log", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_handle_initialize = context.handle_initialize
+	_handle_tools_list = context.handle_tools_list
+	_handle_tools_call_async = context.handle_tools_call_async
+	_handle_notification = context.handle_notification
+	_build_json_rpc_response = context.build_json_rpc_response
+	_build_json_rpc_error = context.build_json_rpc_error
+	_log = context.log
 
 
 func dispose() -> void:

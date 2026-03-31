@@ -5,8 +5,11 @@ class_name MCPEditorLifecycleStateBuilder
 var _get_plugin_host := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_get_plugin_host = callbacks.get("get_plugin_host", Callable())
+func configure(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_get_plugin_host = context.get_plugin_host
 
 
 func dispose() -> void:
