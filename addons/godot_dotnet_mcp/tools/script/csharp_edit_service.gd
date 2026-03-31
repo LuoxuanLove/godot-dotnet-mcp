@@ -1,13 +1,6 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
-const CSharpEditHelper = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
-const CSharpEditActionService = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_action_service.gd")
-
-var _edit_helper := CSharpEditHelper.new()
-var _action_service := CSharpEditActionService.new()
-
-
 func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 	var action = str(args.get("action", ""))
 	var path = _normalize_res_path(str(args.get("path", "")))
@@ -18,18 +11,22 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 
 	match action:
 		"create":
-			return _action_service.create_script(path, args)
+			return _mutation_disabled_error(action)
 		"write":
-			return _action_service.write_script(path, str(args.get("content", "")))
+			return _mutation_disabled_error(action)
 		"add_field":
-			return _action_service.add_field(path, args)
+			return _mutation_disabled_error(action)
 		"add_method":
-			return _action_service.add_method(path, args)
+			return _mutation_disabled_error(action)
 		"replace_method_body":
-			return _action_service.replace_method_body(path, str(args.get("name", "")), str(args.get("body", "")))
+			return _mutation_disabled_error(action)
 		"delete_member":
-			return _action_service.remove_member(path, str(args.get("name", "")), str(args.get("member_type", "auto")))
+			return _mutation_disabled_error(action)
 		"rename_member":
-			return _action_service.rename_member(path, str(args.get("name", "")), str(args.get("new_name", "")))
+			return _mutation_disabled_error(action)
 		_:
-			return _error("Unknown action: %s" % action)
+			return _error("Unknown action: %s. edit_cs is read-only in plugin; use host cs_file_patch for C# mutations." % action)
+
+
+func _mutation_disabled_error(action: String) -> Dictionary:
+	return _error("edit_cs action '%s' is disabled in plugin. Use host cs_file_patch for C# mutations." % action)

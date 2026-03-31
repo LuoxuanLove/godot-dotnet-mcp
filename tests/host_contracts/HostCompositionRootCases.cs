@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.CentralServer;
+using Microsoft.Extensions.Logging.Abstractions;
 using static ContractAssertions;
 using static ContractHttpSupport;
 using static ContractPayloadSupport;
@@ -434,7 +435,7 @@ internal static class HostCompositionRootCases
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 new EditorSessionService(new ProjectRegistryService()),
-                TextWriter.Null,
+                NullLogger<EditorAttachHttpServer>.Instance,
                 () =>
                 {
                     lifetime.Cancel();
@@ -445,7 +446,7 @@ internal static class HostCompositionRootCases
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 runtimeGraph.EditorSessions,
-                TextWriter.Null,
+                NullLogger<EditorAttachHttpServer>.Instance,
                 () =>
                 {
                     lifetime.Cancel();
@@ -489,7 +490,7 @@ internal static class HostCompositionRootCases
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 new EditorSessionService(new ProjectRegistryService()),
-                TextWriter.Null,
+                NullLogger<EditorAttachHttpServer>.Instance,
                 () =>
                 {
                     lifetime.Cancel();
@@ -500,7 +501,7 @@ internal static class HostCompositionRootCases
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 runtimeGraph.EditorSessions,
-                TextWriter.Null,
+                NullLogger<EditorAttachHttpServer>.Instance,
                 () =>
                 {
                     lifetime.Cancel();

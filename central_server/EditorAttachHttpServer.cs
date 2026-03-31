@@ -2,12 +2,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace GodotDotnetMcp.CentralServer;
 
 internal sealed class EditorAttachHttpServer : IAsyncDisposable
 {
-    private readonly TextWriter _error;
+    private readonly ILogger<EditorAttachHttpServer> _logger;
     private readonly EditorSessionService _sessions;
     private readonly TcpListener _listener;
     private readonly string _prefix;
@@ -15,10 +16,15 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
     private Task? _loopTask;
     private volatile bool _disposing;
 
-    public EditorAttachHttpServer(string host, int port, EditorSessionService sessions, TextWriter error, Func<Task>? shutdownRequested = null)
+    public EditorAttachHttpServer(
+        string host,
+        int port,
+        EditorSessionService sessions,
+        ILogger<EditorAttachHttpServer> logger,
+        Func<Task>? shutdownRequested = null)
     {
         _sessions = sessions;
-        _error = error;
+        _logger = logger;
         _listener = new TcpListener(ParseAddress(host), port);
         _prefix = $"http://{host}:{port}/";
         _shutdownRequested = shutdownRequested;
@@ -83,7 +89,7 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
                     break;
                 }
 
-                await _error.WriteLineAsync($"[CentralServer] Editor attach listener failed: {ex.Message}");
+                _logger.LogError(ex, "Editor attach listener failed");
                 continue;
             }
 
@@ -141,7 +147,7 @@ internal sealed class EditorAttachHttpServer : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            await _error.WriteLineAsync($"[CentralServer] Editor attach request failed: {ex.Message}");
+            _logger.LogError(ex, "Editor attach request failed");
             try
             {
                 await WriteJsonResponseAsync(stream, 500, new { success = false, error = ex.Message }, cancellationToken);

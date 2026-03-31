@@ -93,12 +93,10 @@ internal static class CentralServerComposition
     /// </summary>
     public static StdioRuntime CreateStdioRuntime(
         EditorAttachEndpoint attachEndpoint,
-        TextWriter error,
         Func<Task>? shutdownRequested,
         Action<ILoggingBuilder>? configureLogging = null)
     {
         ArgumentNullException.ThrowIfNull(attachEndpoint);
-        ArgumentNullException.ThrowIfNull(error);
 
         var serviceProvider = BuildServiceProvider(attachEndpoint, configureLogging);
         try
@@ -108,7 +106,7 @@ internal static class CentralServerComposition
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 editorSessions,
-                error,
+                serviceProvider.GetRequiredService<ILogger<EditorAttachHttpServer>>(),
                 shutdownRequested);
 
             var runtimeGraph = new CentralServerRuntimeGraph(
@@ -143,12 +141,10 @@ internal static class CentralServerComposition
     /// </summary>
     public static AttachOnlyRuntime CreateAttachOnlyRuntime(
         EditorAttachEndpoint attachEndpoint,
-        TextWriter error,
         Func<Task>? shutdownRequested,
         Action<ILoggingBuilder>? configureLogging = null)
     {
         ArgumentNullException.ThrowIfNull(attachEndpoint);
-        ArgumentNullException.ThrowIfNull(error);
 
         var serviceProvider = BuildServiceProvider(attachEndpoint, configureLogging);
         try
@@ -158,7 +154,7 @@ internal static class CentralServerComposition
                 attachEndpoint.Host,
                 attachEndpoint.Port,
                 editorSessions,
-                error,
+                serviceProvider.GetRequiredService<ILogger<EditorAttachHttpServer>>(),
                 shutdownRequested);
 
             return new AttachOnlyRuntime(attachServer, serviceProvider);

@@ -2,6 +2,8 @@
 extends RefCounted
 class_name MCPRuntimeCommandService
 
+const MCPProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+
 var _get_tree := Callable()
 var _get_viewport := Callable()
 var _get_current_scene_path := Callable()
@@ -380,9 +382,10 @@ func _success(data, message: String) -> Dictionary:
 
 
 func _failure(error_type: String, message: String, data = {}) -> Dictionary:
+	var canonical_error_type := MCPProtocolFactsScript.get_error_code(error_type)
 	var result := {
 		"success": false,
-		"error": error_type,
+		"error": canonical_error_type,
 		"message": message
 	}
 	if data is Dictionary and not (data as Dictionary).is_empty():

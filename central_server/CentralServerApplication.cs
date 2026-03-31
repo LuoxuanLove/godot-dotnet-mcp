@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.HostShared;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -109,7 +111,6 @@ Modes:
 
         await using var stdioRuntime = CentralServerComposition.CreateStdioRuntime(
             attachEndpoint,
-            error,
             () =>
             {
                 attachServerCts.Cancel();
@@ -117,7 +118,10 @@ Modes:
             },
             null);
 
-        var server = new CentralStdioMcpServer(output, error, stdioRuntime.Graph.Dispatcher!);
+        var server = new CentralStdioMcpServer(
+            output,
+            stdioRuntime.Graph.ServiceProvider.GetRequiredService<ILogger<CentralStdioMcpServer>>(),
+            stdioRuntime.Graph.Dispatcher!);
         stdioRuntime.AttachServer.Start(attachServerCts.Token);
         try
         {
@@ -140,7 +144,6 @@ Modes:
 
         await using var attachOnlyRuntime = CentralServerComposition.CreateAttachOnlyRuntime(
             attachEndpoint,
-            effectiveError,
             () =>
             {
                 attachOnlyCts.Cancel();

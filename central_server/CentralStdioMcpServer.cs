@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.HostShared;
+using Microsoft.Extensions.Logging;
 
 namespace GodotDotnetMcp.CentralServer;
 
@@ -10,13 +11,13 @@ internal sealed class CentralStdioMcpServer
     private const int MaxHeaderBytes = 16 * 1024;
 
     private readonly Stream _output;
-    private readonly TextWriter _error;
+    private readonly ILogger<CentralStdioMcpServer> _logger;
     private readonly CentralToolDispatcher _dispatcher;
 
-    public CentralStdioMcpServer(Stream output, TextWriter error, CentralToolDispatcher dispatcher)
+    public CentralStdioMcpServer(Stream output, ILogger<CentralStdioMcpServer> logger, CentralToolDispatcher dispatcher)
     {
         _output = output;
-        _error = error;
+        _logger = logger;
         _dispatcher = dispatcher;
     }
 
@@ -43,8 +44,7 @@ internal sealed class CentralStdioMcpServer
 
                 if (!TryParseRequest(message.Body, out var request, out var parseError))
                 {
-                    await _error.WriteLineAsync(parseError ?? "Invalid JSON-RPC request.");
-                    await _error.FlushAsync();
+                    _logger.LogWarning("Invalid JSON-RPC request: {ParseError}", parseError ?? "unknown");
                     continue;
                 }
 
@@ -74,9 +74,8 @@ internal sealed class CentralStdioMcpServer
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Unhandled error handling {Method}", request.Method);
                     await WriteErrorAsync(request.Id, -32603, $"Internal error: {ex.Message}", cancellationToken);
-                    await _error.WriteLineAsync(ex.ToString());
-                    await _error.FlushAsync();
                 }
             }
         }

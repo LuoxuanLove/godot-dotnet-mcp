@@ -1,5 +1,7 @@
 using System.Text;
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace GodotDotnetMcp.HostShared;
 
@@ -18,50 +20,85 @@ internal static class SemanticCSharpEditor
 {
     public static string UpsertMethod(string text, SemanticMemberPatch patch, out PatchOperationResult result)
     {
-        var typeRegion = FindTypeRegion(text, patch.TypeName);
-        var bodyIndent = typeRegion.BodyIndent;
-        var candidate = FindMethodCandidate(typeRegion.BodyText, patch.MemberName, patch.Parameters, patch.SignatureHint);
-        var newMember = BuildMethod(patch, bodyIndent);
+        var syntaxTree = CSharpSyntaxTree.ParseText(text, cancellationToken: default);
+        var root = syntaxTree.GetRoot();
 
-        if (candidate is not null)
+        var typeDeclaration = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == patch.TypeName && IsTypeKind(t));
+
+        if (typeDeclaration == null)
         {
-            var updatedBody = ReplaceRange(typeRegion.BodyText, candidate.StartIndex, candidate.EndIndex, newMember);
+            throw new BridgeToolException($"Type '{patch.TypeName}' was not found.");
+        }
+
+        var existingMethod = FindMethodDeclaration(typeDeclaration, patch);
+        if (existingMethod != null)
+        {
+            var newMethod = BuildMethodDeclaration(patch);
+            var newRoot = root.ReplaceNode(existingMethod, newMethod);
+            var newText = newRoot.ToFullString();
             result = new PatchOperationResult(
                 Kind: "method_upsert",
                 Target: $"{patch.TypeName}.{patch.MemberName}",
-                MatchCount: candidate.MatchCount,
+                MatchCount: 1,
                 AppliedCount: 1,
-                Note: candidate.MatchCount > 1 ? $"Multiple candidate methods matched '{patch.MemberName}'; updated first match." : "Updated existing method.");
-            return ReplaceTypeBody(text, typeRegion, updatedBody);
+                Note: "Updated existing method.");
+            return newText;
         }
 
-        var insertedBody = InsertBeforeTypeEnd(typeRegion.BodyText, newMember, bodyIndent);
+        var newMethodDeclaration = BuildMethodDeclaration(patch);
+        var newRootWithInsert = InsertMember(root, typeDeclaration, newMethodDeclaration);
+        var updatedText = newRootWithInsert.ToFullString();
         result = new PatchOperationResult(
             Kind: "method_upsert",
             Target: $"{patch.TypeName}.{patch.MemberName}",
             MatchCount: 0,
             AppliedCount: 1,
             Note: "Added new method.");
-        return ReplaceTypeBody(text, typeRegion, insertedBody);
+        return updatedText;
     }
 
     public static string RemoveMethod(string text, string typeName, string memberName, IReadOnlyList<string> parameters, string? signatureHint, out PatchOperationResult result)
     {
-        var typeRegion = FindTypeRegion(text, typeName);
-        var candidate = FindMethodCandidate(typeRegion.BodyText, memberName, parameters, signatureHint);
-        if (candidate is null)
+        var syntaxTree = CSharpSyntaxTree.ParseText(text, cancellationToken: default);
+        var root = syntaxTree.GetRoot();
+
+        var typeDeclaration = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == typeName && IsTypeKind(t));
+
+        if (typeDeclaration == null)
+        {
+            throw new BridgeToolException($"Type '{typeName}' was not found.");
+        }
+
+        var patch = new SemanticMemberPatch(
+            TypeName: typeName,
+            MemberName: memberName,
+            Modifiers: Array.Empty<string>(),
+            ReturnType: null,
+            Parameters: parameters,
+            Body: null,
+            FieldType: null,
+            Initializer: null,
+            SignatureHint: signatureHint);
+
+        var existingMethod = FindMethodDeclaration(typeDeclaration, patch);
+        if (existingMethod == null)
         {
             throw new BridgeToolException($"Method '{memberName}' was not found in type '{typeName}'.");
         }
 
-        var updatedBody = RemoveRange(typeRegion.BodyText, candidate.StartIndex, candidate.EndIndex);
+        var newRoot = root.RemoveNode(existingMethod, SyntaxRemoveOptions.KeepNoTrivia);
+        var newText = newRoot!.ToFullString();
         result = new PatchOperationResult(
             Kind: "method_remove",
             Target: $"{typeName}.{memberName}",
-            MatchCount: candidate.MatchCount,
+            MatchCount: 1,
             AppliedCount: 1,
-            Note: candidate.MatchCount > 1 ? $"Multiple candidate methods matched '{memberName}'; removed first match." : "Removed existing method.");
-        return ReplaceTypeBody(text, typeRegion, updatedBody);
+            Note: "Removed existing method.");
+        return newText;
     }
 
     public static string UpsertField(string text, SemanticMemberPatch patch, out PatchOperationResult result)
@@ -71,387 +108,267 @@ internal static class SemanticCSharpEditor
             throw new BridgeToolException("fieldType is required for field upsert.");
         }
 
-        var typeRegion = FindTypeRegion(text, patch.TypeName);
-        var bodyIndent = typeRegion.BodyIndent;
-        var candidate = FindFieldCandidate(typeRegion.BodyText, patch.MemberName, patch.SignatureHint);
-        var newMember = BuildField(patch, bodyIndent);
+        var syntaxTree = CSharpSyntaxTree.ParseText(text, cancellationToken: default);
+        var root = syntaxTree.GetRoot();
 
-        if (candidate is not null)
+        var typeDeclaration = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == patch.TypeName && IsTypeKind(t));
+
+        if (typeDeclaration == null)
         {
-            var updatedBody = ReplaceRange(typeRegion.BodyText, candidate.StartIndex, candidate.EndIndex, newMember);
+            throw new BridgeToolException($"Type '{patch.TypeName}' was not found.");
+        }
+
+        var existingField = FindFieldDeclaration(typeDeclaration, patch);
+        if (existingField != null)
+        {
+            var newField = BuildFieldDeclaration(patch);
+            var newRoot = root.ReplaceNode(existingField, newField);
+            var newText = newRoot.ToFullString();
             result = new PatchOperationResult(
                 Kind: "field_upsert",
                 Target: $"{patch.TypeName}.{patch.MemberName}",
-                MatchCount: candidate.MatchCount,
+                MatchCount: 1,
                 AppliedCount: 1,
-                Note: candidate.MatchCount > 1 ? $"Multiple candidate fields matched '{patch.MemberName}'; updated first match." : "Updated existing field.");
-            return ReplaceTypeBody(text, typeRegion, updatedBody);
+                Note: "Updated existing field.");
+            return newText;
         }
 
-        var insertedBody = InsertBeforeTypeEnd(typeRegion.BodyText, newMember, bodyIndent);
+        var newFieldDeclaration = BuildFieldDeclaration(patch);
+        var newRootWithInsert = InsertMember(root, typeDeclaration, newFieldDeclaration);
+        var updatedText = newRootWithInsert.ToFullString();
         result = new PatchOperationResult(
             Kind: "field_upsert",
             Target: $"{patch.TypeName}.{patch.MemberName}",
             MatchCount: 0,
             AppliedCount: 1,
             Note: "Added new field.");
-        return ReplaceTypeBody(text, typeRegion, insertedBody);
+        return updatedText;
     }
 
     public static string RemoveField(string text, string typeName, string memberName, string? signatureHint, out PatchOperationResult result)
     {
-        var typeRegion = FindTypeRegion(text, typeName);
-        var candidate = FindFieldCandidate(typeRegion.BodyText, memberName, signatureHint);
-        if (candidate is null)
-        {
-            throw new BridgeToolException($"Field '{memberName}' was not found in type '{typeName}'.");
-        }
+        var syntaxTree = CSharpSyntaxTree.ParseText(text, cancellationToken: default);
+        var root = syntaxTree.GetRoot();
 
-        var updatedBody = RemoveRange(typeRegion.BodyText, candidate.StartIndex, candidate.EndIndex);
-        result = new PatchOperationResult(
-            Kind: "field_remove",
-            Target: $"{typeName}.{memberName}",
-            MatchCount: candidate.MatchCount,
-            AppliedCount: 1,
-            Note: candidate.MatchCount > 1 ? $"Multiple candidate fields matched '{memberName}'; removed first match." : "Removed existing field.");
-        return ReplaceTypeBody(text, typeRegion, updatedBody);
-    }
+        var typeDeclaration = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == typeName && IsTypeKind(t));
 
-    private static string BuildMethod(SemanticMemberPatch patch, string bodyIndent)
-    {
-        var modifiers = patch.Modifiers.Count > 0 ? string.Join(' ', patch.Modifiers) + " " : string.Empty;
-        var returnType = string.IsNullOrWhiteSpace(patch.ReturnType) ? "void" : patch.ReturnType!.Trim();
-        var parameters = string.Join(", ", patch.Parameters);
-        var body = IndentMultiline(patch.Body ?? string.Empty, bodyIndent + "    ");
-
-        var builder = new StringBuilder();
-        builder.Append(bodyIndent);
-        builder.Append(modifiers);
-        builder.Append(returnType);
-        builder.Append(' ');
-        builder.Append(patch.MemberName);
-        builder.Append('(');
-        builder.Append(parameters);
-        builder.AppendLine(")");
-        builder.Append(bodyIndent);
-        builder.AppendLine("{");
-        if (!string.IsNullOrWhiteSpace(body))
-        {
-            builder.AppendLine(body);
-        }
-        builder.Append(bodyIndent);
-        builder.Append('}');
-        return builder.ToString();
-    }
-
-    private static string BuildField(SemanticMemberPatch patch, string bodyIndent)
-    {
-        var modifiers = patch.Modifiers.Count > 0 ? string.Join(' ', patch.Modifiers) + " " : "private ";
-        var initializer = string.IsNullOrWhiteSpace(patch.Initializer) ? string.Empty : " = " + patch.Initializer!.Trim();
-        return $"{bodyIndent}{modifiers}{patch.FieldType!.Trim()} {patch.MemberName}{initializer};";
-    }
-
-    private static SemanticTypeRegion FindTypeRegion(string text, string typeName)
-    {
-        var pattern = $@"\b(class|struct|record(?:\s+class|\s+struct)?)\s+{Regex.Escape(typeName)}\b";
-        var match = Regex.Match(text, pattern, RegexOptions.CultureInvariant);
-        if (!match.Success)
+        if (typeDeclaration == null)
         {
             throw new BridgeToolException($"Type '{typeName}' was not found.");
         }
 
-        var openBraceIndex = text.IndexOf('{', match.Index);
-        if (openBraceIndex < 0)
+        var patch = new SemanticMemberPatch(
+            TypeName: typeName,
+            MemberName: memberName,
+            Modifiers: Array.Empty<string>(),
+            ReturnType: null,
+            Parameters: Array.Empty<string>(),
+            Body: null,
+            FieldType: null,
+            Initializer: null,
+            SignatureHint: signatureHint);
+
+        var existingField = FindFieldDeclaration(typeDeclaration, patch);
+        if (existingField == null)
         {
-            throw new BridgeToolException($"Type '{typeName}' does not have a body.");
+            throw new BridgeToolException($"Field '{memberName}' was not found in type '{typeName}'.");
         }
 
-        var closeBraceIndex = FindMatchingBrace(text, openBraceIndex);
-        var lineStart = FindLineStart(text, match.Index);
-        var typeBodyStart = openBraceIndex + 1;
-        var typeBodyText = text.Substring(typeBodyStart, closeBraceIndex - typeBodyStart);
-        var typeIndent = GetLineIndent(text, lineStart);
-        var bodyIndent = typeIndent + "    ";
-        return new SemanticTypeRegion(lineStart, closeBraceIndex + 1, typeBodyStart, closeBraceIndex, typeIndent, bodyIndent, typeBodyText);
+        var newRoot = root.RemoveNode(existingField, SyntaxRemoveOptions.KeepNoTrivia);
+        var newText = newRoot!.ToFullString();
+        result = new PatchOperationResult(
+            Kind: "field_remove",
+            Target: $"{typeName}.{memberName}",
+            MatchCount: 1,
+            AppliedCount: 1,
+            Note: "Removed existing field.");
+        return newText;
     }
 
-    private static CandidateMatch? FindMethodCandidate(string bodyText, string memberName, IReadOnlyList<string> parameters, string? signatureHint)
+    private static SyntaxNode InsertMember(SyntaxNode root, TypeDeclarationSyntax typeDeclaration, MemberDeclarationSyntax newMember)
     {
-        var matches = FindTopLevelMemberMatches(bodyText, memberName, signatureHint).ToArray();
-        if (matches.Length == 0)
+        if (typeDeclaration.Members.Count == 0)
+        {
+            return root.ReplaceNode(typeDeclaration, typeDeclaration.WithMembers(new SyntaxList<MemberDeclarationSyntax>(newMember)));
+        }
+
+        var lastMember = typeDeclaration.Members.Last();
+        var newMembers = typeDeclaration.Members.Replace(lastMember, lastMember);
+        newMembers = newMembers.Add(newMember);
+        return root.ReplaceNode(typeDeclaration, typeDeclaration.WithMembers(newMembers));
+    }
+
+    private static bool IsTypeKind(TypeDeclarationSyntax typeDeclaration)
+    {
+        return typeDeclaration.Kind() switch
+        {
+            SyntaxKind.ClassDeclaration or
+            SyntaxKind.StructDeclaration or
+            SyntaxKind.RecordDeclaration or
+            SyntaxKind.RecordStructDeclaration => true,
+            _ => false,
+        };
+    }
+
+    private static MethodDeclarationSyntax? FindMethodDeclaration(TypeDeclarationSyntax typeDeclaration, SemanticMemberPatch patch)
+    {
+        var candidates = typeDeclaration.Members
+            .OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == patch.MemberName)
+            .ToList();
+
+        if (candidates.Count == 0)
         {
             return null;
         }
 
-        if (parameters.Count > 0)
+        if (patch.SignatureHint != null)
         {
-            matches = matches.Where(match => parameters.All(parameter => match.LineText.Contains(parameter, StringComparison.Ordinal))).ToArray();
-            if (matches.Length == 0)
+            var hinted = candidates.Where(m => m.ToFullString().Contains(patch.SignatureHint, StringComparison.Ordinal)).ToList();
+            if (hinted.Count > 0)
             {
-                return null;
+                candidates = hinted;
             }
         }
 
-        return new CandidateMatch(matches[0].StartIndex, matches[0].EndIndex, matches.Length, matches[0].LineText);
+        if (patch.Parameters.Count > 0)
+        {
+            var matched = candidates.Where(m => ParametersMatch(m.ParameterList, patch.Parameters)).ToList();
+            if (matched.Count > 0)
+            {
+                candidates = matched;
+            }
+        }
+
+        return candidates.FirstOrDefault();
     }
 
-    private static CandidateMatch? FindFieldCandidate(string bodyText, string memberName, string? signatureHint)
+    private static bool ParametersMatch(BaseParameterListSyntax parameterList, IReadOnlyList<string> parameters)
     {
-        var matches = FindTopLevelMemberMatches(bodyText, memberName, signatureHint)
-            .Where(match => match.LineText.Contains(';', StringComparison.Ordinal) && !match.LineText.Contains('(', StringComparison.Ordinal))
-            .ToArray();
+        if (parameterList.Parameters.Count != parameters.Count)
+        {
+            return false;
+        }
 
-        if (matches.Length == 0)
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            var paramText = parameters[i].Trim();
+            var paramSyntax = parameterList.Parameters[i];
+            var fullParamText = paramSyntax.Type != null
+                ? $"{paramSyntax.Type.ToFullString().Trim()} {paramSyntax.Identifier.Text}"
+                : paramSyntax.Identifier.Text;
+
+            if (!fullParamText.Contains(paramText, StringComparison.Ordinal) &&
+                !paramText.Contains(fullParamText, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static FieldDeclarationSyntax? FindFieldDeclaration(TypeDeclarationSyntax typeDeclaration, SemanticMemberPatch patch)
+    {
+        var candidates = typeDeclaration.Members
+            .OfType<FieldDeclarationSyntax>()
+            .Where(f => f.Declaration.Variables.Count > 0 &&
+                        f.Declaration.Variables[0].Identifier.Text == patch.MemberName)
+            .ToList();
+
+        if (candidates.Count == 0)
         {
             return null;
         }
 
-        return new CandidateMatch(matches[0].StartIndex, matches[0].EndIndex, matches.Length, matches[0].LineText);
-    }
-
-    private static IEnumerable<MemberMatch> FindTopLevelMemberMatches(string bodyText, string memberName, string? signatureHint)
-    {
-        var lines = SplitLinesWithOffsets(bodyText);
-        var depth = 0;
-
-        foreach (var line in lines)
+        if (patch.SignatureHint != null)
         {
-            var trimmed = line.Text.TrimStart();
-            if (depth == 0 && trimmed.Contains(memberName, StringComparison.Ordinal) && (signatureHint is null || trimmed.Contains(signatureHint, StringComparison.Ordinal)))
+            var hinted = candidates.Where(f => f.ToFullString().Contains(patch.SignatureHint, StringComparison.Ordinal)).ToList();
+            if (hinted.Count > 0)
             {
-                var candidateIndex = trimmed.IndexOf(memberName, StringComparison.Ordinal);
-                var absoluteIndex = line.StartIndex + line.Text.IndexOf(trimmed, StringComparison.Ordinal) + candidateIndex;
-                var memberSpan = FindMemberSpan(bodyText, absoluteIndex);
-                yield return new MemberMatch(memberSpan.StartIndex, memberSpan.EndIndex, line.Text);
-            }
-
-            depth = UpdateBraceDepth(depth, line.Text);
-        }
-    }
-
-    private static MemberSpan FindMemberSpan(string text, int memberNameIndex)
-    {
-        var lineStart = FindLineStart(text, memberNameIndex);
-        var arrowIndex = IndexOfToken(text, lineStart, "=>");
-        var openBraceIndex = IndexOfChar(text, lineStart, '{');
-        var semicolonIndex = IndexOfChar(text, lineStart, ';');
-
-        if (arrowIndex >= 0 && (openBraceIndex < 0 || arrowIndex < openBraceIndex) && (semicolonIndex < 0 || arrowIndex < semicolonIndex))
-        {
-            if (semicolonIndex < 0)
-            {
-                throw new BridgeToolException("Expression-bodied member is missing terminating semicolon.");
-            }
-
-            return new MemberSpan(lineStart, semicolonIndex + 1);
-        }
-
-        if (openBraceIndex >= 0 && (semicolonIndex < 0 || openBraceIndex < semicolonIndex))
-        {
-            var closeBraceIndex = FindMatchingBrace(text, openBraceIndex);
-            return new MemberSpan(lineStart, closeBraceIndex + 1);
-        }
-
-        if (semicolonIndex >= 0)
-        {
-            return new MemberSpan(lineStart, semicolonIndex + 1);
-        }
-
-        throw new BridgeToolException("Unable to determine member bounds.");
-    }
-
-    private static string ReplaceRange(string text, int startIndex, int endIndex, string replacement)
-    {
-        return text[..startIndex] + replacement + text[endIndex..];
-    }
-
-    private static string RemoveRange(string text, int startIndex, int endIndex)
-    {
-        var leadingStart = FindLineStart(text, startIndex);
-        var trailingEnd = FindLineEnd(text, endIndex);
-        return text[..leadingStart] + text[trailingEnd..];
-    }
-
-    private static string ReplaceTypeBody(string text, SemanticTypeRegion region, string newBody)
-    {
-        return text[..region.BodyStartIndex] + newBody + text[region.BodyEndIndex..];
-    }
-
-    private static string InsertBeforeTypeEnd(string bodyText, string memberText, string bodyIndent)
-    {
-        var normalizedMember = memberText.TrimEnd();
-        var insertion = bodyText.TrimEnd();
-        if (string.IsNullOrWhiteSpace(insertion))
-        {
-            return Environment.NewLine + normalizedMember + Environment.NewLine;
-        }
-
-        return insertion + Environment.NewLine + Environment.NewLine + normalizedMember + Environment.NewLine;
-    }
-
-    private static string IndentMultiline(string text, string indent)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return string.Empty;
-        }
-
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        var builder = new StringBuilder();
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (i > 0)
-            {
-                builder.AppendLine();
-            }
-
-            if (lines[i].Length == 0)
-            {
-                continue;
-            }
-
-            builder.Append(indent);
-            builder.Append(lines[i].TrimEnd());
-        }
-
-        return builder.ToString();
-    }
-
-    private static IReadOnlyList<MemberLine> SplitLinesWithOffsets(string text)
-    {
-        var lines = new List<MemberLine>();
-        var index = 0;
-        while (index < text.Length)
-        {
-            var lineEnd = text.IndexOf('\n', index);
-            if (lineEnd < 0)
-            {
-                lines.Add(new MemberLine(index, text[index..], text.Length));
-                break;
-            }
-
-            var length = lineEnd - index + 1;
-            lines.Add(new MemberLine(index, text.Substring(index, length), index + length));
-            index = lineEnd + 1;
-        }
-
-        if (text.Length == 0)
-        {
-            lines.Add(new MemberLine(0, string.Empty, 0));
-        }
-
-        return lines;
-    }
-
-    private static int UpdateBraceDepth(int depth, string text)
-    {
-        var updated = depth;
-        foreach (var ch in text)
-        {
-            if (ch == '{')
-            {
-                updated++;
-            }
-            else if (ch == '}')
-            {
-                updated = Math.Max(0, updated - 1);
+                candidates = hinted;
             }
         }
 
-        return updated;
+        return candidates.FirstOrDefault();
     }
 
-    private static int IndexOfToken(string text, int startIndex, string token)
+    private static MethodDeclarationSyntax BuildMethodDeclaration(SemanticMemberPatch patch)
     {
-        return text.IndexOf(token, startIndex, StringComparison.Ordinal);
-    }
+        var modifiers = patch.Modifiers.Count > 0
+            ? SyntaxFactory.TokenList(patch.Modifiers.Select(m => SyntaxFactory.Token(GetModifierKind(m))))
+            : SyntaxFactory.TokenList();
 
-    private static int IndexOfChar(string text, int startIndex, char value)
-    {
-        return text.IndexOf(value, startIndex);
-    }
+        var returnType = string.IsNullOrWhiteSpace(patch.ReturnType)
+            ? SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
+            : SyntaxFactory.ParseTypeName(patch.ReturnType.Trim());
 
-    private static int FindMatchingBrace(string text, int openBraceIndex)
-    {
-        var depth = 0;
-        for (var index = openBraceIndex; index < text.Length; index++)
+        var parameterList = patch.Parameters.Count > 0
+            ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(patch.Parameters.Select(p => SyntaxFactory.Parameter(SyntaxFactory.Identifier(p)))))
+            : SyntaxFactory.ParameterList();
+
+        BlockSyntax body;
+        if (!string.IsNullOrWhiteSpace(patch.Body))
         {
-            if (text[index] == '{')
-            {
-                depth++;
-            }
-            else if (text[index] == '}')
-            {
-                depth--;
-                if (depth == 0)
-                {
-                    return index;
-                }
-            }
+            var bodyTree = CSharpSyntaxTree.ParseText("void __f() { " + patch.Body + " }", cancellationToken: default);
+            var bodyRoot = bodyTree.GetRoot();
+            var methodDecl = bodyRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().First();
+            body = methodDecl.Body ?? SyntaxFactory.Block();
+        }
+        else
+        {
+            body = SyntaxFactory.Block();
         }
 
-        throw new BridgeToolException("Unable to find matching closing brace.");
+        return SyntaxFactory.MethodDeclaration(returnType, patch.MemberName)
+            .WithModifiers(modifiers)
+            .WithParameterList(parameterList)
+            .WithBody(body);
     }
 
-    private static int FindLineStart(string text, int index)
+    private static SyntaxKind GetModifierKind(string modifier)
     {
-        var current = Math.Clamp(index, 0, text.Length);
-        while (current > 0 && text[current - 1] != '\n' && text[current - 1] != '\r')
+        return modifier.Trim().ToLowerInvariant() switch
         {
-            current--;
-        }
-
-        return current;
+            "public" => SyntaxKind.PublicKeyword,
+            "private" => SyntaxKind.PrivateKeyword,
+            "protected" => SyntaxKind.ProtectedKeyword,
+            "internal" => SyntaxKind.InternalKeyword,
+            "static" => SyntaxKind.StaticKeyword,
+            "virtual" => SyntaxKind.VirtualKeyword,
+            "override" => SyntaxKind.OverrideKeyword,
+            "abstract" => SyntaxKind.AbstractKeyword,
+            "readonly" => SyntaxKind.ReadOnlyKeyword,
+            "sealed" => SyntaxKind.SealedKeyword,
+            "async" => SyntaxKind.AsyncKeyword,
+            "partial" => SyntaxKind.PartialKeyword,
+            "extern" => SyntaxKind.ExternKeyword,
+            "unsafe" => SyntaxKind.UnsafeKeyword,
+            "volatile" => SyntaxKind.VolatileKeyword,
+            "new" => SyntaxKind.NewKeyword,
+            _ => SyntaxKind.None,
+        };
     }
 
-    private static int FindLineEnd(string text, int index)
+    private static FieldDeclarationSyntax BuildFieldDeclaration(SemanticMemberPatch patch)
     {
-        var current = Math.Clamp(index, 0, text.Length);
-        while (current < text.Length && text[current] != '\n')
+        var modifiers = patch.Modifiers.Count > 0
+            ? SyntaxFactory.TokenList(patch.Modifiers.Select(m => SyntaxFactory.Token(GetModifierKind(m))))
+            : SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+
+        var fieldType = SyntaxFactory.ParseTypeName(patch.FieldType!.Trim());
+        var variable = SyntaxFactory.VariableDeclarator(patch.MemberName);
+
+        if (!string.IsNullOrWhiteSpace(patch.Initializer))
         {
-            current++;
+            variable = variable.WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(patch.Initializer.Trim())));
         }
 
-        if (current < text.Length)
-        {
-            current++;
-        }
-
-        return current;
+        var declaration = SyntaxFactory.VariableDeclaration(fieldType, SyntaxFactory.SingletonSeparatedList(variable));
+        return SyntaxFactory.FieldDeclaration(declaration).WithModifiers(modifiers);
     }
-
-    private static string GetLineIndent(string text, int lineStartIndex)
-    {
-        var builder = new StringBuilder();
-        for (var index = lineStartIndex; index < text.Length; index++)
-        {
-            var ch = text[index];
-            if (ch == ' ' || ch == '\t')
-            {
-                builder.Append(ch);
-                continue;
-            }
-
-            break;
-        }
-
-        return builder.ToString();
-    }
-
-    private sealed record SemanticTypeRegion(
-        int StartIndex,
-        int EndIndex,
-        int BodyStartIndex,
-        int BodyEndIndex,
-        string TypeIndent,
-        string BodyIndent,
-        string BodyText);
-
-    private sealed record MemberSpan(int StartIndex, int EndIndex);
-
-    private sealed record MemberLine(int StartIndex, string Text, int EndIndex);
-
-    private sealed record MemberMatch(int StartIndex, int EndIndex, string LineText);
-
-    private sealed record CandidateMatch(int StartIndex, int EndIndex, int MatchCount, string LineText);
 }

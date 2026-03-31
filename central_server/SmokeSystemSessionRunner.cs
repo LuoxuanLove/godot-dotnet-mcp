@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using static GodotDotnetMcp.CentralServer.SmokeAssertionSupport;
 using static GodotDotnetMcp.CentralServer.SmokeHttpSupport;
 using static GodotDotnetMcp.CentralServer.SmokePayloadSupport;
@@ -34,14 +36,14 @@ internal static partial class SmokeSystemSessionRunner
         var attachEndpoint = new EditorAttachEndpoint(attachHost, attachPort);
         var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
         var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
+        var dispatcher = new CentralToolDispatcher(NullLogger<CentralToolDispatcher>.Instance, configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
         using var smokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         await using var attachServer = new EditorAttachHttpServer(
             attachHost,
             attachPort,
             editorSessions,
-            error,
+            NullLogger<EditorAttachHttpServer>.Instance,
             () =>
             {
                 smokeCts.Cancel();

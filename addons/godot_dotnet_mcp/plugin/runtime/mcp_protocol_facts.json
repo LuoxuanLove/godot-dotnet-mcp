@@ -4,6 +4,24 @@
   "server_name": "godot-dotnet-mcp",
   "server_version": "0.6.0-dev",
   "error_codes": {
-    "bridge_version_mismatch": "bridge_version_mismatch"
+    "bridge_version_mismatch": "bridge_version_mismatch",
+    "runtime_not_running": "runtime_not_running",
+    "runtime_control_disabled": "runtime_control_disabled",
+    "runtime_session_lost": "runtime_session_lost",
+    "runtime_command_timeout": "runtime_command_timeout",
+    "runtime_bridge_unavailable": "runtime_bridge_unavailable",
+    "runtime_capture_failed": "runtime_capture_failed",
+    "invalid_argument": "invalid_argument",
+    "permission_denied": "permission_denied",
+    "tool_load_failed": "tool_load_failed",
+    "tool_runtime_missing": "tool_runtime_missing",
+    "tool_execution_failed": "tool_execution_failed",
+    "parse_error": "parse_error",
+    "missing_executable": "missing_executable",
+    "invalid_working_directory": "invalid_working_directory",
+    "precheck_read_error": "precheck_read_error",
+    "backup_error": "backup_error",
+    "write_error": "write_error",
+    "dir_error": "dir_error"
   }
 }

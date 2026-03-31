@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using static GodotDotnetMcp.CentralServer.SmokeAssertionSupport;
 using static GodotDotnetMcp.CentralServer.SmokePayloadSupport;
 
@@ -72,6 +74,7 @@ internal static partial class SmokeSystemSessionRunner
         using var interruptEditorProxy = new EditorProxyService();
         var interruptEditorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, interruptEditorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
         var interruptDispatcher = new CentralToolDispatcher(
+            NullLogger<CentralToolDispatcher>.Instance,
             configuration,
             interruptEditorProxy,
             editorProcesses,

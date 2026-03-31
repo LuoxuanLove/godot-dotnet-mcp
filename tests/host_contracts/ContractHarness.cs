@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.CentralServer;
+using Microsoft.Extensions.Logging.Abstractions;
 using static ContractAssertions;
 using static ContractHttpSupport;
 using static ContractPayloadSupport;
@@ -67,9 +68,9 @@ internal sealed class ContractHarness : IAsyncDisposable
             attachHost,
             attachPort,
             new EditorSessionService(new ProjectRegistryService()),
-            TextWriter.Null);
+            NullLogger<EditorAttachHttpServer>.Instance);
         var runtimeGraph = CentralServerComposition.BuildStdioGraph(attachEndpoint, bootstrapAttachServer, null);
-        var attachServer = new EditorAttachHttpServer(attachHost, attachPort, runtimeGraph.EditorSessions, TextWriter.Null);
+        var attachServer = new EditorAttachHttpServer(attachHost, attachPort, runtimeGraph.EditorSessions, NullLogger<EditorAttachHttpServer>.Instance);
         runtimeGraph = runtimeGraph with { AttachServer = attachServer };
         bootstrapAttachServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
 

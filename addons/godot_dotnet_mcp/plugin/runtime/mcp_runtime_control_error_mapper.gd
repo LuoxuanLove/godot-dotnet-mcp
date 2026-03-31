@@ -2,6 +2,8 @@
 extends RefCounted
 class_name MCPRuntimeControlErrorMapper
 
+const MCPProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+
 var _build_editor_context := Callable()
 var _get_debugger_session_snapshot := Callable()
 
@@ -25,6 +27,7 @@ func success(data, message: String) -> Dictionary:
 
 
 func error(error_type: String, message: String, data = {}, action: String = "") -> Dictionary:
+	var canonical_error_type := MCPProtocolFactsScript.get_error_code(error_type)
 	var payload := {}
 	if data is Dictionary:
 		payload = (data as Dictionary).duplicate(true)
@@ -32,12 +35,12 @@ func error(error_type: String, message: String, data = {}, action: String = "") 
 		payload = {"details": data}
 	payload["editor_context"] = _build_editor_context_safe(action)
 	if not payload.has("hint"):
-		var hint := _build_error_hint(error_type)
+		var hint := _build_error_hint(canonical_error_type)
 		if not hint.is_empty():
 			payload["hint"] = hint
 	var result := {
 		"success": false,
-		"error": error_type,
+		"error": canonical_error_type,
 		"message": message
 	}
 	if not payload.is_empty():

@@ -19,6 +19,29 @@ public static class McpProtocolFacts
         return ErrorCodes.TryGetValue(key, out var value) ? value : key;
     }
 
+    public static class Codes
+    {
+        public const string BridgeVersionMismatch = "bridge_version_mismatch";
+        public const string RuntimeNotRunning = "runtime_not_running";
+        public const string RuntimeControlDisabled = "runtime_control_disabled";
+        public const string RuntimeSessionLost = "runtime_session_lost";
+        public const string RuntimeCommandTimeout = "runtime_command_timeout";
+        public const string RuntimeBridgeUnavailable = "runtime_bridge_unavailable";
+        public const string RuntimeCaptureFailed = "runtime_capture_failed";
+        public const string InvalidArgument = "invalid_argument";
+        public const string PermissionDenied = "permission_denied";
+        public const string ToolLoadFailed = "tool_load_failed";
+        public const string ToolRuntimeMissing = "tool_runtime_missing";
+        public const string ToolExecutionFailed = "tool_execution_failed";
+        public const string ParseError = "parse_error";
+        public const string MissingExecutable = "missing_executable";
+        public const string InvalidWorkingDirectory = "invalid_working_directory";
+        public const string PrecheckReadError = "precheck_read_error";
+        public const string BackupError = "backup_error";
+        public const string WriteError = "write_error";
+        public const string DirError = "dir_error";
+    }
+
     private static ProtocolFactsSnapshot LoadSnapshot()
     {
         var assembly = typeof(McpProtocolFacts).Assembly;

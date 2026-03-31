@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolExecutionGateway
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 var _store
 var _runtime_service
@@ -74,7 +75,7 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 			failure_data = {"details": failure_data}
 		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
 		failure_data["action"] = str(args.get("action", ""))
-		failure_data["error_type"] = str(failure_data.get("error_type", "tool_execution_failed"))
+		failure_data["error_type"] = MCPProtocolFactsScript.get_error_code(str(failure_data.get("error_type", "tool_execution_failed")))
 		failure_data["domain"] = category
 		failure_data["elapsed_ms"] = elapsed_ms
 		failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
@@ -181,7 +182,7 @@ func _call_refresh_runtime_context() -> void:
 
 func _failure(error_type: String, category: String, tool_name: String, message: String, data: Dictionary = {}) -> Dictionary:
 	var failure_data = data.duplicate(true)
-	failure_data["error_type"] = error_type
+	failure_data["error_type"] = MCPProtocolFactsScript.get_error_code(error_type)
 	failure_data["domain"] = category
 	failure_data["tool_name"] = category if tool_name.is_empty() else "%s_%s" % [category, tool_name]
 	failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())

@@ -32,21 +32,9 @@ func create_script(path: String, args: Dictionary) -> Dictionary:
 
 
 func write_script(path: String, content: String) -> Dictionary:
-	if content.is_empty():
-		return _error("Content is required")
-
-	var dir_path = path.get_base_dir()
-	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
-
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		return _error("Failed to write script")
-
-	file.store_string(content)
-	file.close()
-	_scan_filesystem_if_available()
-	return _edit_helper.validate_written_script(path, content)
+	var _unused_path := path
+	var _unused_content := content
+	return _error("Plugin-side C# mutation is disabled. Use host cs_file_patch for any C# file changes.")
 
 
 func add_field(path: String, args: Dictionary) -> Dictionary:
