@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -67,8 +67,10 @@ internal static class Program
             process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
             process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = listCases ? "1" : "0";
             // Pre-set runtime environment variables for server_runtime_settings_projection test.
-            // In headless mode, OS.set_environment() does not persist these values,
-            // so they must be inherited from the parent process environment at startup.
+            // In Godot 4.3 headless mode, OS.has_environment() returns false for env vars
+            // created via OS.set_environment() at runtime, even though OS.get_environment() works.
+            // By pre-setting these in the parent process, they exist at Godot startup,
+            // so has_environment() correctly returns true throughout the test.
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_HOST"] = "10.0.0.8";
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_PORT"] = "4100";
             process.StartInfo.ArgumentList.Add("--headless");

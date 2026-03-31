@@ -34,13 +34,13 @@ jobs:
         shell: pwsh
         run: dotnet run --project .\tests\host_contracts\HostContracts.csproj -c Release
 
-      - name: Setup Godot 4.3
+      - name: Setup Godot 4.4
         shell: pwsh
         run: |
-          $godotZip = "$env:TEMP\Godot_v4.3-stable_win64.exe.zip"
+          $godotZip = "$env:TEMP\Godot_v4.4-stable_win64.exe.zip"
           if (-not (Test-Path $godotZip)) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip" -OutFile $godotZip
+            Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.4-stable/Godot_v4.4-stable_win64.exe.zip" -OutFile $godotZip
           }
           $extractDir = "$env:TEMP\godot_extracted"
           Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
