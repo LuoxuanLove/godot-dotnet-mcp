@@ -37,13 +37,14 @@ jobs:
       - name: Setup Godot 4.3
         shell: pwsh
         run: |
-          $godotZip = "$env:TEMP\Godot_v4.3-stable_win64_cmdline.zip"
+          $godotZip = "$env:TEMP\Godot_v4.3-stable_win64.exe.zip"
           if (-not (Test-Path $godotZip)) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64_cmdline.zip" -OutFile $godotZip
+            Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip" -OutFile $godotZip
           }
-          Expand-Archive -Path $godotZip -DestinationPath $env:GITHUB_WORKSPACE -Force
-          $godotExe = "$env:GITHUB_WORKSPACE\Godot_v4.3-stable_win64_cmdline.exe"
+          $extractDir = "$env:TEMP\godot_extracted"
+          Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
+          $godotExe = Get-ChildItem -Path $extractDir -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
           echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run plugin headless harness
