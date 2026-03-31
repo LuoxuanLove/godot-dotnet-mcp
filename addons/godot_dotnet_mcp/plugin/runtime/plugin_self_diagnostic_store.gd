@@ -8,6 +8,17 @@ const DEFAULT_LIMIT := 50
 const SLOW_OPERATION_THRESHOLD_MS := 1200.0
 const SLOW_OPERATION_WARNING_THRESHOLD_MS := 1500.0
 
+## Operation-kind-specific thresholds (ms)
+## Key: operation kind, Value: [warning_threshold_ms, critical_threshold_ms]
+## If an operation kind is not listed, the global SLOW_OPERATION_THRESHOLD_MS / SLOW_OPERATION_WARNING_THRESHOLD_MS are used.
+const OPERATION_KIND_THRESHOLDS := {
+	"server_start": [2500.0, 4000.0],
+	"server_reinitialize": [2500.0, 4000.0],
+	"runtime_soft_reload": [2500.0, 4000.0],
+	"runtime_full_reload": [2500.0, 4000.0],
+	"plugin_enter_tree": [3000.0, 5000.0],
+}
+
 static var _incidents: Array[Dictionary] = []
 static var _operations: Array[Dictionary] = []
 static var _next_incident_id := 1
@@ -159,14 +170,22 @@ static func record_incident(
 
 static func record_slow_operation(operation: Dictionary, component: String, phase: String = "", threshold_ms: float = SLOW_OPERATION_THRESHOLD_MS) -> Dictionary:
 	var duration_ms = float(operation.get("duration_ms", 0.0))
-	if duration_ms <= threshold_ms:
+	# Resolve operation-kind-specific thresholds
+	var resolved_threshold_ms := threshold_ms
+	var resolved_warning_threshold_ms := SLOW_OPERATION_WARNING_THRESHOLD_MS
+	var operation_kind := str(operation.get("kind", ""))
+	if OPERATION_KIND_THRESHOLDS.has(operation_kind):
+		var thresholds = OPERATION_KIND_THRESHOLDS[operation_kind]
+		resolved_threshold_ms = float(thresholds[0])
+		resolved_warning_threshold_ms = float(thresholds[1])
+	if duration_ms <= resolved_threshold_ms:
 		return {}
-	var severity := "warning" if duration_ms > SLOW_OPERATION_WARNING_THRESHOLD_MS else "info"
+	var severity := "warning" if duration_ms > resolved_warning_threshold_ms else "info"
 	return record_incident(
 		severity,
 		"performance_warning",
 		"reload_duration_slow",
-		"Operation exceeded the slow-operation threshold (%.1fms > %.1fms)" % [duration_ms, threshold_ms],
+		"Operation exceeded the slow-operation threshold (%.1fms > %.1fms)" % [duration_ms, resolved_threshold_ms],
 		component,
 		phase if not phase.is_empty() else str(operation.get("phase", "")),
 		"",
@@ -175,10 +194,10 @@ static func record_slow_operation(operation: Dictionary, component: String, phas
 		true,
 		"Inspect the latest reload timeline and the related component state.",
 		{
-			"kind": str(operation.get("kind", "")),
+			"kind": operation_kind,
 			"duration_ms": duration_ms,
-			"threshold_ms": threshold_ms,
-			"warning_threshold_ms": SLOW_OPERATION_WARNING_THRESHOLD_MS
+			"threshold_ms": resolved_threshold_ms,
+			"warning_threshold_ms": resolved_warning_threshold_ms
 		}
 	)
 
