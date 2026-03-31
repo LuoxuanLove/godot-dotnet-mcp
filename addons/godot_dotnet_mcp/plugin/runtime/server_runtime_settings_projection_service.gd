@@ -26,12 +26,14 @@ func project(settings: Dictionary) -> Dictionary:
 
 
 func _apply_environment_overrides(runtime_settings: Dictionary) -> void:
-	var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
-	if not env_host.is_empty():
-		runtime_settings["host"] = env_host
-	var env_port_text := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
-	if env_port_text.is_valid_int() and int(env_port_text) > 0:
-		runtime_settings["port"] = int(env_port_text)
+	if OS.has_environment(ENV_RUNTIME_SERVER_HOST):
+		var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
+		if not env_host.is_empty():
+			runtime_settings["host"] = env_host
+	if OS.has_environment(ENV_RUNTIME_SERVER_PORT):
+		var env_port_text := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
+		if env_port_text.is_valid_int() and int(env_port_text) > 0:
+			runtime_settings["port"] = int(env_port_text)
 
 
 func _resolve_host(value) -> String:
