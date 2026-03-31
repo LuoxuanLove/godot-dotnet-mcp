@@ -23,11 +23,11 @@ var _last_change_reason := ""
 var _last_error := ""
 
 
-func configure(plugin: Object, reload_coordinator, user_tool_service, callbacks: Dictionary = {}) -> void:
+func configure(plugin: Object, reload_coordinator, user_tool_service, apply_external_user_tool_catalog_refresh: Callable = Callable()) -> void:
 	_plugin = plugin
 	_reload_coordinator = reload_coordinator
 	_user_tool_service = user_tool_service
-	_apply_external_user_tool_catalog_refresh = callbacks.get("apply_external_user_tool_catalog_refresh", Callable())
+	_apply_external_user_tool_catalog_refresh = apply_external_user_tool_catalog_refresh
 
 
 func start() -> void:
