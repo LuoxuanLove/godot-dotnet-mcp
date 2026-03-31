@@ -1,7 +1,7 @@
-extends RefCounted
+﻿extends RefCounted
 
 const PluginRuntimeCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 const AUTOLOAD_NAME := "MCPRuntimeBridgeContract"
@@ -36,9 +36,46 @@ class FakeDebuggerBridge extends RefCounted:
 	pass
 
 
+class FakeActionRouter extends RefCounted:
+	var started_count := 0
+	var stopped_count := 0
+	var request_count := 0
+
+	func handle_server_started() -> void:
+		started_count += 1
+
+	func handle_server_stopped() -> void:
+		stopped_count += 1
+
+	func handle_request_received(_method: String, _params: Dictionary) -> void:
+		request_count += 1
+
+
+class FakeServerController extends RefCounted:
+	signal server_started
+	signal server_stopped
+	signal request_received(method: String, params: Dictionary)
+
+	var attach_count := 0
+	var detach_count := 0
+	var attached_plugin = null
+	var attached_settings: Dictionary = {}
+
+	func attach(plugin, settings: Dictionary) -> void:
+		attach_count += 1
+		attached_plugin = plugin
+		attached_settings = settings.duplicate(true)
+
+	func detach() -> void:
+		detach_count += 1
+		attached_plugin = null
+		attached_settings = {}
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var coordinator = PluginRuntimeCoordinator.new()
 	var plugin = FakePlugin.new()
+	var action_router = FakeActionRouter.new()
 	ProjectSettings.set_setting(_autoload_key, "")
 	MCPRuntimeDebugStore.clear()
 	PluginSelfDiagnosticStore.clear()
@@ -74,6 +111,43 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if coordinator.has_runtime_bridge_root_instance(plugin, AUTOLOAD_NAME):
 		return _failure("Coordinator should not report a runtime bridge root instance when no tree is available.")
 
+	var server_controller = coordinator.attach_server_controller(
+		null,
+		plugin,
+		{"auto_start": true},
+		action_router,
+		Callable(self, "_create_fake_server_controller")
+	)
+	if server_controller == null:
+		return _failure("PluginRuntimeCoordinator should create and attach a server controller.")
+	if server_controller.attach_count != 1:
+		return _failure("PluginRuntimeCoordinator should attach the server controller exactly once.")
+	server_controller.server_started.emit()
+	server_controller.server_stopped.emit()
+	server_controller.request_received.emit("tools/list", {})
+	if action_router.started_count != 1 or action_router.stopped_count != 1 or action_router.request_count != 1:
+		return _failure("PluginRuntimeCoordinator should wire server controller signals to the action router.")
+
+	var disposed_controller = server_controller
+	server_controller = coordinator.dispose_server_controller(server_controller, action_router)
+	if server_controller != null:
+		return _failure("PluginRuntimeCoordinator should clear the server controller reference on dispose.")
+	disposed_controller.server_started.emit()
+	if action_router.started_count != 1:
+		return _failure("Disposed server controller should be disconnected from the action router.")
+
+	var recreated_controller = coordinator.recreate_server_controller(
+		FakeServerController.new(),
+		plugin,
+		{"auto_start": false},
+		action_router,
+		Callable(self, "_create_fake_server_controller")
+	)
+	if recreated_controller == null:
+		return _failure("PluginRuntimeCoordinator should recreate the server controller.")
+	if recreated_controller.attach_count != 1:
+		return _failure("Recreated server controller should be attached exactly once.")
+
 	return {
 		"name": "plugin_runtime_coordinator_contracts",
 		"success": true,
@@ -81,7 +155,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"autoload_calls": plugin.autoload_calls.size(),
 			"debugger_add_count": plugin.debugger_added.size(),
-			"debugger_remove_count": plugin.debugger_removed.size()
+			"debugger_remove_count": plugin.debugger_removed.size(),
+			"server_started_count": action_router.started_count
 		}
 	}
 
@@ -94,6 +169,10 @@ func cleanup_case(_tree: SceneTree) -> void:
 
 func _create_fake_debugger_bridge():
 	return FakeDebuggerBridge.new()
+
+
+func _create_fake_server_controller():
+	return FakeServerController.new()
 
 
 func _failure(message: String) -> Dictionary:

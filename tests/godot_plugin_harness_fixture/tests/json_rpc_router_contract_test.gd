@@ -1,6 +1,7 @@
 extends RefCounted
 
 const JsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router.gd")
+const JsonRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router_context.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
@@ -70,15 +71,15 @@ class FakeCallbacks:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var router = JsonRpcRouterScript.new()
 	var callbacks = FakeCallbacks.new()
-	router.configure({
-		"handle_initialize": Callable(callbacks, "handle_initialize"),
-		"handle_tools_list": Callable(callbacks, "handle_tools_list"),
-		"handle_tools_call_async": Callable(callbacks, "handle_tools_call_async"),
-		"handle_notification": Callable(callbacks, "handle_notification"),
-		"build_json_rpc_response": Callable(callbacks, "build_json_rpc_response"),
-		"build_json_rpc_error": Callable(callbacks, "build_json_rpc_error"),
-		"log": Callable(callbacks, "log")
-	})
+	var context = JsonRpcRouterContextScript.new()
+	context.handle_initialize = Callable(callbacks, "handle_initialize")
+	context.handle_tools_list = Callable(callbacks, "handle_tools_list")
+	context.handle_tools_call_async = Callable(callbacks, "handle_tools_call_async")
+	context.handle_notification = Callable(callbacks, "handle_notification")
+	context.build_json_rpc_response = Callable(callbacks, "build_json_rpc_response")
+	context.build_json_rpc_error = Callable(callbacks, "build_json_rpc_error")
+	context.log = Callable(callbacks, "log")
+	router.configure(context)
 
 	var initialize_response: Dictionary = await router.route_request_async("initialize", {}, 1, true)
 	var initialize_result = initialize_response.get("result", {})

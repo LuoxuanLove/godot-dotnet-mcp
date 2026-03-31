@@ -1,6 +1,7 @@
 extends RefCounted
 
 const LifecycleActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_action_service.gd")
+const LifecycleActionContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_action_context.gd")
 
 
 class FakeCallbacks:
@@ -22,14 +23,14 @@ class FakeCallbacks:
 		state["hint"] = hint
 		return state
 
-	func success(data, message: String) -> Dictionary:
+	func build_success(data, message: String) -> Dictionary:
 		return {
 			"success": true,
 			"data": data,
 			"message": message
 		}
 
-	func error(error_code: String, message: String, data: Dictionary = {}) -> Dictionary:
+	func build_error(error_code: String, message: String, data: Dictionary = {}) -> Dictionary:
 		return {
 			"success": false,
 			"error": error_code,
@@ -51,15 +52,15 @@ class FakeCallbacks:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = LifecycleActionServiceScript.new()
 	var callbacks = FakeCallbacks.new()
-	service.configure({
-		"build_state": Callable(callbacks, "build_state"),
-		"build_state_with_hint": Callable(callbacks, "build_state_with_hint"),
-		"success": Callable(callbacks, "success"),
-		"error": Callable(callbacks, "error"),
-		"schedule_action": Callable(callbacks, "schedule_action"),
-		"get_plugin_host": Callable(callbacks, "get_plugin_host"),
-		"log": Callable(callbacks, "log")
-	})
+	var context = LifecycleActionContextScript.new()
+	context.build_state = Callable(callbacks, "build_state")
+	context.build_state_with_hint = Callable(callbacks, "build_state_with_hint")
+	context.build_success = Callable(callbacks, "build_success")
+	context.build_error = Callable(callbacks, "build_error")
+	context.schedule_action = Callable(callbacks, "schedule_action")
+	context.get_plugin_host = Callable(callbacks, "get_plugin_host")
+	context.log = Callable(callbacks, "log")
+	service.configure(context)
 
 	var close_confirmation: Dictionary = service.execute_close({})
 	if str(close_confirmation.get("error", "")) != "editor_confirmation_required":

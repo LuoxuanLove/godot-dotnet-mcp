@@ -19,6 +19,15 @@ func configure(server_controller, reload_feature, self_diagnostic_feature, tool_
 	_user_tool_feature = user_tool_feature
 
 
+func dispose() -> void:
+	_server_controller = null
+	_reload_feature = null
+	_self_diagnostic_feature = null
+	_tool_access_feature = null
+	_tool_profile_feature = null
+	_user_tool_feature = null
+
+
 func execute_runtime_tool(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"state":

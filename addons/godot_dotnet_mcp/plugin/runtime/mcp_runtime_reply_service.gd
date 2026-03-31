@@ -7,10 +7,10 @@ var _get_current_scene_path := Callable()
 var _build_runtime_state := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_send_reply = callbacks.get("send_reply", Callable())
-	_get_current_scene_path = callbacks.get("get_current_scene_path", Callable())
-	_build_runtime_state = callbacks.get("build_runtime_state", Callable())
+func configure(send_reply: Callable = Callable(), get_current_scene_path: Callable = Callable(), build_runtime_state: Callable = Callable()) -> void:
+	_send_reply = send_reply
+	_get_current_scene_path = get_current_scene_path
+	_build_runtime_state = build_runtime_state
 
 
 func dispose() -> void:

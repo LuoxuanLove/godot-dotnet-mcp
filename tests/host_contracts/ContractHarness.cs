@@ -9,14 +9,14 @@ internal sealed class ContractHarness : IAsyncDisposable
 {
     private readonly string? _previousCentralHome;
     private readonly string _tempRoot;
-    private readonly EditorProxyService _editorProxy;
+    private readonly CentralServerRuntimeGraph _runtimeGraph;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly EditorAttachHttpServer _attachServer;
 
     private ContractHarness(
         string tempRoot,
         string? previousCentralHome,
-        EditorProxyService editorProxy,
+        CentralServerRuntimeGraph runtimeGraph,
         EditorAttachHttpServer attachServer,
         ProjectRegistryService registry,
         EditorSessionService editorSessions,
@@ -26,7 +26,7 @@ internal sealed class ContractHarness : IAsyncDisposable
     {
         _tempRoot = tempRoot;
         _previousCentralHome = previousCentralHome;
-        _editorProxy = editorProxy;
+        _runtimeGraph = runtimeGraph;
         _attachServer = attachServer;
         Registry = registry;
         EditorSessions = editorSessions;
@@ -60,22 +60,29 @@ internal sealed class ContractHarness : IAsyncDisposable
         Environment.SetEnvironmentVariable("GODOT_DOTNET_MCP_CENTRAL_HOME", centralHome);
 
         var configuration = new CentralConfigurationService();
-        var editorProcesses = new EditorProcessService();
-        var godotInstallations = new GodotInstallationService();
-        var godotProjectManager = new GodotProjectManagerProvider(configuration);
-        var registry = new ProjectRegistryService();
-        var editorSessions = new EditorSessionService(registry);
-        var editorProxy = new EditorProxyService();
-        var workspaceState = new CentralWorkspaceState();
         var attachHost = "127.0.0.1";
         var attachPort = GetFreeTcpPort();
         var attachEndpoint = new EditorAttachEndpoint(attachHost, attachPort);
-        var editorSessionCoordinator = new EditorSessionCoordinator(configuration, editorProcesses, editorSessions, godotInstallations, registry, workspaceState, attachEndpoint);
-        var editorLifecycleCoordinator = new EditorLifecycleCoordinator(configuration, editorProcesses, editorProxy, editorSessionCoordinator, editorSessions, registry, workspaceState);
-        var dispatcher = new CentralToolDispatcher(configuration, editorProxy, editorProcesses, editorLifecycleCoordinator, editorSessionCoordinator, editorSessions, godotInstallations, godotProjectManager, registry, workspaceState);
-        var attachServer = new EditorAttachHttpServer(attachHost, attachPort, editorSessions, TextWriter.Null);
+        var bootstrapAttachServer = new EditorAttachHttpServer(
+            attachHost,
+            attachPort,
+            new EditorSessionService(new ProjectRegistryService()),
+            TextWriter.Null);
+        var runtimeGraph = CentralServerComposition.BuildStdioGraph(attachEndpoint, bootstrapAttachServer, null);
+        var attachServer = new EditorAttachHttpServer(attachHost, attachPort, runtimeGraph.EditorSessions, TextWriter.Null);
+        runtimeGraph = runtimeGraph with { AttachServer = attachServer };
+        bootstrapAttachServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
-        var harness = new ContractHarness(tempRoot, previousCentralHome, editorProxy, attachServer, registry, editorSessions, dispatcher, attachHost, attachPort);
+        var harness = new ContractHarness(
+            tempRoot,
+            previousCentralHome,
+            runtimeGraph,
+            attachServer,
+            runtimeGraph.Registry,
+            runtimeGraph.EditorSessions,
+            runtimeGraph.Dispatcher ?? throw new InvalidOperationException("Stdio graph did not provide dispatcher."),
+            attachHost,
+            attachPort);
         harness.CreateProjectFixture();
         attachServer.Start(harness._lifetime.Token);
         return harness;
@@ -129,7 +136,7 @@ internal sealed class ContractHarness : IAsyncDisposable
         _lifetime.Cancel();
         await _attachServer.DisposeAsync();
         _lifetime.Dispose();
-        _editorProxy.Dispose();
+        _runtimeGraph.Dispose();
         Environment.SetEnvironmentVariable("GODOT_DOTNET_MCP_CENTRAL_HOME", _previousCentralHome);
         try
         {

@@ -1,6 +1,6 @@
 extends RefCounted
 
-const DiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
+const DiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/shared/gdscript_lsp_diagnostics_service.gd")
 
 
 class FakeDiagnosticsClient extends RefCounted:

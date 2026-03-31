@@ -6,9 +6,9 @@ var _build_editor_context := Callable()
 var _get_debugger_session_snapshot := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_build_editor_context = callbacks.get("build_editor_context", Callable())
-	_get_debugger_session_snapshot = callbacks.get("get_debugger_session_snapshot", Callable())
+func configure(build_editor_context: Callable = Callable(), get_debugger_session_snapshot: Callable = Callable()) -> void:
+	_build_editor_context = build_editor_context
+	_get_debugger_session_snapshot = get_debugger_session_snapshot
 
 
 func reset() -> void:

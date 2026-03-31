@@ -6,9 +6,9 @@ var _get_recent_runtime_events := Callable()
 var _build_error := Callable()
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_get_recent_runtime_events = callbacks.get("get_recent_runtime_events", Callable())
-	_build_error = callbacks.get("build_error", Callable())
+func configure(get_recent_runtime_events: Callable = Callable(), build_error: Callable = Callable()) -> void:
+	_get_recent_runtime_events = get_recent_runtime_events
+	_build_error = build_error
 
 
 func reset() -> void:

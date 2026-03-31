@@ -18,6 +18,7 @@ internal static class Program
         var repoRoot = ResolveRepoRoot();
         var allowSkipMissingGodot = args.Any(arg => string.Equals(arg, "--allow-skip-missing-godot", StringComparison.OrdinalIgnoreCase));
         var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
+        var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
@@ -64,6 +65,7 @@ internal static class Program
             };
             process.StartInfo.Environment["APPDATA"] = appDataRoot;
             process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
+            process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = listCases ? "1" : "0";
             process.StartInfo.ArgumentList.Add("--headless");
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);
@@ -79,6 +81,22 @@ internal static class Program
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
+
+            if (listCases)
+            {
+                var manifest = TryParsePrefixedJsonLine(stdout, "HARNESS_LIST_CASES_MANIFEST:")
+                    ?? TryParseLastJsonLine(stdout)
+                    ?? new
+                    {
+                        discovered = Array.Empty<object>(),
+                        total = 0,
+                        valid = 0,
+                        invalid = 0,
+                    };
+                Console.WriteLine(JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+                return process.ExitCode == 0 ? 0 : 1;
+            }
+
             var leakWarningsDetected = ContainsLeakWarnings(stderr);
             var succeeded = process.ExitCode == 0 && !leakWarningsDetected;
             preserveStageRoot = keepStageRoot && !succeeded;
@@ -173,6 +191,38 @@ internal static class Program
             {
                 rawOutput = stdout.Trim(),
             };
+        }
+    }
+
+    private static object? TryParsePrefixedJsonLine(string stdout, string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(stdout) || string.IsNullOrWhiteSpace(prefix))
+        {
+            return null;
+        }
+
+        var candidate = stdout
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .LastOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return null;
+        }
+
+        var json = candidate[prefix.Length..].Trim();
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<object>(json);
+        }
+        catch
+        {
+            return null;
         }
     }
 

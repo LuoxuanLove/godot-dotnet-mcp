@@ -3,6 +3,7 @@ using System.Text.Json;
 using GodotDotnetMcp.CentralServer;
 using GodotDotnetMcp.HostShared;
 using static ContractAssertions;
+using static HostCompositionRootCases;
 using static ContractPayloadSupport;
 
 internal static class Program
@@ -25,6 +26,14 @@ internal static class Program
             ("workspace_project_restart_editor_reattaches_when_lifecycle_available", VerifyLifecycleRestartContractAsync),
             ("workspace_project_restart_editor_reports_attach_timeout_when_reattach_missing", VerifyLifecycleRestartAttachTimeoutContractAsync),
             ("workspace_project_close_editor_succeeds_when_lifecycle_available", VerifyLifecycleCloseContractAsync),
+            ("stdio_mode_builds_full_host_graph", VerifyStdioModeBuildsFullHostGraphAsync),
+            ("stdio_mode_propagates_attach_endpoint_configuration", VerifyStdioModePropagatesAttachEndpointConfigurationAsync),
+            ("attach_only_mode_builds_minimal_host_graph", VerifyAttachOnlyModeBuildsMinimalHostGraphAsync),
+            ("host_graph_shares_workspace_state_across_dispatcher_and_coordinators", VerifyHostGraphSharesWorkspaceStateAcrossDispatcherAndCoordinatorsAsync),
+            ("host_composition_root_disposes_cleanly", VerifyHostCompositionRootDisposesCleanlyAsync),
+            ("di_style_composition_graph_matches_manual", VerifyDiStyleCompositionGraphMatchesManualAsync),
+            ("singleton_services_are_shared_across_graph", VerifySingletonServicesAreSharedAcrossGraphAsync),
+            ("attach_only_graph_is_minimal", VerifyAttachOnlyGraphIsMinimalAsync),
         };
 
         var results = new List<object>();

@@ -1,6 +1,7 @@
 extends RefCounted
 
 const HttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
+const HttpResponseContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_context.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
@@ -69,12 +70,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"last_request_at_unix": 123456
 		}
 	)
-	service.configure({
-		"get_tool_loader": Callable(callbacks, "get_tool_loader"),
-		"get_tool_loader_status": Callable(callbacks, "get_tool_loader_status"),
-		"get_server_stats": Callable(callbacks, "get_server_stats"),
-		"log": Callable(callbacks, "log")
-	}, MCPProtocolFacts.build_server_facts())
+	var context = HttpResponseContextScript.new()
+	var server_facts = MCPProtocolFacts.build_server_facts()
+	context.get_tool_loader = Callable(callbacks, "get_tool_loader")
+	context.get_tool_loader_status = Callable(callbacks, "get_tool_loader_status")
+	context.get_server_stats = Callable(callbacks, "get_server_stats")
+	context.log = Callable(callbacks, "log")
+	context.server_name = str(server_facts.get("server_name", ""))
+	context.server_version = str(server_facts.get("server_version", ""))
+	context.protocol_version = str(server_facts.get("protocol_version", ""))
+	context.tool_schema_version = str(server_facts.get("tool_schema_version", ""))
+	service.configure(context)
 
 	var rpc_response: Dictionary = service.build_json_rpc_response({"ok": true}, 7.0)
 	if int(rpc_response.get("id", -1)) != 7:

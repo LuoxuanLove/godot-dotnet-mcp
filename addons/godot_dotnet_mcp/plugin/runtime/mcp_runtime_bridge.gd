@@ -139,22 +139,21 @@ func _configure_services() -> void:
 	})
 	if _command_service == null:
 		_command_service = MCPRuntimeCommandServiceScript.new()
-	_command_service.configure({
-		"get_tree": Callable(self, "get_tree"),
-		"get_viewport": Callable(self, "get_viewport"),
-		"get_current_scene_path": Callable(self, "_get_current_scene_path"),
-		"build_runtime_state": Callable(self, "_build_runtime_state")
-	}, {
-		"capture_root_dir": CAPTURE_ROOT_DIR,
-		"max_capture_files_per_session": MAX_CAPTURE_FILES_PER_SESSION
-	})
+	_command_service.configure(
+		Callable(self, "get_tree"),
+		Callable(self, "get_viewport"),
+		Callable(self, "_get_current_scene_path"),
+		Callable(self, "_build_runtime_state"),
+		CAPTURE_ROOT_DIR,
+		MAX_CAPTURE_FILES_PER_SESSION
+	)
 	if _reply_service == null:
 		_reply_service = MCPRuntimeReplyServiceScript.new()
-	_reply_service.configure({
-		"send_reply": Callable(self, "_send_reply_payload"),
-		"get_current_scene_path": Callable(self, "_get_current_scene_path"),
-		"build_runtime_state": Callable(self, "_build_runtime_state")
-	})
+	_reply_service.configure(
+		Callable(self, "_send_reply_payload"),
+		Callable(self, "_get_current_scene_path"),
+		Callable(self, "_build_runtime_state")
+	)
 
 
 func _emit_event(event_name: String, metadata: Dictionary = {}) -> void:

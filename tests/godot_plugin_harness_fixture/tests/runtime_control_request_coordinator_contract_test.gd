@@ -9,13 +9,13 @@ var _auto_reply := true
 
 func run_case(tree: SceneTree) -> Dictionary:
 	_tree = tree
-	_coordinator.configure({
-		"send_runtime_command": Callable(self, "_send_runtime_command"),
-		"resolve_fallback_reply": Callable(self, "_resolve_fallback_reply"),
-		"build_reply_from_runtime_payload": Callable(self, "_build_reply_from_runtime_payload"),
-		"build_error": Callable(self, "_build_error"),
-		"get_scene_tree": Callable(self, "_get_scene_tree")
-	})
+	_coordinator.configure(
+		Callable(self, "_send_runtime_command"),
+		Callable(self, "_resolve_fallback_reply"),
+		Callable(self, "_build_reply_from_runtime_payload"),
+		Callable(self, "_build_error"),
+		Callable(self, "_get_scene_tree")
+	)
 
 	_auto_reply = true
 	var success_result: Dictionary = await _coordinator.request_runtime_command(7, "capture", {

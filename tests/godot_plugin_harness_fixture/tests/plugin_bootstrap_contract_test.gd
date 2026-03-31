@@ -2,6 +2,7 @@ extends RefCounted
 
 const PluginBootstrap = preload("res://addons/godot_dotnet_mcp/plugin/plugin_bootstrap.gd")
 const PluginActionRouter = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
+const PluginDockCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 
 var _bootstrap = null
 var _plugin = null
@@ -41,6 +42,7 @@ class FakeServerController extends RefCounted:
 class FakePlugin extends RefCounted:
 	var _state := FakeState.new()
 	var _action_router = PluginActionRouter.new()
+	var _dock_coordinator = PluginDockCoordinator.new()
 	var _server_controller = FakeServerController.new()
 	var _localization = null
 	var _settings_store = null
@@ -64,6 +66,7 @@ class FakePlugin extends RefCounted:
 	var _central_server_attach_service = null
 	var _central_server_process_service = null
 	var _dock = null
+	var _client_executable_dialog = null
 
 	func _build_dock_model() -> Dictionary:
 		return {}
@@ -175,9 +178,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 
 
-func cleanup_case(_tree: SceneTree) -> void:
+func cleanup_case(tree: SceneTree) -> void:
 	if _plugin != null:
+		if _bootstrap != null:
+			_bootstrap.dispose_plugin_service_instances(_plugin)
 		_plugin._action_router = null
+		_plugin._dock_coordinator = null
 		_plugin._state = null
 		_plugin._server_controller = null
 		_plugin._localization = null
@@ -201,9 +207,12 @@ func cleanup_case(_tree: SceneTree) -> void:
 		_plugin._user_tool_watch_service = null
 		_plugin._central_server_attach_service = null
 		_plugin._central_server_process_service = null
+		_plugin._client_executable_dialog = null
 		_plugin._dock = null
 	_plugin = null
 	_bootstrap = null
+	await tree.process_frame
+	await tree.process_frame
 
 
 func _failure(message: String) -> Dictionary:

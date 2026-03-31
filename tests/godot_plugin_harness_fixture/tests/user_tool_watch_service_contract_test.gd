@@ -20,7 +20,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		RefCounted.new(),
 		null,
 		null,
-		{"apply_external_user_tool_catalog_refresh": Callable(recorder, "record")}
+		Callable(recorder, "record")
 	)
 
 	var changed_path := "res://addons/godot_dotnet_mcp/custom_tools/sample_watch_target.gd"

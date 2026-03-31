@@ -1,6 +1,7 @@
 extends RefCounted
 
 const LifecycleStateBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_state_builder.gd")
+const LifecycleStateBuilderContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_state_builder_context.gd")
 
 
 class FakeEditorInterface:
@@ -69,7 +70,7 @@ var _callbacks
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var builder = LifecycleStateBuilderScript.new()
-	builder.configure({})
+	builder.configure(null)
 	var default_state: Dictionary = builder.build_state()
 	if bool(default_state.get("isPlayingScene", true)):
 		return _failure("Lifecycle state builder should default to a non-playing state when no plugin host exists.")
@@ -77,9 +78,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle state builder default state did not include openScenes as an array.")
 
 	_callbacks = PluginHostCallbacks.new(FakePluginHost.new())
-	builder.configure({
-		"get_plugin_host": Callable(_callbacks, "get_plugin_host")
-	})
+	var context = LifecycleStateBuilderContextScript.new()
+	context.get_plugin_host = Callable(_callbacks, "get_plugin_host")
+	builder.configure(context)
 	var state: Dictionary = builder.build_state()
 	var open_scenes = state.get("openScenes", [])
 	if not (open_scenes is Array) or (open_scenes as Array).size() != 2:

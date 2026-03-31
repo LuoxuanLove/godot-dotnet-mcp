@@ -1,6 +1,7 @@
 extends RefCounted
 
 const HttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
+const HttpRequestRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router_context.gd")
 
 
 class FakeCallbacks:
@@ -52,14 +53,14 @@ class FakeCallbacks:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var router = HttpRequestRouterScript.new()
 	var callbacks = FakeCallbacks.new()
-	router.configure({
-		"handle_mcp_request_async": Callable(callbacks, "handle_mcp_request_async"),
-		"build_health_response": Callable(callbacks, "build_health_response"),
-		"build_tools_list_response": Callable(callbacks, "build_tools_list_response"),
-		"handle_editor_lifecycle_request": Callable(callbacks, "handle_editor_lifecycle_request"),
-		"handle_editor_lifecycle_post_request": Callable(callbacks, "handle_editor_lifecycle_post_request"),
-		"build_cors_response": Callable(callbacks, "build_cors_response")
-	})
+	var context = HttpRequestRouterContextScript.new()
+	context.handle_mcp_request_async = Callable(callbacks, "handle_mcp_request_async")
+	context.build_health_response = Callable(callbacks, "build_health_response")
+	context.build_tools_list_response = Callable(callbacks, "build_tools_list_response")
+	context.handle_editor_lifecycle_request = Callable(callbacks, "handle_editor_lifecycle_request")
+	context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
+	context.build_cors_response = Callable(callbacks, "build_cors_response")
+	router.configure(context)
 
 	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}")
 	if str(mcp_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\"}":

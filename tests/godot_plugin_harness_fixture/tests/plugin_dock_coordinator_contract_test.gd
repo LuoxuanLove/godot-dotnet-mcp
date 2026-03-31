@@ -1,14 +1,48 @@
 extends RefCounted
 
 const PluginDockCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 var _dock: FakeDock = null
 var _base_control: Control = null
+var _plugin = null
+var _packed_scene: PackedScene = null
 
 
 class FakeDock extends Control:
 	signal start_requested
 	signal copy_requested
+
+
+class FakeEditorInterface extends RefCounted:
+	var base_control: Control = null
+
+	func _init(control: Control) -> void:
+		base_control = control
+
+	func get_base_control() -> Control:
+		return base_control
+
+
+class FakePlugin extends RefCounted:
+	var base_control: Control = null
+	var editor_interface = null
+	var added_docks := 0
+	var removed_docks := 0
+
+	func _init(control: Control) -> void:
+		base_control = control
+		editor_interface = FakeEditorInterface.new(control)
+
+	func get_editor_interface():
+		return editor_interface
+
+	func add_control_to_dock(_slot: int, dock: Control) -> void:
+		added_docks += 1
+		base_control.add_child(dock)
+
+	func remove_control_from_docks(_dock: Control) -> void:
+		removed_docks += 1
 
 
 class Recorder extends RefCounted:
@@ -59,6 +93,7 @@ class Recorder extends RefCounted:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var coordinator = PluginDockCoordinator.new()
 	var recorder = Recorder.new()
+	PluginSelfDiagnosticStore.clear()
 	_dock = FakeDock.new()
 	var connected = coordinator.wire_dock_signals(
 		_dock,
@@ -103,24 +138,88 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if recorder.reset_count != 1:
 		return _failure("Dock coordinator should reset the pending client path request on remove.")
 
+	var bindings: Array[Dictionary] = coordinator.build_dock_signal_bindings(recorder)
+	if not bindings.is_empty():
+		return _failure("Dock coordinator should return an empty binding list when the action router cannot build bindings.")
+
+	var focus_snapshot = coordinator.capture_focus_snapshot(null, 2)
+	if int(focus_snapshot.get("tab_index", -1)) != 2:
+		return _failure("Dock coordinator should preserve the fallback tab index when no dock is available.")
+
+	_plugin = FakePlugin.new(_base_control)
+	_packed_scene = PackedScene.new()
+	var dock_template := FakeDock.new()
+	dock_template.name = "MCPDock"
+	var pack_error := _packed_scene.pack(dock_template)
+	dock_template.free()
+	if pack_error != OK:
+		return _failure("Dock coordinator contract setup failed to pack a fake dock scene.")
+
+	var create_result = coordinator.create_plugin_dock(
+		_plugin,
+		null,
+		recorder,
+		0,
+		"res://tests/fake_mcp_dock.tscn",
+		PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH,
+		Callable(self, "_load_fake_dock_scene")
+	)
+	if not bool(create_result.get("success", false)):
+		return _failure("Dock coordinator should create a plugin dock through the high-level API.")
+	var created_dock = create_result.get("dock", null)
+	if created_dock == null or created_dock.get_parent() != _base_control:
+		return _failure("Created plugin dock should be parented under the editor base control.")
+	if coordinator.count_plugin_dock_instances(_plugin, PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH) != 1:
+		return _failure("Dock coordinator should count the newly created plugin dock.")
+
+	var recreate_result = coordinator.recreate_plugin_dock(
+		_plugin,
+		created_dock,
+		recorder,
+		0,
+		"res://tests/fake_mcp_dock.tscn",
+		PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH,
+		Callable(self, "_load_fake_dock_scene")
+	)
+	if not bool(recreate_result.get("success", false)):
+		return _failure("Dock coordinator should recreate the plugin dock through the high-level API.")
+	var recreated_dock = recreate_result.get("dock", null)
+	if recreated_dock == null or recreated_dock == created_dock:
+		return _failure("Recreated plugin dock should replace the previous dock instance.")
+
+	var remove_result = coordinator.remove_plugin_dock(_plugin, recreated_dock, PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH)
+	if remove_result.get("dock", null) != null:
+		return _failure("Dock coordinator should clear the dock reference when removing the plugin dock.")
+	if coordinator.count_plugin_dock_instances(_plugin, PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH) != 0:
+		return _failure("Dock coordinator should report zero live docks after removal.")
+
 	return {
 		"name": "plugin_dock_coordinator_contracts",
 		"success": true,
 		"error": "",
 		"details": {
 			"incident_count": recorder.incidents.size(),
-			"dialog_filter_count": dialog.filters.size()
+			"dialog_filter_count": dialog.filters.size(),
+			"added_docks": _plugin.added_docks,
+			"removed_docks": _plugin.removed_docks
 		}
 	}
 
 
 func cleanup_case(_tree: SceneTree) -> void:
+	PluginSelfDiagnosticStore.clear()
 	if _dock != null and is_instance_valid(_dock):
 		_dock.free()
 	_dock = null
 	if _base_control != null and is_instance_valid(_base_control):
 		_base_control.free()
 	_base_control = null
+	_plugin = null
+	_packed_scene = null
+
+
+func _load_fake_dock_scene(_path: String) -> PackedScene:
+	return _packed_scene
 
 
 func _failure(message: String) -> Dictionary:

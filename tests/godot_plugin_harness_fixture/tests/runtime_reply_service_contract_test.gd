@@ -9,11 +9,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_captured_payloads.clear()
 
 	var service = RuntimeReplyServiceScript.new()
-	service.configure({
-		"send_reply": Callable(self, "_capture_reply"),
-		"get_current_scene_path": Callable(self, "_get_scene_path"),
-		"build_runtime_state": Callable(self, "_build_runtime_state")
-	})
+	service.configure(
+		Callable(self, "_capture_reply"),
+		Callable(self, "_get_scene_path"),
+		Callable(self, "_build_runtime_state")
+	)
 
 	service.send_result("reply-success", 9, {
 		"success": true,

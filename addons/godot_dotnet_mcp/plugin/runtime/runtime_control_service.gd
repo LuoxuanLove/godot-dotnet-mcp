@@ -2,7 +2,7 @@
 extends RefCounted
 class_name MCPRuntimeControlService
 
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const MCPRuntimeControlSessionSelectorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_session_selector.gd")
 const MCPRuntimeControlErrorMapperScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_error_mapper.gd")
 const MCPRuntimeControlReplyResolverScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_reply_resolver.gd")
@@ -22,7 +22,7 @@ var _reply_resolver = MCPRuntimeControlReplyResolverScript.new()
 var _request_coordinator = MCPRuntimeControlRequestCoordinatorScript.new()
 
 
-func configure(plugin: EditorPlugin, debugger_bridge: EditorDebuggerPlugin, callbacks: Dictionary = {}) -> void:
+func configure(plugin: EditorPlugin, debugger_bridge: EditorDebuggerPlugin, log_callback: Callable = Callable()) -> void:
 	_plugin = plugin
 	if _debugger_bridge != debugger_bridge:
 		if _debugger_bridge != null:
@@ -30,23 +30,23 @@ func configure(plugin: EditorPlugin, debugger_bridge: EditorDebuggerPlugin, call
 		_disconnect_debugger_bridge()
 		_debugger_bridge = debugger_bridge
 		_connect_debugger_bridge()
-	_log = callbacks.get("log", Callable())
+	_log = log_callback
 	_session_selector.configure(_plugin, _debugger_bridge)
-	_error_mapper.configure({
-		"build_editor_context": Callable(self, "_build_editor_error_context"),
-		"get_debugger_session_snapshot": Callable(self, "_get_debugger_session_snapshot")
-	})
-	_reply_resolver.configure({
-		"get_recent_runtime_events": Callable(self, "_get_recent_runtime_events"),
-		"build_error": Callable(self, "_build_runtime_control_error")
-	})
-	_request_coordinator.configure({
-		"send_runtime_command": Callable(self, "_send_runtime_command"),
-		"resolve_fallback_reply": Callable(_reply_resolver, "resolve_fallback_reply"),
-		"build_reply_from_runtime_payload": Callable(_reply_resolver, "build_reply_from_runtime_payload"),
-		"build_error": Callable(self, "_build_runtime_control_error"),
-		"get_scene_tree": Callable(self, "_get_scene_tree")
-	})
+	_error_mapper.configure(
+		Callable(self, "_build_editor_error_context"),
+		Callable(self, "_get_debugger_session_snapshot")
+	)
+	_reply_resolver.configure(
+		Callable(self, "_get_recent_runtime_events"),
+		Callable(self, "_build_runtime_control_error")
+	)
+	_request_coordinator.configure(
+		Callable(self, "_send_runtime_command"),
+		Callable(_reply_resolver, "resolve_fallback_reply"),
+		Callable(_reply_resolver, "build_reply_from_runtime_payload"),
+		Callable(self, "_build_runtime_control_error"),
+		Callable(self, "_get_scene_tree")
+	)
 	_validate_armed_session()
 
 

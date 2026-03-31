@@ -6,7 +6,7 @@ signal runtime_reply_received(session_id: int, payload: Dictionary)
 signal session_state_changed(session_id: int, state: String, metadata: Dictionary)
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 
 const MESSAGE_PREFIX := "godot_mcp/"
 const EVENT_CHANNEL := "godot_mcp/runtime_event"

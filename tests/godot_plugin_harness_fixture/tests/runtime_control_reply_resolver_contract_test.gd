@@ -5,10 +5,10 @@ const RuntimeControlReplyResolverScript = preload("res://addons/godot_dotnet_mcp
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var resolver = RuntimeControlReplyResolverScript.new()
-	resolver.configure({
-		"get_recent_runtime_events": Callable(self, "_get_recent_events"),
-		"build_error": Callable(self, "_build_error")
-	})
+	resolver.configure(
+		Callable(self, "_get_recent_events"),
+		Callable(self, "_build_error")
+	)
 
 	var resolved := resolver.resolve_fallback_reply("reply-42", {
 		"session_id": 42,

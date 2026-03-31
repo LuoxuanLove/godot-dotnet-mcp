@@ -11,13 +11,13 @@ var _max_capture_files_per_session := 24
 var _capture_files_by_session: Dictionary = {}
 
 
-func configure(callbacks: Dictionary = {}, options: Dictionary = {}) -> void:
-	_get_tree = callbacks.get("get_tree", Callable())
-	_get_viewport = callbacks.get("get_viewport", Callable())
-	_get_current_scene_path = callbacks.get("get_current_scene_path", Callable())
-	_build_runtime_state = callbacks.get("build_runtime_state", Callable())
-	_capture_root_dir = str(options.get("capture_root_dir", _capture_root_dir))
-	_max_capture_files_per_session = maxi(int(options.get("max_capture_files_per_session", _max_capture_files_per_session)), 1)
+func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: Callable = Callable(), get_current_scene_path_callback: Callable = Callable(), build_runtime_state_callback: Callable = Callable(), capture_root_dir: String = "user://godot_mcp_runtime_captures", max_capture_files_per_session: int = 24) -> void:
+	_get_tree = get_tree_callback
+	_get_viewport = get_viewport_callback
+	_get_current_scene_path = get_current_scene_path_callback
+	_build_runtime_state = build_runtime_state_callback
+	_capture_root_dir = capture_root_dir
+	_max_capture_files_per_session = maxi(max_capture_files_per_session, 1)
 
 
 func execute_action_async(session_id: int, action: String, args: Dictionary) -> Dictionary:

@@ -11,12 +11,12 @@ var _last_reply_at_unix := 0
 var _pending_requests: Dictionary = {}
 
 
-func configure(callbacks: Dictionary = {}) -> void:
-	_send_runtime_command = callbacks.get("send_runtime_command", Callable())
-	_resolve_fallback_reply = callbacks.get("resolve_fallback_reply", Callable())
-	_build_reply_from_runtime_payload = callbacks.get("build_reply_from_runtime_payload", Callable())
-	_build_error = callbacks.get("build_error", Callable())
-	_get_scene_tree = callbacks.get("get_scene_tree", Callable())
+func configure(send_runtime_command: Callable = Callable(), resolve_fallback_reply: Callable = Callable(), build_reply_from_runtime_payload: Callable = Callable(), build_error: Callable = Callable(), get_scene_tree: Callable = Callable()) -> void:
+	_send_runtime_command = send_runtime_command
+	_resolve_fallback_reply = resolve_fallback_reply
+	_build_reply_from_runtime_payload = build_reply_from_runtime_payload
+	_build_error = build_error
+	_get_scene_tree = get_scene_tree
 
 
 func reset() -> void:

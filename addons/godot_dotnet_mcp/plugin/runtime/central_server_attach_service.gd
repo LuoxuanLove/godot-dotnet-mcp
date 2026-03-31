@@ -31,10 +31,10 @@ var _heartbeat_request: HTTPRequest
 var _detach_request: HTTPRequest
 
 
-func configure(plugin: EditorPlugin, settings: Dictionary, callbacks: Dictionary = {}) -> void:
+func configure(plugin: EditorPlugin, settings: Dictionary, save_settings: Callable = Callable()) -> void:
 	_plugin = plugin
 	_settings = settings
-	_save_settings = callbacks.get("save_settings", Callable())
+	_save_settings = save_settings
 
 
 func start() -> void:
