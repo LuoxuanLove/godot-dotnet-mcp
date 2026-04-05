@@ -1,0 +1,75 @@
+name: publish-plugin
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "plugin-v*"
+
+jobs:
+  build-win-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build dotnet bridge library
+        shell: pwsh
+        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+
+      - name: Setup Godot 4.6
+        shell: pwsh
+        run: |
+          $godotZip = "$env:TEMP\Godot_v4.6-stable_mono_win64.exe.zip"
+          if (-not (Test-Path $godotZip)) {
+            curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
+          }
+          $extractDir = "$env:TEMP\godot_extracted"
+          Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
+          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run Roslyn plan verification
+        shell: pwsh
+        run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
+
+      - name: Create plugin package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".Replace("plugin-v", "")
+          $outputRoot = "dist"
+          $stageDir = "$outputRoot/stage"
+          if (Test-Path $stageDir) { Remove-Item -Path $stageDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+          $addonsDir = Join-Path $stageDir "addons"
+          New-Item -ItemType Directory -Path $addonsDir -Force | Out-Null
+          Copy-Item -Path ".\addons\godot_dotnet_mcp" -Destination $addonsDir -Recurse -Force
+          $pluginZip = "$outputRoot/godot-dotnet-mcp-plugin-v$version.zip"
+          if (Test-Path $pluginZip) { Remove-Item -Path $pluginZip -Force }
+          Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $pluginZip -CompressionLevel Optimal
+          $hash = Get-FileHash -Path $pluginZip -Algorithm SHA256
+          "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Path $pluginZip -Leaf)" | Set-Content -Path "$pluginZip.sha256" -Encoding utf8
+          Write-Host "Plugin package created: $pluginZip"
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-dotnet-mcp-plugin
+          path: |
+            dist/*.zip
+            dist/*.sha256
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.sha256
+          generate_release_notes: true

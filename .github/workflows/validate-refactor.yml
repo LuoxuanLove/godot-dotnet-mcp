@@ -1,4 +1,4 @@
-name: validate-refactor
+name: validate-plugin
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
       - "v*-dev"
 
 jobs:
-  build-host:
+  build-dotnet-bridge:
     runs-on: windows-latest
 
     steps:
@@ -22,39 +22,18 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Build central server
-        shell: pwsh
-        run: dotnet build .\central_server\CentralServer.csproj -c Release
-
-      - name: Build host shared library
-        shell: pwsh
-        run: dotnet build .\host_shared\HostShared.csproj -c Release
-
-      - name: Run host contract tests
-        shell: pwsh
-        run: dotnet run --project .\tests\host_contracts\HostContracts.csproj -c Release
-
-      - name: Setup Godot 4.4
+      - name: Setup Godot 4.6
         shell: pwsh
         run: |
-          $godotZip = "$env:TEMP\Godot_v4.4-stable_win64.exe.zip"
+          $godotZip = "$env:TEMP\Godot_v4.6-stable_mono_win64.exe.zip"
           if (-not (Test-Path $godotZip)) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.4-stable/Godot_v4.4-stable_win64.exe.zip" -OutFile $godotZip
+            curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
           }
           $extractDir = "$env:TEMP\godot_extracted"
           Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
-          $godotExe = Get-ChildItem -Path $extractDir -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
           echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run plugin headless harness
+      - name: Run Roslyn plan verification
         shell: pwsh
-        run: dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
-
-      - name: Run reuse session smoke
-        shell: pwsh
-        run: .\scripts\smoke_central_server_system_session.ps1 -SkipBuild
-
-      - name: Validate refactor guardrails
-        shell: pwsh
-        run: .\scripts\validate_refactor_guardrails.ps1
+        run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
