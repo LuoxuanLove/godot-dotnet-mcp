@@ -17,6 +17,7 @@ ACTIONS:
 - set_main_screen: Switch to a different main screen
 - get_distraction_free: Get distraction-free mode status
 - set_distraction_free: Toggle distraction-free mode
+- get_godot_path: Get the current Godot executable path and project root
 
 EXAMPLES:
 - Get editor info: {"action": "get_info"}
@@ -28,7 +29,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_info", "get_main_screen", "set_main_screen", "get_distraction_free", "set_distraction_free"],
+					"enum": ["get_info", "get_main_screen", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
 						"description": "Status action"
 					},
 					"screen": {
@@ -372,6 +373,8 @@ func _execute_status(args: Dictionary) -> Dictionary:
 			return _get_distraction_free()
 		"set_distraction_free":
 			return _set_distraction_free(args.get("enabled", false))
+		"get_godot_path":
+			return _get_godot_path()
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -454,6 +457,15 @@ func _set_distraction_free(enabled: bool) -> Dictionary:
 	ei.set_distraction_free_mode(enabled)
 
 	return _success({"enabled": enabled}, "Distraction-free mode %s" % ("enabled" if enabled else "disabled"))
+
+
+func _get_godot_path() -> Dictionary:
+	var executable_path = OS.get_executable_path()
+	var project_root = ProjectSettings.globalize_path("res://")
+	return _success({
+		"godot_executable_path": executable_path,
+		"project_root_path": project_root
+	})
 
 
 func _capture_editor_screenshot(path: String) -> Dictionary:
