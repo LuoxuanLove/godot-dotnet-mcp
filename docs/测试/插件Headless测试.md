@@ -105,7 +105,7 @@ tests/godot_plugin_harness_fixture/
 | `user_tool_watch_service_contracts` | 验证 `user_tool_watch_service.gd` 通过显式 callback 触发外部用户工具刷新 |
 | `user_tool_service_contracts` | 验证 `user_tool_service.gd` 的 scaffold 创建、目录扫描、兼容报告、删除、恢复与审计 |
 | `script_tool_executor_contracts` | 验证 `script` 域拆分后的 catalog、稳定 executor 入口与代表性 `read / inspect / references / edit_gd` 路径 |
-| `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，插件侧仅保留 `*EditHelper` 文本编辑辅助；C# 官方语义来源仍是 Host 侧 Roslyn |
+| `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，插件侧仅保留 `*EditHelper` 文本编辑辅助；C# 官方语义来源为插件内 Roslyn |
 | `node_tool_executor_contracts` | 验证 `node` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / lifecycle / property / metadata / visibility` 路径 |
 | `animation_tool_executor_contracts` | 验证 `animation` 域拆分后的 catalog、稳定 executor 入口与代表性 `player / animation / track / tween / animation_tree / state_machine / blend_space / blend_tree` 路径 |
 | `physics_tool_executor_contracts` | 验证 `physics` 域拆分后的 catalog、稳定 executor 入口与代表性 `physics_body / collision_shape / physics_joint / physics_query` 路径 |
@@ -146,7 +146,7 @@ tests/godot_plugin_harness_fixture/
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
-| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、`Central Server` 投影和日志/权限/语言选项模型 |
+| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、运行时状态投影和日志/权限/语言选项模型 |
 | `tool_lsp_diagnostics_adapter_contracts` | 验证 `tool_lsp_diagnostics_adapter.gd` 的 configure、tick、reset、release 与 runtime bridge 绑定语义 |
 | `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
 | `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |

@@ -26,7 +26,7 @@
 3. 维护 `Server` 页自己的响应式布局和缩放逻辑
 4. 把按钮与设置操作转成 signal
 
-状态概览、`Central Server` 摘要、自诊断摘要和日志/权限/语言选项模型不再直接在 `server_tab.gd` 中拼装，而是统一下沉到 `server_tab_model_projection.gd`。
+状态概览、自诊断摘要和日志/权限/语言选项模型不再直接在 `server_tab.gd` 中拼装，而是统一下沉到 `server_tab_model_projection.gd`。
 
 ### 响应式布局
 
@@ -134,7 +134,7 @@ plugin.gd
 |---|---|
 | `ui/server_panel.tscn` | Server 页场景 |
 | `ui/server_tab.gd` | Server 页控制器，负责投影结果写回、布局与 signal |
-| `ui/server_tab_model_projection.gd` | Server 页纯投影协作者，负责状态摘要、自诊断、`Central Server` 文本和选项模型构建 |
+| `ui/server_tab_model_projection.gd` | Server 页纯投影协作者，负责状态摘要、自诊断和选项模型构建 |
 | `ui/config_panel.tscn` | Config 页场景 |
 | `ui/config_tab.gd` | Config 页控制器 |
 | `plugin/config/client_config_service.gd` | Config 页配置服务门面，统一委托 serializer / inspection / transaction / launcher adapter |

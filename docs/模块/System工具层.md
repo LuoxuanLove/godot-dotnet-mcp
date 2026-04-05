@@ -1,5 +1,5 @@
 # 系统工具层
-系统工具层是插件的高层工具入口，统一暴露 18 个公开内置工具，用于读取项目状态、驱动编辑器内运行态、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
+系统工具层是插件的高层工具入口，统一暴露 17 个公开内置工具，用于读取项目状态、驱动编辑器内运行态、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
 
 默认 `system` 预设只启用这一层，适合先理解上下文，再决定是否下钻到底层原子工具。
 
@@ -38,7 +38,6 @@ tools/system/
 
 ### 项目级
 - `system_project_state`：汇总当前项目状态，包括文件计数、最近错误和运行状态。
-- `system_project_advise`：根据项目现状生成下一步建议与推荐工具。
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
 - `system_project_run`：运行主场景或指定场景。
@@ -84,7 +83,6 @@ tools/system/
 
 ```text
 system_project_state
-  -> system_project_advise
   -> system_scene_analyze / system_script_analyze / system_runtime_diagnose
   -> system_scene_patch / system_script_patch / 具体原子工具
 ```
