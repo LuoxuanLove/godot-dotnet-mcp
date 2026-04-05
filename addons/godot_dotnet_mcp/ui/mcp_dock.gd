@@ -1,4 +1,4 @@
-@tool
+﻿@tool
 extends VBoxContainer
 
 const SERVER_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/server_panel.tscn"
@@ -14,13 +14,10 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
-signal central_server_detect_requested
-signal central_server_install_requested
-signal central_server_start_requested
-signal central_server_stop_requested
-signal central_server_open_install_dir_requested
-signal central_server_open_logs_requested
 signal clear_self_diagnostics_requested
+signal bridge_install_requested
+signal bridge_validate_requested
+signal bridge_clear_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
@@ -36,7 +33,6 @@ signal config_client_open_config_dir_requested(client_id: String)
 signal config_client_open_config_file_requested(client_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
 signal config_remove_requested(config_type: String, filepath: String, client_name: String)
-signal config_validate_requested(platform_id: String)
 signal copy_requested(text: String, source: String)
 
 @onready var _status_indicator: ColorRect = %StatusIndicator
@@ -63,18 +59,6 @@ func _ready() -> void:
 		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
 		_server_tab.stop_requested.connect(_on_server_tab_stop_requested)
 		_server_tab.full_reload_requested.connect(_on_server_tab_full_reload_requested)
-		if _server_tab.has_signal("central_server_detect_requested"):
-			_server_tab.central_server_detect_requested.connect(_on_server_tab_central_server_detect_requested)
-		if _server_tab.has_signal("central_server_install_requested"):
-			_server_tab.central_server_install_requested.connect(_on_server_tab_central_server_install_requested)
-		if _server_tab.has_signal("central_server_start_requested"):
-			_server_tab.central_server_start_requested.connect(_on_server_tab_central_server_start_requested)
-		if _server_tab.has_signal("central_server_stop_requested"):
-			_server_tab.central_server_stop_requested.connect(_on_server_tab_central_server_stop_requested)
-		if _server_tab.has_signal("central_server_open_install_dir_requested"):
-			_server_tab.central_server_open_install_dir_requested.connect(_on_server_tab_central_server_open_install_dir_requested)
-		if _server_tab.has_signal("central_server_open_logs_requested"):
-			_server_tab.central_server_open_logs_requested.connect(_on_server_tab_central_server_open_logs_requested)
 		if _server_tab.has_signal("clear_self_diagnostics_requested"):
 			_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
 		if _server_tab.has_signal("copy_requested"):
@@ -99,7 +83,6 @@ func _ready() -> void:
 		_config_tab.config_client_open_config_file_requested.connect(_on_config_tab_client_open_config_file_requested)
 		_config_tab.config_write_requested.connect(_on_config_tab_config_write_requested)
 		_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
-		_config_tab.config_validate_requested.connect(_on_config_tab_config_validate_requested)
 		_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
 
 
@@ -283,30 +266,6 @@ func _on_server_tab_full_reload_requested() -> void:
 	full_reload_requested.emit()
 
 
-func _on_server_tab_central_server_detect_requested() -> void:
-	central_server_detect_requested.emit()
-
-
-func _on_server_tab_central_server_install_requested() -> void:
-	central_server_install_requested.emit()
-
-
-func _on_server_tab_central_server_start_requested() -> void:
-	central_server_start_requested.emit()
-
-
-func _on_server_tab_central_server_stop_requested() -> void:
-	central_server_stop_requested.emit()
-
-
-func _on_server_tab_central_server_open_install_dir_requested() -> void:
-	central_server_open_install_dir_requested.emit()
-
-
-func _on_server_tab_central_server_open_logs_requested() -> void:
-	central_server_open_logs_requested.emit()
-
-
 func _on_server_tab_clear_self_diagnostics_requested() -> void:
 	clear_self_diagnostics_requested.emit()
 
@@ -373,10 +332,6 @@ func _on_config_tab_config_write_requested(config_type: String, filepath: String
 
 func _on_config_tab_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
 	config_remove_requested.emit(config_type, filepath, client_name)
-
-
-func _on_config_tab_config_validate_requested(platform_id: String) -> void:
-	config_validate_requested.emit(platform_id)
 
 
 func _on_config_tab_copy_requested(text: String, source: String) -> void:

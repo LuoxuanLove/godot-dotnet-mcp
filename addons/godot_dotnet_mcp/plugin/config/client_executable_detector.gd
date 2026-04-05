@@ -1,74 +1,59 @@
 @tool
-extends "res://addons/godot_dotnet_mcp/plugin/config/client_detector_base.gd"
+extends RefCounted
 class_name ClientExecutableDetector
 
-const STATUS_READY := "ready"
-
-var _config_path := ""
-var _config_type := ""
-var _candidates: Array[String] = []
-var _where_aliases: Array[String] = []
-var _extra_candidates: Array[String] = []
-var _image_names: Array[String] = []
-var _launch_supported := false
-var _auto_add_supported := false
-var _inspect_config_entry := false
+var _client_id := ""
+var _path_resolver: Variant = null
+var _runtime_inspector: Variant = null
+var _config_entry_inspector: Variant = null
+var _options: Dictionary = {}
 
 
-func configure_detector(
-	client_id: String,
-	path_resolver,
-	runtime_inspector,
-	config_entry_inspector,
-	spec: Dictionary
-) -> void:
-	configure(client_id, path_resolver, runtime_inspector, config_entry_inspector)
-	_config_path = str(spec.get("config_path", ""))
-	_config_type = str(spec.get("config_type", ""))
-	_candidates = _to_string_array(spec.get("candidates", []))
-	_where_aliases = _to_string_array(spec.get("where_aliases", []))
-	_extra_candidates = _to_string_array(spec.get("extra_candidates", []))
-	_image_names = _to_string_array(spec.get("image_names", []))
-	_launch_supported = bool(spec.get("launch_supported", false))
-	_auto_add_supported = bool(spec.get("auto_add_supported", false))
-	_inspect_config_entry = bool(spec.get("inspect_config_entry", false))
+func configure_detector(client_id: String, path_resolver: Variant, runtime_inspector: Variant, config_entry_inspector: Variant, options: Dictionary = {}) -> void:
+	_client_id = client_id
+	_path_resolver = path_resolver
+	_runtime_inspector = runtime_inspector
+	_config_entry_inspector = config_entry_inspector
+	_options = options.duplicate(true)
 
 
 func detect(running_processes: PackedStringArray) -> Dictionary:
-	var resolved = _path_resolver.resolve_executable_path(_client_id, _candidates, _where_aliases, _extra_candidates)
-	var entry_state = {}
-	if _inspect_config_entry and not _config_path.is_empty():
-		entry_state = _config_entry_inspector.inspect_config_entry(_config_path, _config_type)
-	var result = _build_common_result(
-		resolved,
-		_runtime_inspector.build_runtime_state(str(resolved.get("path", "")), _image_names, running_processes),
-		entry_state
+	var candidates: Array[String] = _to_typed_string_array(_options.get("candidates", []))
+	var where_aliases: Array[String] = _to_typed_string_array(_options.get("where_aliases", []))
+	var extra_candidates: Array[String] = _to_typed_string_array(_options.get("extra_candidates", []))
+	var image_names: Array[String] = _to_typed_string_array(_options.get("image_names", []))
+	var resolved = _path_resolver.resolve_executable_path(
+		_client_id,
+		candidates,
+		where_aliases,
+		extra_candidates
 	)
-	result["config_path"] = _config_path
-	result["auto_add_supported"] = _auto_add_supported and not str(resolved.get("path", "")).is_empty()
-	result["launch_supported"] = _launch_supported and not str(resolved.get("path", "")).is_empty()
-	result["path_pick_supported"] = true
-	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
-	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_MISSING
-	return result
+	var runtime_state = _runtime_inspector.build_runtime_state(str(resolved.get("path", "")), image_names, running_processes)
+	var config_entry_status = {}
+	if bool(_options.get("inspect_config_entry", false)) and _config_entry_inspector != null:
+		config_entry_status = _config_entry_inspector.inspect_config_entry(str(_options.get("config_path", "")), str(_options.get("config_type", "")))
+
+	return {
+		"id": _client_id,
+		"status": "ready" if not str(resolved.get("path", "")).is_empty() else "missing",
+		"path": str(resolved.get("path", "")),
+		"detected_via": str(resolved.get("detected_via", "")),
+		"using_manual_path": bool(resolved.get("using_manual_path", false)),
+		"has_manual_path": bool(resolved.get("has_manual_path", false)),
+		"manual_path_invalid": bool(resolved.get("manual_path_invalid", false)),
+		"manual_path": str(resolved.get("manual_path", "")),
+		"auto_add_supported": bool(_options.get("auto_add_supported", false)),
+		"launch_supported": bool(_options.get("launch_supported", false)),
+		"path_pick_supported": true,
+		"path_clear_supported": bool(resolved.get("has_manual_path", false)),
+		"runtime_state": runtime_state,
+		"config_entry_status": config_entry_status
+	}
 
 
-func dispose() -> void:
-	super.dispose()
-	_config_path = ""
-	_config_type = ""
-	_candidates = []
-	_where_aliases = []
-	_extra_candidates = []
-	_image_names = []
-	_launch_supported = false
-	_auto_add_supported = false
-	_inspect_config_entry = false
-
-
-func _to_string_array(value) -> Array[String]:
-	var result: Array[String] = []
-	if value is Array:
-		for entry in value:
-			result.append(str(entry))
-	return result
+func _to_typed_string_array(values: Variant) -> Array[String]:
+	var typed_values: Array[String] = []
+	if values is Array:
+		for value in values:
+			typed_values.append(str(value))
+	return typed_values

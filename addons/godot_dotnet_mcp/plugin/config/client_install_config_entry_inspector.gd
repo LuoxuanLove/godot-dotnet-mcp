@@ -9,86 +9,72 @@ const ENTRY_MISSING_SERVER := "missing_server"
 const ENTRY_INVALID_JSON := "invalid_json"
 const ENTRY_INCOMPATIBLE_ROOT := "incompatible_root"
 const ENTRY_INCOMPATIBLE_SERVERS := "incompatible_mcp_servers"
+const MCP_SERVER_KEY := "godot-mcp"
 
 
-func inspect_config_entry(config_path: String, config_type: String = "") -> Dictionary:
-	if config_path.is_empty() or not _file_exists(config_path):
-		return {
-			"status": ENTRY_MISSING_FILE,
-			"has_server_entry": false
-		}
+func inspect_config_entry(file_path: String, config_type: String = "") -> Dictionary:
+	if not _file_exists(file_path):
+		return _build_result(file_path, config_type, ENTRY_MISSING_FILE, false)
 
-	var text = _read_text_file(config_path)
-	if text == null:
-		return {
-			"status": ENTRY_MISSING_FILE,
-			"has_server_entry": false
-		}
+	var read_result = _read_text_file(file_path)
+	if read_result == null:
+		return _build_result(file_path, config_type, ENTRY_MISSING_FILE, false)
+
+	var text = str(read_result)
 	if text.strip_edges().is_empty():
-		return {
-			"status": ENTRY_EMPTY,
-			"has_server_entry": false
-		}
+		return _build_result(file_path, config_type, ENTRY_EMPTY, false)
 
 	var json = JSON.new()
 	if json.parse(text) != OK:
-		return {
-			"status": ENTRY_INVALID_JSON,
-			"has_server_entry": false
-		}
+		return _build_result(file_path, config_type, ENTRY_INVALID_JSON, false)
 
 	var root = json.get_data()
 	if not (root is Dictionary):
-		return {
-			"status": ENTRY_INCOMPATIBLE_ROOT,
-			"has_server_entry": false
-		}
+		return _build_result(file_path, config_type, ENTRY_INCOMPATIBLE_ROOT, false)
 
-	var server_key = "mcp" if config_type == "opencode" else "mcpServers"
-	var mcp_servers = root.get(server_key, {})
-	if not (mcp_servers is Dictionary):
-		return {
-			"status": ENTRY_INCOMPATIBLE_SERVERS,
-			"has_server_entry": false
-		}
+	var container_key = _get_server_container_key(config_type)
+	if not root.has(container_key):
+		return _build_result(file_path, config_type, ENTRY_MISSING_SERVER, false)
 
-	if not mcp_servers.has("godot-mcp"):
-		return {
-			"status": ENTRY_MISSING_SERVER,
-			"has_server_entry": false
-		}
+	var servers = root.get(container_key, {})
+	if not (servers is Dictionary):
+		return _build_result(file_path, config_type, ENTRY_INCOMPATIBLE_SERVERS, false)
 
-	return {
-		"status": ENTRY_PRESENT,
-		"has_server_entry": true
-	}
+	if servers.is_empty() or not servers.has(MCP_SERVER_KEY):
+		return _build_result(file_path, config_type, ENTRY_MISSING_SERVER, false)
+
+	return _build_result(file_path, config_type, ENTRY_PRESENT, true)
 
 
 func can_prepare_file_path(file_path: String) -> bool:
-	var dir_path = normalize_path(file_path.get_base_dir())
-	if dir_path.is_empty():
-		return false
-	return _has_existing_ancestor(dir_path)
+	return _dir_exists(ProjectSettings.globalize_path(file_path).get_base_dir())
 
 
 func normalize_path(path: String) -> String:
-	return path.replace("\\", "/").strip_edges().trim_suffix("/")
+	return path.strip_edges().replace("\\", "/")
 
 
-func _has_existing_ancestor(path: String) -> bool:
-	var current = normalize_path(path)
-	while not current.is_empty():
-		if _dir_exists(current):
-			return true
-		var parent = current.get_base_dir()
-		if parent == current:
-			break
-		current = normalize_path(parent)
-	return false
+func _build_result(file_path: String, config_type: String, status: String, has_server_entry: bool) -> Dictionary:
+	return {
+		"success": true,
+		"path": file_path,
+		"config_type": config_type,
+		"status": status,
+		"has_server_entry": has_server_entry
+	}
+
+
+func _get_server_container_key(config_type: String) -> String:
+	return "mcp" if config_type == "opencode" else "mcpServers"
+
+
+func _file_exists(path: String) -> bool:
+	return FileAccess.file_exists(ProjectSettings.globalize_path(normalize_path(path)))
 
 
 func _read_text_file(file_path: String):
-	var file = FileAccess.open(file_path, FileAccess.READ)
+	var absolute_path := ProjectSettings.globalize_path(normalize_path(file_path))
+	var file = FileAccess.open(absolute_path, FileAccess.READ)
 	if file == null:
 		return null
 	var text = file.get_as_text()
@@ -96,9 +82,5 @@ func _read_text_file(file_path: String):
 	return text
 
 
-func _file_exists(path: String) -> bool:
-	return FileAccess.file_exists(path)
-
-
 func _dir_exists(path: String) -> bool:
-	return DirAccess.dir_exists_absolute(path)
+	return DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(normalize_path(path)))

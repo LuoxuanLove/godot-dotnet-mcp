@@ -1,10 +1,5 @@
-@tool
+﻿@tool
 extends VBoxContainer
-
-const ServerTabModelProjection = preload("res://addons/godot_dotnet_mcp/ui/server_tab_model_projection.gd")
-const ServerTabLayoutService = preload("res://addons/godot_dotnet_mcp/ui/server_tab_layout_service.gd")
-const ServerTabLayoutNodes = preload("res://addons/godot_dotnet_mcp/ui/server_tab_layout_nodes.gd")
-const ServerTabViewBindingService = preload("res://addons/godot_dotnet_mcp/ui/server_tab_view_binding_service.gd")
 
 signal port_changed(value: int)
 signal log_level_changed(level: String)
@@ -14,12 +9,6 @@ signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
-signal central_server_detect_requested
-signal central_server_install_requested
-signal central_server_start_requested
-signal central_server_stop_requested
-signal central_server_open_install_dir_requested
-signal central_server_open_logs_requested
 signal clear_self_diagnostics_requested
 signal copy_requested(text: String, source: String)
 
@@ -30,34 +19,6 @@ signal copy_requested(text: String, source: String)
 @onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
 @onready var _self_diag_details: Label = %SelfDiagnosticsDetails
 @onready var _self_diag_divider: HSeparator = %SelfDiagnosticsDivider
-@onready var _central_server_section_divider: HSeparator = %CentralServerSectionDivider
-@onready var _central_server_section_title: Label = %CentralServerSectionTitle
-@onready var _central_server_status_title: Label = %CentralServerStatusTitle
-@onready var _central_server_status_value: Label = %CentralServerStatusValue
-@onready var _central_server_endpoint_title: Label = %CentralServerEndpointTitle
-@onready var _central_server_endpoint_value: Label = %CentralServerEndpointValue
-@onready var _central_server_project_title: Label = %CentralServerProjectTitle
-@onready var _central_server_project_value: Label = %CentralServerProjectValue
-@onready var _central_server_session_title: Label = %CentralServerSessionTitle
-@onready var _central_server_session_value: Label = %CentralServerSessionValue
-@onready var _central_server_message_title: Label = %CentralServerMessageTitle
-@onready var _central_server_message_value: Label = %CentralServerMessageValue
-@onready var _central_server_local_status_title: Label = %CentralServerLocalStatusTitle
-@onready var _central_server_local_status_value: Label = %CentralServerLocalStatusValue
-@onready var _central_server_local_command_title: Label = %CentralServerLocalCommandTitle
-@onready var _central_server_local_command_value: Label = %CentralServerLocalCommandValue
-@onready var _central_server_install_version_title: Label = %CentralServerInstallVersionTitle
-@onready var _central_server_install_version_value: Label = %CentralServerInstallVersionValue
-@onready var _central_server_install_dir_title: Label = %CentralServerInstallDirTitle
-@onready var _central_server_install_dir_value: Label = %CentralServerInstallDirValue
-@onready var _central_server_install_source_title: Label = %CentralServerInstallSourceTitle
-@onready var _central_server_install_source_value: Label = %CentralServerInstallSourceValue
-@onready var _central_server_detect_button: Button = %CentralServerDetectButton
-@onready var _central_server_install_button: Button = %CentralServerInstallButton
-@onready var _central_server_start_button: Button = %CentralServerStartButton
-@onready var _central_server_stop_button: Button = %CentralServerStopButton
-@onready var _central_server_open_install_dir_button: Button = %CentralServerOpenInstallDirButton
-@onready var _central_server_open_logs_button: Button = %CentralServerOpenLogsButton
 @onready var _overview_buttons: GridContainer = %OverviewButtons
 @onready var _state_value: Label = %ServerStateValue
 @onready var _endpoint_value: Label = %EndpointValue
@@ -91,15 +52,10 @@ var _current_scale := -1.0
 var _current_layout_width := -1.0
 var _self_diag_copy_text := ""
 var _is_running := false
-var _model_projection := ServerTabModelProjection.new()
-var _layout_service := ServerTabLayoutService.new()
-var _layout_nodes: ServerTabLayoutNodes = null
-var _view_binding_service := ServerTabViewBindingService.new()
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	_layout_nodes = ServerTabLayoutNodes.new().populate_from(self)
 	resized.connect(_on_resized)
 	_port_spin.value_changed.connect(_on_port_spin_changed)
 	_log_level_option.item_selected.connect(_on_log_level_option_selected)
@@ -108,17 +64,16 @@ func _ready() -> void:
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_full_reload_button.pressed.connect(_on_full_reload_button_pressed)
-	_central_server_detect_button.pressed.connect(_on_central_server_detect_button_pressed)
-	_central_server_install_button.pressed.connect(_on_central_server_install_button_pressed)
-	_central_server_start_button.pressed.connect(_on_central_server_start_button_pressed)
-	_central_server_stop_button.pressed.connect(_on_central_server_stop_button_pressed)
-	_central_server_open_install_dir_button.pressed.connect(_on_central_server_open_install_dir_button_pressed)
-	_central_server_open_logs_button.pressed.connect(_on_central_server_open_logs_button_pressed)
 	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
 	_self_diag_clear_button.pressed.connect(_on_self_diag_clear_pressed)
 
 
 func apply_model(model: Dictionary) -> void:
+	var localization = model.get("localization")
+	var settings: Dictionary = model.get("settings", {})
+	var languages: Dictionary = model.get("languages", {})
+	var stats: Dictionary = model.get("stats", {})
+	var self_diagnostics: Dictionary = model.get("self_diagnostics", {})
 	var is_running = bool(model.get("is_running", false))
 	var editor_scale = float(model.get("editor_scale", 1.0))
 	_is_running = is_running
@@ -128,99 +83,171 @@ func apply_model(model: Dictionary) -> void:
 	else:
 		_apply_responsive_layout()
 
-	var projection: Dictionary = _model_projection.build_projection(model)
-	_apply_overview_projection(projection)
-	_apply_settings_projection(projection)
+	_apply_self_diagnostics(model, localization)
+	_status_section_title.text = localization.get_text("plugin_overview_title")
+	_settings_section_title.text = localization.get_text("settings")
+	_advanced_section_title.text = localization.get_text("advanced_settings")
+	_server_state_title.text = localization.get_text("plugin_overview_health_label")
+	_endpoint_title.text = localization.get_text("plugin_overview_service_label")
+	_connections_title.text = "%s:" % localization.get_text("total_connections_short")
+	_requests_title.text = localization.get_text("plugin_overview_config_label")
+	_last_request_title.text = localization.get_text("plugin_overview_activity_label")
+	_port_label.text = localization.get_text("port")
+	_log_level_label.text = localization.get_text("log_level")
+	_permission_level_label.text = localization.get_text("permission_level")
+	_language_label.text = localization.get_text("language")
 
+	_state_value.text = _build_overview_health_text(self_diagnostics, localization)
+	_endpoint_value.text = _build_overview_service_text(is_running, settings, localization)
+	_connections_value.text = _build_overview_connections_text(stats, localization)
+	_requests_value.text = _build_overview_config_text(model, localization)
+	_last_request_value.text = _build_overview_activity_text(stats, localization)
 
-func _apply_overview_projection(projection: Dictionary) -> void:
-	var titles: Dictionary = projection.get("titles", {})
-	var overview: Dictionary = projection.get("overview", {})
-	_self_diag_copy_text = str(projection.get("self_diagnostics", {}).get("copy_text", ""))
-	_view_binding_service.apply_self_diagnostics_projection(
-		_self_diag_title,
-		_self_diag_badge,
-		_self_diag_copy_button,
-		_self_diag_clear_button,
-		_self_diag_summary,
-		_self_diag_details,
-		projection.get("self_diagnostics", {})
-	)
-	_view_binding_service.apply_central_server_attach_projection(
-		_central_server_section_title,
-		_central_server_status_title,
-		_central_server_endpoint_title,
-		_central_server_project_title,
-		_central_server_session_title,
-		_central_server_message_title,
-		_central_server_status_value,
-		_central_server_endpoint_value,
-		_central_server_project_value,
-		_central_server_session_value,
-		_central_server_message_value,
-		projection.get("central_server_attach", {})
-	)
-	_view_binding_service.apply_central_server_process_projection(
-		_central_server_local_status_title,
-		_central_server_local_status_value,
-		_central_server_local_command_title,
-		_central_server_local_command_value,
-		_central_server_install_version_title,
-		_central_server_install_version_value,
-		_central_server_install_dir_title,
-		_central_server_install_dir_value,
-		_central_server_install_source_title,
-		_central_server_install_source_value,
-		_central_server_detect_button,
-		_central_server_install_button,
-		_central_server_start_button,
-		_central_server_stop_button,
-		_central_server_open_install_dir_button,
-		_central_server_open_logs_button,
-		projection.get("central_server_process", {})
-	)
-	_view_binding_service.apply_titles(
-		_status_section_title,
-		_settings_section_title,
-		_advanced_section_title,
-		_server_state_title,
-		_endpoint_title,
-		_connections_title,
-		_requests_title,
-		_last_request_title,
-		_port_label,
-		_log_level_label,
-		_permission_level_label,
-		_language_label,
-		titles
-	)
-	_view_binding_service.apply_overview(
-		_state_value,
-		_endpoint_value,
-		_connections_value,
-		_requests_value,
-		_last_request_value,
-		overview
-	)
-
-
-func _apply_settings_projection(projection: Dictionary) -> void:
-	var actions: Dictionary = projection.get("actions", {})
-	_port_spin.set_value_no_signal(int(projection.get("port", 3000)))
+	_port_spin.set_value_no_signal(int(settings.get("port", 3000)))
 	_log_level_syncing = true
-	_view_binding_service.apply_option_model(_log_level_option, projection.get("log_level_option", {}))
+	_log_level_option.clear()
+	var current_log_level = str(model.get("current_log_level", "info"))
+	var selected_log_level = -1
+	var log_levels: Array = model.get("log_levels", [])
+	for log_index in range(log_levels.size()):
+		var level = str(log_levels[log_index])
+		var level_key = "log_level_%s" % level
+		var level_text = localization.get_text(level_key)
+		if level_text == level_key:
+			level_text = level.capitalize()
+		_log_level_option.add_item(level_text, log_index)
+		_log_level_option.set_item_metadata(log_index, level)
+		if level == current_log_level:
+			selected_log_level = log_index
+	if selected_log_level >= 0:
+		_log_level_option.select(selected_log_level)
 	_log_level_syncing = false
+
 	_permission_level_syncing = true
-	_view_binding_service.apply_option_model(_permission_level_option, projection.get("permission_level_option", {}))
+	_permission_level_option.clear()
+	var current_permission_level = str(model.get("current_permission_level", "evolution"))
+	var permission_levels: Array = model.get("permission_levels", [])
+	var selected_permission_level = -1
+	for permission_index in range(permission_levels.size()):
+		var level = str(permission_levels[permission_index])
+		var level_key = "permission_level_%s" % level
+		var level_text = localization.get_text(level_key)
+		if level_text == level_key:
+			level_text = level.capitalize()
+		_permission_level_option.add_item(level_text, permission_index)
+		_permission_level_option.set_item_metadata(permission_index, level)
+		if level == current_permission_level:
+			selected_permission_level = permission_index
+	if selected_permission_level >= 0:
+		_permission_level_option.select(selected_permission_level)
 	_permission_level_syncing = false
-	_start_button.disabled = bool(actions.get("start_disabled", false))
-	_restart_button.disabled = bool(actions.get("restart_disabled", false))
-	_start_button.text = str(actions.get("start_text", ""))
-	_restart_button.text = str(actions.get("restart_text", ""))
-	_full_reload_button.text = str(actions.get("full_reload_text", ""))
+
+	_start_button.disabled = false
+	_restart_button.disabled = not is_running
+	_start_button.text = localization.get_text("btn_close") if is_running else localization.get_text("btn_start")
+	_restart_button.text = localization.get_text("btn_restart")
+	_full_reload_button.text = localization.get_text("btn_reload_plugin")
+
 	_language_syncing = true
-	_view_binding_service.apply_option_model(_language_option, projection.get("language_option", {}))
+	_language_option.clear()
+	var current_lang = str(model.get("current_language", "en"))
+	var selected_index = -1
+	var language_codes: Array = []
+	if localization != null and localization.has_method("get_available_language_codes"):
+		language_codes = localization.get_available_language_codes()
+	else:
+		language_codes = languages.keys()
+		language_codes.sort()
+	var index = 0
+	for lang_code in language_codes:
+		_language_option.add_item(localization.get_language_display_name(str(lang_code), current_lang), index)
+		_language_option.set_item_metadata(index, lang_code)
+		if str(lang_code) == current_lang:
+			selected_index = index
+		index += 1
+	if selected_index >= 0:
+		_language_option.select(selected_index)
 	_language_syncing = false
+
+
+func _build_overview_health_text(self_diagnostics: Dictionary, localization) -> String:
+	var status = str(self_diagnostics.get("status", "ok"))
+	var summary = str(self_diagnostics.get("summary", ""))
+	var active_incidents = int(self_diagnostics.get("active_incident_count", 0))
+	var status_text = status.capitalize()
+	if localization != null:
+		var translated_status_key = "self_diag_status_%s" % status
+		var translated_status = localization.get_text(translated_status_key)
+		if translated_status != translated_status_key:
+			status_text = translated_status
+	if active_incidents > 0:
+		return "%s · %s (%d)" % [status_text, summary, active_incidents]
+	return "%s · %s" % [status_text, summary]
+
+
+func _build_overview_service_text(is_running: bool, settings: Dictionary, localization) -> String:
+	var service_state = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
+	var endpoint = "http://%s:%d/mcp" % [settings.get("host", "127.0.0.1"), int(settings.get("port", 3000))]
+	return "%s · %s" % [service_state, endpoint]
+
+
+func _build_overview_connections_text(stats: Dictionary, localization) -> String:
+	var active_connections = int(stats.get("active_connections", 0))
+	var total_connections = int(stats.get("total_connections", 0))
+	return "%d / %d" % [active_connections, total_connections]
+
+
+func _build_overview_config_text(model: Dictionary, localization) -> String:
+	var profile_id = str(model.get("tool_profile_id", "default"))
+	var permission_level = str(model.get("current_permission_level", PluginRuntimeState.PERMISSION_EVOLUTION))
+	var log_level = str(model.get("current_log_level", "info"))
+	var current_language = str(model.get("current_language", "en"))
+	var profile_text = _get_overview_profile_text(profile_id, localization)
+	var permission_text = localization.get_text("permission_level_%s" % permission_level)
+	if permission_text == "permission_level_%s" % permission_level:
+		permission_text = permission_level.capitalize()
+	var log_text = localization.get_text("log_level_%s" % log_level)
+	if log_text == "log_level_%s" % log_level:
+		log_text = log_level.capitalize()
+	var language_text = _get_overview_language_text(current_language, localization)
+	return "%s · %s · %s · %s" % [profile_text, permission_text, log_text, language_text]
+
+
+func _get_overview_profile_text(profile_id: String, localization) -> String:
+	match profile_id:
+		"slim":
+			return localization.get_text("tool_profile_slim")
+		"default", "":
+			return localization.get_text("tool_profile_default")
+		"full":
+			return localization.get_text("tool_profile_full")
+		_:
+			return localization.get_text("tool_profile_custom_short")
+
+
+func _get_overview_language_text(current_language: String, localization) -> String:
+	if current_language.is_empty():
+		current_language = "en"
+	if localization != null and localization.has_method("get_language_display_name"):
+		return localization.get_language_display_name(current_language, current_language)
+	return current_language.capitalize()
+
+
+func _build_overview_activity_text(stats: Dictionary, localization) -> String:
+	var active_connections = int(stats.get("active_connections", 0))
+	var total_requests = int(stats.get("total_requests", 0))
+	var total_connections = int(stats.get("total_connections", 0))
+	var last_request_at = int(stats.get("last_request_at_unix", 0))
+	var last_method = str(stats.get("last_request_method", ""))
+	var last_request_text = localization.get_text("last_request_none") if last_request_at <= 0 else "%s %s" % [
+		Time.get_datetime_string_from_unix_time(last_request_at),
+		last_method
+	]
+	var parts: PackedStringArray = PackedStringArray()
+	parts.append("%d / %d" % [active_connections, total_requests])
+	parts.append("%d %s" % [total_connections, localization.get_text("total_connections_short")])
+	parts.append(last_request_text)
+	return " · ".join(parts)
 
 
 func _on_port_spin_changed(value: float) -> void:
@@ -260,49 +287,281 @@ func _on_full_reload_button_pressed() -> void:
 	full_reload_requested.emit()
 
 
-func _on_central_server_detect_button_pressed() -> void:
-	central_server_detect_requested.emit()
+func _get_margin_node() -> MarginContainer:
+	return get_node_or_null("Scroll/Margin") as MarginContainer
 
 
-func _on_central_server_install_button_pressed() -> void:
-	central_server_install_requested.emit()
-
-
-func _on_central_server_start_button_pressed() -> void:
-	central_server_start_requested.emit()
-
-
-func _on_central_server_stop_button_pressed() -> void:
-	central_server_stop_requested.emit()
-
-
-func _on_central_server_open_install_dir_button_pressed() -> void:
-	central_server_open_install_dir_requested.emit()
-
-
-func _on_central_server_open_logs_button_pressed() -> void:
-	central_server_open_logs_requested.emit()
+func _get_content_node() -> VBoxContainer:
+	return get_node_or_null("Scroll/Margin/Content") as VBoxContainer
 
 
 func _apply_editor_scale(scale: float) -> void:
-	_ensure_layout_nodes()
 	_current_scale = scale
-	_layout_service.apply_editor_scale(_layout_nodes, scale)
+
+	var margin = _get_margin_node()
+	var content = _get_content_node()
+	if margin == null or content == null:
+		return
+
+	margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
+	margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
+	margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
+	margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
+
+	content.add_theme_constant_override("separation", int(round(12 * scale)))
+
+	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
+	var overview_buttons = get_node("Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons") as GridContainer
+	var self_diag_header = get_node("Scroll/Margin/Content/SelfDiagnosticsHeader") as HBoxContainer
+	status_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
+	status_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	overview_buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	overview_buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
+
+	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
+	settings_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
+	settings_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
+
+	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
+	log_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	log_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
+
+	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow") as GridContainer
+	permission_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	permission_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
+
+	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
+	language_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
+	language_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
+
+	var advanced_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent") as VBoxContainer
+	advanced_content.add_theme_constant_override("separation", int(round(8 * scale)))
+
 	_apply_responsive_layout()
 
 
 func _apply_responsive_layout() -> void:
-	_ensure_layout_nodes()
-	_current_layout_width = _layout_service.apply_responsive_layout(_layout_nodes, _current_scale, _current_layout_width)
+	var content = _get_content_node()
+	if content == null:
+		return
 
+	var available_width = content.size.x
+	if available_width <= 0.0:
+		available_width = size.x
+	if available_width <= 0.0:
+		return
+	if is_equal_approx(_current_layout_width, available_width):
+		return
+	_current_layout_width = available_width
 
-func _ensure_layout_nodes() -> void:
-	if _layout_nodes == null or not _layout_nodes.is_resolved():
-		_layout_nodes = ServerTabLayoutNodes.new().populate_from(self)
+	var scale = _current_scale if _current_scale > 0.0 else 1.0
+	var ultra_narrow_layout = available_width < 320.0 * scale
+	var narrow_layout = available_width < 430.0 * scale
+	var compact_layout = available_width < 520.0 * scale
+	var horizontal_margin = 8.0 * scale if ultra_narrow_layout else (10.0 * scale if narrow_layout else 12.0 * scale)
+	var vertical_margin = 10.0 * scale if ultra_narrow_layout else 12.0 * scale
+	var section_spacing = 10.0 * scale if ultra_narrow_layout else 12.0 * scale
+	var grid_h_spacing = 8.0 * scale if ultra_narrow_layout else 12.0 * scale
+	var grid_v_spacing = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
+	var row_spacing = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
+	var content_width = min(available_width - horizontal_margin * 2.0, 560.0 * scale)
+	content_width = max(content_width, 140.0 * scale)
+	var label_width = 132.0 * scale if not narrow_layout else 96.0 * scale
+	var field_width = max(120.0 * scale, content_width - label_width - int(round(8 * scale)))
+	var status_grid_width = content_width
+	var status_columns = 2 if not narrow_layout else 1
+	var settings_columns = 2 if not narrow_layout else 1
+
+	var margin = _get_margin_node()
+	var status_center = get_node("Scroll/Margin/Content/StatusCenter") as CenterContainer
+	var overview_buttons_center = get_node("Scroll/Margin/Content/OverviewButtonsCenter") as CenterContainer
+	var overview_buttons = get_node("Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons") as GridContainer
+	var settings_center = get_node("Scroll/Margin/Content/SettingsCenter") as CenterContainer
+	var settings_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent") as VBoxContainer
+	var section_divider = get_node("Scroll/Margin/Content/SectionDivider") as HSeparator
+	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
+	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
+	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
+	var advanced_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent") as VBoxContainer
+	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow") as GridContainer
+	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
+
+	if margin != null:
+		margin.add_theme_constant_override("margin_left", int(round(horizontal_margin)))
+		margin.add_theme_constant_override("margin_right", int(round(horizontal_margin)))
+		margin.add_theme_constant_override("margin_top", int(round(vertical_margin)))
+		margin.add_theme_constant_override("margin_bottom", int(round(vertical_margin)))
+	content.add_theme_constant_override("separation", int(round(section_spacing)))
+	overview_buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	overview_buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
+	settings_content.add_theme_constant_override("separation", int(round(section_spacing)))
+	status_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
+	status_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
+	settings_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
+	settings_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
+	log_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	log_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
+	permission_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	permission_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
+	language_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
+	language_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
+	advanced_content.add_theme_constant_override("separation", int(round(section_spacing * 0.75)))
+
+	status_center.custom_minimum_size.x = status_grid_width
+	overview_buttons_center.custom_minimum_size.x = content_width
+	overview_buttons.custom_minimum_size.x = content_width
+	settings_center.custom_minimum_size.x = content_width
+	settings_content.custom_minimum_size.x = content_width
+	section_divider.custom_minimum_size.x = content_width
+	status_grid.columns = status_columns
+	overview_buttons.columns = 1 if narrow_layout else (2 if compact_layout else 3)
+	settings_grid.columns = settings_columns
+	log_level_row.columns = settings_columns
+	permission_level_row.columns = settings_columns
+	language_row.columns = settings_columns
+
+	var status_titles = [_server_state_title, _endpoint_title, _connections_title, _requests_title, _last_request_title]
+	var settings_titles = [_port_label, _log_level_label, _language_label]
+	for title_label in status_titles + settings_titles:
+		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var keep_width = false
+		if title_label in status_titles:
+			keep_width = status_columns == 2
+		else:
+			keep_width = settings_columns == 2
+		title_label.custom_minimum_size.x = label_width if keep_width else 0.0
+
+	_permission_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_permission_level_label.custom_minimum_size.x = label_width if settings_columns == 2 else 0.0
+	_advanced_section_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_advanced_section_title.custom_minimum_size.x = content_width
+
+	for value_label in [_state_value, _endpoint_value, _connections_value, _requests_value, _last_request_value]:
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		value_label.custom_minimum_size.x = field_width if status_columns == 2 else content_width
+
+	_port_spin.custom_minimum_size.y = 32.0 * scale
+	_port_spin.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
+	_log_level_option.custom_minimum_size.y = 32.0 * scale
+	_log_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
+	_permission_level_option.custom_minimum_size.y = 32.0 * scale
+	_permission_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
+	_language_option.custom_minimum_size.y = 32.0 * scale
+	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
+
+	var button_width = content_width if overview_buttons.columns == 1 else (content_width - row_spacing * float(overview_buttons.columns - 1)) / float(overview_buttons.columns)
+	for button in [_start_button, _restart_button, _full_reload_button]:
+		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.custom_minimum_size.x = button_width
+		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+	for button in [_self_diag_copy_button, _self_diag_clear_button]:
+		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+		button.custom_minimum_size.x = 72.0 * scale
 
 
 func _on_resized() -> void:
 	_apply_responsive_layout()
+
+
+func _apply_self_diagnostics(model: Dictionary, localization) -> void:
+	var diagnostics = model.get("self_diagnostics", {})
+	_self_diag_copy_text = str(model.get("self_diagnostic_copy_text", ""))
+	_self_diag_title.text = localization.get_text("self_diag_title")
+	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
+	_self_diag_clear_button.text = localization.get_text("self_diag_clear")
+
+	if not (diagnostics is Dictionary) or (diagnostics as Dictionary).is_empty():
+		_self_diag_badge.text = ""
+		_self_diag_summary.text = localization.get_text("self_diag_empty")
+		_self_diag_details.text = ""
+		_self_diag_clear_button.disabled = true
+		return
+
+	var diag := diagnostics as Dictionary
+	var status = str(diag.get("status", "ok"))
+	var badge_color = _get_self_diag_status_color(status)
+	_self_diag_badge.text = _get_self_diag_status_text(status, localization)
+	_self_diag_badge.add_theme_color_override("font_color", badge_color)
+
+	var active_incidents = int(diag.get("active_incident_count", 0))
+	_self_diag_clear_button.disabled = active_incidents <= 0
+	var tool_loader = diag.get("tool_loader", {})
+	var tool_load_error_count = 0
+	if tool_loader is Dictionary:
+		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
+	var last_operation_text = localization.get_text("self_diag_last_operation_none")
+	var latest_incident_text = localization.get_text("self_diag_latest_incident_none")
+	var last_operation = diag.get("last_operation", {})
+	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
+		last_operation_text = "%s (%s ms)" % [
+			str((last_operation as Dictionary).get("kind", "")),
+			str((last_operation as Dictionary).get("duration_ms", 0.0))
+		]
+	var latest_incident = diag.get("latest_incident", {})
+	if latest_incident is Dictionary and not (latest_incident as Dictionary).is_empty():
+		var latest_incident_dict := latest_incident as Dictionary
+		latest_incident_text = "%s | %s" % [
+			_get_self_diag_code_text(str(latest_incident_dict.get("code", "")), localization),
+			str(latest_incident_dict.get("message", ""))
+		]
+
+	_self_diag_summary.text = "%s | %s | %s | %s" % [
+		localization.get_text("self_diag_active_incidents") % active_incidents,
+		localization.get_text("self_diag_tool_load_errors") % tool_load_error_count,
+		localization.get_text("self_diag_last_operation") % last_operation_text,
+		localization.get_text("self_diag_latest_incident") % latest_incident_text
+	]
+
+	var recent_lines: Array[String] = []
+	for incident in diag.get("recent_incidents", []):
+		if not (incident is Dictionary):
+			continue
+		var incident_dict := incident as Dictionary
+		recent_lines.append("%s | %s | %s" % [
+			_get_self_diag_category_text(str(incident_dict.get("category", "")), localization),
+			_get_self_diag_code_text(str(incident_dict.get("code", "")), localization),
+			str(incident_dict.get("message", ""))
+		])
+		if recent_lines.size() >= 3:
+			break
+	if recent_lines.is_empty():
+		_self_diag_details.text = localization.get_text("self_diag_empty")
+	else:
+		_self_diag_details.text = "\n".join(recent_lines)
+
+
+func _get_self_diag_status_text(status: String, localization) -> String:
+	match status:
+		"error":
+			return localization.get_text("self_diag_status_error")
+		"warning":
+			return localization.get_text("self_diag_status_warning")
+		_:
+			return localization.get_text("self_diag_status_ok")
+
+
+func _get_self_diag_status_color(status: String) -> Color:
+	match status:
+		"error":
+			return Color(0.9, 0.3, 0.3)
+		"warning":
+			return Color(0.95, 0.7, 0.2)
+		_:
+			return Color(0.2, 0.8, 0.2)
+
+
+func _get_self_diag_category_text(category: String, localization) -> String:
+	var key = "self_diag_category_%s" % category
+	var translated = localization.get_text(key)
+	return translated if translated != key else category
+
+
+func _get_self_diag_code_text(code: String, localization) -> String:
+	var key = "self_diag_code_%s" % code
+	var translated = localization.get_text(key)
+	return translated if translated != key else code
 
 
 func _on_self_diag_copy_pressed() -> void:
