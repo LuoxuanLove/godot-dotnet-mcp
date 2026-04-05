@@ -3,8 +3,8 @@ extends RefCounted
 
 ## System layer dispatcher for built-in system tools.
 
-const _BASE = "res://addons/godot_dotnet_mcp/tools/system/"
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const _BASE = "res://addons/godot_dotnet_mcp/tools/system/"
 
 var _bridge
 var _impls: Array = []
@@ -17,22 +17,16 @@ func _init() -> void:
 		return
 	_bridge = bridge_script.new()
 
-	var impl_paths := [
-		_BASE + "project/executor.gd",
-		_BASE + "impl_scene.gd",
-		_BASE + "script/executor.gd",
-		_BASE + "impl_index.gd",
-		_BASE + "impl_runtime.gd"
-	]
-	for path in impl_paths:
+	for impl_name in ["impl_project", "impl_scene", "impl_script", "impl_index"]:
+		var path = _BASE + impl_name + ".gd"
 		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var can_inst = script != null and (script as Script).can_instantiate()
 		if not can_inst:
-			MCPDebugBuffer.record("warning", "system", "Failed to load impl: %s" % path)
+			MCPDebugBuffer.record("warning", "system", "Failed to load impl: %s" % impl_name)
 			continue
 		var impl = script.new()
 		if impl == null:
-			MCPDebugBuffer.record("warning", "system", "Failed to instantiate impl: %s" % path)
+			MCPDebugBuffer.record("warning", "system", "Failed to instantiate impl: %s" % impl_name)
 			continue
 		impl.bridge = _bridge
 		if impl.has_method("configure_runtime"):
@@ -53,19 +47,6 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	for impl in _impls:
 		if impl.handles(tool_name):
 			return impl.execute(tool_name, args)
-	MCPDebugBuffer.record("warning", "system", "No handler for tool: %s" % tool_name)
-	if _bridge != null:
-		return _bridge.error("Unknown tool: %s" % tool_name)
-	return {"success": false, "error": "Unknown tool: %s" % tool_name}
-
-
-func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
-	for impl in _impls:
-		if not impl.handles(tool_name):
-			continue
-		if impl.has_method("execute_async"):
-			return await impl.execute_async(tool_name, args)
-		return impl.execute(tool_name, args)
 	MCPDebugBuffer.record("warning", "system", "No handler for tool: %s" % tool_name)
 	if _bridge != null:
 		return _bridge.error("Unknown tool: %s" % tool_name)
