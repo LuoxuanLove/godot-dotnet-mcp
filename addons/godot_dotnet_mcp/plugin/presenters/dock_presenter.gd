@@ -40,7 +40,7 @@ func build_model(context: Dictionary) -> Dictionary:
 
 	if current_tab == 2:
 		var client_install_statuses: Dictionary = context.get("client_install_statuses", {})
-		var central_server_process: Dictionary = context.get("central_server_process", {})
+		var central_server_process: Dictionary = {}
 		desktop_clients = _client_config_presenter.build_desktop_client_models(
 			settings,
 			str(state.current_cli_scope),
@@ -88,8 +88,6 @@ func build_model(context: Dictionary) -> Dictionary:
 		"tool_load_errors": server_controller.get_tool_load_errors(),
 		"self_diagnostics": context.get("self_diagnostics", {}),
 		"self_diagnostic_copy_text": str(context.get("self_diagnostic_copy_text", "")),
-		"central_server_attach": context.get("central_server_attach", {}),
-		"central_server_process": context.get("central_server_process", {}),
 		"builtin_profiles": context.get("builtin_profiles", []),
 		"custom_profiles": context.get("custom_profiles", {}),
 		"domain_defs": context.get("domain_defs", {}),
@@ -128,101 +126,6 @@ func build_client_transport_model(settings: Dictionary, central_server_process: 
 
 func get_client_install_message_text(client_id: String, status: String, localization) -> String:
 	return _client_config_presenter.get_client_install_message_text(client_id, status, localization)
-
-
-func localize_central_server_attach_status(status: Dictionary, localization) -> Dictionary:
-	var localized = status.duplicate(true)
-	if localization == null:
-		return localized
-
-	var last_error = str(localized.get("last_error", "")).strip_edges()
-	if not last_error.is_empty():
-		return localized
-
-	var message_key = "central_server_message_idle"
-	match str(localized.get("status", "idle")):
-		"disabled":
-			message_key = "central_server_message_disabled"
-		"configured":
-			message_key = "central_server_message_configured"
-		"attaching":
-			message_key = "central_server_message_attaching"
-		"attached":
-			message_key = "central_server_message_attached"
-		"heartbeat_pending":
-			message_key = "central_server_message_heartbeat_pending"
-		"stopped":
-			message_key = "central_server_message_stopped"
-	localized["message"] = localization.get_text(message_key)
-	return localized
-
-
-func resolve_central_server_process_feedback(status: Dictionary, action: String, localization) -> String:
-	if localization == null:
-		return str(status.get("message", ""))
-
-	match action:
-		"detect":
-			if bool(status.get("endpoint_reachable", false)):
-				return localization.get_text("central_server_process_message_endpoint_reachable")
-			if bool(status.get("local_install_ready", false)):
-				return localization.get_text("central_server_process_message_install_ready")
-			if bool(status.get("install_available", false)):
-				return localization.get_text("central_server_process_message_install_available")
-			return localization.get_text("central_server_process_detect_missing")
-		"install_error":
-			var install_error = str(status.get("message", "")).strip_edges()
-			if install_error.is_empty():
-				return localization.get_text("central_server_process_install_failed")
-			return "%s\n\n%s" % [localization.get_text("central_server_process_install_failed"), install_error]
-		"install_success":
-			if str(status.get("launch_source", "")) == "local_install":
-				return localization.get_text("central_server_process_install_completed")
-			return localization.get_text("central_server_process_install_completed_pending_restart")
-		"start":
-			if str(status.get("status", "")) == "launch_error":
-				return localization.get_text("central_server_process_start_failed")
-			if bool(status.get("endpoint_reachable", false)):
-				return localization.get_text("central_server_process_message_endpoint_reachable")
-			return localization.get_text("central_server_process_starting")
-		"stop_error":
-			return localization.get_text("central_server_process_stop_failed")
-		"stop_success":
-			return localization.get_text("central_server_process_stopped_message")
-	return str(status.get("message", ""))
-
-
-func build_central_server_install_confirmation(status: Dictionary, localization) -> String:
-	var action_key = "central_server_install_confirm_upgrade" if bool(status.get("local_install_ready", false)) else "central_server_install_confirm_install"
-	var summary = localization.get_text(action_key)
-	if int(status.get("pid", 0)) > 0 and str(status.get("launch_source", "")) == "local_install":
-		summary += "\n%s" % localization.get_text("central_server_install_confirm_auto_restart")
-	var details = build_central_server_install_details(status, localization, true)
-	if details.is_empty():
-		return summary
-	return "%s\n\n%s" % [summary, details]
-
-
-func build_central_server_install_details(status: Dictionary, localization, include_source_fallback: bool = false) -> String:
-	if localization == null:
-		return ""
-
-	var lines: PackedStringArray = PackedStringArray()
-	var install_version = str(status.get("install_version", "")).strip_edges()
-	var source_version = str(status.get("source_runtime_version", "")).strip_edges()
-	var install_dir = str(status.get("local_install_dir", "")).strip_edges()
-	var install_source = str(status.get("install_source_dir", "")).strip_edges()
-	if install_source.is_empty() and include_source_fallback:
-		install_source = str(status.get("source_runtime_dir", "")).strip_edges()
-
-	var resolved_version = install_version if not install_version.is_empty() else source_version
-	if not resolved_version.is_empty():
-		lines.append("%s %s" % [localization.get_text("central_server_install_version_label"), resolved_version])
-	if not install_dir.is_empty():
-		lines.append("%s %s" % [localization.get_text("central_server_install_dir_label"), install_dir])
-	if not install_source.is_empty():
-		lines.append("%s %s" % [localization.get_text("central_server_install_source_label"), install_source])
-	return "\n".join(lines)
 
 
 func _resolve_tool_profile_id(

@@ -45,6 +45,32 @@ EXAMPLES:
 			}
 		},
 		{
+			"name": "screenshot",
+			"description": """EDITOR SCREENSHOT: Capture the current editor UI viewport to a PNG file.
+
+ACTIONS:
+- capture: Save the current editor window image to a file path.
+
+EXAMPLES:
+- Capture to default path: {"action": "capture"}
+- Capture to custom path: {"action": "capture", "path": "user://captures/editor.png"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["capture"],
+						"description": "Screenshot action"
+					},
+					"path": {
+						"type": "string",
+						"description": "Output PNG path (res:// or user://). Defaults to user://godot_mcp_editor_captures/..."
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "settings",
 			"description": """EDITOR SETTINGS: Access and modify editor preferences.
 
@@ -312,6 +338,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"status":
 			return _execute_status(args)
+		"screenshot":
+			return _execute_screenshot(args)
 		"settings":
 			return _execute_settings(args)
 		"undo_redo":
@@ -344,6 +372,15 @@ func _execute_status(args: Dictionary) -> Dictionary:
 			return _get_distraction_free()
 		"set_distraction_free":
 			return _set_distraction_free(args.get("enabled", false))
+		_:
+			return _error("Unknown action: %s" % action)
+
+
+func _execute_screenshot(args: Dictionary) -> Dictionary:
+	var action = args.get("action", "")
+	match action:
+		"capture":
+			return _capture_editor_screenshot(str(args.get("path", "")))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -417,6 +454,47 @@ func _set_distraction_free(enabled: bool) -> Dictionary:
 	ei.set_distraction_free_mode(enabled)
 
 	return _success({"enabled": enabled}, "Distraction-free mode %s" % ("enabled" if enabled else "disabled"))
+
+
+func _capture_editor_screenshot(path: String) -> Dictionary:
+	var ei = _get_editor_interface()
+	if not ei:
+		return _error("Editor interface not available")
+
+	var base_control = ei.get_base_control()
+	if base_control == null:
+		return _error("Editor base control not available")
+
+	var viewport = base_control.get_viewport()
+	if viewport == null or not viewport.has_method("get_texture"):
+		return _error("Editor viewport not available")
+
+	var texture = viewport.get_texture()
+	if texture == null or not texture.has_method("get_image"):
+		return _error("Editor viewport texture not available")
+
+	var image = texture.get_image()
+	if image == null or image.is_empty():
+		return _error("Editor screenshot image is empty")
+
+	var target_path := path.strip_edges()
+	if target_path.is_empty():
+		target_path = "user://godot_mcp_editor_captures/editor_%s.png" % str(Time.get_unix_time_from_system())
+	var absolute_path = ProjectSettings.globalize_path(target_path)
+	var dir_error = DirAccess.make_dir_recursive_absolute(absolute_path.get_base_dir())
+	if dir_error != OK:
+		return _error("Failed to create screenshot directory: %s" % absolute_path.get_base_dir())
+
+	var save_error = image.save_png(absolute_path)
+	if save_error != OK:
+		return _error("Failed to save editor screenshot: %s" % error_string(save_error))
+
+	return _success({
+		"path": target_path,
+		"absolute_path": absolute_path,
+		"width": image.get_width(),
+		"height": image.get_height()
+	}, "Editor screenshot captured")
 
 
 # ==================== SETTINGS ====================

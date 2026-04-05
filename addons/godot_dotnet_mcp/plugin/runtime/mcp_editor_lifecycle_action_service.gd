@@ -96,10 +96,6 @@ func _prepare_shutdown(action: String) -> void:
 	var editor_interface = plugin.get_editor_interface()
 	if editor_interface != null and editor_interface.has_method("save_all_scenes"):
 		editor_interface.save_all_scenes()
-	if plugin.has_method("get_central_server_attach_service"):
-		var attach_service = plugin.get_central_server_attach_service()
-		if attach_service != null and attach_service.has_method("stop"):
-			attach_service.stop()
 	_log_message("Editor lifecycle %s scheduled" % action, "info")
 
 

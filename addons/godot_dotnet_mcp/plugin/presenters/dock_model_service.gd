@@ -16,8 +16,6 @@ var _config_service
 var _dock_presenter
 var _user_tool_service
 var _client_install_detection_service
-var _central_server_attach_service
-var _central_server_process_service
 var _user_tool_watch_service
 var _tool_access_feature
 var _self_diagnostic_feature
@@ -36,8 +34,6 @@ func configure(context) -> void:
 	_dock_presenter = context.dock_presenter
 	_user_tool_service = context.user_tool_service
 	_client_install_detection_service = context.client_install_detection_service
-	_central_server_attach_service = context.central_server_attach_service
-	_central_server_process_service = context.central_server_process_service
 	_user_tool_watch_service = context.user_tool_watch_service
 	_tool_access_feature = context.tool_access_feature
 	_self_diagnostic_feature = context.self_diagnostic_feature
@@ -53,8 +49,6 @@ func dispose() -> void:
 	_dock_presenter = null
 	_user_tool_service = null
 	_client_install_detection_service = null
-	_central_server_attach_service = null
-	_central_server_process_service = null
 	_user_tool_watch_service = null
 	_tool_access_feature = null
 	_self_diagnostic_feature = null
@@ -86,8 +80,6 @@ func build_model() -> Dictionary:
 		"tools_by_category": tools_by_category,
 		"self_diagnostics": self_diagnostics,
 		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
-		"central_server_attach": _get_central_server_attach_status(),
-		"central_server_process": _get_central_server_process_status(),
 		"user_tool_watch": _get_user_tool_watch_status(),
 		"editor_scale": _resolve_editor_scale(),
 		"permission_levels": ToolPermissionPolicy.PERMISSION_LEVELS,
@@ -146,21 +138,6 @@ func _build_self_diagnostic_health_snapshot() -> Dictionary:
 	if _self_diagnostic_feature != null and _self_diagnostic_feature.has_method("build_self_diagnostic_health_snapshot"):
 		return _self_diagnostic_feature.build_self_diagnostic_health_snapshot()
 	return PluginSelfDiagnosticStore.get_health_snapshot({})
-
-
-func _get_central_server_attach_status() -> Dictionary:
-	if _central_server_attach_service == null:
-		return {}
-	var status = _central_server_attach_service.get_status()
-	if _dock_presenter != null and _dock_presenter.has_method("localize_central_server_attach_status"):
-		return _dock_presenter.localize_central_server_attach_status(status, _localization)
-	return status
-
-
-func _get_central_server_process_status() -> Dictionary:
-	if _central_server_process_service == null:
-		return {}
-	return _central_server_process_service.get_status()
 
 
 func _get_user_tool_watch_status() -> Dictionary:
