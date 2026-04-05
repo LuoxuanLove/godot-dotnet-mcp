@@ -2,23 +2,23 @@
 [![最新版本](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
 [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-> 插件内 MCP 服务端：Roslyn 语法分析运行在 Godot .NET 运行时内部，无需任何外部宿主进程。
+> 插件内 MCP 服务端：Roslyn 语法分析运行在 Godot .NET 运行时内部。
 
 ![Godot .NET MCP 工具预览](asset_library/preview-tools-cn.png)
 
 ## 产品模型
 
 - Godot 插件通过 HTTP 在进程内暴露 MCP 端点。
-- C# 分析使用插件内 Roslyn（纯语法，syntax-first），无外部 Roslyn 宿主。
+- C# 分析使用插件内 Roslyn（纯语法，syntax-first）。
 - `system_*` 工具从运行中的 Godot 进程内部读取实时编辑器状态。
-- 无子进程、无外部宿主兜底。
+- 无子进程兜底。
 
 ## 仓库结构
 
 - `addons/godot_dotnet_mcp/`
   Godot 插件本体：MCP HTTP 服务端、工具路由、运行时服务及插件内 Roslyn façade。
 - `dotnet_bridge/`
-  独立 .NET 库，包含供插件 façade 使用的共享 Roslyn 语法核心。不是可执行文件或外部宿主。
+  供插件 façade 使用的共享 Roslyn 语法核心。
 - `tests/godot_plugin_harness/`、`tests/godot_plugin_harness_fixture/`
   用于插件运行时验证的 Headless Harness。
 - `docs/`
@@ -100,7 +100,7 @@ addons/godot_dotnet_mcp/custom_tools/
 
 - C# 解析由运行在 Godot .NET 运行时内的插件内 Roslyn 处理。
 - 分析为纯语法优先：只提取语法树信息，无 SemanticModel 或项目编译。
-- `dotnet_bridge/` 目录包含独立库，不是外部可执行文件。
+- `dotnet_bridge/` 目录包含共享库。
 - 无 attach 协议、无子进程，插件完全自包含。
 
 ## 文档入口

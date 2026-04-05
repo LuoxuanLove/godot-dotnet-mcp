@@ -2,23 +2,23 @@
 [![Latest Release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=release)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
 [![中文 README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
-> A plugin-internal MCP server: Roslyn syntax analysis runs inside the Godot .NET runtime, no external host process required.
+> A plugin-internal MCP server: Roslyn syntax analysis runs inside the Godot .NET runtime.
 
 ![Godot .NET MCP Tools](asset_library/preview-tools-en.png)
 
 ## Product Model
 
 - The Godot plugin exposes an in-process MCP endpoint via HTTP.
-- C# analysis uses plugin-internal Roslyn (syntax-only, syntax-first) — no external Roslyn host.
+- C# analysis uses plugin-internal Roslyn (syntax-only, syntax-first).
 - `system_*` tools read live editor state from within the running Godot process.
-- No child process, no external host fallback.
+- No child process fallback.
 
 ## Repository Layout
 
 - `addons/godot_dotnet_mcp/`
   The Godot plugin: MCP HTTP server, tool routing, runtime services, and the plugin-internal Roslyn façade.
 - `dotnet_bridge/`
-  Standalone .NET library with shared Roslyn syntax core used by the plugin façade. Not an executable or external host.
+  Shared Roslyn syntax core used by the plugin façade.
 - `tests/godot_plugin_harness/`, `tests/godot_plugin_harness_fixture/`
   Headless harness for plugin runtime verification.
 - `docs/`
@@ -100,7 +100,7 @@ Each `.gd` file should implement `handles()`, `get_tools()`, and `execute()`, wi
 
 - C# parsing is handled by plugin-internal Roslyn running inside the Godot .NET runtime.
 - The analysis is syntax-first: only syntax tree information is extracted, no SemanticModel or project compilation.
-- The `dotnet_bridge/` directory contains a standalone library, not an external executable.
+- The `dotnet_bridge/` directory contains a shared library used by the plugin façade.
 - No attach protocol, no child process — the plugin is self-contained.
 
 ## Docs
