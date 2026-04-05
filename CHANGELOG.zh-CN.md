@@ -4,7 +4,7 @@
 
 ### Added
 
-- 新增已完成的 `.NET MCP Bridge` 首批能力：包含独立 .NET 8 Bridge 进程、stdio MCP 通道、Windows 自包含发布配置、Bridge-first 插件安装，以及 C# / `.csproj` 读写工具链。
+- 新增已完成的内部 .NET 支持库与插件侧工具链：包含 Roslyn 分析、stdio MCP 通道，以及 C# / `.csproj` 读写工具链。
 - 新增 `custom_tools/` 外部落盘自动唤醒：将合法用户工具脚本直接放入 `res://addons/godot_dotnet_mcp/custom_tools/` 后，无需重启 Godot 即可被发现。
 - 新增 User Tool 运行时状态预览：`Tools` 预览中可查看运行时域、版本、状态、待重载、最近错误、发现来源和最近刷新原因。
 

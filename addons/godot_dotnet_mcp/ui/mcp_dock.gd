@@ -15,9 +15,9 @@ signal restart_requested
 signal stop_requested
 signal full_reload_requested
 signal clear_self_diagnostics_requested
-signal bridge_install_requested
-signal bridge_validate_requested
-signal bridge_clear_requested
+signal runtime_install_requested
+signal runtime_validate_requested
+signal runtime_clear_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
@@ -193,8 +193,8 @@ func restore_focus_snapshot(snapshot: Dictionary) -> void:
 		(target as Control).grab_focus()
 
 
-func activate_host_dock_tab() -> void:
-	call_deferred("_activate_host_dock_tab_deferred")
+func activate_editor_dock_tab() -> void:
+	call_deferred("_activate_editor_dock_tab_deferred")
 
 
 func _ensure_tabs() -> void:
@@ -379,7 +379,7 @@ func _can_grab_focus(control: Control) -> bool:
 	return control.focus_mode != Control.FOCUS_NONE and control.is_visible_in_tree()
 
 
-func _activate_host_dock_tab_deferred() -> void:
+func _activate_editor_dock_tab_deferred() -> void:
 	var current: Node = self
 	while current != null:
 		var parent = current.get_parent()

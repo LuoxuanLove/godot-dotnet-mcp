@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added the first completed `.NET MCP Bridge` implementation for Godot .NET workflows, including a standalone .NET 8 bridge process, stdio MCP transport, Windows self-contained publish profile, Bridge-first plugin installation, and C# / `.csproj` read-write tooling.
+- Added the first completed internal .NET support library and plugin-side tooling for Godot .NET workflows, including Roslyn analysis, stdio MCP transport, and C# / `.csproj` read-write tooling.
 - Added external `custom_tools/` watch coordination so valid user tool scripts dropped into `res://addons/godot_dotnet_mcp/custom_tools/` are discovered without restarting Godot.
 - Added user-tool runtime status to the Tools preview, including runtime domain, version, state, pending reload, last error, discovery source, and last refresh reason.
 
