@@ -40,11 +40,11 @@ func build_model(context: Dictionary) -> Dictionary:
 
 	if current_tab == 2:
 		var client_install_statuses: Dictionary = context.get("client_install_statuses", {})
-		var central_server_process: Dictionary = {}
+		var runtime_process: Dictionary = {}
 		desktop_clients = _client_config_presenter.build_desktop_client_models(
 			settings,
 			str(state.current_cli_scope),
-			central_server_process,
+			runtime_process,
 			client_install_statuses,
 			localization,
 			config_service
@@ -52,7 +52,7 @@ func build_model(context: Dictionary) -> Dictionary:
 		cli_clients = _client_config_presenter.build_cli_client_models(
 			settings,
 			str(state.current_cli_scope),
-			central_server_process,
+			runtime_process,
 			client_install_statuses,
 			localization,
 			config_service
@@ -63,7 +63,7 @@ func build_model(context: Dictionary) -> Dictionary:
 			config_platforms
 		)
 		settings["current_config_platform"] = state.current_config_platform
-		config_connection_mode = _client_config_presenter.build_config_connection_mode(settings, central_server_process, localization)
+		config_connection_mode = _client_config_presenter.build_config_connection_mode(settings, runtime_process, localization)
 
 	return {
 		"localization": localization,
@@ -120,8 +120,8 @@ func _resolve_current_language(state, localization) -> String:
 	return "en"
 
 
-func build_client_transport_model(settings: Dictionary, central_server_process: Dictionary) -> Dictionary:
-	return _client_config_presenter.build_client_transport_model(settings, central_server_process)
+func build_client_transport_model(settings: Dictionary, runtime_process: Dictionary) -> Dictionary:
+	return _client_config_presenter.build_client_transport_model(settings, runtime_process)
 
 
 func get_client_install_message_text(client_id: String, status: String, localization) -> String:

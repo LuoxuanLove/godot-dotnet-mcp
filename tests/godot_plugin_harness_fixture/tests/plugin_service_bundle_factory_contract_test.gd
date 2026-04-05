@@ -23,7 +23,7 @@ class FakePlugin extends RefCounted:
 	var _user_tool_service = null
 	var _user_tool_watch_service = null
 	var _central_server_attach_service = null
-	var _central_server_process_service = null
+	var _runtime_process_service = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:

@@ -4,12 +4,12 @@ extends RefCounted
 func build_desktop_client_models(
 	settings: Dictionary,
 	_current_cli_scope: String,
-	central_server_process: Dictionary,
+	runtime_process: Dictionary,
 	client_install_statuses: Dictionary,
 	localization,
 	config_service
 ) -> Array[Dictionary]:
-	var transport = _build_client_transport_model(settings, central_server_process)
+	var transport = _build_client_transport_model(settings, runtime_process)
 	return [
 		_build_client_ui_model("claude_desktop", {
 			"id": "claude_desktop",
@@ -63,12 +63,12 @@ func build_desktop_client_models(
 func build_cli_client_models(
 	settings: Dictionary,
 	current_cli_scope: String,
-	central_server_process: Dictionary,
+	runtime_process: Dictionary,
 	client_install_statuses: Dictionary,
 	localization,
 	config_service
 ) -> Array[Dictionary]:
-	var transport = _build_client_transport_model(settings, central_server_process)
+	var transport = _build_client_transport_model(settings, runtime_process)
 	return [
 		_build_client_ui_model("claude_code", {
 			"id": "claude_code",
@@ -97,19 +97,19 @@ func build_cli_client_models(
 	]
 
 
-func build_client_transport_model(settings: Dictionary, central_server_process: Dictionary) -> Dictionary:
-	return _build_client_transport_model(settings, central_server_process)
+func build_client_transport_model(settings: Dictionary, runtime_process: Dictionary) -> Dictionary:
+	return _build_client_transport_model(settings, runtime_process)
 
 
 func get_client_install_message_text(client_id: String, status: String, localization) -> String:
 	return _get_client_install_message_text(client_id, status, localization)
 
 
-func build_config_connection_mode(settings: Dictionary, central_server_process: Dictionary, localization) -> Dictionary:
-	var transport = _build_client_transport_model(settings, central_server_process)
+func build_config_connection_mode(settings: Dictionary, runtime_process: Dictionary, localization) -> Dictionary:
+	var transport = _build_client_transport_model(settings, runtime_process)
 	var description = localization.get_text(str(transport.get("mode_label_key", "")))
 	if str(transport.get("mode", "")) == "stdio":
-		var command = str(central_server_process.get("client_command", "")).strip_edges()
+		var command = str(runtime_process.get("client_command", "")).strip_edges()
 		return {
 			"mode": "stdio",
 			"label": localization.get_text("config_mode_local_stdio_title"),
@@ -156,10 +156,10 @@ func resolve_current_config_platform(current_platform: String, platforms: Array[
 	return str(platforms[0].get("id", ""))
 
 
-func _build_client_transport_model(settings: Dictionary, central_server_process: Dictionary) -> Dictionary:
-	var launch_available = bool(central_server_process.get("client_launch_available", false))
-	var executable_path = str(central_server_process.get("client_executable_path", "")).strip_edges()
-	var arguments = central_server_process.get("client_arguments", [])
+func _build_client_transport_model(settings: Dictionary, runtime_process: Dictionary) -> Dictionary:
+	var launch_available = bool(runtime_process.get("client_launch_available", false))
+	var executable_path = str(runtime_process.get("client_executable_path", "")).strip_edges()
+	var arguments = runtime_process.get("client_arguments", [])
 	var argument_list: Array = []
 	if arguments is Array:
 		argument_list.assign(arguments)

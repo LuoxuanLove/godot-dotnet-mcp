@@ -64,7 +64,7 @@ class FakePlugin extends RefCounted:
 	var _user_tool_service = null
 	var _user_tool_watch_service = null
 	var _central_server_attach_service = null
-	var _central_server_process_service = null
+	var _runtime_process_service = null
 	var _dock = null
 	var _client_executable_dialog = null
 
@@ -110,7 +110,7 @@ class FakePlugin extends RefCounted:
 	func _recreate_server_controller() -> void:
 		pass
 
-	func _configure_central_server_process_service() -> void:
+	func _configure_runtime_process_service() -> void:
 		pass
 
 	func _configure_central_server_attach_service() -> void:
@@ -206,7 +206,7 @@ func cleanup_case(tree: SceneTree) -> void:
 		_plugin._user_tool_service = null
 		_plugin._user_tool_watch_service = null
 		_plugin._central_server_attach_service = null
-		_plugin._central_server_process_service = null
+		_plugin._runtime_process_service = null
 		_plugin._client_executable_dialog = null
 		_plugin._dock = null
 	_plugin = null

@@ -57,7 +57,7 @@ class FakeContext extends RefCounted:
 	var user_tool_service
 	var client_install_detection_service
 	var central_server_attach_service
-	var central_server_process_service
+	var runtime_process_service
 	var user_tool_watch_service
 	var tool_access_feature
 	var self_diagnostic_feature
@@ -86,7 +86,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.user_tool_service = RefCounted.new()
 	context.client_install_detection_service = null
 	context.central_server_attach_service = null
-	context.central_server_process_service = null
+	context.runtime_process_service = null
 	context.user_tool_watch_service = null
 	context.tool_access_feature = null
 	context.self_diagnostic_feature = null
