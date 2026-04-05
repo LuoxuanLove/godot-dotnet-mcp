@@ -4,6 +4,57 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Editor control tools for Godot MCP
 ## Provides editor UI, theme, and preferences management
 
+var _editor_interface_override = null
+var _undo_redo_override = null
+var _scene_root_override = null
+
+
+func configure_context(context = null) -> void:
+	if context == null:
+		dispose()
+		return
+	_editor_interface_override = context.get("editor_interface", null)
+	_undo_redo_override = context.get("undo_redo", null)
+	_scene_root_override = context.get("scene_root", null)
+
+
+func dispose() -> void:
+	_editor_interface_override = null
+	_undo_redo_override = null
+	_scene_root_override = null
+
+
+func _get_editor_interface():
+	if _editor_interface_override != null:
+		return _editor_interface_override
+	if Engine.has_singleton("EditorInterface"):
+		return Engine.get_singleton("EditorInterface")
+	return null
+
+
+func _get_edited_scene_root():
+	if _scene_root_override != null:
+		return _scene_root_override
+	var main_loop = Engine.get_main_loop()
+	if main_loop and main_loop.has_method("get_edited_scene_root"):
+		return main_loop.get_edited_scene_root()
+	return null
+
+
+func _find_node_by_path(path: String) -> Node:
+	var root = _get_edited_scene_root()
+	if not root:
+		return null
+
+	var normalized_path = _normalize_node_path(path, root)
+	if normalized_path.is_empty() or normalized_path == ".":
+		return root
+	if normalized_path.begins_with("/"):
+		var absolute_node = root.get_node_or_null(NodePath(normalized_path))
+		if absolute_node:
+			return absolute_node
+	return root.get_node_or_null(NodePath(normalized_path))
+
 
 func get_tools() -> Array[Dictionary]:
 	return [
@@ -620,7 +671,7 @@ func _reset_editor_setting(setting: String) -> Dictionary:
 
 # Track current action state for multi-step operations
 var _current_action_name: String = ""
-var _undo_redo_manager: EditorUndoRedoManager = null
+var _undo_redo_manager = null
 
 func _execute_undo_redo(args: Dictionary) -> Dictionary:
 	var action = args.get("action", "")
@@ -650,7 +701,10 @@ func _execute_undo_redo(args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s" % action)
 
 
-func _get_undo_redo() -> EditorUndoRedoManager:
+
+func _get_undo_redo():
+	if _undo_redo_override != null:
+		return _undo_redo_override
 	if _undo_redo_manager:
 		return _undo_redo_manager
 
@@ -935,7 +989,7 @@ func _convert_value(value):
 	return _normalize_input_value(value)
 
 
-func _capture_undo_redo_state(urm: EditorUndoRedoManager) -> Dictionary:
+func _capture_undo_redo_state(urm) -> Dictionary:
 	return {
 		"has_undo": urm.has_undo(),
 		"has_redo": urm.has_redo(),
@@ -1045,7 +1099,7 @@ func _execute_inspector(args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s" % action)
 
 
-func _edit_object(ei: EditorInterface, path: String) -> Dictionary:
+func _edit_object(ei, path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
@@ -1061,7 +1115,7 @@ func _edit_object(ei: EditorInterface, path: String) -> Dictionary:
 	}, "Now editing: %s" % path)
 
 
-func _get_edited_object(ei: EditorInterface) -> Dictionary:
+func _get_edited_object(ei) -> Dictionary:
 	var inspector = ei.get_inspector()
 	if not inspector:
 		return _error("Inspector not available")
@@ -1084,7 +1138,7 @@ func _get_edited_object(ei: EditorInterface) -> Dictionary:
 	return _success(info)
 
 
-func _refresh_inspector(ei: EditorInterface) -> Dictionary:
+func _refresh_inspector(ei) -> Dictionary:
 	var inspector = ei.get_inspector()
 	if not inspector:
 		return _error("Inspector not available")
@@ -1097,7 +1151,7 @@ func _refresh_inspector(ei: EditorInterface) -> Dictionary:
 	return _success(null, "Inspector refreshed")
 
 
-func _get_selected_property(ei: EditorInterface) -> Dictionary:
+func _get_selected_property(ei) -> Dictionary:
 	var inspector = ei.get_inspector()
 	if not inspector:
 		return _error("Inspector not available")
@@ -1109,7 +1163,7 @@ func _get_selected_property(ei: EditorInterface) -> Dictionary:
 	})
 
 
-func _inspect_resource(ei: EditorInterface, resource_path: String) -> Dictionary:
+func _inspect_resource(ei, resource_path: String) -> Dictionary:
 	if resource_path.is_empty():
 		return _error("Resource path is required")
 
@@ -1154,7 +1208,7 @@ func _execute_filesystem(args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s" % action)
 
 
-func _select_file(ei: EditorInterface, path: String) -> Dictionary:
+func _select_file(ei, path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
@@ -1166,7 +1220,7 @@ func _select_file(ei: EditorInterface, path: String) -> Dictionary:
 	return _success({"path": path}, "File selected in FileSystem dock")
 
 
-func _get_selected_files(ei: EditorInterface) -> Dictionary:
+func _get_selected_files(ei) -> Dictionary:
 	var paths = ei.get_selected_paths()
 
 	return _success({
@@ -1175,7 +1229,7 @@ func _get_selected_files(ei: EditorInterface) -> Dictionary:
 	})
 
 
-func _get_current_filesystem_path(ei: EditorInterface) -> Dictionary:
+func _get_current_filesystem_path(ei) -> Dictionary:
 	var current_path = ei.get_current_path()
 	var current_dir = ei.get_current_directory()
 
@@ -1185,7 +1239,7 @@ func _get_current_filesystem_path(ei: EditorInterface) -> Dictionary:
 	})
 
 
-func _scan_filesystem(ei: EditorInterface) -> Dictionary:
+func _scan_filesystem(ei) -> Dictionary:
 	var fs = ei.get_resource_filesystem()
 	if not fs:
 		return _error("Filesystem not available")
@@ -1195,7 +1249,7 @@ func _scan_filesystem(ei: EditorInterface) -> Dictionary:
 	return _success(null, "Filesystem scan triggered")
 
 
-func _reimport_files(ei: EditorInterface, paths: Array) -> Dictionary:
+func _reimport_files(ei, paths: Array) -> Dictionary:
 	if paths.is_empty():
 		return _error("Paths are required")
 
@@ -1270,7 +1324,7 @@ func _list_plugins() -> Dictionary:
 	})
 
 
-func _is_plugin_enabled(ei: EditorInterface, plugin_name: String) -> Dictionary:
+func _is_plugin_enabled(ei, plugin_name: String) -> Dictionary:
 	if plugin_name.is_empty():
 		return _error("Plugin name is required")
 
@@ -1282,7 +1336,7 @@ func _is_plugin_enabled(ei: EditorInterface, plugin_name: String) -> Dictionary:
 	})
 
 
-func _enable_plugin(ei: EditorInterface, plugin_name: String) -> Dictionary:
+func _enable_plugin(ei, plugin_name: String) -> Dictionary:
 	if plugin_name.is_empty():
 		return _error("Plugin name is required")
 
@@ -1299,7 +1353,7 @@ func _enable_plugin(ei: EditorInterface, plugin_name: String) -> Dictionary:
 	}, "Plugin enabled")
 
 
-func _disable_plugin(ei: EditorInterface, plugin_name: String) -> Dictionary:
+func _disable_plugin(ei, plugin_name: String) -> Dictionary:
 	if plugin_name.is_empty():
 		return _error("Plugin name is required")
 

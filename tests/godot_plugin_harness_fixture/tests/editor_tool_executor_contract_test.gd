@@ -101,6 +101,57 @@ class FakeFileSystem:
 		last_reimport_paths = paths
 
 
+class FakeScreenshotImage:
+	extends RefCounted
+
+	var width := 320
+	var height := 180
+
+	func is_empty() -> bool:
+		return false
+
+	func get_width() -> int:
+		return width
+
+	func get_height() -> int:
+		return height
+
+	func save_png(path: String) -> int:
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			return ERR_CANT_CREATE
+		file.store_buffer(PackedByteArray([137, 80, 78, 71, 13, 10, 26, 10]))
+		file.close()
+		return OK
+
+
+class FakeScreenshotTexture:
+	extends RefCounted
+
+	var _image := FakeScreenshotImage.new()
+
+	func get_image():
+		return _image
+
+
+class FakeEditorViewport:
+	extends RefCounted
+
+	var _texture := FakeScreenshotTexture.new()
+
+	func get_texture():
+		return _texture
+
+
+class FakeEditorBaseControl:
+	extends RefCounted
+
+	var _viewport := FakeEditorViewport.new()
+
+	func get_viewport():
+		return _viewport
+
+
 class FakeEditorInterface:
 	extends RefCounted
 
@@ -110,6 +161,7 @@ class FakeEditorInterface:
 	var _undo_redo := FakeUndoRedo.new()
 	var _inspector := FakeInspector.new()
 	var _filesystem := FakeFileSystem.new()
+	var _base_control := FakeEditorBaseControl.new()
 	var _selected_paths: PackedStringArray = PackedStringArray()
 	var _plugin_states := {}
 	var last_edit_node = null
@@ -135,6 +187,9 @@ class FakeEditorInterface:
 
 	func get_editor_undo_redo():
 		return _undo_redo
+
+	func get_base_control():
+		return _base_control
 
 	func get_inspector():
 		return _inspector
@@ -174,9 +229,6 @@ var _scene_root: Node = null
 
 
 func run_case(tree: SceneTree) -> Dictionary:
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/editor_tools.gd"):
-		return _failure("editor_tools.gd should be removed once the split executor becomes the only stable entry.")
-
 	var executor = EditorExecutorScript.new()
 	var editor_interface := FakeEditorInterface.new()
 	_scene_root = _build_scene_fixture(tree)
@@ -188,10 +240,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 7:
-		return _failure("Editor executor should expose 7 tool definitions after the split.")
+	if tool_defs.size() != 8:
+		return _failure("Editor executor should expose 8 tool definitions after the split.")
 
-	var expected_names := ["status", "settings", "undo_redo", "notification", "inspector", "filesystem", "plugin"]
+	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "inspector", "filesystem", "plugin"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
@@ -205,6 +257,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
 	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "3D":
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+
+	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
+	if not bool(path_result.get("success", false)):
+		return _failure("Editor status get_godot_path failed through the split service path.")
+	var executable_path := str(path_result.get("data", {}).get("godot_executable_path", ""))
+	var project_root := str(path_result.get("data", {}).get("project_root_path", ""))
+	if executable_path.is_empty() or project_root.is_empty():
+		return _failure("Editor status get_godot_path returned empty paths.")
+	if executable_path.find("Godot_v4.6.2-stable_mono_win64") == -1:
+		return _failure("Editor status get_godot_path returned an unexpected executable path.")
 
 	var set_setting_result: Dictionary = executor.execute("settings", {
 		"action": "set",
@@ -267,6 +329,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(selected_files_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("Editor filesystem get_selected should report one selected file.")
 
+	var screenshot_result: Dictionary = executor.execute("screenshot", {
+		"action": "capture",
+		"path": "user://editor_executor_contract_screenshot.png"
+	})
+	if not bool(screenshot_result.get("success", false)):
+		return _failure("Editor screenshot capture failed through the split service path.")
+	var screenshot_data: Dictionary = screenshot_result.get("data", {})
+	var screenshot_path := ProjectSettings.globalize_path(str(screenshot_data.get("path", "")))
+	if not FileAccess.file_exists(screenshot_path):
+		return _failure("Editor screenshot capture did not create the PNG file.")
+	if int(screenshot_data.get("width", 0)) != 320 or int(screenshot_data.get("height", 0)) != 180:
+		return _failure("Editor screenshot capture returned unexpected dimensions.")
+
 	var enable_plugin_result: Dictionary = executor.execute("plugin", {
 		"action": "enable",
 		"plugin": "godot_dotnet_mcp"
@@ -286,6 +361,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"tool_count": tool_defs.size(),
+			"godot_executable_path": executable_path,
+			"project_root_path": project_root,
+			"screenshot_path": screenshot_path,
 			"current_screen": str(get_screen_result.get("data", {}).get("current_screen", "")),
 			"selected_property": str(selected_property_result.get("data", {}).get("selected_path", "")),
 			"selected_file_count": int(selected_files_result.get("data", {}).get("count", 0))
