@@ -5,7 +5,7 @@ internal static class BridgeManifest
     public const string ProductName = "Godot .NET MCP Bridge";
     public const string PackageName = "GodotDotnetMcp.DotnetBridge";
     public const string TargetFramework = "net8.0";
-    public const string Version = "0.6.0-dev";
+    public const string Version = "0.6.0";
     public const string Protocol = "stdio";
 
     public static IReadOnlyList<string> SupportedMethods { get; } =
