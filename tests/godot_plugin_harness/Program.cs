@@ -47,10 +47,32 @@ internal static class Program
         {
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
             var appDataRoot = Path.Combine(stageRoot, ".appdata");
             var localAppDataRoot = Path.Combine(stageRoot, ".localappdata");
             Directory.CreateDirectory(appDataRoot);
             Directory.CreateDirectory(localAppDataRoot);
+
+            var stageBuild = await BuildStageRootProject(stageRoot);
+            if (!stageBuild.Succeeded)
+            {
+                preserveStageRoot = keepStageRoot;
+                var buildSummary = new
+                {
+                    success = false,
+                    skipped = false,
+                    reason = stageBuild.TimedOut ? "stage_root_csharp_build_timeout" : "stage_root_csharp_build_failed",
+                    exitCode = stageBuild.ExitCode,
+                    godotPath = explicitGodotPath,
+                    stageRoot,
+                    stageKept = preserveStageRoot,
+                    stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
+                    stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                };
+                Console.WriteLine(JsonSerializer.Serialize(buildSummary, new JsonSerializerOptions { WriteIndented = true }));
+                return 1;
+            }
 
             process = new Process
             {
@@ -76,8 +98,6 @@ internal static class Program
             process.StartInfo.ArgumentList.Add("--headless");
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);
-            process.StartInfo.ArgumentList.Add("--script");
-            process.StartInfo.ArgumentList.Add("res://tests/headless_suite_runner.gd");
 
             process.Start();
             stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -270,6 +290,60 @@ internal static class Program
         }
     }
 
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> BuildStageRootProject(string stageRoot)
+    {
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("dotnet")
+                {
+                    WorkingDirectory = stageRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.ArgumentList.Add("build");
+            process.StartInfo.ArgumentList.Add("GodotDotnetMcpPluginHarness.csproj");
+            process.StartInfo.ArgumentList.Add("-c");
+            process.StartInfo.ArgumentList.Add("Debug");
+            process.StartInfo.ArgumentList.Add("--nologo");
+            process.Start();
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            return (process.ExitCode == 0, process.ExitCode, stdout, stderr, false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            return (false, -1, stdout, stderr, true);
+        }
+    }
+
+    private static void DeleteDirectoryIfExists(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        Directory.Delete(path, recursive: true);
+    }
+
     private static void CopyDirectory(string sourceRoot, string destinationRoot)
     {
         Directory.CreateDirectory(destinationRoot);
@@ -315,7 +389,7 @@ internal static class Program
         while (current is not null)
         {
             if (Directory.Exists(Path.Combine(current.FullName, "addons"))
-                && Directory.Exists(Path.Combine(current.FullName, "central_server")))
+                && Directory.Exists(Path.Combine(current.FullName, "tests", "godot_plugin_harness_fixture")))
             {
                 return current.FullName;
             }

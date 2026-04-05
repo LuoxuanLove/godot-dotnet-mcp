@@ -110,8 +110,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 6:
-		return _failure("System project executor should expose 6 tool definitions after the split.")
+	if tool_defs.size() != 5:
+		return _failure("System project executor should expose 5 tool definitions after the split.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -131,10 +131,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
-
-	var project_advise: Dictionary = executor.execute("project_advise", {"goal": "fix errors"})
-	if not bool(project_advise.get("success", false)):
-		return _failure("project_advise did not succeed through the split system project executor.")
 
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):

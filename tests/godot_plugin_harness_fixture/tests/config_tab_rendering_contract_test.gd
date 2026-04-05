@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 
 const ConfigPanelScene = preload("res://addons/godot_dotnet_mcp/ui/config_panel.tscn")
 
@@ -9,8 +9,6 @@ class FakeLocalization extends RefCounted:
 	var _texts := {
 		"config_header": "Config",
 		"config_header_desc": "Manage client configuration",
-		"config_mode_title": "Connection Mode",
-		"config_validate_button": "Validate",
 		"config_platform": "Platform",
 		"config_scope_claude": "Scope",
 		"config_section_desktop": "Desktop Clients",
@@ -71,10 +69,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
-		"config_connection_mode": {
-			"description": "Use desktop config files",
-			"validate_enabled": true
-		},
 		"current_config_platform": "cursor",
 		"config_platforms": [
 			{
@@ -106,13 +100,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopClients") as VBoxContainer
 	var cli_clients = _instance.get_node("Scroll/Margin/Content/CliClients") as VBoxContainer
-	var validate_button = _instance.get_node("Scroll/Margin/Content/ModeActions/ValidateConfigButton") as Button
 	if desktop_clients == null or desktop_clients.get_child_count() != 1:
 		return _failure("Config tab should render exactly one desktop client card for the selected platform.")
 	if cli_clients == null or cli_clients.get_child_count() != 0:
 		return _failure("Config tab should not create CLI client cards when the selected platform belongs to the desktop group.")
-	if validate_button == null or validate_button.disabled:
-		return _failure("Config tab should enable the validate button when the model allows validation.")
 
 	var desktop_card = desktop_clients.get_child(0)
 	var buttons = desktop_card.find_children("*", "Button", true, false)

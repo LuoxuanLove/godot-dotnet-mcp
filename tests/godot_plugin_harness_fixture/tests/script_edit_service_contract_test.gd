@@ -6,11 +6,13 @@ const GDScriptEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/sc
 const CSharpEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
 
 var _temp_paths: Array[String] = []
+var _gd_service = null
+var _cs_service = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	var gd_service = GDScriptEditServiceScript.new()
-	var cs_service = CSharpEditServiceScript.new()
+	_gd_service = GDScriptEditServiceScript.new()
+	_cs_service = CSharpEditServiceScript.new()
 	var gd_helper = GDScriptEditHelperScript.new()
 	var cs_helper = CSharpEditHelperScript.new()
 
@@ -21,7 +23,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var cs_path := "%s/SampleServiceSplit.cs" % temp_dir
 	_temp_paths.append_array([gd_path, cs_path, temp_dir])
 
-	var gd_create: Dictionary = gd_service.execute("edit_gd", {
+	var gd_create: Dictionary = _gd_service.execute("edit_gd", {
 		"action": "create",
 		"path": gd_path,
 		"extends": "Node"
@@ -29,7 +31,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(gd_create.get("success", false)):
 		return _failure("Split GDScript edit service failed to create a script.")
 
-	var gd_add_function: Dictionary = gd_service.execute("edit_gd", {
+	var gd_add_function: Dictionary = _gd_service.execute("edit_gd", {
 		"action": "add_function",
 		"path": gd_path,
 		"name": "ping",
@@ -39,7 +41,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(gd_add_function.get("success", false)):
 		return _failure("Split GDScript action service failed to add a function.")
 
-	var gd_functions: Dictionary = gd_service.execute("edit_gd", {
+	var gd_functions: Dictionary = _gd_service.execute("edit_gd", {
 		"action": "get_functions",
 		"path": gd_path
 	})
@@ -48,61 +50,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(gd_functions.get("data", {}).get("count", 0)) < 2:
 		return _failure("GDScript edit helper should report both _ready and ping functions.")
 
-	# C# edit service is READ-ONLY — all mutation actions must return error
-	var cs_create: Dictionary = cs_service.execute("edit_cs", {
-		"action": "create",
+	var cs_upsert_method: Dictionary = _cs_service.execute("edit_cs", {
+		"action": "upsert_method",
 		"path": cs_path,
-		"class_name": "SampleServiceSplit",
-		"base_type": "Node"
-	})
-	if bool(cs_create.get("success", false)):
-		return _failure("C# create should be disabled but returned success.")
-	if "disabled" not in str(cs_create.get("error", "")).to_lower():
-		return _failure("C# create should report mutation disabled error.")
-
-	var cs_add_method: Dictionary = cs_service.execute("edit_cs", {
-		"action": "add_method",
-		"path": cs_path,
-		"name": "Ping",
+		"type_name": "SampleServiceSplit",
+		"member_name": "Ping",
 		"return_type": "int",
+		"parameters": ["float delta"],
 		"body": "return 1;"
 	})
-	if bool(cs_add_method.get("success", false)):
-		return _failure("C# add_method should be disabled but returned success.")
-	if "disabled" not in str(cs_add_method.get("error", "")).to_lower():
-		return _failure("C# add_method should report mutation disabled error.")
+	if not bool(cs_upsert_method.get("success", false)):
+		return _failure("C# upsert_method should succeed through the Roslyn-backed split service.")
+	if str(cs_upsert_method.get("data", {}).get("engine", "")) != "roslyn":
+		return _failure("C# upsert_method should report engine=roslyn.")
+	if str(cs_upsert_method.get("data", {}).get("mode", "")) != "syntax":
+		return _failure("C# upsert_method should report mode=syntax.")
 
-	var cs_rename: Dictionary = cs_service.execute("edit_cs", {
+	var cs_rename: Dictionary = _cs_service.execute("edit_cs", {
 		"action": "rename_member",
 		"path": cs_path,
-		"name": "Ping",
-		"new_name": "Pong"
+		"type_name": "SampleServiceSplit",
+		"member_name": "Ping",
+		"new_name": "Pong",
+		"parameters": ["float delta"]
 	})
-	if bool(cs_rename.get("success", false)):
-		return _failure("C# rename_member should be disabled but returned success.")
-	if "disabled" not in str(cs_rename.get("error", "")).to_lower():
-		return _failure("C# rename_member should report mutation disabled error.")
-
-	var cs_write: Dictionary = cs_service.execute("edit_cs", {
-		"action": "write",
-		"path": cs_path,
-		"content": "namespace Test { }"
-	})
-	if bool(cs_write.get("success", false)):
-		return _failure("C# write should be disabled but returned success.")
-	if "disabled" not in str(cs_write.get("error", "")).to_lower():
-		return _failure("C# write should report mutation disabled error.")
-
-	var cs_add_field: Dictionary = cs_service.execute("edit_cs", {
-		"action": "add_field",
-		"path": cs_path,
-		"name": "TestField",
-		"field_type": "int"
-	})
-	if bool(cs_add_field.get("success", false)):
-		return _failure("C# add_field should be disabled but returned success.")
-	if "disabled" not in str(cs_add_field.get("error", "")).to_lower():
-		return _failure("C# add_field should report mutation disabled error.")
+	if not bool(cs_rename.get("success", false)):
+		return _failure("C# rename_member should succeed through the Roslyn-backed split service.")
+	if str(cs_rename.get("data", {}).get("engine", "")) != "roslyn":
+		return _failure("C# rename_member should report engine=roslyn.")
+	if str(cs_rename.get("data", {}).get("mode", "")) != "syntax":
+		return _failure("C# rename_member should report mode=syntax.")
 
 	return {
 		"name": "script_edit_service_contracts",
@@ -116,6 +93,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(_tree: SceneTree) -> void:
+	if _gd_service != null and _gd_service.has_method("clear"):
+		_gd_service.clear()
+	if _cs_service != null and _cs_service.has_method("clear"):
+		_cs_service.clear()
+	_gd_service = null
+	_cs_service = null
 	for path in _temp_paths:
 		if path.ends_with(".gd") or path.ends_with(".cs"):
 			if FileAccess.file_exists(path):

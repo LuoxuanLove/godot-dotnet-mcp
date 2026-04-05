@@ -3,3 +3,8 @@ config_version=5
 
 [application]
 config/name="GodotDotnetMcpPluginHarness"
+config/features=PackedStringArray("4.6", "C#")
+run/main_scene="res://tests/headless_suite_entry.tscn"
+
+[dotnet]
+project/assembly_name="GodotDotnetMcpPluginHarness"
