@@ -14,18 +14,26 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 	var index: Dictionary = index_result.get("data", {})
 	if action == "get_class_map":
 		var csharp_classes = index.get("csharp_classes", [])
-		return _success({
+		return _success(_build_legacy_reference_metadata({
 			"built_at_unix": int(index.get("built_at_unix", 0)),
 			"count": csharp_classes.size(),
 			"unique_script_count": int(index.get("csharp_script_count", 0)),
 			"classes": csharp_classes
-		})
+		}))
 	if action == "get_base_type":
 		return _get_reference_base_type(index, args)
 	if action == "get_scene_refs":
 		return _get_reference_scene_refs(index, args)
 
 	return _error("Unknown action: %s" % action)
+
+
+func _build_legacy_reference_metadata(data: Dictionary) -> Dictionary:
+	var payload := data.duplicate(true)
+	payload["engine"] = "legacy_path_first"
+	payload["mode"] = "path_first"
+	payload["entrypoint"] = "tools/script/executor.gd#references"
+	return payload
 
 
 func _get_reference_index(force_refresh: bool) -> Dictionary:

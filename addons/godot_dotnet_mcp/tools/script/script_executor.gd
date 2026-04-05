@@ -34,3 +34,22 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _csharp_edit_service.execute(tool_name, args)
 		_:
 			return _gdscript_edit_service._error("Unknown tool: %s" % tool_name)
+
+
+func clear() -> void:
+	if _read_service != null and _read_service.has_method("clear"):
+		_read_service.clear()
+	if _inspect_service != null and _inspect_service.has_method("clear"):
+		_inspect_service.clear()
+	if _reference_service != null and _reference_service.has_method("clear"):
+		_reference_service.clear()
+	if _gdscript_edit_service != null and _gdscript_edit_service.has_method("clear"):
+		_gdscript_edit_service.clear()
+	if _csharp_edit_service != null and _csharp_edit_service.has_method("clear"):
+		_csharp_edit_service.clear()
+	_catalog = null
+	_read_service = null
+	_inspect_service = null
+	_reference_service = null
+	_gdscript_edit_service = null
+	_csharp_edit_service = null
