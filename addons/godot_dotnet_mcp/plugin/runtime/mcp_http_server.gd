@@ -95,7 +95,8 @@ func start() -> bool:
 func stop() -> void:
 	if not _running:
 		return
-	_connection_state.disconnect_all_clients()
+	if _connection_state != null:
+		_connection_state.disconnect_all_clients()
 	var runtime_control = _get_runtime_control_service(false)
 	if runtime_control != null and runtime_control.has_method("reset"):
 		runtime_control.reset()

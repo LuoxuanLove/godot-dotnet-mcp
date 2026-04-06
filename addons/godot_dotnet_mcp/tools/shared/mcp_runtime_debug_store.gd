@@ -1,6 +1,6 @@
 @tool
 extends RefCounted
-class_name MCPRuntimeDebugStore
+class_name MCPRuntimeDebugStoreShared
 
 const MAX_EVENTS := 300
 const FALLBACK_FILE_PATH := "user://godot_mcp_runtime_bridge_events.json"
@@ -267,7 +267,7 @@ static func _get_merged_events() -> Array[Dictionary]:
 				continue
 			seen[key] = true
 			merged.append(copied)
-	merged.sort_custom(Callable(MCPRuntimeDebugStore, "_sort_event_chronologically"))
+	merged.sort_custom(Callable(MCPRuntimeDebugStoreShared, "_sort_event_chronologically"))
 	if merged.size() > MAX_EVENTS:
 		merged = merged.slice(merged.size() - MAX_EVENTS)
 	return merged

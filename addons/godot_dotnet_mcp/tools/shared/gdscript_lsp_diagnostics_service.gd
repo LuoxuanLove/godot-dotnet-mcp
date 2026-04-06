@@ -1,6 +1,6 @@
 @tool
 extends RefCounted
-class_name GDScriptLspDiagnosticsService
+class_name GDScriptLspDiagnosticsServiceShared
 
 const LspClientPath := "res://addons/godot_dotnet_mcp/tools/system/lsp_client.gd"
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")

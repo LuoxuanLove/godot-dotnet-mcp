@@ -316,9 +316,7 @@ func _create_dock() -> void:
 		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Dock scene instantiation returned null", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and its script.")
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
-	if not _wire_dock_signals(str(operation.get("operation_id", ""))):
-		_finish_self_operation(operation, false, "plugin", "_create_dock")
-		return
+	_wire_dock_signals(str(operation.get("operation_id", "")))
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	var dock_count = _count_dock_instances()
 	if dock_count > 1:
@@ -537,9 +535,9 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
 	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
 	connected = _connect_dock_signal("full_reload_requested", runtime_full_reload, operation_id) and connected
-	connected = _connect_dock_signal("bridge_install_requested", _on_bridge_install_requested, operation_id) and connected
-	connected = _connect_dock_signal("bridge_validate_requested", _on_bridge_validate_requested, operation_id) and connected
-	connected = _connect_dock_signal("bridge_clear_requested", _on_bridge_clear_requested, operation_id) and connected
+	connected = _connect_dock_signal("runtime_install_requested", _on_bridge_install_requested, operation_id) and connected
+	connected = _connect_dock_signal("runtime_validate_requested", _on_bridge_validate_requested, operation_id) and connected
+	connected = _connect_dock_signal("runtime_clear_requested", _on_bridge_clear_requested, operation_id) and connected
 	connected = _connect_dock_signal("clear_self_diagnostics_requested", _on_clear_self_diagnostics_requested, operation_id) and connected
 	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
 	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
@@ -598,7 +596,7 @@ func _build_dock_model() -> Dictionary:
 	var cli_clients: Array[Dictionary] = []
 	var config_platforms: Array[Dictionary] = []
 
-	if current_tab == 1:
+	if current_tab == 1 and _user_tool_service != null:
 		user_tools = _user_tool_service.list_user_tools()
 
 	if current_tab == 2:
@@ -646,8 +644,6 @@ func _build_dock_model() -> Dictionary:
 
 func _refresh_dock() -> void:
 	if _dock == null or not is_instance_valid(_dock):
-		return
-	if not _dock.is_visible_in_tree():
 		return
 	_dock.apply_model(_build_dock_model())
 
@@ -2661,8 +2657,8 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 	if not (snapshot is Dictionary):
 		return
 	if _dock and is_instance_valid(_dock):
-		if _dock.has_method("activate_host_dock_tab"):
-			_dock.activate_host_dock_tab()
+		if _dock.has_method("activate_editor_dock_tab"):
+			_dock.activate_editor_dock_tab()
 		if _dock.has_method("restore_focus_snapshot"):
 			_dock.restore_focus_snapshot(snapshot)
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
