@@ -2,6 +2,7 @@
 extends RefCounted
 class_name MCPToolLoader
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
@@ -280,41 +281,36 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 
 	var started_usec = Time.get_ticks_usec()
 	var result = executor.execute(tool_name, args)
-	var elapsed_ms = _elapsed_ms(started_usec)
-	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
+	return _finalize_tool_execution(category, tool_name, args, started_usec, result)
 
-	if result is Dictionary and _as_bool(result.get("success", true)):
-		MCPDebugBuffer.record("info", "tool_loader",
-			"%s_%s ok (%.0fms)" % [category, tool_name, elapsed_ms],
-			"%s_%s" % [category, tool_name])
-		return result
 
-	var error_message = "Tool execution failed"
-	if result is Dictionary:
-		error_message = str(result.get("error", error_message))
+func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+			"%s_%s denied: %s" % [category, tool_name, _get_permission_error(category)],
 			"%s_%s" % [category, tool_name])
-		var failure_result: Dictionary = result.duplicate(true)
-		var failure_data = failure_result.get("data", {})
-		if not (failure_data is Dictionary):
-			failure_data = {"details": failure_data}
-		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
-		failure_data["action"] = str(args.get("action", ""))
-		failure_data["error_type"] = str(failure_data.get("error_type", "tool_execution_failed"))
-		failure_data["domain"] = category
-		failure_data["elapsed_ms"] = elapsed_ms
-		failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
-		failure_result["data"] = failure_data
-		return failure_result
+		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
 
-	MCPDebugBuffer.record("warning", "tool_loader",
-		"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+	MCPDebugBuffer.record("debug", "tool_loader",
+		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
 		"%s_%s" % [category, tool_name])
-	return _failure("tool_execution_failed", category, tool_name, error_message, {
-		"action": str(args.get("action", "")),
-		"elapsed_ms": elapsed_ms
-	})
+
+	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
+	if not runtime_result.get("success", false):
+		return runtime_result
+
+	var runtime: Dictionary = runtime_result.get("runtime", {})
+	var executor = runtime.get("instance")
+	if executor == null:
+		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
+
+	var started_usec = Time.get_ticks_usec()
+	var result
+	if executor.has_method("execute_async"):
+		result = await executor.execute_async(tool_name, args)
+	else:
+		result = executor.execute(tool_name, args)
+	return _finalize_tool_execution(category, tool_name, args, started_usec, result)
 
 
 func tick(delta: float) -> void:
@@ -671,8 +667,8 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 	var executor = script_resource.new()
 	if executor == null:
 		return {"success": false, "error": "Tool executor instance creation returned null"}
-	if not executor.has_method("get_tools") or not executor.has_method("execute"):
-		return {"success": false, "error": "Tool executor does not expose get_tools/execute"}
+	if not executor.has_method("get_tools") or (not executor.has_method("execute") and not executor.has_method("execute_async")):
+		return {"success": false, "error": "Tool executor does not expose get_tools/execute or get_tools/execute_async"}
 	if executor.has_method("configure_runtime"):
 		executor.configure_runtime({
 			"tool_loader": self,
@@ -686,6 +682,44 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 		"success": true,
 		"executor": executor
 	}
+
+
+func _finalize_tool_execution(category: String, tool_name: String, args: Dictionary, started_usec: int, result) -> Dictionary:
+	var elapsed_ms = _elapsed_ms(started_usec)
+	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
+
+	if result is Dictionary and _as_bool(result.get("success", true)):
+		MCPDebugBuffer.record("info", "tool_loader",
+			"%s_%s ok (%.0fms)" % [category, tool_name, elapsed_ms],
+			"%s_%s" % [category, tool_name])
+		return result
+
+	var error_message = "Tool execution failed"
+	if result is Dictionary:
+		error_message = str(result.get("error", error_message))
+		MCPDebugBuffer.record("warning", "tool_loader",
+			"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+			"%s_%s" % [category, tool_name])
+		var failure_result: Dictionary = result.duplicate(true)
+		var failure_data = failure_result.get("data", {})
+		if not (failure_data is Dictionary):
+			failure_data = {"details": failure_data}
+		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
+		failure_data["action"] = str(args.get("action", ""))
+		failure_data["error_type"] = str(failure_data.get("error_type", "tool_execution_failed"))
+		failure_data["domain"] = category
+		failure_data["elapsed_ms"] = elapsed_ms
+		failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
+		failure_result["data"] = failure_data
+		return failure_result
+
+	MCPDebugBuffer.record("warning", "tool_loader",
+		"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
+		"%s_%s" % [category, tool_name])
+	return _failure("tool_execution_failed", category, tool_name, error_message, {
+		"action": str(args.get("action", "")),
+		"elapsed_ms": elapsed_ms
+	})
 
 
 func _load_script_resource(path: String, force_reload: bool) -> Resource:

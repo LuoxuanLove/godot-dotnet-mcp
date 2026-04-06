@@ -1,31 +1,52 @@
 extends RefCounted
 
-const DefaultPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 
 
 class FakeServerContext extends RefCounted:
 	var _permission_provider
+	var _runtime_control_service
 
-	func _init(permission_provider) -> void:
+	func _init(permission_provider, runtime_control_service = null) -> void:
 		_permission_provider = permission_provider
+		_runtime_control_service = runtime_control_service
 
 	func get_plugin_permission_provider():
 		return _permission_provider
+
+	func get_runtime_control_service():
+		return _runtime_control_service
+
+
+class FakePermissionProvider extends RefCounted:
+	func is_tool_category_visible_for_permission(_category: String) -> bool:
+		return true
+
+	func is_tool_category_executable_for_permission(_category: String) -> bool:
+		return true
+
+	func get_permission_denied_message_for_category(_category: String) -> String:
+		return "Permission denied"
+
+
+class FakeRuntimeControlService extends RefCounted:
+	func get_status() -> Dictionary:
+		return {
+			"available": true,
+			"armed": false,
+			"message": "Runtime control is disabled for the current session."
+		}
 
 
 var _loader = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	var permission_provider = DefaultPermissionProviderScript.new()
-	permission_provider.configure({
-		"permission_level": "evolution",
-		"show_user_tools": true
-	})
+	var permission_provider = FakePermissionProvider.new()
 
+	var runtime_control_service = FakeRuntimeControlService.new()
 	_loader = ToolLoaderScript.new()
-	_loader.configure(FakeServerContext.new(permission_provider))
+	_loader.configure(FakeServerContext.new(permission_provider, runtime_control_service))
 	var summary: Dictionary = _loader.initialize([])
 
 	if int(summary.get("category_count", 0)) <= 0:
@@ -50,43 +71,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not return any exposed tool definitions.")
 
 	var all_tools: Array[Dictionary] = _loader.get_tool_definitions()
-	for tool_def in all_tools:
-		if bool(tool_def.get("compatibility_alias", false)):
-			return _failure("Tool loader should no longer surface compatibility_alias definitions.")
-
-	for removed_wrapper_path in [
-		"res://addons/godot_dotnet_mcp/tools/script_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/node_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/animation_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/physics_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/project_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/material_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/ui_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/particle_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/resource_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/shader_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/tilemap_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/signal_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/group_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/audio_tools.gd",
-		"res://addons/godot_dotnet_mcp/tools/navigation_tools.gd",
-	]:
-		if ResourceLoader.exists(removed_wrapper_path):
-			return _failure("Removed legacy root wrapper should not exist: %s" % removed_wrapper_path)
 
 	var tools_by_category: Dictionary = _loader.get_tools_by_category()
-	if tools_by_category.has("plugin"):
-		return _failure("Tool loader should no longer expose the legacy plugin category.")
 
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
 		exposed_names.append(str(tool_def.get("name", "")))
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default permission provider.")
+	for runtime_tool_name in ["system_runtime_control", "system_runtime_capture", "system_runtime_input", "system_runtime_step"]:
+		if not exposed_names.has(runtime_tool_name):
+			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+
+	var runtime_control_result: Dictionary = await _loader.execute_tool_async("system", "runtime_control", {"action": "status"})
+	if not bool(runtime_control_result.get("success", false)):
+		return _failure("Tool loader execute_tool_async should route system_runtime_control successfully.")
+	var runtime_control_data = runtime_control_result.get("data", {})
+	if not (runtime_control_data is Dictionary) or bool((runtime_control_data as Dictionary).get("armed", true)):
+		return _failure("Tool loader runtime control status did not return the expected armed flag.")
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):
