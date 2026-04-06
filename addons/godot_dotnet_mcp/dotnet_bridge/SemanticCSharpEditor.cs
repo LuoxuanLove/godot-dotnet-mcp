@@ -3,17 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace GodotDotnetMcp.DotnetBridge;
 
-internal sealed record SemanticMemberPatch(
-    string TypeName,
-    string MemberName,
-    IReadOnlyList<string> Modifiers,
-    string? ReturnType,
-    IReadOnlyList<string> Parameters,
-    string? Body,
-    string? FieldType,
-    string? Initializer,
-    string? SignatureHint);
-
 internal static class SemanticCSharpEditor
 {
     public static string UpsertMethod(string text, SemanticMemberPatch patch, out PatchOperationResult result)
