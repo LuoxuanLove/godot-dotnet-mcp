@@ -21,6 +21,9 @@ class FakeBridge extends RefCounted:
 
 class FakeRuntimeControlService extends RefCounted:
 	var last_capture_args: Dictionary = {}
+	var last_enable_args: Dictionary = {}
+	var last_inputs_args: Dictionary = {}
+	var last_step_args: Dictionary = {}
 
 	func get_status() -> Dictionary:
 		return {
@@ -28,6 +31,18 @@ class FakeRuntimeControlService extends RefCounted:
 			"armed": true,
 			"active_session_id": 9,
 			"message": "Runtime control enabled for the current session."
+		}
+
+	func enable_control(args: Dictionary) -> Dictionary:
+		last_enable_args = args.duplicate(true)
+		return {
+			"success": true,
+			"data": {
+				"armed": true,
+				"session_id": 11,
+				"runtime_state": {"tick": 2}
+			},
+			"message": "Runtime control enabled"
 		}
 
 	func disable_control() -> Dictionary:
@@ -49,6 +64,7 @@ class FakeRuntimeControlService extends RefCounted:
 		}
 
 	func send_inputs(args: Dictionary) -> Dictionary:
+		last_inputs_args = args.duplicate(true)
 		return {
 			"success": true,
 			"data": {"inputs": args.get("inputs", [])},
@@ -56,9 +72,14 @@ class FakeRuntimeControlService extends RefCounted:
 		}
 
 	func step(args: Dictionary) -> Dictionary:
+		last_step_args = args.duplicate(true)
 		return {
 			"success": true,
-			"data": {"wait_frames": int(args.get("wait_frames", 0))},
+			"data": {
+				"wait_frames": int(args.get("wait_frames", 0)),
+				"frame": {"path": "res://capture/frame_0002.png"},
+				"runtime_state": {"tick": 3}
+			},
 			"message": "Runtime step completed"
 		}
 
@@ -81,12 +102,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"server": FakeRuntimeServer.new(fake_service)
 	})
 
+	var tool_defs: Array[Dictionary] = impl.get_tools()
+	if tool_defs.size() != 4:
+		return _failure("runtime system impl should expose exactly four tools.")
+	var tool_names: Array[String] = []
+	for tool_def in tool_defs:
+		tool_names.append(str(tool_def.get("name", "")))
+	for expected_name in ["runtime_control", "runtime_capture", "runtime_input", "runtime_step"]:
+		if not tool_names.has(expected_name):
+			return _failure("runtime system impl is missing tool '%s'." % expected_name)
+
 	var status_result: Dictionary = await impl.execute_async("runtime_control", {"action": "status"})
 	if not bool(status_result.get("success", false)):
 		return _failure("runtime_control status did not return a success payload.")
 	var status_data = status_result.get("data", {})
 	if not (status_data is Dictionary) or not bool((status_data as Dictionary).get("armed", false)):
 		return _failure("runtime_control status did not expose the armed runtime state.")
+
+	var enable_result: Dictionary = await impl.execute_async("runtime_control", {
+		"action": "enable",
+		"timeout_ms": 123
+	})
+	if not bool(enable_result.get("success", false)):
+		return _failure("runtime_control enable did not return a success payload.")
+	if int(fake_service.last_enable_args.get("timeout_ms", 0)) != 123:
+		return _failure("runtime_control enable did not forward timeout_ms to the runtime control service.")
+
+	var disable_result: Dictionary = await impl.execute_async("runtime_control", {"action": "disable"})
+	if not bool(disable_result.get("success", false)):
+		return _failure("runtime_control disable did not return a success payload.")
 
 	var invalid_action: Dictionary = await impl.execute_async("runtime_control", {"action": "bogus"})
 	if str(invalid_action.get("error", "")) != "invalid_argument":
@@ -112,8 +156,37 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capture did not annotate capture_mode=sequence.")
 	if int((capture_data as Dictionary).get("requested_frame_count", 0)) != 2:
 		return _failure("runtime_capture did not preserve requested_frame_count.")
+	if int((capture_data as Dictionary).get("requested_interval_frames", 0)) != 3:
+		return _failure("runtime_capture did not preserve requested_interval_frames.")
 	if int(fake_service.last_capture_args.get("frame_count", 0)) != 2:
 		return _failure("runtime_capture did not forward frame_count to the runtime control service.")
+
+	var input_result: Dictionary = await impl.execute_async("runtime_input", {
+		"inputs": [
+			{"kind": "key", "target": "Space", "op": "tap", "duration_ms": 15}
+		]
+	})
+	if not bool(input_result.get("success", false)):
+		return _failure("runtime_input valid request did not return success.")
+	if int((fake_service.last_inputs_args.get("inputs", []) as Array).size()) != 1:
+		return _failure("runtime_input did not forward inputs to the runtime control service.")
+
+	var step_result: Dictionary = await impl.execute_async("runtime_step", {
+		"wait_frames": 4,
+		"capture": true,
+		"capture_label": "step-check"
+	})
+	if not bool(step_result.get("success", false)):
+		return _failure("runtime_step valid request did not return success.")
+	var step_data = step_result.get("data", {})
+	if not (step_data is Dictionary) or int((step_data as Dictionary).get("wait_frames", 0)) != 4:
+		return _failure("runtime_step did not preserve wait_frames.")
+	if str((step_data as Dictionary).get("runtime_state", {}).get("tick", "")) != "3":
+		return _failure("runtime_step did not preserve runtime_state from the service result.")
+	if str((step_data as Dictionary).get("frame", {}).get("path", "")).is_empty():
+		return _failure("runtime_step did not preserve the captured frame payload.")
+	if int(fake_service.last_step_args.get("wait_frames", 0)) != 4:
+		return _failure("runtime_step did not forward wait_frames to the runtime control service.")
 
 	return {
 		"name": "system_runtime_impl_contracts",
@@ -121,7 +194,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"status_message": str(status_result.get("message", "")),
-			"capture_mode": str((capture_data as Dictionary).get("capture_mode", ""))
+			"capture_mode": str((capture_data as Dictionary).get("capture_mode", "")),
+			"tool_count": tool_defs.size()
 		}
 	}
 

@@ -4,6 +4,8 @@ extends RefCounted
 ## Shared atomic tool bridge for system implementations.
 ## call_atomic() is the single abstraction point for the v1 Backend Router.
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+
 ## Paths protected from write operations via system/user tools.
 ## Write ops targeting these paths require explicit allow_plugin_write=true in args.
 const PLUGIN_PROTECTED_PATHS: Array = [
