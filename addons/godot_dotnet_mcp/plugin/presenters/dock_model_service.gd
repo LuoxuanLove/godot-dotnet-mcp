@@ -7,13 +7,14 @@ const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
 
 var _state
 var _localization
 var _server_controller
 var _tool_catalog
 var _config_service
-var _dock_presenter
+var _dock_presenter = DockPresenterScript.new()
 var _user_tool_service
 var _client_install_detection_service
 var _user_tool_watch_service
@@ -22,25 +23,59 @@ var _self_diagnostic_feature
 var _get_editor_scale := Callable()
 
 
-func configure(context) -> void:
-	if context == null:
-		dispose()
+func configure(
+	context_or_state,
+	localization = null,
+	server_controller = null,
+	tool_catalog = null,
+	config_service = null,
+	dock_presenter = null,
+	user_tool_service = null,
+	client_install_detection_service = null,
+	user_tool_watch_service = null,
+	get_editor_scale: Callable = Callable()
+) -> void:
+	if _dock_presenter == null:
+		_dock_presenter = DockPresenterScript.new()
+	if localization == null and server_controller == null and tool_catalog == null and config_service == null and user_tool_service == null and client_install_detection_service == null and user_tool_watch_service == null:
+		if context_or_state == null:
+			dispose()
+			return
+		_state = context_or_state.get("state")
+		_localization = context_or_state.get("localization")
+		_server_controller = context_or_state.get("server_controller")
+		_tool_catalog = context_or_state.get("tool_catalog")
+		_config_service = context_or_state.get("config_service")
+		var injected_presenter = context_or_state.get("dock_presenter")
+		if injected_presenter != null:
+			_dock_presenter = injected_presenter
+		_user_tool_service = context_or_state.get("user_tool_service")
+		_client_install_detection_service = context_or_state.get("client_install_detection_service")
+		_user_tool_watch_service = context_or_state.get("user_tool_watch_service")
+		_tool_access_feature = context_or_state.get("tool_access_feature")
+		_self_diagnostic_feature = context_or_state.get("self_diagnostic_feature")
+		var resolved_editor_scale = context_or_state.get("get_editor_scale", Callable())
+		_get_editor_scale = resolved_editor_scale if resolved_editor_scale is Callable else Callable()
 		return
-	_state = context.state
-	_localization = context.localization
-	_server_controller = context.server_controller
-	_tool_catalog = context.tool_catalog
-	_config_service = context.config_service
-	_dock_presenter = context.dock_presenter
-	_user_tool_service = context.user_tool_service
-	_client_install_detection_service = context.client_install_detection_service
-	_user_tool_watch_service = context.user_tool_watch_service
-	_tool_access_feature = context.tool_access_feature
-	_self_diagnostic_feature = context.self_diagnostic_feature
-	_get_editor_scale = context.get_editor_scale
+
+	_state = context_or_state
+	_localization = localization
+	_server_controller = server_controller
+	_tool_catalog = tool_catalog
+	_config_service = config_service
+	if dock_presenter != null:
+		_dock_presenter = dock_presenter
+	_user_tool_service = user_tool_service
+	_client_install_detection_service = client_install_detection_service
+	_user_tool_watch_service = user_tool_watch_service
+	_tool_access_feature = null
+	_self_diagnostic_feature = null
+	_get_editor_scale = get_editor_scale
 
 
 func dispose() -> void:
+	if _dock_presenter != null and _dock_presenter.has_method("dispose"):
+		_dock_presenter.dispose()
 	_state = null
 	_localization = null
 	_server_controller = null
@@ -68,7 +103,7 @@ func build_model() -> Dictionary:
 	if int(_state.current_tab) == 2:
 		client_install_statuses = _get_client_install_statuses(settings)
 
-	return _dock_presenter.build_model({
+	var model = _dock_presenter.build_model({
 		"state": _state,
 		"settings": settings,
 		"localization": _localization,
@@ -91,6 +126,8 @@ func build_model() -> Dictionary:
 		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
 		"client_install_statuses": client_install_statuses
 	})
+	model["all_tools_by_category"] = all_tools_by_category
+	return model
 
 
 func _get_settings() -> Dictionary:

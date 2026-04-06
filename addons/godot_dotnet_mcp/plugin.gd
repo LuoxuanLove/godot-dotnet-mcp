@@ -9,6 +9,7 @@ const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const BridgeInstallServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/bridge_install_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
+const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
@@ -29,6 +30,7 @@ var _settings_store := SettingsStore.new()
 var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
+var _dock_model_service: DockModelService = DockModelService.new()
 var _client_install_detection_service := ClientInstallDetectionService.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
@@ -91,6 +93,9 @@ func _exit_tree() -> void:
 	_user_tool_service = null
 	_user_tool_watch_service = null
 	_config_service = null
+	if _dock_model_service != null:
+		_dock_model_service.dispose()
+	_dock_model_service = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -558,94 +563,24 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	return connected
 
 
-func _build_dock_model() -> Dictionary:
-	if _tool_catalog == null:
-		_tool_catalog = ToolCatalogService.new()
-	if _localization == null:
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-	if _user_tool_service == null:
-		_user_tool_service = UserToolService.new()
-
-	var all_tools_by_category = _server_controller.get_all_tools_by_category().duplicate(true)
-	var tools_by_category = all_tools_by_category.duplicate(true)
-	for category in tools_by_category.keys():
-		if not is_tool_category_visible_for_permission(str(category)):
-			tools_by_category.erase(category)
-	var tool_names = _tool_catalog.build_tool_name_index(all_tools_by_category)
-	var profile_id = str(_state.settings.get("tool_profile_id", "default"))
-	var current_tab = int(_state.current_tab)
-
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		profile_id = _tool_catalog.find_matching_profile_id(
-			_state.settings.get("disabled_tools", []),
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names
-		)
-		if profile_id.is_empty():
-			profile_id = "default"
-		_state.settings["tool_profile_id"] = profile_id
-
-	var self_diagnostics = _build_self_diagnostic_health_snapshot()
-	var bridge_install = _get_bridge_install_service().build_snapshot(_state.settings)
-	var user_tool_watch = _get_user_tool_watch_status()
-	var user_tools: Array = []
-	var desktop_clients: Array[Dictionary] = []
-	var cli_clients: Array[Dictionary] = []
-	var config_platforms: Array[Dictionary] = []
-
-	if current_tab == 1 and _user_tool_service != null:
-		user_tools = _user_tool_service.list_user_tools()
-
-	if current_tab == 2:
-		var client_install_statuses = _get_client_install_statuses()
-		desktop_clients = _build_desktop_client_models(client_install_statuses)
-		cli_clients = _build_cli_client_models(client_install_statuses)
-		config_platforms = _build_config_platform_models(desktop_clients, cli_clients)
-		_state.current_config_platform = _resolve_current_config_platform(config_platforms)
-		_state.settings["current_config_platform"] = _state.current_config_platform
-	return {
-		"localization": _localization,
-		"settings": _state.settings,
-		"current_language": _state.resolve_active_language(_localization),
-		"current_tab": _state.current_tab,
-		"permission_levels": PluginRuntimeState.PERMISSION_LEVELS,
-		"current_permission_level": _get_permission_level(),
-		"log_levels": MCPDebugBuffer.get_available_levels(),
-		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
-		"current_cli_scope": _state.current_cli_scope,
-		"current_config_platform": _state.current_config_platform,
-		"tool_profile_id": profile_id,
-		"editor_scale": _get_editor_scale(),
-		"is_running": _server_controller.is_running(),
-		"stats": _server_controller.get_connection_stats(),
-		"domain_states": _server_controller.get_domain_states(),
-		"reload_status": _server_controller.get_reload_status(),
-		"performance": _server_controller.get_performance_summary(),
-		"languages": _localization.get_available_languages(),
-		"tools_by_category": tools_by_category,
-		"tool_load_errors": _server_controller.get_tool_load_errors(),
-		"self_diagnostics": self_diagnostics,
-		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
-		"bridge_install": bridge_install,
-		"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
-		"profile_description": _get_tool_profile_description(profile_id, tool_names),
-		"user_tools": user_tools,
-		"user_tool_watch": user_tool_watch,
-		"desktop_clients": desktop_clients,
-		"cli_clients": cli_clients,
-		"config_platforms": config_platforms,
-	}
-
-
 func _refresh_dock() -> void:
 	if _dock == null or not is_instance_valid(_dock):
 		return
-	_dock.apply_model(_build_dock_model())
+	if _dock_model_service == null:
+		_dock_model_service = DockModelService.new()
+	_dock_model_service.configure(
+		_state,
+		_localization,
+		_server_controller,
+		_tool_catalog,
+		_config_service,
+		null,
+		_user_tool_service,
+		_client_install_detection_service,
+		_user_tool_watch_service,
+		Callable(self, "_get_editor_scale")
+	)
+	_dock.apply_model(_dock_model_service.build_model())
 
 
 func _apply_initial_tool_profile_if_needed() -> void:
@@ -668,276 +603,6 @@ func _apply_initial_tool_profile_if_needed() -> void:
 	_save_settings()
 
 
-func _get_tool_profile_description(profile_id: String, tool_names: Array) -> String:
-	var description = ""
-	for profile in PluginRuntimeState.BUILTIN_TOOL_PROFILES:
-		if str(profile.get("id", "")) == profile_id:
-			description = _localization.get_text(str(profile.get("desc_key", "")))
-			break
-
-	if description.is_empty() and _state.custom_tool_profiles.has(profile_id):
-		description = _localization.get_text("tool_profile_custom_desc") % [str(_state.custom_tool_profiles[profile_id].get("name", profile_id))]
-
-	if description.is_empty():
-		description = _localization.get_text("tool_profile_default_desc")
-
-	if not _tool_catalog.profile_matches_state(
-		profile_id,
-		_state.settings.get("disabled_tools", []),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names
-	):
-		description = "%s %s" % [description, _localization.get_text("tool_profile_modified_desc")]
-
-	return description
-
-
-func _build_desktop_client_models(client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	var transport = _build_client_transport_model(host, port)
-	return [
-		_build_client_ui_model("claude_desktop", {
-			"id": "claude_desktop",
-			"name_key": "config_client_claude_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("claude_desktop", transport), transport),
-			"path": _config_service.get_claude_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("cursor", {
-			"id": "cursor",
-			"name_key": "config_client_cursor",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("cursor", transport), transport),
-			"path": _config_service.get_cursor_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("trae", {
-			"id": "trae",
-			"name_key": "config_client_trae",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("trae", transport), transport),
-			"path": _config_service.get_trae_config_path(),
-			"content": _build_desktop_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses),
-		_build_client_ui_model("codex_desktop", {
-			"id": "codex_desktop",
-			"name_key": "config_client_codex_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("codex_desktop", transport), transport),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses),
-		_build_client_ui_model("opencode_desktop", {
-			"id": "opencode_desktop",
-			"name_key": "config_client_opencode_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("opencode_desktop", transport), transport),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses),
-		_build_client_ui_model("gemini", {
-			"id": "gemini",
-			"name_key": "config_client_gemini",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("gemini", transport), transport),
-			"path": _config_service.get_gemini_config_path(),
-			"content": _build_gemini_client_config_content(transport),
-			"writeable": true
-		}, client_install_statuses)
-	]
-
-
-func _build_cli_client_models(client_install_statuses: Dictionary = {}) -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	var transport = _build_client_transport_model(host, port)
-	return [
-		_build_client_ui_model("claude_code", {
-			"id": "claude_code",
-			"name_key": "config_client_claude_code",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("claude_code", transport), transport),
-			"content": _build_claude_code_cli_content(transport),
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses),
-		_build_client_ui_model("codex", {
-			"id": "codex",
-			"name_key": "config_client_codex",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("codex", transport), transport),
-			"content": _build_codex_cli_content(transport),
-			"primary_action_label_key": "config_client_action_add",
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses),
-		_build_client_ui_model("opencode", {
-			"id": "opencode",
-			"name_key": "config_client_opencode",
-			"summary_text": _build_client_summary_text(_get_cli_summary_key("opencode", transport), transport),
-			"path": _config_service.get_opencode_config_path(),
-			"content": _build_opencode_cli_content(transport),
-			"writeable": true,
-			"launch_action_label_key": "config_client_action_open_terminal"
-		}, client_install_statuses)
-	]
-
-
-func _build_client_transport_model(host: String, port: int) -> Dictionary:
-	return {
-		"mode": "http",
-		"host": host,
-		"port": port,
-		"mode_label_key": "config_transport_http_fallback"
-	}
-
-
-func _build_client_summary_text(base_key: String, transport: Dictionary) -> String:
-	return _localization.get_text(base_key)
-
-
-func _build_desktop_client_config_content(transport: Dictionary) -> String:
-	return _config_service.get_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
-
-
-func _build_gemini_client_config_content(transport: Dictionary) -> String:
-	return _config_service.get_http_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
-
-
-func _build_claude_code_cli_content(transport: Dictionary) -> String:
-	return _config_service.get_claude_code_command(
-		_state.current_cli_scope,
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _build_codex_cli_content(transport: Dictionary) -> String:
-	return _config_service.get_codex_command(
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _build_opencode_cli_content(transport: Dictionary) -> String:
-	return _config_service.get_opencode_remote_config(
-		str(transport.get("host", "127.0.0.1")),
-		int(transport.get("port", 3000))
-	)
-
-
-func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
-	return "config_client_%s_desc" % client_id
-
-
-func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> String:
-	return "config_client_%s_desc" % client_id
-
-
-func _build_client_ui_model(client_id: String, client: Dictionary, client_install_statuses: Dictionary) -> Dictionary:
-	var model = client.duplicate(true)
-	var detection: Dictionary = client_install_statuses.get(client_id, {})
-	var codex_cli_detection: Dictionary = client_install_statuses.get("codex", {})
-	var opencode_cli_detection: Dictionary = client_install_statuses.get("opencode", {})
-	model["path_label_text"] = _localization.get_text("config_client_write_path_label")
-	if detection.is_empty():
-		return model
-
-	var status = str(detection.get("status", ""))
-	if not status.is_empty():
-		model["install_status_text"] = _get_client_install_status_text(status)
-		model["install_message_text"] = _get_client_install_message_text(client_id, status)
-	if bool(detection.get("manual_path_invalid", false)):
-		model["install_message_text"] = _localization.get_text("config_client_manual_path_invalid_msg")
-
-	var runtime_status = str(detection.get("runtime_status", {}).get("status", ""))
-	if not runtime_status.is_empty():
-		model["runtime_status_text"] = _get_client_runtime_status_text(runtime_status)
-
-	var entry_status = str(detection.get("config_entry_status", {}).get("status", ""))
-	if not entry_status.is_empty():
-		model["entry_status_text"] = _get_client_entry_status_text(entry_status)
-
-	var config_path = str(detection.get("config_path", "")).strip_edges()
-	if not config_path.is_empty():
-		model["path"] = config_path
-
-	var executable_path = str(detection.get("executable_path", "")).strip_edges()
-	var using_manual_path = bool(detection.get("using_manual_path", false))
-	var has_manual_path = bool(detection.get("has_manual_path", false))
-	model["path_source_text"] = _get_client_path_source_text(
-		str(detection.get("detected_via", "")),
-		using_manual_path,
-		not executable_path.is_empty()
-	)
-	if not executable_path.is_empty():
-		if client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
-			model["detail_label_text"] = _localization.get_text("config_client_cli_entry_label")
-			model["explanation_text"] = _localization.get_text("config_client_cli_detected_explainer")
-		else:
-			model["detail_label_text"] = _localization.get_text("config_client_program_entry_label")
-			model["explanation_text"] = _localization.get_text("config_client_desktop_path_explainer")
-		model["detail_value"] = executable_path
-	elif client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
-		model["detail_label_text"] = _localization.get_text("config_client_cli_path_label")
-		model["detail_value"] = executable_path
-		model["explanation_text"] = _localization.get_text("config_client_cli_missing_explainer")
-	elif client_id == "claude_desktop" or client_id == "cursor" or client_id == "trae":
-		model["explanation_text"] = _localization.get_text("config_client_desktop_write_only_explainer")
-	else:
-		model["explanation_text"] = _localization.get_text("config_client_pick_path_explainer")
-
-	if using_manual_path:
-		model["explanation_text"] = _localization.get_text("config_client_custom_path_explainer")
-
-	match client_id:
-		"codex_desktop":
-			model["guidance_text"] = _localization.get_text(
-				"config_client_codex_desktop_cli_recommendation_ready"
-				if str(codex_cli_detection.get("status", "")) == "ready"
-				else "config_client_codex_desktop_cli_recommendation_missing"
-			)
-			if str(detection.get("detected_via", "")) == "windows_store":
-				var store_note = _localization.get_text("config_client_codex_desktop_store_notice")
-				if not store_note.is_empty():
-					model["guidance_text"] = "%s\n%s" % [model["guidance_text"], store_note]
-		"opencode_desktop":
-			model["guidance_text"] = _localization.get_text(
-				"config_client_opencode_desktop_cli_recommendation_ready"
-				if str(opencode_cli_detection.get("status", "")) == "ready"
-				else "config_client_opencode_desktop_cli_recommendation_missing"
-			)
-
-	model["launch_supported"] = bool(detection.get("launch_supported", false))
-	model["launch_enabled"] = bool(detection.get("launch_supported", false))
-	if client_id == "cursor" or client_id == "trae":
-		model["launch_action_label_key"] = "config_client_action_open_project"
-	elif client_id == "claude_code" or client_id == "codex" or client_id == "opencode":
-		model["launch_action_label_key"] = "config_client_action_open_terminal"
-
-	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
-	model["path_pick_enabled"] = bool(detection.get("path_pick_supported", false))
-	model["path_pick_action_label_key"] = "config_client_action_reselect_path" if has_manual_path else (
-		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "opencode" else "config_client_action_choose_program_path"
-	)
-	model["path_clear_supported"] = bool(detection.get("path_clear_supported", false))
-	model["path_clear_enabled"] = bool(detection.get("path_clear_supported", false))
-	if not config_path.is_empty():
-		model["open_config_dir_supported"] = true
-		model["open_config_dir_enabled"] = not config_path.get_base_dir().is_empty()
-		model["open_config_file_supported"] = true
-		model["open_config_file_enabled"] = FileAccess.file_exists(config_path)
-
-	match client_id:
-		"claude_desktop", "cursor", "trae", "opencode":
-			model["writeable"] = bool(detection.get("write_supported", false))
-			model["remove_supported"] = bool(detection.get("write_supported", false))
-			model["remove_enabled"] = entry_status == "present"
-		"codex":
-			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
-			if not bool(detection.get("auto_add_supported", false)):
-				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status)
-		"claude_code", "codex_desktop", "opencode_desktop", "opencode":
-			model["writeable"] = false
-	return model
-
-
 func _get_client_install_statuses() -> Dictionary:
 	if _client_install_detection_service == null:
 		_client_install_detection_service = ClientInstallDetectionService.new()
@@ -955,97 +620,6 @@ func _configure_client_install_detection_service() -> void:
 	if _client_install_detection_service == null or _state == null:
 		return
 	_client_install_detection_service.configure(_state.settings)
-
-
-func _get_client_install_status_text(status: String) -> String:
-	match status:
-		"ready":
-			return _localization.get_text("config_client_status_ready")
-		"config_only":
-			return _localization.get_text("config_client_status_config_only")
-		"missing":
-			return _localization.get_text("config_client_status_missing")
-		_:
-			return _localization.get_text("config_client_status_error")
-
-
-func _get_client_runtime_status_text(status: String) -> String:
-	match status:
-		"running":
-			return _localization.get_text("config_client_runtime_running")
-		"not_running":
-			return _localization.get_text("config_client_runtime_not_running")
-		_:
-			return _localization.get_text("config_client_runtime_unknown")
-
-
-func _get_client_entry_status_text(status: String) -> String:
-	match status:
-		"present":
-			return _localization.get_text("config_client_entry_present")
-		"missing_file":
-			return _localization.get_text("config_client_entry_missing_file")
-		"empty":
-			return _localization.get_text("config_client_entry_empty")
-		"missing_server":
-			return _localization.get_text("config_client_entry_missing_server")
-		"invalid_json":
-			return _localization.get_text("config_client_entry_invalid_json")
-		"incompatible_root", "incompatible_mcp_servers":
-			return _localization.get_text("config_client_entry_incompatible")
-		_:
-			return _localization.get_text("config_client_status_error")
-
-
-func _get_client_install_message_text(client_id: String, status: String) -> String:
-	var key := "config_client_%s_%s_msg" % [client_id, status]
-	var localized = _localization.get_text(key)
-	if localized == key:
-		return ""
-	return localized
-
-
-func _get_client_path_source_text(detected_via: String, using_manual_path: bool, has_detected_path: bool) -> String:
-	if using_manual_path:
-		return _localization.get_text("config_client_path_source_manual")
-	if detected_via == "windows_store":
-		return _localization.get_text("config_client_path_source_store")
-	if has_detected_path:
-		return _localization.get_text("config_client_path_source_auto")
-	if not detected_via.is_empty():
-		return _localization.get_text("config_client_path_source_auto")
-	return _localization.get_text("config_client_path_source_missing")
-
-
-func _build_config_platform_models(desktop_clients: Array[Dictionary], cli_clients: Array[Dictionary]) -> Array[Dictionary]:
-	var platforms: Array[Dictionary] = []
-	for client in desktop_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "desktop",
-			"display_name_key": "config_platform_desktop_prefix"
-		})
-	for client in cli_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "cli",
-			"display_name_key": "config_platform_cli_prefix"
-		})
-	return platforms
-
-
-func _resolve_current_config_platform(platforms: Array[Dictionary]) -> String:
-	if platforms.is_empty():
-		return ""
-
-	for platform in platforms:
-		var platform_id = str(platform.get("id", ""))
-		if platform_id == _state.current_config_platform:
-			return platform_id
-
-	return str(platforms[0].get("id", ""))
 
 
 func _on_current_tab_changed(index: int) -> void:
