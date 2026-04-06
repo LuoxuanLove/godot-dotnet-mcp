@@ -561,6 +561,10 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_symbol_search_desc": "Search the semantic project index for symbols such as classes, scripts, and scenes.",
 	"tool_system_scene_dependency_graph_name": "Scene Dependency Graph",
 	"tool_system_scene_dependency_graph_desc": "Return scene-to-scene dependency relationships derived from static references.",
+	"tool_system_runtime_control_name": "Runtime Control",
+	"tool_system_runtime_capture_name": "Runtime Capture",
+	"tool_system_runtime_input_name": "Runtime Input",
+	"tool_system_runtime_step_name": "Runtime Step",
 
 	# Node tools
 	"tool_node_query_name": "Query",

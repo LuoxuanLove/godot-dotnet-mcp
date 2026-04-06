@@ -561,6 +561,10 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_symbol_search_desc": "在语义项目索引中搜索类、脚本、场景等符号。",
 	"tool_system_scene_dependency_graph_name": "场景依赖图",
 	"tool_system_scene_dependency_graph_desc": "返回基于静态引用分析得到的场景依赖关系。",
+	"tool_system_runtime_control_name": "运行时控制",
+	"tool_system_runtime_capture_name": "运行时捕获",
+	"tool_system_runtime_input_name": "运行时输入",
+	"tool_system_runtime_step_name": "运行时步进",
 
 	# Node tools
 	"tool_node_query_name": "查询",
