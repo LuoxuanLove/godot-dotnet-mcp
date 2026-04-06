@@ -1,6 +1,7 @@
 @tool
 extends RefCounted
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools"
 const _CUSTOM_TOOLS_ENABLED_SETTING = "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const _CUSTOM_TOOLS_ENABLED_SETTING_LEGACY = "user_tools/enable_runtime_loading"

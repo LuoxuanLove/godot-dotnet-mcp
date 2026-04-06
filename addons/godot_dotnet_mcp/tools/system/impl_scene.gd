@@ -3,6 +3,8 @@ extends RefCounted
 
 ## System implementation: scene_validate, scene_analyze, scene_patch
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+
 var bridge
 const HANDLED_TOOLS := ["scene_validate", "scene_analyze", "scene_patch"]
 

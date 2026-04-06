@@ -4,6 +4,8 @@ extends RefCounted
 ## System implementation: project_index_build, project_symbol_search, scene_dependency_graph
 ## Holds _project_index shared state -- legitimate memory sharing, not system->system calls.
 
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+
 var bridge
 var _project_index: Dictionary = {}
 
