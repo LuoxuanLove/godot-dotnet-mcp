@@ -378,7 +378,7 @@ func _remove_bridge_install_dialog() -> void:
 	_bridge_install_dialog = null
 
 
-func _ensure_client_executable_dialog() -> void:
+func _configure_client_executable_dialog() -> void:
 	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
 		return
 
@@ -410,6 +410,10 @@ func _remove_client_executable_dialog() -> void:
 		_client_executable_dialog.queue_free()
 	_client_executable_dialog = null
 	_pending_client_path_request = {}
+
+
+func _get_client_executable_dialog():
+	return _client_executable_dialog
 
 
 func _open_bridge_install_dialog() -> void:
@@ -941,33 +945,6 @@ func _on_config_write_requested(config_type: String, filepath: String, config: S
 
 func _on_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
 	_config_tab_action_service.handle_config_remove_requested(config_type, filepath, client_name)
-
-
-func _ensure_client_executable_dialog() -> void:
-	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
-		return
-	_client_executable_dialog = FileDialog.new()
-	_client_executable_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_client_executable_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_client_executable_dialog.title = _localization.get_text("msg_client_path_dialog_title")
-	_client_executable_dialog.file_selected.connect(_on_client_executable_file_selected)
-	add_child(_client_executable_dialog)
-
-
-func _get_client_executable_dialog():
-	return _client_executable_dialog
-
-
-func _remove_client_executable_dialog() -> void:
-	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
-		_client_executable_dialog.queue_free()
-	_client_executable_dialog = null
-
-
-func _remove_bridge_install_dialog() -> void:
-	if _bridge_install_dialog != null and is_instance_valid(_bridge_install_dialog):
-		_bridge_install_dialog.queue_free()
-	_bridge_install_dialog = null
 
 
 func _on_client_executable_file_selected(path: String) -> void:
@@ -1832,7 +1809,7 @@ func _configure_config_tab_action_service() -> void:
 		"save_settings": Callable(self, "_save_settings"),
 		"show_message": Callable(self, "_show_message"),
 		"show_confirmation": Callable(self, "_show_confirmation"),
-		"ensure_client_executable_dialog": Callable(self, "_ensure_client_executable_dialog"),
+		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
 		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
 	})
 
