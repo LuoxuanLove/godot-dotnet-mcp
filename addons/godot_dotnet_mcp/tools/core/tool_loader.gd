@@ -5,7 +5,7 @@ class_name MCPToolLoader
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
-const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
+const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -16,8 +16,7 @@ var _tool_definitions_by_category: Dictionary = {}
 var _disabled_tools: Dictionary = {}
 var _load_errors: Array[Dictionary] = []
 var _reload_status: Dictionary = {}
-var _gdscript_lsp_diagnostics_service
-var _gdscript_lsp_diagnostics_generation := 0
+var _tool_lsp_diagnostics_adapter = null
 var _force_reload_script_load := false
 var _performance: Dictionary = {
 	"startup_ms": 0.0,
@@ -35,6 +34,7 @@ func configure(server_context: Object) -> void:
 		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
 		if runtime_bridge != null and runtime_bridge.has_method("set_tool_loader"):
 			runtime_bridge.set_tool_loader(self)
+	_ensure_lsp_diagnostics_adapter()
 	_refresh_runtime_context()
 
 
@@ -72,6 +72,16 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 
 func reload_registry(disabled_tools: Array = []) -> Dictionary:
 	return initialize(disabled_tools)
+
+
+func shutdown() -> void:
+	for category in _runtime_by_category.keys():
+		_unload_runtime(str(category), "shutdown")
+	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("dispose"):
+		_tool_lsp_diagnostics_adapter.dispose()
+	_tool_lsp_diagnostics_adapter = null
+	_force_reload_script_load = false
+	_reset_state()
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
@@ -322,57 +332,50 @@ func tick(delta: float) -> void:
 		if category == "user":
 			_sync_user_tool_runtime_definitions(executor)
 			_maybe_unload_idle_user_runtime(executor)
-	var diagnostics_service = get_gdscript_lsp_diagnostics_service()
-	if diagnostics_service != null and diagnostics_service.has_method("tick"):
-		diagnostics_service.tick(delta)
+	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
+	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
+		diagnostics_adapter.tick(delta)
 
 
 func get_gdscript_lsp_diagnostics_service():
-	if _gdscript_lsp_diagnostics_service != null and is_instance_valid(_gdscript_lsp_diagnostics_service):
-		return _gdscript_lsp_diagnostics_service
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("get_gdscript_lsp_diagnostics_service"):
-			var runtime_service = runtime_bridge.get_gdscript_lsp_diagnostics_service()
-			if runtime_service != null and is_instance_valid(runtime_service):
-				_gdscript_lsp_diagnostics_service = runtime_service
-				return _gdscript_lsp_diagnostics_service
-	if _gdscript_lsp_diagnostics_service == null or not is_instance_valid(_gdscript_lsp_diagnostics_service):
-		_reset_gdscript_lsp_diagnostics_service()
-	return _gdscript_lsp_diagnostics_service
+	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
+	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_service"):
+		return diagnostics_adapter.get_service()
+	return null
 
 
 func get_lsp_diagnostics_debug_snapshot() -> Dictionary:
-	var service = get_gdscript_lsp_diagnostics_service()
-	var snapshot: Dictionary = {
+	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
+	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_debug_snapshot"):
+		return diagnostics_adapter.get_debug_snapshot(get_tool_loader_status())
+	return {
 		"has_tool_loader": true,
-		"service_available": service != null,
-		"service_generation": _gdscript_lsp_diagnostics_generation,
+		"service_available": false,
+		"service_generation": 0,
 		"tool_loader_status": get_tool_loader_status()
 	}
-	if service != null and service.has_method("get_debug_snapshot"):
-		snapshot["service"] = service.get_debug_snapshot()
-	return snapshot
 
 
 func _reset_gdscript_lsp_diagnostics_service() -> void:
-	if _gdscript_lsp_diagnostics_service != null and is_instance_valid(_gdscript_lsp_diagnostics_service):
-		if _gdscript_lsp_diagnostics_service.has_method("clear"):
-			_gdscript_lsp_diagnostics_service.clear()
-	var diagnostics_script = ResourceLoader.load(
-		GDScriptLspDiagnosticsServicePath,
-		"",
-		ResourceLoader.CACHE_MODE_REPLACE
-	)
-	if diagnostics_script == null:
-		_gdscript_lsp_diagnostics_service = null
-		return
-	_gdscript_lsp_diagnostics_service = diagnostics_script.new()
-	_gdscript_lsp_diagnostics_generation += 1
+	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
+	if diagnostics_adapter != null and diagnostics_adapter.has_method("reset"):
+		diagnostics_adapter.reset()
+
+
+func _ensure_lsp_diagnostics_adapter():
+	if _tool_lsp_diagnostics_adapter == null:
+		_tool_lsp_diagnostics_adapter = ToolLspDiagnosticsAdapterScript.new()
+	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("configure"):
+		_tool_lsp_diagnostics_adapter.configure(self, {
+			"runtime_bridge": _get_runtime_bridge()
+		})
+	return _tool_lsp_diagnostics_adapter
+
+
+func _get_runtime_bridge():
 	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
-			runtime_bridge.set_gdscript_lsp_diagnostics_service(_gdscript_lsp_diagnostics_service)
+		return Engine.get_singleton("MCPRuntimeBridge")
+	return null
 
 
 func _refresh_runtime_context() -> void:
@@ -777,10 +780,23 @@ func _unload_runtime(category: String, reason: String) -> void:
 	if not _runtime_by_category.has(category):
 		return
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
+	var executor = runtime.get("instance", null)
+	_dispose_executor_instance(executor)
 	runtime["instance"] = null
 	runtime["state"] = "definitions_only"
 	runtime["last_unloaded_reason"] = reason
 	_runtime_by_category[category] = runtime
+
+
+func _dispose_executor_instance(executor) -> void:
+	if executor == null:
+		return
+	if executor.has_method("dispose"):
+		executor.dispose()
+	if executor.has_method("shutdown"):
+		executor.shutdown()
+	if executor.has_method("clear"):
+		executor.clear()
 
 
 func _record_tool_call_metric(full_name: String, category: String, elapsed_ms: float) -> void:
