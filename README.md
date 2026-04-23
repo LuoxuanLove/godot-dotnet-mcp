@@ -17,8 +17,8 @@
 
 - `addons/godot_dotnet_mcp/`
   The Godot plugin: MCP HTTP server, tool routing, runtime services, and the plugin-internal Roslyn façade.
-- `dotnet_bridge/`
-  Shared Roslyn syntax core used by the plugin façade.
+- `addons/godot_dotnet_mcp/dotnet_bridge/`
+  Plugin-internal Roslyn syntax library used by the façade.
 - `tests/godot_plugin_harness/`, `tests/godot_plugin_harness_fixture/`
   Headless harness for plugin runtime verification.
 - `docs/`
@@ -46,7 +46,7 @@ Then:
 2. Go to `Project Settings > Plugins`.
 3. Enable `Godot .NET MCP`.
 4. Open `MCPDock`.
-5. Start the service from the `Server` tab.
+5. Start the service from the `Home` tab.
 
 ### Option 2: Source / development workflow
 
@@ -70,6 +70,7 @@ Then follow steps 1-5 above.
 The plugin is required for live editor tools:
 
 - `system_project_state`
+- `system_editor_state`
 - `system_runtime_diagnose`
 - `system_scene_analyze`
 - `system_script_analyze`
@@ -77,7 +78,7 @@ The plugin is required for live editor tools:
 
 ### 2. Connect your MCP client
 
-The MCP endpoint is `http://127.0.0.1:3000/mcp` (or the current port shown in `MCPDock > Server`).
+The MCP endpoint is `http://127.0.0.1:3000/mcp` (or the current port shown in `MCPDock > Home`).
 
 Configure your MCP client to connect to that HTTP endpoint.
 
@@ -100,7 +101,7 @@ Each `.gd` file should implement `handles()`, `get_tools()`, and `execute()`, wi
 
 - C# parsing is handled by plugin-internal Roslyn running inside the Godot .NET runtime.
 - The analysis is syntax-first: only syntax tree information is extracted, no SemanticModel or project compilation.
-- The `dotnet_bridge/` directory contains a shared library used by the plugin façade.
+- The `addons/godot_dotnet_mcp/dotnet_bridge/` directory contains the plugin-internal Roslyn syntax library.
 - No attach protocol, no child process — the plugin is self-contained.
 
 ## Docs

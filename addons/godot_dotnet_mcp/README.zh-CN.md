@@ -9,7 +9,9 @@
 
 嵌入 Godot 编辑器进程的 MCP 服务端。调用 `system_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再根据观察到的问题，用场景、脚本、节点或资源工具做精准修改。
 
-系统层（15 个内置工具）是 Agent 的推荐起点，覆盖项目快照、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
+系统层是 Agent 的推荐起点，覆盖项目快照、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
+
+插件侧运行态细节仍推荐通过 `plugin_runtime_state` 获取；其中 `action=get_lsp_diagnostics_status` 是详细 LSP 自检入口，而 `system_project_state(include_runtime_health=true)` 只返回轻量 `self_diagnostics`、`lsp_diagnostics` 与 `tool_loader` 健康摘要。
 
 如需扩展工具集：在 `custom_tools/` 中放置 `.gd` 文件，实现 `handles / get_tools / execute`，工具名统一以 `user_` 开头。插件自动发现并加载。`plugin_evolution` 工具组负责脚手架、审计和删除。
 
@@ -51,7 +53,7 @@ addons/godot_dotnet_mcp
 
 ### 方式二：作为 Git Submodule
 
-仓库根目录内含 `addons/godot_dotnet_mcp/`（v0.4 后重组，插件不再在仓库根部）。添加子模块时，克隆到父级目录：
+仓库根目录内含 `addons/godot_dotnet_mcp/`。添加子模块时，克隆到父级目录：
 
 ```bash
 git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dotnet-mcp
@@ -79,7 +81,7 @@ addons/godot_dotnet_mcp
 
 ### 1. 启动本地服务
 
-启用插件后，服务可根据已保存设置自动启动，也可在 `MCPDock > Server` 中手动启动。
+启用插件后，服务可根据已保存设置自动启动，也可在 `MCPDock > 主页` 中手动启动。
 
 健康检查：
 
@@ -103,9 +105,10 @@ POST http://127.0.0.1:3000/mcp
 
 打开 `MCPDock > Config`，选择目标平台后查看或复制生成结果。
 
-- 桌面端显示 JSON 配置、目标路径和写入操作
-- CLI 客户端显示对应命令文本
+- 桌面端显示 JSON 配置、目标路径，以及写入 / 移除操作
+- CLI 客户端显示对应命令文本，并在上游 CLI 支持时提供一键添加 / 移除
 - `Claude Code` 额外支持 `user / project` 作用域切换
+- `Gemini CLI` 同样按当前 `settings.json` 作用域支持 `user / project` 切换
 
 推荐顺序：
 

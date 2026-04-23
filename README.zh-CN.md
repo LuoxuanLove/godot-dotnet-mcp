@@ -17,8 +17,8 @@
 
 - `addons/godot_dotnet_mcp/`
   Godot 插件本体：MCP HTTP 服务端、工具路由、运行时服务及插件内 Roslyn façade。
-- `dotnet_bridge/`
-  供插件 façade 使用的共享 Roslyn 语法核心。
+- `addons/godot_dotnet_mcp/dotnet_bridge/`
+  供 façade 使用的插件内 Roslyn 语法库。
 - `tests/godot_plugin_harness/`、`tests/godot_plugin_harness_fixture/`
   用于插件运行时验证的 Headless Harness。
 - `docs/`
@@ -46,7 +46,7 @@ addons/godot_dotnet_mcp
 2. 进入 `Project Settings > Plugins`。
 3. 启用 `Godot .NET MCP`。
 4. 打开 `MCPDock`。
-5. 在 `Server` 页签中启动服务。
+5. 在 `主页` 页签中启动服务。
 
 ### 方式二：源码 / 开发流程
 
@@ -70,6 +70,7 @@ addons/godot_dotnet_mcp
 以下实时编辑器工具依赖插件：
 
 - `system_project_state`
+- `system_editor_state`
 - `system_runtime_diagnose`
 - `system_scene_analyze`
 - `system_script_analyze`
@@ -77,7 +78,7 @@ addons/godot_dotnet_mcp
 
 ### 2. 连接 MCP 客户端
 
-MCP 端点为 `http://127.0.0.1:3000/mcp`（或 `MCPDock > Server` 中显示的当前端口）。
+MCP 端点为 `http://127.0.0.1:3000/mcp`（或 `MCPDock > 主页` 中显示的当前端口）。
 
 将 MCP 客户端配置连接到该 HTTP 端点即可。
 
@@ -100,7 +101,7 @@ addons/godot_dotnet_mcp/custom_tools/
 
 - C# 解析由运行在 Godot .NET 运行时内的插件内 Roslyn 处理。
 - 分析为纯语法优先：只提取语法树信息，无 SemanticModel 或项目编译。
-- `dotnet_bridge/` 目录包含共享库。
+- `addons/godot_dotnet_mcp/dotnet_bridge/` 目录包含插件内 Roslyn 语法库。
 - 无 attach 协议、无子进程，插件完全自包含。
 
 ## 文档入口

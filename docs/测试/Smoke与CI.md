@@ -6,7 +6,7 @@
 
 ## 1. Smoke 的定位
 
-插件 headless harness 验证插件运行时的工具装载和路由行为，不依赖外部进程或第三方测试框架。
+插件 headless harness 验证插件运行时的工具装载和路由行为，不依赖外部进程或第三方测试框架；CI 只硬门禁 `scripts/test_plugin_side_roslyn.ps1` 指定的 required subset。
 
 ---
 
@@ -23,15 +23,16 @@ tests/
       └─ *.gd  (合约测试)
 
 .github/workflows/
-└─ validate-refactor.yml
+└─ validate-plugin.yml
 ```
 
 ---
 
 ## 3. 当前进度
 
-- Plugin headless harness 已接入 CI
-- 多个合约测试 case 已覆盖运行时、工具路由、HTTP 传输层
+- Plugin headless harness 已接入 CI 的 required subset
+- 多个合约测试 case 仍可被 harness 发现，但不等于当前硬门禁
+- `plugin_entrypoint_contracts` 通过 editor probe 运行，退出时的 editor shutdown warning 在 harness 中按非致命噪音处理
 
 ---
 
@@ -39,12 +40,12 @@ tests/
 
 当前工作流：
 
-- `.github/workflows/validate-refactor.yml`
+- `.github/workflows/validate-plugin.yml`
 
 当前包含：
 
-1. Build dotnet bridge library
-2. Run plugin headless harness
+1. Build plugin Roslyn library
+2. Run plugin headless harness required subset（`scripts/test_plugin_side_roslyn.ps1` 中当前维护的 15 个 case）
 
 ---
 
@@ -53,51 +54,30 @@ tests/
 ### 已经是硬门禁的部分
 
 - dotnet bridge library build
-- plugin headless harness
+- plugin headless harness required subset
 
 ### 仍是软门禁或环境依赖的部分
 
-- plugin harness 在无 Godot 可执行文件时允许跳过
+- plugin harness 在无 Godot 可执行文件时允许跳过；其余可发现 case 不自动进入 CI 硬门禁
 
 ---
 
-## 6. 后续演进方向
-
-### 1. 测试矩阵分层
-
-建议把 CI 语义明确为：
-
-| 层级 | 建议内容 |
-|---|---|
-| `Fast Required` | dotnet build、plugin harness 中无环境依赖部分 |
-| `Environment Required` | real Godot headless harness |
-
-### 2. Guardrail 扩展
-
-后续 guardrail 不应只检查源码区与产物区边界，还应逐步补入：
-
-- 测试矩阵完整性检查
-- 超大测试文件阈值检查
-
----
-
-## 7. 推荐运行方式
+## 6. 推荐运行方式
 
 ### 本地 plugin harness
 
 ```powershell
-dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Console Path>"
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
 ```
 
-或允许跳过缺失的 Godot：
+`plugin_entrypoint_contracts` 通过 editor probe 运行时，需要显式提供 Godot 编辑器可执行文件，而不是 console 版：
 
 ```powershell
-dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --allow-skip-missing-godot
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
 ```
 
 ---
 
-## 8. 结论
+## 7. 结论
 
-当前 harness 与 CI 已经形成基础闭环。  
-下一步最重要的不是继续堆更多脚本，而是把测试的门禁语义收紧成明确的分层策略。
+当前 harness 与 CI 已经形成基础闭环，门禁边界也已清晰：required subset 走 CI，editor probe 作为环境依赖 case 单独验证。

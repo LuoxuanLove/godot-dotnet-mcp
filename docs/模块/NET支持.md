@@ -24,9 +24,14 @@
 
 推荐调用：
 
-1. `script_inspect`
-2. `script_symbols`
-3. `script_exports`
+1. `system_script_analyze`
+2. `system_bindings_audit`
+
+需要下钻时，再补充：
+
+- `script_inspect`
+- `script_symbols`
+- `script_exports`
 
 典型场景：
 
@@ -38,8 +43,13 @@
 
 推荐调用：
 
-1. `scene_bindings`
-2. `scene_audit`
+1. `system_bindings_audit`
+2. `system_scene_analyze`
+
+需要下钻时，再补充：
+
+- `scene_bindings`
+- `scene_audit`
 
 典型场景：
 
@@ -51,8 +61,9 @@
 
 推荐调用：
 
-1. `script_open.open`
-2. `script_open.open_at_line`
+1. `system_script_analyze`
+2. `script_open.open`
+3. `script_open.open_at_line`
 
 用途：
 
@@ -68,20 +79,21 @@
 
 ## 实现方法
 
-### 为什么是静态分析而不是编译器分析
+### 为什么是 syntax-first 而不是完整语义分析
 
-当前实现目标是“在 Godot 编辑器进程内稳定返回可用结构”，因此优先选择轻量静态分析，而不是引入 Roslyn 级依赖。这样做的原因：
+当前实现目标是“在 Godot 编辑器进程内稳定返回可用结构”，因此采用插件内 Roslyn 的 syntax-first 路线，而不是引入完整 SemanticModel / 项目级语义分析。这样做的原因：
 
-- 插件需要在编辑器内直接工作，不依赖外部编译过程
+- 插件需要在编辑器内直接工作，不依赖外部编译过程或独立后台宿主
 - 目标是导出字段、类信息和场景绑定，而不是完整语言服务
 - 返回速度和可移植性优先于完整语义覆盖
 
 ### 当前实现链路
 
-1. `tools/script/csharp_edit_service.gd` 与 `tools/script/inspect_service.gd` 读取或解析 `.cs` 文件文本。
-2. 共享解析逻辑提取 `namespace`、`class`、`partial class`、`base_type`、`method`、`enum`、`[Export]` 和 `[ExportGroup]`。
-3. `tools/scene/bindings_service.gd` 读取场景中的脚本实例与导出值。
-4. `scene_bindings` / `scene_audit` 将声明与实际绑定状态关联起来。
+1. `addons/godot_dotnet_mcp/dotnet_bridge/` 与 `plugin/runtime/roslyn/*` 提供插件内 Roslyn 语法分析核心。
+2. `tools/script/csharp_edit_service.gd`、`tools/script/inspect_service.gd` 与 system 脚本入口读取 `.cs` 文件文本并接入 Roslyn façade。
+3. Roslyn 路径提取 `namespace`、`class`、`partial class`、`base_type`、`method`、`enum`、`[Export]`、`[ExportGroup]` 与 parse errors。
+4. `tools/scene/bindings_service.gd` 读取场景中的脚本实例与导出值。
+5. `scene_bindings` / `scene_audit` 将声明与实际绑定状态关联起来。
 
 ### 适用边界
 

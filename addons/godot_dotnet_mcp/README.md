@@ -9,11 +9,11 @@
 
 An MCP endpoint embedded in the Godot editor process. Call `system_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then use scene, script, node, or resource tools to make targeted changes based on the observed state.
 
-The System layer (15 built-in tools) is the intended starting point for agents. It provides project-level snapshots, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
+The System layer is the intended starting point for agents. It provides project-level snapshots, editor-session snapshots, editor UI control, editor log access, runtime diagnostics, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
-For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; System tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `lsp_diagnostics` and `tool_loader` status.
+For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; System tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `self_diagnostics`, `lsp_diagnostics`, and `tool_loader` status.
 
-For GDScript diagnostics, `system_script_analyze(include_diagnostics=true)` returns structure data immediately and fills LSP diagnostics in the background from the saved file content on disk. The first call may return `pending`; later calls return the cached result. Unsaved editor buffer changes are not included yet.
+For GDScript diagnostics, `system_script_analyze(include_diagnostics=true)` returns structure data immediately and fills LSP diagnostics in the background from the saved file content on disk. The first call may return `pending`; later calls return the cached result. Unsaved editor buffer changes are excluded.
 
 To extend the tool set: place a `.gd` file in `custom_tools/` implementing `handles / get_tools / execute`, with all tool names prefixed `user_`. The plugin picks it up automatically. `plugin_evolution` tools handle scaffolding, auditing, and removal from the Dock or via MCP.
 
@@ -83,7 +83,7 @@ Then enable it as described in Option 1.
 
 ### 1. Start the local service
 
-After enabling the plugin, the service can start automatically from saved settings, or start manually from `MCPDock > Server`.
+After enabling the plugin, the service can start automatically from saved settings, or start manually from `MCPDock > Home`.
 
 Health check:
 
@@ -107,9 +107,10 @@ POST http://127.0.0.1:3000/mcp
 
 Open `MCPDock > Config`, choose a target platform, then inspect or copy the generated output.
 
-- Desktop clients show JSON config, target path, and write actions
-- CLI clients show the generated command text
+- Desktop clients show JSON config, target path, and write/remove actions
+- CLI clients show the generated command text plus one-click add/remove when the upstream CLI supports it
 - `Claude Code` additionally supports `user / project` scope switching
+- `Gemini CLI` supports the same `user / project` scope switching pattern through its active `settings.json`
 
 Recommended order:
 

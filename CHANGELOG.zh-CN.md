@@ -7,20 +7,29 @@
 - 新增已完成的内部 .NET 支持库与插件侧工具链：包含 Roslyn 分析、stdio MCP 通道，以及 C# / `.csproj` 读写工具链。
 - 新增 `custom_tools/` 外部落盘自动唤醒：将合法用户工具脚本直接放入 `res://addons/godot_dotnet_mcp/custom_tools/` 后，无需重启 Godot 即可被发现。
 - 新增 User Tool 运行时状态预览：`Tools` 预览中可查看运行时域、版本、状态、待重载、最近错误、发现来源和最近刷新原因。
+- 新增 `system_editor_state` 高层只读快照，用于统一聚合编辑器 UI 状态、Inspector、FileSystem 选择、项目运行摘要与 runtime control 状态。
+- 为 `system_project_state(include_runtime_health=true)` 新增 `self_diagnostics` 轻量健康摘要。
+- 新增 `system_editor_log` 高层工具，用于读取编辑器 Output 面板、按错误/警告筛选输出，并直接清空 Output 面板。
 
 ### Changed
 
+- 将 Dock 第一个页签的用户可见语义改为 `主页`，不再把它表述成独立的 `Server` 页；服务状态、端点、完全重载入口和插件自检继续常驻首页。
+- 扩展客户端接入流程：Claude Code CLI、Codex CLI、Gemini CLI 现支持一键添加 / 移除，桌面端入口只在确认可直接打开时才暴露对应动作。
+- 配置卡片的安装状态改为尽量展示具体配置路径或 CLI 作用域，而不是只显示笼统的“已检测到 / 未检测到”。
+- 为高层编辑器控制补入 `activate_dock_tab(title=...)`，让 Agent 可以先把 `MCPDock` 等 dock 页签切到前台，再结合截图进行视觉验证。
 - 完成 User Tool 热重载架构收口：用户工具现在按“单脚本 runtime slot”管理，不再混入 `system` 执行器生命周期。
 - 统一 User Tool 刷新流程：显式拆分为注册表刷新、运行时重载与 UI 重建三个阶段。
 - 调整 `Tools` 页统计口径：只统计系统高层工具与 User Tool，不再把内部原子工具计入可见总数。
 - `Tools` 树继续保留 `系统` 与 `用户` 两个根节点。
-- 对外 MCP 工具继续收敛为 15 个 `system_*` 高层工具，原子工具仅保留为内部依赖。
+- 对外 MCP 工具继续收敛为高层 `system_*` 工具，原子工具仅保留为内部依赖。
 - 优化自检展示：区分“最近操作”和“最近告警”，并提供可恢复告警的清除入口。
 
 ### Fixed
 
 - 修复 User Tool 运行时生命周期：外部新增、修改、删除、恢复脚本时，无需重启即可正确生效。
 - 修复空 `user` 域清理：删除最后一个 User Tool 后，运行时会正确回到 `uninitialized`。
+- 修复同步到 Mechoes 后的完全重载链路：最新插件实例可在真实编辑器中重新接管 MCP HTTP 端点并恢复健康状态。
+- 修复插件自举开发时 editor/debug 原子执行器复用旧缓存的问题，使同步后的编辑器控制与编辑器日志能力能在下一次重载后正确生效。
 
 ## 0.5.0 - 2026-03-19
 

@@ -117,11 +117,21 @@ $RequiredCases = @(
     "roslyn_parsing_contracts"
     "csharp_tool_engine_contracts"
     "plugin_path_csharp_registration_probe"
+    "system_editor_state_contracts"
+    "system_editor_log_contracts"
+    "system_runtime_health_contracts"
+    "editor_tool_executor_contracts"
+    "tool_loader_contracts"
+    "plugin_entrypoint_contracts"
     "external_host_removal_audit"
+    "client_install_detection_service_contracts"
+    "config_tab_action_service_contracts"
+    "client_config_presenter_contracts"
+    "home_tab_localization_contracts"
 )
 
 try {
-    Invoke-CommandOrThrow -Description "Build dotnet bridge library" -Command {
+    Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
         dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
     }
 
@@ -156,7 +166,7 @@ try {
         .\scripts\validate_refactor_guardrails.ps1
     }
 
-    Write-Host "Roslyn plan verification completed successfully."
+    Write-Host "Plugin harness verification completed successfully."
 }
 finally {
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue

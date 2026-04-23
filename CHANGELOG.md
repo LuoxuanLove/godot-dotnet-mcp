@@ -7,19 +7,28 @@
 - Added the first completed internal .NET support library and plugin-side tooling for Godot .NET workflows, including Roslyn analysis, stdio MCP transport, and C# / `.csproj` read-write tooling.
 - Added external `custom_tools/` watch coordination so valid user tool scripts dropped into `res://addons/godot_dotnet_mcp/custom_tools/` are discovered without restarting Godot.
 - Added user-tool runtime status to the Tools preview, including runtime domain, version, state, pending reload, last error, discovery source, and last refresh reason.
+- Added `system_editor_state` as a high-level read-only editor session snapshot aggregating editor UI state, Inspector, FileSystem selection, project runtime summary, and runtime control status.
+- Added `self_diagnostics` to `system_project_state(include_runtime_health=true)` lightweight health summaries.
+- Added `system_editor_log` as a high-level Output-panel entry for reading editor output, reading filtered warning/error lines, and clearing the Output panel without dropping down to atomic debug tools.
 
 ### Changed
 
+- Reframed the first Dock tab as `Home` instead of a dedicated `Server` page, while keeping service status, endpoint, reload entry, and self-diagnostics on the landing page.
+- Expanded client setup flow so Claude Code CLI and Codex CLI support one-click add/remove actions, desktop detections can surface launch actions more consistently, and Gemini now participates in install-status detection.
+- Tightened config-card status projection so install state can show the concrete config path or CLI scope instead of only a generic detected/missing label.
+- Added `activate_dock_tab(title=...)` to the high-level editor UI control flow so agents can bring dock tabs such as `MCPDock` to the foreground before taking verification screenshots.
 - Finished the user-tool hot reload refactor: user tools now reload as per-script runtime slots instead of being mixed into the `system` executor lifecycle.
 - Unified user-tool refresh flow under explicit registry refresh, runtime reload, and UI rebuild stages.
 - Refined the Tools page so it keeps separate `System` and `User` roots while counting only System high-level tools plus User tools in the visible total.
-- Limited externally exposed MCP tools to the 15 `system_*` high-level tools; atomic tools remain internal-only.
+- Limited externally exposed MCP tools to the 18 `system_*` high-level tools; atomic tools remain internal-only.
 - Simplified self-diagnostic presentation by separating the latest operation from the latest incident and adding a clear action for recoverable warnings.
 
 ### Fixed
 
 - Fixed user-tool runtime lifecycle so external add / change / delete / restore flows apply cleanly without requiring a Godot restart.
 - Fixed user-domain cleanup so removing the final user tool returns the domain to `uninitialized`.
+- Fixed the synchronized Mechoes integration path so the full reload action can restart the live plugin instance and keep the MCP HTTP endpoint healthy after reload.
+- Fixed stale atomic editor/debug executor reuse during plugin self-development so newly synced editor-control and editor-log behavior can be picked up by the next reload cycle.
 
 ## 0.5.0 - 2026-03-19
 

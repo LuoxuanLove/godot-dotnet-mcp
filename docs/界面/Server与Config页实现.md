@@ -1,14 +1,14 @@
-# Server 与 Config 页实现
+# Home 与 Config 页实现
 
-本文档说明 `Server` 页和 `Config` 页的场景脚本职责、动态布局逻辑和配置生成方式。
+本文档说明 `Home` 页和 `Config` 页的场景脚本职责、动态布局逻辑和配置生成方式。`server_panel.tscn` / `server_tab.gd` 的文件名保持不变，但用户可见的一号页签已按最新 README 改造成 `Home`。
 
 ---
 
-## `Server` 页
+## `Home` 页
 
 ### 目标职责
 
-`Server` 页负责：
+`Home` 页负责：
 
 - 展示当前服务状态与端点
 - 展示连接数、请求数和最近请求
@@ -23,7 +23,7 @@
 
 1. 调 `server_tab_model_projection.gd` 将 model 投影成纯展示数据
 2. 把投影结果写回状态文本、按钮状态与下拉框
-3. 维护 `Server` 页自己的响应式布局和缩放逻辑
+3. 维护 `Home` 页自己的响应式布局和缩放逻辑
 4. 把按钮与设置操作转成 signal
 
 状态概览、自诊断摘要和日志/权限/语言选项模型不再直接在 `server_tab.gd` 中拼装，而是统一下沉到 `server_tab_model_projection.gd`。
@@ -40,12 +40,12 @@
 
 ### 自诊断卡片
 
-Server 页头部的自诊断卡片展示数据来自：
+Home 页头部的自诊断卡片展示数据来自：
 
 - `plugin_runtime_state(action=get_lsp_diagnostics_status)`：详细运行态自检快照
 - `project_state(include_runtime_health=true)`：轻量健康摘要
 
-这块内容不放在 Dock 顶部公共区域，而是跟随 `Server` 页展示，以避免其他页签承载无关信息。
+这块内容跟随 `Home` 页展示，让服务状态、端点、重载入口和插件自诊断常驻首页，避免继续保留独立服务页流程。
 
 ---
 
@@ -59,8 +59,9 @@ Server 页头部的自诊断卡片展示数据来自：
 - 桌面端客户端配置展示
 - CLI 命令展示
 - Claude Code 作用域切换
-- 一键写入配置
+- 一键安装 / 写入 / 卸载 `godot-mcp`
 - 复制配置文本或命令
+- 明确展示安装状态与安装位置 / 作用域
 
 ### 控制器结构
 
@@ -81,8 +82,8 @@ Server 页头部的自诊断卡片展示数据来自：
 
 按钮逻辑：
 
-- 桌面端客户端：可显示 `Write Config` + `Copy`
-- CLI 客户端：只显示 `Copy`
+- 桌面端客户端：根据能力显示 `Write Config`、`Remove Config`、打开客户端、路径管理与复制动作
+- CLI 客户端：根据能力显示一键安装 / 卸载、打开终端、路径管理与复制动作
 
 ### 平台分组
 
