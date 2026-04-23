@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"client_manual_paths": {},
 	"current_cli_scope": "user",
 	"current_config_platform": "claude_desktop",
+	"debug_mode": true,
 	"disabled_tools": [],
 	"host": "127.0.0.1",
 	"language": "en",
@@ -38,13 +39,17 @@ const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL
 const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
 const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_bindings_audit",
-	"system_project_advise",
+	"system_editor_state",
 	"system_project_configure",
 	"system_project_run",
 	"system_project_state",
 	"system_project_stop",
 	"system_project_symbol_search",
+	"system_runtime_capture",
+	"system_runtime_control",
 	"system_runtime_diagnose",
+	"system_runtime_input",
+	"system_runtime_step",
 	"system_scene_analyze",
 	"system_scene_dependency_graph",
 	"system_scene_patch",
@@ -76,6 +81,10 @@ func resolve_active_language(localization) -> String:
 
 static func get_domain_category_consistency_issues(domain_defs: Array = TOOL_DOMAIN_DEFS) -> Array[String]:
 	return ToolPermissionPolicy.get_domain_category_consistency_issues(domain_defs)
+
+
+static func build_default_settings() -> Dictionary:
+	return DEFAULT_SETTINGS.duplicate(true)
 
 
 static func normalize_permission_level(raw_level: String) -> String:

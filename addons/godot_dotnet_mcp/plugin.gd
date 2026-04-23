@@ -7,9 +7,11 @@ const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
-const BridgeInstallServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/bridge_install_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
+const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
 const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
+const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const ConfigTabActionService = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
 const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
@@ -33,13 +35,14 @@ var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
 var _config_tab_action_service := ConfigTabActionService.new()
 var _dock_model_service: DockModelService = DockModelService.new()
+var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _client_install_detection_service := ClientInstallDetectionService.new()
 var _user_tool_service := UserToolService.new()
 var _user_tool_watch_service := UserToolWatchService.new()
-var _bridge_install_service: BridgeInstallService
+var _action_router := PluginActionRouterScript.new()
+var _dock_coordinator := PluginDockCoordinatorScript.new()
 var _localization: LocalizationService
 var _dock: Control
-var _bridge_install_dialog: FileDialog
 var _client_executable_dialog: FileDialog
 var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
@@ -56,8 +59,13 @@ func _enter_tree() -> void:
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
-	_state.settings["debug_mode"] = true
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
 
 	_attach_server_controller()
 	_configure_user_tool_watch_service()
@@ -87,9 +95,13 @@ func _exit_tree() -> void:
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.stop()
 	_remove_dock()
-	_remove_bridge_install_dialog()
 	_remove_client_executable_dialog()
 	_uninstall_editor_debugger_bridge()
+	_remove_runtime_bridge_autoload()
+	if _action_router != null:
+		_action_router.dispose()
+		_action_router = null
+	_dock_coordinator = null
 	_dispose_server_controller()
 	LocalizationService.reset_instance()
 	_localization = null
@@ -102,6 +114,7 @@ func _exit_tree() -> void:
 	if _dock_model_service != null:
 		_dock_model_service.dispose()
 	_dock_model_service = null
+	_runtime_coordinator = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -136,6 +149,8 @@ func _process(delta: float) -> void:
 
 
 func get_server() -> Node:
+	if _server_controller == null:
+		return null
 	return _server_controller.get_server()
 
 
@@ -148,10 +163,18 @@ func stop_server() -> void:
 
 
 func _attach_server_controller() -> void:
-	if _server_controller == null:
-		_server_controller = ServerRuntimeController.new()
-	_server_controller.attach(self, _state.settings)
-	_connect_server_controller_signals()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.attach_server_controller(
+		_server_controller,
+		self,
+		_state.settings,
+		_action_router,
+		Callable(self, "_create_server_controller")
+	)
 
 
 func _connect_server_controller_signals() -> void:
@@ -176,18 +199,35 @@ func _disconnect_server_controller_signals() -> void:
 		_server_controller.request_received.disconnect(_on_request_received)
 
 
+func _create_server_controller() -> ServerRuntimeController:
+	return ServerRuntimeController.new()
+
+
+func _create_editor_debugger_bridge():
+	return MCPEditorDebuggerBridge.new()
+
+
 func _dispose_server_controller() -> void:
 	if _server_controller == null:
 		return
-	_disconnect_server_controller_signals()
-	_server_controller.detach()
-	_server_controller = null
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.dispose_server_controller(_server_controller, _action_router)
 
 
 func _recreate_server_controller() -> void:
-	_dispose_server_controller()
-	_server_controller = ServerRuntimeController.new()
-	_attach_server_controller()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.recreate_server_controller(
+		_server_controller,
+		self,
+		_state.settings,
+		_action_router,
+		Callable(self, "_create_server_controller")
+	)
 	_configure_user_tool_watch_service()
 
 
@@ -199,7 +239,6 @@ func _load_state() -> void:
 		PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS
 	)
 	_state.settings = load_result["settings"]
-	_state.settings["auto_start"] = true
 	if not (_state.settings.get("client_manual_paths", {}) is Dictionary):
 		_state.settings["client_manual_paths"] = {}
 	_state.current_cli_scope = str(_state.settings.get("current_cli_scope", _state.current_cli_scope))
@@ -236,7 +275,9 @@ func _ensure_runtime_bridge_autoload() -> void:
 		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
 		return
 	_clear_runtime_bridge_root_instance()
-	add_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_runtime_coordinator.ensure_runtime_bridge_autoload(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
 	ProjectSettings.save()
 	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
 	_record_runtime_bridge_stale_instance("_ensure_runtime_bridge_autoload", str(operation.get("operation_id", "")))
@@ -253,9 +294,12 @@ func _remove_runtime_bridge_autoload() -> void:
 		_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
 		return
 	_clear_runtime_bridge_root_instance()
-	remove_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME)
-	ProjectSettings.save()
-	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	var removed = _runtime_coordinator.remove_runtime_bridge_autoload(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if not removed:
+		_finish_self_operation(operation, false, "plugin", "_remove_runtime_bridge_autoload")
+		return
 	_record_runtime_bridge_stale_instance("_remove_runtime_bridge_autoload", str(operation.get("operation_id", "")))
 	_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
 	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload removed")
@@ -272,6 +316,8 @@ func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
 
 
 func _clear_runtime_bridge_root_instance() -> void:
+	if not is_inside_tree():
+		return
 	var tree := get_tree()
 	if tree == null or tree.root == null:
 		return
@@ -291,12 +337,13 @@ func _install_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge != null:
 		_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
 		return
-	_editor_debugger_bridge = MCPEditorDebuggerBridge.new()
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_editor_debugger_bridge = _runtime_coordinator.install_editor_debugger_bridge(self, _editor_debugger_bridge, Callable(self, "_create_editor_debugger_bridge"))
 	if _editor_debugger_bridge == null:
-		_record_self_incident("error", "lifecycle_error", "editor_debugger_bridge_install_failed", "Failed to instantiate the editor debugger bridge", "plugin", "_install_editor_debugger_bridge", "", "", str(operation.get("operation_id", "")), true, "Inspect the editor debugger bridge script and plugin lifecycle output.")
+		_record_self_incident("error", "lifecycle_error", "editor_debugger_bridge_create_failed", "Failed to instantiate the editor debugger bridge", "plugin", "_install_editor_debugger_bridge", "", "", str(operation.get("operation_id", "")), true, "Inspect the editor debugger bridge script and plugin lifecycle output.")
 		_finish_self_operation(operation, false, "plugin", "_install_editor_debugger_bridge")
 		return
-	add_debugger_plugin(_editor_debugger_bridge)
 	_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
 
 
@@ -305,30 +352,38 @@ func _uninstall_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge == null:
 		_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
 		return
-	remove_debugger_plugin(_editor_debugger_bridge)
-	_editor_debugger_bridge.set_script(null)
-	_editor_debugger_bridge = null
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_editor_debugger_bridge = _runtime_coordinator.uninstall_editor_debugger_bridge(self, _editor_debugger_bridge)
 	_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
 
 
 func _create_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("create_dock", "_create_dock")
-	_remove_dock()
-	_remove_stale_docks()
-	var dock_scene = _load_packed_scene(MCP_DOCK_SCENE_PATH)
-	if dock_scene == null:
-		push_error("[Godot MCP] Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
-		MCPDebugBuffer.record("error", "plugin", "Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
-		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Failed to load dock scene", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and script dependencies.")
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var cleanup_result = _dock_coordinator.remove_stale_plugin_docks(self, _dock, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
+	if not bool(cleanup_result.get("success", false)):
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
-	_dock = dock_scene.instantiate()
-	if _dock == null:
-		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Dock scene instantiation returned null", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and its script.")
+	var result = _dock_coordinator.create_plugin_dock(
+		self,
+		_dock,
+		Callable(self, "_record_self_incident"),
+		DOCK_SLOT_RIGHT_UL,
+		MCP_DOCK_SCENE_PATH,
+		MCP_DOCK_SCRIPT_PATH,
+		Callable(self, "_load_packed_scene")
+	)
+	if not bool(result.get("success", false)):
+		var error_text = str(result.get("error", "Failed to create dock"))
+		push_error("[Godot MCP] %s" % error_text)
+		MCPDebugBuffer.record("error", "plugin", error_text)
+		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", error_text, "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and its script.")
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
+	_dock = result.get("dock", null)
 	_wire_dock_signals(str(operation.get("operation_id", "")))
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	var dock_count = _count_dock_instances()
 	if dock_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance is present after dock creation", "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and plugin reload ordering.", {"dock_count": dock_count})
@@ -337,45 +392,13 @@ func _create_dock() -> void:
 
 func _remove_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("remove_dock", "_remove_dock")
-	if _dock != null and is_instance_valid(_dock):
-		if _dock.get_parent() != null:
-			remove_control_from_docks(_dock)
-			_dock.get_parent().remove_child(_dock)
-		_dock.set_script(null)
-		_dock.free()
-	_dock = null
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var result = _dock_coordinator.remove_plugin_dock(self, _dock, MCP_DOCK_SCRIPT_PATH)
+	_dock = result.get("dock", null)
 	if _count_dock_instances() > 0:
 		_record_self_incident("warning", "reload_conflict", "instance_cleanup_incomplete", "Dock instances remain after dock removal", "plugin", "_remove_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect dock cleanup and plugin reload ordering.", {"remaining_dock_instances": _count_dock_instances()})
 	_finish_self_operation(operation, true, "plugin", "_remove_dock")
-
-
-func _ensure_bridge_install_dialog() -> void:
-	if _bridge_install_dialog != null and is_instance_valid(_bridge_install_dialog):
-		return
-
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return
-
-	_bridge_install_dialog = FileDialog.new()
-	_bridge_install_dialog.name = "BridgeInstallDialog"
-	_bridge_install_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_bridge_install_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_bridge_install_dialog.title = _localization.get_text("bridge_install_dialog_title") if _localization else "Select Bridge Executable"
-	_bridge_install_dialog.filters = PackedStringArray(["*.exe ; Bridge Executable"])
-	_bridge_install_dialog.file_selected.connect(_on_bridge_install_file_selected)
-	base_control.add_child(_bridge_install_dialog)
-
-
-func _remove_bridge_install_dialog() -> void:
-	if _bridge_install_dialog == null:
-		return
-	if is_instance_valid(_bridge_install_dialog):
-		_bridge_install_dialog.queue_free()
-	_bridge_install_dialog = null
 
 
 func _configure_client_executable_dialog() -> void:
@@ -416,51 +439,6 @@ func _get_client_executable_dialog():
 	return _client_executable_dialog
 
 
-func _open_bridge_install_dialog() -> void:
-	if _bridge_install_dialog == null or not is_instance_valid(_bridge_install_dialog):
-		_record_self_incident("error", "ui_binding_error", "bridge_install_dialog_missing", "Bridge install dialog could not be created", "plugin", "_open_bridge_install_dialog", "", "", "", true, "Inspect the editor base control and dock lifecycle.")
-		return
-	var current_bridge_path = str(_state.settings.get("bridge_executable_path", ""))
-	if not current_bridge_path.is_empty():
-		_bridge_install_dialog.current_dir = current_bridge_path.get_base_dir()
-	_bridge_install_dialog.title = _localization.get_text("bridge_install_dialog_title") if _localization else "Select Bridge Executable"
-	_bridge_install_dialog.popup_centered_ratio(0.6)
-
-
-func _on_bridge_install_requested() -> void:
-	_open_bridge_install_dialog()
-
-
-func _on_bridge_validate_requested() -> void:
-	var bridge_install_service = _get_bridge_install_service()
-	var result = bridge_install_service.validate_executable(str(_state.settings.get("bridge_executable_path", "")))
-	if not bool(result.get("success", false)):
-		_state.settings["bridge_install_state"] = BridgeInstallService.STATUS_INVALID
-		_state.settings["bridge_install_message"] = str(result.get("message", "Bridge validation failed."))
-		_save_settings()
-		_refresh_dock()
-		_show_bridge_install_feedback("bridge_install_validation_failed", str(result.get("message", "Bridge validation failed.")))
-		return
-
-	var registered = bridge_install_service.register_executable(_state.settings, str(_state.settings.get("bridge_executable_path", "")))
-	if bool(registered.get("success", false)):
-		_save_settings()
-		_refresh_dock()
-		_show_bridge_install_feedback("bridge_install_selected", str(registered.get("message", "Bridge executable registered.")))
-		return
-
-	_show_bridge_install_feedback("bridge_install_validation_failed", str(registered.get("message", "Bridge validation failed.")))
-
-
-func _on_bridge_clear_requested() -> void:
-	var bridge_install_service = _get_bridge_install_service()
-	var result = bridge_install_service.clear_executable(_state.settings)
-	if bool(result.get("success", false)):
-		_save_settings()
-		_refresh_dock()
-		_show_bridge_install_feedback("bridge_install_cleared", str(result.get("message", "Bridge registration cleared.")))
-
-
 func _on_clear_self_diagnostics_requested() -> void:
 	var result = clear_self_diagnostics_from_tools()
 	if bool(result.get("success", false)):
@@ -469,67 +447,14 @@ func _on_clear_self_diagnostics_requested() -> void:
 	_show_message(str(result.get("error", _localization.get_text("self_diag_clear_failed"))))
 
 
-func _on_bridge_install_file_selected(path: String) -> void:
-	var bridge_install_service = _get_bridge_install_service()
-	var result = bridge_install_service.register_executable(_state.settings, path, "plugin_file_dialog")
-	if not bool(result.get("success", false)):
-		_state.settings["bridge_install_state"] = BridgeInstallService.STATUS_INVALID
-		_state.settings["bridge_install_message"] = str(result.get("message", "Bridge validation failed."))
-		_save_settings()
-		_refresh_dock()
-		_show_bridge_install_feedback("bridge_install_validation_failed", str(result.get("message", "Bridge validation failed.")))
-		return
-
-	_save_settings()
-	_refresh_dock()
-	_show_bridge_install_feedback("bridge_install_selected", str(result.get("message", "Bridge executable registered.")))
-
-
-func _show_bridge_install_feedback(title_key: String, message: String) -> void:
-	var title = _localization.get_text(title_key) if _localization else title_key
-	if title == title_key:
-		title = "Bridge"
-	if _dock != null and is_instance_valid(_dock) and _dock.has_method("show_message"):
-		_dock.show_message(title, message)
-	else:
-		push_warning("[Godot MCP] %s: %s" % [title, message])
-
-
-func _get_bridge_install_service() -> BridgeInstallService:
-	if _bridge_install_service == null:
-		_bridge_install_service = BridgeInstallServiceScript.new()
-	return _bridge_install_service
-
-
 func _remove_stale_docks() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("remove_stale_docks", "_remove_stale_docks")
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		_finish_self_operation(operation, true, "plugin", "_remove_stale_docks")
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var result = _dock_coordinator.remove_stale_plugin_docks(self, _dock, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
+	if not bool(result.get("success", false)):
+		_finish_self_operation(operation, false, "plugin", "_remove_stale_docks")
 		return
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		_finish_self_operation(operation, true, "plugin", "_remove_stale_docks")
-		return
-
-	for child in base_control.find_children("*", "Control", true, false):
-		if child == null or not is_instance_valid(child):
-			continue
-		if child == _dock:
-			continue
-		var script = child.get_script()
-		var script_path := ""
-		if script != null:
-			script_path = str(script.resource_path)
-		if child.name != "MCPDock" and script_path != MCP_DOCK_SCRIPT_PATH:
-			continue
-		if child.get_parent() != null:
-			remove_control_from_docks(child)
-			child.get_parent().remove_child(child)
-		child.set_script(null)
-		child.free()
-		MCPDebugBuffer.record("debug", "plugin",
-			"Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
 	var remaining_count = _count_dock_instances()
 	if remaining_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance remains after stale-dock cleanup", "plugin", "_remove_stale_docks", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and editor plugin reload ordering.", {"dock_count": remaining_count})
@@ -540,37 +465,13 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	if _dock == null or not is_instance_valid(_dock):
 		_record_self_incident("error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal wiring was requested before the dock instance was ready", "plugin", "_wire_dock_signals", MCP_DOCK_SCRIPT_PATH, "", operation_id, true, "Inspect dock creation order.")
 		return false
-	var connected = true
-	connected = _connect_dock_signal("current_tab_changed", _on_current_tab_changed, operation_id) and connected
-	connected = _connect_dock_signal("port_changed", _on_port_changed, operation_id) and connected
-	connected = _connect_dock_signal("log_level_changed", _on_log_level_changed, operation_id) and connected
-	connected = _connect_dock_signal("permission_level_changed", _on_permission_level_changed, operation_id) and connected
-	connected = _connect_dock_signal("language_changed", _on_language_changed, operation_id) and connected
-	connected = _connect_dock_signal("start_requested", _on_start_requested, operation_id) and connected
-	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
-	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
-	connected = _connect_dock_signal("full_reload_requested", runtime_full_reload, operation_id) and connected
-	connected = _connect_dock_signal("runtime_install_requested", _on_bridge_install_requested, operation_id) and connected
-	connected = _connect_dock_signal("runtime_validate_requested", _on_bridge_validate_requested, operation_id) and connected
-	connected = _connect_dock_signal("runtime_clear_requested", _on_bridge_clear_requested, operation_id) and connected
-	connected = _connect_dock_signal("clear_self_diagnostics_requested", _on_clear_self_diagnostics_requested, operation_id) and connected
-	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
-	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
-	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
-	connected = _connect_dock_signal("domain_toggled", _on_domain_toggled, operation_id) and connected
-	connected = _connect_dock_signal("tree_collapse_changed", _on_tree_collapse_changed, operation_id) and connected
-	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
-	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
-	connected = _connect_dock_signal("config_client_action_requested", _on_config_client_action_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_client_launch_requested", _on_config_client_launch_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_client_path_pick_requested", _on_config_client_path_pick_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_client_path_clear_requested", _on_config_client_path_clear_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_client_open_config_dir_requested", _on_config_client_open_config_dir_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_client_open_config_file_requested", _on_config_client_open_config_file_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
-	connected = _connect_dock_signal("config_remove_requested", _on_config_remove_requested, operation_id) and connected
-	connected = _connect_dock_signal("copy_requested", _on_copy_requested, operation_id) and connected
-	return connected
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	var bindings = _dock_coordinator.build_dock_signal_bindings(_action_router)
+	return _dock_coordinator.wire_dock_signals(_dock, bindings, operation_id, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
 
 
 func _refresh_dock() -> void:
@@ -1697,26 +1598,14 @@ func _connect_dock_signal(signal_name: String, callable: Callable, operation_id:
 
 
 func _count_dock_instances() -> int:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return 0
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return 0
-	var count := 0
-	for child in base_control.find_children("*", "Control", true, false):
-		if child == null or not is_instance_valid(child):
-			continue
-		var script_path := ""
-		var script = child.get_script()
-		if script != null:
-			script_path = str(script.resource_path)
-		if child.name == "MCPDock" or script_path == MCP_DOCK_SCRIPT_PATH:
-			count += 1
-	return count
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	return _dock_coordinator.count_plugin_dock_instances(self, MCP_DOCK_SCRIPT_PATH)
 
 
 func _has_runtime_bridge_root_instance() -> bool:
+	if not is_inside_tree():
+		return false
 	var tree := get_tree()
 	if tree == null or tree.root == null:
 		return false
@@ -1840,4 +1729,3 @@ func _refresh_service_instances() -> void:
 	_client_install_detection_service = ClientInstallDetectionService.new()
 	_user_tool_service = UserToolService.new()
 	_user_tool_watch_service = UserToolWatchService.new()
-	_bridge_install_service = BridgeInstallServiceScript.new()
