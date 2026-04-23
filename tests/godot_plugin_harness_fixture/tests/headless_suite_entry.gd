@@ -77,6 +77,10 @@ func _run_suite() -> void:
 		if not warning.is_empty():
 			print("HARNESS_CASE_WARNING:%s:%s" % [case_name, warning])
 
+		var mode := str(case_info.get("mode", "headless"))
+		if mode != "headless" and only_case != case_name:
+			continue
+
 		var case_script = load(case_script_path)
 		if case_script == null:
 			results.append({

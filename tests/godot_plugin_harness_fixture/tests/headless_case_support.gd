@@ -12,7 +12,7 @@ static func discover_test_cases(root_path: String = "res://tests/") -> Array[Dic
 		discovered.append({
 			"name": _derive_case_name(script_path),
 			"path": script_path,
-			"mode": "headless"
+			"mode": _derive_case_mode(script_path)
 		})
 	return discovered
 
@@ -108,6 +108,12 @@ static func _derive_case_name(script_path: String) -> String:
 	if file_name.ends_with("_contract_test"):
 		file_name = file_name.substr(0, file_name.length() - "_contract_test".length())
 	return "%s_contracts" % file_name
+
+
+static func _derive_case_mode(script_path: String) -> String:
+	if script_path.get_file() == "plugin_entrypoint_contract_test.gd":
+		return "editor_probe"
+	return "headless"
 
 
 static func _is_headless_incompatible(source_text: String) -> bool:
