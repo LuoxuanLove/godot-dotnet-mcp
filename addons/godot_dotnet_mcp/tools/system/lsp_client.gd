@@ -18,6 +18,8 @@ const STATE_READY := "ready"
 const STATE_FAILED := "failed"
 
 var _read_buffer := PackedByteArray()
+var _endpoint_host := HOST
+var _endpoint_port := PORT
 var _request_id := 0
 var _tcp: StreamPeerTCP
 var _active_path := ""
@@ -26,6 +28,7 @@ var _active_uri := ""
 var _active_root_uri := ""
 var _source_hash := ""
 var _deadline_msec := 0
+var _request_timeout_ms := DEFAULT_RESPONSE_TIMEOUT_MS
 var _init_request_id := 0
 var _state := STATE_IDLE
 var _request_started_msec := 0
@@ -72,14 +75,15 @@ func start_diagnostics(res_path: String, source_code: String, timeout_ms: int = 
 	_source_hash = str(source_code.hash())
 	_request_id = 1
 	_init_request_id = 1
-	_deadline_msec = Time.get_ticks_msec() + maxi(timeout_ms, 1)
+	_request_timeout_ms = maxi(timeout_ms, 1)
+	_deadline_msec = Time.get_ticks_msec() + _request_timeout_ms
 	_state = STATE_CONNECTING
 	_request_started_msec = Time.get_ticks_msec()
 	_request_finished_msec = 0
 
 	_tcp = StreamPeerTCP.new()
-	if _tcp.connect_to_host(HOST, PORT) != OK:
-		return _finish_failure("Cannot connect to Godot LSP at %s:%d" % [HOST, PORT])
+	if _tcp.connect_to_host(_endpoint_host, _endpoint_port) != OK:
+		return _finish_failure("Cannot connect to Godot LSP at %s:%d" % [_endpoint_host, _endpoint_port])
 
 	_status = {
 		"available": false,
@@ -95,6 +99,11 @@ func start_diagnostics(res_path: String, source_code: String, timeout_ms: int = 
 		"note": "LSP request queued"
 	}
 	return get_status()
+
+
+func set_endpoint_for_testing(host: String, port: int) -> void:
+	_endpoint_host = host.strip_edges() if not host.strip_edges().is_empty() else HOST
+	_endpoint_port = port if port > 0 else PORT
 
 
 func tick(_delta: float) -> void:
@@ -159,7 +168,7 @@ func _tick_connecting() -> void:
 	var tcp_status := _tcp.get_status()
 	if tcp_status == StreamPeerTCP.STATUS_CONNECTING:
 		if Time.get_ticks_msec() > _deadline_msec:
-			_finish_failure("LSP connection timeout after %dms" % CONNECT_TIMEOUT_MS)
+			_finish_failure("LSP connection timeout after %dms" % _request_timeout_ms)
 		return
 
 	if tcp_status != StreamPeerTCP.STATUS_CONNECTED:
