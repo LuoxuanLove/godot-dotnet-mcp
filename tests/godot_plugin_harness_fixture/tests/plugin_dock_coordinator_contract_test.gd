@@ -158,7 +158,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var create_result = coordinator.create_plugin_dock(
 		_plugin,
 		null,
-		recorder,
+		Callable(recorder, "record_incident"),
 		0,
 		"res://tests/fake_mcp_dock.tscn",
 		PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH,
@@ -175,7 +175,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var recreate_result = coordinator.recreate_plugin_dock(
 		_plugin,
 		created_dock,
-		recorder,
+		Callable(recorder, "record_incident"),
 		0,
 		"res://tests/fake_mcp_dock.tscn",
 		PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH,

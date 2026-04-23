@@ -39,6 +39,7 @@ const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL
 const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
 const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_bindings_audit",
+	"system_editor_log",
 	"system_editor_state",
 	"system_project_configure",
 	"system_project_run",

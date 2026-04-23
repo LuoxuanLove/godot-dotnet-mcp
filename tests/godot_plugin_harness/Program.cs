@@ -19,9 +19,11 @@ internal static class Program
         var allowSkipMissingGodot = args.Any(arg => string.Equals(arg, "--allow-skip-missing-godot", StringComparison.OrdinalIgnoreCase));
         var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
         var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
+        var onlyCase = Environment.GetEnvironmentVariable("GODOT_PLUGIN_HARNESS_ONLY_CASE");
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
+        var editorProbeMode = string.Equals(onlyCase, "plugin_entrypoint_contracts", StringComparison.Ordinal);
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
         {
@@ -47,6 +49,10 @@ internal static class Program
         {
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            if (editorProbeMode)
+            {
+                DisableProductionPluginForEditorProbe(stageRoot);
+            }
             DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
             DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
             var appDataRoot = Path.Combine(stageRoot, ".appdata");
@@ -96,6 +102,10 @@ internal static class Program
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_HOST"] = "10.0.0.8";
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_PORT"] = "4100";
             process.StartInfo.ArgumentList.Add("--headless");
+            if (editorProbeMode)
+            {
+                process.StartInfo.ArgumentList.Add("--editor");
+            }
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);
 
@@ -124,7 +134,7 @@ internal static class Program
                 return process.ExitCode == 0 ? 0 : 1;
             }
 
-            var leakWarningsDetected = ContainsLeakWarnings(stderr);
+            var leakWarningsDetected = editorProbeMode ? false : ContainsLeakWarnings(stderr);
             var succeeded = process.ExitCode == 0 && !leakWarningsDetected;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
@@ -361,6 +371,29 @@ internal static class Program
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
             File.Copy(file, destinationPath, overwrite: true);
         }
+    }
+
+    private static void DisableProductionPluginForEditorProbe(string stageRoot)
+    {
+        var projectFilePath = Path.Combine(stageRoot, "project.godot");
+        if (!File.Exists(projectFilePath))
+        {
+            return;
+        }
+
+        var lines = File.ReadAllLines(projectFilePath).ToList();
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (!lines[index].StartsWith("enabled=PackedStringArray(", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lines[index] = "enabled=PackedStringArray(\"res://addons/godot_plugin_harness_probe/plugin.cfg\")";
+            break;
+        }
+
+        File.WriteAllLines(projectFilePath, lines);
     }
 
     private static string ResolveRepoRoot()

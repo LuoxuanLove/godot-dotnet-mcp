@@ -1,7 +1,7 @@
 ﻿extends RefCounted
 
 const PluginRuntimeCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 const AUTOLOAD_NAME := "MCPRuntimeBridgeContract"
@@ -12,6 +12,7 @@ var _autoload_key := "autoload/%s" % AUTOLOAD_NAME
 
 class FakePlugin extends RefCounted:
 	var autoload_calls: Array[Dictionary] = []
+	var autoload_removed: Array[String] = []
 	var debugger_added: Array = []
 	var debugger_removed: Array = []
 
@@ -27,6 +28,10 @@ class FakePlugin extends RefCounted:
 
 	func remove_debugger_plugin(plugin) -> void:
 		debugger_removed.append(plugin)
+
+	func remove_autoload_singleton(name: String) -> void:
+		autoload_removed.append(name)
+		ProjectSettings.set_setting("autoload/%s" % name, "")
 
 	func get_tree():
 		return null
@@ -95,6 +100,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	coordinator.ensure_runtime_bridge_autoload(plugin, AUTOLOAD_NAME, RUNTIME_BRIDGE_PATH)
 	if plugin.autoload_calls.size() != 1:
 		return _failure("Runtime bridge autoload should not register twice when already installed.")
+
+	if not coordinator.remove_runtime_bridge_autoload(plugin, AUTOLOAD_NAME, RUNTIME_BRIDGE_PATH):
+		return _failure("PluginRuntimeCoordinator should remove the runtime bridge autoload.")
+	if plugin.autoload_removed.size() != 1:
+		return _failure("Runtime bridge autoload should be removed exactly once.")
+	if str(ProjectSettings.get_setting(_autoload_key, "")) != "":
+		return _failure("Runtime bridge autoload path should be cleared after removal.")
 
 	var debugger_bridge = coordinator.install_editor_debugger_bridge(plugin, null, Callable(self, "_create_fake_debugger_bridge"))
 	if debugger_bridge == null:

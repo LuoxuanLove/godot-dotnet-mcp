@@ -8,3 +8,6 @@ run/main_scene="res://tests/headless_suite_entry.tscn"
 
 [dotnet]
 project/assembly_name="GodotDotnetMcpPluginHarness"
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot_dotnet_mcp/plugin.cfg", "res://addons/godot_plugin_harness_probe/plugin.cfg")
