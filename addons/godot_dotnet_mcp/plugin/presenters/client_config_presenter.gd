@@ -34,28 +34,6 @@ func build_desktop_client_models(
 			"path": config_service.get_trae_config_path(),
 			"content": _build_desktop_client_config_content(transport, config_service),
 			"writeable": true
-		}, client_install_statuses, localization),
-		_build_client_ui_model("codex_desktop", {
-			"id": "codex_desktop",
-			"name_key": "config_client_codex_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("codex_desktop", transport), transport, localization),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses, localization),
-		_build_client_ui_model("opencode_desktop", {
-			"id": "opencode_desktop",
-			"name_key": "config_client_opencode_desktop",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("opencode_desktop", transport), transport, localization),
-			"content": "",
-			"writeable": false
-		}, client_install_statuses, localization),
-		_build_client_ui_model("gemini", {
-			"id": "gemini",
-			"name_key": "config_client_gemini",
-			"summary_text": _build_client_summary_text(_get_desktop_summary_key("gemini", transport), transport, localization),
-			"path": config_service.get_gemini_config_path(),
-			"content": _build_gemini_client_config_content(transport, config_service),
-			"writeable": true
 		}, client_install_statuses, localization)
 	]
 
@@ -73,15 +51,28 @@ func build_cli_client_models(
 		_build_client_ui_model("claude_code", {
 			"id": "claude_code",
 			"name_key": "config_client_claude_code",
+			"cli_scope": current_cli_scope,
 			"summary_text": _build_client_summary_text(_get_cli_summary_key("claude_code", transport), transport, localization),
 			"content": _build_claude_code_cli_content(current_cli_scope, transport, config_service),
+			"primary_action_label_key": "config_client_action_add",
 			"launch_action_label_key": "config_client_action_open_terminal"
 		}, client_install_statuses, localization),
 		_build_client_ui_model("codex", {
 			"id": "codex",
 			"name_key": "config_client_codex",
+			"cli_scope": current_cli_scope,
 			"summary_text": _build_client_summary_text(_get_cli_summary_key("codex", transport), transport, localization),
 			"content": _build_codex_cli_content(transport, config_service),
+			"primary_action_label_key": "config_client_action_add",
+			"launch_action_label_key": "config_client_action_open_terminal"
+		}, client_install_statuses, localization),
+		_build_client_ui_model("gemini", {
+			"id": "gemini",
+			"name_key": "config_client_gemini",
+			"cli_scope": current_cli_scope,
+			"summary_text": _build_client_summary_text(_get_cli_summary_key("gemini", transport), transport, localization),
+			"path": config_service.get_gemini_config_path(current_cli_scope),
+			"content": _build_gemini_cli_content(current_cli_scope, transport, config_service),
 			"primary_action_label_key": "config_client_action_add",
 			"launch_action_label_key": "config_client_action_open_terminal"
 		}, client_install_statuses, localization),
@@ -208,6 +199,19 @@ func _build_gemini_client_config_content(transport: Dictionary, config_service) 
 	return config_service.get_http_url_config(str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000)))
 
 
+func _build_gemini_cli_content(current_cli_scope: String, transport: Dictionary, config_service) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return config_service.get_command_config(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return config_service.get_gemini_command(
+		current_cli_scope,
+		str(transport.get("host", "127.0.0.1")),
+		int(transport.get("port", 3000))
+	)
+
+
 func _build_claude_code_cli_content(current_cli_scope: String, transport: Dictionary, config_service) -> String:
 	if str(transport.get("mode", "")) == "stdio":
 		return config_service.get_claude_code_stdio_command(
@@ -253,6 +257,8 @@ func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
 				return "config_client_claude_code_stdio_desc"
 			"codex":
 				return "config_client_codex_stdio_desc"
+			"gemini":
+				return "config_client_gemini_stdio_desc"
 			"opencode":
 				return "config_client_opencode_stdio_desc"
 	return "config_client_%s_desc" % client_id
@@ -283,7 +289,7 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 
 	var status = str(detection.get("status", ""))
 	if not status.is_empty():
-		model["install_status_text"] = _get_client_install_status_text(status, localization)
+		model["install_status_text"] = _build_client_install_status_text(client_id, model, detection, localization)
 		model["install_message_text"] = _get_client_install_message_text(client_id, status, localization)
 	if bool(detection.get("manual_path_invalid", false)):
 		model["install_message_text"] = localization.get_text("config_client_manual_path_invalid_msg")
@@ -310,14 +316,14 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		localization
 	)
 	if not executable_path.is_empty():
-		if client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
+		if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode":
 			model["detail_label_text"] = localization.get_text("config_client_cli_entry_label")
 			model["explanation_text"] = localization.get_text("config_client_cli_detected_explainer")
 		else:
 			model["detail_label_text"] = localization.get_text("config_client_program_entry_label")
 			model["explanation_text"] = localization.get_text("config_client_desktop_path_explainer")
 		model["detail_value"] = executable_path
-	elif client_id == "codex" or client_id == "claude_code" or client_id == "opencode":
+	elif client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode":
 		model["detail_label_text"] = localization.get_text("config_client_cli_path_label")
 		model["detail_value"] = executable_path
 		model["explanation_text"] = localization.get_text("config_client_cli_missing_explainer")
@@ -329,35 +335,19 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 	if using_manual_path:
 		model["explanation_text"] = localization.get_text("config_client_custom_path_explainer")
 
-	match client_id:
-		"codex_desktop":
-			model["guidance_text"] = localization.get_text(
-				"config_client_codex_desktop_cli_recommendation_ready"
-				if str(codex_cli_detection.get("status", "")) == "ready"
-				else "config_client_codex_desktop_cli_recommendation_missing"
-			)
-			if str(detection.get("detected_via", "")) == "windows_store":
-				var store_note = localization.get_text("config_client_codex_desktop_store_notice")
-				if not store_note.is_empty():
-					model["guidance_text"] = "%s\n%s" % [model["guidance_text"], store_note]
-		"opencode_desktop":
-			model["guidance_text"] = localization.get_text(
-				"config_client_opencode_desktop_cli_recommendation_ready"
-				if str(opencode_cli_detection.get("status", "")) == "ready"
-				else "config_client_opencode_desktop_cli_recommendation_missing"
-			)
-
 	model["launch_supported"] = bool(detection.get("launch_supported", false))
 	model["launch_enabled"] = bool(detection.get("launch_supported", false))
 	if client_id == "cursor" or client_id == "trae":
 		model["launch_action_label_key"] = "config_client_action_open_project"
-	elif client_id == "claude_code" or client_id == "codex" or client_id == "opencode":
+	elif client_id == "claude_code" or client_id == "codex" or client_id == "gemini" or client_id == "opencode":
 		model["launch_action_label_key"] = "config_client_action_open_terminal"
+	elif client_id == "claude_desktop":
+		model["launch_action_label_key"] = "config_client_action_open_app"
 
 	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
 	model["path_pick_enabled"] = bool(detection.get("path_pick_supported", false))
 	model["path_pick_action_label_key"] = "config_client_action_reselect_path" if has_manual_path else (
-		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "opencode" else "config_client_action_choose_program_path"
+		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode" else "config_client_action_choose_program_path"
 	)
 	model["path_clear_supported"] = bool(detection.get("path_clear_supported", false))
 	model["path_clear_enabled"] = bool(detection.get("path_clear_supported", false))
@@ -372,13 +362,44 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 			model["writeable"] = bool(detection.get("write_supported", false))
 			model["remove_supported"] = bool(detection.get("write_supported", false))
 			model["remove_enabled"] = entry_status == "present"
-		"codex":
+		"claude_code":
 			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
+			model["primary_action_label_key"] = "tool_action_remove_name" if entry_status == "present" else "config_client_action_add"
 			if not bool(detection.get("auto_add_supported", false)):
 				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
-		"claude_code", "codex_desktop", "opencode_desktop", "opencode":
+		"codex":
+			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
+			model["primary_action_label_key"] = "tool_action_remove_name" if entry_status == "present" else "config_client_action_add"
+			if not bool(detection.get("auto_add_supported", false)):
+				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
+		"gemini":
+			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
+			model["primary_action_label_key"] = "tool_action_remove_name" if entry_status == "present" else "config_client_action_add"
+			if not bool(detection.get("auto_add_supported", false)):
+				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
+		"claude_code", "opencode":
 			model["writeable"] = false
 	return model
+
+
+func _build_client_install_status_text(client_id: String, model: Dictionary, detection: Dictionary, localization) -> String:
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", ""))
+	var config_path = str(detection.get("config_path", model.get("path", ""))).strip_edges()
+	if entry_status == "present":
+		if client_id == "claude_code":
+			var cli_scope = str(model.get("cli_scope", "user"))
+			var scope_key = "scope_project" if cli_scope == "project" else "scope_user"
+			return "%s\n%s" % [
+				localization.get_text("config_client_entry_present"),
+				localization.get_text(scope_key)
+			]
+		if not config_path.is_empty():
+			return "%s\n%s" % [
+				localization.get_text("config_client_entry_present"),
+				config_path
+			]
+		return localization.get_text("config_client_entry_present")
+	return _get_client_install_status_text(str(detection.get("status", "")), localization)
 
 
 func _get_client_install_status_text(status: String, localization) -> String:

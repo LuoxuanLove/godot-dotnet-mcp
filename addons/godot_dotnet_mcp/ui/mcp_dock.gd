@@ -15,9 +15,6 @@ signal restart_requested
 signal stop_requested
 signal full_reload_requested
 signal clear_self_diagnostics_requested
-signal runtime_install_requested
-signal runtime_validate_requested
-signal runtime_clear_requested
 signal tool_toggled(tool_name: String, enabled: bool)
 signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)

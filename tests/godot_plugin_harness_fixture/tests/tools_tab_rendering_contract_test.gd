@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "tools_tab_rendering_contracts"}
+
 const ToolsTabScene = preload("res://addons/godot_dotnet_mcp/ui/tools_tab.tscn")
 
 var _instance: VBoxContainer = null
@@ -40,23 +42,31 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"disabled_tools": [],
 			"collapsed_nodes": {}
 		},
-		"domain_defs": [
-			{
-				"key": "core",
-				"label": "domain_core",
-				"categories": ["system", "project"]
-			},
-			{
-				"key": "user",
-				"label": "domain_user",
-				"categories": ["user"]
-			}
-		],
 		"tools_by_category": {
 			"system": [
 				{
+					"name": "editor_state",
+					"description": "Summarize the current editor session"
+				},
+				{
 					"name": "project_state",
 					"description": "Summarize the project state"
+				},
+				{
+					"name": "runtime_control",
+					"description": "Inspect runtime control status"
+				},
+				{
+					"name": "runtime_capture",
+					"description": "Capture runtime frames"
+				},
+				{
+					"name": "runtime_input",
+					"description": "Send runtime inputs"
+				},
+				{
+					"name": "runtime_step",
+					"description": "Run input-wait-capture step"
 				}
 			],
 			"project": [
@@ -79,8 +89,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 
 	var tool_count_label = _instance.get_node("HeaderMargin/HeaderContent/ToolCountLabel") as Label
-	if tool_count_label == null or tool_count_label.text != "Enabled 3/3":
-		return _failure("Tools tab should count all rendered categories instead of only system and user.")
+	if tool_count_label == null or tool_count_label.text != "Enabled 7/7":
+		return _failure("Tools tab should count the current system and user roots exactly once.")
 
 	var tool_tree = _instance.get_node("ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree") as Tree
 	if tool_tree == null:
@@ -89,22 +99,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if root == null:
 		return _failure("Tools tab should create a root tree item when applying the model.")
 
-	var core_domain = _find_child_by_metadata(root, "domain", "core")
-	var user_domain = _find_child_by_metadata(root, "domain", "user")
-	if core_domain == null or user_domain == null:
-		return _failure("Tools tab should render both core and user domains from the model.")
+	var system_category = _find_child_by_metadata(root, "root", "system")
+	var user_category = _find_child_by_metadata(root, "root", "user")
+	if system_category == null or user_category == null:
+		return _failure("Tools tab should render the current system and user root groups.")
 
-	var system_category = _find_child_by_metadata(core_domain, "category", "system")
-	var project_category = _find_child_by_metadata(core_domain, "category", "project")
-	var user_category = _find_child_by_metadata(user_domain, "category", "user")
-	if system_category == null or project_category == null or user_category == null:
-		return _failure("Tools tab should render category nodes under each visible domain.")
-
+	var editor_state_tool = _find_child_by_metadata(system_category, "tool", "system_editor_state")
 	var system_tool = _find_child_by_metadata(system_category, "tool", "system_project_state")
-	var project_tool = _find_child_by_metadata(project_category, "tool", "project_info")
+	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
+	var runtime_capture_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_capture")
+	var runtime_input_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_input")
+	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if system_tool == null or project_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or runtime_control_tool == null or runtime_capture_tool == null or runtime_input_tool == null or runtime_step_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
+
+	if editor_state_tool.get_child_count() != 0:
+		return _failure("Tools tab should only render atomic children that are present in the current model payload.")
 
 	var atomic_tool = _find_child_by_metadata(system_tool, "atomic", "project_info")
 	if atomic_tool == null:
@@ -116,8 +127,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"top_level_domain_count": root.get_child_count(),
-			"core_category_count": core_domain.get_child_count(),
-			"user_category_count": user_domain.get_child_count()
+			"system_tool_count": system_category.get_child_count(),
+			"user_tool_count": user_category.get_child_count()
 		}
 	}
 

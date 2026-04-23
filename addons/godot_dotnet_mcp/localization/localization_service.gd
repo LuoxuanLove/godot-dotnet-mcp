@@ -60,7 +60,7 @@ const SUPPLEMENTAL_TRANSLATIONS: Dictionary = {}
 
 static func get_instance() -> LocalizationService:
 	if _instance == null:
-		_instance = LocalizationService.new()
+		_instance = new()
 		_instance._init_translations()
 	return _instance
 

@@ -45,6 +45,10 @@ static func get_gemini_config_path() -> String:
 	return _normalize_path(_get_home_dir() + "/.gemini/settings.json")
 
 
+static func get_gemini_project_config_path(project_root: String) -> String:
+	return _normalize_path(project_root + "/.gemini/settings.json")
+
+
 static func get_codex_config_path() -> String:
 	return _normalize_path(_get_home_dir() + "/.codex/config.toml")
 
@@ -92,3 +96,7 @@ static func get_claude_code_command(scope: String, host: String, port: int) -> S
 
 static func get_codex_command(host: String, port: int) -> String:
 	return "codex mcp add godot-mcp --url http://%s:%d/mcp" % [host, port]
+
+
+static func get_gemini_command(scope: String, host: String, port: int) -> String:
+	return "gemini mcp add --transport http --scope %s godot-mcp http://%s:%d/mcp" % [scope, host, port]

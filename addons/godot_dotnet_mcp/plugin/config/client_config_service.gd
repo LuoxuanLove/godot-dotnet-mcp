@@ -18,7 +18,9 @@ func get_trae_config_path() -> String:
 	return ConfigPathsScript.get_trae_config_path()
 
 
-func get_gemini_config_path() -> String:
+func get_gemini_config_path(scope: String = "user") -> String:
+	if scope == "project":
+		return ConfigPathsScript.get_gemini_project_config_path(ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/"))
 	return ConfigPathsScript.get_gemini_config_path()
 
 
@@ -50,6 +52,10 @@ func get_claude_code_command(scope: String, host: String, port: int) -> String:
 
 func get_codex_command(host: String, port: int) -> String:
 	return ConfigPathsScript.get_codex_command(host, port)
+
+
+func get_gemini_command(scope: String, host: String, port: int) -> String:
+	return ConfigPathsScript.get_gemini_command(scope, host, port)
 
 
 

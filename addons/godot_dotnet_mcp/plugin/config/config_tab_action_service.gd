@@ -59,8 +59,12 @@ func dispose() -> void:
 func handle_config_client_action_requested(client_id: String) -> void:
 	var client_statuses = _get_client_install_statuses.call() if _get_client_install_statuses.is_valid() else {}
 	match client_id:
+		"claude_code":
+			_toggle_claude_code_mcp_config(client_statuses.get("claude_code", {}))
 		"codex":
-			_apply_codex_mcp_config(client_statuses.get("codex", {}))
+			_toggle_codex_mcp_config(client_statuses.get("codex", {}))
+		"gemini":
+			_toggle_gemini_mcp_config(client_statuses.get("gemini", {}))
 		_:
 			pass
 
@@ -68,6 +72,8 @@ func handle_config_client_action_requested(client_id: String) -> void:
 func handle_config_client_launch_requested(client_id: String) -> void:
 	var client_statuses = _get_client_install_statuses.call() if _get_client_install_statuses.is_valid() else {}
 	match client_id:
+		"claude_desktop":
+			_launch_desktop_agent(_get_client_display_name("claude_desktop"), client_statuses.get("claude_desktop", {}), PackedStringArray())
 		"cursor":
 			_launch_cursor_for_current_project(client_statuses.get("cursor", {}))
 		"trae":
@@ -75,10 +81,16 @@ func handle_config_client_launch_requested(client_id: String) -> void:
 				_get_client_display_name("trae"),
 				client_statuses.get("trae", {})
 			)
+		"codex_desktop":
+			_launch_desktop_agent(_get_client_display_name("codex_desktop"), client_statuses.get("codex_desktop", {}), PackedStringArray())
 		"claude_code":
 			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("claude_code"), client_statuses.get("claude_code", {}))
 		"codex":
 			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("codex"), client_statuses.get("codex", {}))
+		"gemini":
+			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("gemini"), client_statuses.get("gemini", {}))
+		"opencode_desktop":
+			_launch_desktop_agent(_get_client_display_name("opencode_desktop"), client_statuses.get("opencode_desktop", {}), PackedStringArray())
 		"opencode":
 			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("opencode"), client_statuses.get("opencode", {}))
 		_:
@@ -466,7 +478,45 @@ func _get_client_display_name(client_id: String) -> String:
 			return client_id
 
 
-func _apply_codex_mcp_config(detection: Dictionary) -> void:
+func _toggle_claude_code_mcp_config(detection: Dictionary) -> void:
+	if detection.is_empty() or str(detection.get("status", "")) != "ready":
+		_show_config_message(_get_client_install_message_text("claude_code", str(detection.get("status", "missing"))))
+		return
+
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_config_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_claude_code"))
+		return
+
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
+	var client_name = _localization.get_text("config_client_claude_code")
+	if entry_status == "present":
+		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		if not bool(remove_result.get("success", false)):
+			_show_config_message("%s\n\n%s" % [
+				_localization.get_text("msg_config_remove_failed"),
+				str(remove_result.get("message", ""))
+			])
+			return
+		_invalidate_client_install_status_cache_if_possible()
+		_refresh_dock_if_possible()
+		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
+		return
+
+	var add_result = _config_service.execute_cli_command(executable_path, _build_claude_code_add_arguments())
+	if not bool(add_result.get("success", false)):
+		_show_config_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_action_failed") % client_name,
+			str(add_result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache_if_possible()
+	_refresh_dock_if_possible()
+	_show_config_message(_localization.get_text("msg_client_action_success") % client_name)
+
+
+func _toggle_codex_mcp_config(detection: Dictionary) -> void:
 	if detection.is_empty() or str(detection.get("status", "")) != "ready":
 		_show_config_message(_get_client_install_message_text("codex", str(detection.get("status", "missing"))))
 		return
@@ -476,33 +526,95 @@ func _apply_codex_mcp_config(detection: Dictionary) -> void:
 		_show_config_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_codex"))
 		return
 
-	var transport = _build_client_transport_model(str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000)))
-
-	var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", "godot-mcp"]))
-	if not bool(remove_result.get("success", false)):
-		var remove_message = str(remove_result.get("message", ""))
-		if remove_message.find("No MCP server named 'godot-mcp' found.") == -1:
+	var client_name = _localization.get_text("config_client_codex")
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
+	if entry_status == "present":
+		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		if not bool(remove_result.get("success", false)):
 			_show_config_message("%s\n\n%s" % [
-				_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
-				remove_message
+				_localization.get_text("msg_config_remove_failed"),
+				str(remove_result.get("message", ""))
 			])
 			return
+		_invalidate_client_install_status_cache_if_possible()
+		_refresh_dock_if_possible()
+		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
+		return
 
+	var transport = _build_client_transport_model(str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000)))
 	var add_result = _config_service.execute_cli_command(executable_path, _build_codex_add_arguments(transport))
 	if not bool(add_result.get("success", false)):
 		_show_config_message("%s\n\n%s" % [
-			_localization.get_text("msg_client_action_failed") % _localization.get_text("config_client_codex"),
+			_localization.get_text("msg_client_action_failed") % client_name,
 			str(add_result.get("message", ""))
 		])
 		return
 
 	_invalidate_client_install_status_cache_if_possible()
 	_refresh_dock_if_possible()
-	_show_config_message(_localization.get_text("msg_client_action_success") % _localization.get_text("config_client_codex"))
+	_show_config_message(_localization.get_text("msg_client_action_success") % client_name)
+
+
+func _toggle_gemini_mcp_config(detection: Dictionary) -> void:
+	if detection.is_empty() or str(detection.get("status", "")) != "ready":
+		_show_config_message(_get_client_install_message_text("gemini", str(detection.get("status", "missing"))))
+		return
+
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_config_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_gemini"))
+		return
+
+	var client_name = _localization.get_text("config_client_gemini")
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
+	if entry_status == "present":
+		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		if not bool(remove_result.get("success", false)):
+			_show_config_message("%s\n\n%s" % [
+				_localization.get_text("msg_config_remove_failed"),
+				str(remove_result.get("message", ""))
+			])
+			return
+		_invalidate_client_install_status_cache_if_possible()
+		_refresh_dock_if_possible()
+		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
+		return
+
+	var add_result = _config_service.execute_cli_command(executable_path, _build_gemini_add_arguments())
+	if not bool(add_result.get("success", false)):
+		_show_config_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_action_failed") % client_name,
+			str(add_result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache_if_possible()
+	_refresh_dock_if_possible()
+	_show_config_message(_localization.get_text("msg_client_action_success") % client_name)
 
 
 func _launch_cursor_for_current_project(detection: Dictionary) -> void:
 	_launch_desktop_agent_for_current_project(_localization.get_text("config_client_cursor"), detection)
+
+
+func _launch_desktop_agent(client_name: String, detection: Dictionary, arguments: PackedStringArray) -> void:
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_config_message(_localization.get_text("msg_client_action_missing_executable") % client_name)
+		return
+
+	var project_root = _get_current_project_root()
+	var result = _config_service.launch_desktop_client(executable_path, arguments, project_root)
+	if not bool(result.get("success", false)):
+		_show_config_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_launch_failed") % client_name,
+			str(result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache_if_possible()
+	_refresh_dock_if_possible()
+	_show_config_message(_localization.get_text("msg_client_launch_success") % client_name)
 
 
 func _launch_desktop_agent_for_current_project(client_name: String, detection: Dictionary) -> void:
@@ -543,6 +655,8 @@ func _launch_cli_agent_for_current_project(client_id: String, client_name: Strin
 	match client_id:
 		"claude_code", "codex":
 			arguments = PackedStringArray()
+		"gemini":
+			arguments = PackedStringArray()
 		"opencode":
 			arguments = PackedStringArray([project_root])
 		_:
@@ -559,12 +673,11 @@ func _launch_cli_agent_for_current_project(client_id: String, client_name: Strin
 
 	_invalidate_client_install_status_cache_if_possible()
 	_refresh_dock_if_possible()
+	var followup_text = _localization.get_text("msg_client_launch_workdir") % project_root
+	followup_text += "\n" + _localization.get_text("msg_client_launch_terminal_hint")
 	_show_config_message("%s\n\n%s" % [
 		_localization.get_text("msg_client_launch_success") % client_name,
-		"%s\n%s" % [
-			_localization.get_text("msg_client_launch_workdir") % project_root,
-			_localization.get_text("msg_client_launch_terminal_hint")
-		]
+		followup_text
 	])
 
 
@@ -588,6 +701,32 @@ func _build_codex_add_arguments(transport: Dictionary) -> PackedStringArray:
 		"godot-mcp",
 		"--url",
 		"http://%s:%d/mcp" % [str(transport.get("host", "127.0.0.1")), int(transport.get("port", 3000))]
+	])
+
+
+func _build_claude_code_add_arguments() -> PackedStringArray:
+	return PackedStringArray([
+		"mcp",
+		"add",
+		"--transport",
+		"http",
+		"--scope",
+		str(_state.current_cli_scope),
+		MCP_SERVER_KEY,
+		"http://%s:%d/mcp" % [str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000))]
+	])
+
+
+func _build_gemini_add_arguments() -> PackedStringArray:
+	return PackedStringArray([
+		"mcp",
+		"add",
+		"--transport",
+		"http",
+		"--scope",
+		str(_state.current_cli_scope),
+		MCP_SERVER_KEY,
+		"http://%s:%d/mcp" % [str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000))]
 	])
 
 

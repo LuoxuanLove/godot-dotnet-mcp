@@ -23,6 +23,7 @@ const CACHE_TTL_MS := 5000
 var _cached_all: Dictionary = {}
 var _cache_deadline_msec := 0
 var _manual_paths: Dictionary = {}
+var _current_cli_scope := "user"
 
 
 func configure(settings: Dictionary) -> void:
@@ -33,9 +34,13 @@ func configure(settings: Dictionary) -> void:
 			var normalized = _normalize_path(str(candidate_paths[key]))
 			if not normalized.is_empty():
 				normalized_paths[str(key)] = normalized
-	if _manual_paths == normalized_paths:
+	var next_cli_scope = str(settings.get("current_cli_scope", "user")).strip_edges()
+	if next_cli_scope.is_empty():
+		next_cli_scope = "user"
+	if _manual_paths == normalized_paths and _current_cli_scope == next_cli_scope:
 		return
 	_manual_paths = normalized_paths
+	_current_cli_scope = next_cli_scope
 	invalidate_cache()
 
 
@@ -50,6 +55,7 @@ func detect_all(force_refresh: bool = false) -> Dictionary:
 		"claude_code": _detect_claude_code(running_processes),
 		"cursor": _detect_cursor(running_processes),
 		"trae": _detect_trae(running_processes),
+		"gemini": _detect_gemini(running_processes),
 		"codex_desktop": _detect_codex_desktop(running_processes),
 		"codex": _detect_codex(running_processes),
 		"opencode_desktop": _detect_opencode_desktop(running_processes),
@@ -94,7 +100,7 @@ func _detect_claude_desktop(running_processes: PackedStringArray = PackedStringA
 	result["config_path"] = config_path
 	result["write_supported"] = config_supported
 	result["auto_add_supported"] = false
-	result["launch_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
 	if not str(resolved.get("path", "")).is_empty() and config_supported:
@@ -180,6 +186,44 @@ func _detect_trae(running_processes: PackedStringArray = PackedStringArray()) ->
 	return result
 
 
+func _detect_gemini(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = _get_gemini_config_path_for_scope()
+	var resolved = _resolve_executable_path(
+		"gemini",
+		[
+			"%s/npm/gemini.cmd" % _get_app_data_root(),
+			"%s/npm/gemini" % _get_app_data_root(),
+			"%s/.local/bin/gemini" % _get_home_root()
+		],
+		["gemini"]
+	)
+	var entry_state = _inspect_config_entry(config_path)
+	var runtime_state = _build_runtime_state(str(resolved.get("path", "")), [], running_processes)
+	var config_supported = _can_prepare_file_path(config_path)
+
+	var result = _build_common_result("gemini", resolved, runtime_state, entry_state)
+	result["config_path"] = config_path
+	result["write_supported"] = config_supported
+	result["auto_add_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["path_pick_supported"] = true
+	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
+	if not str(resolved.get("path", "")).is_empty() and config_supported:
+		result["status"] = STATUS_READY
+	elif config_supported:
+		result["status"] = STATUS_CONFIG_ONLY
+	else:
+		result["status"] = STATUS_MISSING
+	return result
+
+
+func _get_gemini_config_path_for_scope() -> String:
+	if _current_cli_scope == "project":
+		var project_root = ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
+		return ConfigPathsScript.get_gemini_project_config_path(project_root)
+	return ConfigPathsScript.get_gemini_config_path()
+
+
 func _detect_claude_code(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var resolved = _resolve_executable_path(
 		"claude_code",
@@ -194,11 +238,14 @@ func _detect_claude_code(running_processes: PackedStringArray = PackedStringArra
 		"claude_code",
 		resolved,
 		_build_runtime_state(str(resolved.get("path", "")), ["claude.exe"], running_processes),
-		{}
+		_inspect_cli_server_entry(
+			str(resolved.get("path", "")),
+			PackedStringArray(["mcp", "get", "godot-mcp"])
+		)
 	)
 	result["config_path"] = ""
 	result["write_supported"] = false
-	result["auto_add_supported"] = false
+	result["auto_add_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
@@ -266,7 +313,7 @@ func _detect_codex_desktop(running_processes: PackedStringArray = PackedStringAr
 	result["config_path"] = ""
 	result["write_supported"] = false
 	result["auto_add_supported"] = false
-	result["launch_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
 	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_MISSING
@@ -287,7 +334,10 @@ func _detect_codex(running_processes: PackedStringArray = PackedStringArray()) -
 		"codex",
 		resolved,
 		_build_runtime_state(str(resolved.get("path", "")), ["codex.exe"], running_processes),
-		{}
+		_inspect_cli_server_entry(
+			str(resolved.get("path", "")),
+			PackedStringArray(["mcp", "get", "godot-mcp", "--json"])
+		)
 	)
 	result["config_path"] = ConfigPathsScript.get_codex_config_path()
 	result["write_supported"] = false
@@ -318,7 +368,7 @@ func _detect_opencode_desktop(running_processes: PackedStringArray = PackedStrin
 	result["config_path"] = ConfigPathsScript.get_opencode_config_path()
 	result["write_supported"] = false
 	result["auto_add_supported"] = false
-	result["launch_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
 	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_MISSING
@@ -377,6 +427,64 @@ func _build_common_result(client_id: String, resolved: Dictionary, runtime_state
 		"path_clear_supported": false,
 		"config_entry_status": entry_state,
 		"runtime_status": runtime_state
+	}
+
+
+func _inspect_cli_server_entry(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	if executable_path.is_empty():
+		return {
+			"status": ENTRY_MISSING_SERVER,
+			"has_server_entry": false
+		}
+	var result = _execute_cli_query(executable_path, arguments)
+	if bool(result.get("success", false)):
+		return {
+			"status": ENTRY_PRESENT,
+			"has_server_entry": true
+		}
+	return {
+		"status": ENTRY_MISSING_SERVER,
+		"has_server_entry": false
+	}
+
+
+func _execute_cli_query(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	if executable_path.is_empty():
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": PackedStringArray(),
+			"message": "CLI executable path is empty."
+		}
+	var invocation = _build_cli_invocation(executable_path, arguments)
+	var output: Array = []
+	var exit_code = OS.execute(
+		str(invocation.get("command", "")),
+		invocation.get("arguments", PackedStringArray()),
+		output,
+		true,
+		false
+	)
+	return {
+		"success": exit_code == 0,
+		"exit_code": exit_code,
+		"output": output,
+		"message": "\n".join(output)
+	}
+
+
+func _build_cli_invocation(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	var lower_path = executable_path.to_lower()
+	if lower_path.ends_with(".cmd") or lower_path.ends_with(".bat"):
+		var wrapped_args := PackedStringArray(["/c", executable_path])
+		wrapped_args.append_array(arguments)
+		return {
+			"command": "cmd.exe",
+			"arguments": wrapped_args
+		}
+	return {
+		"command": executable_path,
+		"arguments": arguments
 	}
 
 
