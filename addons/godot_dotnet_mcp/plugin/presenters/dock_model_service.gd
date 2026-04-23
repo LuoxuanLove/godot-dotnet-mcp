@@ -41,20 +41,20 @@ func configure(
 		if context_or_state == null:
 			dispose()
 			return
-		_state = context_or_state.get("state")
-		_localization = context_or_state.get("localization")
-		_server_controller = context_or_state.get("server_controller")
-		_tool_catalog = context_or_state.get("tool_catalog")
-		_config_service = context_or_state.get("config_service")
-		var injected_presenter = context_or_state.get("dock_presenter")
+		_state = _context_get(context_or_state, "state")
+		_localization = _context_get(context_or_state, "localization")
+		_server_controller = _context_get(context_or_state, "server_controller")
+		_tool_catalog = _context_get(context_or_state, "tool_catalog")
+		_config_service = _context_get(context_or_state, "config_service")
+		var injected_presenter = _context_get(context_or_state, "dock_presenter")
 		if injected_presenter != null:
 			_dock_presenter = injected_presenter
-		_user_tool_service = context_or_state.get("user_tool_service")
-		_client_install_detection_service = context_or_state.get("client_install_detection_service")
-		_user_tool_watch_service = context_or_state.get("user_tool_watch_service")
-		_tool_access_feature = context_or_state.get("tool_access_feature")
-		_self_diagnostic_feature = context_or_state.get("self_diagnostic_feature")
-		var resolved_editor_scale = context_or_state.get("get_editor_scale", Callable())
+		_user_tool_service = _context_get(context_or_state, "user_tool_service")
+		_client_install_detection_service = _context_get(context_or_state, "client_install_detection_service")
+		_user_tool_watch_service = _context_get(context_or_state, "user_tool_watch_service")
+		_tool_access_feature = _context_get(context_or_state, "tool_access_feature")
+		_self_diagnostic_feature = _context_get(context_or_state, "self_diagnostic_feature")
+		var resolved_editor_scale = _context_get(context_or_state, "get_editor_scale", Callable())
 		_get_editor_scale = resolved_editor_scale if resolved_editor_scale is Callable else Callable()
 		return
 
@@ -71,6 +71,17 @@ func configure(
 	_tool_access_feature = null
 	_self_diagnostic_feature = null
 	_get_editor_scale = get_editor_scale
+
+
+func _context_get(context, key: String, default_value = null):
+	if context == null:
+		return default_value
+	if context is Dictionary:
+		return (context as Dictionary).get(key, default_value)
+	if context.has_method("get"):
+		var value = context.get(key)
+		return default_value if value == null else value
+	return default_value
 
 
 func dispose() -> void:
