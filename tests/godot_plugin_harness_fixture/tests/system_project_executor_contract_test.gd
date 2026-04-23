@@ -1,10 +1,14 @@
 extends RefCounted
 
-const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/project/executor.gd")
+# {"name": "system_project_executor_contracts"}
+
+const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 
 class FakeBridge extends RefCounted:
 	var _tool_loader
+	var scene_run_actions: Array[String] = []
 
 	func _init(tool_loader = null) -> void:
 		_tool_loader = tool_loader
@@ -49,6 +53,7 @@ class FakeBridge extends RefCounted:
 			"debug_editor_log":
 				return success({"error_count": 0, "errors": []})
 			"scene_run":
+				scene_run_actions.append(str(args.get("action", "")))
 				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))}, "ok")
 			"project_settings":
 				return success({"applied": true})
@@ -102,16 +107,22 @@ class FakeToolLoader extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd"):
-		return _failure("impl_project.gd should be removed once system/project/executor.gd becomes the only project entry.")
+	PluginSelfDiagnosticStore.clear()
+	PluginSelfDiagnosticStore.record_incident(
+		"warning",
+		"contract_warning",
+		"project_state_contract_incident",
+		"Contract incident",
+		"system_project_executor_contract_test"
+	)
 
 	var executor = SystemProjectExecutorScript.new()
 	executor.bridge = FakeBridge.new(FakeToolLoader.new())
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 5:
-		return _failure("System project executor should expose 5 tool definitions after the split.")
+	if tool_defs.size() != 6:
+		return _failure("System project implementation should expose 6 tool definitions including editor_state.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -128,6 +139,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (runtime_health is Dictionary):
 		return _failure("project_state include_runtime_health did not return runtime_health.")
 	var runtime_health_dict: Dictionary = runtime_health
+	var self_diagnostics = runtime_health_dict.get("self_diagnostics", {})
+	if not (self_diagnostics is Dictionary):
+		return _failure("project_state runtime_health.self_diagnostics did not return a dictionary payload.")
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
@@ -139,6 +153,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_run: Dictionary = executor.execute("project_run", {})
 	if not bool(project_run.get("success", false)):
 		return _failure("project_run did not succeed through the split runtime service.")
+	var timed_project_run: Dictionary = executor.execute("project_run", {"timeout_ms": 1})
+	if not bool(timed_project_run.get("success", false)):
+		return _failure("project_run with timeout_ms did not succeed.")
+	await (Engine.get_main_loop() as SceneTree).create_timer(0.05).timeout
+	if executor.bridge.scene_run_actions.size() < 3:
+		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
+	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
+		return _failure("project_run timeout should emit play_main followed by stop.")
 
 	var runtime_diagnose: Dictionary = executor.execute("runtime_diagnose", {
 		"include_compile_errors": true,
