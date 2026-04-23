@@ -66,13 +66,26 @@ ToolsTab
 ```text
 root
   ├─ system
+  │   ├─ system_editor_state
+  │   │   ├─ editor_status
+  │   │   ├─ editor_inspector
+  │   │   ├─ editor_filesystem
+  │   │   ├─ debug_runtime_bridge
+  │   │   └─ debug_dotnet
+  │   ├─ system_editor_control
+  │   │   ├─ editor_status
+  │   │   ├─ editor_screenshot
+  │   │   ├─ editor_ui_control
+  │   │   └─ editor_popup
   │   ├─ system_project_state
   │   │   ├─ project_info
   │   │   ├─ project_dotnet
   │   │   ├─ filesystem_directory
   │   │   └─ debug_runtime_bridge
-  │   ├─ system_project_suggest
+  │   ├─ system_runtime_control
   │   ├─ system_runtime_capture
+  │   ├─ system_runtime_input
+  │   ├─ system_runtime_step
   │   └─ ...
   └─ user
       ├─ user_tool_a
@@ -101,11 +114,7 @@ root
 
 当前主控制器已经不再持有全部纯逻辑 helper。以下协作者已独立：
 
-- `ui/tools_tab_context_menu_support.gd`
-- `ui/tools_tab_model_support.gd`
-- `ui/tools_tab_selection_support.gd`
-- `ui/tools_tab_search_service.gd`
-- `ui/tools_tab_preview_builder.gd`
+- 当前这些职责已经并回 `ui/tools_tab.gd` 主控制器
 
 不负责：
 
@@ -125,7 +134,7 @@ root
 - 系统工具名称命中时保留该工具
 - 原子工具名称或描述命中时，保留其所属的 系统祖先
 - 搜索会递归命中 `SYSTEM_TOOL_ATOMIC_CHILDREN`，因此搜索原子工具也能定位到上层 系统工具
-- 当前过滤结果先由 `tools_tab_search_service.gd` 预计算，再由主控制器按分组渲染
+- 当前过滤结果由 `tools_tab.gd` 内部直接计算，再按分组渲染
 
 搜索不会改写持久化折叠状态，只影响当前树重建结果。
 
@@ -204,15 +213,10 @@ root
 | 路径 | 作用 |
 |---|---|
 | `ui/tools_tab.tscn` | Tools 页节点树与布局 |
-| `ui/tools_tab.gd` | Tools 页主控制器 |
-| `ui/tools_tab_context_menu_support.gd` | Tools 页上下文菜单辅助 |
-| `ui/tools_tab_model_support.gd` | Tools 页共享模型辅助 |
-| `ui/tools_tab_selection_support.gd` | Tools 页选择状态辅助 |
-| `ui/tools_tab_search_service.gd` | Tools 页搜索协作者 |
-| `ui/tools_tab_preview_builder.gd` | Tools 页预览协作者 |
-| `tools/system_tools.gd` | 系统高层工具实现 |
-| `tools/tool_manifest_data.gd` | 默认工具暴露策略与 domain/category 纯静态数据层 |
-| `tools/tool_manifest.gd` | 默认工具暴露策略与 manifest 访问层 |
+| `ui/tools_tab.gd` | Tools 页主控制器，内聚上下文菜单、模型、选择、搜索与预览逻辑 |
+| `tools/system/executor.gd`、`tools/system/impl_*.gd` | 当前系统高层工具调度与实现入口 |
+| `tools/tool_registry.gd` | builtin executor 注册事实源 |
+| `tools/tool_manifest.gd` | domain/category 元数据与 manifest 访问层 |
 | `plugin/runtime/plugin_runtime_state.gd` | 当前 settings / custom profile 状态 |
 | `plugin/runtime/tool_permission_policy.gd` | permission 规则 |
 | `plugin/runtime/tool_profile_catalog.gd` | builtin profile 目录 |
