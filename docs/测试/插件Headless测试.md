@@ -1,6 +1,6 @@
 # 插件 Headless 测试
 
-本文档说明 `Godot Headless Harness` 当前的结构、覆盖范围、已知问题与后续方向。
+本文档说明 `Godot Headless Harness` 当前的结构、覆盖范围与已知边界。
 
 ---
 
@@ -55,9 +55,8 @@ tests/godot_plugin_harness_fixture/
    ├─ group_tool_executor_contract_test.gd
    ├─ audio_tool_executor_contract_test.gd
    ├─ navigation_tool_executor_contract_test.gd
-   ├─ plugin_bootstrap_contract_test.gd
-   ├─ plugin_dock_coordinator_contract_test.gd
-   ├─ plugin_runtime_coordinator_contract_test.gd
+    ├─ plugin_dock_coordinator_contract_test.gd
+    ├─ plugin_runtime_coordinator_contract_test.gd
    ├─ client_config_serializer_contract_test.gd
    ├─ client_config_inspection_service_contract_test.gd
    ├─ client_config_file_transaction_contract_test.gd
@@ -74,9 +73,9 @@ tests/godot_plugin_harness_fixture/
    ├─ system_runtime_impl_contract_test.gd
    ├─ system_index_impl_contract_test.gd
    ├─ tool_loader_contract_test.gd
-   ├─ tools_tab_interaction_support_contract_test.gd
-   ├─ tools_tab_search_service_contract_test.gd
-   └─ tools_tab_preview_builder_contract_test.gd
+    ├─ tools_tab_rendering_contract_test.gd
+    ├─ editor_lifecycle_endpoint_contract_test.gd
+    └─ plugin_entrypoint_contract_test.gd
 ```
 
 职责分布如下：
@@ -92,7 +91,7 @@ tests/godot_plugin_harness_fixture/
 
 ## 当前覆盖范围
 
-截至 `2026-03-28`，当前有 `56` 个 case：
+当前 case 由 harness 自动发现，以下列出当前可发现 case 中的一组代表性 case（CI 只硬门禁其中的 required subset）：
 
 | 用例 | 目标 |
 |---|---|
@@ -111,7 +110,7 @@ tests/godot_plugin_harness_fixture/
 | `physics_tool_executor_contracts` | 验证 `physics` 域拆分后的 catalog、稳定 executor 入口与代表性 `physics_body / collision_shape / physics_joint / physics_query` 路径 |
 | `scene_tool_executor_contracts` | 验证 `scene` 域拆分后的 catalog、稳定 executor 入口与代表性 `management / hierarchy / run / bindings / audit` 路径 |
 | `debug_tool_executor_contracts` | 验证 `debug` 域拆分后的 catalog、稳定 executor 入口与代表性 `log_buffer / runtime_bridge / dotnet / performance / class_db` 路径 |
-| `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / settings / undo_redo / notification / inspector / filesystem / plugin` 路径 |
+| `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / screenshot / settings / undo_redo / notification / ui_control / popup / inspector / filesystem / plugin` 路径 |
 | `lighting_tool_executor_contracts` | 验证 `lighting` 域拆分后的 catalog、稳定 executor 入口与代表性 `light / environment / sky` 路径 |
 | `geometry_tool_executor_contracts` | 验证 `geometry` 域拆分后的 catalog、稳定 executor 入口与代表性 `csg / gridmap / multimesh` 路径 |
 | `filesystem_tool_executor_contracts` | 验证 `filesystem` 域拆分后的 catalog、稳定 executor 入口与代表性 `directory / file_read / file_write / file_manage / json / search` 路径，并断言旧根文件已删除 |
@@ -126,7 +125,6 @@ tests/godot_plugin_harness_fixture/
 | `group_tool_executor_contracts` | 验证 `group` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / operation / membership` 路径，并断言旧根文件已删除 |
 | `audio_tool_executor_contracts` | 验证 `audio` 域拆分后的 catalog、稳定 executor 入口与代表性 `bus / player` 路径，并断言旧根文件已删除 |
 | `navigation_tool_executor_contracts` | 验证 `navigation` 域拆分后的 catalog、稳定 executor 入口与代表性 `map / region / agent` 路径，并断言旧根文件已删除 |
-| `plugin_bootstrap_contracts` | 验证 `plugin_bootstrap.gd` 的 service bundle 回填、action router 重装配与 dock model service 独立重配能力 |
 | `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的高阶 dock create/remove/recreate、dock signal wiring、dock instance 计数、`FileDialog` 创建与 dialog 清理语义 |
 | `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
 | `config_feature_config_workflow_contracts` | 验证 `config_feature_config_workflow.gd` 的写入/移除确认流、成功提示、noop 移除和运行后 follow-up 提示 |
@@ -141,8 +139,9 @@ tests/godot_plugin_harness_fixture/
 | `json_rpc_router_contracts` | 验证 `mcp_json_rpc_router` 的 initialize、notification 无响应与 method-not-found 语义 |
 | `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
 | `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
-| `system_project_executor_contracts` | 验证 `tools/system/project/` 目录化拆分后的 catalog、稳定 executor 入口与项目级 system 工具路由 |
-| `system_script_executor_contracts` | 验证 `tools/system/script/` 目录化拆分后的 catalog、稳定 executor 入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
+| `system_project_executor_contracts` | 验证 `impl_project.gd` 作为当前项目级 system 聚合入口的工具暴露、runtime health 聚合与项目级路由 |
+| `system_editor_control_contracts` | 验证 `impl_editor.gd` 的高层编辑器界面路由，把 `set_main_screen / capture_editor / list_controls / capture_control / popup` 动作稳定委托到对应原子工具 |
+| `system_script_executor_contracts` | 验证 `impl_script.gd` 作为当前脚本级 system 聚合入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
@@ -151,14 +150,14 @@ tests/godot_plugin_harness_fixture/
 | `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
 | `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
 | `lsp_service_access_contracts` | 验证 `mcp_http_server.gd` 与 `mcp_stdio_server.gd` 只暴露 loader-owned 的 GDScript diagnostics service，不再自行创建或回退 singleton |
-| `tools_tab_interaction_support_contracts` | 验证 `tools_tab_context_menu_support.gd` 与 `tools_tab_selection_support.gd` 的 metadata、菜单项与选择状态语义 |
-| `tools_tab_search_service_contracts` | 验证 `tools_tab_search_service.gd` 的直接命中与系统原子工具递归搜索 |
-| `tools_tab_preview_builder_contracts` | 验证 `tools_tab_preview_builder.gd` 的工具预览文本、参数摘要与原子工具提示 |
+| `tools_tab_rendering_contracts` | 验证 `tools_tab.gd` 的 TreeItem 渲染、树交互、上下文菜单与预览回流语义 |
+| `editor_lifecycle_endpoint_contracts` | 验证 `mcp_editor_lifecycle_endpoint.gd` 的请求解析与 action 分派 |
+| `plugin_entrypoint_contracts` | 验证 `plugin.gd` 的真实运行时入口生命周期：`_enter_tree/_exit_tree` 期间的 autoload、debugger bridge、dock attach/detach 与 server controller 装配；该 case 通过 editor probe 运行 |
 
 当前实测状态：
 
-- suite：`56/56` 通过
-- harness `stderr` 为空，退出无 `ObjectDB` / 资源泄漏告警
+- suite：通过
+- harness `stderr` 仍会包含 editor 退出噪音，但 `plugin_entrypoint_contracts` 已在 harness 内按 editor probe 例外放行
 - `tool_loader_status=ready`
 - `category_count=26`
 - `tool_count=115`
@@ -225,15 +224,11 @@ tests/godot_plugin_harness_fixture/
 - `client_config_file_transaction.gd`
 - `client_config_file_support.gd`
 - `client_config_launcher_adapter.gd`
-- `tools_tab_context_menu_support.gd`
-- `tools_tab_model_support.gd`
-- `tools_tab_selection_support.gd`
-- `tools_tab_search_service.gd`
-- `tools_tab_preview_builder.gd`
+- `tools_tab.gd`：已内聚上下文菜单、模型、选择、搜索与预览逻辑
 - `mcp_http_server.gd` 的公共测试入口
 - `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
 - `initialize / /health` 路径对 `protocolVersion / toolSchemaVersion / serverInfo` 的统一协议字段断言
-- `tool_loader.gd` 的 façade + `tool_registry_store / tool_bootstrap_coordinator / tool_execution_gateway / tool_lsp_diagnostics_adapter` 分层
+- `tool_loader.gd` 的 façade + `tool_lsp_diagnostics_adapter.gd` 的 loader-owned GDScript diagnostics 分层
 - `tool_lsp_diagnostics_adapter.gd` 现已成为 GDScript LSP 诊断服务的唯一主链拥有者，正式源码不再允许 `GDScriptLspDiagnosticsService.get_singleton()` 回退
 - `script/csharp_edit_service.gd` 与 `script/gdscript_edit_service.gd` 的 façade + semantic provider + edit action service 分层
 
@@ -241,18 +236,18 @@ tests/godot_plugin_harness_fixture/
 
 ---
 
-## 当前边界与后续收口点
+## 当前边界
 
 ### 1. 已摆脱私有方法名耦合，但 seam 仍可继续独立
 
 当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。  
 这显著降低了“内部方法改名或拆分导致测试先碎”的风险。
 
-不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮虽然已经把 runtime fallback / reply 行为抽到独立 helper，并把 `client_config_service.gd` 收成门面，但后续仍建议继续把 command adapter 和 step 执行器进一步外提。
+不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮已经把 runtime fallback / reply 行为抽到独立 helper，并把 `client_config_service.gd` 收成门面。
 
 ### 2. 当前仍偏“结构契约 + 局部 fake”混合模式
 
-这是当前阶段可以接受的折中，但后续应继续往“稳定 seam + 明确 fixture”方向收口。
+这是当前阶段的实际测试形态。
 
 ---
 
@@ -261,12 +256,13 @@ tests/godot_plugin_harness_fixture/
 推荐命令：
 
 ```powershell
-dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Console Path>"
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
 ```
+
+`plugin_entrypoint_contracts` 通过 editor probe 运行时，需要指向 Godot 编辑器可执行文件，而不是 console 版。
 
 常用附加选项：
 
-- `--allow-skip-missing-godot`
 - `--keep-stage-root`
 
 当前返回内容包括：
@@ -276,64 +272,7 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 - 每个 case 的结果
 - stderr 摘要
 
----
-
-## 下一步重构方向
-
-### 1. 继续把 `mcp_http_server.gd` seam 从节点内部往外收口
-
-建议目标：
-
-- `McpRequestRouter`
-- `EditorLifecycleEndpoint`
-- `EditorLifecycleActionService`
-- `ToolListResponseBuilder`
-- `JsonRpcRouter`
-- `HttpResponseService`
-- `EditorLifecycleStateBuilder`
-
-当前已经完成“从私有方法名迁移到公共测试入口”的第一步。  
-下一步目标是让 lifecycle、tools snapshot 和 JSON-RPC 入口更自然地落在独立 helper 上。
-
-### 2. 继续把 `mcp_runtime_bridge.gd` seam 从 bridge 节点内部往外收口
-
-建议目标：
-
-- `RuntimeCommandAdapter`
-- `RuntimeCaptureExecutor / RuntimeInputExecutor / RuntimeStepExecutor`
-- `RuntimeFallbackStore`
-- `RuntimeReplyWriter`
-
-当前已经完成 command capture、fallback store、reply writer 的第一轮公共化。  
-下一步目标是让 capture / input / step 三类执行逻辑也可以更独立地测试，而不必总通过 bridge 节点本身。
-
-### 3. `runtime_control_service.gd` 已完成第二轮 seam 外提
-
-建议目标：
-
-- `SessionSelector`
-- `EditorErrorMapper`
-- `RuntimeReplyResolver`
-- `RequestCoordinator`
-
-当前已经完成 session selector、error mapper、reply resolver 与 request coordinator 的外提。  
-下一步目标不再是继续拆 reply waiter，而是补更具体的负例覆盖，例如 `runtime_session_lost`、bridge unavailable 与 request cleanup 边界。
-
-### 4. 补更多负例
-
-优先补充：
-
-- `tool_loader` reload
-- permission 切换边界
-- `runtime_session_lost`
-- `runtime_control` enable / disable / step 的更多失败路径
-- 更贴近 transport 的 HTTP 请求路径
-- 临时资源
-- 测试状态清理
-
----
-
 ## 结论
 
 插件 headless harness 已经可用，而且已经真实发现并推动修复过运行时问题。  
-当前它的主要短板不是“没有测试”，而是“测试 seam 虽已起步但仍可继续独立、清理边界还不够干净”。
+当前它的重点是维持测试 seam 与清理边界的稳定。
