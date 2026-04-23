@@ -26,6 +26,8 @@ func _execute_status(ei, action: String, args: Dictionary) -> Dictionary:
 			return _get_editor_info(ei)
 		"get_main_screen":
 			return _get_main_screen(ei)
+		"get_focus_context":
+			return _get_focus_context(ei)
 		"set_main_screen":
 			return _set_main_screen(ei, args.get("screen", ""))
 		"get_distraction_free":
@@ -41,7 +43,7 @@ func _execute_status(ei, action: String, args: Dictionary) -> Dictionary:
 func _execute_screenshot(ei, action: String, args: Dictionary) -> Dictionary:
 	match action:
 		"capture":
-			return _capture_editor_screenshot(ei, str(args.get("path", "")))
+			return _capture_editor_screenshot(ei, args)
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -66,6 +68,47 @@ func _get_main_screen(ei) -> Dictionary:
 			current_name = str(current_screen.get_class())
 
 	return _success({"current_screen": current_name, "available": ["2D", "3D", "Script", "AssetLib"]})
+
+
+func _get_focus_context(ei) -> Dictionary:
+	var base_control = ei.get_base_control()
+	if base_control == null:
+		return _error("Editor base control not available")
+
+	var viewport = base_control.get_viewport()
+	var focus_owner = null
+	if viewport != null and viewport.has_method("gui_get_focus_owner"):
+		focus_owner = viewport.gui_get_focus_owner()
+
+	var selected_paths: Array[String] = []
+	var selection = null
+	if ei.has_method("get_selection"):
+		selection = ei.get_selection()
+	if selection != null and selection.has_method("get_selected_nodes"):
+		for node in selection.get_selected_nodes():
+			if node != null and node.has_method("get_path"):
+				selected_paths.append(str(node.get_path()))
+
+	var focus_owner_name := ""
+	var focus_owner_class := ""
+	var focus_owner_path := ""
+	if focus_owner != null:
+		focus_owner_name = str(focus_owner.name)
+		if focus_owner.has_method("get_focus_class"):
+			focus_owner_class = str(focus_owner.get_focus_class())
+		elif focus_owner.has_method("get_class"):
+			focus_owner_class = str(focus_owner.get_class())
+		if focus_owner.has_method("get_path"):
+			focus_owner_path = str(focus_owner.get_path())
+
+	return _success({
+		"has_focus_owner": focus_owner != null,
+		"focus_owner_name": focus_owner_name,
+		"focus_owner_class": focus_owner_class,
+		"focus_owner_path": focus_owner_path,
+		"selected_node_count": selected_paths.size(),
+		"selected_node_paths": selected_paths
+	})
 
 
 func _set_main_screen(ei, screen: String) -> Dictionary:
@@ -96,7 +139,7 @@ func _get_godot_path() -> Dictionary:
 	})
 
 
-func _capture_editor_screenshot(ei, path: String) -> Dictionary:
+func _capture_editor_screenshot(ei, args: Dictionary) -> Dictionary:
 	var base_control = ei.get_base_control()
 	if base_control == null:
 		return _error("Editor base control not available")
@@ -113,6 +156,33 @@ func _capture_editor_screenshot(ei, path: String) -> Dictionary:
 	if image == null or image.is_empty():
 		return _error("Editor screenshot image is empty")
 
+	var capture_mode := "full"
+	var region_data := {}
+	var region_x_value = args.get("x", null)
+	var region_y_value = args.get("y", null)
+	var region_width_value = args.get("width", null)
+	var region_height_value = args.get("height", null)
+	if region_x_value != null or region_y_value != null or region_width_value != null or region_height_value != null:
+		var region_width := int(region_width_value) if region_width_value != null else 0
+		var region_height := int(region_height_value) if region_height_value != null else 0
+		if region_width <= 0 or region_height <= 0:
+			return _error("Screenshot region width and height must be greater than 0")
+		var region_x := maxi(int(region_x_value) if region_x_value != null else 0, 0)
+		var region_y := maxi(int(region_y_value) if region_y_value != null else 0, 0)
+		if region_x >= image.get_width() or region_y >= image.get_height():
+			return _error("Screenshot region origin is outside the editor viewport")
+		region_width = mini(region_width, image.get_width() - region_x)
+		region_height = mini(region_height, image.get_height() - region_y)
+		image = image.get_region(Rect2i(region_x, region_y, region_width, region_height))
+		capture_mode = "region"
+		region_data = {
+			"x": region_x,
+			"y": region_y,
+			"width": region_width,
+			"height": region_height
+		}
+
+	var path := str(args.get("path", ""))
 	var target_path := path.strip_edges()
 	if target_path.is_empty():
 		target_path = "user://godot_mcp_editor_captures/editor_%s.png" % str(Time.get_unix_time_from_system())
@@ -125,4 +195,11 @@ func _capture_editor_screenshot(ei, path: String) -> Dictionary:
 	if save_error != OK:
 		return _error("Failed to save editor screenshot: %s" % error_string(save_error))
 
-	return _success({"path": target_path, "absolute_path": absolute_path, "width": image.get_width(), "height": image.get_height()}, "Editor screenshot captured")
+	return _success({
+		"path": target_path,
+		"absolute_path": absolute_path,
+		"width": image.get_width(),
+		"height": image.get_height(),
+		"capture_mode": capture_mode,
+		"region": region_data
+	}, "Editor screenshot captured")

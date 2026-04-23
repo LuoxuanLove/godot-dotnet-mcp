@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "editor_tool_executor_contracts"}
+
 const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor/executor.gd")
 
 
@@ -116,6 +118,12 @@ class FakeScreenshotImage:
 	func get_height() -> int:
 		return height
 
+	func get_region(rect: Rect2i):
+		var image := FakeScreenshotImage.new()
+		image.width = rect.size.x
+		image.height = rect.size.y
+		return image
+
 	func save_png(path: String) -> int:
 		var file := FileAccess.open(path, FileAccess.WRITE)
 		if file == null:
@@ -138,18 +146,170 @@ class FakeEditorViewport:
 	extends RefCounted
 
 	var _texture := FakeScreenshotTexture.new()
+	var focus_owner = null
 
 	func get_texture():
 		return _texture
+
+	func gui_get_focus_owner():
+		return focus_owner
 
 
 class FakeEditorBaseControl:
 	extends RefCounted
 
 	var _viewport := FakeEditorViewport.new()
+	var _children: Array = []
 
 	func get_viewport():
 		return _viewport
+
+	func add_popup_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_parent():
+		return null
+
+	func get_path() -> NodePath:
+		return NodePath("/root/Editor")
+
+
+class FakePopupNode:
+	extends RefCounted
+
+	var name := ""
+	var title := ""
+	var text := ""
+	var visible := true
+	var disabled := false
+	var _popup_class := "Control"
+	var _parent_ref: WeakRef = null
+	var _children: Array = []
+	var pressed := false
+
+	func _init(node_name: String = "", popup_class: String = "Control") -> void:
+		name = node_name
+		_popup_class = popup_class
+
+	func set_parent(parent) -> void:
+		_parent_ref = weakref(parent)
+
+	func add_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_parent():
+		return _parent_ref.get_ref() if _parent_ref != null else null
+
+	func get_popup_class() -> String:
+		return _popup_class
+
+	func get_path() -> NodePath:
+		var parent = get_parent()
+		if parent == null or not parent.has_method("get_path"):
+			return NodePath("/" + name)
+		return NodePath(str(parent.get_path()) + "/" + name)
+
+	func is_visible_in_tree() -> bool:
+		return visible
+
+	func hide() -> void:
+		visible = false
+
+	func press() -> void:
+		pressed = true
+
+
+class FakeUiControl:
+	extends RefCounted
+
+	var name := ""
+	var text := ""
+	var title := ""
+	var visible := true
+	var disabled := false
+	var focused := false
+	var pressed := false
+	var _ui_class := "Control"
+	var _parent_ref: WeakRef = null
+	var _children: Array = []
+	var _rect := Rect2(0, 0, 100, 24)
+
+	func _init(node_name: String = "", ui_class: String = "Control", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		name = node_name
+		_ui_class = ui_class
+		_rect = rect
+
+	func set_parent(parent) -> void:
+		_parent_ref = weakref(parent)
+
+	func add_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_child_count() -> int:
+		return _children.size()
+
+	func get_parent():
+		return _parent_ref.get_ref() if _parent_ref != null else null
+
+	func get_path() -> NodePath:
+		var parent = get_parent()
+		if parent == null or not parent.has_method("get_path"):
+			return NodePath("/" + name)
+		return NodePath(str(parent.get_path()) + "/" + name)
+
+	func is_visible_in_tree() -> bool:
+		return visible
+
+	func get_global_rect() -> Rect2:
+		return _rect
+
+	func get_ui_class() -> String:
+		return _ui_class
+
+	func grab_focus() -> void:
+		focused = true
+
+	func press() -> void:
+		pressed = true
+
+	func set_text(value: String) -> void:
+		text = value
+
+
+class FakeFocusOwner:
+	extends RefCounted
+
+	var name := "InspectorSearch"
+
+	func get_focus_class() -> String:
+		return "LineEdit"
+
+	func get_path() -> NodePath:
+		return NodePath("/root/Editor/InspectorSearch")
+
+
+class FakeSelection:
+	extends RefCounted
+
+	var _nodes: Array = []
+
+	func get_selected_nodes() -> Array:
+		return _nodes
 
 
 class FakeEditorInterface:
@@ -162,6 +322,8 @@ class FakeEditorInterface:
 	var _inspector := FakeInspector.new()
 	var _filesystem := FakeFileSystem.new()
 	var _base_control := FakeEditorBaseControl.new()
+	var _selection := FakeSelection.new()
+	var _edited_scene_root: Node = null
 	var _selected_paths: PackedStringArray = PackedStringArray()
 	var _plugin_states := {}
 	var last_edit_node = null
@@ -190,6 +352,12 @@ class FakeEditorInterface:
 
 	func get_base_control():
 		return _base_control
+
+	func get_selection():
+		return _selection
+
+	func get_edited_scene_root() -> Node:
+		return _edited_scene_root
 
 	func get_inspector():
 		return _inspector
@@ -232,6 +400,35 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var executor = EditorExecutorScript.new()
 	var editor_interface := FakeEditorInterface.new()
 	_scene_root = _build_scene_fixture(tree)
+	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
+	popup_root.title = "Search"
+	var popup_button := FakePopupNode.new("ConfirmButton", "Button")
+	popup_button.text = "Confirm"
+	var popup_input := FakePopupNode.new("SearchInput", "LineEdit")
+	popup_input.text = "OldValue"
+	var hidden_popup_root := FakePopupNode.new("HiddenDialog", "PopupMenu")
+	hidden_popup_root.visible = false
+	var hidden_popup_button := FakePopupNode.new("HiddenButton", "Button")
+	hidden_popup_root.add_child(hidden_popup_button)
+	var non_popup_button := FakePopupNode.new("ToolbarButton", "Button")
+	var non_popup_input := FakePopupNode.new("ToolbarInput", "LineEdit")
+	non_popup_input.text = "ToolbarOld"
+	var search_panel := FakeUiControl.new("SearchPanel", "PanelContainer", Rect2(16, 16, 200, 72))
+	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
+	search_field.text = "InitialQuery"
+	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	search_panel.add_child(search_field)
+	search_panel.add_child(refresh_button)
+	popup_root.add_child(popup_button)
+	popup_root.add_child(popup_input)
+	editor_interface.get_base_control().add_popup_child(popup_root)
+	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
+	editor_interface.get_base_control().add_popup_child(non_popup_button)
+	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(search_panel)
+	editor_interface._edited_scene_root = _scene_root
+	editor_interface.get_base_control().get_viewport().focus_owner = FakeFocusOwner.new()
+	editor_interface.get_selection()._nodes = [_scene_root.get_node("Target")]
 	editor_interface.get_inspector().edited_object = _scene_root.get_node("Target")
 	executor.configure_context({
 		"editor_interface": editor_interface,
@@ -240,10 +437,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 8:
-		return _failure("Editor executor should expose 8 tool definitions after the split.")
+	if tool_defs.size() != 10:
+		return _failure("Editor executor should expose 10 tool definitions after UI control is added.")
 
-	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "inspector", "filesystem", "plugin"]
+	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "ui_control", "popup", "inspector", "filesystem", "plugin"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
@@ -267,6 +464,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status get_godot_path returned empty paths.")
 	if executable_path.find("Godot_v4.6.2-stable_mono_win64") == -1:
 		return _failure("Editor status get_godot_path returned an unexpected executable path.")
+
+	var focus_context_result: Dictionary = executor.execute("status", {"action": "get_focus_context"})
+	if not bool(focus_context_result.get("success", false)):
+		return _failure("Editor status get_focus_context failed through the split service path.")
+	if str(focus_context_result.get("data", {}).get("focus_owner_name", "")) != "InspectorSearch":
+		return _failure("Editor status get_focus_context returned an unexpected focus owner.")
+	if int(focus_context_result.get("data", {}).get("selected_node_count", 0)) != 1:
+		return _failure("Editor status get_focus_context should report one selected scene node.")
 
 	var set_setting_result: Dictionary = executor.execute("settings", {
 		"action": "set",
@@ -309,6 +514,124 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(notification_result.get("success", false)):
 		return _failure("Editor notification toast failed through the split service path.")
 
+	var search_field_path := str(search_field.get_path())
+	var refresh_button_path := str(refresh_button.get_path())
+	var list_controls_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_visible",
+		"class_name": "LineEdit"
+	})
+	if not bool(list_controls_result.get("success", false)):
+		return _failure("Editor ui_control list_visible failed through the split service path.")
+	if int(list_controls_result.get("data", {}).get("count", 0)) < 1:
+		return _failure("Editor ui_control list_visible should return at least one visible LineEdit.")
+
+	var get_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "get_control",
+		"target_path": search_field_path
+	})
+	if not bool(get_control_result.get("success", false)):
+		return _failure("Editor ui_control get_control failed through the split service path.")
+	if str(get_control_result.get("data", {}).get("control", {}).get("class", "")) != "LineEdit":
+		return _failure("Editor ui_control get_control should preserve the control class.")
+
+	var focus_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "focus_control",
+		"target_path": search_field_path
+	})
+	if not bool(focus_control_result.get("success", false)):
+		return _failure("Editor ui_control focus_control failed through the split service path.")
+	if not bool(search_field.focused):
+		return _failure("Editor ui_control focus_control should grab focus on the target control.")
+
+	var set_text_result: Dictionary = executor.execute("ui_control", {
+		"action": "set_text",
+		"target_path": search_field_path,
+		"text": "Player"
+	})
+	if not bool(set_text_result.get("success", false)):
+		return _failure("Editor ui_control set_text failed through the split service path.")
+	if search_field.text != "Player":
+		return _failure("Editor ui_control set_text should update the target control text.")
+
+	var activate_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_control",
+		"target_path": refresh_button_path
+	})
+	if not bool(activate_control_result.get("success", false)):
+		return _failure("Editor ui_control activate_control failed through the split service path.")
+	if not bool(refresh_button.pressed):
+		return _failure("Editor ui_control activate_control should activate the target control.")
+
+	var capture_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "capture_control",
+		"target_path": search_field_path,
+		"path": "user://editor_executor_control_capture.png"
+	})
+	if not bool(capture_control_result.get("success", false)):
+		return _failure("Editor ui_control capture_control failed through the split service path.")
+	var control_capture_path := ProjectSettings.globalize_path(str(capture_control_result.get("data", {}).get("path", "")))
+	if not FileAccess.file_exists(control_capture_path):
+		return _failure("Editor ui_control capture_control did not create the cropped PNG file.")
+
+	var popup_list_result: Dictionary = executor.execute("popup", {"action": "list_visible"})
+	if not bool(popup_list_result.get("success", false)):
+		return _failure("Editor popup list_visible failed through the split service path.")
+	if int(popup_list_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("Editor popup list_visible should report one visible popup root.")
+	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
+	var popup_button_path := "%s/ConfirmButton" % popup_root_path
+	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var popup_press_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": popup_button_path
+	})
+	if not bool(popup_press_result.get("success", false)):
+		return _failure("Editor popup press_button failed through the split service path.")
+	if not bool(popup_button.pressed):
+		return _failure("Editor popup press_button should activate the target button.")
+
+	var popup_text_result: Dictionary = executor.execute("popup", {
+		"action": "set_text",
+		"target_path": popup_input_path,
+		"text": "NewValue"
+	})
+	if not bool(popup_text_result.get("success", false)):
+		return _failure("Editor popup set_text failed through the split service path.")
+	if popup_input.text != "NewValue":
+		return _failure("Editor popup set_text should update the popup input value.")
+
+	var popup_close_result: Dictionary = executor.execute("popup", {
+		"action": "close_popup",
+		"target_path": popup_root_path
+	})
+	if not bool(popup_close_result.get("success", false)):
+		return _failure("Editor popup close_popup failed through the split service path.")
+	if popup_root.visible:
+		return _failure("Editor popup close_popup should hide the popup root.")
+
+	var hidden_popup_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": str(hidden_popup_button.get_path())
+	})
+	if bool(hidden_popup_result.get("success", false)):
+		return _failure("Editor popup press_button should reject targets inside hidden popup roots.")
+
+	var non_popup_button_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": str(non_popup_button.get_path())
+	})
+	if bool(non_popup_button_result.get("success", false)):
+		return _failure("Editor popup press_button should reject targets outside popup roots.")
+
+	var non_popup_input_result: Dictionary = executor.execute("popup", {
+		"action": "set_text",
+		"target_path": str(non_popup_input.get_path()),
+		"text": "ToolbarNew"
+	})
+	if bool(non_popup_input_result.get("success", false)):
+		return _failure("Editor popup set_text should reject targets outside popup roots.")
+
 	var edit_object_result: Dictionary = executor.execute("inspector", {
 		"action": "edit_object",
 		"path": "Target"
@@ -342,6 +665,22 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(screenshot_data.get("width", 0)) != 320 or int(screenshot_data.get("height", 0)) != 180:
 		return _failure("Editor screenshot capture returned unexpected dimensions.")
 
+	var region_screenshot_result: Dictionary = executor.execute("screenshot", {
+		"action": "capture",
+		"path": "user://editor_executor_contract_region.png",
+		"x": 10,
+		"y": 20,
+		"width": 64,
+		"height": 48
+	})
+	if not bool(region_screenshot_result.get("success", false)):
+		return _failure("Editor screenshot region capture failed through the split service path.")
+	var region_screenshot_data: Dictionary = region_screenshot_result.get("data", {})
+	if str(region_screenshot_data.get("capture_mode", "")) != "region":
+		return _failure("Editor screenshot region capture should report capture_mode=region.")
+	if int(region_screenshot_data.get("width", 0)) != 64 or int(region_screenshot_data.get("height", 0)) != 48:
+		return _failure("Editor screenshot region capture returned unexpected cropped dimensions.")
+
 	var enable_plugin_result: Dictionary = executor.execute("plugin", {
 		"action": "enable",
 		"plugin": "godot_dotnet_mcp"
@@ -364,6 +703,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"godot_executable_path": executable_path,
 			"project_root_path": project_root,
 			"screenshot_path": screenshot_path,
+			"control_capture_path": control_capture_path,
 			"current_screen": str(get_screen_result.get("data", {}).get("current_screen", "")),
 			"selected_property": str(selected_property_result.get("data", {}).get("selected_path", "")),
 			"selected_file_count": int(selected_files_result.get("data", {}).get("count", 0))

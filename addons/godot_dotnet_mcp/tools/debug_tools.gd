@@ -1198,14 +1198,30 @@ func _get_editor_log_rtl() -> RichTextLabel:
 
 func _find_editor_log_rtl(node: Node) -> RichTextLabel:
 	if node.get_class() == "EditorLog":
-		for i in range(node.get_child_count()):
-			var child := node.get_child(i)
-			if child is RichTextLabel:
-				return child as RichTextLabel
+		var direct_rtl := _find_first_rich_text_label(node)
+		if direct_rtl != null:
+			return direct_rtl
+	var node_name := str(node.name)
+	if node_name == "Output" or str(node.get_path()).find("/Output") != -1:
+		var output_rtl := _find_first_rich_text_label(node)
+		if output_rtl != null:
+			return output_rtl
 	for i in range(node.get_child_count()):
 		var result := _find_editor_log_rtl(node.get_child(i))
 		if result != null:
 			return result
+	return null
+
+
+func _find_first_rich_text_label(node: Node) -> RichTextLabel:
+	for i in range(node.get_child_count()):
+		var child := node.get_child(i)
+		if child is RichTextLabel:
+			return child as RichTextLabel
+	for i in range(node.get_child_count()):
+		var nested := _find_first_rich_text_label(node.get_child(i))
+		if nested != null:
+			return nested
 	return null
 
 

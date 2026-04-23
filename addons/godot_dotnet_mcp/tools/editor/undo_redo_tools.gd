@@ -3,14 +3,13 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
 ## Editor undo/redo tools for Godot MCP
 
-var _editor_interface_override = null
-var _undo_redo_override = null
 var _current_action_name: String = ""
 var _undo_redo_manager = null
 
 
 func execute(ei, args: Dictionary) -> Dictionary:
 	_editor_interface_override = ei
+	_scene_root_override = ei.get_edited_scene_root() if ei != null and ei.has_method("get_edited_scene_root") else null
 	var action = args.get("action", "")
 
 	match action:

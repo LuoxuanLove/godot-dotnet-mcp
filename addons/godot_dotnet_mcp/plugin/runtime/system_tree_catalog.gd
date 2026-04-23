@@ -8,19 +8,30 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "project_dotnet",       "actions": []},
 		{"tool": "filesystem_directory", "actions": ["get_files"]},
 		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_errors_context", "get_scene_snapshot", "get_recent_filtered"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]}
+		{"tool": "debug_dotnet",         "actions": ["build"]}
 	],
-	"system_project_advise": [
-		{"tool": "project_info",         "actions": ["get_info"]},
-		{"tool": "filesystem_directory", "actions": ["get_files"]},
-		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_recent_filtered"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]}
+	"system_editor_state": [
+		{"tool": "editor_status",       "actions": ["get_info", "get_main_screen", "get_focus_context", "get_distraction_free", "get_godot_path"]},
+		{"tool": "editor_inspector",    "actions": ["get_edited", "get_selected_property"]},
+		{"tool": "editor_filesystem",   "actions": ["get_selected", "get_current_path"]},
+		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_scene_snapshot", "get_errors_context", "get_recent_filtered"]},
+		{"tool": "debug_dotnet",         "actions": ["build"]}
+	],
+	"system_editor_control": [
+		{"tool": "editor_status",      "actions": ["set_main_screen"]},
+		{"tool": "editor_screenshot",  "actions": ["capture"]},
+		{"tool": "editor_ui_control",  "actions": ["list_visible", "get_control", "capture_control", "focus_control", "activate_control", "set_text"]},
+		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "set_text", "close_popup"]}
 	],
 	"system_runtime_diagnose": [
 		{"tool": "debug_runtime_bridge", "actions": ["get_errors_context"]},
-		{"tool": "debug_dotnet",         "actions": ["restore"]},
+		{"tool": "debug_dotnet",         "actions": ["build"]},
 		{"tool": "debug_performance",    "actions": ["get_fps", "get_memory", "get_render_info"]}
 	],
+	"system_runtime_control": [],
+	"system_runtime_capture": [],
+	"system_runtime_input": [],
+	"system_runtime_step": [],
 	"system_project_configure": [
 		{"tool": "project_info",     "actions": ["get_settings"]},
 		{"tool": "project_settings", "actions": ["set"]},
@@ -113,4 +124,3 @@ static func get_generic_action_name_key(action_name: String) -> String:
 
 static func get_generic_action_desc_key(action_name: String) -> String:
 	return "tool_action_%s_desc" % action_name
-

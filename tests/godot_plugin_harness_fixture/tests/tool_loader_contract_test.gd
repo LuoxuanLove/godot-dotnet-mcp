@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 
 class FakeServerContext extends RefCounted:
@@ -42,6 +43,14 @@ var _loader = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	PluginSelfDiagnosticStore.clear()
+	PluginSelfDiagnosticStore.record_incident(
+		"warning",
+		"contract_warning",
+		"tool_loader_contract_incident",
+		"Tool loader contract incident",
+		"tool_loader_contract_test"
+	)
 	var permission_provider = FakePermissionProvider.new()
 
 	var runtime_control_service = FakeRuntimeControlService.new()
@@ -79,6 +88,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		exposed_names.append(str(tool_def.get("name", "")))
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default permission provider.")
+	if not exposed_names.has("system_editor_state"):
+		return _failure("Tool loader did not expose system_editor_state under the default permission provider.")
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_capture", "system_runtime_input", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
@@ -92,6 +103,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_control_data = runtime_control_result.get("data", {})
 	if not (runtime_control_data is Dictionary) or bool((runtime_control_data as Dictionary).get("armed", true)):
 		return _failure("Tool loader runtime control status did not return the expected armed flag.")
+
+	var editor_state_result: Dictionary = await _loader.execute_tool_async("system", "editor_state", {})
+	if not bool(editor_state_result.get("success", false)):
+		return _failure("Tool loader should route system_editor_state successfully even when editor-only sections are unavailable.")
+	var editor_state_data = editor_state_result.get("data", {})
+	if not (editor_state_data is Dictionary):
+		return _failure("Tool loader system_editor_state should return a dictionary payload.")
+	var editor_section = (editor_state_data as Dictionary).get("editor", {})
+	if not (editor_section is Dictionary):
+		return _failure("Tool loader system_editor_state should include the editor section.")
+	if bool((editor_section as Dictionary).get("available", true)):
+		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
+
+	var project_state_result: Dictionary = await _loader.execute_tool_async("system", "project_state", {"include_runtime_health": true})
+	if not bool(project_state_result.get("success", false)):
+		return _failure("Tool loader should route system_project_state(include_runtime_health=true) successfully.")
+	var project_state_data = project_state_result.get("data", {})
+	if not (project_state_data is Dictionary):
+		return _failure("Tool loader system_project_state should return a dictionary payload.")
+	var runtime_health = (project_state_data as Dictionary).get("runtime_health", {})
+	if not (runtime_health is Dictionary):
+		return _failure("Tool loader system_project_state should include runtime_health when requested.")
+	if not ((runtime_health as Dictionary).get("self_diagnostics", {}) is Dictionary):
+		return _failure("Tool loader system_project_state runtime_health should include self_diagnostics.")
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):

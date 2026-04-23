@@ -26,6 +26,10 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
 	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd"
 }
+const EXECUTOR_DEPENDENCY_PATHS := {
+	"editor": ["res://addons/godot_dotnet_mcp/tools/editor_tools.gd"],
+	"debug": ["res://addons/godot_dotnet_mcp/tools/debug_tools.gd"]
+}
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 const PROJECT_FILE_PATTERNS := {
@@ -46,6 +50,7 @@ func success(data = null, message: String = "") -> Dictionary:
 
 func configure_runtime(context: Dictionary) -> void:
 	_runtime_context = context.duplicate(true)
+	_atomic_executors.clear()
 
 
 func get_tool_loader():
@@ -130,14 +135,22 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 		MCPDebugBuffer.record("debug", "atomic",
 			"Unknown category: %s (from %s)" % [category, full_name])
 		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
-	if not _atomic_executors.has(category):
-		var path := str(EXECUTOR_SCRIPT_PATHS[category])
-		var script = load(path)
-		if script == null:
-			MCPDebugBuffer.record("error", "atomic",
-				"Failed to load executor for: %s (path: %s)" % [category, path])
-			return error("Failed to load atomic executor: %s" % path)
-		_atomic_executors[category] = script.new()
+	var path := str(EXECUTOR_SCRIPT_PATHS[category])
+	for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
+		ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
+	var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+	if script == null:
+		MCPDebugBuffer.record("error", "atomic",
+			"Failed to load executor for: %s (path: %s)" % [category, path])
+		return error("Failed to load atomic executor: %s" % path)
+	if _atomic_executors.has(category):
+		var old_executor = _atomic_executors[category]
+		if old_executor != null:
+			if old_executor.has_method("dispose"):
+				old_executor.dispose()
+			if old_executor.has_method("shutdown"):
+				old_executor.shutdown()
+	_atomic_executors[category] = script.new()
 	var executor = _atomic_executors[category]
 	if executor == null or not executor.has_method("execute"):
 		MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)

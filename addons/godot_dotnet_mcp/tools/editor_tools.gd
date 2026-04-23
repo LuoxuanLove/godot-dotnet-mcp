@@ -1,6 +1,5 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
-class_name MCPEditorTools
 
 ## Editor control tools for Godot MCP
 ## Provides editor UI, theme, and preferences management
@@ -11,17 +10,16 @@ const PluginTools = preload("res://addons/godot_dotnet_mcp/tools/editor/plugin_t
 const SettingsTools = preload("res://addons/godot_dotnet_mcp/tools/editor/settings_tools.gd")
 const StateTools = preload("res://addons/godot_dotnet_mcp/tools/editor/state_tools.gd")
 const InspectorTools = preload("res://addons/godot_dotnet_mcp/tools/editor/inspector_tools.gd")
+const UIControlTools = preload("res://addons/godot_dotnet_mcp/tools/editor/ui_control_tools.gd")
 const UndoRedoTools = preload("res://addons/godot_dotnet_mcp/tools/editor/undo_redo_tools.gd")
 
-var _editor_interface_override = null
-var _undo_redo_override = null
-var _scene_root_override = null
 var _notification_tools := NotificationTools.new()
 var _filesystem_tools := FilesystemTools.new()
 var _plugin_tools := PluginTools.new()
 var _settings_tools := SettingsTools.new()
 var _state_tools := StateTools.new()
 var _inspector_tools := InspectorTools.new()
+var _ui_control_tools := UIControlTools.new()
 var _undo_redo_tools := UndoRedoTools.new()
 
 
@@ -38,12 +36,15 @@ func dispose() -> void:
 	_editor_interface_override = null
 	_undo_redo_override = null
 	_scene_root_override = null
+	_ui_control_tools = UIControlTools.new()
 	_undo_redo_tools = UndoRedoTools.new()
 
 
 func _get_editor_interface():
 	if _editor_interface_override != null:
 		return _editor_interface_override
+	if not Engine.is_editor_hint():
+		return null
 	if Engine.has_singleton("EditorInterface"):
 		return Engine.get_singleton("EditorInterface")
 	return null
@@ -73,6 +74,19 @@ func _find_node_by_path(path: String) -> Node:
 	return root.get_node_or_null(NodePath(normalized_path))
 
 
+func _build_subtool_context() -> Dictionary:
+	return {
+		"editor_interface": _editor_interface_override,
+		"undo_redo": _undo_redo_override,
+		"scene_root": _scene_root_override
+	}
+
+
+func _configure_subtool(tool) -> void:
+	if tool != null and tool.has_method("configure_context"):
+		tool.configure_context(_build_subtool_context())
+
+
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
@@ -82,6 +96,7 @@ func get_tools() -> Array[Dictionary]:
 ACTIONS:
 - get_info: Get editor version and status info
 - get_main_screen: Get currently active main screen (2D, 3D, Script, AssetLib)
+- get_focus_context: Get current editor focus owner and selected scene nodes
 - set_main_screen: Switch to a different main screen
 - get_distraction_free: Get distraction-free mode status
 - set_distraction_free: Toggle distraction-free mode
@@ -90,6 +105,7 @@ ACTIONS:
 EXAMPLES:
 - Get editor info: {"action": "get_info"}
 - Get main screen: {"action": "get_main_screen"}
+- Get focus context: {"action": "get_focus_context"}
 - Switch to 3D: {"action": "set_main_screen", "screen": "3D"}
 - Toggle distraction-free: {"action": "set_distraction_free", "enabled": true}""",
 			"inputSchema": {
@@ -97,7 +113,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-					"enum": ["get_info", "get_main_screen", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
+						"enum": ["get_info", "get_main_screen", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
 						"description": "Status action"
 					},
 					"screen": {
@@ -122,7 +138,8 @@ ACTIONS:
 
 EXAMPLES:
 - Capture to default path: {"action": "capture"}
-- Capture to custom path: {"action": "capture", "path": "user://captures/editor.png"}""",
+- Capture to custom path: {"action": "capture", "path": "user://captures/editor.png"}
+- Capture a region: {"action": "capture", "x": 32, "y": 16, "width": 128, "height": 96}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -134,6 +151,22 @@ EXAMPLES:
 					"path": {
 						"type": "string",
 						"description": "Output PNG path (res:// or user://). Defaults to user://godot_mcp_editor_captures/..."
+					},
+					"x": {
+						"type": "integer",
+						"description": "Optional capture region X origin"
+					},
+					"y": {
+						"type": "integer",
+						"description": "Optional capture region Y origin"
+					},
+					"width": {
+						"type": "integer",
+						"description": "Optional capture region width"
+					},
+					"height": {
+						"type": "integer",
+						"description": "Optional capture region height"
 					}
 				},
 				"required": ["action"]
@@ -297,6 +330,112 @@ EXAMPLES:
 			}
 		},
 		{
+			"name": "ui_control",
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, capture control-local screenshots, focus a control, activate safe button-like controls, and write text into text-editing controls.
+
+ACTIONS:
+- list_visible: Enumerate visible editor controls
+- list_dock_tabs: Enumerate dock tabs by title/path, including hidden ones when requested
+- activate_dock_tab: Activate a dock tab by its title
+- get_control: Fetch one control summary by target_path
+- capture_control: Capture a screenshot cropped to one control
+- focus_control: Move editor focus to a control
+- activate_control: Activate a button-like control
+- set_text: Write text into a text-editing control
+
+EXAMPLES:
+- List controls: {"action": "list_visible", "class_name": "LineEdit"}
+- List dock tabs: {"action": "list_dock_tabs", "include_hidden": true}
+- Activate dock tab: {"action": "activate_dock_tab", "title": "MCPDock"}
+- Inspect one control: {"action": "get_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
+- Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
+- Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
+- Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
+- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "get_control", "capture_control", "focus_control", "activate_control", "set_text"],
+						"description": "UI control action"
+					},
+					"title": {
+						"type": "string",
+						"description": "Dock tab title for activate_dock_tab"
+					},
+					"target_path": {
+						"type": "string",
+						"description": "Editor control path returned from list_visible"
+					},
+					"path": {
+						"type": "string",
+						"description": "Output PNG path for capture_control"
+					},
+					"text": {
+						"type": "string",
+						"description": "Text for set_text"
+					},
+					"class_name": {
+						"type": "string",
+						"description": "Optional class filter for list_visible"
+					},
+					"text_query": {
+						"type": "string",
+						"description": "Optional text filter for list_visible"
+					},
+					"include_hidden": {
+						"type": "boolean",
+						"description": "Include hidden controls in list_visible"
+					},
+					"limit": {
+						"type": "integer",
+						"description": "Maximum controls returned from list_visible"
+					},
+					"max_depth": {
+						"type": "integer",
+						"description": "Maximum tree depth for list_visible"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "popup",
+			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups and perform minimal safe interactions.
+
+ACTIONS:
+- list_visible: List visible popup/window roots and actionable children
+- press_button: Activate a popup button by target_path
+- set_text: Set text on a popup LineEdit/TextEdit by target_path
+- close_popup: Close a popup/window by target_path
+
+EXAMPLES:
+- List popups: {"action": "list_visible"}
+- Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
+- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
+- Close popup: {"action": "close_popup", "target_path": "/root/Editor/SearchDialog"}""",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": ["list_visible", "press_button", "set_text", "close_popup"],
+						"description": "Popup action"
+					},
+					"target_path": {
+						"type": "string",
+						"description": "Popup control path returned from list_visible"
+					},
+					"text": {
+						"type": "string",
+						"description": "Text to write for set_text"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "inspector",
 			"description": """INSPECTOR CONTROL: Control the editor inspector panel.
 
@@ -404,17 +543,37 @@ EXAMPLES:
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
+	_configure_subtool(_state_tools)
+	_configure_subtool(_settings_tools)
+	_configure_subtool(_undo_redo_tools)
+	_configure_subtool(_notification_tools)
+	_configure_subtool(_inspector_tools)
+	_configure_subtool(_filesystem_tools)
+	_configure_subtool(_plugin_tools)
+	_configure_subtool(_ui_control_tools)
 	match tool_name:
 		"status":
 			return _state_tools.execute(_get_editor_interface(), {"tool": "status", "action": args.get("action", ""), "screen": args.get("screen", ""), "enabled": args.get("enabled", false)})
 		"screenshot":
-			return _state_tools.execute(_get_editor_interface(), {"tool": "screenshot", "action": args.get("action", ""), "path": args.get("path", "")})
+			return _state_tools.execute(_get_editor_interface(), {
+				"tool": "screenshot",
+				"action": args.get("action", ""),
+				"path": args.get("path", ""),
+				"x": args.get("x", null),
+				"y": args.get("y", null),
+				"width": args.get("width", null),
+				"height": args.get("height", null)
+			})
 		"settings":
 			return _settings_tools.execute(_get_editor_interface(), args)
 		"undo_redo":
 			return _undo_redo_tools.execute(_get_editor_interface(), args)
 		"notification":
 			return _notification_tools.execute(_get_editor_interface(), args)
+		"ui_control":
+			return _ui_control_tools.execute(_get_editor_interface(), args)
+		"popup":
+			return _notification_tools.execute_popup(_get_editor_interface(), args)
 		"inspector":
 			return _inspector_tools.execute(_get_editor_interface(), args)
 		"filesystem":
@@ -423,4 +582,3 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _plugin_tools.execute(_get_editor_interface(), args)
 		_:
 			return _error("Unknown tool: %s" % tool_name)
-
