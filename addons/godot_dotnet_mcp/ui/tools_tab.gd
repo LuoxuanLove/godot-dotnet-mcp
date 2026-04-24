@@ -270,10 +270,13 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 		return
 	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
 	if category == SYSTEM_CATEGORY:
-		var has_children := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.has(full_name)
+		var action_values := _extract_action_values(tool_def)
+		var atomic_children: Array = SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(full_name, [])
+		var has_children := not action_values.is_empty() or not atomic_children.is_empty()
 		if has_children:
 			var settings: Dictionary = model.get("settings", {})
 			item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_TOOL, full_name)
+		_create_action_children(item, full_name, tool_def)
 		var visited := {}
 		visited[full_name] = true
 		_create_atomic_tool_children(item, model, full_name, visited)
@@ -342,6 +345,15 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, system_fu
 			var action_item = _tool_tree.create_item(item)
 			if action_item != null:
 				_configure_action_item(action_item, str(action_name), atomic_full_name)
+
+
+func _create_action_children(parent: TreeItem, parent_full_name: String, tool_def: Dictionary) -> void:
+	for action_name in _extract_action_values(tool_def):
+		if not _matches_action_search(parent_full_name, str(action_name), tool_def):
+			continue
+		var action_item = _tool_tree.create_item(parent)
+		if action_item != null:
+			_configure_action_item(action_item, str(action_name), parent_full_name)
 
 
 func _count_enabled_tools(model: Dictionary) -> Array:
@@ -783,6 +795,11 @@ func _matches_tool_search(model: Dictionary, category: String, tool_def: Diction
 	var full_name = "%s_%s" % [category, tool_name]
 	if _get_tool_display_name(localization, full_name, tool_name).to_lower().contains(query):
 		return true
+	if _get_tool_description(localization, full_name, tool_def).to_lower().contains(query):
+		return true
+	for action_name in _extract_action_values(tool_def):
+		if _matches_action_search(full_name, str(action_name), tool_def):
+			return true
 	if category != SYSTEM_CATEGORY:
 		return false
 	return _matches_atomic_tool_search_recursive(model, full_name, {})

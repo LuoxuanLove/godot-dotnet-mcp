@@ -3,6 +3,7 @@ extends RefCounted
 class_name SystemTreeCatalog
 
 const SYSTEM_TOOL_ATOMIC_CHILDREN := {
+	"system_help": [],
 	"system_project_state": [
 		{"tool": "project_info",         "actions": ["get_info"]},
 		{"tool": "project_dotnet",       "actions": []},
@@ -20,8 +21,11 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["set_main_screen"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
-		{"tool": "editor_ui_control",  "actions": ["list_visible", "get_control", "capture_control", "focus_control", "activate_control", "set_text"]},
+		{"tool": "editor_ui_control",  "actions": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "set_text"]},
 		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "set_text", "close_popup"]}
+	],
+	"system_editor_log": [
+		{"tool": "debug_editor_log", "actions": ["get_output", "get_errors", "clear"]}
 	],
 	"system_runtime_diagnose": [
 		{"tool": "debug_runtime_bridge", "actions": ["get_errors_context"]},
@@ -38,6 +42,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
 		{"tool": "project_input",    "actions": ["list_actions"]}
 	],
+	"system_userdata_maintenance": [],
 	"system_project_run":  [{"tool": "scene_run", "actions": ["play_main", "play_custom"]}],
 	"system_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
 	"system_bindings_audit": [
