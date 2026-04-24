@@ -183,26 +183,3 @@ horizontal_alignment = 0
 [node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-
-[node name="AdvancedSectionTitle" type="Label" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-
-[node name="AdvancedContent" type="VBoxContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
-unique_name_in_owner = true
-size_flags_horizontal = 4
-theme_override_constants/separation = 8
-
-[node name="PermissionLevelRow" type="GridContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent"]
-unique_name_in_owner = true
-columns = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 8
-
-[node name="PermissionLevelLabel" type="Label" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow"]
-unique_name_in_owner = true
-horizontal_alignment = 0
-
-[node name="PermissionLevelOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3

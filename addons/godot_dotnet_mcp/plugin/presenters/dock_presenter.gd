@@ -70,8 +70,6 @@ func build_model(context: Dictionary) -> Dictionary:
 		"settings": settings,
 		"current_language": _resolve_current_language(state, localization),
 		"current_tab": state.current_tab,
-		"permission_levels": context.get("permission_levels", []),
-		"current_permission_level": str(context.get("current_permission_level", "")),
 		"log_levels": context.get("log_levels", []),
 		"current_log_level": str(context.get("current_log_level", "")),
 		"current_cli_scope": state.current_cli_scope,

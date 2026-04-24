@@ -8,7 +8,6 @@ const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.ts
 signal current_tab_changed(index: int)
 signal port_changed(value: int)
 signal log_level_changed(level: String)
-signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
 signal start_requested
 signal restart_requested
@@ -50,7 +49,6 @@ func _ready() -> void:
 	if _server_tab:
 		_server_tab.port_changed.connect(_on_server_tab_port_changed)
 		_server_tab.log_level_changed.connect(_on_server_tab_log_level_changed)
-		_server_tab.permission_level_changed.connect(_on_server_tab_permission_level_changed)
 		_server_tab.language_changed.connect(_on_server_tab_language_changed)
 		_server_tab.start_requested.connect(_on_server_tab_start_requested)
 		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
@@ -237,10 +235,6 @@ func _on_server_tab_port_changed(value: int) -> void:
 
 func _on_server_tab_log_level_changed(level: String) -> void:
 	log_level_changed.emit(level)
-
-
-func _on_server_tab_permission_level_changed(level: String) -> void:
-	permission_level_changed.emit(level)
 
 
 func _on_server_tab_language_changed(language_code: String) -> void:

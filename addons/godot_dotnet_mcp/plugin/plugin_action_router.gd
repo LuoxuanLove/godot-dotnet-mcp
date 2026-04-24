@@ -24,7 +24,6 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "current_tab_changed", "callable": Callable(self, "current_tab_changed")},
 		{"signal": "port_changed", "callable": Callable(self, "port_changed")},
 		{"signal": "log_level_changed", "callable": Callable(self, "log_level_changed")},
-		{"signal": "permission_level_changed", "callable": Callable(self, "permission_level_changed")},
 		{"signal": "language_changed", "callable": Callable(self, "language_changed")},
 		{"signal": "start_requested", "callable": Callable(self, "start_requested")},
 		{"signal": "restart_requested", "callable": Callable(self, "restart_requested")},
@@ -60,10 +59,6 @@ func port_changed(value: int) -> void:
 
 func log_level_changed(level: String) -> void:
 	_call_plugin_method("_on_log_level_changed", [level])
-
-
-func permission_level_changed(level: String) -> void:
-	_call_plugin_method("_on_permission_level_changed", [level])
 
 
 func language_changed(language_code: String) -> void:

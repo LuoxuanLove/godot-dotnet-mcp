@@ -272,9 +272,9 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_permission_error(category)],
+			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
 			"%s_%s" % [category, tool_name])
-		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
+		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
 
 	MCPDebugBuffer.record("debug", "tool_loader",
 		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
@@ -297,9 +297,9 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_permission_error(category)],
+			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
 			"%s_%s" % [category, tool_name])
-		return _failure("permission_denied", category, tool_name, _get_permission_error(category))
+		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
 
 	MCPDebugBuffer.record("debug", "tool_loader",
 		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
@@ -381,7 +381,8 @@ func _get_runtime_bridge():
 func _refresh_runtime_context() -> void:
 	var context: Dictionary = {
 		"tool_loader": self,
-		"server": _server_context
+		"server": _server_context,
+		"plugin_host": _get_plugin_host()
 	}
 	for category in _runtime_by_category.keys():
 		var runtime: Dictionary = _runtime_by_category.get(category, {})
@@ -657,9 +658,8 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 	if script_resource == null:
 		return {"success": false, "error": "Failed to load tool script"}
 	if script_resource is Script and not script_resource.can_instantiate():
-		# Stale cache recovery: reload with CACHE_MODE_REPLACE to evict the broken
-		# cache entry without touching the dependency chain.
-		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+		# Stale cache recovery: reload from disk and refresh external script dependencies.
+		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
 		if script_resource == null:
 			return {"success": false, "error": "Failed to load tool script"}
 		if script_resource is Script and not script_resource.can_instantiate():
@@ -676,6 +676,7 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 		executor.configure_runtime({
 			"tool_loader": self,
 			"server": _server_context,
+			"plugin_host": _get_plugin_host(),
 			"category": category,
 			"reason": reason,
 			"entry": entry.duplicate(true)
@@ -685,6 +686,14 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 		"success": true,
 		"executor": executor
 	}
+
+
+func _get_plugin_host():
+	if _server_context != null and is_instance_valid(_server_context) and _server_context.has_method("get_parent"):
+		var plugin = _server_context.get_parent()
+		if plugin != null and is_instance_valid(plugin):
+			return plugin
+	return null
 
 
 func _finalize_tool_execution(category: String, tool_name: String, args: Dictionary, started_usec: int, result) -> Dictionary:
@@ -728,7 +737,7 @@ func _finalize_tool_execution(category: String, tool_name: String, args: Diction
 func _load_script_resource(path: String, force_reload: bool) -> Resource:
 	var cache_mode = ResourceLoader.CACHE_MODE_REUSE
 	if force_reload:
-		cache_mode = ResourceLoader.CACHE_MODE_REPLACE
+		cache_mode = ResourceLoader.CACHE_MODE_IGNORE_DEEP
 	return ResourceLoader.load(path, "", cache_mode)
 
 
@@ -924,35 +933,35 @@ func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
 	return str(tool_def.get("category", "")) == "system"
 
 
-func _get_permission_provider():
+func _get_tool_access_provider():
 	if _server_context == null:
 		return null
-	if _server_context.has_method("get_plugin_permission_provider"):
-		return _server_context.get_plugin_permission_provider()
+	if _server_context.has_method("get_tool_access_provider"):
+		return _server_context.get_tool_access_provider()
 	if _server_context.has_method("get_parent"):
 		return _server_context.get_parent()
 	return null
 
 
 func _is_category_visible(category: String) -> bool:
-	var provider = _get_permission_provider()
-	if provider != null and provider.has_method("is_tool_category_visible_for_permission"):
-		return _as_bool(provider.is_tool_category_visible_for_permission(category))
-	return false
+	var provider = _get_tool_access_provider()
+	if provider != null and provider.has_method("is_tool_category_visible"):
+		return _as_bool(provider.is_tool_category_visible(category))
+	return true
 
 
 func _is_category_executable(category: String) -> bool:
-	var provider = _get_permission_provider()
-	if provider != null and provider.has_method("is_tool_category_executable_for_permission"):
-		return _as_bool(provider.is_tool_category_executable_for_permission(category))
-	return false
+	var provider = _get_tool_access_provider()
+	if provider != null and provider.has_method("is_tool_category_executable"):
+		return _as_bool(provider.is_tool_category_executable(category))
+	return true
 
 
-func _get_permission_error(category: String) -> String:
-	var provider = _get_permission_provider()
-	if provider != null and provider.has_method("get_permission_denied_message_for_category"):
-		return str(provider.get_permission_denied_message_for_category(category))
-	return "Current permission level does not allow this tool category"
+func _get_tool_access_error(category: String) -> String:
+	var provider = _get_tool_access_provider()
+	if provider != null and provider.has_method("get_tool_access_denied_message"):
+		return str(provider.get_tool_access_denied_message(category))
+	return "Tool category is disabled."
 
 
 func _as_bool(value) -> bool:

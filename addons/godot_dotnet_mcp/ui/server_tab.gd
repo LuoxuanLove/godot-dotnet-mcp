@@ -3,7 +3,6 @@ extends VBoxContainer
 
 signal port_changed(value: int)
 signal log_level_changed(level: String)
-signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
 signal start_requested
 signal restart_requested
@@ -30,8 +29,6 @@ const ServerTabModelProjectionServiceScript = preload("res://addons/godot_dotnet
 @onready var _port_spin: SpinBox = %PortSpin
 @onready var _log_level_label: Label = %LogLevelLabel
 @onready var _log_level_option: OptionButton = %LogLevelOption
-@onready var _permission_level_label: Label = %PermissionLevelLabel
-@onready var _permission_level_option: OptionButton = %PermissionLevelOption
 @onready var _language_label: Label = %LanguageLabel
 @onready var _language_option: OptionButton = %LanguageOption
 @onready var _start_button: Button = %StartButton
@@ -39,7 +36,6 @@ const ServerTabModelProjectionServiceScript = preload("res://addons/godot_dotnet
 @onready var _full_reload_button: Button = %FullReloadButton
 @onready var _status_section_title: Label = %StatusSectionTitle
 @onready var _settings_section_title: Label = %SettingsSectionTitle
-@onready var _advanced_section_title: Label = %AdvancedSectionTitle
 @onready var _server_state_title: Label = %ServerStateTitle
 @onready var _endpoint_title: Label = %EndpointTitle
 @onready var _connections_title: Label = %ConnectionsTitle
@@ -49,7 +45,6 @@ const ServerTabModelProjectionServiceScript = preload("res://addons/godot_dotnet
 
 var _language_syncing := false
 var _log_level_syncing := false
-var _permission_level_syncing := false
 var _current_scale := -1.0
 var _current_layout_width := -1.0
 var _self_diag_copy_text := ""
@@ -62,7 +57,6 @@ func _ready() -> void:
 	resized.connect(_on_resized)
 	_port_spin.value_changed.connect(_on_port_spin_changed)
 	_log_level_option.item_selected.connect(_on_log_level_option_selected)
-	_permission_level_option.item_selected.connect(_on_permission_level_option_selected)
 	_language_option.item_selected.connect(_on_language_option_selected)
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
@@ -93,7 +87,6 @@ func apply_model(model: Dictionary) -> void:
 	_self_diag_clear_button.text = localization.get_text("self_diag_clear")
 	_status_section_title.text = localization.get_text("plugin_overview_title")
 	_settings_section_title.text = localization.get_text("settings")
-	_advanced_section_title.text = localization.get_text("advanced_settings")
 	_server_state_title.text = localization.get_text("plugin_overview_health_label")
 	_endpoint_title.text = localization.get_text("plugin_overview_service_label")
 	_connections_title.text = "%s:" % localization.get_text("total_connections_short")
@@ -101,7 +94,6 @@ func apply_model(model: Dictionary) -> void:
 	_last_request_title.text = localization.get_text("plugin_overview_activity_label")
 	_port_label.text = localization.get_text("port")
 	_log_level_label.text = localization.get_text("log_level")
-	_permission_level_label.text = localization.get_text("permission_level")
 	_language_label.text = localization.get_text("language")
 
 	_state_value.text = str(overview.get("health_text", ""))
@@ -114,10 +106,6 @@ func apply_model(model: Dictionary) -> void:
 	_log_level_syncing = true
 	_apply_projected_options(_log_level_option, options.get("log_levels", []))
 	_log_level_syncing = false
-
-	_permission_level_syncing = true
-	_apply_projected_options(_permission_level_option, options.get("permission_levels", []))
-	_permission_level_syncing = false
 
 	_start_button.disabled = false
 	_restart_button.disabled = not is_running
@@ -171,12 +159,6 @@ func _on_log_level_option_selected(index: int) -> void:
 	if _log_level_syncing:
 		return
 	log_level_changed.emit(str(_log_level_option.get_item_metadata(index)))
-
-
-func _on_permission_level_option_selected(index: int) -> void:
-	if _permission_level_syncing:
-		return
-	permission_level_changed.emit(str(_permission_level_option.get_item_metadata(index)))
 
 
 func _on_start_button_pressed() -> void:
@@ -234,16 +216,9 @@ func _apply_editor_scale(scale: float) -> void:
 	log_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
 	log_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
 
-	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow") as GridContainer
-	permission_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	permission_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-
 	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
 	language_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
 	language_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-
-	var advanced_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent") as VBoxContainer
-	advanced_content.add_theme_constant_override("separation", int(round(8 * scale)))
 
 	_apply_responsive_layout()
 
@@ -290,8 +265,6 @@ func _apply_responsive_layout() -> void:
 	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
 	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
 	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
-	var advanced_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent") as VBoxContainer
-	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/AdvancedContent/PermissionLevelRow") as GridContainer
 	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
 
 	if margin != null:
@@ -309,11 +282,8 @@ func _apply_responsive_layout() -> void:
 	settings_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
 	log_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
 	log_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	permission_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	permission_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
 	language_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
 	language_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	advanced_content.add_theme_constant_override("separation", int(round(section_spacing * 0.75)))
 
 	status_center.custom_minimum_size.x = status_grid_width
 	overview_buttons_center.custom_minimum_size.x = content_width
@@ -325,7 +295,6 @@ func _apply_responsive_layout() -> void:
 	overview_buttons.columns = 1 if narrow_layout else (2 if compact_layout else 3)
 	settings_grid.columns = settings_columns
 	log_level_row.columns = settings_columns
-	permission_level_row.columns = settings_columns
 	language_row.columns = settings_columns
 
 	var status_titles = [_server_state_title, _endpoint_title, _connections_title, _requests_title, _last_request_title]
@@ -339,11 +308,6 @@ func _apply_responsive_layout() -> void:
 			keep_width = settings_columns == 2
 		title_label.custom_minimum_size.x = label_width if keep_width else 0.0
 
-	_permission_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_permission_level_label.custom_minimum_size.x = label_width if settings_columns == 2 else 0.0
-	_advanced_section_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_advanced_section_title.custom_minimum_size.x = content_width
-
 	for value_label in [_state_value, _endpoint_value, _connections_value, _requests_value, _last_request_value]:
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -353,8 +317,6 @@ func _apply_responsive_layout() -> void:
 	_port_spin.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 	_log_level_option.custom_minimum_size.y = 32.0 * scale
 	_log_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_permission_level_option.custom_minimum_size.y = 32.0 * scale
-	_permission_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 	_language_option.custom_minimum_size.y = 32.0 * scale
 	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
 

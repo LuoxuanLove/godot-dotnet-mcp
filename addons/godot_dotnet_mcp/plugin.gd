@@ -55,7 +55,6 @@ func _enter_tree() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_enter_tree", "_enter_tree")
 	_refresh_service_instances()
 	_load_state()
-	_validate_permission_configuration()
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
@@ -131,12 +130,6 @@ func _disable_plugin() -> void:
 		"Plugin disabled without removing runtime bridge autoload"
 	)
 	_finish_self_operation(operation, true, "plugin", "_disable_plugin")
-
-
-func _validate_permission_configuration() -> void:
-	for issue in PluginRuntimeState.get_domain_category_consistency_issues():
-		push_warning("[Godot MCP] Permission configuration issue: %s" % issue)
-		MCPDebugBuffer.record("warning", "plugin", "Permission config issue: %s" % issue)
 
 
 func _process(delta: float) -> void:
@@ -589,12 +582,6 @@ func _on_log_level_changed(level: String) -> void:
 	_refresh_dock()
 
 
-func _on_permission_level_changed(level: String) -> void:
-	_state.settings["permission_level"] = PluginRuntimeState.normalize_permission_level(level)
-	_save_settings()
-	_refresh_dock()
-
-
 func _on_show_user_tools_changed(enabled: bool) -> void:
 	_state.settings["show_user_tools"] = true
 	_save_settings()
@@ -745,20 +732,6 @@ func _on_tool_toggled(tool_name: String, enabled: bool) -> void:
 
 
 func _on_category_toggled(category: String, enabled: bool) -> void:
-	if not enabled and _is_plugin_category_restricted(category):
-		for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-			if str(tool_name).begins_with(category + "_"):
-				_set_tool_enabled(str(tool_name), false)
-		_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-		_save_settings()
-		_refresh_dock()
-		return
-
-	if enabled and not _can_enable_category(category):
-		_show_message(get_permission_denied_message_for_category(category))
-		_refresh_dock()
-		return
-
 	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
 		if str(tool_name).begins_with(category + "_"):
 			_set_tool_enabled(str(tool_name), enabled)
@@ -768,11 +741,6 @@ func _on_category_toggled(category: String, enabled: bool) -> void:
 
 
 func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
-	if enabled and not _can_enable_domain(domain_key):
-		_show_message(get_permission_denied_message_for_domain(domain_key))
-		_refresh_dock()
-		return
-
 	var target_categories: Array = []
 	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
 		if str(domain_def.get("key", "")) != domain_key:
@@ -870,10 +838,6 @@ func _on_request_received(_method: String, _params: Dictionary) -> void:
 
 
 func _apply_tool_enabled(tool_name: String, enabled: bool) -> void:
-	if enabled and not _can_enable_tool(tool_name):
-		_show_message(get_permission_denied_message_for_tool(tool_name))
-		_refresh_dock()
-		return
 	_set_tool_enabled(tool_name, enabled)
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
 	_save_settings()
@@ -1169,30 +1133,22 @@ func get_self_diagnostic_timeline_from_tools(limit: int = 20) -> Dictionary:
 
 
 func clear_self_diagnostics_from_tools() -> Dictionary:
-	if _get_permission_level() != PluginRuntimeState.PERMISSION_DEVELOPER:
-		return {"success": false, "error": "Developer permission level is required to clear self diagnostics"}
 	PluginSelfDiagnosticStore.clear()
 	_refresh_dock()
 	return {"success": true, "message": "Plugin self diagnostics cleared"}
 
 
 func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_tool(tool_name):
-		return {"success": false, "error": get_permission_denied_message_for_tool(tool_name)}
 	_apply_tool_enabled(tool_name, enabled)
 	return {"success": true, "tool_name": tool_name, "enabled": enabled}
 
 
 func set_category_enabled_from_tools(category: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_category(category):
-		return {"success": false, "error": get_permission_denied_message_for_category(category)}
 	_on_category_toggled(category, enabled)
 	return {"success": true, "category": category, "enabled": enabled}
 
 
 func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_domain(domain_key):
-		return {"success": false, "error": get_permission_denied_message_for_domain(domain_key)}
 	_on_domain_toggled(domain_key, enabled)
 	return {"success": true, "domain": domain_key, "enabled": enabled}
 
@@ -1208,7 +1164,6 @@ func get_developer_settings_for_tools() -> Dictionary:
 	return {
 		"success": true,
 		"data": {
-			"permission_level": _get_permission_level(),
 			"log_level": get_log_level_for_tools(),
 			"show_user_tools": true,
 			"language": str(_state.settings.get("language", "")),
@@ -1375,11 +1330,11 @@ func get_runtime_usage_guide_from_tools() -> Dictionary:
 				"Start with plugin_runtime_state before changing toggles or reload state.",
 				"Prefer reload_domain or reload_all_domains first, then soft_reload_plugin, and keep full_reload_plugin for editor-side lifecycle resets only.",
 				"Use debug_runtime_bridge to read the latest project session state and captured lifecycle events, even after the project has stopped.",
-				"Use runtime toggles to disable tools freely, but enabling plugin_evolution or plugin_developer targets requires the matching permission level."
+				"All built-in plugin maintenance categories are available internally; public MCP exposure remains limited to high-level system tools."
 			],
 			"recommended_flow": [
-				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and the active permission mode."},
-				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable anything when isolating faults; only enable targets allowed by the current permission level."},
+				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and health summaries."},
+				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable tools when isolating faults, then re-enable them after verification."},
 				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
 				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
 				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
@@ -1387,7 +1342,7 @@ func get_runtime_usage_guide_from_tools() -> Dictionary:
 			],
 			"warnings": [
 				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
-				"Enabling plugin_evolution or plugin_developer targets from runtime toggles is permission-gated and cannot bypass the user-selected mode.",
+				"Runtime toggles are diagnostic controls; avoid leaving essential high-level system tools disabled.",
 				"debug_runtime_bridge is the MCP tool name; runtime state remains readable after stop, but real-time observation still requires the project to be running.",
 				"Full plugin reload should be reserved for Dock wiring or plugin lifecycle recreation, not routine executor edits."
 			]
@@ -1414,7 +1369,6 @@ func get_evolution_usage_guide_from_tools() -> Dictionary:
 				{"step": 5, "name": "Audit", "tools": ["plugin_evolution_user_tool_audit"], "purpose": "Confirm that the authorized change has been recorded."}
 			],
 			"warnings": [
-				"Stable mode hides and denies the entire plugin_evolution category.",
 				"User tools must stay inside the User category even when generated through MCP.",
 				"Deletion and restore requests should be previewed before authorization to avoid mutating the wrong script."
 			]
@@ -1428,81 +1382,24 @@ func get_usage_guide_from_tools() -> Dictionary:
 		"success": true,
 		"data": {
 			"summary": [
-				"Developer mode is the only permission level that exposes plugin_developer tools and the legacy plugin compatibility category.",
-				"Use this category for Dock-facing settings such as language, preset selection, log level and permission-mode inspection.",
-				"Permission level itself is user-controlled from the Dock and is intentionally not mutable through MCP.",
+				"Plugin developer tools are internal maintenance helpers for Dock-facing settings such as language, preset selection and log level.",
+				"The plugin no longer has permission levels; all built-in maintenance capabilities are available internally while public MCP exposure stays high-level.",
 				"Use debug_runtime_bridge for the latest project session and lifecycle readback; it remains readable after the project stops."
 			],
 			"recommended_flow": [
-				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read permission level, log level, language, active preset and reload status before making changes."},
+				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read log level, language, active preset and reload status before making changes."},
 				{"step": 2, "name": "Tune the session", "tools": ["plugin_developer_log_level", "plugin_developer_set_language", "plugin_developer_apply_profile"], "purpose": "Adjust Dock-facing developer settings for the current debugging session."},
 				{"step": 3, "name": "Inspect project runtime result", "tools": ["debug_runtime_bridge"], "purpose": "Read the latest captured project session state and lifecycle events after each run."},
 				{"step": 4, "name": "Coordinate with runtime and evolution", "tools": ["plugin_runtime_usage_guide", "plugin_evolution_usage_guide"], "purpose": "Use the sibling guide tools to choose the correct reload or self-evolution flow."},
 				{"step": 5, "name": "Save reusable presets", "tools": ["plugin_developer_save_profile"], "purpose": "Persist a known-good tool selection after manual tuning."}
 			],
-			"permission_levels": {
-				"developer": "Shows and allows plugin_runtime, plugin_evolution and plugin_developer.",
-				"evolution": "Shows and allows plugin_runtime and plugin_evolution, but hides and denies plugin_developer.",
-				"stable": "Shows and allows only plugin_runtime, and hides and denies plugin_evolution and plugin_developer."
-			},
 			"warnings": [
-				"Changing permission level is intentionally restricted to the Dock so external agents cannot raise their own privileges.",
-				"Evolution mode hides the developer category at both UI and execution levels.",
 				"Use the exact MCP tool name debug_runtime_bridge when reading recent project runtime state.",
-				"Stable mode denies both plugin_evolution and plugin_developer, including direct calls from cached wrappers."
+				"Do not expose internal plugin_* categories as public MCP tools; keep public access routed through high-level system tools."
 			]
 		},
 		"message": "Plugin usage guide fetched"
 	}
-
-
-func _get_permission_level() -> String:
-	return PluginRuntimeState.normalize_permission_level(str(_state.settings.get("permission_level", PluginRuntimeState.PERMISSION_EVOLUTION)))
-
-
-func is_tool_category_visible_for_permission(category: String) -> bool:
-	if category == "user":
-		return true
-	if category == "plugin":
-		return _get_permission_level() == PluginRuntimeState.PERMISSION_DEVELOPER
-	return is_tool_category_executable_for_permission(category)
-
-
-func is_tool_category_executable_for_permission(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
-
-
-func get_permission_denied_message_for_category(category: String) -> String:
-	return _localization.get_text("permission_denied_category") % [_get_permission_level(), category]
-
-
-func get_permission_denied_message_for_tool(tool_name: String) -> String:
-	var category = PluginRuntimeState.extract_category_from_tool_name(tool_name)
-	if category.is_empty():
-		return _localization.get_text("permission_denied_tool") % [_get_permission_level(), tool_name]
-	return get_permission_denied_message_for_category(category)
-
-
-func get_permission_denied_message_for_domain(domain_key: String) -> String:
-	return _localization.get_text("permission_denied_domain") % [_get_permission_level(), domain_key]
-
-
-func _can_enable_tool(tool_name: String) -> bool:
-	if not PluginRuntimeState.permission_allows_tool(_get_permission_level(), tool_name):
-		return false
-	return true
-
-
-func _can_enable_category(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
-
-
-func _can_enable_domain(domain_key: String) -> bool:
-	return PluginRuntimeState.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
-
-
-func _is_plugin_category_restricted(category: String) -> bool:
-	return PluginRuntimeState.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
 
 
 func _get_editor_scale() -> float:

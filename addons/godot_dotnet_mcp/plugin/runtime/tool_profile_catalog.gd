@@ -2,7 +2,8 @@
 extends RefCounted
 class_name ToolProfileCatalog
 
-const PROFILE_STORAGE_DIR := "user://godot_dotnet_mcp_tool_profiles"
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const PROFILE_STORAGE_DIR := MCPUserDataPaths.PROFILE_STORAGE_DIR
 
 const BUILTIN_TOOL_PROFILES: Array[Dictionary] = [
 	{

@@ -6,7 +6,7 @@ const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loa
 const MCPHttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
 const MCPHttpServiceBundleScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPDefaultToolPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
+const MCPDefaultToolAccessProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_access_provider.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 signal server_started
@@ -22,7 +22,7 @@ var _running: bool = false
 var _debug_mode: bool = false
 var _connection_state = MCPHttpConnectionStateScript.new()
 var _service_bundle = MCPHttpServiceBundleScript.new()
-var _default_permission_provider = MCPDefaultToolPermissionProviderScript.new()
+var _default_tool_access_provider = MCPDefaultToolAccessProviderScript.new()
 
 func _ready() -> void:
 	set_process(true)
@@ -53,7 +53,8 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	_debug_mode = debug
 	set_disabled_tools(disabled_tools)
 	_ensure_service_bundle()
-	_service_bundle.get_tool_loader_supervisor().register_tools(reason, reason == "tool_soft_reload")
+	var force_reload_tools = reason == "tool_soft_reload" or reason == "tool_full_reload"
+	_service_bundle.get_tool_loader_supervisor().register_tools(reason, force_reload_tools)
 	MCPDebugBuffer.record("info", "server", "Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
 	if _debug_mode:
 		print("[MCP] Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
@@ -112,7 +113,7 @@ func dispose() -> void:
 	if _service_bundle != null and _service_bundle.has_method("dispose"):
 		_service_bundle.dispose()
 	_service_bundle = null
-	_default_permission_provider = null
+	_default_tool_access_provider = null
 	_connection_state = null
 	_tcp_server = null
 
@@ -177,17 +178,17 @@ func get_performance_summary() -> Dictionary: _ensure_service_bundle(); var load
 func reload_tool_domain(domain: String) -> Dictionary: _ensure_service_bundle(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.reload_domain(domain)
 func reload_all_tool_domains() -> Dictionary: _ensure_service_bundle(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.reload_all_domains()
 
-func get_plugin_permission_provider():
+func get_tool_access_provider():
 	var plugin = get_parent()
 	if plugin != null and plugin.has_method("get_tool_access_provider"):
 		var provider = plugin.get_tool_access_provider()
 		if provider != null:
 			return provider
-	if plugin != null and plugin.has_method("is_tool_category_visible_for_permission"):
+	if plugin != null and plugin.has_method("is_tool_category_visible"):
 		return plugin
-	if _default_permission_provider != null and _default_permission_provider.has_method("configure"):
-		_default_permission_provider.configure({"permission_level": "evolution", "show_user_tools": true})
-	return _default_permission_provider
+	if _default_tool_access_provider != null and _default_tool_access_provider.has_method("configure"):
+		_default_tool_access_provider.configure({"show_user_tools": true})
+	return _default_tool_access_provider
 
 func _ensure_initialized() -> void:
 	if _tcp_server == null:
