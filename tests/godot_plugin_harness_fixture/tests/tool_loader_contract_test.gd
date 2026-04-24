@@ -5,29 +5,29 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 
 
 class FakeServerContext extends RefCounted:
-	var _permission_provider
+	var _tool_access_provider
 	var _runtime_control_service
 
-	func _init(permission_provider, runtime_control_service = null) -> void:
-		_permission_provider = permission_provider
+	func _init(tool_access_provider, runtime_control_service = null) -> void:
+		_tool_access_provider = tool_access_provider
 		_runtime_control_service = runtime_control_service
 
-	func get_plugin_permission_provider():
-		return _permission_provider
+	func get_tool_access_provider():
+		return _tool_access_provider
 
 	func get_runtime_control_service():
 		return _runtime_control_service
 
 
-class FakePermissionProvider extends RefCounted:
-	func is_tool_category_visible_for_permission(_category: String) -> bool:
+class FakeToolAccessProvider extends RefCounted:
+	func is_tool_category_visible(_category: String) -> bool:
 		return true
 
-	func is_tool_category_executable_for_permission(_category: String) -> bool:
+	func is_tool_category_executable(_category: String) -> bool:
 		return true
 
-	func get_permission_denied_message_for_category(_category: String) -> String:
-		return "Permission denied"
+	func get_tool_access_denied_message(_category: String) -> String:
+		return "Tool category disabled"
 
 
 class FakeRuntimeControlService extends RefCounted:
@@ -51,11 +51,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"Tool loader contract incident",
 		"tool_loader_contract_test"
 	)
-	var permission_provider = FakePermissionProvider.new()
+	var tool_access_provider = FakeToolAccessProvider.new()
 
 	var runtime_control_service = FakeRuntimeControlService.new()
 	_loader = ToolLoaderScript.new()
-	_loader.configure(FakeServerContext.new(permission_provider, runtime_control_service))
+	_loader.configure(FakeServerContext.new(tool_access_provider, runtime_control_service))
 	var summary: Dictionary = _loader.initialize([])
 
 	if int(summary.get("category_count", 0)) <= 0:
@@ -80,16 +80,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not return any exposed tool definitions.")
 
 	var all_tools: Array[Dictionary] = _loader.get_tool_definitions()
+	if all_tools.size() <= exposed_tools.size():
+		return _failure("Tool loader should keep internal atomic/domain tools available while exposing only high-level system tools publicly.")
 
 	var tools_by_category: Dictionary = _loader.get_tools_by_category()
+	for required_internal_category in ["debug", "editor", "project", "scene", "script", "node", "filesystem"]:
+		if not tools_by_category.has(required_internal_category) or (tools_by_category[required_internal_category] as Array).is_empty():
+			return _failure("Tool loader should keep strongest internal category available: %s" % required_internal_category)
 
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
-		exposed_names.append(str(tool_def.get("name", "")))
+		var exposed_name := str(tool_def.get("name", ""))
+		exposed_names.append(exposed_name)
+		if not exposed_name.begins_with("system_"):
+			return _failure("Public MCP exposure should remain high-level system-only, not permission-filtered atomic exposure: %s" % exposed_name)
+	if not exposed_names.has("system_help"):
+		return _failure("Tool loader did not expose system_help under the default tool access provider.")
 	if not exposed_names.has("system_project_state"):
-		return _failure("Tool loader did not expose system_project_state under the default permission provider.")
+		return _failure("Tool loader did not expose system_project_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_state"):
-		return _failure("Tool loader did not expose system_editor_state under the default permission provider.")
+		return _failure("Tool loader did not expose system_editor_state under the default tool access provider.")
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_capture", "system_runtime_input", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
@@ -127,6 +137,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_project_state should include runtime_health when requested.")
 	if not ((runtime_health as Dictionary).get("self_diagnostics", {}) is Dictionary):
 		return _failure("Tool loader system_project_state runtime_health should include self_diagnostics.")
+
+	var help_result: Dictionary = await _loader.execute_tool_async("system", "help", {"include_tools": true})
+	if not bool(help_result.get("success", false)):
+		return _failure("Tool loader should route system_help successfully.")
+	var help_data = help_result.get("data", {})
+	if not (help_data is Dictionary):
+		return _failure("Tool loader system_help should return a dictionary payload.")
+	var visual_guidance = (help_data as Dictionary).get("visual_guidance", {})
+	if not (visual_guidance is Dictionary) or not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
+		return _failure("Tool loader system_help should expose hidden-control guidance.")
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):

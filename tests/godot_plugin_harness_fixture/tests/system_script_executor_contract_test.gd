@@ -2,7 +2,6 @@ extends RefCounted
 
 # {"name": "system_script_executor_contracts"}
 
-const DefaultPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
 const SystemScriptExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_script.gd")
 const TEMP_ROOT := "res://tests_tmp/system_script_executor_contracts"
 
@@ -43,16 +42,6 @@ class FakeToolLoader extends RefCounted:
 
 	func get_gdscript_lsp_diagnostics_service():
 		return _diagnostics_service
-
-
-class FakeServerContext extends RefCounted:
-	var _permission_provider
-
-	func _init(permission_provider) -> void:
-		_permission_provider = permission_provider
-
-	func get_plugin_permission_provider():
-		return _permission_provider
 
 
 class FakeBridge extends RefCounted:

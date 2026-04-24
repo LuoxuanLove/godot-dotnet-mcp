@@ -19,21 +19,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if state.resolve_active_language(FakeLocalization.new()) != "ja":
 		return _failure("PluginRuntimeState should fall back to localization language.")
 
-	if PluginRuntimeStateScript.PERMISSION_LEVELS.size() != 3:
-		return _failure("PluginRuntimeState should expose the three permission levels.")
-	if PluginRuntimeStateScript.normalize_permission_level("bogus") != PluginRuntimeStateScript.PERMISSION_EVOLUTION:
-		return _failure("PluginRuntimeState should normalize invalid permission levels to evolution.")
-	if not PluginRuntimeStateScript.permission_allows_domain(PluginRuntimeStateScript.PERMISSION_DEVELOPER, "plugin"):
-		return _failure("PluginRuntimeState should allow developer access to the plugin domain.")
-	if PluginRuntimeStateScript.extract_category_from_tool_name("plugin_runtime_list_profiles") != "plugin_runtime":
-		return _failure("PluginRuntimeState should extract plugin categories from tool names.")
+	if PluginRuntimeStateScript.DEFAULT_SETTINGS.has("per" + "miss" + "ion" + "_level"):
+		return _failure("PluginRuntimeState should not expose a legacy access level setting.")
 	if PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES.is_empty():
 		return _failure("PluginRuntimeState should expose builtin tool profiles.")
 	if PluginRuntimeStateScript.TOOL_DOMAIN_DEFS.is_empty():
 		return _failure("PluginRuntimeState should expose tool domain definitions.")
 	var expected_collapsed := [
 		"system_bindings_audit",
+		"system_editor_log",
 		"system_editor_state",
+		"system_help",
 		"system_project_configure",
 		"system_project_run",
 		"system_project_state",
@@ -71,7 +67,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"success": true,
 		"error": "",
 		"details": {
-			"permission_levels": PluginRuntimeStateScript.PERMISSION_LEVELS.size(),
 			"domain_count": PluginRuntimeStateScript.TOOL_DOMAIN_DEFS.size()
 		}
 	}

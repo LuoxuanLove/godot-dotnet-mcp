@@ -71,7 +71,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"disabled_tools": [],
 		"language": "en",
 		"log_level": "info",
-		"permission_level": "evolution",
 		"show_user_tools": true,
 		"tool_profile_id": "default"
 	}
@@ -95,12 +94,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var model: Dictionary = service.build_model()
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
-	if tools_by_category.has("scene"):
-		return _failure("Dock model should only expose the high-level exposed categories in the tools tab.")
+	if not tools_by_category.has("scene"):
+		return _failure("Dock model should keep non-root atomic categories available for system tool tree lookup.")
 	if not tools_by_category.has("system"):
 		return _failure("Dock model should keep the exposed system category available.")
 	if model.get("all_tools_by_category", {}).has("scene") == false:
-		return _failure("Dock model should still keep the full tool set for profile and permission logic.")
+		return _failure("Dock model should still keep the full tool set for profile and filtering logic.")
 
 	return {
 		"name": "dock_model_service_contracts",

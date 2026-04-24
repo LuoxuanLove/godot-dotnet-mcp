@@ -30,6 +30,17 @@ class FakeBridge extends RefCounted:
 						})
 					"activate_dock_tab":
 						return success({"title": str(args.get("title", ""))})
+					"activate_ui":
+						return success({
+							"title": str(args.get("title", "")),
+							"semantic_path": str(args.get("semantic_path", "")),
+							"target_path": str(args.get("target_path", "")),
+							"tab_title": str(args.get("tab_title", "")),
+							"tab_index": int(args.get("tab_index", -1)),
+							"bottom_panel_title": str(args.get("bottom_panel_title", "")),
+							"bottom_panel_path": str(args.get("bottom_panel_path", "")),
+							"path": str(args.get("path", ""))
+						})
 					"get_control":
 						return success({
 							"control": {"path": str(args.get("target_path", "")), "class": "LineEdit"}
@@ -85,6 +96,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_control_properties: Dictionary = editor_control_schema.get("properties", {})
 	if not editor_control_properties.has("title"):
 		return _failure("editor_control schema should expose title for activate_dock_tab.")
+	if not editor_control_properties.has("semantic_path"):
+		return _failure("editor_control schema should expose semantic_path for non-invasive activate_ui.")
+	if not editor_control_properties.has("tab_title") or not editor_control_properties.has("tab_index"):
+		return _failure("editor_control schema should expose tab_title/tab_index for TabContainer activation.")
+	if not editor_control_properties.has("bottom_panel_title") or not editor_control_properties.has("bottom_panel_path"):
+		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
@@ -117,6 +134,37 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(activate_dock_result.get("success", false)):
 		return _failure("system editor_control should delegate activate_dock_tab.")
+
+	var activate_ui_semantic_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/config",
+		"path": "user://mcpdock_config.png"
+	})
+	if not bool(activate_ui_semantic_result.get("success", false)):
+		return _failure("system editor_control should delegate semantic activate_ui.")
+	if str(activate_ui_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/config":
+		return _failure("system editor_control should preserve activate_ui semantic_path.")
+
+	var activate_ui_tab_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"target_path": "/root/Editor/MCPDock/TabContainer",
+		"tab_title": "ConfigTab",
+		"tab_index": 2
+	})
+	if not bool(activate_ui_tab_result.get("success", false)):
+		return _failure("system editor_control should delegate TabContainer activate_ui.")
+	if int(activate_ui_tab_result.get("data", {}).get("tab_index", -1)) != 2:
+		return _failure("system editor_control should preserve activate_ui tab_index.")
+
+	var activate_ui_bottom_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"bottom_panel_title": "Output",
+		"bottom_panel_path": "/root/Editor/BottomPanel/Output"
+	})
+	if not bool(activate_ui_bottom_result.get("success", false)):
+		return _failure("system editor_control should delegate bottom panel activate_ui.")
+	if str(activate_ui_bottom_result.get("data", {}).get("bottom_panel_title", "")) != "Output":
+		return _failure("system editor_control should preserve activate_ui bottom_panel_title.")
 
 	var activate_dock_missing_title_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_dock_tab"

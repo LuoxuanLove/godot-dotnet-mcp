@@ -3,17 +3,17 @@ extends RefCounted
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
-const DefaultPermissionProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_permission_provider.gd")
+const DefaultToolAccessProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_access_provider.gd")
 
 
 class FakeServerContext extends RefCounted:
-	var _permission_provider
+	var _tool_access_provider
 
-	func _init(permission_provider) -> void:
-		_permission_provider = permission_provider
+	func _init(tool_access_provider) -> void:
+		_tool_access_provider = tool_access_provider
 
-	func get_plugin_permission_provider():
-		return _permission_provider
+	func get_tool_access_provider():
+		return _tool_access_provider
 
 
 var _http_server = null
@@ -33,13 +33,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if http_service != http_loader.get_gdscript_lsp_diagnostics_service():
 		return _failure("HTTP server should expose the exact diagnostics service instance owned by the loader adapter.")
 
-	var permission_provider = DefaultPermissionProviderScript.new()
-	permission_provider.configure({
-		"permission_level": "evolution",
+	var tool_access_provider = DefaultToolAccessProviderScript.new()
+	tool_access_provider.configure({
 		"show_user_tools": true
 	})
 	_tool_loader = ToolLoaderScript.new()
-	_tool_loader.configure(FakeServerContext.new(permission_provider))
+	_tool_loader.configure(FakeServerContext.new(tool_access_provider))
 	var summary: Dictionary = _tool_loader.initialize([])
 	if int(summary.get("tool_count", 0)) <= 0:
 		return _failure("Standalone tool loader did not initialize for stdio access testing.")

@@ -1,10 +1,10 @@
 extends RefCounted
 
-const RuntimeProbePlugin = preload("res://tests/plugin_entrypoint_runtime_probe.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 
+const RUNTIME_PROBE_PLUGIN_PATH := "res://tests/plugin_entrypoint_runtime_probe.gd"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
 
@@ -27,7 +27,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_probe_base_control.name = "EntrypointProbeRoot"
 	tree.root.add_child(_probe_base_control)
 
-	_probe_plugin = RuntimeProbePlugin.new(_probe_base_control)
+	var probe_script = load(RUNTIME_PROBE_PLUGIN_PATH)
+	if probe_script == null or not probe_script.has_method("new"):
+		return _return_failure(tree, "plugin entrypoint runtime probe script should load in editor probe mode.")
+	_probe_plugin = probe_script.new(_probe_base_control)
 	_probe_plugin._enter_tree()
 	_probe_entered = true
 
@@ -39,6 +42,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _return_failure(tree, "plugin.gd should install the editor debugger bridge during _enter_tree().")
 	if _probe_plugin.get_server() == null:
 		return _return_failure(tree, "plugin.gd should attach a server controller during _enter_tree().")
+	for method_name in ["runtime_restart_server", "runtime_soft_reload", "runtime_full_reload"]:
+		if not _probe_plugin.has_method(method_name):
+			return _return_failure(tree, "plugin.gd should expose %s as a stable runtime reload entrypoint." % method_name)
 	if _probe_plugin.dock_add_calls.size() != 1:
 		return _return_failure(tree, "plugin.gd should create and dock MCPDock during _enter_tree().")
 	if _probe_plugin.base_control == null or _probe_plugin.base_control.get_child_count() != 1:

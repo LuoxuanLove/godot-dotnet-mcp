@@ -1,7 +1,8 @@
 extends RefCounted
 
 const RuntimeBridgeScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
-const FALLBACK_FILE_PATH := "user://godot_mcp_runtime_bridge_events.json"
+const UserDataPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const FALLBACK_FILE_PATH := UserDataPathsScript.RUNTIME_EVENTS_PATH
 const REQUEST_ID := "runtime-unknown-action"
 
 

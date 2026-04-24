@@ -1,9 +1,10 @@
 extends RefCounted
 
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const UserDataPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const BACKUP_DIR := "res://addons/godot_dotnet_mcp/custom_tools/.backup"
-const AUDIT_LOG_PATH := "user://godot_dotnet_mcp_user_tool_audit.log"
+const AUDIT_LOG_PATH := UserDataPathsScript.USER_TOOL_AUDIT_LOG_PATH
 
 
 var _service = null

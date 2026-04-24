@@ -145,7 +145,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var capture_result: Dictionary = await impl.execute_async("runtime_capture", {
 		"frame_count": 2,
-		"interval_frames": 3
+		"interval_frames": 3,
+		"capture_dir": "user://contract_runtime_captures"
 	})
 	if not bool(capture_result.get("success", false)):
 		return _failure("runtime_capture valid request did not return success.")
@@ -160,6 +161,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capture did not preserve requested_interval_frames.")
 	if int(fake_service.last_capture_args.get("frame_count", 0)) != 2:
 		return _failure("runtime_capture did not forward frame_count to the runtime control service.")
+	if str(fake_service.last_capture_args.get("capture_dir", "")) != "user://contract_runtime_captures":
+		return _failure("runtime_capture did not forward capture_dir to the runtime control service.")
 
 	var input_result: Dictionary = await impl.execute_async("runtime_input", {
 		"inputs": [
@@ -174,6 +177,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var step_result: Dictionary = await impl.execute_async("runtime_step", {
 		"wait_frames": 4,
 		"capture": true,
+		"capture_dir": "user://contract_step_captures",
 		"capture_label": "step-check"
 	})
 	if not bool(step_result.get("success", false)):
@@ -187,6 +191,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_step did not preserve the captured frame payload.")
 	if int(fake_service.last_step_args.get("wait_frames", 0)) != 4:
 		return _failure("runtime_step did not forward wait_frames to the runtime control service.")
+	if str(fake_service.last_step_args.get("capture_dir", "")) != "user://contract_step_captures":
+		return _failure("runtime_step did not forward capture_dir to the runtime control service.")
 
 	return {
 		"name": "system_runtime_impl_contracts",

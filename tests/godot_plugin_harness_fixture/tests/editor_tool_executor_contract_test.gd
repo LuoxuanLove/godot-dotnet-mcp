@@ -291,6 +291,44 @@ class FakeUiControl:
 		text = value
 
 
+class FakeTabContainer:
+	extends FakeUiControl
+
+	var current_tab := 0
+	var _tab_titles: Array[String] = []
+
+	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		super(node_name, "TabContainer", rect)
+
+	func add_tab(child, title: String) -> void:
+		_tab_titles.append(title)
+		add_child(child)
+		_update_tab_visibility()
+
+	func get_tab_count() -> int:
+		return _children.size()
+
+	func get_tab_control(index: int):
+		if index < 0 or index >= _children.size():
+			return null
+		return _children[index]
+
+	func get_tab_title(index: int) -> String:
+		if index < 0 or index >= _tab_titles.size():
+			return ""
+		return _tab_titles[index]
+
+	func set_current_tab(index: int) -> void:
+		current_tab = index
+		_update_tab_visibility()
+
+	func _update_tab_visibility() -> void:
+		for index in range(_children.size()):
+			var child = _children[index]
+			if child != null:
+				child.visible = index == current_tab
+
+
 class FakeFocusOwner:
 	extends RefCounted
 
@@ -393,12 +431,31 @@ class FakeEditorInterface:
 		_plugin_states[plugin_name] = enabled
 
 
+class FakeEditorPlugin:
+	extends RefCounted
+
+	var _editor_interface = null
+	var visible_bottom_panel = null
+
+	func _init(editor_interface = null) -> void:
+		_editor_interface = editor_interface
+
+	func get_editor_interface():
+		return _editor_interface
+
+	func make_bottom_panel_item_visible(control) -> void:
+		visible_bottom_panel = control
+		if control != null:
+			control.visible = true
+
+
 var _scene_root: Node = null
 
 
 func run_case(tree: SceneTree) -> Dictionary:
 	var executor = EditorExecutorScript.new()
 	var editor_interface := FakeEditorInterface.new()
+	var editor_plugin := FakeEditorPlugin.new(editor_interface)
 	_scene_root = _build_scene_fixture(tree)
 	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
 	popup_root.title = "Search"
@@ -417,6 +474,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	var mcp_dock := FakeUiControl.new("MCPDock", "VBoxContainer", Rect2(220, 16, 200, 160))
+	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
+	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var tools_tab := FakeUiControl.new("ToolsTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var config_tab := FakeUiControl.new("ConfigTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var output_panel := FakeUiControl.new("Output", "PanelContainer", Rect2(16, 120, 240, 80))
+	output_panel.title = "Output"
+	output_panel.visible = false
+	mcp_tabs.add_tab(server_tab, "主页")
+	mcp_tabs.add_tab(tools_tab, "工具")
+	mcp_tabs.add_tab(config_tab, "配置")
+	mcp_dock.add_child(mcp_tabs)
 	search_panel.add_child(search_field)
 	search_panel.add_child(refresh_button)
 	popup_root.add_child(popup_button)
@@ -426,12 +495,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
 	editor_interface.get_base_control().add_popup_child(search_panel)
+	editor_interface.get_base_control().add_popup_child(mcp_dock)
+	editor_interface.get_base_control().add_popup_child(output_panel)
 	editor_interface._edited_scene_root = _scene_root
 	editor_interface.get_base_control().get_viewport().focus_owner = FakeFocusOwner.new()
 	editor_interface.get_selection()._nodes = [_scene_root.get_node("Target")]
 	editor_interface.get_inspector().edited_object = _scene_root.get_node("Target")
 	executor.configure_context({
 		"editor_interface": editor_interface,
+		"plugin_host": editor_plugin,
 		"undo_redo": editor_interface.get_editor_undo_redo(),
 		"scene_root": _scene_root,
 	})
@@ -572,6 +644,55 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var control_capture_path := ProjectSettings.globalize_path(str(capture_control_result.get("data", {}).get("path", "")))
 	if not FileAccess.file_exists(control_capture_path):
 		return _failure("Editor ui_control capture_control did not create the cropped PNG file.")
+	if not str(capture_control_result.get("data", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control capture_control should normalize root-level user:// PNG paths into the managed control capture directory.")
+
+	var tab_container_path := str(mcp_tabs.get_path())
+	var activate_tab_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"target_path": tab_container_path,
+		"tab_title": "ConfigTab",
+		"path": "user://editor_executor_activate_tab.png"
+	})
+	if not bool(activate_tab_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should switch a TabContainer by child tab title.")
+	if mcp_tabs.current_tab != 2 or not config_tab.visible or server_tab.visible:
+		return _failure("Editor ui_control activate_ui should set current_tab and update visible tab content.")
+	if str(activate_tab_result.get("data", {}).get("active_path", "")) != str(config_tab.get_path()):
+		return _failure("Editor ui_control activate_ui should return the active tab control path.")
+	var activate_tab_capture_path := ProjectSettings.globalize_path(str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")))
+	if not FileAccess.file_exists(activate_tab_capture_path):
+		return _failure("Editor ui_control activate_ui should capture the activated tab when path is provided.")
+	if not str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control activate_ui should normalize root-level user:// PNG paths into the managed control capture directory.")
+
+	var activate_semantic_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/tools"
+	})
+	if not bool(activate_semantic_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should support MCPDock/tools semantic path.")
+	if mcp_tabs.current_tab != 1 or not tools_tab.visible or config_tab.visible:
+		return _failure("Editor ui_control activate_ui semantic path should switch to the requested MCPDock tab.")
+	if str(activate_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/tools":
+		return _failure("Editor ui_control activate_ui should return the semantic path it activated.")
+
+	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"bottom_panel_title": "Output",
+		"path": "user://editor_executor_bottom_panel.png"
+	})
+	if not bool(activate_bottom_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should support bottom panel activation by title.")
+	if editor_plugin.visible_bottom_panel != output_panel or not output_panel.visible:
+		return _failure("Editor ui_control activate_ui should call make_bottom_panel_item_visible on the requested panel.")
+	if str(activate_bottom_result.get("data", {}).get("active_path", "")) != str(output_panel.get_path()):
+		return _failure("Editor ui_control activate_ui should return the active bottom panel path.")
+	var bottom_capture_path := ProjectSettings.globalize_path(str(activate_bottom_result.get("data", {}).get("capture", {}).get("path", "")))
+	if not FileAccess.file_exists(bottom_capture_path):
+		return _failure("Editor ui_control activate_ui should capture the activated bottom panel when path is provided.")
+	if not str(activate_bottom_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control activate_ui should normalize bottom panel captures into the managed control capture directory.")
 
 	var popup_list_result: Dictionary = executor.execute("popup", {"action": "list_visible"})
 	if not bool(popup_list_result.get("success", false)):
@@ -662,6 +783,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var screenshot_path := ProjectSettings.globalize_path(str(screenshot_data.get("path", "")))
 	if not FileAccess.file_exists(screenshot_path):
 		return _failure("Editor screenshot capture did not create the PNG file.")
+	if not str(screenshot_data.get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor/"):
+		return _failure("Editor screenshot capture should normalize root-level user:// PNG paths into the managed editor capture directory.")
 	if int(screenshot_data.get("width", 0)) != 320 or int(screenshot_data.get("height", 0)) != 180:
 		return _failure("Editor screenshot capture returned unexpected dimensions.")
 

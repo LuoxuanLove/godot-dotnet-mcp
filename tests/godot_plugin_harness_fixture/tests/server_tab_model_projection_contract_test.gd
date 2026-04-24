@@ -9,8 +9,6 @@ class FullLocalization extends RefCounted:
 		"status_stopped": "Stopped",
 		"tool_profile_default": "Default",
 		"tool_profile_custom_short": "Custom",
-		"permission_level_developer": "Developer",
-		"permission_level_evolution": "Evolution",
 		"log_level_warning": "Warning",
 		"log_level_info": "Info",
 		"self_diag_empty": "Empty diagnostics",
@@ -66,7 +64,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var projected = service.project(_build_primary_model())
 	if str((projected.get("overview", {}) as Dictionary).get("service_text", "")) != "Running · http://10.0.0.8:4100/mcp":
 		return _failure("Server tab projection should preserve the overview service text.")
-	if str((projected.get("overview", {}) as Dictionary).get("config_text", "")) != "Custom · Developer · Warning · English":
+	if str((projected.get("overview", {}) as Dictionary).get("config_text", "")) != "Custom · Warning · English":
 		return _failure("Server tab projection should compose the overview config text from the projected values.")
 	if str((projected.get("overview", {}) as Dictionary).get("activity_text", "")).find("tools/call") == -1:
 		return _failure("Server tab projection should include the latest request method in the activity text.")
@@ -195,10 +193,8 @@ func _build_primary_model() -> Dictionary:
 		"is_running": true,
 		"tool_profile_id": "custom-profile",
 		"current_log_level": "warning",
-		"current_permission_level": "developer",
 		"current_language": "en",
 		"log_levels": ["info", "warning", "error"],
-		"permission_levels": ["stable", "evolution", "developer"],
 		"languages": {
 			"zh_CN": true,
 			"en": true
@@ -224,7 +220,6 @@ func _build_fallback_model() -> Dictionary:
 		"is_running": false,
 		"current_language": "es",
 		"log_levels": ["info"],
-		"permission_levels": ["stable"],
 		"languages": {
 			"zh_CN": true,
 			"en": true

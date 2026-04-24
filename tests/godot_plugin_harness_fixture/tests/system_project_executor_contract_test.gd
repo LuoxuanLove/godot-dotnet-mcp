@@ -121,8 +121,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 6:
-		return _failure("System project implementation should expose 6 tool definitions including editor_state.")
+	if tool_defs.size() != 7:
+		return _failure("System project implementation should expose 7 tool definitions including userdata_maintenance.")
+	if not _has_tool(tool_defs, "userdata_maintenance"):
+		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -145,6 +147,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
+
+	var layout_result: Dictionary = executor.execute("userdata_maintenance", {"action": "ensure_layout"})
+	if not bool(layout_result.get("success", false)):
+		return _failure("userdata_maintenance ensure_layout should succeed.")
+	var cleanup_preview: Dictionary = executor.execute("userdata_maintenance", {"action": "cleanup_legacy_cache"})
+	if not bool(cleanup_preview.get("success", false)):
+		return _failure("userdata_maintenance cleanup_legacy_cache dry-run should succeed.")
+	if not bool(cleanup_preview.get("data", {}).get("dry_run", false)):
+		return _failure("userdata_maintenance cleanup_legacy_cache should default to dry_run=true.")
 
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
@@ -182,6 +193,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"error_count": int((project_state_data as Dictionary).get("error_count", 0))
 		}
 	}
+
+
+func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
+	for tool_def in tool_defs:
+		if str(tool_def.get("name", "")) == name:
+			return true
+	return false
 
 
 func _failure(message: String) -> Dictionary:

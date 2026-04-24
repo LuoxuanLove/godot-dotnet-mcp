@@ -1,6 +1,7 @@
 extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
+const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 var _server
 
@@ -23,7 +24,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(loader_status.get("exposed_tool_count", 0)) <= 0:
 		return _failure("Tool loader did not report any exposed tools.")
 	if not bool(loader_status.get("healthy", false)):
-		return _failure("Tool loader should be healthy when the default permission provider is active.")
+		return _failure("Tool loader should be healthy when the default tool access provider is active.")
 	var lsp_service = _server.get_gdscript_lsp_diagnostics_service()
 	var loader = _server.get_tool_loader()
 	if lsp_service == null:
@@ -51,6 +52,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle close did not require save=true confirmation.")
 
 	var tools_list: Dictionary = _server.build_tools_api_snapshot()
+	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
 	var required_keys := ["tools", "domain_states", "tool_count", "exposed_tool_count", "tool_loader_status", "performance"]
 	for key in required_keys:
 		if not tools_list.has(key):
@@ -61,6 +63,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not return a tool_loader_status dictionary.")
 	if (tools_list.get("tools", []) as Array).is_empty():
 		return _failure("Tools list response did not return any exposed tools.")
+	if not _has_tool(tools_list.get("tools", []), "system_help"):
+		return _failure("Tools list response did not expose system_help.")
+
+	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 10,
+		"method": "initialize",
+		"params": {}
+	}))
+	var rpc_initialize_result = rpc_initialize.get("result", {})
+	if not (rpc_initialize_result is Dictionary):
+		return _failure("JSON-RPC initialize did not return a result object.")
+	if str((rpc_initialize_result as Dictionary).get("toolSchemaVersion", "")) != expected_schema_version:
+		return _failure("JSON-RPC initialize did not expose the current tool schema version.")
+
+	var full_reload_summary: Dictionary = _server.reinitialize(0, "127.0.0.1", false, [], "tool_full_reload")
+	if int(full_reload_summary.get("tool_count", 0)) <= 0:
+		return _failure("HTTP server full reload reinitialize did not report visible tools.")
+	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
+	if not _has_tool(full_reload_tools_list.get("tools", []), "system_help"):
+		return _failure("HTTP server full reload reinitialize did not expose system_help.")
 
 	var rpc_tools_list: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -127,3 +150,12 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _has_tool(tools, tool_name: String) -> bool:
+	if not (tools is Array):
+		return false
+	for tool_def in tools:
+		if tool_def is Dictionary and str((tool_def as Dictionary).get("name", "")) == tool_name:
+			return true
+	return false
