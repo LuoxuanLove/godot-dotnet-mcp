@@ -57,6 +57,30 @@ static func get_opencode_config_path() -> String:
 	return _normalize_path(_get_home_dir() + "/.config/opencode/opencode.json")
 
 
+static func get_windsurf_config_path() -> String:
+	return _normalize_path(_get_home_dir() + "/.codeium/windsurf/mcp_config.json")
+
+
+static func get_cline_config_path() -> String:
+	return _normalize_path(OS.get_environment("APPDATA") + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json")
+
+
+static func get_roo_config_path() -> String:
+	return _normalize_path(OS.get_environment("APPDATA") + "/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json")
+
+
+static func get_qwen_config_path() -> String:
+	return _normalize_path(_get_home_dir() + "/.qwen/settings.json")
+
+
+static func get_qwen_project_config_path(project_root: String) -> String:
+	return _normalize_path(project_root + "/.qwen/settings.json")
+
+
+static func get_cherry_studio_config_hint_path() -> String:
+	return _normalize_path(OS.get_environment("APPDATA") + "/CherryStudio")
+
+
 static func get_url_config(host: String, port: int) -> String:
 	return JSON.stringify({
 		"mcpServers": {
@@ -100,3 +124,7 @@ static func get_codex_command(host: String, port: int) -> String:
 
 static func get_gemini_command(scope: String, host: String, port: int) -> String:
 	return "gemini mcp add --transport http --scope %s godot-mcp http://%s:%d/mcp" % [scope, host, port]
+
+
+static func get_qwen_command(scope: String, host: String, port: int) -> String:
+	return "qwen mcp add --transport http --scope %s godot-mcp http://%s:%d/mcp" % [scope, host, port]

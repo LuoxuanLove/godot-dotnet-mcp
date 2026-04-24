@@ -32,6 +32,28 @@ func get_opencode_config_path() -> String:
 	return ConfigPathsScript.get_opencode_config_path()
 
 
+func get_windsurf_config_path() -> String:
+	return ConfigPathsScript.get_windsurf_config_path()
+
+
+func get_cline_config_path() -> String:
+	return ConfigPathsScript.get_cline_config_path()
+
+
+func get_roo_config_path() -> String:
+	return ConfigPathsScript.get_roo_config_path()
+
+
+func get_qwen_config_path(scope: String = "user") -> String:
+	if scope == "project":
+		return ConfigPathsScript.get_qwen_project_config_path(ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/"))
+	return ConfigPathsScript.get_qwen_config_path()
+
+
+func get_cherry_studio_config_hint_path() -> String:
+	return ConfigPathsScript.get_cherry_studio_config_hint_path()
+
+
 func get_url_config(host: String, port: int) -> String:
 	return ConfigPathsScript.get_url_config(host, port)
 
@@ -56,6 +78,10 @@ func get_codex_command(host: String, port: int) -> String:
 
 func get_gemini_command(scope: String, host: String, port: int) -> String:
 	return ConfigPathsScript.get_gemini_command(scope, host, port)
+
+
+func get_qwen_command(scope: String, host: String, port: int) -> String:
+	return ConfigPathsScript.get_qwen_command(scope, host, port)
 
 
 
