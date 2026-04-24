@@ -59,6 +59,7 @@ func _enter_tree() -> void:
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+	_state.settings["log_level"] = MCPDebugBuffer.get_minimum_level()
 
 	if _action_router == null:
 		_action_router = PluginActionRouterScript.new()
@@ -576,8 +577,8 @@ func _on_full_reload_requested() -> void:
 
 
 func _on_log_level_changed(level: String) -> void:
-	_state.settings["log_level"] = level
 	MCPDebugBuffer.set_minimum_level(level)
+	_state.settings["log_level"] = MCPDebugBuffer.get_minimum_level()
 	_save_settings()
 	_refresh_dock()
 

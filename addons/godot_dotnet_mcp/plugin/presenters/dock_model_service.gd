@@ -128,7 +128,7 @@ func build_model() -> Dictionary:
 		"user_tool_watch": _get_user_tool_watch_status(),
 		"editor_scale": _resolve_editor_scale(),
 		"log_levels": MCPDebugBuffer.get_available_levels(),
-		"current_log_level": str(settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
+		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
@@ -142,6 +142,15 @@ func _get_settings() -> Dictionary:
 	if _state == null or not (_state.settings is Dictionary):
 		return {}
 	return _state.settings
+
+
+func _normalize_log_level(level: String) -> String:
+	var normalized := level.to_lower().strip_edges()
+	if normalized == "trace":
+		return "debug"
+	if not (normalized in MCPDebugBuffer.get_available_levels()):
+		return MCPDebugBuffer.get_minimum_level()
+	return normalized
 
 
 func _get_all_tools_by_category() -> Dictionary:

@@ -26,7 +26,7 @@ func project(model: Dictionary) -> Dictionary:
 		},
 		"self_diagnostics": _project_self_diagnostics(model, self_diagnostics, localization),
 		"options": {
-			"log_levels": _project_enum_options(model.get("log_levels", []), str(model.get("current_log_level", DEFAULT_LOG_LEVEL)), localization, "log_level"),
+			"log_levels": _project_enum_options(model.get("log_levels", []), _normalize_log_level(str(model.get("current_log_level", DEFAULT_LOG_LEVEL))), localization, "log_level"),
 			"languages": _project_language_options(model, localization)
 		}
 	}
@@ -57,12 +57,23 @@ func _build_overview_connections_text(stats: Dictionary) -> String:
 
 func _build_overview_config_text(model: Dictionary, localization) -> String:
 	var profile_id = str(model.get("tool_profile_id", "default"))
-	var log_level = str(model.get("current_log_level", DEFAULT_LOG_LEVEL))
+	var log_level = _normalize_log_level(str(model.get("current_log_level", DEFAULT_LOG_LEVEL)))
 	var current_language = str(model.get("current_language", DEFAULT_LANGUAGE))
 	var profile_text = _get_overview_profile_text(profile_id, localization)
 	var log_text = _get_localized_text(localization, "log_level_%s" % log_level, log_level.capitalize())
 	var language_text = _get_overview_language_text(current_language, localization)
 	return "%s · %s · %s" % [profile_text, log_text, language_text]
+
+
+func _normalize_log_level(level: String) -> String:
+	var normalized := level.to_lower().strip_edges()
+	if normalized == "trace":
+		return "debug"
+	match normalized:
+		"debug", "info", "warning", "error":
+			return normalized
+		_:
+			return DEFAULT_LOG_LEVEL
 
 
 func _get_overview_profile_text(profile_id: String, localization) -> String:

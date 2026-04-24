@@ -9,8 +9,10 @@ class FullLocalization extends RefCounted:
 		"status_stopped": "Stopped",
 		"tool_profile_default": "Default",
 		"tool_profile_custom_short": "Custom",
+		"log_level_debug": "Debug",
 		"log_level_warning": "Warning",
 		"log_level_info": "Info",
+		"log_level_error": "Error",
 		"self_diag_empty": "Empty diagnostics",
 		"self_diag_status_ok": "OK",
 		"self_diag_status_warning": "Warning",
@@ -93,10 +95,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var options: Dictionary = projected.get("options", {})
 	var log_levels: Array = options.get("log_levels", [])
-	if log_levels.size() != 3 or not bool((log_levels[1] as Dictionary).get("selected", false)):
+	if log_levels.size() != 4 or not bool((log_levels[2] as Dictionary).get("selected", false)):
 		return _failure("Server tab projection should mark the current log level as selected.")
-	if str((log_levels[1] as Dictionary).get("text", "")) != "Warning":
+	if str((log_levels[2] as Dictionary).get("text", "")) != "Warning":
 		return _failure("Server tab projection should project localized log level labels.")
+
+	var legacy_model := _build_primary_model()
+	legacy_model["current_log_level"] = "trace"
+	var legacy_projection = service.project(legacy_model)
+	var legacy_options: Dictionary = legacy_projection.get("options", {})
+	var legacy_log_levels: Array = legacy_options.get("log_levels", [])
+	if not bool((legacy_log_levels[0] as Dictionary).get("selected", false)):
+		return _failure("Server tab projection should normalize legacy trace settings to debug.")
+	if str((legacy_projection.get("overview", {}) as Dictionary).get("config_text", "")).find("Debug") == -1:
+		return _failure("Server tab overview should display Debug instead of legacy Trace.")
 
 	var language_options: Array = options.get("languages", [])
 	if language_options.size() != 2:
@@ -194,7 +206,7 @@ func _build_primary_model() -> Dictionary:
 		"tool_profile_id": "custom-profile",
 		"current_log_level": "warning",
 		"current_language": "en",
-		"log_levels": ["info", "warning", "error"],
+		"log_levels": ["debug", "info", "warning", "error"],
 		"languages": {
 			"zh_CN": true,
 			"en": true
