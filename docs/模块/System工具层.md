@@ -1,5 +1,5 @@
 # 系统工具层
-系统工具层是插件的高层工具入口，统一暴露当前公开的系统工具，用于读取项目状态、汇总编辑器态、驱动编辑器界面与运行态、读取和清理编辑器 Output、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
+系统工具层是插件的高层工具入口，统一暴露当前公开的系统工具，用于读取 MCP 能力说明、项目状态、汇总编辑器态、驱动编辑器界面与运行态、读取和清理编辑器 Output、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
 
 默认 `system` 预设只启用这一层，适合先理解上下文，再决定是否下钻到底层原子工具。
 
@@ -11,7 +11,8 @@
 tools/system/
 ├─ executor.gd         # 调度器：初始化 system 子域执行器并统一路由 execute / execute_async
 ├─ atomic_bridge.gd    # 原子桥：call_atomic() 调用下层原子 executor，附带写保护逻辑
-├─ impl_editor.gd      # 编辑器 UI 控制聚合入口（1 个公开工具）
+├─ impl_help.gd        # 连接后能力说明与 Agent 推荐工作流（1 个公开工具）
+├─ impl_editor.gd      # 编辑器 UI 控制与 Output 日志聚合入口（2 个公开工具）
 ├─ impl_runtime.gd     # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
 ├─ impl_scene.gd       # 场景级工具实现（3 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
@@ -24,6 +25,11 @@ tools/system/
 
 ## 内置工具
 
+### 能力说明
+- `system_help`：返回面向 Agent 的 MCP 能力说明、推荐起手顺序、编辑器截图优先提示、隐藏控件枚举提示、运行时自动化能力与当前工具 schema 版本。
+
+连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
+
 ### 项目级
 - `system_project_state`：汇总当前项目状态，包括文件计数、最近错误和运行状态。
 - `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要与 runtime control 状态。
@@ -35,16 +41,18 @@ tools/system/
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
 ### 编辑器界面级
-- `system_editor_control`：统一封装编辑器主屏幕切换、整窗截图、可见控件枚举、单控件截图、焦点移动、按钮类控件激活，以及可见弹窗的最小安全交互。
+- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、焦点移动、按钮类控件激活，以及可见弹窗的最小安全交互。
 - `system_editor_log`：以高层入口读取当前 Output 面板、按错误/警告过滤输出，并清空 Output 面板。
 
 这组工具当前由 `tools/system/impl_editor.gd` 承载，并通过 `atomic_bridge.gd` 聚合底层 `editor_status`、`editor_screenshot`、`editor_ui_control`、`editor_popup` 与 `editor_log` 原子工具，适合作为 Agent 处理编辑器界面和 Output 面板任务时的稳定入口。
 
 ### 运行时自动化级
 - `system_runtime_control`：查询、启用或关闭当前编辑器调试会话的 runtime control 安全闸。
-- `system_runtime_capture`：统一截图入口；默认抓取单帧，传 `frame_count > 1` 时按 `interval_frames` 抓取低频多帧序列。
+- `system_runtime_capture`：统一截图入口；默认抓取单帧，传 `frame_count > 1` 时按 `interval_frames` 抓取低频多帧序列；默认写入固定运行时截图缓存目录，也可通过 `capture_dir` 指定输出目录。
 - `system_runtime_input`：注入 `InputMap action` 或原始键盘输入，支持 `press/release/tap/hold`。
-- `system_runtime_step`：标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环。
+- `system_runtime_step`：标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环；当 `capture=true` 时同样支持 `capture_dir`。
+
+默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理旧缓存；需要整理历史遗留根级文件时，由 Agent 显式调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 
 ### 场景级
 - `system_scene_validate`：做场景完整性检查与依赖缺失检测。
@@ -99,12 +107,13 @@ system_project_run
 
 ```text
 system_editor_state
-  -> system_editor_control(action=list_controls)
-  -> system_editor_control(action=get_control / capture_control)
-  -> system_editor_control(action=focus_control / activate_control / set_control_text)
+	-> system_editor_control(action=activate_ui)
+	-> system_editor_control(action=list_controls)
+	-> system_editor_control(action=get_control / capture_control)
+	-> system_editor_control(action=focus_control / activate_control / set_control_text)
 ```
 
-其中 `system_editor_control` 优先负责安全、可回读的界面动作；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
+其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
 
 ---
 

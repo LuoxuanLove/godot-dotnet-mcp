@@ -10,6 +10,10 @@
 - Added `system_editor_state` as a high-level read-only editor session snapshot aggregating editor UI state, Inspector, FileSystem selection, project runtime summary, and runtime control status.
 - Added `self_diagnostics` to `system_project_state(include_runtime_health=true)` lightweight health summaries.
 - Added `system_editor_log` as a high-level Output-panel entry for reading editor output, reading filtered warning/error lines, and clearing the Output panel without dropping down to atomic debug tools.
+- Added `system_help` as a high-level connection guide for MCP capabilities, recommended first steps, editor-screenshot-first guidance, hidden-control enumeration hints, and the current tool schema version.
+- Added `capture_dir` to `system_runtime_capture` and `system_runtime_step` so runtime screenshots can target a caller-provided directory instead of only the default cache.
+- Added `system_editor_control(action=activate_ui)` for non-invasive Godot API-based dock/plugin/bottom-panel activation, including semantic targets such as `MCPDock/config` and optional capture output.
+- Added layered `user://godot_dotnet_mcp/` output management and manual `system_userdata_maintenance` cleanup for stale root-level MCP cache files.
 
 ### Changed
 
@@ -17,11 +21,14 @@
 - Expanded client setup flow so Claude Code CLI and Codex CLI support one-click add/remove actions, desktop detections can surface launch actions more consistently, and Gemini now participates in install-status detection.
 - Tightened config-card status projection so install state can show the concrete config path or CLI scope instead of only a generic detected/missing label.
 - Added `activate_dock_tab(title=...)` to the high-level editor UI control flow so agents can bring dock tabs such as `MCPDock` to the foreground before taking verification screenshots.
+- Documented the preferred background UI verification flow and discouraged OS mouse/window automation unless explicitly authorized by the user.
 - Finished the user-tool hot reload refactor: user tools now reload as per-script runtime slots instead of being mixed into the `system` executor lifecycle.
 - Unified user-tool refresh flow under explicit registry refresh, runtime reload, and UI rebuild stages.
 - Refined the Tools page so it keeps separate `System` and `User` roots while counting only System high-level tools plus User tools in the visible total.
-- Limited externally exposed MCP tools to the 18 `system_*` high-level tools; atomic tools remain internal-only.
+- Limited externally exposed MCP tools to high-level `system_*` tools; atomic tools remain internal-only.
 - Simplified self-diagnostic presentation by separating the latest operation from the latest incident and adding a clear action for recoverable warnings.
+- Removed the plugin permission-level system and the Home tab's advanced permission settings; the plugin now always keeps the strongest internal tool capability available.
+- Expanded Tools tree localization and action children so high-level System tools show localized names, descriptions, direct actions, and linked atomic-tool details without exposing atomic tools as public MCP tools.
 
 ### Fixed
 

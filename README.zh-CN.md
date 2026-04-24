@@ -70,6 +70,7 @@ addons/godot_dotnet_mcp
 以下实时编辑器工具依赖插件：
 
 - `system_project_state`
+- `system_help`
 - `system_editor_state`
 - `system_runtime_diagnose`
 - `system_scene_analyze`
@@ -86,6 +87,7 @@ MCP 端点为 `http://127.0.0.1:3000/mcp`（或 `MCPDock > 主页` 中显示的�
 
 - `GET http://127.0.0.1:3000/health` 返回正常。
 - `GET http://127.0.0.1:3000/api/tools` 返回工具列表。
+- `system_help` 返回当前能力说明，包含编辑器截图优先提示与隐藏控件枚举提示。
 
 ## 自定义工具
 

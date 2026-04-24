@@ -70,6 +70,7 @@ Then follow steps 1-5 above.
 The plugin is required for live editor tools:
 
 - `system_project_state`
+- `system_help`
 - `system_editor_state`
 - `system_runtime_diagnose`
 - `system_scene_analyze`
@@ -86,6 +87,7 @@ Configure your MCP client to connect to that HTTP endpoint.
 
 - `GET http://127.0.0.1:3000/health` returns normally.
 - `GET http://127.0.0.1:3000/api/tools` returns the tool list.
+- `system_help` returns the current capability guide, including editor screenshot guidance and hidden-control enumeration hints.
 
 ## Custom Tools
 

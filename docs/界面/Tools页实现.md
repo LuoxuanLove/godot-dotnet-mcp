@@ -218,5 +218,4 @@ root
 | `tools/tool_registry.gd` | builtin executor 注册事实源 |
 | `tools/tool_manifest.gd` | domain/category 元数据与 manifest 访问层 |
 | `plugin/runtime/plugin_runtime_state.gd` | 当前 settings / custom profile 状态 |
-| `plugin/runtime/tool_permission_policy.gd` | permission 规则 |
 | `plugin/runtime/tool_profile_catalog.gd` | builtin profile 目录 |

@@ -140,12 +140,12 @@ tests/godot_plugin_harness_fixture/
 | `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
 | `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
 | `system_project_executor_contracts` | 验证 `impl_project.gd` 作为当前项目级 system 聚合入口的工具暴露、runtime health 聚合与项目级路由 |
-| `system_editor_control_contracts` | 验证 `impl_editor.gd` 的高层编辑器界面路由，把 `set_main_screen / capture_editor / list_controls / capture_control / popup` 动作稳定委托到对应原子工具 |
+| `system_editor_control_contracts` | 验证 `impl_editor.gd` 的高层编辑器界面路由，把 `set_main_screen / activate_ui / capture_editor / list_controls / capture_control / popup` 动作稳定委托到对应原子工具 |
 | `system_script_executor_contracts` | 验证 `impl_script.gd` 作为当前脚本级 system 聚合入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
-| `tool_loader_contracts` | 验证默认 permission provider 下的 loader 初始化和 disabled tool 收缩 |
-| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、运行时状态投影和日志/权限/语言选项模型 |
+| `tool_loader_contracts` | 验证默认工具访问 provider 下的 loader 初始化和 disabled tool 收缩 |
+| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、运行时状态投影和日志/语言选项模型 |
 | `tool_lsp_diagnostics_adapter_contracts` | 验证 `tool_lsp_diagnostics_adapter.gd` 的 configure、tick、reset、release 与 runtime bridge 绑定语义 |
 | `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
 | `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
@@ -193,13 +193,13 @@ tests/godot_plugin_harness_fixture/
 
 这对排查卡死、性能问题和资源清理问题很有帮助。
 
-### 3. headless 路径已修复默认 permission provider 缺失问题
+### 3. headless 路径具备默认工具访问 provider
 
-先前 bare `MCPHttpServer.new()` 在无插件父节点的 headless 路径下，没有 permission provider，导致：
+bare `MCPHttpServer.new()` 在无插件父节点的 headless 路径下，会创建默认工具访问 provider，避免 loader 在测试环境中缺少访问状态来源导致：
 
 - `tool_loader_status=no_visible_tools`
 
-当前已经通过默认 fallback provider 修复，因此 headless 路径可以真实装载工具目录并暴露工具状态。
+当前 headless 路径可以真实装载工具目录并暴露工具状态；插件不再提供权限等级配置。
 
 ### 4. 已补第一轮稳定测试 seam
 

@@ -10,6 +10,10 @@
 - 新增 `system_editor_state` 高层只读快照，用于统一聚合编辑器 UI 状态、Inspector、FileSystem 选择、项目运行摘要与 runtime control 状态。
 - 为 `system_project_state(include_runtime_health=true)` 新增 `self_diagnostics` 轻量健康摘要。
 - 新增 `system_editor_log` 高层工具，用于读取编辑器 Output 面板、按错误/警告筛选输出，并直接清空 Output 面板。
+- 新增 `system_help` 高层工具，用于在连接后集中说明 MCP 能力、推荐起手顺序、编辑器截图优先策略、隐藏控件枚举提示与当前工具 schema 版本。
+- `system_runtime_capture` 与 `system_runtime_step` 新增 `capture_dir` 参数，可在默认运行时截图缓存目录之外指定输出目录。
+- 新增 `system_editor_control(action=activate_ui)`，可通过 Godot API 无感激活 Dock/插件页签/底部面板，支持 `MCPDock/config` 等语义目标与可选截图输出。
+- 新增 `user://godot_dotnet_mcp/` 分层输出管理，并提供手动 `system_userdata_maintenance` 清理旧版根级 MCP 缓存文件。
 
 ### Changed
 
@@ -17,12 +21,15 @@
 - 扩展客户端接入流程：Claude Code CLI、Codex CLI、Gemini CLI 现支持一键添加 / 移除，桌面端入口只在确认可直接打开时才暴露对应动作。
 - 配置卡片的安装状态改为尽量展示具体配置路径或 CLI 作用域，而不是只显示笼统的“已检测到 / 未检测到”。
 - 为高层编辑器控制补入 `activate_dock_tab(title=...)`，让 Agent 可以先把 `MCPDock` 等 dock 页签切到前台，再结合截图进行视觉验证。
+- 文档化后台 UI 验证优先流程，并明确除非用户授权，否则不应使用系统级鼠标/窗口自动化。
 - 完成 User Tool 热重载架构收口：用户工具现在按“单脚本 runtime slot”管理，不再混入 `system` 执行器生命周期。
 - 统一 User Tool 刷新流程：显式拆分为注册表刷新、运行时重载与 UI 重建三个阶段。
 - 调整 `Tools` 页统计口径：只统计系统高层工具与 User Tool，不再把内部原子工具计入可见总数。
 - `Tools` 树继续保留 `系统` 与 `用户` 两个根节点。
 - 对外 MCP 工具继续收敛为高层 `system_*` 工具，原子工具仅保留为内部依赖。
 - 优化自检展示：区分“最近操作”和“最近告警”，并提供可恢复告警的清除入口。
+- 移除插件权限级别系统与首页高级权限设置，插件内部始终保持最高可用工具能力。
+- 补全 `Tools` 树本地化与高层 System 工具 action 子节点展示，继续只对外暴露高层 MCP 工具，原子工具仅作为内部依赖说明展示。
 
 ### Fixed
 
@@ -118,7 +125,6 @@
 
 - 新增主项目运行时回读能力，可通过 `debug_runtime_bridge` 追踪 Godot 编辑器启动/停止后的调试会话状态。
 - 新增更完整的插件治理层，包括运行时控制、自动化工具管理、开发者入口与使用引导。
-- 新增插件权限级别与授权边界，用于区分稳定使用、自我扩展与开发调试。
 - 新增 `User` 分类管理支持，便于发现、审计与清理用户侧扩展工具。
 
 ### Changed

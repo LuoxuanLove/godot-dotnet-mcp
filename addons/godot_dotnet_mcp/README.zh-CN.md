@@ -11,6 +11,8 @@
 
 系统层是 Agent 的推荐起点，覆盖项目快照、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
 
+连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。
+
 插件侧运行态细节仍推荐通过 `plugin_runtime_state` 获取；其中 `action=get_lsp_diagnostics_status` 是详细 LSP 自检入口，而 `system_project_state(include_runtime_health=true)` 只返回轻量 `self_diagnostics`、`lsp_diagnostics` 与 `tool_loader` 健康摘要。
 
 如需扩展工具集：在 `custom_tools/` 中放置 `.gd` 文件，实现 `handles / get_tools / execute`，工具名统一以 `user_` 开头。插件自动发现并加载。`plugin_evolution` 工具组负责脚手架、审计和删除。
@@ -123,6 +125,7 @@ POST http://127.0.0.1:3000/mcp
 
 - `/health` 返回正常
 - `/api/tools` 能返回工具列表
+- `system_help` 返回当前能力说明，并包含编辑器截图优先提示与隐藏控件枚举提示
 - MCP 客户端能够连接到 `http://127.0.0.1:3000/mcp`
 
 ### 4. 读取最近一次主项目运行状态
