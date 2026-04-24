@@ -42,6 +42,13 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
 		{"tool": "project_input",    "actions": ["list_actions"]}
 	],
+	"system_project_files": [
+		{"tool": "filesystem_directory", "actions": ["get_files", "create", "delete"]},
+		{"tool": "filesystem_file_read", "actions": ["read"]},
+		{"tool": "filesystem_file_write", "actions": ["write"]},
+		{"tool": "filesystem_file_manage", "actions": ["delete", "copy", "move"]},
+		{"tool": "editor_filesystem", "actions": ["select_file", "get_selected", "get_current_path", "scan", "reimport"]}
+	],
 	"system_userdata_maintenance": [],
 	"system_project_run":  [{"tool": "scene_run", "actions": ["play_main", "play_custom"]}],
 	"system_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
@@ -63,9 +70,16 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	],
 	"system_scene_patch": [
 		{"tool": "scene_management", "actions": ["get_current", "open", "save"]},
-		{"tool": "node_lifecycle",   "actions": ["create", "delete"]},
-		{"tool": "node_property",    "actions": ["set"]},
+		{"tool": "node_lifecycle",   "actions": ["create", "delete", "attach_script", "rename"]},
+		{"tool": "node_property",    "actions": ["get", "set"]},
 		{"tool": "node_hierarchy",   "actions": ["reparent"]}
+	],
+	"system_scene_tree": [
+		{"tool": "scene_hierarchy",  "actions": ["get_tree", "get_selected", "select"]},
+		{"tool": "node_lifecycle",   "actions": ["create", "delete", "attach_script", "rename"]},
+		{"tool": "node_property",    "actions": ["get", "set"]},
+		{"tool": "node_hierarchy",   "actions": ["reparent", "reorder"]},
+		{"tool": "node_transform",   "actions": ["set_position"]}
 	],
 	"system_script_analyze": [
 		{"tool": "script_inspect",    "actions": ["path"]},

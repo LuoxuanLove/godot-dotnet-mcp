@@ -34,6 +34,7 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_editor_state",
 	"system_help",
 	"system_project_configure",
+	"system_project_files",
 	"system_project_run",
 	"system_project_state",
 	"system_project_stop",
@@ -46,6 +47,7 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_scene_analyze",
 	"system_scene_dependency_graph",
 	"system_scene_patch",
+	"system_scene_tree",
 	"system_scene_validate",
 	"system_script_analyze",
 	"system_script_patch"
