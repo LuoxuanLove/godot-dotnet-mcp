@@ -28,7 +28,7 @@ func get_tools() -> Array[Dictionary]:
 				"properties": {
 					"level": {
 						"type": "string",
-						"enum": ["trace", "debug", "info", "warning", "error"]
+						"enum": ["debug", "info", "warning", "error"]
 					}
 				},
 				"required": ["level"]
