@@ -14,10 +14,10 @@ tools/system/
 ├─ impl_help.gd        # 连接后能力说明与 Agent 推荐工作流（1 个公开工具）
 ├─ impl_editor.gd      # 编辑器 UI 控制与 Output 日志聚合入口（2 个公开工具）
 ├─ impl_runtime.gd     # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
-├─ impl_scene.gd       # 场景级工具实现（3 个）
+├─ impl_scene.gd       # 场景级工具实现（4 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 ├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
-├─ impl_project.gd     # 项目级与编辑器态聚合工具实现（6 个公开工具）
+├─ impl_project.gd     # 项目级与编辑器态聚合工具实现（8 个公开工具）
 └─ impl_script.gd      # 脚本与绑定审计工具实现（3 个公开工具）
 ```
 
@@ -35,6 +35,7 @@ tools/system/
 - `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要与 runtime control 状态。
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
+- `system_project_files`：高层项目文件树入口，支持列目录、创建/删除目录、读写/复制/移动/删除文件、选中文件、扫描与重导入。
 - `system_project_run`：运行主场景或指定场景。
 - `system_project_stop`：停止当前运行中的项目。
 
@@ -57,6 +58,7 @@ tools/system/
 ### 场景级
 - `system_scene_validate`：做场景完整性检查与依赖缺失检测。
 - `system_scene_analyze`：分析节点、脚本、绑定和结构问题。
+- `system_scene_tree`：高层当前编辑场景树入口，支持获取/选择节点、添加/移除/重命名/重设父节点/排序节点、挂载脚本、读写属性与移动节点。
 - `system_scene_patch`：以结构化方式修改 `.tscn` 内容。
 
 ### 脚本级
@@ -86,8 +88,8 @@ tools/system/
 
 ```text
 system_editor_state / system_project_state
-  -> system_scene_analyze / system_script_analyze / system_runtime_diagnose
-  -> system_scene_patch / system_script_patch / 具体原子工具
+  -> system_project_files / system_scene_analyze / system_script_analyze / system_runtime_diagnose
+  -> system_scene_tree / system_scene_patch / system_script_patch / 具体原子工具
 ```
 
 这条链路适合先获取全局上下文，再进入局部修改，避免一开始就落到过细的原子操作上。

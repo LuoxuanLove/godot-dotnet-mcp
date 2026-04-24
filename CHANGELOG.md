@@ -14,6 +14,7 @@
 - Added `capture_dir` to `system_runtime_capture` and `system_runtime_step` so runtime screenshots can target a caller-provided directory instead of only the default cache.
 - Added `system_editor_control(action=activate_ui)` for non-invasive Godot API-based dock/plugin/bottom-panel activation, including semantic targets such as `MCPDock/config` and optional capture output.
 - Added layered `user://godot_dotnet_mcp/` output management and manual `system_userdata_maintenance` cleanup for stale root-level MCP cache files.
+- Added high-level `system_project_files` and `system_scene_tree` tools for common Agent workflows that modify the project FileSystem tree or the currently edited scene tree.
 
 ### Changed
 
@@ -29,6 +30,8 @@
 - Simplified self-diagnostic presentation by separating the latest operation from the latest incident and adding a clear action for recoverable warnings.
 - Removed the plugin permission-level system and the Home tab's advanced permission settings; the plugin now always keeps the strongest internal tool capability available.
 - Expanded Tools tree localization and action children so high-level System tools show localized names, descriptions, direct actions, and linked atomic-tool details without exposing atomic tools as public MCP tools.
+- Expanded Config client support and status projection for Codex Desktop, OpenCode Desktop, Windsurf, Cline, Roo Code, Qwen Code, and Cherry Studio, with installed entries shown as explicit `Installed to` paths or CLI scopes.
+- Consolidated public logging levels to `debug`, `info`, `warning`, and `error`; legacy `trace` inputs are normalized to `debug` for compatibility.
 
 ### Fixed
 

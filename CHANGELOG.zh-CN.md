@@ -14,6 +14,7 @@
 - `system_runtime_capture` 与 `system_runtime_step` 新增 `capture_dir` 参数，可在默认运行时截图缓存目录之外指定输出目录。
 - 新增 `system_editor_control(action=activate_ui)`，可通过 Godot API 无感激活 Dock/插件页签/底部面板，支持 `MCPDock/config` 等语义目标与可选截图输出。
 - 新增 `user://godot_dotnet_mcp/` 分层输出管理，并提供手动 `system_userdata_maintenance` 清理旧版根级 MCP 缓存文件。
+- 新增 `system_project_files` 与 `system_scene_tree` 高层工具，分别覆盖项目文件树修改和当前编辑场景树修改的常见 Agent 工作流。
 
 ### Changed
 
@@ -30,6 +31,8 @@
 - 优化自检展示：区分“最近操作”和“最近告警”，并提供可恢复告警的清除入口。
 - 移除插件权限级别系统与首页高级权限设置，插件内部始终保持最高可用工具能力。
 - 补全 `Tools` 树本地化与高层 System 工具 action 子节点展示，继续只对外暴露高层 MCP 工具，原子工具仅作为内部依赖说明展示。
+- 扩展 Config 页客户端支持与状态展示，覆盖 Codex Desktop、OpenCode Desktop、Windsurf、Cline、Roo Code、Qwen Code 与 Cherry Studio，并将已安装状态明确显示为“已安装到”具体配置路径或 CLI 作用域。
+- 日志公开级别收敛为 `debug`、`info`、`warning`、`error` 四级；旧 `trace` 输入仅作为兼容别名归并到 `debug`。
 
 ### Fixed
 
