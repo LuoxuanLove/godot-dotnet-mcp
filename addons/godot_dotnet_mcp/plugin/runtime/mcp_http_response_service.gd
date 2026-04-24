@@ -141,7 +141,7 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 			header_error,
 			body_error
 		],
-		"trace"
+		"debug"
 	)
 
 

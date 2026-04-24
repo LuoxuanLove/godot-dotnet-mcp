@@ -82,7 +82,7 @@ func _process_client(client: StreamPeerTCP) -> bool:
 		var request_str = data[1].get_string_from_utf8()
 		var pending_data = _connection_state.get_pending_data(client) + request_str
 		_connection_state.set_pending_data(client, pending_data)
-		_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "trace")
+		_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
 		_process_http_request_async(client)
 		return false
 
@@ -106,14 +106,14 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 	if not bool(decoded_request.get("ready", false)):
 		var waiting_for := str(decoded_request.get("waiting_for", ""))
 		if waiting_for == "headers" and data.length() > 0:
-			_log("Waiting for headers... current data length: %d" % data.length(), "trace")
+			_log("Waiting for headers... current data length: %d" % data.length(), "debug")
 		elif waiting_for == "chunked_body":
-			_log("Waiting for chunked body...", "trace")
+			_log("Waiting for chunked body...", "debug")
 		elif waiting_for == "body":
 			_log(
 				"Waiting for body... need %d bytes, have %d bytes"
 				% [int(decoded_request.get("content_length", 0)), int(decoded_request.get("body_byte_size", 0))],
-				"trace"
+				"debug"
 			)
 		return
 
@@ -131,7 +131,7 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 	_log(
 		"Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s"
 		% [headers.get("method", "?"), content_length, body_byte_size, is_chunked],
-		"trace"
+		"debug"
 	)
 
 	_connection_state.mark_processing(client)

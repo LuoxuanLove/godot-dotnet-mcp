@@ -28,7 +28,7 @@ func dispose() -> void:
 
 
 func handle_request_async(body: String) -> Dictionary:
-	_log_message("Parsing request body (%d bytes)" % body.length(), "trace")
+	_log_message("Parsing request body (%d bytes)" % body.length(), "debug")
 	var json = JSON.new()
 	var error = json.parse(body)
 
