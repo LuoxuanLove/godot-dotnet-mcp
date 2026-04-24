@@ -65,6 +65,8 @@ func handle_config_client_action_requested(client_id: String) -> void:
 			_toggle_codex_mcp_config(client_statuses.get("codex", {}))
 		"gemini":
 			_toggle_gemini_mcp_config(client_statuses.get("gemini", {}))
+		"qwen":
+			_toggle_qwen_mcp_config(client_statuses.get("qwen", {}))
 		_:
 			pass
 
@@ -93,6 +95,15 @@ func handle_config_client_launch_requested(client_id: String) -> void:
 			_launch_desktop_agent(_get_client_display_name("opencode_desktop"), client_statuses.get("opencode_desktop", {}), PackedStringArray())
 		"opencode":
 			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("opencode"), client_statuses.get("opencode", {}))
+		"windsurf":
+			_launch_desktop_agent_for_current_project(
+				_get_client_display_name("windsurf"),
+				client_statuses.get("windsurf", {})
+			)
+		"qwen":
+			_launch_cli_agent_for_current_project(client_id, _get_client_display_name("qwen"), client_statuses.get("qwen", {}))
+		"cherry_studio":
+			_launch_desktop_agent(_get_client_display_name("cherry_studio"), client_statuses.get("cherry_studio", {}), PackedStringArray())
 		_:
 			_show_config_message(_localization.get_text("msg_client_launch_unsupported"))
 
@@ -474,6 +485,16 @@ func _get_client_display_name(client_id: String) -> String:
 			return _localization.get_text("config_client_opencode")
 		"gemini":
 			return _localization.get_text("config_client_gemini")
+		"windsurf":
+			return _localization.get_text("config_client_windsurf")
+		"cline":
+			return _localization.get_text("config_client_cline")
+		"roo_code":
+			return _localization.get_text("config_client_roo_code")
+		"qwen":
+			return _localization.get_text("config_client_qwen")
+		"cherry_studio":
+			return _localization.get_text("config_client_cherry_studio")
 		_:
 			return client_id
 
@@ -593,6 +614,44 @@ func _toggle_gemini_mcp_config(detection: Dictionary) -> void:
 	_show_config_message(_localization.get_text("msg_client_action_success") % client_name)
 
 
+func _toggle_qwen_mcp_config(detection: Dictionary) -> void:
+	if detection.is_empty() or str(detection.get("status", "")) != "ready":
+		_show_config_message(_get_client_install_message_text("qwen", str(detection.get("status", "missing"))))
+		return
+
+	var executable_path = str(detection.get("executable_path", "")).strip_edges()
+	if executable_path.is_empty():
+		_show_config_message(_localization.get_text("msg_client_action_missing_executable") % _localization.get_text("config_client_qwen"))
+		return
+
+	var client_name = _localization.get_text("config_client_qwen")
+	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
+	if entry_status == "present":
+		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		if not bool(remove_result.get("success", false)):
+			_show_config_message("%s\n\n%s" % [
+				_localization.get_text("msg_config_remove_failed"),
+				str(remove_result.get("message", ""))
+			])
+			return
+		_invalidate_client_install_status_cache_if_possible()
+		_refresh_dock_if_possible()
+		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
+		return
+
+	var add_result = _config_service.execute_cli_command(executable_path, _build_qwen_add_arguments())
+	if not bool(add_result.get("success", false)):
+		_show_config_message("%s\n\n%s" % [
+			_localization.get_text("msg_client_action_failed") % client_name,
+			str(add_result.get("message", ""))
+		])
+		return
+
+	_invalidate_client_install_status_cache_if_possible()
+	_refresh_dock_if_possible()
+	_show_config_message(_localization.get_text("msg_client_action_success") % client_name)
+
+
 func _launch_cursor_for_current_project(detection: Dictionary) -> void:
 	_launch_desktop_agent_for_current_project(_localization.get_text("config_client_cursor"), detection)
 
@@ -655,7 +714,7 @@ func _launch_cli_agent_for_current_project(client_id: String, client_name: Strin
 	match client_id:
 		"claude_code", "codex":
 			arguments = PackedStringArray()
-		"gemini":
+		"gemini", "qwen":
 			arguments = PackedStringArray()
 		"opencode":
 			arguments = PackedStringArray([project_root])
@@ -718,6 +777,19 @@ func _build_claude_code_add_arguments() -> PackedStringArray:
 
 
 func _build_gemini_add_arguments() -> PackedStringArray:
+	return PackedStringArray([
+		"mcp",
+		"add",
+		"--transport",
+		"http",
+		"--scope",
+		str(_state.current_cli_scope),
+		MCP_SERVER_KEY,
+		"http://%s:%d/mcp" % [str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000))]
+	])
+
+
+func _build_qwen_add_arguments() -> PackedStringArray:
 	return PackedStringArray([
 		"mcp",
 		"add",

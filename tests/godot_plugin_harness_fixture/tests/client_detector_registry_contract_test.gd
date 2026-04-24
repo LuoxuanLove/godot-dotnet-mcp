@@ -24,7 +24,7 @@ class FakePathResolver extends RefCounted:
 
 	func resolve_executable_path(client_id: String, _candidates: Array[String], _where_aliases: Array[String], _extra_candidates: Array[String] = []) -> Dictionary:
 		var executable_path = ""
-		if client_id == "codex":
+		if client_id == "codex" or client_id == "gemini" or client_id == "qwen":
 			executable_path = "C:/Tools/codex.exe"
 		elif client_id == "cursor":
 			executable_path = "C:/Programs/Cursor/Cursor.exe"
@@ -63,9 +63,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var results = registry.detect_all(PackedStringArray())
 	var supported_ids = registry.get_supported_client_ids()
-	if supported_ids.size() != 8:
+	if supported_ids.size() != 14:
 		return _failure("Client detector registry should register the full supported client set.")
-	if not results.has("cursor") or not results.has("codex") or not results.has("opencode"):
+	if not results.has("cursor") or not results.has("codex") or not results.has("opencode") or not results.has("windsurf") or not results.has("qwen") or not results.has("cherry_studio"):
 		return _failure("Client detector registry should expose all client ids through detect_all.")
 	if str(results.get("cursor", {}).get("status", "")) != "ready":
 		return _failure("Client detector registry should delegate config-file clients to the config detector path.")

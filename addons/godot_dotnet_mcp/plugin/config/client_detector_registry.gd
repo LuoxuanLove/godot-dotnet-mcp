@@ -24,8 +24,14 @@ func get_supported_client_ids() -> PackedStringArray:
 		"trae",
 		"codex_desktop",
 		"codex",
+		"gemini",
 		"opencode_desktop",
-		"opencode"
+		"opencode",
+		"windsurf",
+		"cline",
+		"roo_code",
+		"qwen",
+		"cherry_studio"
 	])
 
 
@@ -37,8 +43,14 @@ func detect_all(running_processes: PackedStringArray) -> Dictionary:
 		"trae": _detect_config_client("trae", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
 		"codex_desktop": _detect_executable_client("codex_desktop", running_processes, false),
 		"codex": _detect_executable_client("codex", running_processes, true),
+		"gemini": _detect_executable_client("gemini", running_processes, true),
 		"opencode_desktop": _detect_config_client("opencode_desktop", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
-		"opencode": _detect_executable_client("opencode", running_processes, false)
+		"opencode": _detect_executable_client("opencode", running_processes, false),
+		"windsurf": _detect_config_client("windsurf", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, true),
+		"cline": _detect_config_client("cline", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
+		"roo_code": _detect_config_client("roo_code", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
+		"qwen": _detect_executable_client("qwen", running_processes, true),
+		"cherry_studio": _detect_executable_client("cherry_studio", running_processes, false)
 	}
 
 
@@ -91,7 +103,21 @@ func _resolve_config_path(client_id: String) -> String:
 			return "C:/Users/Test/Trae/config.json"
 		"codex_desktop":
 			return "C:/Users/Test/Codex/config.json"
+		"gemini":
+			return "C:/Users/Test/.gemini/settings.json"
 		"opencode_desktop":
 			return "C:/Users/Test/.opencode/config.json"
+		"opencode":
+			return "C:/Users/Test/.config/opencode/opencode.json"
+		"windsurf":
+			return "C:/Users/Test/.codeium/windsurf/mcp_config.json"
+		"cline":
+			return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+		"roo_code":
+			return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"
+		"qwen":
+			return "C:/Users/Test/.qwen/settings.json"
+		"cherry_studio":
+			return "C:/Users/Test/AppData/Roaming/CherryStudio"
 		_:
 			return ""

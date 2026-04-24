@@ -65,7 +65,12 @@ func detect_all(force_refresh: bool = false, include_slow_checks: bool = false) 
 		"codex_desktop": _detect_codex_desktop(running_processes),
 		"codex": _detect_codex(running_processes),
 		"opencode_desktop": _detect_opencode_desktop(running_processes),
-		"opencode": _detect_opencode(running_processes)
+		"opencode": _detect_opencode(running_processes),
+		"windsurf": _detect_windsurf(running_processes),
+		"cline": _detect_config_file_client("cline", ConfigPathsScript.get_cline_config_path()),
+		"roo_code": _detect_config_file_client("roo_code", ConfigPathsScript.get_roo_config_path()),
+		"qwen": _detect_qwen(running_processes),
+		"cherry_studio": _detect_cherry_studio(running_processes)
 	}
 	_cached_all_includes_slow_checks = requested_slow_checks
 	_allow_slow_checks = false
@@ -410,6 +415,116 @@ func _detect_opencode(running_processes: PackedStringArray = PackedStringArray()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
 	if not str(resolved.get("path", "")).is_empty() and config_supported:
+		result["status"] = STATUS_READY
+	elif config_supported:
+		result["status"] = STATUS_CONFIG_ONLY
+	else:
+		result["status"] = STATUS_MISSING
+	return result
+
+
+func _detect_windsurf(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = ConfigPathsScript.get_windsurf_config_path()
+	var resolved = _resolve_executable_path(
+		"windsurf",
+		[
+			"%s/Windsurf/Windsurf.exe" % _get_local_app_data_root(),
+			"%s/Programs/Windsurf/Windsurf.exe" % _get_local_app_data_root(),
+			"%s/Windsurf/Windsurf.exe" % _get_program_files_root(),
+			"%s/Windsurf/Windsurf.exe" % _get_secondary_program_files_root()
+		],
+		["windsurf"]
+	)
+	var result = _build_common_result(
+		"windsurf",
+		resolved,
+		_build_runtime_state(str(resolved.get("path", "")), ["windsurf.exe"], running_processes),
+		_inspect_config_entry(config_path)
+	)
+	return _finish_config_file_result(result, config_path, not str(resolved.get("path", "")).is_empty())
+
+
+func _detect_qwen(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = _get_qwen_config_path_for_scope()
+	var resolved = _resolve_executable_path(
+		"qwen",
+		[
+			"%s/npm/qwen.cmd" % _get_app_data_root(),
+			"%s/npm/qwen" % _get_app_data_root(),
+			"%s/.local/bin/qwen" % _get_home_root()
+		],
+		["qwen"]
+	)
+	var result = _build_common_result(
+		"qwen",
+		resolved,
+		_build_runtime_state(str(resolved.get("path", "")), [], running_processes),
+		_inspect_config_entry(config_path)
+	)
+	result["config_path"] = config_path
+	result["write_supported"] = _can_prepare_file_path(config_path)
+	result["auto_add_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["path_pick_supported"] = true
+	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
+	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else (STATUS_CONFIG_ONLY if bool(result.get("write_supported", false)) else STATUS_MISSING)
+	return result
+
+
+func _get_qwen_config_path_for_scope() -> String:
+	if _current_cli_scope == "project":
+		var project_root = ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/")
+		return ConfigPathsScript.get_qwen_project_config_path(project_root)
+	return ConfigPathsScript.get_qwen_config_path()
+
+
+func _detect_cherry_studio(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = ConfigPathsScript.get_cherry_studio_config_hint_path()
+	var resolved = _resolve_executable_path(
+		"cherry_studio",
+		[
+			"%s/Cherry Studio/Cherry Studio.exe" % _get_local_app_data_root(),
+			"%s/Programs/Cherry Studio/Cherry Studio.exe" % _get_local_app_data_root(),
+			"%s/Cherry Studio/Cherry Studio.exe" % _get_program_files_root(),
+			"%s/Cherry Studio/Cherry Studio.exe" % _get_secondary_program_files_root()
+		],
+		["cherry-studio", "cherrystudio"]
+	)
+	var result = _build_common_result(
+		"cherry_studio",
+		resolved,
+		_build_runtime_state(str(resolved.get("path", "")), ["cherry studio.exe", "cherry-studio.exe"], running_processes),
+		{"status": ENTRY_DEFERRED, "has_server_entry": false, "deferred": true}
+	)
+	result["config_path"] = config_path
+	result["write_supported"] = false
+	result["auto_add_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["path_pick_supported"] = true
+	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
+	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_CONFIG_ONLY
+	return result
+
+
+func _detect_config_file_client(client_id: String, config_path: String) -> Dictionary:
+	var result = _build_common_result(
+		client_id,
+		{},
+		{"status": RUNTIME_UNKNOWN, "is_running": false},
+		_inspect_config_entry(config_path)
+	)
+	return _finish_config_file_result(result, config_path, false)
+
+
+func _finish_config_file_result(result: Dictionary, config_path: String, has_executable: bool) -> Dictionary:
+	var config_supported = _can_prepare_file_path(config_path)
+	result["config_path"] = config_path
+	result["write_supported"] = config_supported
+	result["auto_add_supported"] = false
+	result["launch_supported"] = has_executable
+	result["path_pick_supported"] = has_executable
+	result["path_clear_supported"] = bool(result.get("has_manual_path", false))
+	if has_executable and config_supported:
 		result["status"] = STATUS_READY
 	elif config_supported:
 		result["status"] = STATUS_CONFIG_ONLY
