@@ -61,7 +61,7 @@ Then follow steps 1-5 above.
 ## Requirements
 
 - Godot `4.6+` with .NET support (Mono/.NET build)
-- An MCP client such as Claude Code, Codex CLI, Gemini CLI, Claude Desktop, or Cursor
+- An MCP client such as Claude Code, Codex CLI, Gemini CLI, OpenCode, Qwen Code, Claude Desktop, Cursor, Trae, Windsurf, Cline, Roo Code, or Cherry Studio
 
 ## Quick Start
 
@@ -72,7 +72,10 @@ The plugin is required for live editor tools:
 - `system_project_state`
 - `system_help`
 - `system_editor_state`
+- `system_project_files`
 - `system_runtime_diagnose`
+- `system_scene_tree`
+- `system_scene_patch`
 - `system_scene_analyze`
 - `system_script_analyze`
 - `system_bindings_audit`

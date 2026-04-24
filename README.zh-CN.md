@@ -61,7 +61,7 @@ addons/godot_dotnet_mcp
 ## 环境要求
 
 - Godot `4.6+`（需 .NET 支持，即 Mono/.NET build）
-- 可接入的 MCP 客户端，例如 Claude Code、Codex CLI、Gemini CLI、Claude Desktop 或 Cursor
+- 可接入的 MCP 客户端，例如 Claude Code、Codex CLI、Gemini CLI、OpenCode、Qwen Code、Claude Desktop、Cursor、Trae、Windsurf、Cline、Roo Code 或 Cherry Studio
 
 ## 快速开始
 
@@ -72,7 +72,10 @@ addons/godot_dotnet_mcp
 - `system_project_state`
 - `system_help`
 - `system_editor_state`
+- `system_project_files`
 - `system_runtime_diagnose`
+- `system_scene_tree`
+- `system_scene_patch`
 - `system_scene_analyze`
 - `system_script_analyze`
 - `system_bindings_audit`
