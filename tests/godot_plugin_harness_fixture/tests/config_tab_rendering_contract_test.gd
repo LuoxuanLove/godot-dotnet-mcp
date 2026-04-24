@@ -84,7 +84,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 				"id": "cursor",
 				"name_key": "config_client_cursor",
 				"summary_text": "Desktop client summary",
-				"install_status_text": "Ready",
+				"install_status_text": "Installed to\nC:/Users/Test/AppData/Roaming/Cursor/User/mcp.json",
 				"path": "C:/Users/Test/AppData/Roaming/Cursor/User/mcp.json",
 				"content": "{\"mcpServers\":{}}",
 				"primary_action_label_key": "config_client_action_apply",
@@ -106,6 +106,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Config tab should not create CLI client cards when the selected platform belongs to the desktop group.")
 
 	var desktop_card = desktop_clients.get_child(0)
+	var labels = desktop_card.find_children("*", "Label", true, false)
+	if _find_label_containing(labels, "Installed to") == null or _find_label_containing(labels, "C:/Users/Test/AppData/Roaming/Cursor/User/mcp.json") == null:
+		return _failure("Config tab should visibly render the concrete 'Installed to <path>' status for installed clients.")
 	var buttons = desktop_card.find_children("*", "Button", true, false)
 	if buttons.size() < 4:
 		return _failure("Config tab client card should render action buttons for apply/write/remove/copy.")
@@ -155,6 +158,14 @@ func _find_button(buttons: Array, text: String) -> Button:
 		var button = button_variant as Button
 		if button != null and button.text == text:
 			return button
+	return null
+
+
+func _find_label_containing(labels: Array, text: String) -> Label:
+	for label_variant in labels:
+		var label = label_variant as Label
+		if label != null and label.text.find(text) != -1:
+			return label
 	return null
 
 

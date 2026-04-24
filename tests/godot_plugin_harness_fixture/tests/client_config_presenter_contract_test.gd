@@ -10,6 +10,11 @@ class FakeLocalization extends RefCounted:
 			"config_client_claude_desktop": "Claude Desktop",
 			"config_client_cursor": "Cursor",
 			"config_client_gemini": "Gemini CLI",
+			"config_client_qwen": "Qwen Code CLI",
+			"config_client_windsurf": "Windsurf",
+			"config_client_cline": "Cline",
+			"config_client_roo_code": "Roo Code",
+			"config_client_cherry_studio": "Cherry Studio",
 			"config_client_codex": "Codex CLI",
 			"config_transport_http_fallback": "HTTP",
 			"config_client_write_path_label": "Config Write Location",
@@ -37,15 +42,24 @@ class FakeLocalization extends RefCounted:
 			"config_client_path_source_store": "Store",
 			"config_client_path_source_missing": "Missing",
 			"config_client_action_add": "One-Click Add",
+			"config_client_action_open_project": "Open Project",
+			"config_client_action_open_app": "Open App",
 			"tool_action_remove_name": "Remove",
 			"scope_user": "User (Global)",
 			"scope_project": "Project (Current Only)",
 			"config_client_cursor_desc": "Cursor description",
 			"config_client_claude_code_desc": "Claude Code description",
 			"config_client_codex_desc": "Codex description",
+			"config_client_qwen_desc": "Qwen description",
+			"config_client_windsurf_desc": "Windsurf description",
+			"config_client_cline_desc": "Cline description",
+			"config_client_roo_code_desc": "Roo Code description",
+			"config_client_cherry_studio_desc": "Cherry Studio description",
 			"config_client_cursor_ready_msg": "Cursor ready",
 			"config_client_claude_code_ready_msg": "Claude ready",
-			"config_client_codex_ready_msg": "Codex ready"
+			"config_client_codex_ready_msg": "Codex ready",
+			"config_client_qwen_ready_msg": "Qwen ready",
+			"config_client_windsurf_ready_msg": "Windsurf ready"
 		}
 		return str(texts.get(key, key))
 
@@ -60,10 +74,27 @@ class FakeConfigService extends RefCounted:
 	func get_trae_config_path() -> String:
 		return "C:/Users/Test/AppData/Roaming/Trae/User/mcp.json"
 
+	func get_windsurf_config_path() -> String:
+		return "C:/Users/Test/.codeium/windsurf/mcp_config.json"
+
+	func get_cline_config_path() -> String:
+		return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+
+	func get_roo_config_path() -> String:
+		return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"
+
+	func get_cherry_studio_config_hint_path() -> String:
+		return "C:/Users/Test/AppData/Roaming/CherryStudio"
+
 	func get_gemini_config_path(scope: String = "user") -> String:
 		if scope == "project":
 			return "E:/Project/Test/.gemini/settings.json"
 		return "C:/Users/Test/.gemini/settings.json"
+
+	func get_qwen_config_path(scope: String = "user") -> String:
+		if scope == "project":
+			return "E:/Project/Test/.qwen/settings.json"
+		return "C:/Users/Test/.qwen/settings.json"
 
 	func get_claude_code_command(_scope: String, host: String, port: int) -> String:
 		return "claude mcp add --transport http godot-mcp http://%s:%d/mcp" % [host, port]
@@ -73,6 +104,9 @@ class FakeConfigService extends RefCounted:
 
 	func get_gemini_command(scope: String, host: String, port: int) -> String:
 		return "gemini mcp add --transport http --scope %s godot-mcp http://%s:%d/mcp" % [scope, host, port]
+
+	func get_qwen_command(scope: String, host: String, port: int) -> String:
+		return "qwen mcp add --transport http --scope %s godot-mcp http://%s:%d/mcp" % [scope, host, port]
 
 	func get_opencode_config_path() -> String:
 		return "C:/Users/Test/.config/opencode/opencode.json"
@@ -124,8 +158,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		config_service
 	)
 	var cursor_model: Dictionary = desktop_models[1]
+	if desktop_models.size() != 9:
+		return _failure("Presenter should expose all supported desktop clients in the config page model.")
 	if str(cursor_model.get("install_status_text", "")).find("C:/Users/Test/.cursor/mcp.json") == -1:
 		return _failure("Desktop client status should surface the concrete config path once godot-mcp is installed.")
+	var windsurf_model: Dictionary = desktop_models[5]
+	if str(windsurf_model.get("name_key", "")) != "config_client_windsurf":
+		return _failure("Presenter should include Windsurf in the desktop client list.")
 
 	var cli_models = presenter.build_cli_client_models(
 		{"host": "127.0.0.1", "port": 3000},
@@ -163,12 +202,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"path_clear_supported": false,
 				"runtime_status": {"status": "unknown"},
 				"executable_path": "C:/Tools/gemini.cmd"
+			},
+			"qwen": {
+				"status": "ready",
+				"config_path": "E:/Project/Test/.qwen/settings.json",
+				"config_entry_status": {"status": "present"},
+				"auto_add_supported": true,
+				"launch_supported": true,
+				"path_pick_supported": true,
+				"path_clear_supported": false,
+				"runtime_status": {"status": "unknown"},
+				"executable_path": "C:/Tools/qwen.cmd"
 			}
 		},
 		localization,
 		config_service
 	)
 	var claude_model: Dictionary = cli_models[0]
+	if cli_models.size() != 5:
+		return _failure("Presenter should expose all supported CLI clients in the config page model.")
 	if str(claude_model.get("install_status_text", "")).find("Project (Current Only)") == -1:
 		return _failure("Claude Code status should surface the active install scope when godot-mcp is already installed.")
 	if str(claude_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
@@ -185,6 +237,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Gemini CLI should launch through the terminal flow, not the desktop-app flow.")
 	if str(gemini_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
 		return _failure("Gemini CLI should switch the primary action to Remove when godot-mcp is already installed.")
+	var qwen_model: Dictionary = cli_models[4]
+	if str(qwen_model.get("install_status_text", "")).find("E:/Project/Test/.qwen/settings.json") == -1:
+		return _failure("Qwen Code CLI status should surface the active config file path once godot-mcp is already installed.")
+	if str(qwen_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
+		return _failure("Qwen Code CLI should switch the primary action to Remove when godot-mcp is already installed.")
 
 	return {
 		"name": "client_config_presenter_contracts",

@@ -9,6 +9,7 @@ class FakeLocalization extends RefCounted:
 			"config_client_claude_code": "Claude Code CLI",
 			"config_client_codex": "Codex CLI",
 			"config_client_gemini": "Gemini CLI",
+			"config_client_qwen": "Qwen Code CLI",
 			"config_client_claude_desktop": "Claude Desktop",
 			"msg_client_action_missing_executable": "Missing executable for %s",
 			"msg_client_action_success": "%s connected successfully.",
@@ -173,6 +174,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if gemini_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
 		return _failure("Gemini one-click removal should use `gemini mcp remove godot-mcp`.")
 
+	recorder.statuses["qwen"] = {
+		"status": "ready",
+		"executable_path": "C:/Tools/qwen.cmd",
+		"config_entry_status": {"status": "missing_server"}
+	}
+	action_service.handle_config_client_action_requested("qwen")
+	var qwen_add = config_service.cli_calls[6]
+	if qwen_add["arguments"] != ["mcp", "add", "--transport", "http", "--scope", "user", "godot-mcp", "http://127.0.0.1:3000/mcp"]:
+		return _failure("Qwen Code one-click install should use the documented `qwen mcp add --transport http --scope ...` arguments.")
+
+	recorder.statuses["qwen"]["config_entry_status"] = {"status": "present"}
+	action_service.handle_config_client_action_requested("qwen")
+	var qwen_remove = config_service.cli_calls[7]
+	if qwen_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
+		return _failure("Qwen Code one-click removal should use `qwen mcp remove godot-mcp`.")
+
 	recorder.statuses["claude_desktop"] = {
 		"status": "ready",
 		"executable_path": "C:/Apps/Claude/Claude.exe"
@@ -198,7 +215,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"success": true,
 		"error": "",
 		"details": {
-			"cli_call_count": config_service.cli_calls.size(),
+		"cli_call_count": config_service.cli_calls.size(),
 			"desktop_launch_count": config_service.desktop_launches.size(),
 			"message_count": recorder.messages.size()
 		}

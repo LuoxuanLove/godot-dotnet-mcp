@@ -34,6 +34,54 @@ func build_desktop_client_models(
 			"path": config_service.get_trae_config_path(),
 			"content": _build_desktop_client_config_content(transport, config_service),
 			"writeable": true
+		}, client_install_statuses, localization),
+		_build_client_ui_model("codex_desktop", {
+			"id": "codex_desktop",
+			"name_key": "config_client_codex_desktop",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("codex_desktop", transport), transport, localization),
+			"path": "",
+			"content": "",
+			"writeable": false
+		}, client_install_statuses, localization),
+		_build_client_ui_model("opencode_desktop", {
+			"id": "opencode_desktop",
+			"name_key": "config_client_opencode_desktop",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("opencode_desktop", transport), transport, localization),
+			"path": config_service.get_opencode_config_path(),
+			"content": "",
+			"writeable": false
+		}, client_install_statuses, localization),
+		_build_client_ui_model("windsurf", {
+			"id": "windsurf",
+			"name_key": "config_client_windsurf",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("windsurf", transport), transport, localization),
+			"path": config_service.get_windsurf_config_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": true
+		}, client_install_statuses, localization),
+		_build_client_ui_model("cline", {
+			"id": "cline",
+			"name_key": "config_client_cline",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("cline", transport), transport, localization),
+			"path": config_service.get_cline_config_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": true
+		}, client_install_statuses, localization),
+		_build_client_ui_model("roo_code", {
+			"id": "roo_code",
+			"name_key": "config_client_roo_code",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("roo_code", transport), transport, localization),
+			"path": config_service.get_roo_config_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": true
+		}, client_install_statuses, localization),
+		_build_client_ui_model("cherry_studio", {
+			"id": "cherry_studio",
+			"name_key": "config_client_cherry_studio",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("cherry_studio", transport), transport, localization),
+			"path": config_service.get_cherry_studio_config_hint_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": false
 		}, client_install_statuses, localization)
 	]
 
@@ -83,6 +131,16 @@ func build_cli_client_models(
 			"path": config_service.get_opencode_config_path(),
 			"content": _build_opencode_cli_content(transport, config_service),
 			"writeable": true,
+			"launch_action_label_key": "config_client_action_open_terminal"
+		}, client_install_statuses, localization),
+		_build_client_ui_model("qwen", {
+			"id": "qwen",
+			"name_key": "config_client_qwen",
+			"cli_scope": current_cli_scope,
+			"summary_text": _build_client_summary_text(_get_cli_summary_key("qwen", transport), transport, localization),
+			"path": config_service.get_qwen_config_path(current_cli_scope),
+			"content": _build_qwen_cli_content(current_cli_scope, transport, config_service),
+			"primary_action_label_key": "config_client_action_add",
 			"launch_action_label_key": "config_client_action_open_terminal"
 		}, client_install_statuses, localization)
 	]
@@ -250,6 +308,19 @@ func _build_opencode_cli_content(transport: Dictionary, config_service) -> Strin
 	)
 
 
+func _build_qwen_cli_content(current_cli_scope: String, transport: Dictionary, config_service) -> String:
+	if str(transport.get("mode", "")) == "stdio":
+		return config_service.get_command_config(
+			str(transport.get("command", "")),
+			Array(transport.get("args", []))
+		)
+	return config_service.get_qwen_command(
+		current_cli_scope,
+		str(transport.get("host", "127.0.0.1")),
+		int(transport.get("port", 3000))
+	)
+
+
 func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
 	if str(transport.get("mode", "")) == "stdio":
 		match client_id:
@@ -261,6 +332,8 @@ func _get_cli_summary_key(client_id: String, transport: Dictionary) -> String:
 				return "config_client_gemini_stdio_desc"
 			"opencode":
 				return "config_client_opencode_stdio_desc"
+			"qwen":
+				return "config_client_qwen_stdio_desc"
 	return "config_client_%s_desc" % client_id
 
 
@@ -273,6 +346,14 @@ func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> Strin
 				return "config_client_cursor_stdio_desc"
 			"trae":
 				return "config_client_trae_stdio_desc"
+			"windsurf":
+				return "config_client_windsurf_stdio_desc"
+			"cline":
+				return "config_client_cline_stdio_desc"
+			"roo_code":
+				return "config_client_roo_code_stdio_desc"
+			"cherry_studio":
+				return "config_client_cherry_studio_stdio_desc"
 			"gemini":
 				return "config_client_gemini_stdio_desc"
 	return "config_client_%s_desc" % client_id
@@ -316,18 +397,18 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		localization
 	)
 	if not executable_path.is_empty():
-		if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode":
+		if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen":
 			model["detail_label_text"] = localization.get_text("config_client_cli_entry_label")
 			model["explanation_text"] = localization.get_text("config_client_cli_detected_explainer")
 		else:
 			model["detail_label_text"] = localization.get_text("config_client_program_entry_label")
 			model["explanation_text"] = localization.get_text("config_client_desktop_path_explainer")
 		model["detail_value"] = executable_path
-	elif client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode":
+	elif client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen":
 		model["detail_label_text"] = localization.get_text("config_client_cli_path_label")
 		model["detail_value"] = executable_path
 		model["explanation_text"] = localization.get_text("config_client_cli_missing_explainer")
-	elif client_id == "claude_desktop" or client_id == "cursor" or client_id == "trae":
+	elif client_id == "claude_desktop" or client_id == "cursor" or client_id == "trae" or client_id == "windsurf" or client_id == "cline" or client_id == "roo_code" or client_id == "cherry_studio":
 		model["explanation_text"] = localization.get_text("config_client_desktop_write_only_explainer")
 	else:
 		model["explanation_text"] = localization.get_text("config_client_pick_path_explainer")
@@ -337,17 +418,17 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 
 	model["launch_supported"] = bool(detection.get("launch_supported", false))
 	model["launch_enabled"] = bool(detection.get("launch_supported", false))
-	if client_id == "cursor" or client_id == "trae":
+	if client_id == "cursor" or client_id == "trae" or client_id == "windsurf":
 		model["launch_action_label_key"] = "config_client_action_open_project"
-	elif client_id == "claude_code" or client_id == "codex" or client_id == "gemini" or client_id == "opencode":
+	elif client_id == "claude_code" or client_id == "codex" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen":
 		model["launch_action_label_key"] = "config_client_action_open_terminal"
-	elif client_id == "claude_desktop":
+	elif client_id == "claude_desktop" or client_id == "codex_desktop" or client_id == "opencode_desktop" or client_id == "cherry_studio":
 		model["launch_action_label_key"] = "config_client_action_open_app"
 
 	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
 	model["path_pick_enabled"] = bool(detection.get("path_pick_supported", false))
 	model["path_pick_action_label_key"] = "config_client_action_reselect_path" if has_manual_path else (
-		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode" else "config_client_action_choose_program_path"
+		"config_client_action_choose_cli_path" if client_id == "codex" or client_id == "claude_code" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen" else "config_client_action_choose_program_path"
 	)
 	model["path_clear_supported"] = bool(detection.get("path_clear_supported", false))
 	model["path_clear_enabled"] = bool(detection.get("path_clear_supported", false))
@@ -358,7 +439,7 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		model["open_config_file_enabled"] = FileAccess.file_exists(config_path)
 
 	match client_id:
-		"claude_desktop", "cursor", "trae", "opencode":
+		"claude_desktop", "cursor", "trae", "opencode", "windsurf", "cline", "roo_code":
 			model["writeable"] = bool(detection.get("write_supported", false))
 			model["remove_supported"] = bool(detection.get("write_supported", false))
 			model["remove_enabled"] = entry_status == "present"
@@ -373,6 +454,11 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 			if not bool(detection.get("auto_add_supported", false)):
 				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
 		"gemini":
+			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
+			model["primary_action_label_key"] = "tool_action_remove_name" if entry_status == "present" else "config_client_action_add"
+			if not bool(detection.get("auto_add_supported", false)):
+				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
+		"qwen":
 			model["primary_action_enabled"] = bool(detection.get("auto_add_supported", false))
 			model["primary_action_label_key"] = "tool_action_remove_name" if entry_status == "present" else "config_client_action_add"
 			if not bool(detection.get("auto_add_supported", false)):
