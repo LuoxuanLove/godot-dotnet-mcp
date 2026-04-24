@@ -1,12 +1,12 @@
 @tool
 extends RefCounted
 
-## System implementation: scene_validate, scene_analyze, scene_patch
+## System implementation: scene_validate, scene_analyze, scene_tree, scene_patch
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
-const HANDLED_TOOLS := ["scene_validate", "scene_analyze", "scene_patch"]
+const HANDLED_TOOLS := ["scene_validate", "scene_analyze", "scene_tree", "scene_patch"]
 
 
 func handles(tool_name: String) -> bool:
@@ -35,6 +35,34 @@ func get_tools() -> Array[Dictionary]:
 					"scene": {"type": "string", "description": "Scene path (res://..., .tscn)"}
 				},
 				"required": ["scene"]
+			}
+		},
+		{
+			"name": "scene_tree",
+			"description": "SCENE TREE: High-level edited-scene tree operations. Actions: get_tree, get_selected, select, add_node, remove_node, rename_node, reparent_node, reorder_node, attach_script, set_property, get_property, set_transform. Use this for common Scene dock modifications before falling back to lower-level node tools.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["get_tree", "get_selected", "select", "add_node", "remove_node", "rename_node", "reparent_node", "reorder_node", "attach_script", "set_property", "get_property", "set_transform"], "description": "Scene tree action"},
+					"depth": {"type": "integer", "description": "Tree depth for get_tree"},
+					"include_internal": {"type": "boolean", "description": "Include internal nodes for get_tree"},
+					"paths": {"type": "array", "items": {"type": "string"}, "description": "Node paths for select"},
+					"node_path": {"type": "string", "description": "Target node path"},
+					"parent_path": {"type": "string", "description": "Parent node path for add_node"},
+					"type": {"type": "string", "description": "Node type for add_node"},
+					"name": {"type": "string", "description": "Node name for add_node"},
+					"new_name": {"type": "string", "description": "New node name"},
+					"new_parent": {"type": "string", "description": "New parent node path"},
+					"index": {"type": "integer", "description": "Sibling index for reorder_node"},
+					"script": {"type": "string", "description": "Script path for attach_script"},
+					"property": {"type": "string", "description": "Property name"},
+					"value": {},
+					"x": {"type": "number"},
+					"y": {"type": "number"},
+					"z": {"type": "number"},
+					"global": {"type": "boolean", "description": "Use global coordinates for set_transform"}
+				},
+				"required": ["action"]
 			}
 		},
 		{
@@ -77,6 +105,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"scene_validate": return _execute_scene_validate(args)
 		"scene_analyze":  return _execute_scene_analyze(args)
+		"scene_tree":     return _execute_scene_tree(args)
 		"scene_patch":    return _execute_scene_patch(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
 
@@ -89,25 +118,97 @@ func _apply_scene_patch_op(op: Dictionary) -> Dictionary:
 		"add_node":
 			return bridge.call_atomic("node_lifecycle", {"action": "create", "parent_path": str(op.get("parent_path", ".")), "type": str(op.get("type", "Node")), "name": str(op.get("name", ""))})
 		"remove_node":
-			return bridge.call_atomic("node_lifecycle", {"action": "delete", "node_path": str(op.get("node_path", ""))})
+			return bridge.call_atomic("node_lifecycle", {"action": "delete", "path": str(op.get("node_path", ""))})
 		"set_property":
-			var set_args: Dictionary = {"action": "set", "node_path": str(op.get("node_path", "")), "property": str(op.get("property", "")), "value": op.get("value", null)}
+			var set_args: Dictionary = {"action": "set", "path": str(op.get("node_path", "")), "property": str(op.get("property", "")), "value": op.get("value", null)}
 			return bridge.call_atomic("node_property", set_args)
 		"attach_script":
 			return bridge.call_atomic("node_lifecycle", {"action": "attach_script", "node_path": str(op.get("node_path", "")), "script_path": str(op.get("script", ""))})
 		"reparent_node":
-			return bridge.call_atomic("node_hierarchy", {"action": "reparent", "node_path": str(op.get("node_path", "")), "new_parent": str(op.get("new_parent", ""))})
+			return bridge.call_atomic("node_hierarchy", {"action": "reparent", "path": str(op.get("node_path", "")), "new_parent": str(op.get("new_parent", ""))})
 		"rename_node":
 			return bridge.call_atomic("node_lifecycle", {"action": "rename", "node_path": str(op.get("node_path", "")), "new_name": str(op.get("new_name", ""))})
 		"update_property":
 			var prop := str(op.get("property", ""))
 			var node_path := str(op.get("node_path", ""))
-			var read_result: Dictionary = bridge.call_atomic("node_property", {"action": "get", "node_path": node_path, "property": prop})
+			var read_result: Dictionary = bridge.call_atomic("node_property", {"action": "get", "path": node_path, "property": prop})
 			if not bool(read_result.get("success", false)):
 				return bridge.error("Property '%s' does not exist on node '%s'" % [prop, node_path])
-			return bridge.call_atomic("node_property", {"action": "set", "node_path": node_path, "property": prop, "value": op.get("value", null)})
+			return bridge.call_atomic("node_property", {"action": "set", "path": node_path, "property": prop, "value": op.get("value", null)})
 		_:
 			return bridge.error("Unknown scene patch op: %s" % op_name)
+
+
+func _execute_scene_tree(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"get_tree":
+			return bridge.call_atomic("scene_hierarchy", {
+				"action": "get_tree",
+				"depth": int(args.get("depth", -1)),
+				"include_internal": bool(args.get("include_internal", false))
+			})
+		"get_selected":
+			return bridge.call_atomic("scene_hierarchy", {"action": "get_selected"})
+		"select":
+			return bridge.call_atomic("scene_hierarchy", {"action": "select", "paths": args.get("paths", [])})
+		"add_node":
+			return bridge.call_atomic("node_lifecycle", {
+				"action": "create",
+				"parent_path": str(args.get("parent_path", "")),
+				"type": str(args.get("type", "Node")),
+				"name": str(args.get("name", ""))
+			})
+		"remove_node":
+			return bridge.call_atomic("node_lifecycle", {"action": "delete", "path": str(args.get("node_path", ""))})
+		"rename_node":
+			return bridge.call_atomic("node_lifecycle", {
+				"action": "rename",
+				"node_path": str(args.get("node_path", "")),
+				"new_name": str(args.get("new_name", ""))
+			})
+		"reparent_node":
+			return bridge.call_atomic("node_hierarchy", {
+				"action": "reparent",
+				"path": str(args.get("node_path", "")),
+				"new_parent": str(args.get("new_parent", ""))
+			})
+		"reorder_node":
+			return bridge.call_atomic("node_hierarchy", {
+				"action": "reorder",
+				"path": str(args.get("node_path", "")),
+				"index": int(args.get("index", 0))
+			})
+		"attach_script":
+			return bridge.call_atomic("node_lifecycle", {
+				"action": "attach_script",
+				"node_path": str(args.get("node_path", "")),
+				"script_path": str(args.get("script", ""))
+			})
+		"set_property":
+			return bridge.call_atomic("node_property", {
+				"action": "set",
+				"path": str(args.get("node_path", "")),
+				"property": str(args.get("property", "")),
+				"value": args.get("value", null)
+			})
+		"get_property":
+			return bridge.call_atomic("node_property", {
+				"action": "get",
+				"path": str(args.get("node_path", "")),
+				"property": str(args.get("property", ""))
+			})
+		"set_transform":
+			return bridge.call_atomic("node_transform", {
+				"action": "set_position",
+				"path": str(args.get("node_path", "")),
+				"x": args.get("x", 0.0),
+				"y": args.get("y", 0.0),
+				"z": args.get("z", 0.0),
+				"global": bool(args.get("global", false))
+			})
+		_:
+			return bridge.error("Unknown scene_tree action: %s" % action)
 
 
 # --- tool implementations ---
