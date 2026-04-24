@@ -15,6 +15,7 @@ const ENTRY_MISSING_SERVER := "missing_server"
 const ENTRY_INVALID_JSON := "invalid_json"
 const ENTRY_INCOMPATIBLE_ROOT := "incompatible_root"
 const ENTRY_INCOMPATIBLE_SERVERS := "incompatible_mcp_servers"
+const ENTRY_DEFERRED := "deferred"
 const RUNTIME_RUNNING := "running"
 const RUNTIME_NOT_RUNNING := "not_running"
 const RUNTIME_UNKNOWN := "unknown"
@@ -22,8 +23,10 @@ const CACHE_TTL_MS := 5000
 
 var _cached_all: Dictionary = {}
 var _cache_deadline_msec := 0
+var _cached_all_includes_slow_checks := false
 var _manual_paths: Dictionary = {}
 var _current_cli_scope := "user"
+var _allow_slow_checks := false
 
 
 func configure(settings: Dictionary) -> void:
@@ -44,11 +47,14 @@ func configure(settings: Dictionary) -> void:
 	invalidate_cache()
 
 
-func detect_all(force_refresh: bool = false) -> Dictionary:
+func detect_all(force_refresh: bool = false, include_slow_checks: bool = false) -> Dictionary:
 	var now = Time.get_ticks_msec()
+	var requested_slow_checks := include_slow_checks or force_refresh
 	if not force_refresh and not _cached_all.is_empty() and now < _cache_deadline_msec:
-		return _cached_all.duplicate(true)
+		if not requested_slow_checks or _cached_all_includes_slow_checks:
+			return _cached_all.duplicate(true)
 
+	_allow_slow_checks = requested_slow_checks
 	var running_processes = _collect_running_process_names()
 	_cached_all = {
 		"claude_desktop": _detect_claude_desktop(running_processes),
@@ -61,6 +67,8 @@ func detect_all(force_refresh: bool = false) -> Dictionary:
 		"opencode_desktop": _detect_opencode_desktop(running_processes),
 		"opencode": _detect_opencode(running_processes)
 	}
+	_cached_all_includes_slow_checks = requested_slow_checks
+	_allow_slow_checks = false
 	_cache_deadline_msec = now + CACHE_TTL_MS
 	return _cached_all.duplicate(true)
 
@@ -76,6 +84,7 @@ func detect_client(client_id: String) -> Dictionary:
 func invalidate_cache() -> void:
 	_cached_all.clear()
 	_cache_deadline_msec = 0
+	_cached_all_includes_slow_checks = false
 
 
 func _detect_claude_desktop(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
@@ -431,6 +440,12 @@ func _build_common_result(client_id: String, resolved: Dictionary, runtime_state
 
 
 func _inspect_cli_server_entry(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	if not _allow_slow_checks:
+		return {
+			"status": ENTRY_DEFERRED,
+			"has_server_entry": false,
+			"deferred": true
+		}
 	if executable_path.is_empty():
 		return {
 			"status": ENTRY_MISSING_SERVER,
@@ -449,6 +464,13 @@ func _inspect_cli_server_entry(executable_path: String, arguments: PackedStringA
 
 
 func _execute_cli_query(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	if not _allow_slow_checks:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": PackedStringArray(),
+			"message": "Skipped passive CLI query during config page render."
+		}
 	if executable_path.is_empty():
 		return {
 			"success": false,
@@ -547,6 +569,8 @@ func _resolve_executable_path(client_id: String, candidates: Array[String], wher
 
 
 func _collect_appx_package_candidates(package_name: String, relative_paths: Array[String]) -> Array[String]:
+	if not _allow_slow_checks:
+		return []
 	var output: Array = []
 	var command = "Get-AppxPackage -Name '%s' | Sort-Object Version -Descending | Select-Object -ExpandProperty InstallLocation" % [
 		package_name.replace("'", "''")
@@ -577,6 +601,8 @@ func _collect_appx_package_candidates(package_name: String, relative_paths: Arra
 
 
 func _collect_where_paths(command_name: String) -> Array[String]:
+	if not _allow_slow_checks:
+		return []
 	var output: Array = []
 	var exit_code = OS.execute("where.exe", PackedStringArray([command_name]), output, true, false)
 	if exit_code != 0:
@@ -604,6 +630,8 @@ func _collect_existing_candidates(candidates: Array[String]) -> Array[String]:
 
 
 func _collect_running_process_names() -> PackedStringArray:
+	if not _allow_slow_checks:
+		return PackedStringArray()
 	var output: Array = []
 	var exit_code = OS.execute("tasklist.exe", PackedStringArray(["/FO", "CSV", "/NH"]), output, true, false)
 	if exit_code != 0:
@@ -624,6 +652,12 @@ func _collect_running_process_names() -> PackedStringArray:
 
 
 func _build_runtime_state(executable_path: String, image_names: Array[String], running_processes: PackedStringArray) -> Dictionary:
+	if not _allow_slow_checks:
+		return {
+			"status": RUNTIME_UNKNOWN,
+			"is_running": false,
+			"deferred": true
+		}
 	if image_names.is_empty():
 		return {
 			"status": RUNTIME_UNKNOWN,

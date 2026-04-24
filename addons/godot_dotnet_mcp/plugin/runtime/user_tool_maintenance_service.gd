@@ -196,6 +196,16 @@ func _ensure_backup_dir() -> Dictionary:
 	return {"success": true}
 
 
+func _ensure_parent_dir(file_path: String) -> void:
+	var dir_path := file_path.get_base_dir()
+	if dir_path.is_empty():
+		return
+	var global_path := ProjectSettings.globalize_path(dir_path)
+	if DirAccess.dir_exists_absolute(global_path):
+		return
+	DirAccess.make_dir_recursive_absolute(global_path)
+
+
 func _authorization_required(action: String, preview: Dictionary) -> Dictionary:
 	return {
 		"success": false,
@@ -205,6 +215,7 @@ func _authorization_required(action: String, preview: Dictionary) -> Dictionary:
 
 
 func _append_audit(action: String, authorized: bool, success: bool, payload: Dictionary, error_code: String = "", agent_hint: String = "") -> void:
+	_ensure_parent_dir(_audit_log_path)
 	var file = FileAccess.open(_audit_log_path, FileAccess.READ_WRITE)
 	if file == null:
 		file = FileAccess.open(_audit_log_path, FileAccess.WRITE)

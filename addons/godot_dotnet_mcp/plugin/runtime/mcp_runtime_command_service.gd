@@ -3,17 +3,18 @@ extends RefCounted
 class_name MCPRuntimeCommandService
 
 const MCPProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
 var _get_tree := Callable()
 var _get_viewport := Callable()
 var _get_current_scene_path := Callable()
 var _build_runtime_state := Callable()
-var _capture_root_dir := "user://godot_mcp_runtime_captures"
+var _capture_root_dir := MCPUserDataPaths.RUNTIME_CAPTURE_ROOT
 var _max_capture_files_per_session := 24
 var _capture_files_by_session: Dictionary = {}
 
 
-func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: Callable = Callable(), get_current_scene_path_callback: Callable = Callable(), build_runtime_state_callback: Callable = Callable(), capture_root_dir: String = "user://godot_mcp_runtime_captures", max_capture_files_per_session: int = 24) -> void:
+func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: Callable = Callable(), get_current_scene_path_callback: Callable = Callable(), build_runtime_state_callback: Callable = Callable(), capture_root_dir: String = MCPUserDataPaths.RUNTIME_CAPTURE_ROOT, max_capture_files_per_session: int = 24) -> void:
 	_get_tree = get_tree_callback
 	_get_viewport = get_viewport_callback
 	_get_current_scene_path = get_current_scene_path_callback
@@ -91,7 +92,7 @@ func _capture_single_frame_async(session_id: int, args: Dictionary) -> Dictionar
 		return _failure("runtime_capture_failed", "Viewport image is unavailable.")
 
 	var session_key := _session_key(session_id)
-	var capture_dir := "%s/%s" % [_capture_root_dir, session_key]
+	var capture_dir := _resolve_capture_dir(session_key, args)
 	var absolute_capture_dir := ProjectSettings.globalize_path(capture_dir)
 	var mkdir_error := DirAccess.make_dir_recursive_absolute(absolute_capture_dir)
 	if mkdir_error != OK:
@@ -251,6 +252,8 @@ func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
 
 func _await_capture_ready() -> void:
 	await _await_process_frames(1)
+	if DisplayServer.get_name().to_lower() == "headless":
+		return
 	await RenderingServer.frame_post_draw
 
 
@@ -364,6 +367,13 @@ func _build_runtime_state_safe(session_id: int) -> Dictionary:
 
 func _session_key(session_id: int) -> String:
 	return str(session_id) if session_id >= 0 else "unknown"
+
+
+func _resolve_capture_dir(session_key: String, args: Dictionary) -> String:
+	var requested_dir := str(args.get("capture_dir", "")).strip_edges()
+	if requested_dir.is_empty():
+		return "%s/%s" % [_capture_root_dir, session_key]
+	return requested_dir.rstrip("/").rstrip("\\")
 
 
 func _sanitize_capture_label(label: String) -> String:

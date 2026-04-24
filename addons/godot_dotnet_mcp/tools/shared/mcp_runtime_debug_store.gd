@@ -2,8 +2,10 @@
 extends RefCounted
 class_name MCPRuntimeDebugStoreShared
 
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+
 const MAX_EVENTS := 300
-const FALLBACK_FILE_PATH := "user://godot_mcp_runtime_bridge_events.json"
+const FALLBACK_FILE_PATH := MCPUserDataPaths.RUNTIME_EVENTS_PATH
 
 static var _events: Array[Dictionary] = []
 static var _sessions: Dictionary = {}

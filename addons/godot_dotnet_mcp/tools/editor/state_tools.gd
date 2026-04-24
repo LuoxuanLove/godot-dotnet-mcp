@@ -1,6 +1,8 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+
 ## Editor state tools for Godot MCP
 
 
@@ -183,9 +185,10 @@ func _capture_editor_screenshot(ei, args: Dictionary) -> Dictionary:
 		}
 
 	var path := str(args.get("path", ""))
-	var target_path := path.strip_edges()
-	if target_path.is_empty():
-		target_path = "user://godot_mcp_editor_captures/editor_%s.png" % str(Time.get_unix_time_from_system())
+	var target_path := MCPUserDataPaths.normalize_editor_capture_output_path(
+		path,
+		"editor_%s.png" % str(Time.get_unix_time_from_system())
+	)
 	var absolute_path = ProjectSettings.globalize_path(target_path)
 	var dir_error = DirAccess.make_dir_recursive_absolute(absolute_path.get_base_dir())
 	if dir_error != OK:

@@ -2,7 +2,9 @@
 extends RefCounted
 class_name MCPRuntimeFallbackStore
 
-var _fallback_file_path := "user://godot_mcp_runtime_bridge_events.json"
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+
+var _fallback_file_path := MCPUserDataPaths.RUNTIME_EVENTS_PATH
 var _max_stored_events := 300
 var _pending_events: Array[Dictionary] = []
 var _fallback_cache: Array[Dictionary] = []

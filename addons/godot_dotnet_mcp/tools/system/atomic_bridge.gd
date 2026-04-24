@@ -155,7 +155,39 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 	if executor == null or not executor.has_method("execute"):
 		MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
 		return error("Atomic executor not available: %s" % category)
+	_configure_executor(executor, category)
 	return executor.execute(tool_name, args)
+
+
+func _configure_executor(executor, category: String) -> void:
+	var context := _runtime_context.duplicate(true)
+	context["category"] = category
+	var plugin = _resolve_plugin_host(context)
+	if plugin != null:
+		context["plugin_host"] = plugin
+		if not context.has("editor_interface") and plugin.has_method("get_editor_interface"):
+			context["editor_interface"] = plugin.get_editor_interface()
+	if executor.has_method("configure_runtime"):
+		executor.configure_runtime(context.duplicate(true))
+	if executor.has_method("configure_context"):
+		executor.configure_context(context.duplicate(true))
+
+
+func _resolve_plugin_host(context: Dictionary):
+	var plugin = context.get("plugin_host", null)
+	if plugin != null and is_instance_valid(plugin):
+		return plugin
+	var getter = context.get("get_plugin_host", Callable())
+	if getter is Callable and getter.is_valid():
+		plugin = getter.call()
+		if plugin != null and is_instance_valid(plugin):
+			return plugin
+	var server = context.get("server", null)
+	if server != null and is_instance_valid(server) and server.has_method("get_parent"):
+		plugin = server.get_parent()
+		if plugin != null and is_instance_valid(plugin):
+			return plugin
+	return null
 
 
 func extract_data(result: Dictionary) -> Dictionary:

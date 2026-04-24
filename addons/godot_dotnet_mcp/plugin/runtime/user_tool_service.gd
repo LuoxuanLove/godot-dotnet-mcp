@@ -4,6 +4,7 @@ class_name UserToolService
 
 const UserToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_catalog_service.gd")
 const UserToolMaintenanceService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_maintenance_service.gd")
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
@@ -20,7 +21,7 @@ func _init() -> void:
 	_maintenance_service.configure(
 		CUSTOM_TOOLS_DIR,
 		"res://addons/godot_dotnet_mcp/custom_tools/.backup",
-		"user://godot_dotnet_mcp_user_tool_audit.log",
+		MCPUserDataPaths.USER_TOOL_AUDIT_LOG_PATH,
 		_session_id,
 		SCAFFOLD_VERSION
 	)
@@ -93,7 +94,7 @@ func _ensure_maintenance_service() -> bool:
 	_maintenance_service.configure(
 		CUSTOM_TOOLS_DIR,
 		"res://addons/godot_dotnet_mcp/custom_tools/.backup",
-		"user://godot_dotnet_mcp_user_tool_audit.log",
+		MCPUserDataPaths.USER_TOOL_AUDIT_LOG_PATH,
 		_session_id,
 		SCAFFOLD_VERSION
 	)

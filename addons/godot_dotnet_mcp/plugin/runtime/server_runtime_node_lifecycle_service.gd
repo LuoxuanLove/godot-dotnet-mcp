@@ -125,7 +125,7 @@ func _load_server_script(force_reload: bool) -> Script:
 	var script = ResourceLoader.load(
 		SERVER_SCRIPT_PATH,
 		"",
-		ResourceLoader.CACHE_MODE_REPLACE if force_reload else ResourceLoader.CACHE_MODE_REUSE
+		ResourceLoader.CACHE_MODE_IGNORE_DEEP if force_reload else ResourceLoader.CACHE_MODE_REUSE
 	)
 	if script == null or not (script is Script):
 		_record_server_incident(

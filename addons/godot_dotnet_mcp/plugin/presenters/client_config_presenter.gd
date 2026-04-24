@@ -438,6 +438,8 @@ func _get_client_entry_status_text(status: String, localization) -> String:
 			return localization.get_text("config_client_entry_invalid_json")
 		"incompatible_root", "incompatible_mcp_servers":
 			return localization.get_text("config_client_entry_incompatible")
+		"deferred":
+			return localization.get_text("config_client_entry_deferred")
 		_:
 			return localization.get_text("config_client_status_error")
 

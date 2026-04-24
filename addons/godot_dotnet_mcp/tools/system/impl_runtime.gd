@@ -44,6 +44,7 @@ func get_tools() -> Array[Dictionary]:
 				"properties": {
 					"frame_count": {"type": "integer", "description": "Number of frames to capture (default: 1)"},
 					"interval_frames": {"type": "integer", "description": "Frames to wait between captures (default: 1)"},
+					"capture_dir": {"type": "string", "description": "Optional output directory. Defaults to the fixed runtime capture cache directory."},
 					"capture_label": {"type": "string", "description": "Optional file name prefix"},
 					"include_runtime_state": {"type": "boolean", "description": "Include runtime state snapshot in the response (default: true)"},
 					"timeout_ms": {"type": "integer", "description": "Optional timeout in milliseconds"}
@@ -71,6 +72,7 @@ func get_tools() -> Array[Dictionary]:
 					"inputs": {"type": "array", "items": {"type": "object"}, "description": "Optional runtime input entries"},
 					"wait_frames": {"type": "integer", "description": "Frames to wait before capture (default: 1)"},
 					"capture": {"type": "boolean", "description": "Capture a frame after waiting (default: true)"},
+					"capture_dir": {"type": "string", "description": "Optional output directory when capture=true. Defaults to the fixed runtime capture cache directory."},
 					"capture_label": {"type": "string", "description": "Optional capture label"},
 					"include_runtime_state": {"type": "boolean", "description": "Include runtime state snapshot in the response (default: true)"},
 					"timeout_ms": {"type": "integer", "description": "Optional timeout in milliseconds"}

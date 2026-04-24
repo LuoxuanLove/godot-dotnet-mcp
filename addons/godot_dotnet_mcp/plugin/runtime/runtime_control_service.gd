@@ -139,6 +139,7 @@ func capture(args: Dictionary) -> Dictionary:
 	var payload := {
 		"frame_count": frame_count,
 		"interval_frames": interval_frames,
+		"capture_dir": str(args.get("capture_dir", "")),
 		"capture_label": str(args.get("capture_label", "")),
 		"include_runtime_state": bool(args.get("include_runtime_state", true))
 	}
@@ -169,6 +170,7 @@ func step(args: Dictionary) -> Dictionary:
 		"inputs": (inputs as Array).duplicate(true) if inputs is Array else [],
 		"wait_frames": wait_frames,
 		"capture": bool(args.get("capture", true)),
+		"capture_dir": str(args.get("capture_dir", "")),
 		"capture_label": str(args.get("capture_label", "")),
 		"include_runtime_state": bool(args.get("include_runtime_state", true))
 	}

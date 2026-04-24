@@ -6,6 +6,7 @@ extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -13,7 +14,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_run", "project_stop", "runtime_diagnose"
+	"project_run", "project_stop", "runtime_diagnose", "userdata_maintenance"
 ]
 
 
@@ -67,6 +68,18 @@ func get_tools() -> Array[Dictionary]:
 					"value": {"description": "New value for set_setting"},
 					"name": {"type": "string", "description": "Autoload name for add/remove_autoload"},
 					"path": {"type": "string", "description": "Script path for add_autoload"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "userdata_maintenance",
+			"description": "USERDATA MAINTENANCE: Manually inspect or clean legacy Godot MCP files in user://. Actions: ensure_layout creates the current layered directories; cleanup_legacy_cache finds or applies cleanup for old root-level MCP screenshots/logs/events. cleanup_legacy_cache defaults to dry_run=true and must be explicitly run by an Agent/user; plugin startup does not auto-clean.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["ensure_layout", "cleanup_legacy_cache"], "description": "Maintenance action"},
+					"dry_run": {"type": "boolean", "description": "Preview cleanup without changing files (default: true)"}
 				},
 				"required": ["action"]
 			}
@@ -127,10 +140,23 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"project_run":       return _execute_project_run(args)
 		"project_stop":      return _execute_project_stop(args)
 		"runtime_diagnose":  return _execute_runtime_diagnose(args)
+		"userdata_maintenance": return _execute_userdata_maintenance(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
 
 
 # --- private helpers ---
+
+
+func _execute_userdata_maintenance(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"ensure_layout":
+			return bridge.success(MCPUserDataPaths.initialize_layout(false), "User data layout ensured")
+		"cleanup_legacy_cache":
+			var dry_run := bool(args.get("dry_run", true))
+			return bridge.success(MCPUserDataPaths.cleanup_legacy_cache(dry_run), "Legacy user data cleanup previewed" if dry_run else "Legacy user data cleanup applied")
+		_:
+			return bridge.error("Unknown userdata_maintenance action: %s" % action)
 
 func _get_runtime_summary() -> Dictionary:
 	return bridge.extract_data(bridge.call_atomic("debug_runtime_bridge", {"action": "get_summary"}))

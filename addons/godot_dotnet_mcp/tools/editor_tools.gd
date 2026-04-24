@@ -21,6 +21,7 @@ var _state_tools := StateTools.new()
 var _inspector_tools := InspectorTools.new()
 var _ui_control_tools := UIControlTools.new()
 var _undo_redo_tools := UndoRedoTools.new()
+var _plugin_host_override = null
 
 
 func configure_context(context = null) -> void:
@@ -30,12 +31,14 @@ func configure_context(context = null) -> void:
 	_editor_interface_override = context.get("editor_interface", null)
 	_undo_redo_override = context.get("undo_redo", null)
 	_scene_root_override = context.get("scene_root", null)
+	_plugin_host_override = context.get("plugin_host", null)
 
 
 func dispose() -> void:
 	_editor_interface_override = null
 	_undo_redo_override = null
 	_scene_root_override = null
+	_plugin_host_override = null
 	_ui_control_tools = UIControlTools.new()
 	_undo_redo_tools = UndoRedoTools.new()
 
@@ -78,7 +81,8 @@ func _build_subtool_context() -> Dictionary:
 	return {
 		"editor_interface": _editor_interface_override,
 		"undo_redo": _undo_redo_override,
-		"scene_root": _scene_root_override
+		"scene_root": _scene_root_override,
+		"plugin_host": _plugin_host_override
 	}
 
 
@@ -138,7 +142,7 @@ ACTIONS:
 
 EXAMPLES:
 - Capture to default path: {"action": "capture"}
-- Capture to custom path: {"action": "capture", "path": "user://captures/editor.png"}
+- Capture to custom path: {"action": "capture", "path": "user://godot_dotnet_mcp/captures/editor/custom.png"}
 - Capture a region: {"action": "capture", "x": 32, "y": 16, "width": 128, "height": 96}""",
 			"inputSchema": {
 				"type": "object",
@@ -150,7 +154,7 @@ EXAMPLES:
 					},
 					"path": {
 						"type": "string",
-						"description": "Output PNG path (res:// or user://). Defaults to user://godot_mcp_editor_captures/..."
+						"description": "Output PNG path (res:// or user://). Defaults to user://godot_dotnet_mcp/captures/editor/...; root-level user://file.png is normalized into the managed editor capture directory."
 					},
 					"x": {
 						"type": "integer",
@@ -331,12 +335,13 @@ EXAMPLES:
 		},
 		{
 			"name": "ui_control",
-			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, capture control-local screenshots, focus a control, activate safe button-like controls, and write text into text-editing controls.
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, and write text into text-editing controls.
 
 ACTIONS:
 - list_visible: Enumerate visible editor controls
 - list_dock_tabs: Enumerate dock tabs by title/path, including hidden ones when requested
 - activate_dock_tab: Activate a dock tab by its title
+- activate_ui: Non-invasively activate dock/plugin/bottom-panel UI by semantic_path, dock title, bottom_panel_title/path, or TabContainer target_path plus tab_title/tab_index
 - get_control: Fetch one control summary by target_path
 - capture_control: Capture a screenshot cropped to one control
 - focus_control: Move editor focus to a control
@@ -347,6 +352,9 @@ EXAMPLES:
 - List controls: {"action": "list_visible", "class_name": "LineEdit"}
 - List dock tabs: {"action": "list_dock_tabs", "include_hidden": true}
 - Activate dock tab: {"action": "activate_dock_tab", "title": "MCPDock"}
+- Activate MCPDock config: {"action": "activate_ui", "semantic_path": "MCPDock/config", "path": "user://godot_dotnet_mcp/captures/editor_controls/mcpdock_config.png"}
+- Activate TabContainer tab: {"action": "activate_ui", "target_path": "/root/Editor/MCPDock/TabContainer", "tab_title": "ConfigTab"}
+- Activate bottom panel: {"action": "activate_ui", "bottom_panel_title": "Output"}
 - Inspect one control: {"action": "get_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
@@ -357,12 +365,32 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "get_control", "capture_control", "focus_control", "activate_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "set_text"],
 						"description": "UI control action"
 					},
 					"title": {
 						"type": "string",
-						"description": "Dock tab title for activate_dock_tab"
+						"description": "Dock tab title for activate_dock_tab/activate_ui"
+					},
+					"semantic_path": {
+						"type": "string",
+						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home"
+					},
+					"tab_title": {
+						"type": "string",
+						"description": "Tab title or child name for activate_ui when target_path points to a TabContainer"
+					},
+					"tab_index": {
+						"type": "integer",
+						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+					},
+					"bottom_panel_title": {
+						"type": "string",
+						"description": "Bottom panel control title/name/text for activate_ui"
+					},
+					"bottom_panel_path": {
+						"type": "string",
+						"description": "Bottom panel control path for activate_ui"
 					},
 					"target_path": {
 						"type": "string",

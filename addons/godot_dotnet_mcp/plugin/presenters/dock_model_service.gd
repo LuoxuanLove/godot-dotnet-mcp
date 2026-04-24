@@ -2,7 +2,6 @@
 extends RefCounted
 class_name DockModelService
 
-const ToolPermissionPolicy = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_permission_policy.gd")
 const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -128,8 +127,6 @@ func build_model() -> Dictionary:
 		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
 		"user_tool_watch": _get_user_tool_watch_status(),
 		"editor_scale": _resolve_editor_scale(),
-		"permission_levels": ToolPermissionPolicy.PERMISSION_LEVELS,
-		"current_permission_level": _get_permission_level(),
 		"log_levels": MCPDebugBuffer.get_available_levels(),
 		"current_log_level": str(settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
@@ -159,27 +156,17 @@ func _get_all_tools_by_category() -> Dictionary:
 func _filter_visible_tools_by_category(all_tools_by_category: Dictionary) -> Dictionary:
 	var filtered = all_tools_by_category.duplicate(true)
 	for category in filtered.keys():
-		if not _is_tool_category_visible_for_permission(str(category)):
+		if not _is_tool_category_visible(str(category)):
 			filtered.erase(category)
 	return filtered
 
 
-func _is_tool_category_visible_for_permission(category: String) -> bool:
-	if _tool_access_feature != null and _tool_access_feature.has_method("is_tool_category_visible_for_permission"):
-		return _tool_access_feature.is_tool_category_visible_for_permission(category)
+func _is_tool_category_visible(category: String) -> bool:
+	if _tool_access_feature != null and _tool_access_feature.has_method("is_tool_category_visible"):
+		return _tool_access_feature.is_tool_category_visible(category)
 	if category == "user":
 		return bool(_get_settings().get("show_user_tools", true))
-	if category == "plugin":
-		return _get_permission_level() == ToolPermissionPolicy.PERMISSION_DEVELOPER
-	return ToolPermissionPolicy.permission_allows_category(_get_permission_level(), category)
-
-
-func _get_permission_level() -> String:
-	if _tool_access_feature != null and _tool_access_feature.has_method("get_permission_level"):
-		return str(_tool_access_feature.get_permission_level())
-	return ToolPermissionPolicy.normalize_permission_level(
-		str(_get_settings().get("permission_level", ToolPermissionPolicy.PERMISSION_EVOLUTION))
-	)
+	return true
 
 
 func _build_self_diagnostic_health_snapshot() -> Dictionary:

@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, capture the full editor UI, inspect visible controls, capture a specific control, focus or activate controls, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls, capture a specific control, focus or activate controls, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -32,6 +32,7 @@ func get_tools() -> Array[Dictionary]:
 							"list_controls",
 							"list_dock_tabs",
 							"activate_dock_tab",
+							"activate_ui",
 							"get_control",
 							"capture_control",
 							"focus_control",
@@ -59,7 +60,27 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"title": {
 						"type": "string",
-						"description": "Dock tab title for activate_dock_tab"
+						"description": "Dock tab title for activate_dock_tab/activate_ui"
+					},
+					"semantic_path": {
+						"type": "string",
+						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home"
+					},
+					"tab_title": {
+						"type": "string",
+						"description": "Tab title or child name for activate_ui when target_path points to a TabContainer"
+					},
+					"tab_index": {
+						"type": "integer",
+						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+					},
+					"bottom_panel_title": {
+						"type": "string",
+						"description": "Bottom panel control title/name/text for activate_ui"
+					},
+					"bottom_panel_path": {
+						"type": "string",
+						"description": "Bottom panel control path for activate_ui"
 					},
 					"text": {
 						"type": "string",
@@ -163,6 +184,18 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "activate_dock_tab",
 				"title": title
+			})
+		"activate_ui":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "activate_ui",
+				"title": str(args.get("title", "")).strip_edges(),
+				"semantic_path": str(args.get("semantic_path", "")).strip_edges(),
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"tab_title": str(args.get("tab_title", "")).strip_edges(),
+				"tab_index": int(args.get("tab_index", -1)),
+				"bottom_panel_title": str(args.get("bottom_panel_title", "")).strip_edges(),
+				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
+				"path": str(args.get("path", "")).strip_edges()
 			})
 		"get_control":
 			return bridge.call_atomic("editor_ui_control", {
