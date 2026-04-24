@@ -157,7 +157,7 @@ func _create_tool_result_payload(result: Dictionary) -> Dictionary:
 	var result_text = JSON.stringify(sanitized_result)
 	var is_error = not normalized_result.get("success", false)
 
-	_log_message("Tool response text length: %d, is_error=%s" % [result_text.length(), is_error], "trace")
+	_log_message("Tool response text length: %d, is_error=%s" % [result_text.length(), is_error], "debug")
 
 	return {
 		"content": [{

@@ -102,7 +102,7 @@ func _try_parse_frame() -> bool:
 
 
 func _handle_request(body: String) -> void:
-	_log("Parsing request (%d bytes)" % body.length(), "trace")
+	_log("Parsing request (%d bytes)" % body.length(), "debug")
 	var json := JSON.new()
 	if json.parse(body) != OK:
 		_write_response(_create_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null))

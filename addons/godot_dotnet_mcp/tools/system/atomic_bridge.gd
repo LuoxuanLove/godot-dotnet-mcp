@@ -116,7 +116,7 @@ func _find_path_in_args(args: Dictionary) -> String:
 
 
 func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
-	MCPDebugBuffer.record("trace", "atomic",
+	MCPDebugBuffer.record("debug", "atomic",
 		"%s action=%s" % [full_name, str(args.get("action", ""))])
 	# Write protection: block writes to plugin directory unless explicitly authorized
 	if _is_write_action(args):
