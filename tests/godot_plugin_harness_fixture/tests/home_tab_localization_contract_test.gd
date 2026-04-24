@@ -7,30 +7,44 @@ const ServerPanelScene = preload("res://addons/godot_dotnet_mcp/ui/server_panel.
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	if str(LocaleEn.TRANSLATIONS.get("tab_server", "")) != "Home":
+	var en := LocaleEn.get_translations()
+	var zh_cn := LocaleZhCn.get_translations()
+	var zh_tw := LocaleZhTw.get_translations()
+	if str(en.get("tab_server", "")) != "Home":
 		return _failure("English localization should expose the first Dock tab as Home after the service-page-to-homepage migration.")
-	if str(LocaleZhCn.TRANSLATIONS.get("tab_server", "")) != "主页":
+	if str(zh_cn.get("tab_server", "")) != "主页":
 		return _failure("简体中文本地化应将第一个 Dock 页签显示为“主页”。")
-	if str(LocaleZhTw.TRANSLATIONS.get("tab_server", "")) != "首頁":
+	if str(zh_tw.get("tab_server", "")) != "首頁":
 		return _failure("繁體中文本地化應將第一個 Dock 頁籤顯示為“首頁”。")
-	if str(LocaleEn.TRANSLATIONS.get("title", "")).find("Server") != -1:
+	if str(en.get("title", "")).find("Server") != -1:
 		return _failure("English title should no longer present the Dock as a dedicated server page.")
-	if str(LocaleZhCn.TRANSLATIONS.get("title", "")).find("服务") != -1:
+	if str(zh_cn.get("title", "")).find("服务") != -1:
 		return _failure("简体中文标题不应再将 Dock 表述为单独的服务页。")
-	if str(LocaleZhTw.TRANSLATIONS.get("title", "")).find("服務") != -1:
+	if str(zh_tw.get("title", "")).find("服務") != -1:
 		return _failure("繁體中文標題不應再將 Dock 表述為單獨的服務頁。")
-	for locale in [LocaleEn.TRANSLATIONS, LocaleZhCn.TRANSLATIONS, LocaleZhTw.TRANSLATIONS]:
+	for locale in [en, zh_cn, zh_tw]:
 		if locale.has("advanced_settings"):
 			return _failure("Localization dictionaries should not keep the removed Advanced Settings label.")
 	for key in [
 		"tool_system_editor_state_name",
+		"tool_system_project_files_name",
+		"tool_system_scene_tree_name",
 		"tool_system_userdata_maintenance_name",
 		"tool_system_editor_log_name",
 		"tool_action_get_output_name",
 		"tool_action_ensure_layout_name",
-		"tool_action_cleanup_legacy_cache_name"
+		"tool_action_cleanup_legacy_cache_name",
+		"log_level_debug",
+		"log_level_info",
+		"log_level_warning",
+		"log_level_error",
+		"config_client_windsurf",
+		"config_client_cline",
+		"config_client_roo_code",
+		"config_client_qwen",
+		"config_client_cherry_studio"
 	]:
-		if not LocaleEn.TRANSLATIONS.has(key) or not LocaleZhCn.TRANSLATIONS.has(key) or not LocaleZhTw.TRANSLATIONS.has(key):
+		if not en.has(key) or not zh_cn.has(key) or not zh_tw.has(key):
 			return _failure("All supported locales should define visible Tools-page key: %s" % key)
 
 	var server_panel = ServerPanelScene.instantiate() as Control
@@ -46,12 +60,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"success": true,
 		"error": "",
 		"details": {
-			"en_tab": str(LocaleEn.TRANSLATIONS.get("tab_server", "")),
-			"zh_tab": str(LocaleZhCn.TRANSLATIONS.get("tab_server", "")),
-			"zh_tw_tab": str(LocaleZhTw.TRANSLATIONS.get("tab_server", "")),
-			"en_title": str(LocaleEn.TRANSLATIONS.get("title", "")),
-			"zh_title": str(LocaleZhCn.TRANSLATIONS.get("title", "")),
-			"zh_tw_title": str(LocaleZhTw.TRANSLATIONS.get("title", ""))
+			"en_tab": str(en.get("tab_server", "")),
+			"zh_tab": str(zh_cn.get("tab_server", "")),
+			"zh_tw_tab": str(zh_tw.get("tab_server", "")),
+			"en_title": str(en.get("title", "")),
+			"zh_title": str(zh_cn.get("title", "")),
+			"zh_tw_title": str(zh_tw.get("title", ""))
 		}
 	}
 
