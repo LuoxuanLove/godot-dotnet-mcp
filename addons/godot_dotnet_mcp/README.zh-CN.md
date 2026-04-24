@@ -9,7 +9,7 @@
 
 嵌入 Godot 编辑器进程的 MCP 服务端。调用 `system_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再根据观察到的问题，用场景、脚本、节点或资源工具做精准修改。
 
-系统层是 Agent 的推荐起点，覆盖项目快照、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
+系统层是 Agent 的推荐起点，覆盖项目快照、项目文件树修改、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、当前场景树修改、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
 
 连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。
 
@@ -21,7 +21,7 @@
 
 - **运行在编辑器内部**：在 Godot 进程中运行，场景查询、脚本读取和属性修改直接反映编辑器的真实状态。
 - **Godot.NET 优先**：C# 绑定检查（`system_bindings_audit`）、导出成员分析、`.cs` 脚本修补均内置，不是附加功能。
-- **系统优先**：`system_project_state` → `system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` → 具体操作，是推荐的工作流起点。工具选择由 AI/LLM 根据工具描述自行判断。
+- **系统优先**：`system_project_state` / `system_editor_state` → `system_project_files` / `system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` → `system_scene_tree` / `system_scene_patch` / 具体操作，是推荐的工作流起点。工具选择由 AI/LLM 根据工具描述自行判断。
 - **可用户扩展**：`custom_tools/` 中的脚本作为一等工具加载，无需重建插件。`plugin_evolution` 管理全生命周期。
 
 ## 环境要求
@@ -32,8 +32,15 @@
   - Claude Code
   - Codex CLI
   - Gemini CLI
+  - OpenCode
+  - Qwen Code
   - Claude Desktop
   - Cursor
+  - Trae
+  - Windsurf
+  - Cline
+  - Roo Code
+  - Cherry Studio
 
 ## 安装
 
@@ -111,6 +118,7 @@ POST http://127.0.0.1:3000/mcp
 - CLI 客户端显示对应命令文本，并在上游 CLI 支持时提供一键添加 / 移除
 - `Claude Code` 额外支持 `user / project` 作用域切换
 - `Gemini CLI` 同样按当前 `settings.json` 作用域支持 `user / project` 切换
+- 已安装的客户端会明确显示“已安装到”具体配置路径或 CLI 作用域。
 
 推荐顺序：
 

@@ -9,7 +9,7 @@
 
 An MCP endpoint embedded in the Godot editor process. Call `system_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then use scene, script, node, or resource tools to make targeted changes based on the observed state.
 
-The System layer is the intended starting point for agents. It provides project-level snapshots, editor-session snapshots, editor UI control, editor log access, runtime diagnostics, scene analysis, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
+The System layer is the intended starting point for agents. It provides project-level snapshots, project file-tree changes, editor-session snapshots, editor UI control, editor log access, runtime diagnostics, scene analysis, current scene-tree changes, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
 After connecting, call `system_help` for the current capability guide and schema version. For any Dock, popup, layout, focus, or button-visibility task, prefer `system_editor_control(action=activate_ui)` and `system_editor_control(action=capture_editor)` through Godot editor APIs before acting; do not use OS mouse/window automation unless the user explicitly authorizes foreground automation. If visible control enumeration misses the target, retry `system_editor_control(action=list_controls, include_hidden=true)`.
 
@@ -23,7 +23,7 @@ To extend the tool set: place a `.gd` file in `custom_tools/` implementing `hand
 
 - **Editor-native**: Runs inside the Godot process. Scene queries, script reads, and property changes reflect the actual live editor state.
 - **Godot.NET first**: C# binding inspection (`system_bindings_audit`), exported member analysis, and `.cs` script patching are built in.
-- **System-first**: `system_project_state` →`system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` →targeted action is the intended workflow. Tool selection is left to AI/LLM based on tool descriptions.
+- **System-first**: `system_project_state` / `system_editor_state` → `system_project_files` / `system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` → `system_scene_tree` / `system_scene_patch` / targeted action is the intended workflow. Tool selection is left to AI/LLM based on tool descriptions.
 - **User-extensible**: `custom_tools/` scripts are loaded as first-class tools with no plugin rebuild. `plugin_evolution` manages the lifecycle.
 
 ## Requirements
@@ -34,8 +34,15 @@ To extend the tool set: place a `.gd` file in `custom_tools/` implementing `hand
   - Claude Code
   - Codex CLI
   - Gemini CLI
+  - OpenCode
+  - Qwen Code
   - Claude Desktop
   - Cursor
+  - Trae
+  - Windsurf
+  - Cline
+  - Roo Code
+  - Cherry Studio
 
 ## Installation
 
@@ -113,6 +120,7 @@ Open `MCPDock > Config`, choose a target platform, then inspect or copy the gene
 - CLI clients show the generated command text plus one-click add/remove when the upstream CLI supports it
 - `Claude Code` additionally supports `user / project` scope switching
 - `Gemini CLI` supports the same `user / project` scope switching pattern through its active `settings.json`
+- Installed clients show an explicit `Installed to` status with the concrete config path or CLI scope.
 
 Recommended order:
 
