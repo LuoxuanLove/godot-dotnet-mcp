@@ -61,6 +61,32 @@ class FakeBridge extends RefCounted:
 				return success({"count": 0, "entries": []})
 			"project_input":
 				return success({"count": 0, "actions": []})
+			"filesystem_directory":
+				match str(args.get("action", "")):
+					"get_files":
+						return success({"files": ["res://Player.gd"], "count": 1})
+					"create", "delete":
+						return success({"path": str(args.get("path", ""))})
+					_:
+						return error("Unsupported filesystem_directory action")
+			"filesystem_file_read":
+				return success({"path": str(args.get("path", "")), "content": "ok"})
+			"filesystem_file_write":
+				return success({"path": str(args.get("path", "")), "written": true})
+			"filesystem_file_manage":
+				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))})
+			"editor_filesystem":
+				match str(args.get("action", "")):
+					"select_file":
+						return success({"path": str(args.get("path", ""))})
+					"get_selected":
+						return success({"paths": ["res://Player.gd"], "count": 1})
+					"get_current_path":
+						return success({"current_path": "res://Player.gd", "current_directory": "res://"})
+					"scan", "reimport":
+						return success({"ok": true})
+					_:
+						return error("Unsupported editor_filesystem action")
 			_:
 				return error("Unsupported fake bridge call: %s" % tool_name)
 
@@ -121,10 +147,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 7:
-		return _failure("System project implementation should expose 7 tool definitions including userdata_maintenance.")
+	if tool_defs.size() != 8:
+		return _failure("System project implementation should expose 8 tool definitions including project_files and userdata_maintenance.")
 	if not _has_tool(tool_defs, "userdata_maintenance"):
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
+	if not _has_tool(tool_defs, "project_files"):
+		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -160,6 +188,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
 		return _failure("project_configure bogus action should fail.")
+
+	var project_files_list: Dictionary = executor.execute("project_files", {"action": "list_dir", "path": "res://", "filter": "*.gd"})
+	if not bool(project_files_list.get("success", false)):
+		return _failure("project_files list_dir should delegate to the filesystem directory atomic tool.")
+	var project_files_write: Dictionary = executor.execute("project_files", {"action": "write_file", "path": "res://notes.txt", "content": "ok"})
+	if not bool(project_files_write.get("success", false)):
+		return _failure("project_files write_file should delegate to the filesystem write atomic tool.")
+	var project_files_select: Dictionary = executor.execute("project_files", {"action": "select_file", "path": "res://Player.gd"})
+	if not bool(project_files_select.get("success", false)):
+		return _failure("project_files select_file should delegate to the editor filesystem atomic tool.")
 
 	var project_run: Dictionary = executor.execute("project_run", {})
 	if not bool(project_run.get("success", false)):

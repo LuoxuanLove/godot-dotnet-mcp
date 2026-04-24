@@ -2,7 +2,7 @@
 extends RefCounted
 
 ## System implementation: project_state, project_configure,
-## project_run, project_stop, runtime_diagnose
+## project_files, project_run, project_stop, runtime_diagnose
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -14,7 +14,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_run", "project_stop", "runtime_diagnose", "userdata_maintenance"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance"
 ]
 
 
@@ -85,6 +85,24 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "project_files",
+			"description": "PROJECT FILES: High-level project FileSystem tree operations. Actions: list_dir, create_dir, delete_dir, read_file, write_file, delete_file, copy_file, move_file, select_file, get_selected, get_current_path, scan, reimport. Use this for common FileSystem dock and project file-tree changes before falling back to atomic filesystem tools.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["list_dir", "create_dir", "delete_dir", "read_file", "write_file", "delete_file", "copy_file", "move_file", "select_file", "get_selected", "get_current_path", "scan", "reimport"], "description": "Project file-tree action"},
+					"path": {"type": "string", "description": "Project path (res://...)"},
+					"content": {"type": "string", "description": "Content for write_file"},
+					"source": {"type": "string", "description": "Source path for copy_file/move_file"},
+					"dest": {"type": "string", "description": "Destination path for copy_file/move_file"},
+					"paths": {"type": "array", "items": {"type": "string"}, "description": "Paths for reimport"},
+					"filter": {"type": "string", "description": "Filter for list_dir (default *)"},
+					"recursive": {"type": "boolean", "description": "Recursive list_dir traversal"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "project_run",
 			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state for compile errors before running. Pair with project_stop. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout.",
 			"inputSchema": {
@@ -137,6 +155,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"project_state":     return _execute_project_state(args)
 		"editor_state":      return _execute_editor_state(args)
 		"project_configure": return _execute_project_configure(args)
+		"project_files":     return _execute_project_files(args)
 		"project_run":       return _execute_project_run(args)
 		"project_stop":      return _execute_project_stop(args)
 		"runtime_diagnose":  return _execute_runtime_diagnose(args)
@@ -567,6 +586,56 @@ func _execute_project_configure(args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("project_input", {"action": "list_actions"})
 		_:
 			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions" % action)
+
+
+func _execute_project_files(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"list_dir":
+			return bridge.call_atomic("filesystem_directory", {
+				"action": "get_files",
+				"path": str(args.get("path", "res://")),
+				"filter": str(args.get("filter", "*")),
+				"recursive": bool(args.get("recursive", false))
+			})
+		"create_dir":
+			return bridge.call_atomic("filesystem_directory", {"action": "create", "path": str(args.get("path", ""))})
+		"delete_dir":
+			return bridge.call_atomic("filesystem_directory", {"action": "delete", "path": str(args.get("path", ""))})
+		"read_file":
+			return bridge.call_atomic("filesystem_file_read", {"action": "read", "path": str(args.get("path", ""))})
+		"write_file":
+			return bridge.call_atomic("filesystem_file_write", {
+				"action": "write",
+				"path": str(args.get("path", "")),
+				"content": str(args.get("content", ""))
+			})
+		"delete_file":
+			return bridge.call_atomic("filesystem_file_manage", {"action": "delete", "path": str(args.get("path", ""))})
+		"copy_file":
+			return bridge.call_atomic("filesystem_file_manage", {
+				"action": "copy",
+				"source": str(args.get("source", "")),
+				"dest": str(args.get("dest", ""))
+			})
+		"move_file":
+			return bridge.call_atomic("filesystem_file_manage", {
+				"action": "move",
+				"source": str(args.get("source", "")),
+				"dest": str(args.get("dest", ""))
+			})
+		"select_file":
+			return bridge.call_atomic("editor_filesystem", {"action": "select_file", "path": str(args.get("path", ""))})
+		"get_selected":
+			return bridge.call_atomic("editor_filesystem", {"action": "get_selected"})
+		"get_current_path":
+			return bridge.call_atomic("editor_filesystem", {"action": "get_current_path"})
+		"scan":
+			return bridge.call_atomic("editor_filesystem", {"action": "scan"})
+		"reimport":
+			return bridge.call_atomic("editor_filesystem", {"action": "reimport", "paths": args.get("paths", [])})
+		_:
+			return bridge.error("Unknown project_files action: %s" % action)
 
 
 func _execute_project_run(args: Dictionary) -> Dictionary:
