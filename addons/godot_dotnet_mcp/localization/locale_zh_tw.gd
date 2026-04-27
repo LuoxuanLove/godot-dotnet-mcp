@@ -290,7 +290,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_get_output_desc": "讀取編輯器 Output 面板中的最近輸出。",
 	"tool_action_get_errors_desc": "讀取編輯器輸出中的錯誤與警告行。",
 	"tool_action_clear_output_desc": "清空編輯器 Output 面板。",
-	"tool_action_ensure_layout_desc": "建立目前版本使用的 user:// 分層目錄。",
+	"tool_action_ensure_layout_desc": "建立外掛使用的 user:// 分層目錄。",
 	"tool_action_cleanup_legacy_cache_desc": "預覽或清理舊版根級 MCP 快取檔案。",
 	"tool_action_capture_editor_desc": "截取完整編輯器介面。",
 	"tool_action_list_controls_desc": "列舉目前編輯器介面中的控制項。",

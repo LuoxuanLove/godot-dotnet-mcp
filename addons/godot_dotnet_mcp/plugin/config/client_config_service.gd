@@ -502,6 +502,13 @@ func launch_desktop_client(executable_path: String, arguments: PackedStringArray
 			"message": "Client executable path is empty."
 		}
 
+	if not FileAccess.file_exists(executable_path):
+		return {
+			"success": false,
+			"error": "missing_executable",
+			"message": "Client executable does not exist: %s" % executable_path
+		}
+
 	if working_directory.strip_edges().is_empty() or not DirAccess.dir_exists_absolute(working_directory):
 		return {
 			"success": false,
@@ -513,11 +520,17 @@ func launch_desktop_client(executable_path: String, arguments: PackedStringArray
 	for argument in arguments:
 		arg_literals.append(_to_powershell_literal(str(argument)))
 
-	var script := "$argList = @(%s); Start-Process -FilePath %s -WorkingDirectory %s -ArgumentList $argList | Out-Null" % [
-		", ".join(arg_literals),
+	var start_process_command := "Start-Process -FilePath %s -WorkingDirectory %s -PassThru" % [
 		_to_powershell_literal(executable_path),
 		_to_powershell_literal(working_directory)
 	]
+	if not arg_literals.is_empty():
+		start_process_command = "Start-Process -FilePath %s -WorkingDirectory %s -ArgumentList @(%s) -PassThru" % [
+			_to_powershell_literal(executable_path),
+			_to_powershell_literal(working_directory),
+			", ".join(arg_literals)
+		]
+	var script := "$ErrorActionPreference = 'Stop'; try { $process = %s; if ($null -eq $process) { throw 'Start-Process did not return a process.' }; Start-Sleep -Milliseconds 800; if ($process.HasExited) { throw ('Client process exited immediately with code ' + $process.ExitCode) }; exit 0 } catch { Write-Error $_; exit 1 }" % start_process_command
 	return _launch_powershell_background(script)
 
 
@@ -568,7 +581,8 @@ func _build_cli_invocation(executable_path: String, arguments: PackedStringArray
 
 
 func _launch_powershell_background(script: String) -> Dictionary:
-	var pid = OS.create_process(
+	var output: Array = []
+	var exit_code = OS.execute(
 		"powershell.exe",
 		PackedStringArray([
 			"-NoProfile",
@@ -577,12 +591,20 @@ func _launch_powershell_background(script: String) -> Dictionary:
 			"-Command",
 			script
 		]),
+		output,
+		true,
 		false
 	)
+	var message := "Client process launched."
+	if exit_code != 0:
+		message = "Failed to launch client process."
+		var detail := "\n".join(output).strip_edges()
+		if not detail.is_empty():
+			message += "\n" + detail
 	return {
-		"success": pid > 0,
-		"pid": pid,
-		"message": "Client process launched." if pid > 0 else "Failed to launch client process."
+		"success": exit_code == 0,
+		"exit_code": exit_code,
+		"message": message
 	}
 
 
