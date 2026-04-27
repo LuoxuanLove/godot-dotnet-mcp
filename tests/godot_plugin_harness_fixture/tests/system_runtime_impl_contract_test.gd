@@ -1,9 +1,16 @@
 extends RefCounted
 
 const RuntimeImplScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_runtime.gd")
+const RuntimeAtomicExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/runtime/executor.gd")
 
 
 class FakeBridge extends RefCounted:
+	var runtime_executor = RuntimeAtomicExecutorScript.new()
+	var calls: Array[String] = []
+
+	func configure_runtime(context: Dictionary) -> void:
+		runtime_executor.configure_runtime(context)
+
 	func success(data, message: String) -> Dictionary:
 		return {
 			"success": true,
@@ -17,6 +24,18 @@ class FakeBridge extends RefCounted:
 			"error": "bridge_error",
 			"message": message
 		}
+
+	func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
+		calls.append(full_name)
+		if not full_name.begins_with("runtime_"):
+			return error("Unexpected atomic tool: %s" % full_name)
+		return runtime_executor.execute(full_name.trim_prefix("runtime_"), args)
+
+	func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
+		calls.append(full_name)
+		if not full_name.begins_with("runtime_"):
+			return error("Unexpected atomic tool: %s" % full_name)
+		return await runtime_executor.execute_async(full_name.trim_prefix("runtime_"), args)
 
 
 class FakeRuntimeControlService extends RefCounted:
@@ -97,10 +116,13 @@ class FakeRuntimeServer extends RefCounted:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var fake_service := FakeRuntimeControlService.new()
 	var impl = RuntimeImplScript.new()
-	impl.bridge = FakeBridge.new()
-	impl.configure_runtime({
+	var fake_bridge := FakeBridge.new()
+	impl.bridge = fake_bridge
+	var runtime_context := {
 		"server": FakeRuntimeServer.new(fake_service)
-	})
+	}
+	fake_bridge.configure_runtime(runtime_context)
+	impl.configure_runtime(runtime_context)
 
 	var tool_defs: Array[Dictionary] = impl.get_tools()
 	if tool_defs.size() != 4:
@@ -193,6 +215,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_step did not forward wait_frames to the runtime control service.")
 	if str(fake_service.last_step_args.get("capture_dir", "")) != "user://contract_step_captures":
 		return _failure("runtime_step did not forward capture_dir to the runtime control service.")
+	for expected_atomic in ["runtime_control", "runtime_capture", "runtime_input", "runtime_step"]:
+		if not fake_bridge.calls.has(expected_atomic):
+			return _failure("runtime system impl should route through atomic bridge for %s." % expected_atomic)
 
 	return {
 		"name": "system_runtime_impl_contracts",

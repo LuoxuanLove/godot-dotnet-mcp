@@ -120,10 +120,12 @@ $RequiredCases = @(
     "system_editor_state_contracts"
     "system_editor_log_contracts"
     "system_runtime_health_contracts"
+    "system_runtime_impl_contracts"
     "runtime_command_service_contracts"
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
     "plugin_entrypoint_contracts"
+    "plugin_runtime_state_contracts"
     "external_host_removal_audit"
     "system_help_contracts"
     "system_project_executor_contracts"
@@ -136,6 +138,11 @@ $RequiredCases = @(
     "home_tab_localization_contracts"
     "server_tab_model_projection_contracts"
     "mcp_debug_buffer_contracts"
+    "tool_presentation_service_contracts"
+    "tools_api_service_contracts"
+    "tool_rpc_router_contracts"
+    "dock_model_service_contracts"
+    "tools_tab_rendering_contracts"
 )
 
 try {

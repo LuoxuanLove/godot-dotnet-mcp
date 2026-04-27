@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "dock_model_service_contracts"}
+
 const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 
 
@@ -20,6 +22,9 @@ class FakeServerController extends RefCounted:
 			],
 			"scene": [
 				{"name": "scene_validate"}
+			],
+			"user": [
+				{"name": "sample_tool", "source": "user_tool", "script_path": "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd"}
 			]
 		}
 
@@ -45,6 +50,11 @@ class FakeServerController extends RefCounted:
 class FakeDockPresenter extends RefCounted:
 	func build_model(context: Dictionary) -> Dictionary:
 		return context
+
+
+class FakeToolAccessFeature extends RefCounted:
+	func is_tool_category_visible(category: String) -> bool:
+		return category != "user"
 
 
 class FakeContext extends RefCounted:
@@ -87,7 +97,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.central_server_attach_service = null
 	context.runtime_process_service = null
 	context.user_tool_watch_service = null
-	context.tool_access_feature = null
+	context.tool_access_feature = FakeToolAccessFeature.new()
 	context.self_diagnostic_feature = null
 	context.get_editor_scale = Callable()
 	service.configure(context)
@@ -98,8 +108,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should keep non-root atomic categories available for system tool tree lookup.")
 	if not tools_by_category.has("system"):
 		return _failure("Dock model should keep the exposed system category available.")
+	if tools_by_category.has("user"):
+		return _failure("Dock model should apply tool access visibility to tools_by_category.")
 	if model.get("all_tools_by_category", {}).has("scene") == false:
 		return _failure("Dock model should still keep the full tool set for profile and filtering logic.")
+	if model.get("all_tools_by_category", {}).has("user") == false:
+		return _failure("Dock model should still keep hidden categories in all_tools_by_category for profile logic.")
+	var presentation: Dictionary = model.get("tool_presentation", {})
+	if presentation.is_empty() or not (presentation.get("toolTree", []) is Array):
+		return _failure("Dock model should include the unified tool presentation model.")
+	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
+		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
 
 	return {
 		"name": "dock_model_service_contracts",
@@ -118,3 +137,15 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _contains_presentation_category(nodes: Array, category: String) -> bool:
+	for node in nodes:
+		if not (node is Dictionary):
+			continue
+		var node_dict := node as Dictionary
+		if str(node_dict.get("kind", "")) == "category" and str(node_dict.get("key", "")) == category:
+			return true
+		if _contains_presentation_category(node_dict.get("children", []), category):
+			return true
+	return false
