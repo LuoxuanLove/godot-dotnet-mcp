@@ -10,6 +10,7 @@ class_name MCPStdioServer
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
 
@@ -152,19 +153,22 @@ func _handle_request(body: String) -> void:
 func _handle_tools_list(id) -> Dictionary:
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var tools_list: Array[Dictionary] = []
-	for tool_def in _tool_loader.get_exposed_tool_definitions():
-		tools_list.append({
-			"name": tool_def["name"],
-			"description": tool_def.get("description", ""),
-			"category": tool_def.get("category", ""),
-			"domainKey": tool_def.get("domain_key", "other"),
-			"loadState": tool_def.get("load_state", "definitions_only"),
-			"source": tool_def.get("source", "builtin"),
-			"enabled": bool(tool_def.get("enabled", true)),
-			"inputSchema": tool_def.get("inputSchema", {"type": "object", "properties": {}})
-		})
-	return _create_json_rpc_response({"tools": tools_list}, id)
+	var exposed_tools = _tool_loader.get_exposed_tool_definitions()
+	var all_tools_by_category := {}
+	if _tool_loader.has_method("get_all_tools_by_category"):
+		all_tools_by_category = _tool_loader.get_all_tools_by_category()
+	elif _tool_loader.has_method("get_tools_by_category"):
+		all_tools_by_category = _tool_loader.get_tools_by_category()
+	var domain_states := []
+	if _tool_loader.has_method("get_domain_states"):
+		domain_states = _tool_loader.get_domain_states()
+	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+	return _create_json_rpc_response({
+		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
+		"presentationVersion": int(presentation.get("presentationVersion", 1)),
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", [])
+	}, id)
 
 
 func _handle_tools_call(params: Dictionary, id) -> Dictionary:
