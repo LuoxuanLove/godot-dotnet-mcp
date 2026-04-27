@@ -36,9 +36,8 @@ class FakePlugin extends RefCounted:
 	func _on_current_tab_changed(index: int) -> void:
 		current_tab_changes.append(index)
 
-	func runtime_full_reload() -> Dictionary:
+	func _on_full_reload_requested() -> void:
 		full_reload_count += 1
-		return {"success": true, "message": "reload queued"}
 
 	func _on_copy_requested(text: String, source: String) -> void:
 		copy_events.append({"text": text, "source": source})
@@ -97,7 +96,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_router.configure(_plugin, "RuntimeBridge", "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
 
 	var bindings = _coordinator.build_dock_signal_bindings(_router)
-	if bindings.size() != 26:
+	if bindings.size() != 25:
 		return _failure("PluginActionRouter should expose the full dock binding set.")
 	var binding_map := _map_bindings_by_signal(bindings)
 	for signal_name in ["current_tab_changed", "full_reload_requested", "copy_requested", "config_write_requested"]:
@@ -138,7 +137,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if _plugin.current_tab_changes != [7]:
 		return _failure("PluginActionRouter should route current_tab_changed through the dock binding.")
 	if _plugin.full_reload_count != 1:
-		return _failure("PluginActionRouter should route full_reload_requested to runtime_full_reload.")
+		return _failure("PluginActionRouter should route full_reload_requested to the plugin UI reload handler.")
 	if _plugin.copy_events.size() != 1 or str(_plugin.copy_events[0].get("text", "")) != "copy text":
 		return _failure("PluginActionRouter should route copy_requested through the dock binding.")
 	if not recorder.incidents.is_empty():
