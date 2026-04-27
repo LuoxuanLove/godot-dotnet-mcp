@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "tool_rpc_router_contracts"}
+
 const ToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
 const ToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd")
 
@@ -30,6 +32,31 @@ class FakeToolLoader:
 			"category": "system",
 			"status": "ready"
 		}]
+
+	func get_all_tools_by_category() -> Dictionary:
+		return {
+			"system": [{
+				"name": "project_state",
+				"full_name": "system_project_state",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}],
+			"project": [{
+				"name": "info",
+				"full_name": "project_info",
+				"category": "project",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}],
+			"filesystem": [{
+				"name": "directory",
+				"full_name": "filesystem_directory",
+				"category": "filesystem",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}]
+		}
 
 	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
 		return {
@@ -83,6 +110,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tools = tools_list.get("tools", [])
 	if not (tools is Array) or (tools as Array).is_empty():
 		return _failure("Tool RPC router did not surface exposed tool definitions.")
+	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
+		return _failure("Tool RPC router did not expose the unified tool tree.")
+	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
+		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
 
 	var success_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_project_state",

@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "tools_api_service_contracts"}
+
 const ToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
 const ToolsApiServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service_context.gd")
 
@@ -8,13 +10,50 @@ class FakeToolLoader:
 	extends RefCounted
 
 	func get_exposed_tool_definitions() -> Array:
-		return [{"name": "system_project_state"}, {"name": "system_scene_inspect"}]
+		return [{
+			"name": "system_project_state",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
+		}, {
+			"name": "system_scene_inspect",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
+		}]
 
 	func get_tool_definitions() -> Array:
 		return get_exposed_tool_definitions()
 
 	func get_domain_states() -> Array:
 		return [{"category": "system", "status": "ready"}]
+
+	func get_all_tools_by_category() -> Dictionary:
+		return {
+			"system": [{
+				"name": "project_state",
+				"full_name": "system_project_state",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}],
+			"project": [{
+				"name": "info",
+				"full_name": "project_info",
+				"category": "project",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}],
+			"filesystem": [{
+				"name": "directory",
+				"full_name": "filesystem_directory",
+				"category": "filesystem",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}]
+		}
 
 	func get_performance_summary() -> Dictionary:
 		return {"slow_operations": 0}
@@ -51,6 +90,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools API service did not preserve the exposed tool definitions.")
 	if int(response.get("tool_count", 0)) != 2:
 		return _failure("Tools API service did not preserve the tool count.")
+	if not (response.get("toolTree", []) is Array) or (response.get("toolTree", []) as Array).is_empty():
+		return _failure("Tools API service did not expose the unified tool tree.")
+	if not (response.get("toolGroups", []) is Array) or (response.get("toolGroups", []) as Array).is_empty():
+		return _failure("Tools API service did not expose tool groups.")
+	if not ((tools as Array)[0] as Dictionary).has("groupPath"):
+		return _failure("Tools API service should enrich flat tools with non-breaking groupPath metadata.")
 	var tool_loader_status = response.get("tool_loader_status", {})
 	if not (tool_loader_status is Dictionary) or str((tool_loader_status as Dictionary).get("status", "")) != "ready":
 		return _failure("Tools API service did not preserve the loader status snapshot.")

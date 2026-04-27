@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolRpcRouter
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 var _get_tool_loader := Callable()
 var _is_tool_enabled := Callable()
@@ -31,27 +32,27 @@ func dispose() -> void:
 
 
 func build_tools_list_result() -> Dictionary:
-	var tools_list: Array[Dictionary] = []
 	var loader = _get_loader()
 	if loader == null:
-		return {"tools": tools_list}
+		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": []}
 
-	for tool_def in loader.get_exposed_tool_definitions():
-		tools_list.append({
-			"name": tool_def["name"],
-			"description": tool_def.get("description", ""),
-			"category": tool_def.get("category", ""),
-			"domainKey": tool_def.get("domain_key", "other"),
-			"loadState": tool_def.get("load_state", "definitions_only"),
-			"source": tool_def.get("source", "builtin"),
-			"enabled": bool(tool_def.get("enabled", true)),
-			"inputSchema": tool_def.get("inputSchema", {
-				"type": "object",
-				"properties": {}
-			})
-		})
+	var exposed_tools = loader.get_exposed_tool_definitions()
+	var all_tools_by_category := {}
+	if loader.has_method("get_all_tools_by_category"):
+		all_tools_by_category = loader.get_all_tools_by_category()
+	elif loader.has_method("get_tools_by_category"):
+		all_tools_by_category = loader.get_tools_by_category()
+	var domain_states := []
+	if loader.has_method("get_domain_states"):
+		domain_states = loader.get_domain_states()
+	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
 
-	return {"tools": tools_list}
+	return {
+		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
+		"presentationVersion": int(presentation.get("presentationVersion", 1)),
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", [])
+	}
 
 
 func build_tool_call_result(params: Dictionary) -> Dictionary:
