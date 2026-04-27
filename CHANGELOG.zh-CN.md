@@ -14,6 +14,7 @@
 - `system_runtime_capture` 与 `system_runtime_step` 新增 `capture_dir` 参数，可在默认运行时截图缓存目录之外指定输出目录。
 - 新增 `system_editor_control(action=activate_ui)`，可通过 Godot API 无感激活 Dock/插件页签/底部面板，支持 `MCPDock/config` 等语义目标与可选截图输出。
 - 新增 `user://godot_dotnet_mcp/` 分层输出管理，并提供手动 `system_userdata_maintenance` 清理旧版根级 MCP 缓存文件。
+- 为 `system_userdata_maintenance` 新增列出受管理编辑器 / 控件 / 运行时截图缓存，以及默认 dry-run 预览后显式清理这些缓存的动作；清理时会跳过 symlink、junction 与 reparse point。
 - 新增 `system_project_files` 与 `system_scene_tree` 高层工具，分别覆盖项目文件树修改和当前编辑场景树修改的常见 Agent 工作流。
 - 新增统一 Tool Presentation Model，使 `/api/tools`、MCP `tools/list`、stdio `tools/list` 与 Dock Tools 页共享同一份 domain/category/tool/atomic/action 工具树，同时保留扁平 `tools[]` 兼容契约。
 
@@ -36,6 +37,7 @@
 - 日志公开级别收敛为 `debug`、`info`、`warning`、`error` 四级；旧 `trace` 输入仅作为兼容别名归并到 `debug`。
 - Dock Tools 页现在优先消费生成好的 `toolTree` 展示模型，仅在缺少新模型时回退到旧的本地组树逻辑。
 - 将 `runtime` 注册为内部原子工具分类，并同步内置工具 Profile，使 `system_runtime_*` 的内部子链路保持启用，同时不把 runtime 原子工具暴露为公开 MCP 工具。
+- 因 `system_userdata_maintenance` action 枚举扩展，递增工具 schema 版本，便于 Agent 识别新的缓存管理契约。
 
 ### Fixed
 

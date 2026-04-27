@@ -14,6 +14,7 @@
 - Added `capture_dir` to `system_runtime_capture` and `system_runtime_step` so runtime screenshots can target a caller-provided directory instead of only the default cache.
 - Added `system_editor_control(action=activate_ui)` for non-invasive Godot API-based dock/plugin/bottom-panel activation, including semantic targets such as `MCPDock/config` and optional capture output.
 - Added layered `user://godot_dotnet_mcp/` output management and manual `system_userdata_maintenance` cleanup for stale root-level MCP cache files.
+- Added `system_userdata_maintenance` actions for listing managed editor/control/runtime screenshot caches and explicitly cleaning them with dry-run preview by default, while skipping symlinks, junctions, and reparse points.
 - Added high-level `system_project_files` and `system_scene_tree` tools for common Agent workflows that modify the project FileSystem tree or the currently edited scene tree.
 - Added a shared Tool Presentation Model so `/api/tools`, MCP `tools/list`, stdio `tools/list`, and the Dock Tools page can expose the same domain/category/tool/atomic/action tree while preserving the flat `tools[]` contract.
 
@@ -35,6 +36,7 @@
 - Consolidated public logging levels to `debug`, `info`, `warning`, and `error`; legacy `trace` inputs are normalized to `debug` for compatibility.
 - The Dock Tools page now prefers the generated `toolTree` presentation model and only falls back to the older local tree reconstruction path for compatibility.
 - Registered `runtime` as an internal atomic tool category and aligned built-in profiles so `system_runtime_*` tree children stay enabled without exposing runtime atomics as public MCP tools.
+- Bumped the tool schema version for the expanded `system_userdata_maintenance` action enum so agents can detect the new cache-management contract.
 
 ### Fixed
 
