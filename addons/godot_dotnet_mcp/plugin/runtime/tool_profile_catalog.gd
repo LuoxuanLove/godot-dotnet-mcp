@@ -10,25 +10,25 @@ const BUILTIN_TOOL_PROFILES: Array[Dictionary] = [
 		"id": "system",
 		"name_key": "tool_profile_system",
 		"desc_key": "tool_profile_system_desc",
-		"enabled_categories": ["system"]
+		"enabled_categories": ["system", "runtime"]
 	},
 	{
 		"id": "task",
 		"name_key": "tool_profile_task",
 		"desc_key": "tool_profile_task_desc",
-		"enabled_categories": ["system", "project", "scene", "script", "debug", "plugin_runtime", "plugin_developer", "filesystem"]
+		"enabled_categories": ["system", "project", "scene", "script", "debug", "plugin_runtime", "plugin_developer", "filesystem", "runtime"]
 	},
 	{
 		"id": "slim",
 		"name_key": "tool_profile_slim",
 		"desc_key": "tool_profile_slim_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_developer", "debug", "group", "signal", "system"]
+		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_developer", "debug", "runtime", "group", "signal", "system"]
 	},
 	{
 		"id": "default",
 		"name_key": "tool_profile_default",
 		"desc_key": "tool_profile_default_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "group", "signal", "animation", "physics", "navigation", "audio", "ui", "system"]
+		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "runtime", "group", "signal", "animation", "physics", "navigation", "audio", "ui", "system"]
 	},
 	{
 		"id": "full",

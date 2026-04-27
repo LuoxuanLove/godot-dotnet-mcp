@@ -25,12 +25,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should expose builtin tool profiles.")
 	if PluginRuntimeStateScript.TOOL_DOMAIN_DEFS.is_empty():
 		return _failure("PluginRuntimeState should expose tool domain definitions.")
+	for profile in PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES:
+		if not (profile is Dictionary):
+			continue
+		var profile_id := str((profile as Dictionary).get("id", ""))
+		if profile_id == "full":
+			continue
+		var enabled_categories: Array = (profile as Dictionary).get("enabled_categories", [])
+		if not enabled_categories.has("runtime"):
+			return _failure("Builtin tool profile '%s' should keep runtime atomic tools enabled for system runtime tree children." % profile_id)
 	var expected_collapsed := [
 		"system_bindings_audit",
 		"system_editor_log",
 		"system_editor_state",
 		"system_help",
 		"system_project_configure",
+		"system_project_files",
+		"system_project_index_build",
 		"system_project_run",
 		"system_project_state",
 		"system_project_stop",
@@ -43,6 +54,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"system_scene_analyze",
 		"system_scene_dependency_graph",
 		"system_scene_patch",
+		"system_scene_tree",
 		"system_scene_validate",
 		"system_script_analyze",
 		"system_script_patch"
