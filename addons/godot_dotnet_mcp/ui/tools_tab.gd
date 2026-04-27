@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends VBoxContainer
 
 signal tool_toggled(tool_name: String, enabled: bool)
@@ -19,6 +19,7 @@ const CATEGORY_LABEL_KEYS := {
 	"project": "cat_project",
 	"editor": "cat_editor",
 	"plugin_runtime": "cat_plugin_runtime",
+	"runtime": "cat_runtime",
 	"plugin_evolution": "cat_plugin_evolution",
 	"plugin_developer": "cat_plugin_developer",
 	"debug": "cat_debug",
@@ -43,13 +44,18 @@ const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
 const SYSTEM_CATEGORY := "system"
 const USER_TOOL_CUSTOM_ROOT := "res://addons/godot_dotnet_mcp/custom_tools"
+const TREE_TEXT_MIN_WIDTH := 180.0
+const TREE_TEXT_MAX_WIDTH := 300.0
+const TREE_CHECK_MIN_WIDTH := 32.0
+const TREE_CHECK_MAX_WIDTH := 40.0
+const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 
+@onready var _header_card: PanelContainer = %HeaderCard
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
-@onready var _top_shadow: ColorRect = %TopShadow
-@onready var _bottom_shadow: ColorRect = %BottomShadow
+@onready var _tool_list_panel: PanelContainer = %ToolListPanel
 @onready var _tool_preview_panel: PanelContainer = %ToolPreviewPanel
 @onready var _tool_preview_title: Label = %ToolPreviewTitle
 @onready var _tool_preview_text: TextEdit = %ToolPreviewText
@@ -82,6 +88,7 @@ func _ready() -> void:
 	_search_edit.text_changed.connect(_on_search_text_changed)
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.gui_input.connect(_on_tree_gui_input)
+	_tool_tree.theme_type_variation = "TreeSecondary"
 	_tool_tree.set_allow_reselect(true)
 	_tool_preview_text.editable = false
 	_tool_preview_text.selecting_enabled = true
@@ -95,13 +102,10 @@ func _ready() -> void:
 	bottom_pane.clip_contents = true
 	tool_list_panel.clip_contents = true
 	_tool_preview_panel.clip_contents = true
-	_configure_tree_shadow(_top_shadow, false)
-	_configure_tree_shadow(_bottom_shadow, true)
-	set_process(true)
 	_context_menu = PopupMenu.new()
 	add_child(_context_menu)
 	_context_menu.id_pressed.connect(_on_context_menu_id_pressed)
-
+	resized.connect(_on_resized)
 
 func apply_model(model: Dictionary) -> void:
 	var localization = model.get("localization")
@@ -111,6 +115,8 @@ func apply_model(model: Dictionary) -> void:
 
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
+	else:
+		_apply_responsive_layout()
 
 	_apply_localized_copy(localization, model)
 
@@ -126,14 +132,136 @@ func _render_tool_tree(model: Dictionary) -> void:
 	var root = _tool_tree.create_item()
 	if root == null:
 		_tree_syncing = false
-		call_deferred("_update_tree_shadow_visibility")
+		return
+	if _has_presentation_tree(model):
+		for node in model.get("toolTree", []):
+			if node is Dictionary:
+				_create_presentation_node(root, model, node as Dictionary)
+		_tree_syncing = false
 		return
 
 	_create_root_group_item(root, model, SYSTEM_CATEGORY)
 	_create_root_group_item(root, model, "user")
 
 	_tree_syncing = false
-	call_deferred("_update_tree_shadow_visibility")
+
+
+func _has_presentation_tree(model: Dictionary) -> bool:
+	return model.get("toolTree", []) is Array and not (model.get("toolTree", []) as Array).is_empty()
+
+
+func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictionary) -> TreeItem:
+	var filtered_node := _filter_presentation_node(model, node)
+	if filtered_node.is_empty():
+		return null
+	var kind := str(filtered_node.get("kind", ""))
+	var key := str(filtered_node.get("key", filtered_node.get("id", "")))
+	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return null
+	var display_name := _get_presentation_node_display_name(filtered_node)
+	var metadata := _build_presentation_node_metadata(filtered_node, display_name)
+	match kind:
+		"domain", "category":
+			_configure_item_toggle(item, _is_presentation_group_enabled(filtered_node))
+			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", 0)), int(filtered_node.get("totalCount", 0))]
+			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(filtered_node.get("labelKey", ""))))
+		"tool":
+			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
+			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _find_tool_definition(str(filtered_node.get("category", "")), str(filtered_node.get("toolName", "")))))
+		"atomic":
+			_configure_info_row(item, display_name, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, key))
+		"action":
+			_configure_action_item(item, str(filtered_node.get("actionName", filtered_node.get("action", ""))), str(filtered_node.get("parentTool", filtered_node.get("parent_tool", ""))))
+		_:
+			_configure_item_text(item, display_name, metadata)
+	var children: Array = filtered_node.get("children", [])
+	if not children.is_empty() and kind != "atomic":
+		item.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key)
+	for child in children:
+		if child is Dictionary:
+			_create_presentation_node(item, model, child as Dictionary)
+	return item
+
+
+func _filter_presentation_node(model: Dictionary, node: Dictionary) -> Dictionary:
+	var query := _get_search_query()
+	var filtered := node.duplicate(true)
+	var children: Array = []
+	for child in node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var filtered_child := _filter_presentation_node(model, child as Dictionary)
+		if not filtered_child.is_empty():
+			children.append(filtered_child)
+	if query.is_empty() or _presentation_node_matches_search(model, node, query) or not children.is_empty():
+		filtered["children"] = children if not query.is_empty() else node.get("children", [])
+		return filtered
+	return {}
+
+
+func _presentation_node_matches_search(model: Dictionary, node: Dictionary, query: String) -> bool:
+	var display_name := _get_presentation_node_display_name(node).to_lower()
+	if display_name.contains(query) or str(node.get("key", "")).to_lower().contains(query):
+		return true
+	var kind := str(node.get("kind", ""))
+	if kind == "tool" or kind == "atomic":
+		var tool_def := _find_tool_definition(str(node.get("category", "")), str(node.get("toolName", "")))
+		return _get_tool_description(model.get("localization"), str(node.get("key", "")), tool_def).to_lower().contains(query)
+	return false
+
+
+func _get_presentation_node_display_name(node: Dictionary) -> String:
+	var kind := str(node.get("kind", ""))
+	match kind:
+		"domain":
+			return _localization.get_text(str(node.get("labelKey", "domain_other")))
+		"category":
+			return _get_category_label(_localization, str(node.get("category", node.get("key", ""))))
+		"tool", "atomic":
+			var full_name := str(node.get("fullName", node.get("key", "")))
+			return _get_tool_display_name(_localization, full_name, str(node.get("toolName", node.get("tool_name", ""))))
+		"action":
+			return _get_action_display_name(str(node.get("parentTool", node.get("parent_tool", ""))), str(node.get("actionName", node.get("action", ""))))
+	return str(node.get("key", node.get("id", "")))
+
+
+func _build_presentation_node_metadata(node: Dictionary, display_name: String) -> Dictionary:
+	var kind := str(node.get("kind", ""))
+	var key := str(node.get("key", node.get("id", "")))
+	var extra := {
+		"label_key": str(node.get("labelKey", "")),
+		"category": str(node.get("category", "")),
+		"tool_name": str(node.get("toolName", node.get("tool_name", ""))),
+		"source": str(node.get("source", "")),
+		"script_path": str(node.get("script_path", node.get("scriptPath", ""))),
+		"domain_script_path": str(node.get("domain_script_path", node.get("domainScriptPath", ""))),
+		"load_state": str(node.get("loadState", node.get("load_state", ""))),
+		"group_path": node.get("groupPath", [])
+	}
+	if kind == "action":
+		extra["action"] = str(node.get("actionName", node.get("action", "")))
+		extra["tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
+		extra["parent_tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
+	return _build_tree_node_metadata(kind, key, display_name, key, extra)
+
+
+func _is_presentation_group_enabled(node: Dictionary) -> bool:
+	var total := int(node.get("totalCount", 0))
+	return total > 0 and int(node.get("enabledCount", 0)) == total
+
+
+func _presentation_collapse_kind(kind: String) -> String:
+	match kind:
+		"domain":
+			return TreeCollapseState.KIND_DOMAIN
+		"category":
+			return TreeCollapseState.KIND_CATEGORY
+		"tool":
+			return TreeCollapseState.KIND_TOOL
+		"atomic":
+			return TreeCollapseState.KIND_ATOMIC
+	return kind
 
 
 func _create_root_group_item(parent: TreeItem, model: Dictionary, category: String) -> void:
@@ -180,7 +308,7 @@ func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary, col
 	item.set_text(TREE_TEXT_COLUMN, text)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
 	item.set_metadata(TREE_TEXT_COLUMN, metadata)
-	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.6, 0.6, 0.6))
+	item.set_custom_color(TREE_TEXT_COLUMN, _get_muted_text_color())
 	item.collapsed = collapsed
 
 
@@ -194,7 +322,7 @@ func _configure_action_item(item: TreeItem, action_name: String, parent_tool: St
 		"parent_tool": parent_tool,
 		"description_key": SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
 	}))
-	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.45, 0.45, 0.45))
+	item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 
 
 func _configure_item_toggle(item: TreeItem, checked: bool) -> void:
@@ -253,7 +381,7 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 		category_tooltip += "\n".join(load_error_messages)
 	_configure_item_text(item, category_text, _build_tree_node_metadata("category", category, category_label, category, {"label_key": label_key}), category_tooltip)
 	if not load_error_messages.is_empty():
-		item.set_custom_color(TREE_TEXT_COLUMN, Color(0.9, 0.35, 0.35))
+		item.set_custom_color(TREE_TEXT_COLUMN, _get_error_text_color())
 	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_CATEGORY, category)
 
 	for tool_def in _get_filtered_tool_definitions(model, category):
@@ -523,7 +651,7 @@ func _on_tree_gui_input(event: InputEvent) -> void:
 	if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 		var item = _tool_tree.get_item_at_position(mouse_event.position)
 		if item != null:
-			_show_tree_context_menu(item, _tool_tree.get_global_transform().origin + mouse_event.position)
+			_show_tree_context_menu(item, _get_tree_context_menu_screen_position(mouse_event.position))
 			get_viewport().set_input_as_handled()
 		return
 	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
@@ -602,6 +730,10 @@ func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
 	_context_menu.popup(Rect2i(int(global_pos.x), int(global_pos.y), 0, 0))
 
 
+func _get_tree_context_menu_screen_position(local_position: Vector2) -> Vector2:
+	return _tool_tree.get_screen_transform() * local_position
+
+
 func _on_context_menu_id_pressed(id: int) -> void:
 	match id:
 		_CTX_COPY_LOCALIZED_NAME:
@@ -678,64 +810,11 @@ func _get_context_menu_user_tool_script_path() -> String:
 	return ""
 
 
-func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
-	var shader := Shader.new()
-	shader.code = """
-shader_type canvas_item;
-
-uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 0.58);
-uniform bool invert_gradient = false;
-
-void fragment() {
-	float amount = 1.0 - UV.y;
-	if (invert_gradient) {
-		amount = UV.y;
-	}
-	float alpha = pow(amount, 1.35) * shadow_color.a;
-	COLOR = vec4(shadow_color.rgb, alpha);
-}
-"""
-	var material := ShaderMaterial.new()
-	material.shader = shader
-	material.set_shader_parameter("shadow_color", Color(0.0, 0.0, 0.0, 0.58))
-	material.set_shader_parameter("invert_gradient", invert)
-	shadow.material = material
-	shadow.color = Color.WHITE
-	shadow.anchor_left = 0.0
-	shadow.anchor_right = 1.0
-	shadow.offset_left = -12.0
-	shadow.offset_right = 12.0
-	shadow.z_index = 8
-	if invert:
-		shadow.anchor_top = 1.0
-		shadow.anchor_bottom = 1.0
-		shadow.offset_top = -18.0
-		shadow.offset_bottom = 0.0
-	else:
-		shadow.anchor_top = 0.0
-		shadow.anchor_bottom = 0.0
-		shadow.offset_top = 0.0
-		shadow.offset_bottom = 18.0
-
-
-func _process(_delta: float) -> void:
-	_update_tree_shadow_visibility()
-
-
-func _update_tree_shadow_visibility() -> void:
-	if not is_instance_valid(_tool_tree):
-		_top_shadow.visible = false
-		_bottom_shadow.visible = false
-		return
-	var scroll: Vector2 = _tool_tree.get_scroll()
-	var root = _tool_tree.get_root()
-	var has_items := root != null and root.get_first_child() != null
-	_top_shadow.visible = scroll.y > 0.5
-	_bottom_shadow.visible = has_items and _tree_has_hidden_content_below(root)
-
-
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
+	add_theme_constant_override("separation", int(round(8 * scale)))
+	_apply_visual_style(scale)
+	_apply_spacing(scale)
 
 	_tool_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tool_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -745,19 +824,99 @@ func _apply_editor_scale(scale: float) -> void:
 	_tool_tree.custom_minimum_size.x = 0.0
 	_tool_tree.set_column_expand(TREE_TEXT_COLUMN, true)
 	_tool_tree.set_column_expand(TREE_CHECK_COLUMN, false)
-	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(320 * scale)))
-	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(44 * scale)))
-	_tool_preview_panel.custom_minimum_size.y = 88.0 * scale
-	_top_shadow.offset_left = -12.0 * scale
-	_top_shadow.offset_right = 12.0 * scale
-	_top_shadow.custom_minimum_size.y = 14.0 * scale
-	_top_shadow.offset_bottom = 14.0 * scale
-	_bottom_shadow.offset_left = -12.0 * scale
-	_bottom_shadow.offset_right = 12.0 * scale
-	_bottom_shadow.custom_minimum_size.y = 14.0 * scale
-	_bottom_shadow.offset_top = -14.0 * scale
+	_apply_responsive_layout()
+	_tool_preview_panel.custom_minimum_size.y = 148.0 * scale
+	var desired_split := 560.0 * scale
+	if size.y > 0.0:
+		desired_split = max(420.0 * scale, size.y * 0.62)
+	_content_split.split_offset = int(round(desired_split))
 
-	_search_edit.custom_minimum_size.y = 30.0 * scale
+	_search_edit.custom_minimum_size.y = 0.0
+	_tool_count_label.remove_theme_font_size_override("font_size")
+	_tool_preview_title.remove_theme_font_size_override("font_size")
+	_tool_preview_text.remove_theme_font_size_override("font_size")
+
+
+func _apply_responsive_layout() -> void:
+	if _tool_tree == null:
+		return
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	var available_width: float = size.x
+	if available_width <= 0.0:
+		var parent_control := get_parent() as Control
+		if parent_control != null:
+			available_width = parent_control.size.x
+	var check_width: float = min(max(TREE_CHECK_MIN_WIDTH * scale, 32.0 * scale), TREE_CHECK_MAX_WIDTH * scale)
+	var tree_width: float = max(available_width - TREE_HORIZONTAL_CHROME_WIDTH * scale, (TREE_TEXT_MIN_WIDTH + TREE_CHECK_MIN_WIDTH) * scale)
+	var text_width: float = min(max(tree_width - check_width, TREE_TEXT_MIN_WIDTH * scale), TREE_TEXT_MAX_WIDTH * scale)
+	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
+	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(check_width)))
+
+
+func _on_resized() -> void:
+	_apply_responsive_layout()
+
+
+func _apply_spacing(scale: float) -> void:
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/SearchOuterMargin") as MarginContainer, 10, 8, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/ToolListOuterMargin") as MarginContainer, 10, 4, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin") as MarginContainer, 0, 6, 0, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("BottomPane/PreviewOuterMargin") as MarginContainer, 10, 2, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin") as MarginContainer, 0, 2, 0, 12, scale)
+
+
+func _set_margin_constants(margin: MarginContainer, left: int, top: int, right: int, bottom: int, scale: float) -> void:
+	if margin == null:
+		return
+	margin.add_theme_constant_override("margin_left", int(round(left * scale)))
+	margin.add_theme_constant_override("margin_top", int(round(top * scale)))
+	margin.add_theme_constant_override("margin_right", int(round(right * scale)))
+	margin.add_theme_constant_override("margin_bottom", int(round(bottom * scale)))
+
+
+func _apply_visual_style(scale: float) -> void:
+	begin_bulk_theme_override()
+	_header_card.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_tool_list_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "Tree", 0, 0))
+	_tool_preview_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_search_edit.add_theme_stylebox_override("normal", _make_theme_style("normal", "LineEdit", 10, 6))
+	_search_edit.add_theme_stylebox_override("focus", _make_theme_style("focus", "LineEdit", 10, 6))
+	_tool_count_label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_search_edit.add_theme_color_override("font_color", get_theme_color("font_color", "LineEdit"))
+	_search_edit.add_theme_color_override("font_placeholder_color", _get_muted_text_color())
+	_tool_tree.add_theme_color_override("font_color", get_theme_color("font_color", "Tree"))
+	_tool_tree.add_theme_color_override("font_selected_color", get_theme_color("font_selected_color", "Tree"))
+	_tool_tree.add_theme_color_override("guide_color", _get_muted_text_color())
+	_tool_tree.remove_theme_constant_override("v_separation")
+	_tool_preview_title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_tool_preview_text.add_theme_color_override("font_color", get_theme_color("font_color", "TextEdit"))
+	_tool_preview_text.add_theme_color_override("font_readonly_color", get_theme_color("font_readonly_color", "TextEdit"))
+	_tool_preview_text.add_theme_stylebox_override("normal", _make_theme_style("normal", "TextEdit", 8, 6))
+	_tool_preview_text.add_theme_stylebox_override("focus", _make_theme_style("focus", "TextEdit", 8, 6))
+	_tool_preview_text.add_theme_stylebox_override("read_only", _make_theme_style("read_only", "TextEdit", 8, 6))
+	_tool_preview_text.remove_theme_constant_override("line_spacing")
+	end_bulk_theme_override()
+
+
+func _make_theme_style(style_name: String, theme_type: String, horizontal_margin: int, vertical_margin: int) -> StyleBox:
+	var style := get_theme_stylebox(style_name, theme_type).duplicate() as StyleBox
+	style.content_margin_left = horizontal_margin
+	style.content_margin_right = horizontal_margin
+	style.content_margin_top = vertical_margin
+	style.content_margin_bottom = vertical_margin
+	return style
+
+
+func _get_muted_text_color() -> Color:
+	return get_theme_color("font_disabled_color", "Editor")
+
+
+func _get_dim_text_color() -> Color:
+	return get_theme_color("font_disabled_color", "Editor")
+
+
+func _get_error_text_color() -> Color:
+	return get_theme_color("error_color", "Editor")
 
 
 func _category_matches_search(model: Dictionary, category: String) -> bool:
@@ -965,32 +1124,6 @@ func _find_item_by_selection(item: TreeItem) -> TreeItem:
 			return found
 		child = child.get_next()
 	return null
-
-
-func _tree_has_hidden_content_below(root: TreeItem) -> bool:
-	var last_item = _find_last_visible_tree_item(root)
-	if last_item == null:
-		return false
-	var rect = _tool_tree.get_item_area_rect(last_item, TREE_TEXT_COLUMN, -1)
-	return rect.position.y + rect.size.y > _tool_tree.size.y + 1.0
-
-
-func _find_last_visible_tree_item(item: TreeItem) -> TreeItem:
-	if item == null:
-		return null
-	var child = item.get_first_child()
-	if child == null:
-		return item
-
-	var last_visible: TreeItem = null
-	while child != null:
-		last_visible = child
-		if not child.collapsed:
-			var deepest = _find_last_visible_tree_item(child)
-			if deepest != null:
-				last_visible = deepest
-		child = child.get_next()
-	return last_visible
 
 
 func _refresh_preview() -> void:
@@ -1482,7 +1615,8 @@ func _build_tree_signature(model: Dictionary) -> String:
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
-		JSON.stringify(model.get("tool_load_errors", []))
+		JSON.stringify(model.get("tool_load_errors", [])),
+		JSON.stringify(model.get("toolTree", []))
 	]
 	var categories: Array = tools_by_category.keys()
 	categories.sort()

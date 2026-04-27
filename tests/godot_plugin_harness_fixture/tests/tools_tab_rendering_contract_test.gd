@@ -4,6 +4,7 @@ extends RefCounted
 
 const ToolsTabScene = preload("res://addons/godot_dotnet_mcp/ui/tools_tab.tscn")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 var _instance: VBoxContainer = null
 
@@ -14,8 +15,13 @@ class FakeLocalization extends RefCounted:
 		"tool_search_placeholder": "Search tools",
 		"tool_preview_title": "Preview",
 		"tool_preview_empty": "Nothing selected",
+		"tool_preview_tool": "工具",
+		"tool_preview_tool_id": "工具 ID",
+		"tool_preview_category": "分类",
+		"tool_preview_description": "描述",
 		"tools_partial_suffix": "(partial)",
 		"cat_system": "System",
+		"cat_runtime": "运行时",
 		"cat_project": "Project",
 		"cat_user": "User",
 		"domain_core": "Core",
@@ -29,6 +35,9 @@ class FakeLocalization extends RefCounted:
 		"tool_system_editor_state_name": "编辑器状态",
 		"tool_system_editor_log_name": "编辑器日志",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
+		"tool_system_runtime_capture_name": "运行时捕获",
+		"tool_runtime_capture_name": "捕获",
+		"tool_runtime_capture_desc": "内部运行时捕获：通过已启用的运行时会话，将正在运行游戏的视口捕获为 PNG。",
 		"tool_project_info_name": "Project Info",
 		"tool_user_sample_tool_name": "Sample Tool"
 	}
@@ -44,6 +53,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	tree.root.add_child(_instance)
 	await tree.process_frame
 
+	var tools_by_category := _build_tools_by_category()
+	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
@@ -51,12 +62,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"disabled_tools": [],
 			"collapsed_nodes": {}
 		},
-		"tools_by_category": _build_tools_by_category(),
+		"tools_by_category": tools_by_category,
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", []),
+		"tool_presentation": presentation,
 		"tool_load_errors": []
 	})
 	await tree.process_frame
 
-	var tool_count_label = _instance.get_node("HeaderMargin/HeaderContent/ToolCountLabel") as Label
+	var tool_count_label = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel") as Label
 	var expected_visible_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 1
 	if tool_count_label == null or tool_count_label.text != "Enabled %d/%d" % [expected_visible_tool_count, expected_visible_tool_count]:
 		return _failure("Tools tab should count the current system and user roots exactly once.")
@@ -68,10 +82,24 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if root == null:
 		return _failure("Tools tab should create a root tree item when applying the model.")
 
-	var system_category = _find_child_by_metadata(root, "root", "system")
-	var user_category = _find_child_by_metadata(root, "root", "user")
+	var core_domain = _find_child_by_metadata(root, "domain", "core")
+	var user_domain = _find_child_by_metadata(root, "domain", "user")
+	if core_domain == null or user_domain == null:
+		return _failure("Tools tab should render presentation domain roots.")
+	var expected_context_position := tool_tree.get_screen_transform() * Vector2(24, 24)
+	var actual_context_position = _instance.call("_get_tree_context_menu_screen_position", Vector2(24, 24))
+	if not (actual_context_position is Vector2) or (actual_context_position as Vector2).distance_to(expected_context_position) > 2.0:
+		return _failure("Tools tab context menu position should be transformed through ToolTree.get_screen_transform().")
+	_instance.call("_show_tree_context_menu", core_domain, expected_context_position)
+	await tree.process_frame
+	var popup_menu := _find_context_popup(_instance)
+	if popup_menu == null:
+		return _failure("Tools tab should create a context popup for right-clicked tree items.")
+	popup_menu.hide()
+	var system_category = _find_child_by_metadata(core_domain, "category", "system")
+	var user_category = _find_child_by_metadata(user_domain, "category", "user")
 	if system_category == null or user_category == null:
-		return _failure("Tools tab should render the current system and user root groups.")
+		return _failure("Tools tab should render presentation category nodes.")
 
 	var editor_state_tool = _find_child_by_metadata(system_category, "tool", "system_editor_state")
 	var system_tool = _find_child_by_metadata(system_category, "tool", "system_project_state")
@@ -84,8 +112,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
 	if editor_state_tool == null or system_tool == null or runtime_control_tool == null or runtime_capture_tool == null or runtime_input_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
+	var user_metadata = user_tool.get_metadata(0)
+	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
+		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
 	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or userdata_tool.get_text(0) != "用户数据维护":
 		return _failure("Tools tab should localize newly added system tool rows.")
+	var runtime_capture_atomic = _find_child_by_metadata(runtime_capture_tool, "atomic", "runtime_capture")
+	if runtime_capture_tool.get_text(0) != "运行时捕获" or runtime_capture_atomic == null or runtime_capture_atomic.get_text(0) != "捕获":
+		return _failure("Tools tab should localize runtime atomic tool rows.")
+	_instance.call("_apply_selection_metadata", runtime_capture_atomic.get_metadata(0))
+	await tree.process_frame
+	var preview_text = _instance.get_node("ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText") as TextEdit
+	if preview_text == null:
+		return _failure("Tools tab rendering test could not resolve the preview text control.")
+	if not preview_text.text.contains("工具: 捕获") or not preview_text.text.contains("分类: 运行时") or not preview_text.text.contains("内部运行时捕获"):
+		return _failure("Tools tab should localize runtime atomic preview text.")
+	if preview_text.text.contains("RUNTIME CAPTURE ATOMIC"):
+		return _failure("Tools tab should not fall back to the runtime atomic English description.")
 
 	var atomic_tool = _find_child_by_metadata(system_tool, "atomic", "project_info")
 	if atomic_tool == null:
@@ -111,6 +154,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"catalog_tool_count": SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size()
 		}
 	}
+
+
+func _build_exposed_tools(tools_by_category: Dictionary) -> Array:
+	var exposed: Array = []
+	for tool_def in tools_by_category.get("system", []):
+		if not (tool_def is Dictionary):
+			continue
+		var tool := (tool_def as Dictionary).duplicate(true)
+		tool["name"] = "system_%s" % str(tool.get("name", ""))
+		tool["category"] = "system"
+		exposed.append(tool)
+	return exposed
 
 
 func _build_tools_by_category() -> Dictionary:
@@ -167,7 +222,7 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 
 
 func _split_full_name(full_name: String) -> Dictionary:
-	var categories := ["plugin_developer", "plugin_evolution", "plugin_runtime", "filesystem", "animation", "navigation", "material", "resource", "particle", "geometry", "lighting", "tilemap", "project", "editor", "system", "script", "signal", "shader", "debug", "scene", "group", "audio", "node", "user", "ui"]
+	var categories := ["plugin_developer", "plugin_evolution", "plugin_runtime", "filesystem", "animation", "navigation", "material", "resource", "particle", "geometry", "lighting", "tilemap", "project", "editor", "runtime", "system", "script", "signal", "shader", "debug", "scene", "group", "audio", "node", "user", "ui"]
 	for category in categories:
 		if full_name.begins_with("%s_" % category):
 			return {"category": category, "tool": full_name.trim_prefix("%s_" % category)}
@@ -235,6 +290,13 @@ func _find_child_by_metadata(parent: TreeItem, kind: String, key: String) -> Tre
 			if str(meta.get("kind", "")) == kind and str(meta.get("key", "")) == key:
 				return child
 		child = child.get_next()
+	return null
+
+
+func _find_context_popup(root: Node) -> PopupMenu:
+	for child in root.get_children():
+		if child is PopupMenu:
+			return child as PopupMenu
 	return null
 
 
