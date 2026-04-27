@@ -31,155 +31,215 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="SelfDiagnosticsHeader" type="HBoxContainer" parent="Scroll/Margin/Content"]
+[node name="DiagnosticsCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DiagnosticsCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/DiagnosticsCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="DiagnosticsCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin"]
 unique_name_in_owner = true
 theme_override_constants/separation = 8
 
-[node name="SelfDiagnosticsTitle" type="Label" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
+[node name="SelfDiagnosticsHeader" type="HBoxContainer" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="SelfDiagnosticsTitle" type="Label" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+vertical_alignment = 1
 
-[node name="SelfDiagnosticsBadge" type="Label" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
+[node name="SelfDiagnosticsBadge" type="Label" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="SelfDiagnosticsCopyButton" type="Button" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader"]
 unique_name_in_owner = true
 
-[node name="SelfDiagnosticsCopyButton" type="Button" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
+[node name="SelfDiagnosticsClearButton" type="Button" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader"]
 unique_name_in_owner = true
 
-[node name="SelfDiagnosticsClearButton" type="Button" parent="Scroll/Margin/Content/SelfDiagnosticsHeader"]
-unique_name_in_owner = true
-
-[node name="SelfDiagnosticsSummary" type="Label" parent="Scroll/Margin/Content"]
+[node name="SelfDiagnosticsSummary" type="Label" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="SelfDiagnosticsDetails" type="Label" parent="Scroll/Margin/Content"]
+[node name="SelfDiagnosticsDivider" type="HSeparator" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="SelfDiagnosticsDetails" type="Label" parent="Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="SelfDiagnosticsDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+[node name="StatusCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="StatusSectionTitle" type="Label" parent="Scroll/Margin/Content"]
+[node name="StatusCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/StatusCard"]
 unique_name_in_owner = true
-horizontal_alignment = 1
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
 
-[node name="StatusCenter" type="CenterContainer" parent="Scroll/Margin/Content"]
+[node name="StatusCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="StatusSectionTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="StatusCenter" type="MarginContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody"]
 size_flags_horizontal = 3
 
-[node name="StatusGrid" type="GridContainer" parent="Scroll/Margin/Content/StatusCenter"]
+[node name="StatusGrid" type="VBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter"]
 unique_name_in_owner = true
-columns = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 8
+theme_override_constants/separation = 8
 
-[node name="ServerStateTitle" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
-unique_name_in_owner = true
+[node name="ServerStateRow" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
 
-[node name="ServerStateValue" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
-unique_name_in_owner = true
-
-[node name="EndpointTitle" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="ServerStateTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ServerStateRow"]
 unique_name_in_owner = true
 
-[node name="EndpointValue" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="ServerStateValue" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ServerStateRow"]
 unique_name_in_owner = true
 
-[node name="ConnectionsTitle" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="EndpointRow" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="EndpointTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/EndpointRow"]
 unique_name_in_owner = true
 
-[node name="ConnectionsValue" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="EndpointValue" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/EndpointRow"]
 unique_name_in_owner = true
 
-[node name="RequestsTitle" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="ConnectionsRow" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="ConnectionsTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ConnectionsRow"]
 unique_name_in_owner = true
 
-[node name="RequestsValue" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="ConnectionsValue" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ConnectionsRow"]
 unique_name_in_owner = true
 
-[node name="LastRequestTitle" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="RequestsRow" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="RequestsTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/RequestsRow"]
 unique_name_in_owner = true
 
-[node name="LastRequestValue" type="Label" parent="Scroll/Margin/Content/StatusCenter/StatusGrid"]
+[node name="RequestsValue" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/RequestsRow"]
+unique_name_in_owner = true
+
+[node name="LastRequestRow" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="LastRequestTitle" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/LastRequestRow"]
+unique_name_in_owner = true
+
+[node name="LastRequestValue" type="Label" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/LastRequestRow"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="OverviewButtonsCenter" type="CenterContainer" parent="Scroll/Margin/Content"]
+[node name="OverviewButtonsCenter" type="MarginContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody"]
 size_flags_horizontal = 3
 
-[node name="OverviewButtons" type="GridContainer" parent="Scroll/Margin/Content/OverviewButtonsCenter"]
+[node name="OverviewButtons" type="HBoxContainer" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter"]
 unique_name_in_owner = true
-columns = 3
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 8
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
-[node name="StartButton" type="Button" parent="Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons"]
+[node name="StartButton" type="Button" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="RestartButton" type="Button" parent="Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons"]
+[node name="RestartButton" type="Button" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="FullReloadButton" type="Button" parent="Scroll/Margin/Content/OverviewButtonsCenter/OverviewButtons"]
+[node name="FullReloadButton" type="Button" parent="Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
 [node name="SectionDivider" type="HSeparator" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
+visible = false
 size_flags_horizontal = 3
 
-[node name="SettingsSectionTitle" type="Label" parent="Scroll/Margin/Content"]
+[node name="SettingsCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
-horizontal_alignment = 1
-
-[node name="SettingsCenter" type="CenterContainer" parent="Scroll/Margin/Content"]
 size_flags_horizontal = 3
 
-[node name="SettingsContent" type="VBoxContainer" parent="Scroll/Margin/Content/SettingsCenter"]
-size_flags_horizontal = 4
-theme_override_constants/separation = 12
-
-[node name="SettingsGrid" type="GridContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
+[node name="SettingsCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/SettingsCard"]
 unique_name_in_owner = true
-columns = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 8
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
 
-[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid"]
+[node name="SettingsCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="SettingsSectionTitle" type="Label" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody"]
 unique_name_in_owner = true
 horizontal_alignment = 0
 
-[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid"]
+[node name="SettingsCenter" type="MarginContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody"]
+size_flags_horizontal = 3
+
+[node name="SettingsContent" type="VBoxContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="SettingsGrid" type="HBoxContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent"]
+unique_name_in_owner = true
+theme_override_constants/separation = 12
+
+[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/SettingsGrid"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/SettingsGrid"]
 unique_name_in_owner = true
 min_value = 1024.0
 max_value = 65535.0
 
-[node name="LogLevelRow" type="GridContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
+[node name="LogLevelRow" type="HBoxContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent"]
 unique_name_in_owner = true
-columns = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="LogLevelLabel" type="Label" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow"]
+[node name="LogLevelLabel" type="Label" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LogLevelRow"]
 unique_name_in_owner = true
 horizontal_alignment = 0
 
-[node name="LogLevelOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow"]
+[node name="LogLevelOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LogLevelRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="LanguageRow" type="GridContainer" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent"]
+[node name="LanguageRow" type="HBoxContainer" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent"]
 unique_name_in_owner = true
-columns = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow"]
+[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LanguageRow"]
 unique_name_in_owner = true
 horizontal_alignment = 0
 
-[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow"]
+[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LanguageRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
