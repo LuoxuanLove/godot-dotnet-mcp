@@ -7,6 +7,7 @@ const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manife
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 var _state
 var _localization
@@ -107,6 +108,14 @@ func build_model() -> Dictionary:
 	var settings = _get_settings()
 	var all_tools_by_category = _get_all_tools_by_category()
 	var tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
+	var domain_states = _server_controller.get_domain_states()
+	var tool_presentation = ToolPresentationService.build_tool_presentation(
+		_build_exposed_tool_definitions(tools_by_category),
+		tools_by_category,
+		domain_states,
+		settings.get("disabled_tools", []),
+		MCPToolManifest.TOOL_DOMAIN_DEFS
+	)
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var client_install_statuses := {}
 
@@ -132,10 +141,25 @@ func build_model() -> Dictionary:
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
+		"tool_presentation": tool_presentation,
 		"client_install_statuses": client_install_statuses
 	})
 	model["all_tools_by_category"] = all_tools_by_category
 	return model
+
+
+func _build_exposed_tool_definitions(all_tools_by_category: Dictionary) -> Array[Dictionary]:
+	var exposed: Array[Dictionary] = []
+	for tool_def in all_tools_by_category.get("system", []):
+		if not (tool_def is Dictionary):
+			continue
+		var tool := (tool_def as Dictionary).duplicate(true)
+		if bool(tool.get("compatibility_alias", false)):
+			continue
+		tool["name"] = str(tool.get("full_name", "system_%s" % str(tool.get("name", ""))))
+		tool["category"] = "system"
+		exposed.append(tool)
+	return exposed
 
 
 func _get_settings() -> Dictionary:
