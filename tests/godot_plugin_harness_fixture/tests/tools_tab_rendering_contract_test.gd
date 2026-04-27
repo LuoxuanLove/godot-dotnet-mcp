@@ -30,6 +30,8 @@ class FakeLocalization extends RefCounted:
 		"tool_action_get_errors_name": "读取错误",
 		"tool_action_clear_name": "清空",
 		"tool_action_ensure_layout_name": "确保目录结构",
+		"tool_action_list_capture_cache_name": "列出截图缓存",
+		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
 		"tool_action_cleanup_legacy_cache_name": "清理旧缓存",
 		"tool_system_project_state_name": "Project State",
 		"tool_system_editor_state_name": "编辑器状态",
@@ -234,7 +236,7 @@ func _system_actions_for(full_name: String) -> Array:
 		"system_editor_log":
 			return ["get_output", "get_errors", "clear"]
 		"system_userdata_maintenance":
-			return ["ensure_layout", "cleanup_legacy_cache"]
+			return ["ensure_layout", "list_capture_cache", "cleanup_capture_cache", "cleanup_legacy_cache"]
 		"system_runtime_control":
 			return ["status", "enable", "disable"]
 		"system_editor_control":

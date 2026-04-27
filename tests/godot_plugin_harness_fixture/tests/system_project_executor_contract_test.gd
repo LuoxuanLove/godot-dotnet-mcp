@@ -4,6 +4,7 @@ extends RefCounted
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
 
 class FakeBridge extends RefCounted:
@@ -184,6 +185,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("userdata_maintenance cleanup_legacy_cache dry-run should succeed.")
 	if not bool(cleanup_preview.get("data", {}).get("dry_run", false)):
 		return _failure("userdata_maintenance cleanup_legacy_cache should default to dry_run=true.")
+	_create_user_file(MCPUserDataPaths.EDITOR_CAPTURE_DIR + "/contract_editor.png", "editor")
+	_create_user_file(MCPUserDataPaths.EDITOR_CONTROL_CAPTURE_DIR + "/contract_control.png", "control")
+	_create_user_file(MCPUserDataPaths.RUNTIME_CAPTURE_ROOT + "/contract_session/frame.png", "runtime")
+	var capture_list: Dictionary = executor.execute("userdata_maintenance", {"action": "list_capture_cache"})
+	if not bool(capture_list.get("success", false)):
+		return _failure("userdata_maintenance list_capture_cache should succeed.")
+	if int(capture_list.get("data", {}).get("file_count", 0)) < 3:
+		return _failure("userdata_maintenance list_capture_cache should include managed editor/control/runtime captures.")
+	var capture_cleanup_preview: Dictionary = executor.execute("userdata_maintenance", {"action": "cleanup_capture_cache"})
+	if not bool(capture_cleanup_preview.get("success", false)) or not bool(capture_cleanup_preview.get("data", {}).get("dry_run", false)):
+		return _failure("userdata_maintenance cleanup_capture_cache should default to dry_run=true.")
+	if not FileAccess.file_exists(MCPUserDataPaths.EDITOR_CAPTURE_DIR + "/contract_editor.png"):
+		return _failure("userdata_maintenance cleanup_capture_cache dry-run should not delete captures.")
+	var capture_cleanup_apply: Dictionary = executor.execute("userdata_maintenance", {"action": "cleanup_capture_cache", "dry_run": false})
+	if not bool(capture_cleanup_apply.get("success", false)):
+		return _failure("userdata_maintenance cleanup_capture_cache should apply when dry_run=false.")
+	if FileAccess.file_exists(MCPUserDataPaths.EDITOR_CAPTURE_DIR + "/contract_editor.png"):
+		return _failure("userdata_maintenance cleanup_capture_cache should remove managed capture files when applied.")
 
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
@@ -238,6 +257,18 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 		if str(tool_def.get("name", "")) == name:
 			return true
 	return false
+
+
+func cleanup_case(_tree: SceneTree) -> void:
+	PluginSelfDiagnosticStore.clear()
+	MCPUserDataPaths.cleanup_capture_cache(false)
+
+
+func _create_user_file(path: String, content: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(content)
 
 
 func _failure(message: String) -> Dictionary:

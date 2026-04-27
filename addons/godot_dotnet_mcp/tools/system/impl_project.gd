@@ -74,11 +74,11 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "userdata_maintenance",
-			"description": "USERDATA MAINTENANCE: Manually inspect or clean legacy Godot MCP files in user://. Actions: ensure_layout creates the current layered directories; cleanup_legacy_cache finds or applies cleanup for old root-level MCP screenshots/logs/events. cleanup_legacy_cache defaults to dry_run=true and must be explicitly run by an Agent/user; plugin startup does not auto-clean.",
+			"description": "USERDATA MAINTENANCE: Manually inspect or clean Godot MCP files in user://. Actions: ensure_layout creates the current layered directories; list_capture_cache reports managed editor/control/runtime screenshots; cleanup_capture_cache previews or removes current managed capture files while skipping symlinks, junctions, and reparse points; cleanup_legacy_cache finds or applies cleanup for old root-level MCP screenshots/logs/events. cleanup_* defaults to dry_run=true and must be explicitly run by an Agent/user; plugin startup does not auto-clean.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["ensure_layout", "cleanup_legacy_cache"], "description": "Maintenance action"},
+					"action": {"type": "string", "enum": ["ensure_layout", "list_capture_cache", "cleanup_capture_cache", "cleanup_legacy_cache"], "description": "Maintenance action"},
 					"dry_run": {"type": "boolean", "description": "Preview cleanup without changing files (default: true)"}
 				},
 				"required": ["action"]
@@ -171,6 +171,11 @@ func _execute_userdata_maintenance(args: Dictionary) -> Dictionary:
 	match action:
 		"ensure_layout":
 			return bridge.success(MCPUserDataPaths.initialize_layout(false), "User data layout ensured")
+		"list_capture_cache":
+			return bridge.success(MCPUserDataPaths.list_capture_cache(), "Capture cache listed")
+		"cleanup_capture_cache":
+			var dry_run_current := bool(args.get("dry_run", true))
+			return bridge.success(MCPUserDataPaths.cleanup_capture_cache(dry_run_current), "Capture cache cleanup previewed" if dry_run_current else "Capture cache cleanup applied")
 		"cleanup_legacy_cache":
 			var dry_run := bool(args.get("dry_run", true))
 			return bridge.success(MCPUserDataPaths.cleanup_legacy_cache(dry_run), "Legacy user data cleanup previewed" if dry_run else "Legacy user data cleanup applied")

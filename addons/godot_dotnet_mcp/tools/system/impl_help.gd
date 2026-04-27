@@ -59,7 +59,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"Call system_editor_state when the task depends on the current editor UI.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
-			"Use system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true) to inspect stale root-level MCP cache files; apply cleanup only by explicit Agent/user action.",
+			"Use system_userdata_maintenance(action=list_capture_cache) to inspect managed screenshot caches, cleanup_capture_cache with dry_run=true to preview removal, and cleanup_legacy_cache for stale root-level MCP files; cleanup skips symlinks/junctions/reparse points and must only be applied by explicit Agent/user action.",
 			"If a target UI is not found, retry system_editor_control(action=list_controls) with include_hidden=true."
 		],
 		"capabilities": {

@@ -70,6 +70,47 @@ static func cleanup_legacy_cache(dry_run: bool = true) -> Dictionary:
 	return result
 
 
+static func list_capture_cache() -> Dictionary:
+	var result := {
+		"roots": [EDITOR_CAPTURE_DIR, EDITOR_CONTROL_CAPTURE_DIR, RUNTIME_CAPTURE_ROOT],
+		"files": [],
+		"file_count": 0,
+		"total_bytes": 0,
+		"skipped_links": [],
+		"errors": []
+	}
+	for dir_path in [EDITOR_CAPTURE_DIR, EDITOR_CONTROL_CAPTURE_DIR, RUNTIME_CAPTURE_ROOT]:
+		_collect_cache_files(dir_path, result)
+	result["file_count"] = (result["files"] as Array).size()
+	return result
+
+
+static func cleanup_capture_cache(dry_run: bool = true) -> Dictionary:
+	var result := list_capture_cache()
+	result["dry_run"] = dry_run
+	result["removed"] = []
+	if dry_run:
+		return result
+	for entry in result.get("files", []):
+		if not (entry is Dictionary):
+			continue
+		var path := str((entry as Dictionary).get("path", ""))
+		var root := str((entry as Dictionary).get("root", ""))
+		if path.is_empty() or root.is_empty():
+			continue
+		if not _is_managed_child_path(path, root):
+			(result["errors"] as Array).append({"path": path, "error": "Path is outside managed capture root"})
+			continue
+		var error := DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+		if error == OK:
+			(result["removed"] as Array).append(path)
+		else:
+			(result["errors"] as Array).append({"path": path, "error": error_string(error)})
+	for dir_path in [RUNTIME_CAPTURE_ROOT, EDITOR_CONTROL_CAPTURE_DIR, EDITOR_CAPTURE_DIR]:
+		_remove_empty_capture_dirs(dir_path, result, dir_path)
+	return result
+
+
 static func editor_capture_path(filename: String) -> String:
 	return "%s/%s" % [EDITOR_CAPTURE_DIR, sanitize_filename(filename)]
 
@@ -218,6 +259,103 @@ static func _collect_root_png_candidates(result: Dictionary) -> void:
 			(result["candidates"] as Array).append({"type": "file", "path": "user://%s" % entry, "action": "remove"})
 		entry = dir.get_next()
 	dir.list_dir_end()
+
+
+static func _collect_cache_files(dir_path: String, result: Dictionary) -> void:
+	_collect_cache_files_under_root(dir_path, dir_path, result)
+
+
+static func _collect_cache_files_under_root(dir_path: String, root_path: String, result: Dictionary) -> void:
+	if not _is_managed_child_path(dir_path, root_path):
+		(result["errors"] as Array).append({"path": dir_path, "error": "Path is outside managed capture root"})
+		return
+	if _is_link_path(dir_path):
+		(result["skipped_links"] as Array).append(dir_path)
+		return
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		return
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		(result["errors"] as Array).append({"path": dir_path, "error": "Unable to open directory"})
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		var child_path := "%s/%s" % [dir_path, entry]
+		if not _is_managed_child_path(child_path, root_path):
+			(result["errors"] as Array).append({"path": child_path, "error": "Path is outside managed capture root"})
+			entry = dir.get_next()
+			continue
+		if dir.is_link(entry):
+			(result["skipped_links"] as Array).append(child_path)
+			entry = dir.get_next()
+			continue
+		if dir.current_is_dir():
+			_collect_cache_files_under_root(child_path, root_path, result)
+		else:
+			var size := 0
+			if FileAccess.file_exists(child_path):
+				var file := FileAccess.open(child_path, FileAccess.READ)
+				if file != null:
+					size = file.get_length()
+			(result["files"] as Array).append({"path": child_path, "root": root_path, "bytes": size})
+			result["total_bytes"] = int(result.get("total_bytes", 0)) + size
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+
+static func _remove_empty_capture_dirs(dir_path: String, result: Dictionary, protected_root: String) -> void:
+	if not _is_managed_child_path(dir_path, protected_root):
+		(result["errors"] as Array).append({"path": dir_path, "error": "Path is outside managed capture root"})
+		return
+	if _is_link_path(dir_path):
+		(result["skipped_links"] as Array).append(dir_path)
+		return
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		return
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	var child_dirs: Array[String] = []
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if dir.is_link(entry):
+			(result["skipped_links"] as Array).append("%s/%s" % [dir_path, entry])
+		elif dir.current_is_dir():
+			var child_dir := "%s/%s" % [dir_path, entry]
+			if _is_managed_child_path(child_dir, protected_root):
+				child_dirs.append(child_dir)
+			else:
+				(result["errors"] as Array).append({"path": child_dir, "error": "Path is outside managed capture root"})
+		entry = dir.get_next()
+	dir.list_dir_end()
+	for child_dir in child_dirs:
+		_remove_empty_capture_dirs(child_dir, result, protected_root)
+	if dir_path == protected_root:
+		return
+	_remove_empty_dir(dir_path, result)
+
+
+static func _is_managed_child_path(path: String, root_path: String) -> bool:
+	var normalized_path := path.replace("\\", "/").strip_edges().trim_suffix("/")
+	var normalized_root := root_path.replace("\\", "/").strip_edges().trim_suffix("/")
+	if normalized_path.is_empty() or normalized_root.is_empty():
+		return false
+	if normalized_path == normalized_root:
+		return true
+	return normalized_path.begins_with("%s/" % normalized_root)
+
+
+static func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
 
 
 static func _is_legacy_root_cache_file(filename: String) -> bool:
