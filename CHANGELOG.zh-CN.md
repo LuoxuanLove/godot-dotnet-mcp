@@ -39,14 +39,11 @@
 - 日志公开级别收敛为 `debug`、`info`、`warning`、`error` 四级；旧 `trace` 输入仅作为兼容别名归并到 `debug`。
 - Dock Tools 页现在优先消费生成好的 `toolTree` 展示模型，仅在缺少新模型时回退到旧的本地组树逻辑。
 - 将 `runtime` 注册为内部原子工具分类，并同步内置工具 Profile，使 `system_runtime_*` 的内部子链路保持启用，同时不把 runtime 原子工具暴露为公开 MCP 工具。
-- 因 `system_userdata_maintenance` action 枚举扩展，递增工具 schema 版本，便于 Agent 识别新的缓存管理契约。
 
 ### Fixed
 
 - 修复 User Tool 运行时生命周期：外部新增、修改、删除、恢复脚本时，无需重启即可正确生效。
 - 修复空 `user` 域清理：删除最后一个 User Tool 后，运行时会正确回到 `uninitialized`。
-- 修复同步到 Mechoes 后的完全重载链路：最新插件实例可在真实编辑器中重新接管 MCP HTTP 端点并恢复健康状态。
-- 修复插件自举开发时 editor/debug 原子执行器复用旧缓存的问题，使同步后的编辑器控制与编辑器日志能力能在下一次重载后正确生效。
 
 ## 0.5.0 - 2026-03-19
 

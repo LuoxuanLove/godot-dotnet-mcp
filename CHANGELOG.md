@@ -38,14 +38,11 @@
 - Consolidated public logging levels to `debug`, `info`, `warning`, and `error`; legacy `trace` inputs are normalized to `debug` for compatibility.
 - The Dock Tools page now prefers the generated `toolTree` presentation model and only falls back to the older local tree reconstruction path for compatibility.
 - Registered `runtime` as an internal atomic tool category and aligned built-in profiles so `system_runtime_*` tree children stay enabled without exposing runtime atomics as public MCP tools.
-- Bumped the tool schema version for the expanded `system_userdata_maintenance` action enum so agents can detect the new cache-management contract.
 
 ### Fixed
 
 - Fixed user-tool runtime lifecycle so external add / change / delete / restore flows apply cleanly without requiring a Godot restart.
 - Fixed user-domain cleanup so removing the final user tool returns the domain to `uninitialized`.
-- Fixed the synchronized Mechoes integration path so the full reload action can restart the live plugin instance and keep the MCP HTTP endpoint healthy after reload.
-- Fixed stale atomic editor/debug executor reuse during plugin self-development so newly synced editor-control and editor-log behavior can be picked up by the next reload cycle.
 
 ## 0.5.0 - 2026-03-19
 
