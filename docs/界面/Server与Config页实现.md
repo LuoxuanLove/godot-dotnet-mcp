@@ -80,6 +80,10 @@ Home 页头部的自诊断卡片展示数据来自：
 - `VBoxContainer`
 - 标题、说明、路径文本、内容区、按钮区
 
+Config 页静态分组卡片与动态客户端卡片都通过 `config_tab.gd::_make_framed_panel_style()` 覆盖 `PanelContainer.panel`：背景复制编辑器主题的 `Tree.panel`，再在 `StyleBoxFlat` 上补 `Editor.separator_color` 的 1px 边框。这样能保持与 `Tools` 页树区一致的背景深度，同时恢复卡片边界可见性。
+
+配置内容区不再直接使用可编辑控件，而是使用 `PanelContainer + Label` 并套用 `TextEdit.read_only` 主题样式；复制按钮悬浮在内容区右上角，默认隐藏，鼠标进入内容区域后显示。这样既保留只读文本区的视觉层级，也避免 TextEdit 在窄宽度下引入额外滚动和焦点行为。
+
 按钮逻辑：
 
 - 桌面端客户端：根据能力显示 `Write Config`、`Remove Config`、打开客户端、路径管理与复制动作
@@ -125,7 +129,7 @@ plugin.gd
 - 文本统一由本地化服务驱动，不依赖 Godot 自动翻译
 - 动作都通过 signal 回流到 `plugin.gd`
 - 页签本身不持有 `MCPHttpServer` 或 `SettingsStore` 实例
-- 只读文本区优先使用 `TextEdit`
+- 只读文本区优先复用 Godot 文本控件主题；Config 页配置内容区使用 `PanelContainer + Label` 承载文本，并套用 `TextEdit.read_only` 样式以保持外观一致
 
 ---
 

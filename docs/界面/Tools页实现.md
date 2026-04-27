@@ -9,7 +9,7 @@
 `Tools` 页当前聚焦四类能力：
 
 1. 显示当前已启用的工具数
-2. 以 `system` / `user` 根分组展示当前公开工具
+2. 消费运行时生成的 Tool Presentation Model，以 `domain → category → tool → atomic/action` 层级展示当前工具
 3. 展开查看 `system_*` 工具依赖的原子工具链路
 4. 展示当前选中项的描述、参数、运行时信息与原子工具预览
 
@@ -61,41 +61,44 @@ ToolsTab
 
 ## 系统工具树
 
-当前树结构固定为：
+当前树结构由运行时 Tool Presentation Model 生成，主层级为：
 
 ```text
 root
-  ├─ system
-  │   ├─ system_editor_state
-  │   │   ├─ editor_status
-  │   │   ├─ editor_inspector
-  │   │   ├─ editor_filesystem
-  │   │   ├─ debug_runtime_bridge
-  │   │   └─ debug_dotnet
-  │   ├─ system_editor_control
-  │   │   ├─ editor_status
-  │   │   ├─ editor_screenshot
-  │   │   ├─ editor_ui_control
-  │   │   └─ editor_popup
-  │   ├─ system_project_state
-  │   │   ├─ project_info
-  │   │   ├─ project_dotnet
-  │   │   ├─ filesystem_directory
-  │   │   └─ debug_runtime_bridge
-  │   ├─ system_runtime_control
-  │   ├─ system_runtime_capture
-  │   ├─ system_runtime_input
-  │   ├─ system_runtime_step
-  │   └─ ...
+  ├─ core
+  │   ├─ system
+  │   │   ├─ system_editor_state
+  │   │   │   ├─ editor_status
+  │   │   │   ├─ editor_inspector
+  │   │   │   ├─ editor_filesystem
+  │   │   │   ├─ debug_runtime_bridge
+  │   │   │   └─ debug_dotnet
+  │   │   ├─ system_project_index_build
+  │   │   │   ├─ filesystem_directory
+  │   │   │   ├─ script_inspect
+  │   │   │   └─ resource_query
+  │   │   ├─ system_runtime_control
+  │   │   │   ├─ status / enable / disable
+  │   │   │   └─ runtime_control
+  │   │   ├─ system_runtime_capture
+  │   │   │   └─ runtime_capture
+  │   │   ├─ system_runtime_input
+  │   │   │   └─ runtime_input
+  │   │   ├─ system_runtime_step
+  │   │   │   └─ runtime_step
+  │   │   └─ ...
+  │   └─ ... internal atomic categories
   └─ user
-      ├─ user_tool_a
-      └─ user_tool_b
+      └─ user
+          ├─ user_tool_a
+          └─ user_tool_b
 ```
 
 说明：
 
-- 根下固定先渲染 `system` 与 `user` 两个根分组
-- 当前仍保留 category / domain 元数据与信号语义，但主树默认不渲染独立 domain 节点
+- 根下渲染 domain 节点，再渲染 category 节点；`system` 与 `user` 不再是硬编码根节点
+- `system_*` 高层工具通过 `SystemTreeCatalog` 展开真实内部 atomic/action 链路
+- `runtime_*` 是内部 atomic category，只作为 `system_runtime_*` 的子链路展示，不作为对外 MCP 工具暴露
 - 原子工具节点可继续递归展开
 - 原子工具的勾选行为沿用普通工具行逻辑，仍通过 `tool_toggled` 回流
 
@@ -106,8 +109,8 @@ root
 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 当前负责：
 
 - 接收 model 并刷新文案
-- 构建 `system` / `user` 根分组与 TreeItem
-- 根据 `SYSTEM_TOOL_ATOMIC_CHILDREN` 构建原子工具子树
+- 优先消费 model 中的 `toolTree` / `toolGroups` / `tool_presentation` 构建 TreeItem
+- 在缺少 presentation model 时，才回退到旧的本地树重建逻辑
 - 管理当前选中项、上下文菜单和预览区滚动恢复
 - 发出工具启停与展开折叠信号
 - 在极小尺寸下裁剪树区和预览区内容
