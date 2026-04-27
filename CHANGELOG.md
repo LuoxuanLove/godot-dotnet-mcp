@@ -15,6 +15,7 @@
 - Added `system_editor_control(action=activate_ui)` for non-invasive Godot API-based dock/plugin/bottom-panel activation, including semantic targets such as `MCPDock/config` and optional capture output.
 - Added layered `user://godot_dotnet_mcp/` output management and manual `system_userdata_maintenance` cleanup for stale root-level MCP cache files.
 - Added high-level `system_project_files` and `system_scene_tree` tools for common Agent workflows that modify the project FileSystem tree or the currently edited scene tree.
+- Added a shared Tool Presentation Model so `/api/tools`, MCP `tools/list`, stdio `tools/list`, and the Dock Tools page can expose the same domain/category/tool/atomic/action tree while preserving the flat `tools[]` contract.
 
 ### Changed
 
@@ -25,13 +26,15 @@
 - Documented the preferred background UI verification flow and discouraged OS mouse/window automation unless explicitly authorized by the user.
 - Finished the user-tool hot reload refactor: user tools now reload as per-script runtime slots instead of being mixed into the `system` executor lifecycle.
 - Unified user-tool refresh flow under explicit registry refresh, runtime reload, and UI rebuild stages.
-- Refined the Tools page so it keeps separate `System` and `User` roots while counting only System high-level tools plus User tools in the visible total.
+- Refined the Tools page count so it includes only System high-level tools plus User tools in the visible total.
 - Limited externally exposed MCP tools to high-level `system_*` tools; atomic tools remain internal-only.
 - Simplified self-diagnostic presentation by separating the latest operation from the latest incident and adding a clear action for recoverable warnings.
 - Removed the plugin permission-level system and the Home tab's advanced permission settings; the plugin now always keeps the strongest internal tool capability available.
 - Expanded Tools tree localization and action children so high-level System tools show localized names, descriptions, direct actions, and linked atomic-tool details without exposing atomic tools as public MCP tools.
 - Expanded Config client support and status projection for Codex Desktop, OpenCode Desktop, Windsurf, Cline, Roo Code, Qwen Code, and Cherry Studio, with installed entries shown as explicit `Installed to` paths or CLI scopes.
 - Consolidated public logging levels to `debug`, `info`, `warning`, and `error`; legacy `trace` inputs are normalized to `debug` for compatibility.
+- The Dock Tools page now prefers the generated `toolTree` presentation model and only falls back to the older local tree reconstruction path for compatibility.
+- Registered `runtime` as an internal atomic tool category and aligned built-in profiles so `system_runtime_*` tree children stay enabled without exposing runtime atomics as public MCP tools.
 
 ### Fixed
 

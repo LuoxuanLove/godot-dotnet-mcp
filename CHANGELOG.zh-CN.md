@@ -15,6 +15,7 @@
 - 新增 `system_editor_control(action=activate_ui)`，可通过 Godot API 无感激活 Dock/插件页签/底部面板，支持 `MCPDock/config` 等语义目标与可选截图输出。
 - 新增 `user://godot_dotnet_mcp/` 分层输出管理，并提供手动 `system_userdata_maintenance` 清理旧版根级 MCP 缓存文件。
 - 新增 `system_project_files` 与 `system_scene_tree` 高层工具，分别覆盖项目文件树修改和当前编辑场景树修改的常见 Agent 工作流。
+- 新增统一 Tool Presentation Model，使 `/api/tools`、MCP `tools/list`、stdio `tools/list` 与 Dock Tools 页共享同一份 domain/category/tool/atomic/action 工具树，同时保留扁平 `tools[]` 兼容契约。
 
 ### Changed
 
@@ -26,13 +27,15 @@
 - 完成 User Tool 热重载架构收口：用户工具现在按“单脚本 runtime slot”管理，不再混入 `system` 执行器生命周期。
 - 统一 User Tool 刷新流程：显式拆分为注册表刷新、运行时重载与 UI 重建三个阶段。
 - 调整 `Tools` 页统计口径：只统计系统高层工具与 User Tool，不再把内部原子工具计入可见总数。
-- `Tools` 树继续保留 `系统` 与 `用户` 两个根节点。
+- `Tools` 树改为消费统一 Tool Presentation Model 的 domain/category 层级，不再把 `系统` 与 `用户` 作为硬编码根节点。
 - 对外 MCP 工具继续收敛为高层 `system_*` 工具，原子工具仅保留为内部依赖。
 - 优化自检展示：区分“最近操作”和“最近告警”，并提供可恢复告警的清除入口。
 - 移除插件权限级别系统与首页高级权限设置，插件内部始终保持最高可用工具能力。
 - 补全 `Tools` 树本地化与高层 System 工具 action 子节点展示，继续只对外暴露高层 MCP 工具，原子工具仅作为内部依赖说明展示。
 - 扩展 Config 页客户端支持与状态展示，覆盖 Codex Desktop、OpenCode Desktop、Windsurf、Cline、Roo Code、Qwen Code 与 Cherry Studio，并将已安装状态明确显示为“已安装到”具体配置路径或 CLI 作用域。
 - 日志公开级别收敛为 `debug`、`info`、`warning`、`error` 四级；旧 `trace` 输入仅作为兼容别名归并到 `debug`。
+- Dock Tools 页现在优先消费生成好的 `toolTree` 展示模型，仅在缺少新模型时回退到旧的本地组树逻辑。
+- 将 `runtime` 注册为内部原子工具分类，并同步内置工具 Profile，使 `system_runtime_*` 的内部子链路保持启用，同时不把 runtime 原子工具暴露为公开 MCP 工具。
 
 ### Fixed
 
