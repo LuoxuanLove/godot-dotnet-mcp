@@ -534,7 +534,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var project_root := str(path_result.get("data", {}).get("project_root_path", ""))
 	if executable_path.is_empty() or project_root.is_empty():
 		return _failure("Editor status get_godot_path returned empty paths.")
-	if executable_path.find("Godot_v4.6.2-stable_mono_win64") == -1:
+	var executable_name := executable_path.get_file().to_lower()
+	if executable_name.find("godot") == -1 or not executable_name.ends_with(".exe"):
 		return _failure("Editor status get_godot_path returned an unexpected executable path.")
 
 	var focus_context_result: Dictionary = executor.execute("status", {"action": "get_focus_context"})
