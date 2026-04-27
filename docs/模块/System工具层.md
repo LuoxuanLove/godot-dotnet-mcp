@@ -53,7 +53,7 @@ tools/system/
 - `system_runtime_input`：注入 `InputMap action` 或原始键盘输入，支持 `press/release/tap/hold`。
 - `system_runtime_step`：标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环；当 `capture=true` 时同样支持 `capture_dir`。
 
-默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理旧缓存；需要整理历史遗留根级文件时，由 Agent 显式调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
+默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理缓存；需要查看或整理当前截图缓存时，由 Agent 显式调用 `system_userdata_maintenance(action=list_capture_cache)` 或 `system_userdata_maintenance(action=cleanup_capture_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。当前截图缓存清理会跳过 symlink、Windows junction 与 reparse point。需要整理历史遗留根级文件时，调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 
 ### 场景级
 - `system_scene_validate`：做场景完整性检查与依赖缺失检测。
