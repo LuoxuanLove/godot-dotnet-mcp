@@ -1,9 +1,10 @@
-﻿@tool
+@tool
 extends VBoxContainer
 
 const SERVER_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/server_panel.tscn"
 const TOOLS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/tools_tab.tscn"
 const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.tscn"
+const DOCK_TAB_ACTIVATION_RETRY_COUNT := 6
 
 signal current_tab_changed(index: int)
 signal port_changed(value: int)
@@ -39,6 +40,7 @@ var _current_scale := -1.0
 var _server_tab: Control
 var _tools_tab: Control
 var _config_tab: Control
+var _is_running := false
 
 
 func _ready() -> void:
@@ -80,7 +82,6 @@ func _ready() -> void:
 		_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
 		_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
 
-
 func apply_model(model: Dictionary) -> void:
 	if _status_indicator == null or _tab_container == null:
 		return
@@ -89,15 +90,14 @@ func apply_model(model: Dictionary) -> void:
 		return
 	var is_running = bool(model.get("is_running", false))
 	var editor_scale = float(model.get("editor_scale", 1.0))
-	var color = Color(0.2, 0.8, 0.2) if is_running else Color(0.9, 0.3, 0.3)
+	_is_running = is_running
 
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
 
-	_status_indicator.color = color
 	_title_label.text = localization.get_text("title")
 	_status_label.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
-	_status_label.add_theme_color_override("font_color", color)
+	_refresh_theme_colors()
 
 	if _tab_container.get_tab_count() >= 3:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
@@ -189,7 +189,7 @@ func restore_focus_snapshot(snapshot: Dictionary) -> void:
 
 
 func activate_editor_dock_tab() -> void:
-	call_deferred("_activate_editor_dock_tab_deferred")
+	call_deferred("_activate_editor_dock_tab_retry", 0)
 
 
 func _ensure_tabs() -> void:
@@ -332,24 +332,52 @@ func _on_config_tab_copy_requested(text: String, source: String) -> void:
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
 	custom_minimum_size = Vector2(280, 400) * scale
+	add_theme_constant_override("separation", int(round(6 * scale)))
 
-	var header = get_node("Header") as HBoxContainer
-	header.custom_minimum_size.y = 40.0 * scale
+	var header = get_node_or_null("Header") as PanelContainer
+	if header == null or _status_indicator == null or _title_label == null or _status_label == null:
+		return
+	header.custom_minimum_size.y = 48.0 * scale
+	header.remove_theme_stylebox_override("panel")
 
-	var header_margin = get_node("Header/HeaderMargin") as MarginContainer
-	header_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	header_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
+	var header_margin = get_node_or_null("Header/HeaderMargin") as MarginContainer
+	if header_margin == null:
+		return
+	header_margin.add_theme_constant_override("margin_left", int(round(14 * scale)))
+	header_margin.add_theme_constant_override("margin_right", int(round(14 * scale)))
 	header_margin.add_theme_constant_override("margin_top", int(round(8 * scale)))
 	header_margin.add_theme_constant_override("margin_bottom", int(round(8 * scale)))
 
-	var header_content = get_node("Header/HeaderMargin/HeaderContent") as HBoxContainer
-	header_content.add_theme_constant_override("separation", int(round(10 * scale)))
+	var header_content = get_node_or_null("Header/HeaderMargin/HeaderContent") as HBoxContainer
+	if header_content == null:
+		return
+	header_content.add_theme_constant_override("separation", int(round(8 * scale)))
 
-	_status_indicator.custom_minimum_size = Vector2(12, 12) * scale
+	_status_indicator.custom_minimum_size = Vector2(10, 10) * scale
+	_title_label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_title_label.remove_theme_font_size_override("font_size")
+	_status_label.remove_theme_font_size_override("font_size")
+	_refresh_theme_colors()
+
+
+func _refresh_theme_colors() -> void:
+	if _title_label == null or _status_label == null:
+		return
+	var color := _get_status_color(_is_running)
+	_title_label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_status_label.add_theme_color_override("font_color", color)
+	if _status_indicator != null:
+		_status_indicator.color = color
+
+
+func _get_status_color(is_running: bool) -> Color:
+	if is_running:
+		return get_theme_color("accent_color", "Editor")
+	return get_theme_color("error_color", "Editor")
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REUSE)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE)
 	return scene as PackedScene
 
 
@@ -370,14 +398,30 @@ func _can_grab_focus(control: Control) -> bool:
 	return control.focus_mode != Control.FOCUS_NONE and control.is_visible_in_tree()
 
 
+func _activate_editor_dock_tab_retry(attempt: int) -> void:
+	_activate_editor_dock_tab_deferred()
+	if attempt >= DOCK_TAB_ACTIVATION_RETRY_COUNT:
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	await tree.process_frame
+	if not is_instance_valid(self):
+		return
+	_activate_editor_dock_tab_retry(attempt + 1)
+
+
 func _activate_editor_dock_tab_deferred() -> void:
 	var current: Node = self
 	while current != null:
+		if current.has_method("make_visible"):
+			current.call("make_visible")
+			return
 		var parent = current.get_parent()
 		if parent is TabContainer:
 			var tab_container := parent as TabContainer
 			for index in range(tab_container.get_tab_count()):
-				if tab_container.get_child(index) == current:
+				if tab_container.get_tab_control(index) == current:
 					tab_container.current_tab = index
 					return
 		current = parent

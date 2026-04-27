@@ -123,9 +123,8 @@ func remove_plugin_dock(plugin, dock, dock_script_path: String) -> Dictionary:
 		var parent = dock.get_parent()
 		if parent != null:
 			parent.remove_child(dock)
-		if dock.has_method("set_script"):
-			dock.set_script(null)
-			dock.queue_free()
+		dock.set_script(null)
+		dock.queue_free()
 	return {"success": true, "dock": null, "dock_script_path": dock_script_path}
 
 

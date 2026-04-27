@@ -78,8 +78,7 @@ func stop_requested() -> void:
 
 
 func full_reload_requested() -> void:
-	if not _call_plugin_method("runtime_full_reload"):
-		_call_plugin_method("_on_full_reload_requested")
+	_call_plugin_method("_on_full_reload_requested")
 
 
 func clear_self_diagnostics_requested() -> void:
