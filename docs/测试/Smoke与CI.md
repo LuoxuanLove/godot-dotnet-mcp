@@ -45,7 +45,7 @@ tests/
 当前包含：
 
 1. Build plugin Roslyn library
-2. Run plugin headless harness required subset（`scripts/test_plugin_side_roslyn.ps1` 中当前维护的 28 个 case）
+2. Run plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
 
 ---
 
@@ -58,7 +58,7 @@ tests/
 
 ### 仍是软门禁或环境依赖的部分
 
-- plugin harness 在无 Godot 可执行文件时允许跳过；其余可发现 case 不自动进入 CI 硬门禁
+- `tests/godot_plugin_harness` 支持 `--allow-skip-missing-godot`，但 CI 入口 `scripts/test_plugin_side_roslyn.ps1` 要求真实 Godot 可执行文件；其余可发现 case 不自动进入 CI 硬门禁
 
 ---
 
