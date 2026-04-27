@@ -73,6 +73,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if _probe_plugin._server_controller == null or bool(_probe_plugin._server_controller._running):
 		return _return_failure(tree, "plugin.gd should not auto-start the server when saved auto_start=false is restored.")
 
+	var runtime_full_reload: Dictionary = _probe_plugin.runtime_full_reload()
+	if not bool(runtime_full_reload.get("success", false)) or not bool(runtime_full_reload.get("deferred", false)):
+		return _return_failure(tree, "plugin.gd runtime_full_reload should report a deferred reload request.")
+	if _probe_plugin.scheduled_runtime_reloads.size() != 1:
+		return _return_failure(tree, "plugin.gd runtime_full_reload should schedule exactly one runtime reload callback.")
+	var duplicate_runtime_full_reload: Dictionary = _probe_plugin.runtime_full_reload()
+	if bool(duplicate_runtime_full_reload.get("success", true)) or str(duplicate_runtime_full_reload.get("error", "")).find("Runtime reload already scheduled") == -1:
+		return _return_failure(tree, "plugin.gd runtime_full_reload should reject duplicate pending reload requests.")
+	_probe_plugin._pending_runtime_reload_action = ""
+
+	_probe_plugin._on_full_reload_requested()
+	_probe_plugin._on_full_reload_requested()
+	if _probe_plugin.plugin_reenable_schedule_count != 1:
+		return _return_failure(tree, "plugin.gd should schedule only one full reload while a plugin re-enable is pending.")
+
 	_probe_plugin._exit_tree()
 	await tree.process_frame
 	await tree.process_frame

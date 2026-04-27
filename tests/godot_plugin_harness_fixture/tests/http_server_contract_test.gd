@@ -2,6 +2,7 @@ extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const RESTART_CONTRACT_PORT := 39993
 
 var _server
 
@@ -53,7 +54,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var tools_list: Dictionary = _server.build_tools_api_snapshot()
 	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
-	var required_keys := ["tools", "domain_states", "tool_count", "exposed_tool_count", "tool_loader_status", "performance"]
+	var required_keys := ["tools", "domain_states", "tool_count", "exposed_tool_count", "tool_loader_status", "performance", "toolTree", "toolGroups"]
 	for key in required_keys:
 		if not tools_list.has(key):
 			return _failure("Tools list response is missing key '%s'." % key)
@@ -65,6 +66,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not return any exposed tools.")
 	if not _has_tool(tools_list.get("tools", []), "system_help"):
 		return _failure("Tools list response did not expose system_help.")
+	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
+		return _failure("Tools list response did not expose the unified tool tree.")
+	if not _first_tool_has_group_path(tools_list.get("tools", [])):
+		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
 
 	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -85,6 +90,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_tool(full_reload_tools_list.get("tools", []), "system_help"):
 		return _failure("HTTP server full reload reinitialize did not expose system_help.")
 
+	_server.reinitialize(RESTART_CONTRACT_PORT, "127.0.0.1", false, [], "contract_restart")
+	if not bool(_server.start()):
+		return _failure("HTTP server should start on the fixed restart contract port.")
+	_server.stop()
+	if not bool(_server.start()):
+		return _failure("HTTP server should restart on the same fixed port immediately after stop().")
+	_server.stop()
+	_server.reinitialize(0, "127.0.0.1", false, [], "contract_restore_ephemeral_port")
+
 	var rpc_tools_list: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 1,
@@ -99,6 +113,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not return tools as an array.")
 	if (rpc_tools as Array).is_empty():
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
+	if not ((rpc_tools_list_result as Dictionary).get("toolTree", []) is Array) or (((rpc_tools_list_result as Dictionary).get("toolTree", []) as Array).is_empty()):
+		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
+	if not _first_tool_has_group_path(rpc_tools):
+		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -159,3 +177,10 @@ func _has_tool(tools, tool_name: String) -> bool:
 		if tool_def is Dictionary and str((tool_def as Dictionary).get("name", "")) == tool_name:
 			return true
 	return false
+
+
+func _first_tool_has_group_path(tools) -> bool:
+	if not (tools is Array) or (tools as Array).is_empty():
+		return false
+	var first_tool = (tools as Array)[0]
+	return first_tool is Dictionary and (first_tool as Dictionary).has("groupPath")

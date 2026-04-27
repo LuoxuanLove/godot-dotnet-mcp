@@ -5,6 +5,9 @@ var _plugin_id := ""
 var _phase := 0
 var _editor_interface
 var _server_controller = null
+var _reenable_delay_remaining := 0.0
+
+const REENABLE_DELAY_SECONDS := 0.25
 
 
 func configure(plugin_id: String, editor_interface, server_controller = null) -> void:
@@ -60,7 +63,7 @@ func _ready() -> void:
 	set_process(true)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var editor_interface = _get_editor_interface()
 	if editor_interface == null or _plugin_id.is_empty():
 		queue_free()
@@ -69,8 +72,12 @@ func _process(_delta: float) -> void:
 	match _phase:
 		0:
 			editor_interface.set_plugin_enabled(_plugin_id, false)
+			_reenable_delay_remaining = REENABLE_DELAY_SECONDS
 			_phase = 1
 		1:
+			_reenable_delay_remaining -= delta
+			if _reenable_delay_remaining > 0.0:
+				return
 			editor_interface.set_plugin_enabled(_plugin_id, true)
 			queue_free()
 

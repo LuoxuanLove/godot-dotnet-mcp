@@ -48,6 +48,9 @@ var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
+var _plugin_reenable_pending := false
+var _dock_recreate_pending := false
+var _dock_recreate_attempted := false
 
 
 func _enter_tree() -> void:
@@ -303,10 +306,19 @@ func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
 	var normalized := setting_value.trim_prefix("*")
 	if normalized == RUNTIME_BRIDGE_AUTOLOAD_PATH:
 		return true
+	if normalized.begins_with("uid://"):
+		return _is_runtime_bridge_uid_path(normalized)
 	if normalized.is_empty() or not ResourceLoader.exists(normalized):
 		return false
 	var resource := ResourceLoader.load(normalized)
 	return resource != null and str(resource.resource_path) == RUNTIME_BRIDGE_AUTOLOAD_PATH
+
+
+func _is_runtime_bridge_uid_path(uid_path: String) -> bool:
+	var uid := ResourceUID.text_to_id(uid_path)
+	if not ResourceUID.has_id(uid):
+		return false
+	return str(ResourceUID.get_id_path(uid)) == RUNTIME_BRIDGE_AUTOLOAD_PATH
 
 
 func _clear_runtime_bridge_root_instance() -> void:
@@ -377,15 +389,20 @@ func _create_dock() -> void:
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
 	_dock = result.get("dock", null)
+	_dock_recreate_pending = false
+	if _dock != null and is_instance_valid(_dock) and _dock.has_method("apply_model"):
+		_dock_recreate_attempted = false
+	else:
+		_record_self_incident("error", "ui_binding_error", "dock_controller_missing", "Dock scene was instantiated without an apply_model() controller", "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene script for parser or runtime initialization errors.")
 	_wire_dock_signals(str(operation.get("operation_id", "")))
 	var dock_count = _count_dock_instances()
 	if dock_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance is present after dock creation", "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and plugin reload ordering.", {"dock_count": dock_count})
 	_finish_self_operation(operation, true, "plugin", "_create_dock")
 
-
 func _remove_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("remove_dock", "_remove_dock")
+	_dock_recreate_pending = false
 	if _dock_coordinator == null:
 		_dock_coordinator = PluginDockCoordinatorScript.new()
 	var result = _dock_coordinator.remove_plugin_dock(self, _dock, MCP_DOCK_SCRIPT_PATH)
@@ -471,6 +488,13 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 func _refresh_dock() -> void:
 	if _dock == null or not is_instance_valid(_dock):
 		return
+	if not _dock.has_method("apply_model"):
+		if _dock_recreate_pending or _dock_recreate_attempted:
+			return
+		_dock_recreate_pending = true
+		_dock_recreate_attempted = true
+		call_deferred("_recreate_dock")
+		return
 	if _dock_model_service == null:
 		_dock_model_service = DockModelService.new()
 	_dock_model_service.configure(
@@ -485,7 +509,7 @@ func _refresh_dock() -> void:
 		_user_tool_watch_service,
 		Callable(self, "_get_editor_scale")
 	)
-	_dock.apply_model(_dock_model_service.build_model())
+	_dock.call("apply_model", _dock_model_service.build_model())
 
 
 func _apply_initial_tool_profile_if_needed() -> void:
@@ -568,12 +592,16 @@ func _on_stop_requested() -> void:
 
 
 func _on_full_reload_requested() -> void:
+	if _plugin_reenable_pending:
+		return
 	var focus_snapshot := {}
 	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
 		focus_snapshot = _dock.capture_focus_snapshot()
 	_store_pending_focus_snapshot(focus_snapshot)
 	_save_settings()
-	_schedule_plugin_reenable()
+	_plugin_reenable_pending = true
+	if not _schedule_plugin_reenable():
+		_plugin_reenable_pending = false
 
 
 func _on_log_level_changed(level: String) -> void:
@@ -1005,10 +1033,23 @@ func runtime_soft_reload() -> Dictionary:
 
 func runtime_full_reload() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_full_reload", "runtime_full_reload")
+	if not _pending_runtime_reload_action.is_empty():
+		_finish_self_operation(operation, false, "plugin", "runtime_full_reload", ["runtime_reload_pending"])
+		return {
+			"success": false,
+			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
+		}
+
 	var was_running := _server_controller != null and _server_controller.is_running()
 	var focus_snapshot := _capture_dock_focus_snapshot()
+	_pending_runtime_reload_action = "runtime_full_reload"
 	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
-	return {"success": true, "message": "Plugin full reload scheduled"}
+	return {
+		"success": true,
+		"message": "Plugin full reload scheduled",
+		"running": was_running,
+		"deferred": true
+	}
 
 
 func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
@@ -1098,10 +1139,12 @@ func _capture_dock_focus_snapshot() -> Dictionary:
 func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 	if _dock == null or not is_instance_valid(_dock):
 		return
-	if _dock.has_method("activate_host_dock_tab"):
-		_dock.activate_host_dock_tab()
+	if _dock.has_method("activate_editor_dock_tab"):
+		_dock.activate_editor_dock_tab()
 	if _dock.has_method("restore_focus_snapshot"):
 		_dock.restore_focus_snapshot(snapshot)
+	if _dock.has_method("focus_active_panel"):
+		_dock.call_deferred("focus_active_panel")
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
@@ -1521,15 +1564,17 @@ func _record_runtime_bridge_stale_instance(phase: String, operation_id: String) 
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REUSE)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE)
 	return scene as PackedScene
 
 
 func _recreate_dock() -> void:
+	_dock_recreate_pending = false
 	_remove_dock()
 	_remove_stale_docks()
 	_create_dock()
-	_refresh_dock()
+	if _dock != null and is_instance_valid(_dock) and _dock.has_method("apply_model"):
+		_refresh_dock()
 
 
 func _store_pending_focus_snapshot(snapshot: Dictionary) -> void:
@@ -1549,22 +1594,25 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 			_dock.activate_editor_dock_tab()
 		if _dock.has_method("restore_focus_snapshot"):
 			_dock.restore_focus_snapshot(snapshot)
+		if _dock.has_method("focus_active_panel"):
+			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
 
 
-func _schedule_plugin_reenable() -> void:
+func _schedule_plugin_reenable() -> bool:
 	var editor_interface = get_editor_interface()
 	if editor_interface == null:
-		return
+		return false
 	var base_control = editor_interface.get_base_control()
 	if base_control == null:
-		return
+		return false
 
 	var coordinator = PluginReloadCoordinator.new()
 	coordinator.name = "MCPPluginReloadCoordinator"
 	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
 	base_control.add_child(coordinator)
+	return true
 
 
 func _create_reload_coordinator():

@@ -102,6 +102,7 @@ func stop() -> void:
 	if runtime_control != null and runtime_control.has_method("reset"):
 		runtime_control.reset()
 	_tcp_server.stop()
+	_tcp_server = TCPServer.new()
 	_running = false
 	MCPDebugBuffer.record("info", "server", "Server stopped")
 	if _debug_mode:

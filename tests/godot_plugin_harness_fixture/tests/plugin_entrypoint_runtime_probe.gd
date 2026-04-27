@@ -3,6 +3,7 @@ extends "res://addons/godot_dotnet_mcp/plugin.gd"
 
 class FakeEditorInterface extends RefCounted:
 	var _base_control: Control
+	var plugin_enabled_calls: Array[Dictionary] = []
 
 
 	func _init(base_control: Control) -> void:
@@ -15,6 +16,10 @@ class FakeEditorInterface extends RefCounted:
 
 	func get_editor_scale() -> float:
 		return 1.0
+
+
+	func set_plugin_enabled(plugin_id: String, enabled: bool) -> void:
+		plugin_enabled_calls.append({"plugin_id": plugin_id, "enabled": enabled})
 
 
 class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd":
@@ -60,6 +65,8 @@ var debugger_add_calls: Array = []
 var debugger_remove_calls: Array = []
 var dock_add_calls: Array[Dictionary] = []
 var dock_remove_calls: Array[Control] = []
+var scheduled_runtime_reloads: Array[Dictionary] = []
+var plugin_reenable_schedule_count := 0
 
 
 func _init(base_control_in: Control) -> void:
@@ -81,6 +88,17 @@ func _create_server_controller():
 @warning_ignore("native_method_override")
 func _restore_pending_focus_snapshot_if_needed() -> void:
 	return
+
+
+@warning_ignore("native_method_override")
+func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
+	scheduled_runtime_reloads.append({"method_name": method_name, "bound_args": bound_args.duplicate(true)})
+
+
+@warning_ignore("native_method_override")
+func _schedule_plugin_reenable() -> bool:
+	plugin_reenable_schedule_count += 1
+	return true
 
 
 @warning_ignore("native_method_override")
