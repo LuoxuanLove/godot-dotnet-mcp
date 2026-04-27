@@ -74,6 +74,10 @@ The plugin is required for live editor tools:
 - `system_editor_state`
 - `system_project_files`
 - `system_runtime_diagnose`
+- `system_runtime_control`
+- `system_runtime_capture`
+- `system_runtime_input`
+- `system_runtime_step`
 - `system_scene_tree`
 - `system_scene_patch`
 - `system_scene_analyze`
