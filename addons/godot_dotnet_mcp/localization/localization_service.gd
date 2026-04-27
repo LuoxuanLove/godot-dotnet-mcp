@@ -87,7 +87,7 @@ func _init_translations() -> void:
 
 
 func _load_language_translations(file_path: String):
-	var lang_script = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REUSE)
+	var lang_script = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REPLACE)
 	if lang_script == null:
 		return {}
 
