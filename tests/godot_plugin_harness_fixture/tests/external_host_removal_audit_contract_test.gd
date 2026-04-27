@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "external_host_removal_audit"}
+
 ## Contract test: verifies that external-host production artifacts have been removed.
 ## This test is RED (fails) before task-9 deletion, GREEN after.
 ## It checks the task-9 deletion guard only: product directories plus plugin runtime references.

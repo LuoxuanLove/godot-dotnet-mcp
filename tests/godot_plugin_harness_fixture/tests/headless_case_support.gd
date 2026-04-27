@@ -100,7 +100,7 @@ static func _derive_case_name(script_path: String) -> String:
 	var source_result := _read_text(script_path)
 	if bool(source_result.get("ok", false)):
 		var source_text := str(source_result.get("text", ""))
-		var name_match := _match_first_group(source_text, '(?m)"name"\\s*:\\s*"([^"]+)"')
+		var name_match := _match_first_group(source_text, '(?m)^\\s*#\\s*\\{\\s*"name"\\s*:\\s*"([^"]+)"')
 		if not name_match.is_empty():
 			return name_match
 

@@ -1,5 +1,7 @@
 extends RefCounted
 
+# {"name": "plugin_path_csharp_registration_probe"}
+
 const PROJECT_PROBE_PATH := "res://ProbeProjectScript.cs"
 const PLUGIN_PROBE_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/ProbePluginScript.cs"
 const FACADE_LIKE_PROBE_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/ProbeFacadeLikeScript.cs"
