@@ -33,6 +33,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_system_editor_log_name",
 		"tool_action_get_output_name",
 		"tool_action_ensure_layout_name",
+		"tool_action_list_capture_cache_name",
+		"tool_action_cleanup_capture_cache_name",
 		"tool_action_cleanup_legacy_cache_name",
 		"log_level_debug",
 		"log_level_info",
