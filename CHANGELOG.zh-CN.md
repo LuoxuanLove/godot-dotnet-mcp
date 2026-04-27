@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.0-pre1 - 2026-04-28
+
 ### Added
 
 - 新增已完成的内部 .NET 支持库与插件侧工具链：包含 Roslyn 分析、stdio MCP 通道，以及 C# / `.csproj` 读写工具链。

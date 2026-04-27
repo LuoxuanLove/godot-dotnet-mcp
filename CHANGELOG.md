@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.0-pre1 - 2026-04-28
+
 ### Added
 
 - Added the first completed internal .NET support library and plugin-side tooling for Godot .NET workflows, including Roslyn analysis, stdio MCP transport, and C# / `.csproj` read-write tooling.
