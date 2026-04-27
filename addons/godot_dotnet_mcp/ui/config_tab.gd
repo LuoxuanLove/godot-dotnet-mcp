@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends VBoxContainer
 
 signal cli_scope_changed(scope: String)
@@ -15,36 +15,51 @@ signal copy_requested(text: String, source: String)
 
 @onready var _config_header: Label = %ConfigHeader
 @onready var _config_desc: Label = %ConfigDescription
+@onready var _config_intro_card: PanelContainer = %ConfigIntroCard
 @onready var _platform_label: Label = %PlatformLabel
 @onready var _platform_option: OptionButton = %PlatformOption
+@onready var _platform_desktop_separator: HSeparator = %PlatformDesktopSeparator
+@onready var _desktop_card: PanelContainer = %DesktopCard
 @onready var _desktop_header: Label = %DesktopHeader
 @onready var _desktop_header_divider: HSeparator = %DesktopHeaderDivider
 @onready var _desktop_desc: Label = %DesktopDescription
 @onready var _desktop_clients: VBoxContainer = %DesktopClients
 @onready var _separator: HSeparator = %Separator
+@onready var _cli_card: PanelContainer = %CliCard
 @onready var _cli_header: Label = %CliHeader
 @onready var _cli_header_divider: HSeparator = %CliHeaderDivider
 @onready var _cli_desc: Label = %CliDescription
 @onready var _scope_label: Label = %ScopeLabel
 @onready var _scope_option: OptionButton = %ScopeOption
 @onready var _cli_clients: VBoxContainer = %CliClients
+@onready var _config_intro_margin: MarginContainer = %ConfigIntroMargin
+@onready var _desktop_card_margin: MarginContainer = %DesktopCardMargin
+@onready var _cli_card_margin: MarginContainer = %CliCardMargin
+@onready var _config_intro_body: VBoxContainer = %ConfigIntroBody
+@onready var _desktop_card_body: VBoxContainer = %DesktopCardBody
+@onready var _cli_card_body: VBoxContainer = %CliCardBody
 
 var _current_scale := -1.0
 var _is_rebuilding_platforms := false
+var _current_model: Dictionary = {}
+var _current_layout_width := -1.0
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_platform_option.item_selected.connect(_on_platform_option_selected)
 	_scope_option.item_selected.connect(_on_scope_option_selected)
-
+	resized.connect(_on_resized)
 
 func apply_model(model: Dictionary) -> void:
+	_current_model = model
 	var localization = model.get("localization")
 	var selected_platform = str(model.get("current_config_platform", ""))
 	var editor_scale = float(model.get("editor_scale", 1.0))
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
+	else:
+		_apply_responsive_layout()
 
 	_config_header.text = localization.get_text("config_header")
 	_config_desc.text = localization.get_text("config_header_desc")
@@ -94,21 +109,24 @@ func _rebuild_client_cards(container: VBoxContainer, clients: Array, supports_wr
 func _create_client_card(client: Dictionary, supports_write: bool, localization) -> Control:
 	var panel = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
 
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", int(round(10 * _current_scale)))
-	margin.add_theme_constant_override("margin_top", int(round(10 * _current_scale)))
-	margin.add_theme_constant_override("margin_right", int(round(10 * _current_scale)))
-	margin.add_theme_constant_override("margin_bottom", int(round(10 * _current_scale)))
+	margin.add_theme_constant_override("margin_left", int(round(12 * _current_scale)))
+	margin.add_theme_constant_override("margin_top", int(round(12 * _current_scale)))
+	margin.add_theme_constant_override("margin_right", int(round(12 * _current_scale)))
+	margin.add_theme_constant_override("margin_bottom", int(round(12 * _current_scale)))
 	panel.add_child(margin)
 
 	var body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", int(round(10 * _current_scale)))
+	body.add_theme_constant_override("separation", int(round(6 * _current_scale)))
 	margin.add_child(body)
 
 	var title = Label.new()
 	title.text = localization.get_text(str(client.get("name_key", "")))
+	title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	title.remove_theme_font_size_override("font_size")
 	body.add_child(title)
 
 	var summary_text = str(client.get("summary_text", "")).strip_edges()
@@ -119,7 +137,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var summary = Label.new()
 		summary.text = summary_text
 		summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		summary.add_theme_color_override("font_color", Color(0.78, 0.78, 0.78))
+		summary.add_theme_color_override("font_color", _get_description_text_color())
 		body.add_child(summary)
 
 	var install_status = str(client.get("install_status_text", "")).strip_edges()
@@ -155,7 +173,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var install_message_label = Label.new()
 		install_message_label.text = install_message
 		install_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		install_message_label.add_theme_color_override("font_color", Color(0.72, 0.72, 0.72))
+		install_message_label.add_theme_color_override("font_color", _get_hint_text_color())
 		body.add_child(install_message_label)
 
 	var path_value = str(client.get("path", "")).strip_edges()
@@ -175,7 +193,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var explanation = Label.new()
 		explanation.text = explanation_text
 		explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		explanation.add_theme_color_override("font_color", Color(0.72, 0.72, 0.72))
+		explanation.add_theme_color_override("font_color", _get_hint_text_color())
 		body.add_child(explanation)
 
 	var guidance_text = str(client.get("guidance_text", "")).strip_edges()
@@ -183,19 +201,114 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var guidance = Label.new()
 		guidance.text = guidance_text
 		guidance.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		guidance.add_theme_color_override("font_color", Color(0.62, 0.78, 0.96))
+		guidance.add_theme_color_override("font_color", _get_description_text_color())
 		body.add_child(guidance)
 
 	var content_text = str(client.get("content", ""))
 	if not content_text.is_empty():
-		var content = TextEdit.new()
-		content.editable = false
+		var content_panel = PanelContainer.new()
+		content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content_panel.clip_contents = true
+		content_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		content_panel.add_theme_stylebox_override("panel", _make_theme_style("read_only", "TextEdit", int(round(8 * _current_scale)), int(round(6 * _current_scale))))
+
+		var line_count := content_text.count("\n") + 1
+		var longest_line := 0
+		for line in content_text.split("\n"):
+			longest_line = max(longest_line, String(line).length())
+		var estimated_wrap_lines = max(line_count, int(ceil(float(longest_line) / 64.0)))
+		var content_height = max(68.0, 18.0 + float(estimated_wrap_lines) * 24.0) * _current_scale
+		content_panel.custom_minimum_size.y = content_height
+		var content_overlay = Control.new()
+		content_overlay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content_overlay.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content_overlay.custom_minimum_size.y = content_height
+		content_overlay.clip_contents = true
+		content_overlay.mouse_filter = Control.MOUSE_FILTER_PASS
+		content_panel.add_child(content_overlay)
+
+		var content_margin = MarginContainer.new()
+		content_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		content_margin.add_theme_constant_override("margin_left", int(round(8 * _current_scale)))
+		content_margin.add_theme_constant_override("margin_top", int(round(6 * _current_scale)))
+		content_margin.add_theme_constant_override("margin_right", int(round(54 * _current_scale)))
+		content_margin.add_theme_constant_override("margin_bottom", int(round(6 * _current_scale)))
+		content_overlay.add_child(content_margin)
+
+		var content = Label.new()
 		content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		content.scroll_fit_content_height = true
-		var tall_content = supports_write or bool(client.get("writeable", false)) or bool(client.get("remove_supported", false))
-		content.custom_minimum_size.y = (92.0 if tall_content else 60.0) * _current_scale
+		content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content.custom_minimum_size.x = 0.0
 		content.text = content_text
-		body.add_child(content)
+		content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+		content.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		content.add_theme_color_override("font_color", get_theme_color("font_readonly_color", "TextEdit"))
+		content.add_theme_font_override("font", get_theme_font("font", "TextEdit"))
+		content.add_theme_font_size_override("font_size", get_theme_font_size("font_size", "TextEdit"))
+		content_margin.add_child(content)
+
+		var content_copy_button = Button.new()
+		content_copy_button.visible = false
+		content_copy_button.focus_mode = Control.FOCUS_NONE
+		content_copy_button.mouse_filter = Control.MOUSE_FILTER_STOP
+		content_copy_button.tooltip_text = localization.get_text("btn_copy")
+		content_copy_button.custom_minimum_size = Vector2(26.0, 26.0) * _current_scale
+		if has_theme_icon("ActionCopy", "EditorIcons"):
+			content_copy_button.icon = get_theme_icon("ActionCopy", "EditorIcons")
+		else:
+			content_copy_button.text = localization.get_text("btn_copy")
+		var copy_button_margin := int(round(12 * _current_scale))
+		var copy_button_size := int(round(26 * _current_scale))
+		content_copy_button.anchor_left = 1.0
+		content_copy_button.anchor_right = 1.0
+		content_copy_button.anchor_top = 0.0
+		content_copy_button.anchor_bottom = 0.0
+		content_copy_button.offset_left = -copy_button_size - copy_button_margin
+		content_copy_button.offset_right = -copy_button_margin
+		content_copy_button.offset_top = copy_button_margin
+		content_copy_button.offset_bottom = copy_button_margin + copy_button_size
+		content_copy_button.pressed.connect(Callable(self, "_on_copy_client_pressed").bind(content_text, localization.get_text(str(client.get("name_key", "")))))
+		var show_copy_button := func() -> void:
+			content_copy_button.visible = true
+		var hide_copy_button_if_outside := func() -> void:
+			if not is_instance_valid(content_panel) or not is_instance_valid(content_copy_button):
+				return
+			var mouse_position := content_panel.get_viewport().get_mouse_position()
+			if not content_panel.get_global_rect().has_point(mouse_position):
+				content_copy_button.visible = false
+		var sync_copy_button_hover := func() -> void:
+			if not is_instance_valid(content_panel) or not is_instance_valid(content_copy_button):
+				return
+			var mouse_position := content_panel.get_viewport().get_mouse_position()
+			content_copy_button.visible = content_panel.get_global_rect().has_point(mouse_position)
+		content_panel.mouse_entered.connect(func() -> void:
+			show_copy_button.call()
+		)
+		content_panel.mouse_exited.connect(func() -> void:
+			hide_copy_button_if_outside.call_deferred()
+		)
+		content_overlay.mouse_entered.connect(func() -> void:
+			show_copy_button.call()
+		)
+		content_overlay.mouse_exited.connect(func() -> void:
+			hide_copy_button_if_outside.call_deferred()
+		)
+		content_copy_button.mouse_entered.connect(func() -> void:
+			show_copy_button.call()
+		)
+		content_copy_button.mouse_exited.connect(func() -> void:
+			hide_copy_button_if_outside.call_deferred()
+		)
+		content_overlay.add_child(content_copy_button)
+		sync_copy_button_hover.call_deferred()
+		body.add_child(content_panel)
+
+		var content_actions_gap = Control.new()
+		content_actions_gap.custom_minimum_size.y = max(10.0, round(10.0 * _current_scale))
+		body.add_child(content_actions_gap)
 
 	var action_buttons: Array[Button] = []
 
@@ -204,7 +317,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var primary_button = Button.new()
 		primary_button.text = localization.get_text(primary_action_label_key)
 		primary_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		primary_button.custom_minimum_size.y = 30.0 * _current_scale
+		primary_button.custom_minimum_size.y = 0.0
 		primary_button.disabled = not bool(client.get("primary_action_enabled", false))
 		primary_button.pressed.connect(Callable(self, "_on_client_action_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(primary_button)
@@ -213,7 +326,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var launch_button = Button.new()
 		launch_button.text = localization.get_text(str(client.get("launch_action_label_key", "config_client_action_open_project")))
 		launch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		launch_button.custom_minimum_size.y = 30.0 * _current_scale
+		launch_button.custom_minimum_size.y = 0.0
 		launch_button.disabled = not bool(client.get("launch_enabled", true))
 		launch_button.pressed.connect(Callable(self, "_on_launch_client_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(launch_button)
@@ -222,7 +335,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var pick_button = Button.new()
 		pick_button.text = localization.get_text(str(client.get("path_pick_action_label_key", "config_client_action_choose_program_path")))
 		pick_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		pick_button.custom_minimum_size.y = 30.0 * _current_scale
+		pick_button.custom_minimum_size.y = 0.0
 		pick_button.disabled = not bool(client.get("path_pick_enabled", true))
 		pick_button.pressed.connect(Callable(self, "_on_pick_client_path_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(pick_button)
@@ -231,7 +344,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var clear_button = Button.new()
 		clear_button.text = localization.get_text("config_client_action_clear_custom_path")
 		clear_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		clear_button.custom_minimum_size.y = 30.0 * _current_scale
+		clear_button.custom_minimum_size.y = 0.0
 		clear_button.disabled = not bool(client.get("path_clear_enabled", true))
 		clear_button.pressed.connect(Callable(self, "_on_clear_client_path_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(clear_button)
@@ -240,7 +353,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var open_dir_button = Button.new()
 		open_dir_button.text = localization.get_text("config_client_action_open_config_dir")
 		open_dir_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		open_dir_button.custom_minimum_size.y = 30.0 * _current_scale
+		open_dir_button.custom_minimum_size.y = 0.0
 		open_dir_button.disabled = not bool(client.get("open_config_dir_enabled", true))
 		open_dir_button.pressed.connect(Callable(self, "_on_open_client_config_dir_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(open_dir_button)
@@ -249,7 +362,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var open_file_button = Button.new()
 		open_file_button.text = localization.get_text("config_client_action_open_config_file")
 		open_file_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		open_file_button.custom_minimum_size.y = 30.0 * _current_scale
+		open_file_button.custom_minimum_size.y = 0.0
 		open_file_button.disabled = not bool(client.get("open_config_file_enabled", true))
 		open_file_button.pressed.connect(Callable(self, "_on_open_client_config_file_pressed").bind(str(client.get("id", ""))))
 		action_buttons.append(open_file_button)
@@ -258,7 +371,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var write_button = Button.new()
 		write_button.text = localization.get_text("btn_write_config")
 		write_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		write_button.custom_minimum_size.y = 30.0 * _current_scale
+		write_button.custom_minimum_size.y = 0.0
 		write_button.pressed.connect(Callable(self, "_on_write_client_pressed").bind(client, localization.get_text(str(client.get("name_key", "")))))
 		action_buttons.append(write_button)
 
@@ -266,32 +379,17 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var remove_button = Button.new()
 		remove_button.text = localization.get_text("btn_remove_plugin_config")
 		remove_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		remove_button.custom_minimum_size.y = 30.0 * _current_scale
+		remove_button.custom_minimum_size.y = 0.0
 		remove_button.disabled = not bool(client.get("remove_enabled", false))
 		remove_button.pressed.connect(Callable(self, "_on_remove_client_pressed").bind(client, localization.get_text(str(client.get("name_key", "")))))
 		action_buttons.append(remove_button)
 
-	if not content_text.is_empty():
-		var copy_button = Button.new()
-		copy_button.text = localization.get_text("btn_copy")
-		copy_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		copy_button.custom_minimum_size.y = 30.0 * _current_scale
-		copy_button.pressed.connect(Callable(self, "_on_copy_client_pressed").bind(content_text, localization.get_text(str(client.get("name_key", "")))))
-		action_buttons.append(copy_button)
-
-	var actions: Control
-	if action_buttons.size() > 2:
-		var actions_grid = GridContainer.new()
-		actions_grid.columns = 2
-		actions_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		actions_grid.add_theme_constant_override("h_separation", int(round(8 * _current_scale)))
-		actions_grid.add_theme_constant_override("v_separation", int(round(8 * _current_scale)))
-		actions = actions_grid
-	else:
-		var actions_row = HBoxContainer.new()
-		actions_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		actions_row.add_theme_constant_override("separation", int(round(8 * _current_scale)))
-		actions = actions_row
+	var actions_grid = GridContainer.new()
+	actions_grid.columns = _get_action_column_count(action_buttons.size())
+	actions_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions_grid.add_theme_constant_override("h_separation", int(round(8 * _current_scale)))
+	actions_grid.add_theme_constant_override("v_separation", int(round(8 * _current_scale)))
+	var actions: Control = actions_grid
 	body.add_child(actions)
 	for button in action_buttons:
 		actions.add_child(button)
@@ -300,19 +398,23 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 
 
 func _create_info_block(label_text: String, value_text: String) -> Control:
-	var block = VBoxContainer.new()
+	var block = HBoxContainer.new()
 	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	block.add_theme_constant_override("separation", int(round(3 * _current_scale)))
+	block.add_theme_constant_override("separation", int(round(8 * _current_scale)))
 
 	var label = Label.new()
 	label.text = label_text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", Color(0.68, 0.68, 0.68))
+	label.custom_minimum_size.x = 168.0 * _current_scale
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.clip_text = false
+	label.add_theme_color_override("font_color", _get_meta_label_text_color())
 	block.add_child(label)
 
 	var value = Label.new()
 	value.text = value_text
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	value.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 	block.add_child(value)
 
 	return block
@@ -391,27 +493,140 @@ func _apply_editor_scale(scale: float) -> void:
 	if margin == null or content == null:
 		return
 
-	margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
-
-	content.add_theme_constant_override("separation", int(round(16 * scale)))
+	_apply_responsive_layout()
+	_apply_visual_style(scale)
 
 	for section_path in [
-		"Scroll/Margin/Content/DesktopClients",
-		"Scroll/Margin/Content/CliClients"
+		"Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients",
+		"Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/CliClients"
 	]:
 		var section = get_node(section_path) as VBoxContainer
 		section.add_theme_constant_override("separation", int(round(8 * scale)))
 
-	var platform_row = get_node("Scroll/Margin/Content/PlatformRow") as HBoxContainer
+	var platform_row = get_node("Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody/PlatformRow") as HBoxContainer
 	platform_row.add_theme_constant_override("separation", int(round(8 * scale)))
 
-	var row = get_node("Scroll/Margin/Content/ScopeRow") as HBoxContainer
+	var row = get_node("Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/ScopeRow") as HBoxContainer
 	row.add_theme_constant_override("separation", int(round(8 * scale)))
-	_platform_option.custom_minimum_size.y = 32.0 * scale
-	_scope_option.custom_minimum_size.y = 32.0 * scale
+	_platform_option.custom_minimum_size.y = 0.0
+	_platform_option.custom_minimum_size.x = 0.0
+	_scope_option.custom_minimum_size.y = 0.0
+	_scope_option.custom_minimum_size.x = 0.0
+
+
+func _apply_responsive_layout() -> void:
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	var margin = _get_margin_node()
+	var content = _get_content_node()
+	if margin == null or content == null:
+		return
+	var available_width: float = content.size.x
+	if available_width <= 0.0:
+		available_width = size.x
+	if available_width <= 0.0:
+		return
+	if is_equal_approx(_current_layout_width, available_width):
+		return
+	_current_layout_width = available_width
+
+	var narrow_layout: bool = available_width < 360.0 * scale
+	var horizontal_margin: float = 10.0 * scale if narrow_layout else 14.0 * scale
+	var vertical_margin: float = 12.0 * scale
+	margin.add_theme_constant_override("margin_left", int(round(horizontal_margin)))
+	margin.add_theme_constant_override("margin_right", int(round(horizontal_margin)))
+	margin.add_theme_constant_override("margin_top", int(round(vertical_margin)))
+	margin.add_theme_constant_override("margin_bottom", int(round(vertical_margin)))
+	content.add_theme_constant_override("separation", int(round((12.0 if narrow_layout else 16.0) * scale)))
+
+	for label in [_config_desc, _desktop_desc, _cli_desc]:
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size.x = 0.0
+	for label in [_platform_label, _scope_label]:
+		label.clip_text = narrow_layout
+		label.custom_minimum_size.x = 0.0
+
+
+func _get_action_column_count(button_count: int) -> int:
+	if button_count <= 1:
+		return 1
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	var available_width: float = size.x
+	var content = _get_content_node()
+	if content != null and content.size.x > 0.0:
+		available_width = content.size.x
+	return 1 if available_width < 420.0 * scale else 2
+
+
+func _on_resized() -> void:
+	_current_layout_width = -1.0
+	_apply_responsive_layout()
+
+
+func _apply_visual_style(scale: float) -> void:
+	begin_bulk_theme_override()
+	_config_intro_card.add_theme_stylebox_override("panel", _make_framed_panel_style())
+	_desktop_card.add_theme_stylebox_override("panel", _make_framed_panel_style())
+	_cli_card.add_theme_stylebox_override("panel", _make_framed_panel_style())
+	for margin in [_config_intro_margin, _desktop_card_margin, _cli_card_margin]:
+		margin.add_theme_constant_override("margin_left", int(round(14 * scale)))
+		margin.add_theme_constant_override("margin_right", int(round(14 * scale)))
+		margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
+		margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
+	for body in [_config_intro_body, _desktop_card_body, _cli_card_body]:
+		body.add_theme_constant_override("separation", int(round(10 * scale)))
+	for title in [_config_header, _desktop_header, _cli_header]:
+		title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+		title.remove_theme_font_size_override("font_size")
+	for desc in [_config_desc, _desktop_desc, _cli_desc]:
+		desc.add_theme_color_override("font_color", _get_description_text_color())
+	for label in [_platform_label, _scope_label]:
+		label.add_theme_color_override("font_color", _get_meta_label_text_color())
+	var separator_style := StyleBoxLine.new()
+	separator_style.color = get_theme_color("separator_color", "Editor")
+	separator_style.thickness = max(1, int(round(scale)))
+	_platform_desktop_separator.custom_minimum_size.y = max(6.0, round(6.0 * scale))
+	_platform_desktop_separator.add_theme_stylebox_override("separator", separator_style)
+	end_bulk_theme_override()
+
+
+func _make_theme_style(style_name: String, theme_type: String, horizontal_margin: int, vertical_margin: int) -> StyleBox:
+	var style := get_theme_stylebox(style_name, theme_type).duplicate() as StyleBox
+	style.content_margin_left = horizontal_margin
+	style.content_margin_right = horizontal_margin
+	style.content_margin_top = vertical_margin
+	style.content_margin_bottom = vertical_margin
+	return style
+
+
+func _make_framed_panel_style() -> StyleBox:
+	var style := _make_theme_style("panel", "Tree", 0, 0)
+	if style is StyleBoxFlat:
+		var flat_style := style as StyleBoxFlat
+		flat_style.border_color = get_theme_color("separator_color", "Editor")
+		flat_style.set_border_width_all(1)
+	return style
+
+
+func _get_muted_text_color() -> Color:
+	return _get_meta_label_text_color()
+
+
+func _get_description_text_color() -> Color:
+	var base := get_theme_color("font_color", "Label")
+	var disabled := get_theme_color("font_disabled_color", "Editor")
+	return base.lerp(disabled, 0.18)
+
+
+func _get_hint_text_color() -> Color:
+	var base := get_theme_color("font_color", "Label")
+	var disabled := get_theme_color("font_disabled_color", "Editor")
+	return base.lerp(disabled, 0.34)
+
+
+func _get_meta_label_text_color() -> Color:
+	var base := get_theme_color("font_color", "Label")
+	var disabled := get_theme_color("font_disabled_color", "Editor")
+	return base.lerp(disabled, 0.48)
 
 
 func _rebuild_platform_options(platforms: Array, selected_platform: String, localization) -> void:
@@ -454,15 +669,17 @@ func _apply_section_visibility(selected_group: String, selected_client_id: Strin
 	var show_desktop = selected_group == "desktop"
 	var show_cli = selected_group == "cli"
 	var show_claude_scope = show_cli and selected_client_id == "claude_code"
+	_desktop_card.visible = show_desktop
 	_desktop_header.visible = show_desktop
-	_desktop_header_divider.visible = show_desktop
+	_desktop_header_divider.visible = false
 	_desktop_desc.visible = show_desktop
 	_desktop_clients.visible = show_desktop
 	_separator.visible = false
+	_cli_card.visible = show_cli
 	_cli_header.visible = show_cli
-	_cli_header_divider.visible = show_cli
+	_cli_header_divider.visible = false
 	_cli_desc.visible = show_cli
 	_scope_label.visible = show_claude_scope
 	_scope_option.visible = show_claude_scope
-	var scope_row = get_node("Scroll/Margin/Content/ScopeRow") as HBoxContainer
+	var scope_row = get_node("Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/ScopeRow") as HBoxContainer
 	scope_row.visible = show_claude_scope

@@ -98,8 +98,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	await tree.process_frame
 
-	var desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopClients") as VBoxContainer
-	var cli_clients = _instance.get_node("Scroll/Margin/Content/CliClients") as VBoxContainer
+	var desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var cli_clients = _instance.get_node("Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/CliClients") as VBoxContainer
 	if desktop_clients == null or desktop_clients.get_child_count() != 1:
 		return _failure("Config tab should render exactly one desktop client card for the selected platform.")
 	if cli_clients == null or cli_clients.get_child_count() != 0:
@@ -156,7 +156,7 @@ func cleanup_case(tree: SceneTree) -> void:
 func _find_button(buttons: Array, text: String) -> Button:
 	for button_variant in buttons:
 		var button = button_variant as Button
-		if button != null and button.text == text:
+		if button != null and (button.text == text or button.tooltip_text == text):
 			return button
 	return null
 
