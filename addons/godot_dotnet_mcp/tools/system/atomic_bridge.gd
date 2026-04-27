@@ -24,7 +24,8 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"editor": "res://addons/godot_dotnet_mcp/tools/editor/executor.gd",
 	"resource": "res://addons/godot_dotnet_mcp/tools/resource/executor.gd",
 	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
-	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd"
+	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd",
+	"runtime": "res://addons/godot_dotnet_mcp/tools/runtime/executor.gd"
 }
 const EXECUTOR_DEPENDENCY_PATHS := {
 	"editor": ["res://addons/godot_dotnet_mcp/tools/editor_tools.gd"],
@@ -157,6 +158,53 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 		return error("Atomic executor not available: %s" % category)
 	_configure_executor(executor, category)
 	return executor.execute(tool_name, args)
+
+
+func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
+	MCPDebugBuffer.record("debug", "atomic",
+		"%s action=%s" % [full_name, str(args.get("action", ""))])
+	if _is_write_action(args):
+		var target_path := _find_path_in_args(args)
+		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
+			MCPDebugBuffer.record("warning", "atomic",
+				"Write blocked on protected path: %s (tool: %s)" % [target_path, full_name])
+			return error("Protected path: cannot write to MCP plugin directory via system tools. Use plugin_developer tools with explicit authorization.")
+	var parts := full_name.split("_", false, 1)
+	if parts.size() < 2:
+		MCPDebugBuffer.record("debug", "atomic", "Invalid atomic name: %s" % full_name)
+		return error("Invalid atomic tool name: %s" % full_name)
+	var category := parts[0]
+	var tool_name := parts[1]
+	if not EXECUTOR_SCRIPT_PATHS.has(category):
+		MCPDebugBuffer.record("debug", "atomic",
+			"Unknown category: %s (from %s)" % [category, full_name])
+		return error("Unknown atomic category: %s (from %s)" % category)
+	var path := str(EXECUTOR_SCRIPT_PATHS[category])
+	for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
+		ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
+	var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+	if script == null:
+		MCPDebugBuffer.record("error", "atomic",
+			"Failed to load executor for: %s (path: %s)" % [category, path])
+		return error("Failed to load atomic executor: %s" % path)
+	if _atomic_executors.has(category):
+		var old_executor = _atomic_executors[category]
+		if old_executor != null:
+			if old_executor.has_method("dispose"):
+				old_executor.dispose()
+			if old_executor.has_method("shutdown"):
+				old_executor.shutdown()
+	_atomic_executors[category] = script.new()
+	var executor = _atomic_executors[category]
+	if executor == null:
+		MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
+		return error("Atomic executor not available: %s" % category)
+	_configure_executor(executor, category)
+	if executor.has_method("execute_async"):
+		return await executor.execute_async(tool_name, args)
+	if executor.has_method("execute"):
+		return executor.execute(tool_name, args)
+	return error("Atomic executor does not expose execute/execute_async: %s" % category)
 
 
 func _configure_executor(executor, category: String) -> void:
