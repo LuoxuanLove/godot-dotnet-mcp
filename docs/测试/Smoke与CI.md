@@ -45,7 +45,7 @@ tests/
 当前包含：
 
 1. Build plugin Roslyn library
-2. Run plugin headless harness required subset（`scripts/test_plugin_side_roslyn.ps1` 中当前维护的 17 个 case）
+2. Run plugin headless harness required subset（`scripts/test_plugin_side_roslyn.ps1` 中当前维护的 28 个 case）
 
 ---
 
