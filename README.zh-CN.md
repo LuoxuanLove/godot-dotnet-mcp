@@ -1,6 +1,6 @@
 # Godot .NET MCP
 
-[![最新版本](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
+[![最新正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![最新预发布版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%3Fper_page%3D1&query=%24%5B0%5D.tag_name&label=%E9%A2%84%E5%8F%91%E5%B8%83%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
 > 一个面向 Godot 4.6+ 的编辑器 MCP 插件，让 AI Agent 可以在 Godot 编辑器内部读取项目状态、编辑场景、分析脚本、控制运行时、截图、读取日志并完成客户端接入配置。
 
