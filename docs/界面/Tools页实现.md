@@ -1,6 +1,6 @@
 # Tools 页实现
 
-本文档说明 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 与 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 的节点结构、Intelligence 工具树、预览面板与当前布局约束。
+本文档说明 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 与 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 的节点结构、工具树、预览面板与当前布局约束。
 
 ---
 
@@ -8,10 +8,10 @@
 
 `Tools` 页当前聚焦四类能力：
 
-1. 显示当前已启用的 Intelligence 工具数
-2. 以根级平铺方式展示 8 个 Intelligence 工具
-3. 展开查看每个 Intelligence 工具依赖的原子工具链路
-4. 展示当前选中项的描述、参数与原子工具预览
+1. 显示当前已启用的工具数
+2. 消费运行时生成的 Tool Presentation Model，以 `domain → category → tool → atomic/action` 层级展示当前工具
+3. 展开查看 `system_*` 工具依赖的原子工具链路
+4. 展示当前选中项的描述、参数、运行时信息与原子工具预览
 
 当前页不再承担 profile 选择、保存、重命名、删除。
 
@@ -59,44 +59,46 @@ ToolsTab
 
 ---
 
-## Intelligence 工具树
+## 系统工具树
 
-当前树结构固定为：
+当前树结构由运行时 Tool Presentation Model 生成，主层级为：
 
 ```text
 root
-  ├─ intelligence_project_state
-  │   ├─ project_info
-  │   ├─ project_dotnet
-  │   ├─ filesystem_directory
-  │   └─ debug_runtime_bridge
-  ├─ intelligence_project_suggest
-  │   └─ intelligence_project_state
-  ├─ intelligence_workflow_recommend
-  │   └─ intelligence_project_state
-  ├─ intelligence_bindings_audit
-  │   ├─ script_inspect
-  │   ├─ script_references
-  │   ├─ scene_bindings
-  │   ├─ scene_audit
-  │   └─ filesystem_directory
-  ├─ intelligence_scene_validate
-  │   ├─ scene_audit
-  │   └─ resource_query
-  ├─ intelligence_project_index_build
-  │   ├─ filesystem_directory
-  │   ├─ script_inspect
-  │   └─ resource_query
-  ├─ intelligence_project_symbol_search
-  │   └─ intelligence_project_index_build
-  └─ intelligence_scene_dependency_graph
-      └─ intelligence_project_index_build
+  ├─ core
+  │   ├─ system
+  │   │   ├─ system_editor_state
+  │   │   │   ├─ editor_status
+  │   │   │   ├─ editor_inspector
+  │   │   │   ├─ editor_filesystem
+  │   │   │   ├─ debug_runtime_bridge
+  │   │   │   └─ debug_dotnet
+  │   │   ├─ system_project_index_build
+  │   │   │   ├─ filesystem_directory
+  │   │   │   ├─ script_inspect
+  │   │   │   └─ resource_query
+  │   │   ├─ system_runtime_control
+  │   │   │   ├─ status / enable / disable
+  │   │   │   └─ runtime_control
+  │   │   ├─ system_runtime_capture
+  │   │   │   └─ runtime_capture
+  │   │   ├─ system_runtime_input
+  │   │   │   └─ runtime_input
+  │   │   ├─ system_runtime_step
+  │   │   │   └─ runtime_step
+  │   │   └─ ...
+  │   └─ ... internal atomic categories
+  └─ user
+      └─ user
+          ├─ user_tool_a
+          └─ user_tool_b
 ```
 
 说明：
 
-- 根下不再渲染 domain 节点
-- 根下不再渲染 category 节点
+- 根下渲染 domain 节点，再渲染 category 节点；`system` 与 `user` 不再是硬编码根节点
+- `system_*` 高层工具通过 `SystemTreeCatalog` 展开真实内部 atomic/action 链路
+- `runtime_*` 是内部 atomic category，只作为 `system_runtime_*` 的子链路展示，不作为对外 MCP 工具暴露
 - 原子工具节点可继续递归展开
 - 原子工具的勾选行为沿用普通工具行逻辑，仍通过 `tool_toggled` 回流
 
@@ -107,12 +109,15 @@ root
 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 当前负责：
 
 - 接收 model 并刷新文案
-- 构建 Intelligence 根级工具树
-- 根据 `INTELLIGENCE_TOOL_ATOMIC_CHILDREN` 构建原子工具子树
-- 管理搜索关键字与递归命中结果
-- 管理当前选中项和预览文本
+- 优先消费 model 中的 `toolTree` / `toolGroups` / `tool_presentation` 构建 TreeItem
+- 在缺少 presentation model 时，才回退到旧的本地树重建逻辑
+- 管理当前选中项、上下文菜单和预览区滚动恢复
 - 发出工具启停与展开折叠信号
 - 在极小尺寸下裁剪树区和预览区内容
+
+当前主控制器已经不再持有全部纯逻辑 helper。以下协作者已独立：
+
+- 当前这些职责已经并回 `ui/tools_tab.gd` 主控制器
 
 不负责：
 
@@ -129,9 +134,10 @@ root
 
 当前搜索策略：
 
-- Intelligence 工具名称命中时保留该工具
-- 原子工具名称或描述命中时，保留其所属的 Intelligence 祖先
-- 搜索会递归命中 `INTELLIGENCE_TOOL_ATOMIC_CHILDREN`，因此搜索原子工具也能定位到上层 Intelligence 工具
+- 系统工具名称命中时保留该工具
+- 原子工具名称或描述命中时，保留其所属的 系统祖先
+- 搜索会递归命中 `SYSTEM_TOOL_ATOMIC_CHILDREN`，因此搜索原子工具也能定位到上层 系统工具
+- 当前过滤结果由 `tools_tab.gd` 内部直接计算，再按分组渲染
 
 搜索不会改写持久化折叠状态，只影响当前树重建结果。
 
@@ -143,10 +149,13 @@ root
 
 当前预览对象包括：
 
+- domain
 - category
 - tool
+- atomic
+- action
 
-其中 Intelligence 工具级预览会额外展示：
+其中 系统工具级预览会额外展示：
 
 - 描述
 - action 概览
@@ -207,6 +216,9 @@ root
 | 路径 | 作用 |
 |---|---|
 | `ui/tools_tab.tscn` | Tools 页节点树与布局 |
-| `ui/tools_tab.gd` | Tools 页控制器 |
-| `tools/intelligence_tools.gd` | Intelligence 高层工具实现 |
-| `plugin/runtime/plugin_runtime_state.gd` | 默认工具暴露策略 |
+| `ui/tools_tab.gd` | Tools 页主控制器，内聚上下文菜单、模型、选择、搜索与预览逻辑 |
+| `tools/system/executor.gd`、`tools/system/impl_*.gd` | 当前系统高层工具调度与实现入口 |
+| `tools/tool_registry.gd` | builtin executor 注册事实源 |
+| `tools/tool_manifest.gd` | domain/category 元数据与 manifest 访问层 |
+| `plugin/runtime/plugin_runtime_state.gd` | 当前 settings / custom profile 状态 |
+| `plugin/runtime/tool_profile_catalog.gd` | builtin profile 目录 |

@@ -8,8 +8,15 @@ const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/setti
 const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
+const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
+const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
+const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
+const ConfigTabActionService = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
+const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -26,12 +33,24 @@ var _settings_store := SettingsStore.new()
 var _server_controller := ServerRuntimeController.new()
 var _tool_catalog := ToolCatalogService.new()
 var _config_service := ClientConfigService.new()
+var _config_tab_action_service := ConfigTabActionService.new()
+var _dock_model_service: DockModelService = DockModelService.new()
+var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
+var _client_install_detection_service := ClientInstallDetectionService.new()
 var _user_tool_service := UserToolService.new()
+var _user_tool_watch_service := UserToolWatchService.new()
+var _action_router := PluginActionRouterScript.new()
+var _dock_coordinator := PluginDockCoordinatorScript.new()
 var _localization: LocalizationService
 var _dock: Control
+var _client_executable_dialog: FileDialog
+var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
+var _plugin_reenable_pending := false
+var _dock_recreate_pending := false
+var _dock_recreate_attempted := false
 
 
 func _enter_tree() -> void:
@@ -39,14 +58,21 @@ func _enter_tree() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_enter_tree", "_enter_tree")
 	_refresh_service_instances()
 	_load_state()
-	_validate_permission_configuration()
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
-	_state.settings["debug_mode"] = true
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+	_state.settings["log_level"] = MCPDebugBuffer.get_minimum_level()
+
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
 
 	_attach_server_controller()
+	_configure_user_tool_watch_service()
+	_configure_config_tab_action_service()
 	_ensure_runtime_bridge_autoload()
 	_install_editor_debugger_bridge()
 
@@ -69,13 +95,30 @@ func _exit_tree() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_exit_tree", "_exit_tree")
 	set_process(false)
 	_save_settings()
+	if _user_tool_watch_service != null:
+		_user_tool_watch_service.stop()
 	_remove_dock()
+	_remove_client_executable_dialog()
 	_uninstall_editor_debugger_bridge()
+	_remove_runtime_bridge_autoload()
+	if _action_router != null:
+		_action_router.dispose()
+		_action_router = null
+	_dock_coordinator = null
 	_dispose_server_controller()
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
+	_user_tool_watch_service = null
 	_config_service = null
+	if _config_tab_action_service != null:
+		_config_tab_action_service.dispose()
+		_config_tab_action_service = null
+	if _dock_model_service != null:
+		_dock_model_service.dispose()
+	_dock_model_service = null
+	_runtime_coordinator = null
+	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
@@ -93,13 +136,9 @@ func _disable_plugin() -> void:
 	_finish_self_operation(operation, true, "plugin", "_disable_plugin")
 
 
-func _validate_permission_configuration() -> void:
-	for issue in PluginRuntimeState.get_domain_category_consistency_issues():
-		push_warning("[Godot MCP] Permission configuration issue: %s" % issue)
-		MCPDebugBuffer.record("warning", "plugin", "Permission config issue: %s" % issue)
-
-
 func _process(delta: float) -> void:
+	if _user_tool_watch_service != null:
+		_user_tool_watch_service.tick()
 	_status_poll_accumulator += delta
 	if _status_poll_accumulator >= 0.5:
 		_status_poll_accumulator = 0.0
@@ -107,6 +146,8 @@ func _process(delta: float) -> void:
 
 
 func get_server() -> Node:
+	if _server_controller == null:
+		return null
 	return _server_controller.get_server()
 
 
@@ -119,10 +160,18 @@ func stop_server() -> void:
 
 
 func _attach_server_controller() -> void:
-	if _server_controller == null:
-		_server_controller = ServerRuntimeController.new()
-	_server_controller.attach(self, _state.settings)
-	_connect_server_controller_signals()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.attach_server_controller(
+		_server_controller,
+		self,
+		_state.settings,
+		_action_router,
+		Callable(self, "_create_server_controller")
+	)
 
 
 func _connect_server_controller_signals() -> void:
@@ -147,18 +196,36 @@ func _disconnect_server_controller_signals() -> void:
 		_server_controller.request_received.disconnect(_on_request_received)
 
 
+func _create_server_controller() -> ServerRuntimeController:
+	return ServerRuntimeController.new()
+
+
+func _create_editor_debugger_bridge():
+	return MCPEditorDebuggerBridge.new()
+
+
 func _dispose_server_controller() -> void:
 	if _server_controller == null:
 		return
-	_disconnect_server_controller_signals()
-	_server_controller.detach()
-	_server_controller = null
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.dispose_server_controller(_server_controller, _action_router)
 
 
 func _recreate_server_controller() -> void:
-	_dispose_server_controller()
-	_server_controller = ServerRuntimeController.new()
-	_attach_server_controller()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_server_controller = _runtime_coordinator.recreate_server_controller(
+		_server_controller,
+		self,
+		_state.settings,
+		_action_router,
+		Callable(self, "_create_server_controller")
+	)
+	_configure_user_tool_watch_service()
 
 
 func _load_state() -> void:
@@ -169,8 +236,13 @@ func _load_state() -> void:
 		PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS
 	)
 	_state.settings = load_result["settings"]
+	if not (_state.settings.get("client_manual_paths", {}) is Dictionary):
+		_state.settings["client_manual_paths"] = {}
+	_state.current_cli_scope = str(_state.settings.get("current_cli_scope", _state.current_cli_scope))
+	_state.current_config_platform = str(_state.settings.get("current_config_platform", _state.current_config_platform))
 	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
 	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_configure_client_install_detection_service()
 
 
 func _save_settings() -> void:
@@ -200,7 +272,9 @@ func _ensure_runtime_bridge_autoload() -> void:
 		_finish_self_operation(operation, false, "plugin", "_ensure_runtime_bridge_autoload")
 		return
 	_clear_runtime_bridge_root_instance()
-	add_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_runtime_coordinator.ensure_runtime_bridge_autoload(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
 	ProjectSettings.save()
 	MCPRuntimeDebugStore.set_bridge_status(true, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload installed")
 	_record_runtime_bridge_stale_instance("_ensure_runtime_bridge_autoload", str(operation.get("operation_id", "")))
@@ -217,9 +291,12 @@ func _remove_runtime_bridge_autoload() -> void:
 		_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
 		return
 	_clear_runtime_bridge_root_instance()
-	remove_autoload_singleton(RUNTIME_BRIDGE_AUTOLOAD_NAME)
-	ProjectSettings.save()
-	MCPRuntimeDebugStore.set_bridge_status(false, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH, "Runtime bridge autoload removed")
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	var removed = _runtime_coordinator.remove_runtime_bridge_autoload(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	if not removed:
+		_finish_self_operation(operation, false, "plugin", "_remove_runtime_bridge_autoload")
+		return
 	_record_runtime_bridge_stale_instance("_remove_runtime_bridge_autoload", str(operation.get("operation_id", "")))
 	_finish_self_operation(operation, true, "plugin", "_remove_runtime_bridge_autoload")
 	MCPDebugBuffer.record("info", "plugin", "Runtime bridge autoload removed")
@@ -229,13 +306,24 @@ func _is_runtime_bridge_autoload_path(setting_value: String) -> bool:
 	var normalized := setting_value.trim_prefix("*")
 	if normalized == RUNTIME_BRIDGE_AUTOLOAD_PATH:
 		return true
+	if normalized.begins_with("uid://"):
+		return _is_runtime_bridge_uid_path(normalized)
 	if normalized.is_empty() or not ResourceLoader.exists(normalized):
 		return false
 	var resource := ResourceLoader.load(normalized)
 	return resource != null and str(resource.resource_path) == RUNTIME_BRIDGE_AUTOLOAD_PATH
 
 
+func _is_runtime_bridge_uid_path(uid_path: String) -> bool:
+	var uid := ResourceUID.text_to_id(uid_path)
+	if not ResourceUID.has_id(uid):
+		return false
+	return str(ResourceUID.get_id_path(uid)) == RUNTIME_BRIDGE_AUTOLOAD_PATH
+
+
 func _clear_runtime_bridge_root_instance() -> void:
+	if not is_inside_tree():
+		return
 	var tree := get_tree()
 	if tree == null or tree.root == null:
 		return
@@ -255,12 +343,13 @@ func _install_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge != null:
 		_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
 		return
-	_editor_debugger_bridge = MCPEditorDebuggerBridge.new()
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_editor_debugger_bridge = _runtime_coordinator.install_editor_debugger_bridge(self, _editor_debugger_bridge, Callable(self, "_create_editor_debugger_bridge"))
 	if _editor_debugger_bridge == null:
-		_record_self_incident("error", "lifecycle_error", "editor_debugger_bridge_install_failed", "Failed to instantiate the editor debugger bridge", "plugin", "_install_editor_debugger_bridge", "", "", str(operation.get("operation_id", "")), true, "Inspect the editor debugger bridge script and plugin lifecycle output.")
+		_record_self_incident("error", "lifecycle_error", "editor_debugger_bridge_create_failed", "Failed to instantiate the editor debugger bridge", "plugin", "_install_editor_debugger_bridge", "", "", str(operation.get("operation_id", "")), true, "Inspect the editor debugger bridge script and plugin lifecycle output.")
 		_finish_self_operation(operation, false, "plugin", "_install_editor_debugger_bridge")
 		return
-	add_debugger_plugin(_editor_debugger_bridge)
 	_finish_self_operation(operation, true, "plugin", "_install_editor_debugger_bridge")
 
 
@@ -269,81 +358,114 @@ func _uninstall_editor_debugger_bridge() -> void:
 	if _editor_debugger_bridge == null:
 		_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
 		return
-	remove_debugger_plugin(_editor_debugger_bridge)
-	_editor_debugger_bridge.set_script(null)
-	_editor_debugger_bridge = null
+	if _runtime_coordinator == null:
+		_runtime_coordinator = PluginRuntimeCoordinatorScript.new()
+	_editor_debugger_bridge = _runtime_coordinator.uninstall_editor_debugger_bridge(self, _editor_debugger_bridge)
 	_finish_self_operation(operation, true, "plugin", "_uninstall_editor_debugger_bridge")
 
 
 func _create_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("create_dock", "_create_dock")
-	_remove_dock()
-	_remove_stale_docks()
-	var dock_scene = _load_packed_scene(MCP_DOCK_SCENE_PATH)
-	if dock_scene == null:
-		push_error("[Godot MCP] Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
-		MCPDebugBuffer.record("error", "plugin", "Failed to load dock scene: %s" % MCP_DOCK_SCENE_PATH)
-		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Failed to load dock scene", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and script dependencies.")
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var cleanup_result = _dock_coordinator.remove_stale_plugin_docks(self, _dock, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
+	if not bool(cleanup_result.get("success", false)):
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
-	_dock = dock_scene.instantiate()
-	if _dock == null:
-		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", "Dock scene instantiation returned null", "plugin", "_create_dock", MCP_DOCK_SCENE_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and its script.")
+	var result = _dock_coordinator.create_plugin_dock(
+		self,
+		_dock,
+		Callable(self, "_record_self_incident"),
+		DOCK_SLOT_RIGHT_UL,
+		MCP_DOCK_SCENE_PATH,
+		MCP_DOCK_SCRIPT_PATH,
+		Callable(self, "_load_packed_scene")
+	)
+	if not bool(result.get("success", false)):
+		var error_text = str(result.get("error", "Failed to create dock"))
+		push_error("[Godot MCP] %s" % error_text)
+		MCPDebugBuffer.record("error", "plugin", error_text)
+		_record_self_incident("error", "resource_missing", "dock_scene_load_failed", error_text, "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene resource and its script.")
 		_finish_self_operation(operation, false, "plugin", "_create_dock")
 		return
-	if not _wire_dock_signals(str(operation.get("operation_id", ""))):
-		_finish_self_operation(operation, false, "plugin", "_create_dock")
-		return
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
+	_dock = result.get("dock", null)
+	_dock_recreate_pending = false
+	if _dock != null and is_instance_valid(_dock) and _dock.has_method("apply_model"):
+		_dock_recreate_attempted = false
+	else:
+		_record_self_incident("error", "ui_binding_error", "dock_controller_missing", "Dock scene was instantiated without an apply_model() controller", "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect the dock scene script for parser or runtime initialization errors.")
+	_wire_dock_signals(str(operation.get("operation_id", "")))
 	var dock_count = _count_dock_instances()
 	if dock_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance is present after dock creation", "plugin", "_create_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and plugin reload ordering.", {"dock_count": dock_count})
 	_finish_self_operation(operation, true, "plugin", "_create_dock")
 
-
 func _remove_dock() -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("remove_dock", "_remove_dock")
-	if _dock != null and is_instance_valid(_dock):
-		remove_control_from_docks(_dock)
-		if _dock.get_parent() != null:
-			_dock.get_parent().remove_child(_dock)
-		_dock.set_script(null)
-		_dock.free()
-	_dock = null
+	_dock_recreate_pending = false
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var result = _dock_coordinator.remove_plugin_dock(self, _dock, MCP_DOCK_SCRIPT_PATH)
+	_dock = result.get("dock", null)
 	if _count_dock_instances() > 0:
 		_record_self_incident("warning", "reload_conflict", "instance_cleanup_incomplete", "Dock instances remain after dock removal", "plugin", "_remove_dock", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect dock cleanup and plugin reload ordering.", {"remaining_dock_instances": _count_dock_instances()})
 	_finish_self_operation(operation, true, "plugin", "_remove_dock")
 
 
-func _remove_stale_docks() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("remove_stale_docks", "_remove_stale_docks")
+func _configure_client_executable_dialog() -> void:
+	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
+		return
+
 	var editor_interface = get_editor_interface()
 	if editor_interface == null:
-		_finish_self_operation(operation, true, "plugin", "_remove_stale_docks")
 		return
 	var base_control = editor_interface.get_base_control()
 	if base_control == null:
-		_finish_self_operation(operation, true, "plugin", "_remove_stale_docks")
 		return
 
-	for child in base_control.find_children("*", "Control", true, false):
-		if child == null or not is_instance_valid(child):
-			continue
-		if child == _dock:
-			continue
-		var script = child.get_script()
-		var script_path := ""
-		if script != null:
-			script_path = str(script.resource_path)
-		if child.name != "MCPDock" and script_path != MCP_DOCK_SCRIPT_PATH:
-			continue
-		remove_control_from_docks(child)
-		if child.get_parent() != null:
-			child.get_parent().remove_child(child)
-		child.set_script(null)
-		child.free()
-		MCPDebugBuffer.record("debug", "plugin",
-			"Removed stale dock instance: %s path=%s" % [child.get_instance_id(), script_path])
+	_client_executable_dialog = FileDialog.new()
+	_client_executable_dialog.name = "ClientExecutableDialog"
+	_client_executable_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_client_executable_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_client_executable_dialog.filters = PackedStringArray([
+		"*.exe ; Executable",
+		"*.cmd ; Command Script",
+		"*.bat ; Batch Script",
+		"* ; All Files"
+	])
+	_client_executable_dialog.file_selected.connect(_on_client_executable_file_selected)
+	base_control.add_child(_client_executable_dialog)
+
+
+func _remove_client_executable_dialog() -> void:
+	if _client_executable_dialog == null:
+		return
+	if is_instance_valid(_client_executable_dialog):
+		_client_executable_dialog.queue_free()
+	_client_executable_dialog = null
+	_pending_client_path_request = {}
+
+
+func _get_client_executable_dialog():
+	return _client_executable_dialog
+
+
+func _on_clear_self_diagnostics_requested() -> void:
+	var result = clear_self_diagnostics_from_tools()
+	if bool(result.get("success", false)):
+		_show_message(_localization.get_text("self_diag_cleared"))
+		return
+	_show_message(str(result.get("error", _localization.get_text("self_diag_clear_failed"))))
+
+
+func _remove_stale_docks() -> void:
+	var operation = PluginSelfDiagnosticStore.begin_operation("remove_stale_docks", "_remove_stale_docks")
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	var result = _dock_coordinator.remove_stale_plugin_docks(self, _dock, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
+	if not bool(result.get("success", false)):
+		_finish_self_operation(operation, false, "plugin", "_remove_stale_docks")
+		return
 	var remaining_count = _count_dock_instances()
 	if remaining_count > 1:
 		_record_self_incident("warning", "reload_conflict", "dock_duplicate_instance", "More than one MCP dock instance remains after stale-dock cleanup", "plugin", "_remove_stale_docks", MCP_DOCK_SCRIPT_PATH, "", str(operation.get("operation_id", "")), true, "Inspect stale dock cleanup and editor plugin reload ordering.", {"dock_count": remaining_count})
@@ -354,102 +476,40 @@ func _wire_dock_signals(operation_id: String = "") -> bool:
 	if _dock == null or not is_instance_valid(_dock):
 		_record_self_incident("error", "ui_binding_error", "dock_signal_binding_failed", "Dock signal wiring was requested before the dock instance was ready", "plugin", "_wire_dock_signals", MCP_DOCK_SCRIPT_PATH, "", operation_id, true, "Inspect dock creation order.")
 		return false
-	var connected = true
-	connected = _connect_dock_signal("current_tab_changed", _on_current_tab_changed, operation_id) and connected
-	connected = _connect_dock_signal("port_changed", _on_port_changed, operation_id) and connected
-	connected = _connect_dock_signal("auto_start_toggled", _on_auto_start_toggled, operation_id) and connected
-	connected = _connect_dock_signal("log_level_changed", _on_log_level_changed, operation_id) and connected
-	connected = _connect_dock_signal("permission_level_changed", _on_permission_level_changed, operation_id) and connected
-	connected = _connect_dock_signal("language_changed", _on_language_changed, operation_id) and connected
-	connected = _connect_dock_signal("start_requested", _on_start_requested, operation_id) and connected
-	connected = _connect_dock_signal("restart_requested", _on_restart_requested, operation_id) and connected
-	connected = _connect_dock_signal("stop_requested", _on_stop_requested, operation_id) and connected
-	connected = _connect_dock_signal("full_reload_requested", _on_full_reload_requested, operation_id) and connected
-	connected = _connect_dock_signal("delete_user_tool_requested", _on_delete_user_tool_requested, operation_id) and connected
-	connected = _connect_dock_signal("tool_toggled", _on_tool_toggled, operation_id) and connected
-	connected = _connect_dock_signal("category_toggled", _on_category_toggled, operation_id) and connected
-	connected = _connect_dock_signal("domain_toggled", _on_domain_toggled, operation_id) and connected
-	connected = _connect_dock_signal("tree_collapse_changed", _on_tree_collapse_changed, operation_id) and connected
-	connected = _connect_dock_signal("cli_scope_changed", _on_cli_scope_changed, operation_id) and connected
-	connected = _connect_dock_signal("config_platform_changed", _on_config_platform_changed, operation_id) and connected
-	connected = _connect_dock_signal("config_write_requested", _on_config_write_requested, operation_id) and connected
-	connected = _connect_dock_signal("copy_requested", _on_copy_requested, operation_id) and connected
-	return connected
-
-
-func _build_dock_model() -> Dictionary:
-	if _tool_catalog == null:
-		_tool_catalog = ToolCatalogService.new()
-	if _localization == null:
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-	if _user_tool_service == null:
-		_user_tool_service = UserToolService.new()
-
-	var all_tools_by_category = _server_controller.get_all_tools_by_category().duplicate(true)
-	var tools_by_category = all_tools_by_category.duplicate(true)
-	for category in tools_by_category.keys():
-		if not is_tool_category_visible_for_permission(str(category)):
-			tools_by_category.erase(category)
-	var tool_names = _tool_catalog.build_tool_name_index(all_tools_by_category)
-	var profile_id = str(_state.settings.get("tool_profile_id", "default"))
-
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		profile_id = _tool_catalog.find_matching_profile_id(
-			_state.settings.get("disabled_tools", []),
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names
-		)
-		if profile_id.is_empty():
-			profile_id = "default"
-		_state.settings["tool_profile_id"] = profile_id
-
-	var desktop_clients = _build_desktop_client_models()
-	var cli_clients = _build_cli_client_models()
-	var config_platforms = _build_config_platform_models(desktop_clients, cli_clients)
-	_state.current_config_platform = _resolve_current_config_platform(config_platforms)
-
-	var self_diagnostics = _build_self_diagnostic_health_snapshot()
-	return {
-		"localization": _localization,
-		"settings": _state.settings,
-		"current_language": _state.resolve_active_language(_localization),
-		"current_tab": _state.current_tab,
-		"permission_levels": PluginRuntimeState.PERMISSION_LEVELS,
-		"current_permission_level": _get_permission_level(),
-		"show_user_tools": bool(_state.settings.get("show_user_tools", false)),
-		"log_levels": MCPDebugBuffer.get_available_levels(),
-		"current_log_level": str(_state.settings.get("log_level", MCPDebugBuffer.get_minimum_level())),
-		"current_cli_scope": _state.current_cli_scope,
-		"current_config_platform": _state.current_config_platform,
-		"editor_scale": _get_editor_scale(),
-		"is_running": _server_controller.is_running(),
-		"stats": _server_controller.get_connection_stats(),
-		"domain_states": _server_controller.get_domain_states(),
-		"reload_status": _server_controller.get_reload_status(),
-		"performance": _server_controller.get_performance_summary(),
-		"languages": _localization.get_available_languages(),
-		"tools_by_category": tools_by_category,
-		"tool_load_errors": _server_controller.get_tool_load_errors(),
-		"self_diagnostics": self_diagnostics,
-		"self_diagnostic_copy_text": PluginSelfDiagnosticStore.build_copy_text(self_diagnostics),
-		"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": PluginRuntimeState.TOOL_DOMAIN_DEFS,
-		"profile_description": _get_tool_profile_description(profile_id, tool_names),
-		"user_tools": _user_tool_service.list_user_tools(),
-		"desktop_clients": desktop_clients,
-		"cli_clients": cli_clients,
-		"config_platforms": config_platforms
-	}
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	if _action_router == null:
+		_action_router = PluginActionRouterScript.new()
+	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+	var bindings = _dock_coordinator.build_dock_signal_bindings(_action_router)
+	return _dock_coordinator.wire_dock_signals(_dock, bindings, operation_id, Callable(self, "_record_self_incident"), MCP_DOCK_SCRIPT_PATH)
 
 
 func _refresh_dock() -> void:
 	if _dock == null or not is_instance_valid(_dock):
 		return
-	_dock.apply_model(_build_dock_model())
+	if not _dock.has_method("apply_model"):
+		if _dock_recreate_pending or _dock_recreate_attempted:
+			return
+		_dock_recreate_pending = true
+		_dock_recreate_attempted = true
+		call_deferred("_recreate_dock")
+		return
+	if _dock_model_service == null:
+		_dock_model_service = DockModelService.new()
+	_dock_model_service.configure(
+		_state,
+		_localization,
+		_server_controller,
+		_tool_catalog,
+		_config_service,
+		null,
+		_user_tool_service,
+		_client_install_detection_service,
+		_user_tool_watch_service,
+		Callable(self, "_get_editor_scale")
+	)
+	_dock.call("apply_model", _dock_model_service.build_model())
 
 
 func _apply_initial_tool_profile_if_needed() -> void:
@@ -472,122 +532,34 @@ func _apply_initial_tool_profile_if_needed() -> void:
 	_save_settings()
 
 
-func _get_tool_profile_description(profile_id: String, tool_names: Array) -> String:
-	var description = ""
-	for profile in PluginRuntimeState.BUILTIN_TOOL_PROFILES:
-		if str(profile.get("id", "")) == profile_id:
-			description = _localization.get_text(str(profile.get("desc_key", "")))
-			break
-
-	if description.is_empty() and _state.custom_tool_profiles.has(profile_id):
-		description = _localization.get_text("tool_profile_custom_desc") % [str(_state.custom_tool_profiles[profile_id].get("name", profile_id))]
-
-	if description.is_empty():
-		description = _localization.get_text("tool_profile_default_desc")
-
-	if not _tool_catalog.profile_matches_state(
-		profile_id,
-		_state.settings.get("disabled_tools", []),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names
-	):
-		description = "%s %s" % [description, _localization.get_text("tool_profile_modified_desc")]
-
-	return description
+func _get_client_install_statuses() -> Dictionary:
+	if _client_install_detection_service == null:
+		_client_install_detection_service = ClientInstallDetectionService.new()
+	_configure_client_install_detection_service()
+	return _client_install_detection_service.detect_all()
 
 
-func _build_desktop_client_models() -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	return [
-		{
-			"id": "claude_desktop",
-			"name_key": "config_client_claude_desktop",
-			"summary_key": "config_client_claude_desktop_desc",
-			"path": _config_service.get_claude_config_path(),
-			"content": _config_service.get_url_config(host, port),
-			"writeable": true
-		},
-		{
-			"id": "cursor",
-			"name_key": "config_client_cursor",
-			"summary_key": "config_client_cursor_desc",
-			"path": _config_service.get_cursor_config_path(),
-			"content": _config_service.get_url_config(host, port),
-			"writeable": true
-		},
-		{
-			"id": "gemini",
-			"name_key": "config_client_gemini",
-			"summary_key": "config_client_gemini_desc",
-			"path": _config_service.get_gemini_config_path(),
-			"content": _config_service.get_http_url_config(host, port),
-			"writeable": true
-		}
-	]
+func _invalidate_client_install_status_cache() -> void:
+	if _client_install_detection_service == null:
+		return
+	_client_install_detection_service.invalidate_cache()
 
 
-func _build_cli_client_models() -> Array[Dictionary]:
-	var host = str(_state.settings.get("host", "127.0.0.1"))
-	var port = int(_state.settings.get("port", 3000))
-	return [
-		{
-			"id": "claude_code",
-			"name_key": "config_client_claude_code",
-			"summary_key": "config_client_claude_code_desc",
-			"content": _config_service.get_claude_code_command(_state.current_cli_scope, host, port)
-		},
-		{
-			"id": "codex",
-			"name_key": "config_client_codex",
-			"summary_key": "config_client_codex_desc",
-			"content": _config_service.get_codex_command(host, port)
-		}
-	]
-
-
-func _build_config_platform_models(desktop_clients: Array[Dictionary], cli_clients: Array[Dictionary]) -> Array[Dictionary]:
-	var platforms: Array[Dictionary] = []
-	for client in desktop_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "desktop"
-		})
-	for client in cli_clients:
-		platforms.append({
-			"id": str(client.get("id", "")),
-			"name_key": str(client.get("name_key", "")),
-			"group": "cli"
-		})
-	return platforms
-
-
-func _resolve_current_config_platform(platforms: Array[Dictionary]) -> String:
-	if platforms.is_empty():
-		return ""
-
-	for platform in platforms:
-		var platform_id = str(platform.get("id", ""))
-		if platform_id == _state.current_config_platform:
-			return platform_id
-
-	return str(platforms[0].get("id", ""))
+func _configure_client_install_detection_service() -> void:
+	if _client_install_detection_service == null or _state == null:
+		return
+	_client_install_detection_service.configure(_state.settings)
 
 
 func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
+	if _state.current_tab == 2:
+		_invalidate_client_install_status_cache()
+	_refresh_dock()
 
 
 func _on_port_changed(value: int) -> void:
 	_state.settings["port"] = value
-	_save_settings()
-	_refresh_dock()
-
-
-func _on_auto_start_toggled(enabled: bool) -> void:
-	_state.settings["auto_start"] = enabled
 	_save_settings()
 	_refresh_dock()
 
@@ -620,23 +592,27 @@ func _on_stop_requested() -> void:
 
 
 func _on_full_reload_requested() -> void:
+	if _plugin_reenable_pending:
+		return
 	var focus_snapshot := {}
 	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
 		focus_snapshot = _dock.capture_focus_snapshot()
 	_store_pending_focus_snapshot(focus_snapshot)
 	_save_settings()
-	_schedule_plugin_reenable()
+	_plugin_reenable_pending = true
+	if not _schedule_plugin_reenable():
+		_plugin_reenable_pending = false
 
 
 func _on_log_level_changed(level: String) -> void:
-	_state.settings["log_level"] = level
 	MCPDebugBuffer.set_minimum_level(level)
+	_state.settings["log_level"] = MCPDebugBuffer.get_minimum_level()
 	_save_settings()
 	_refresh_dock()
 
 
-func _on_permission_level_changed(level: String) -> void:
-	_state.settings["permission_level"] = PluginRuntimeState.normalize_permission_level(level)
+func _on_show_user_tools_changed(enabled: bool) -> void:
+	_state.settings["show_user_tools"] = true
 	_save_settings()
 	_refresh_dock()
 
@@ -785,20 +761,6 @@ func _on_tool_toggled(tool_name: String, enabled: bool) -> void:
 
 
 func _on_category_toggled(category: String, enabled: bool) -> void:
-	if not enabled and _is_plugin_category_restricted(category):
-		for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
-			if str(tool_name).begins_with(category + "_"):
-				_set_tool_enabled(str(tool_name), false)
-		_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-		_save_settings()
-		_refresh_dock()
-		return
-
-	if enabled and not _can_enable_category(category):
-		_show_message(get_permission_denied_message_for_category(category))
-		_refresh_dock()
-		return
-
 	for tool_name in _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category()):
 		if str(tool_name).begins_with(category + "_"):
 			_set_tool_enabled(str(tool_name), enabled)
@@ -808,11 +770,6 @@ func _on_category_toggled(category: String, enabled: bool) -> void:
 
 
 func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
-	if enabled and not _can_enable_domain(domain_key):
-		_show_message(get_permission_denied_message_for_domain(domain_key))
-		_refresh_dock()
-		return
-
 	var target_categories: Array = []
 	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
 		if str(domain_def.get("key", "")) != domain_key:
@@ -844,27 +801,52 @@ func _on_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> vo
 
 func _on_cli_scope_changed(scope: String) -> void:
 	_state.current_cli_scope = scope
+	_state.settings["current_cli_scope"] = scope
+	_save_settings()
 	_refresh_dock()
 
 
 func _on_config_platform_changed(platform_id: String) -> void:
 	_state.current_config_platform = platform_id
+	_state.settings["current_config_platform"] = platform_id
+	_save_settings()
 	_refresh_dock()
 
 
-func _on_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
-	var result = _config_service.write_config_file(config_type, filepath, config)
-	if not result.get("success", false):
-		match str(result.get("error", "")):
-			"parse_error":
-				_show_message(_localization.get_text("msg_parse_error"))
-			"dir_error":
-				_show_message(_localization.get_text("msg_dir_error") + str(result.get("path", "")))
-			_:
-				_show_message(_localization.get_text("msg_write_error"))
-		return
+func _on_config_client_action_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_action_requested(client_id)
 
-	_show_message(_localization.get_text("msg_config_success") % client_name)
+
+func _on_config_client_launch_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_launch_requested(client_id)
+
+
+func _on_config_client_path_pick_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_path_pick_requested(client_id)
+
+
+func _on_config_client_path_clear_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_path_clear_requested(client_id)
+
+
+func _on_config_client_open_config_dir_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_open_config_dir_requested(client_id)
+
+
+func _on_config_client_open_config_file_requested(client_id: String) -> void:
+	_config_tab_action_service.handle_config_client_open_config_file_requested(client_id)
+
+
+func _on_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
+	_config_tab_action_service.handle_config_write_requested(config_type, filepath, config, client_name)
+
+
+func _on_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
+	_config_tab_action_service.handle_config_remove_requested(config_type, filepath, client_name)
+
+
+func _on_client_executable_file_selected(path: String) -> void:
+	_config_tab_action_service.on_client_executable_file_selected(path)
 
 
 func _on_copy_requested(text: String, source: String) -> void:
@@ -885,10 +867,6 @@ func _on_request_received(_method: String, _params: Dictionary) -> void:
 
 
 func _apply_tool_enabled(tool_name: String, enabled: bool) -> void:
-	if enabled and not _can_enable_tool(tool_name):
-		_show_message(get_permission_denied_message_for_tool(tool_name))
-		_refresh_dock()
-		return
 	_set_tool_enabled(tool_name, enabled)
 	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
 	_save_settings()
@@ -908,6 +886,19 @@ func _show_message(message: String) -> void:
 	MCPDebugBuffer.record("info", "plugin", message)
 	if _dock and is_instance_valid(_dock):
 		_dock.show_message(_localization.get_text("dialog_title"), message)
+
+
+func _show_confirmation(message: String, on_confirmed: Callable) -> void:
+	MCPDebugBuffer.record("info", "plugin", message)
+	if _dock and is_instance_valid(_dock) and _dock.has_method("show_confirmation"):
+		_dock.show_confirmation(_localization.get_text("dialog_title"), message, on_confirmed)
+		return
+	if on_confirmed.is_valid():
+		on_confirmed.call()
+
+
+
+
 
 
 func set_log_level_for_tools(level: String) -> Dictionary:
@@ -932,21 +923,21 @@ func create_user_tool_from_tools(args: Dictionary) -> Dictionary:
 		str(args.get("agent_hint", ""))
 	)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "create_user_tool")
 	return result
 
 
 func delete_user_tool_from_tools(script_path: String, authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.delete_tool(script_path, authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", script_path)), "delete_user_tool")
 	return result
 
 
 func restore_user_tool_from_tools(authorized: bool, agent_hint: String = "") -> Dictionary:
 	var result = _user_tool_service.restore_latest_backup(authorized, agent_hint)
 	if bool(result.get("success", false)):
-		_apply_user_tool_catalog_refresh()
+		_apply_user_tool_catalog_refresh(str((result.get("data", {}) as Dictionary).get("script_path", "")), "restore_user_tool")
 	return result
 
 
@@ -954,8 +945,36 @@ func _schedule_user_tool_catalog_refresh() -> void:
 	call_deferred("_apply_user_tool_catalog_refresh")
 
 
-func _apply_user_tool_catalog_refresh() -> void:
-	_server_controller.reload_all_domains()
+func _apply_user_tool_catalog_refresh(script_path: String = "", reason: String = "user_tool_catalog_refresh") -> void:
+	_refresh_user_tool_registry()
+	_reload_user_tool_runtime(script_path, reason)
+	_rebuild_user_tool_ui_model()
+
+
+func _apply_external_user_tool_catalog_refresh(changed_paths: Array[String], reason: String = "external_watch") -> void:
+	_refresh_user_tool_registry()
+	if changed_paths.is_empty():
+		_reload_user_tool_runtime("", reason)
+	else:
+		for script_path in changed_paths:
+			_reload_user_tool_runtime(str(script_path), reason)
+	_rebuild_user_tool_ui_model()
+
+
+func _refresh_user_tool_registry() -> Array[Dictionary]:
+	return _user_tool_service.list_user_tools()
+
+
+func _reload_user_tool_runtime(script_path: String, reason: String) -> Dictionary:
+	var coordinator = _create_reload_coordinator()
+	if coordinator == null:
+		return {"success": false, "error": "Reload coordinator is unavailable"}
+	if not script_path.is_empty():
+		return coordinator.request_reload_by_script(script_path, reason)
+	return coordinator.request_reload("user", reason)
+
+
+func _rebuild_user_tool_ui_model() -> void:
 	_cleanup_disabled_tools()
 	_save_settings()
 	_refresh_dock()
@@ -1001,8 +1020,9 @@ func runtime_soft_reload() -> Dictionary:
 		}
 
 	var was_running = _server_controller.is_running()
+	var focus_snapshot := _capture_dock_focus_snapshot()
 	_pending_runtime_reload_action = "runtime_soft_reload"
-	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running])
+	_schedule_runtime_reload("_complete_runtime_soft_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
 	return {
 		"success": true,
 		"message": "Plugin soft reload scheduled",
@@ -1013,9 +1033,23 @@ func runtime_soft_reload() -> Dictionary:
 
 func runtime_full_reload() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_full_reload", "runtime_full_reload")
-	_on_full_reload_requested()
-	_finish_self_operation(operation, true, "plugin", "runtime_full_reload")
-	return {"success": true, "message": "Plugin full reload scheduled"}
+	if not _pending_runtime_reload_action.is_empty():
+		_finish_self_operation(operation, false, "plugin", "runtime_full_reload", ["runtime_reload_pending"])
+		return {
+			"success": false,
+			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
+		}
+
+	var was_running := _server_controller != null and _server_controller.is_running()
+	var focus_snapshot := _capture_dock_focus_snapshot()
+	_pending_runtime_reload_action = "runtime_full_reload"
+	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
+	return {
+		"success": true,
+		"message": "Plugin full reload scheduled",
+		"running": was_running,
+		"deferred": true
+	}
 
 
 func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
@@ -1046,7 +1080,7 @@ func _complete_runtime_server_restart(operation_id: String) -> void:
 	)
 
 
-func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> void:
+func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
 	var success := false
 	if _state != null and _server_controller != null:
 		_refresh_service_instances()
@@ -1061,6 +1095,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 			success = _server_controller.reinitialize(_state.settings, "tool_soft_reload")
 		_recreate_dock()
 		_refresh_dock()
+		_restore_runtime_dock_focus_snapshot(focus_snapshot)
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -1068,6 +1103,48 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool) -> v
 		"plugin",
 		"runtime_soft_reload"
 	)
+
+
+func _complete_runtime_full_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
+	var success := false
+	if _state != null and _server_controller != null:
+		_refresh_service_instances()
+		_recreate_server_controller()
+		LocalizationService.reset_instance()
+		_localization = LocalizationService.get_instance()
+		_localization.set_language(str(_state.settings.get("language", "")))
+		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+		if was_running:
+			success = _server_controller.start(_state.settings, "tool_full_reload")
+		else:
+			success = _server_controller.reinitialize(_state.settings, "tool_full_reload")
+		_recreate_dock()
+		_refresh_dock()
+		_restore_runtime_dock_focus_snapshot(focus_snapshot)
+	_pending_runtime_reload_action = ""
+	_finish_self_operation(
+		{"operation_id": operation_id},
+		success,
+		"plugin",
+		"runtime_full_reload"
+	)
+
+
+func _capture_dock_focus_snapshot() -> Dictionary:
+	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
+		return _dock.capture_focus_snapshot()
+	return {"tab_index": _state.current_tab, "focus_path": ""}
+
+
+func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
+	if _dock == null or not is_instance_valid(_dock):
+		return
+	if _dock.has_method("activate_editor_dock_tab"):
+		_dock.activate_editor_dock_tab()
+	if _dock.has_method("restore_focus_snapshot"):
+		_dock.restore_focus_snapshot(snapshot)
+	if _dock.has_method("focus_active_panel"):
+		_dock.call_deferred("focus_active_panel")
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
@@ -1100,48 +1177,39 @@ func get_self_diagnostic_timeline_from_tools(limit: int = 20) -> Dictionary:
 
 
 func clear_self_diagnostics_from_tools() -> Dictionary:
-	if _get_permission_level() != PluginRuntimeState.PERMISSION_DEVELOPER:
-		return {"success": false, "error": "Developer permission level is required to clear self diagnostics"}
 	PluginSelfDiagnosticStore.clear()
 	_refresh_dock()
 	return {"success": true, "message": "Plugin self diagnostics cleared"}
 
 
 func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_tool(tool_name):
-		return {"success": false, "error": get_permission_denied_message_for_tool(tool_name)}
 	_apply_tool_enabled(tool_name, enabled)
 	return {"success": true, "tool_name": tool_name, "enabled": enabled}
 
 
 func set_category_enabled_from_tools(category: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_category(category):
-		return {"success": false, "error": get_permission_denied_message_for_category(category)}
 	_on_category_toggled(category, enabled)
 	return {"success": true, "category": category, "enabled": enabled}
 
 
 func set_domain_enabled_from_tools(domain_key: String, enabled: bool) -> Dictionary:
-	if enabled and not _can_enable_domain(domain_key):
-		return {"success": false, "error": get_permission_denied_message_for_domain(domain_key)}
 	_on_domain_toggled(domain_key, enabled)
 	return {"success": true, "domain": domain_key, "enabled": enabled}
 
 
 func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
-	_state.settings["show_user_tools"] = enabled
+	_state.settings["show_user_tools"] = true
 	_save_settings()
 	_refresh_dock()
-	return {"success": true, "show_user_tools": enabled}
+	return {"success": true, "show_user_tools": true}
 
 
 func get_developer_settings_for_tools() -> Dictionary:
 	return {
 		"success": true,
 		"data": {
-			"permission_level": _get_permission_level(),
 			"log_level": get_log_level_for_tools(),
-			"show_user_tools": bool(_state.settings.get("show_user_tools", false)),
+			"show_user_tools": true,
 			"language": str(_state.settings.get("language", "")),
 			"resolved_language": _state.resolve_active_language(_localization),
 			"tool_profile_id": str(_state.settings.get("tool_profile_id", "default"))
@@ -1164,8 +1232,7 @@ func set_language_from_tools(language_code: String) -> Dictionary:
 func get_languages_for_tools() -> Dictionary:
 	var languages: Array[Dictionary] = []
 	var active_language = _state.resolve_active_language(_localization)
-	var codes: Array = _localization.get_available_languages().keys()
-	codes.sort()
+	var codes: Array = _localization.get_available_language_codes()
 	for code in codes:
 		languages.append({
 			"code": str(code),
@@ -1307,11 +1374,11 @@ func get_runtime_usage_guide_from_tools() -> Dictionary:
 				"Start with plugin_runtime_state before changing toggles or reload state.",
 				"Prefer reload_domain or reload_all_domains first, then soft_reload_plugin, and keep full_reload_plugin for editor-side lifecycle resets only.",
 				"Use debug_runtime_bridge to read the latest project session state and captured lifecycle events, even after the project has stopped.",
-				"Use runtime toggles to disable tools freely, but enabling plugin_evolution or plugin_developer targets requires the matching permission level."
+				"All built-in plugin maintenance categories are available internally; public MCP exposure remains limited to high-level system tools."
 			],
 			"recommended_flow": [
-				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and the active permission mode."},
-				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable anything when isolating faults; only enable targets allowed by the current permission level."},
+				{"step": 1, "name": "Inspect state", "tools": ["plugin_runtime_state"], "purpose": "Read loaded domains, reload status and health summaries."},
+				{"step": 2, "name": "Toggle carefully", "tools": ["plugin_runtime_toggle"], "purpose": "Disable tools when isolating faults, then re-enable them after verification."},
 				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
 				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
 				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
@@ -1319,7 +1386,7 @@ func get_runtime_usage_guide_from_tools() -> Dictionary:
 			],
 			"warnings": [
 				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
-				"Enabling plugin_evolution or plugin_developer targets from runtime toggles is permission-gated and cannot bypass the user-selected mode.",
+				"Runtime toggles are diagnostic controls; avoid leaving essential high-level system tools disabled.",
 				"debug_runtime_bridge is the MCP tool name; runtime state remains readable after stop, but real-time observation still requires the project to be running.",
 				"Full plugin reload should be reserved for Dock wiring or plugin lifecycle recreation, not routine executor edits."
 			]
@@ -1346,7 +1413,6 @@ func get_evolution_usage_guide_from_tools() -> Dictionary:
 				{"step": 5, "name": "Audit", "tools": ["plugin_evolution_user_tool_audit"], "purpose": "Confirm that the authorized change has been recorded."}
 			],
 			"warnings": [
-				"Stable mode hides and denies the entire plugin_evolution category.",
 				"User tools must stay inside the User category even when generated through MCP.",
 				"Deletion and restore requests should be previewed before authorization to avoid mutating the wrong script."
 			]
@@ -1360,81 +1426,24 @@ func get_usage_guide_from_tools() -> Dictionary:
 		"success": true,
 		"data": {
 			"summary": [
-				"Developer mode is the only permission level that exposes plugin_developer tools and the legacy plugin compatibility category.",
-				"Use this category for Dock-facing settings such as language, preset selection, log level and permission-mode inspection.",
-				"Permission level itself is user-controlled from the Dock and is intentionally not mutable through MCP.",
+				"Plugin developer tools are internal maintenance helpers for Dock-facing settings such as language, preset selection and log level.",
+				"The plugin no longer has permission levels; all built-in maintenance capabilities are available internally while public MCP exposure stays high-level.",
 				"Use debug_runtime_bridge for the latest project session and lifecycle readback; it remains readable after the project stops."
 			],
 			"recommended_flow": [
-				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read permission level, log level, language, active preset and reload status before making changes."},
+				{"step": 1, "name": "Inspect settings", "tools": ["plugin_developer_settings", "plugin_runtime_state"], "purpose": "Read log level, language, active preset and reload status before making changes."},
 				{"step": 2, "name": "Tune the session", "tools": ["plugin_developer_log_level", "plugin_developer_set_language", "plugin_developer_apply_profile"], "purpose": "Adjust Dock-facing developer settings for the current debugging session."},
 				{"step": 3, "name": "Inspect project runtime result", "tools": ["debug_runtime_bridge"], "purpose": "Read the latest captured project session state and lifecycle events after each run."},
 				{"step": 4, "name": "Coordinate with runtime and evolution", "tools": ["plugin_runtime_usage_guide", "plugin_evolution_usage_guide"], "purpose": "Use the sibling guide tools to choose the correct reload or self-evolution flow."},
 				{"step": 5, "name": "Save reusable presets", "tools": ["plugin_developer_save_profile"], "purpose": "Persist a known-good tool selection after manual tuning."}
 			],
-			"permission_levels": {
-				"developer": "Shows and allows plugin_runtime, plugin_evolution and plugin_developer.",
-				"evolution": "Shows and allows plugin_runtime and plugin_evolution, but hides and denies plugin_developer.",
-				"stable": "Shows and allows only plugin_runtime, and hides and denies plugin_evolution and plugin_developer."
-			},
 			"warnings": [
-				"Changing permission level is intentionally restricted to the Dock so external agents cannot raise their own privileges.",
-				"Evolution mode hides the developer category at both UI and execution levels.",
 				"Use the exact MCP tool name debug_runtime_bridge when reading recent project runtime state.",
-				"Stable mode denies both plugin_evolution and plugin_developer, including direct calls from cached wrappers."
+				"Do not expose internal plugin_* categories as public MCP tools; keep public access routed through high-level system tools."
 			]
 		},
 		"message": "Plugin usage guide fetched"
 	}
-
-
-func _get_permission_level() -> String:
-	return PluginRuntimeState.normalize_permission_level(str(_state.settings.get("permission_level", PluginRuntimeState.PERMISSION_EVOLUTION)))
-
-
-func is_tool_category_visible_for_permission(category: String) -> bool:
-	if category == "user":
-		return bool(_state.settings.get("show_user_tools", false))
-	if category == "plugin":
-		return _get_permission_level() == PluginRuntimeState.PERMISSION_DEVELOPER
-	return is_tool_category_executable_for_permission(category)
-
-
-func is_tool_category_executable_for_permission(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
-
-
-func get_permission_denied_message_for_category(category: String) -> String:
-	return _localization.get_text("permission_denied_category") % [_get_permission_level(), category]
-
-
-func get_permission_denied_message_for_tool(tool_name: String) -> String:
-	var category = PluginRuntimeState.extract_category_from_tool_name(tool_name)
-	if category.is_empty():
-		return _localization.get_text("permission_denied_tool") % [_get_permission_level(), tool_name]
-	return get_permission_denied_message_for_category(category)
-
-
-func get_permission_denied_message_for_domain(domain_key: String) -> String:
-	return _localization.get_text("permission_denied_domain") % [_get_permission_level(), domain_key]
-
-
-func _can_enable_tool(tool_name: String) -> bool:
-	if not PluginRuntimeState.permission_allows_tool(_get_permission_level(), tool_name):
-		return false
-	return true
-
-
-func _can_enable_category(category: String) -> bool:
-	return PluginRuntimeState.permission_allows_category(_get_permission_level(), category)
-
-
-func _can_enable_domain(domain_key: String) -> bool:
-	return PluginRuntimeState.permission_allows_domain(_get_permission_level(), domain_key, PluginRuntimeState.TOOL_DOMAIN_DEFS)
-
-
-func _is_plugin_category_restricted(category: String) -> bool:
-	return PluginRuntimeState.PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category)
 
 
 func _get_editor_scale() -> float:
@@ -1530,26 +1539,14 @@ func _connect_dock_signal(signal_name: String, callable: Callable, operation_id:
 
 
 func _count_dock_instances() -> int:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return 0
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return 0
-	var count := 0
-	for child in base_control.find_children("*", "Control", true, false):
-		if child == null or not is_instance_valid(child):
-			continue
-		var script_path := ""
-		var script = child.get_script()
-		if script != null:
-			script_path = str(script.resource_path)
-		if child.name == "MCPDock" or script_path == MCP_DOCK_SCRIPT_PATH:
-			count += 1
-	return count
+	if _dock_coordinator == null:
+		_dock_coordinator = PluginDockCoordinatorScript.new()
+	return _dock_coordinator.count_plugin_dock_instances(self, MCP_DOCK_SCRIPT_PATH)
 
 
 func _has_runtime_bridge_root_instance() -> bool:
+	if not is_inside_tree():
+		return false
 	var tree := get_tree()
 	if tree == null or tree.root == null:
 		return false
@@ -1567,15 +1564,17 @@ func _record_runtime_bridge_stale_instance(phase: String, operation_id: String) 
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REUSE)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE)
 	return scene as PackedScene
 
 
 func _recreate_dock() -> void:
+	_dock_recreate_pending = false
 	_remove_dock()
 	_remove_stale_docks()
 	_create_dock()
-	_refresh_dock()
+	if _dock != null and is_instance_valid(_dock) and _dock.has_method("apply_model"):
+		_refresh_dock()
 
 
 func _store_pending_focus_snapshot(snapshot: Dictionary) -> void:
@@ -1591,26 +1590,69 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 	if not (snapshot is Dictionary):
 		return
 	if _dock and is_instance_valid(_dock):
-		if _dock.has_method("activate_host_dock_tab"):
-			_dock.activate_host_dock_tab()
+		if _dock.has_method("activate_editor_dock_tab"):
+			_dock.activate_editor_dock_tab()
 		if _dock.has_method("restore_focus_snapshot"):
 			_dock.restore_focus_snapshot(snapshot)
+		if _dock.has_method("focus_active_panel"):
+			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
 
 
-func _schedule_plugin_reenable() -> void:
+func _schedule_plugin_reenable() -> bool:
 	var editor_interface = get_editor_interface()
 	if editor_interface == null:
-		return
+		return false
 	var base_control = editor_interface.get_base_control()
 	if base_control == null:
-		return
+		return false
 
 	var coordinator = PluginReloadCoordinator.new()
 	coordinator.name = "MCPPluginReloadCoordinator"
-	coordinator.configure(PLUGIN_ID, editor_interface)
+	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
 	base_control.add_child(coordinator)
+	return true
+
+
+func _create_reload_coordinator():
+	var coordinator = PluginReloadCoordinator.new()
+	coordinator.configure(PLUGIN_ID, get_editor_interface(), _server_controller)
+	return coordinator
+
+
+func _configure_user_tool_watch_service() -> void:
+	if _user_tool_watch_service == null:
+		_user_tool_watch_service = UserToolWatchService.new()
+	_user_tool_watch_service.stop()
+	_user_tool_watch_service.configure(self, _create_reload_coordinator(), _user_tool_service)
+	_user_tool_watch_service.start()
+
+
+func _configure_config_tab_action_service() -> void:
+	if _config_tab_action_service == null:
+		_config_tab_action_service = ConfigTabActionService.new()
+	_config_tab_action_service.configure({
+		"state": _state,
+		"localization": _localization,
+		"config_service": _config_service,
+		"client_install_detection_service": _client_install_detection_service,
+		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
+		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
+		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
+		"refresh_dock": Callable(self, "_refresh_dock"),
+		"save_settings": Callable(self, "_save_settings"),
+		"show_message": Callable(self, "_show_message"),
+		"show_confirmation": Callable(self, "_show_confirmation"),
+		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
+		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
+	})
+
+
+func _get_user_tool_watch_status() -> Dictionary:
+	if _user_tool_watch_service == null:
+		return {}
+	return _user_tool_watch_service.get_status()
 
 
 func _cleanup_disabled_tools() -> void:
@@ -1630,4 +1672,6 @@ func _refresh_service_instances() -> void:
 	_settings_store = SettingsStore.new()
 	_tool_catalog = ToolCatalogService.new()
 	_config_service = ClientConfigService.new()
+	_client_install_detection_service = ClientInstallDetectionService.new()
 	_user_tool_service = UserToolService.new()
+	_user_tool_watch_service = UserToolWatchService.new()

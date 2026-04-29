@@ -115,7 +115,7 @@ ACTIONS:
 					},
 					"level": {
 						"type": "string",
-						"enum": ["trace", "debug", "info", "warning", "error"]
+					"enum": ["debug", "info", "warning", "error"]
 					},
 					"enabled": {"type": "boolean"}
 				},

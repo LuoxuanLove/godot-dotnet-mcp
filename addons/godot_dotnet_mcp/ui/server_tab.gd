@@ -2,178 +2,269 @@
 extends VBoxContainer
 
 signal port_changed(value: int)
-signal auto_start_toggled(enabled: bool)
 signal log_level_changed(level: String)
-signal permission_level_changed(level: String)
 signal language_changed(language_code: String)
 signal start_requested
 signal restart_requested
 signal stop_requested
 signal full_reload_requested
+signal clear_self_diagnostics_requested
 signal copy_requested(text: String, source: String)
 
-@onready var _self_diag_title: Label = %SelfDiagnosticsTitle
-@onready var _self_diag_badge: Label = %SelfDiagnosticsBadge
-@onready var _self_diag_copy_button: Button = %SelfDiagnosticsCopyButton
-@onready var _self_diag_summary: Label = %SelfDiagnosticsSummary
-@onready var _self_diag_details: Label = %SelfDiagnosticsDetails
-@onready var _self_diag_divider: HSeparator = %SelfDiagnosticsDivider
-@onready var _state_value: Label = %ServerStateValue
-@onready var _endpoint_value: Label = %EndpointValue
-@onready var _connections_value: Label = %ConnectionsValue
-@onready var _requests_value: Label = %RequestsValue
-@onready var _last_request_value: Label = %LastRequestValue
-@onready var _port_spin: SpinBox = %PortSpin
-@onready var _auto_start_check: CheckBox = %AutoStartCheck
-@onready var _log_level_label: Label = %LogLevelLabel
-@onready var _log_level_option: OptionButton = %LogLevelOption
-@onready var _permission_level_label: Label = %PermissionLevelLabel
-@onready var _permission_level_option: OptionButton = %PermissionLevelOption
-@onready var _language_label: Label = %LanguageLabel
-@onready var _language_option: OptionButton = %LanguageOption
-@onready var _start_button: Button = %StartButton
-@onready var _restart_button: Button = %RestartButton
-@onready var _stop_button: Button = %StopButton
-@onready var _full_reload_button: Button = %FullReloadButton
-@onready var _status_section_title: Label = %StatusSectionTitle
-@onready var _settings_section_title: Label = %SettingsSectionTitle
-@onready var _server_state_title: Label = %ServerStateTitle
-@onready var _endpoint_title: Label = %EndpointTitle
-@onready var _connections_title: Label = %ConnectionsTitle
-@onready var _requests_title: Label = %RequestsTitle
-@onready var _last_request_title: Label = %LastRequestTitle
-@onready var _port_label: Label = %PortLabel
+const ServerTabModelProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/ui/server_tab_model_projection.gd")
+const LAYOUT_WIDTH_BUCKET := 48.0
+const STATUS_LABEL_WIDTH := 96.0
+const SETTING_FIELD_WIDTH := 128.0
+
+@onready var _self_diag_title: Label = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader/SelfDiagnosticsTitle") as Label
+@onready var _self_diag_badge: Label = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader/SelfDiagnosticsBadge") as Label
+@onready var _self_diag_copy_button: Button = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader/SelfDiagnosticsCopyButton") as Button
+@onready var _self_diag_clear_button: Button = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader/SelfDiagnosticsClearButton") as Button
+@onready var _self_diag_summary: Label = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsSummary") as Label
+@onready var _self_diag_details: Label = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsDetails") as Label
+@onready var _self_diag_divider: HSeparator = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsDivider") as HSeparator
+@onready var _overview_buttons: HBoxContainer = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons") as HBoxContainer
+@onready var _state_value: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ServerStateRow/ServerStateValue") as Label
+@onready var _endpoint_value: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/EndpointRow/EndpointValue") as Label
+@onready var _connections_value: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ConnectionsRow/ConnectionsValue") as Label
+@onready var _requests_value: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/RequestsRow/RequestsValue") as Label
+@onready var _last_request_value: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/LastRequestRow/LastRequestValue") as Label
+@onready var _port_spin: SpinBox = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/SettingsGrid/PortSpin") as SpinBox
+@onready var _log_level_label: Label = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LogLevelRow/LogLevelLabel") as Label
+@onready var _log_level_option: OptionButton = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LogLevelRow/LogLevelOption") as OptionButton
+@onready var _language_label: Label = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LanguageRow/LanguageLabel") as Label
+@onready var _language_option: OptionButton = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LanguageRow/LanguageOption") as OptionButton
+@onready var _start_button: Button = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons/StartButton") as Button
+@onready var _restart_button: Button = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons/RestartButton") as Button
+@onready var _full_reload_button: Button = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter/OverviewButtons/FullReloadButton") as Button
+@onready var _status_section_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusSectionTitle") as Label
+@onready var _settings_section_title: Label = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsSectionTitle") as Label
+@onready var _server_state_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ServerStateRow/ServerStateTitle") as Label
+@onready var _endpoint_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/EndpointRow/EndpointTitle") as Label
+@onready var _connections_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ConnectionsRow/ConnectionsTitle") as Label
+@onready var _requests_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/RequestsRow/RequestsTitle") as Label
+@onready var _last_request_title: Label = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/LastRequestRow/LastRequestTitle") as Label
+@onready var _port_label: Label = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/SettingsGrid/PortLabel") as Label
+@onready var _diagnostics_card: PanelContainer = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard") as PanelContainer
+@onready var _status_card: PanelContainer = get_node_or_null("Scroll/Margin/Content/StatusCard") as PanelContainer
+@onready var _settings_card: PanelContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard") as PanelContainer
+@onready var _diagnostics_card_margin: MarginContainer = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin") as MarginContainer
+@onready var _status_card_margin: MarginContainer = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin") as MarginContainer
+@onready var _settings_card_margin: MarginContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin") as MarginContainer
+@onready var _diagnostics_card_body: VBoxContainer = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody") as VBoxContainer
+@onready var _status_card_body: VBoxContainer = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody") as VBoxContainer
+@onready var _settings_card_body: VBoxContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody") as VBoxContainer
+@onready var _margin: MarginContainer = _get_margin_node()
+@onready var _content: VBoxContainer = _get_content_node()
+@onready var _status_center: Control = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter") as Control
+@onready var _overview_buttons_center: Control = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/OverviewButtonsCenter") as Control
+@onready var _settings_center: Control = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter") as Control
+@onready var _settings_content: VBoxContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent") as VBoxContainer
+@onready var _section_divider: HSeparator = get_node_or_null("Scroll/Margin/Content/SectionDivider") as HSeparator
+@onready var _status_grid: VBoxContainer = get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid") as VBoxContainer
+@onready var _settings_grid: HBoxContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/SettingsGrid") as HBoxContainer
+@onready var _log_level_row: HBoxContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LogLevelRow") as HBoxContainer
+@onready var _language_row: HBoxContainer = get_node_or_null("Scroll/Margin/Content/SettingsCard/SettingsCardMargin/SettingsCardBody/SettingsCenter/SettingsContent/LanguageRow") as HBoxContainer
+@onready var _status_rows: Array[HBoxContainer] = [
+	get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ServerStateRow") as HBoxContainer,
+	get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/EndpointRow") as HBoxContainer,
+	get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/ConnectionsRow") as HBoxContainer,
+	get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/RequestsRow") as HBoxContainer,
+	get_node_or_null("Scroll/Margin/Content/StatusCard/StatusCardMargin/StatusCardBody/StatusCenter/StatusGrid/LastRequestRow") as HBoxContainer,
+]
 
 var _language_syncing := false
 var _log_level_syncing := false
-var _permission_level_syncing := false
 var _current_scale := -1.0
-var _current_layout_width := -1.0
+var _current_layout_key := -1
+var _layout_update_queued := false
 var _self_diag_copy_text := ""
+var _is_running := false
+var _pending_model: Dictionary = {}
+var _pending_model_apply_queued := false
+var _projection_service := ServerTabModelProjectionServiceScript.new()
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	resized.connect(_on_resized)
 	_port_spin.value_changed.connect(_on_port_spin_changed)
-	_auto_start_check.toggled.connect(_on_auto_start_check_toggled)
 	_log_level_option.item_selected.connect(_on_log_level_option_selected)
-	_permission_level_option.item_selected.connect(_on_permission_level_option_selected)
 	_language_option.item_selected.connect(_on_language_option_selected)
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
-	_stop_button.pressed.connect(_on_stop_button_pressed)
 	_full_reload_button.pressed.connect(_on_full_reload_button_pressed)
 	_self_diag_copy_button.pressed.connect(_on_self_diag_copy_pressed)
+	_self_diag_clear_button.pressed.connect(_on_self_diag_clear_pressed)
+	_apply_fill_width_flags()
+	_queue_pending_model_apply()
 
+
+func _apply_fill_width_flags() -> void:
+	var fill_controls: Array[Control] = [
+		_content,
+		_status_center,
+		_overview_buttons_center,
+		_overview_buttons,
+		_settings_center,
+		_settings_content,
+		_section_divider,
+		_status_grid,
+		_settings_grid,
+		_log_level_row,
+		_language_row,
+		_state_value,
+		_endpoint_value,
+		_connections_value,
+		_requests_value,
+		_last_request_value,
+		_port_spin,
+		_log_level_option,
+		_language_option,
+		_start_button,
+		_restart_button,
+		_full_reload_button,
+	]
+	for control in fill_controls:
+		if control != null:
+			control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for status_row in _status_rows:
+		if status_row != null:
+			status_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func apply_model(model: Dictionary) -> void:
+	if not is_node_ready() or not _has_required_controls():
+		_pending_model = model.duplicate(true)
+		_queue_pending_model_apply()
+		return
+
 	var localization = model.get("localization")
 	var settings: Dictionary = model.get("settings", {})
-	var languages: Dictionary = model.get("languages", {})
-	var stats: Dictionary = model.get("stats", {})
-	var is_running = bool(model.get("is_running", false))
-	var editor_scale = float(model.get("editor_scale", 1.0))
+	var is_running := bool(model.get("is_running", false))
+	var editor_scale := float(model.get("editor_scale", 1.0))
+	_is_running = is_running
 
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
 	else:
 		_apply_responsive_layout()
 
-	_apply_self_diagnostics(model, localization)
-	_status_section_title.text = localization.get_text("server_status")
+	var projection: Dictionary = _projection_service.project(model)
+	var overview: Dictionary = projection.get("overview", {})
+	var self_diagnostics: Dictionary = projection.get("self_diagnostics", {})
+	var options: Dictionary = projection.get("options", {})
+
+	_self_diag_title.text = localization.get_text("self_diag_title")
+	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
+	_self_diag_clear_button.text = localization.get_text("self_diag_clear")
+	_status_section_title.text = localization.get_text("plugin_overview_title")
 	_settings_section_title.text = localization.get_text("settings")
-	_server_state_title.text = localization.get_text("server_state_label")
-	_endpoint_title.text = localization.get_text("endpoint")
-	_connections_title.text = localization.get_text("active_connections")
-	_requests_title.text = localization.get_text("total_requests")
-	_last_request_title.text = localization.get_text("last_request")
+	_server_state_title.text = localization.get_text("plugin_overview_health_label")
+	_endpoint_title.text = localization.get_text("plugin_overview_service_label")
+	_connections_title.text = "%s:" % localization.get_text("total_connections_short")
+	_requests_title.text = localization.get_text("plugin_overview_config_label")
+	_last_request_title.text = localization.get_text("plugin_overview_activity_label")
 	_port_label.text = localization.get_text("port")
 	_log_level_label.text = localization.get_text("log_level")
-	_permission_level_label.text = localization.get_text("permission_level")
 	_language_label.text = localization.get_text("language")
-	_auto_start_check.text = localization.get_text("auto_start")
 
-	_state_value.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
-	_endpoint_value.text = "http://%s:%d/mcp" % [settings.get("host", "127.0.0.1"), int(settings.get("port", 3000))]
-	_connections_value.text = "%d" % int(stats.get("active_connections", 0))
-	_requests_value.text = "%d (%s %d)" % [
-		int(stats.get("total_requests", 0)),
-		localization.get_text("total_connections_short"),
-		int(stats.get("total_connections", 0))
-	]
-
-	var last_request_at = int(stats.get("last_request_at_unix", 0))
-	var last_method = str(stats.get("last_request_method", ""))
-	_last_request_value.text = localization.get_text("last_request_none") if last_request_at <= 0 else "%s %s" % [
-		Time.get_datetime_string_from_unix_time(last_request_at),
-		last_method
-	]
+	_state_value.text = str(overview.get("health_text", ""))
+	_endpoint_value.text = str(overview.get("service_text", ""))
+	_connections_value.text = str(overview.get("connections_text", ""))
+	_requests_value.text = str(overview.get("config_text", ""))
+	_last_request_value.text = str(overview.get("activity_text", ""))
 
 	_port_spin.set_value_no_signal(int(settings.get("port", 3000)))
-	_auto_start_check.set_pressed_no_signal(bool(settings.get("auto_start", true)))
 	_log_level_syncing = true
-	_log_level_option.clear()
-	var current_log_level = str(model.get("current_log_level", "info"))
-	var selected_log_level = -1
-	var log_levels: Array = model.get("log_levels", [])
-	for log_index in range(log_levels.size()):
-		var level = str(log_levels[log_index])
-		var level_key = "log_level_%s" % level
-		var level_text = localization.get_text(level_key)
-		if level_text == level_key:
-			level_text = level.capitalize()
-		_log_level_option.add_item(level_text, log_index)
-		_log_level_option.set_item_metadata(log_index, level)
-		if level == current_log_level:
-			selected_log_level = log_index
-	if selected_log_level >= 0:
-		_log_level_option.select(selected_log_level)
+	_apply_projected_options(_log_level_option, options.get("log_levels", []))
 	_log_level_syncing = false
 
-	_permission_level_syncing = true
-	_permission_level_option.clear()
-	var current_permission_level = str(model.get("current_permission_level", "evolution"))
-	var permission_levels: Array = model.get("permission_levels", [])
-	var selected_permission_level = -1
-	for permission_index in range(permission_levels.size()):
-		var level = str(permission_levels[permission_index])
-		var level_key = "permission_level_%s" % level
-		var level_text = localization.get_text(level_key)
-		if level_text == level_key:
-			level_text = level.capitalize()
-		_permission_level_option.add_item(level_text, permission_index)
-		_permission_level_option.set_item_metadata(permission_index, level)
-		if level == current_permission_level:
-			selected_permission_level = permission_index
-	if selected_permission_level >= 0:
-		_permission_level_option.select(selected_permission_level)
-	_permission_level_syncing = false
-
-	_start_button.disabled = is_running
+	_start_button.disabled = false
 	_restart_button.disabled = not is_running
-	_stop_button.disabled = not is_running
-	_start_button.text = localization.get_text("btn_start")
+	_start_button.text = localization.get_text("btn_close") if is_running else localization.get_text("btn_start")
 	_restart_button.text = localization.get_text("btn_restart")
-	_stop_button.text = localization.get_text("btn_stop")
 	_full_reload_button.text = localization.get_text("btn_reload_plugin")
 
 	_language_syncing = true
-	_language_option.clear()
-	var current_lang = str(model.get("current_language", "en"))
-	var selected_index = -1
-	var language_codes = languages.keys()
-	language_codes.sort()
-	var index = 0
-	for lang_code in language_codes:
-		_language_option.add_item(localization.get_language_display_name(str(lang_code), current_lang), index)
-		_language_option.set_item_metadata(index, lang_code)
-		if str(lang_code) == current_lang:
-			selected_index = index
-		index += 1
-	if selected_index >= 0:
-		_language_option.select(selected_index)
+	_apply_projected_options(_language_option, options.get("languages", []))
 	_language_syncing = false
+
+	_self_diag_copy_text = str(self_diagnostics.get("copy_text", ""))
+	_apply_projected_self_diagnostics(self_diagnostics, localization)
+
+
+func _apply_pending_model() -> void:
+	_pending_model_apply_queued = false
+	if _pending_model.is_empty():
+		return
+	if not is_node_ready() or not _has_required_controls():
+		return
+	var pending_model := _pending_model
+	_pending_model = {}
+	apply_model(pending_model)
+
+
+func _queue_pending_model_apply() -> void:
+	if _pending_model_apply_queued:
+		return
+	_pending_model_apply_queued = true
+	_apply_pending_model.call_deferred()
+
+
+func _has_required_controls() -> bool:
+	for control in [
+		_self_diag_title,
+		_self_diag_copy_button,
+		_self_diag_clear_button,
+		_status_section_title,
+		_settings_section_title,
+		_server_state_title,
+		_endpoint_title,
+		_connections_title,
+		_requests_title,
+		_last_request_title,
+		_port_label,
+		_log_level_label,
+		_language_label,
+		_state_value,
+		_endpoint_value,
+		_connections_value,
+		_requests_value,
+		_last_request_value,
+		_port_spin,
+		_log_level_option,
+		_language_option,
+		_start_button,
+		_restart_button,
+		_full_reload_button,
+	]:
+		if control == null:
+			return false
+	return true
+
+
+func _apply_projected_options(option_button: OptionButton, projected_items: Array) -> void:
+	option_button.clear()
+	var selected_index := -1
+	for item_index in range(projected_items.size()):
+		var item: Dictionary = projected_items[item_index]
+		option_button.add_item(str(item.get("text", "")), item_index)
+		option_button.set_item_metadata(item_index, item.get("value", ""))
+		if bool(item.get("selected", false)):
+			selected_index = item_index
+	if selected_index >= 0:
+		option_button.select(selected_index)
+
+
+func _apply_projected_self_diagnostics(self_diagnostics: Dictionary, localization) -> void:
+	var badge_text = str(self_diagnostics.get("badge_text", ""))
+	_self_diag_badge.text = badge_text
+	_self_diag_summary.text = str(self_diagnostics.get("summary_text", localization.get_text("self_diag_empty")))
+	_self_diag_details.text = str(self_diagnostics.get("details_text", ""))
+	_self_diag_clear_button.disabled = bool(self_diagnostics.get("clear_disabled", true))
+	if badge_text.is_empty():
+		return
+	_self_diag_badge.add_theme_color_override("font_color", self_diagnostics.get("badge_color", get_theme_color("accent_color", "Editor")))
 
 
 func _on_port_spin_changed(value: float) -> void:
@@ -192,26 +283,15 @@ func _on_log_level_option_selected(index: int) -> void:
 	log_level_changed.emit(str(_log_level_option.get_item_metadata(index)))
 
 
-func _on_permission_level_option_selected(index: int) -> void:
-	if _permission_level_syncing:
-		return
-	permission_level_changed.emit(str(_permission_level_option.get_item_metadata(index)))
-
-
-func _on_auto_start_check_toggled(pressed: bool) -> void:
-	auto_start_toggled.emit(pressed)
-
-
 func _on_start_button_pressed() -> void:
-	start_requested.emit()
+	if _is_running:
+		stop_requested.emit()
+	else:
+		start_requested.emit()
 
 
 func _on_restart_button_pressed() -> void:
 	restart_requested.emit()
-
-
-func _on_stop_button_pressed() -> void:
-	stop_requested.emit()
 
 
 func _on_full_reload_button_pressed() -> void:
@@ -228,257 +308,205 @@ func _get_content_node() -> VBoxContainer:
 
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
+	_current_layout_key = -1
 
-	var margin = _get_margin_node()
-	var content = _get_content_node()
-	if margin == null or content == null:
+	if _margin == null or _content == null:
 		return
 
-	margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
-	margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
+	_margin.add_theme_constant_override("margin_left", int(round(12 * scale)))
+	_margin.add_theme_constant_override("margin_right", int(round(12 * scale)))
+	_margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
+	_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
 
-	content.add_theme_constant_override("separation", int(round(12 * scale)))
+	_content.add_theme_constant_override("separation", int(round(12 * scale)))
 
-	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
-	var self_diag_header = get_node("Scroll/Margin/Content/SelfDiagnosticsHeader") as HBoxContainer
-	status_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
-	status_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
-	self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
+	_apply_visual_style(scale)
 
-	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
-	settings_grid.add_theme_constant_override("h_separation", int(round(12 * scale)))
-	settings_grid.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	var self_diag_header = get_node_or_null("Scroll/Margin/Content/DiagnosticsCard/DiagnosticsCardMargin/DiagnosticsCardBody/SelfDiagnosticsHeader") as HBoxContainer
+	if _status_grid != null:
+		_status_grid.add_theme_constant_override("separation", int(round(8 * scale)))
+	for status_row in _status_rows:
+		if status_row != null:
+			status_row.add_theme_constant_override("separation", int(round(12 * scale)))
+	if _overview_buttons != null:
+		_overview_buttons.add_theme_constant_override("separation", int(round(8 * scale)))
+	if self_diag_header != null:
+		self_diag_header.add_theme_constant_override("separation", int(round(8 * scale)))
 
-	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
-	log_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	log_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-
-	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/PermissionLevelRow") as GridContainer
-	permission_level_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	permission_level_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-
-	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
-	language_row.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	language_row.add_theme_constant_override("v_separation", int(round(8 * scale)))
-
-	var buttons = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/Buttons") as GridContainer
-	buttons.add_theme_constant_override("h_separation", int(round(8 * scale)))
-	buttons.add_theme_constant_override("v_separation", int(round(8 * scale)))
+	if _settings_grid != null:
+		_settings_grid.add_theme_constant_override("separation", int(round(12 * scale)))
+	if _log_level_row != null:
+		_log_level_row.add_theme_constant_override("separation", int(round(8 * scale)))
+	if _language_row != null:
+		_language_row.add_theme_constant_override("separation", int(round(8 * scale)))
 
 	_apply_responsive_layout()
 
 
 func _apply_responsive_layout() -> void:
-	var content = _get_content_node()
-	if content == null:
+	if _content == null:
 		return
 
-	var available_width = content.size.x
+	var available_width: float = _content.size.x
 	if available_width <= 0.0:
 		available_width = size.x
 	if available_width <= 0.0:
 		return
-	if is_equal_approx(_current_layout_width, available_width):
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	var bucket_size: float = max(16.0, LAYOUT_WIDTH_BUCKET * scale)
+	var layout_bucket: int = int(floor(available_width / bucket_size))
+
+	var ultra_narrow_layout: bool = available_width < 360.0 * scale
+	var narrow_layout: bool = available_width < 560.0 * scale
+	var compact_layout: bool = available_width < 720.0 * scale
+	var layout_mode := 0
+	if ultra_narrow_layout:
+		layout_mode += 1
+	if narrow_layout:
+		layout_mode += 2
+	if compact_layout:
+		layout_mode += 4
+	var layout_key := layout_bucket * 100 + layout_mode * 10
+	if _current_layout_key == layout_key:
 		return
-	_current_layout_width = available_width
+	_current_layout_key = layout_key
 
-	var scale = _current_scale if _current_scale > 0.0 else 1.0
-	var ultra_narrow_layout = available_width < 320.0 * scale
-	var narrow_layout = available_width < 430.0 * scale
-	var compact_layout = available_width < 520.0 * scale
-	var horizontal_margin = 8.0 * scale if ultra_narrow_layout else (10.0 * scale if narrow_layout else 12.0 * scale)
-	var vertical_margin = 10.0 * scale if ultra_narrow_layout else 12.0 * scale
-	var section_spacing = 10.0 * scale if ultra_narrow_layout else 12.0 * scale
-	var grid_h_spacing = 8.0 * scale if ultra_narrow_layout else 12.0 * scale
-	var grid_v_spacing = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
-	var row_spacing = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
-	var content_width = min(available_width - horizontal_margin * 2.0, 560.0 * scale)
-	content_width = max(content_width, 140.0 * scale)
-	var label_width = 132.0 * scale if not narrow_layout else 96.0 * scale
-	var field_width = max(120.0 * scale, content_width - label_width - int(round(8 * scale)))
-	var status_grid_width = content_width
-	var status_columns = 2 if not narrow_layout else 1
-	var settings_columns = 2 if not narrow_layout else 1
+	var horizontal_margin: float = 10.0 * scale if ultra_narrow_layout else (12.0 * scale if narrow_layout else 14.0 * scale)
+	var vertical_margin: float = 12.0 * scale
+	var section_spacing: float = 10.0 * scale if ultra_narrow_layout else 12.0 * scale
+	var grid_h_spacing: float = 8.0 * scale if ultra_narrow_layout else 12.0 * scale
+	var grid_v_spacing: float = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
+	var row_spacing: float = 6.0 * scale if ultra_narrow_layout else 8.0 * scale
+	var label_width: float = STATUS_LABEL_WIDTH * scale
+	var setting_field_width: float = SETTING_FIELD_WIDTH * scale
 
-	var margin = _get_margin_node()
-	var status_center = get_node("Scroll/Margin/Content/StatusCenter") as CenterContainer
-	var settings_center = get_node("Scroll/Margin/Content/SettingsCenter") as CenterContainer
-	var settings_content = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent") as VBoxContainer
-	var section_divider = get_node("Scroll/Margin/Content/SectionDivider") as HSeparator
-	var status_grid = get_node("Scroll/Margin/Content/StatusCenter/StatusGrid") as GridContainer
-	var settings_grid = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/SettingsGrid") as GridContainer
-	var log_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LogLevelRow") as GridContainer
-	var permission_level_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/PermissionLevelRow") as GridContainer
-	var language_row = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/LanguageRow") as GridContainer
-	var buttons = get_node("Scroll/Margin/Content/SettingsCenter/SettingsContent/Buttons") as GridContainer
+	if _margin != null:
+		_margin.add_theme_constant_override("margin_left", int(round(horizontal_margin)))
+		_margin.add_theme_constant_override("margin_right", int(round(horizontal_margin)))
+		_margin.add_theme_constant_override("margin_top", int(round(vertical_margin)))
+		_margin.add_theme_constant_override("margin_bottom", int(round(vertical_margin)))
+	_content.add_theme_constant_override("separation", int(round(section_spacing)))
+	if _overview_buttons != null:
+		_overview_buttons.add_theme_constant_override("separation", int(round(row_spacing)))
+	if _settings_content != null:
+		_settings_content.add_theme_constant_override("separation", int(round(section_spacing)))
+	if _status_grid != null:
+		_status_grid.add_theme_constant_override("separation", int(round(grid_v_spacing)))
+	for status_row in _status_rows:
+		if status_row != null:
+			status_row.add_theme_constant_override("separation", int(round(grid_h_spacing)))
+	if _settings_grid != null:
+		_settings_grid.add_theme_constant_override("separation", int(round(grid_h_spacing)))
+	if _log_level_row != null:
+		_log_level_row.add_theme_constant_override("separation", int(round(row_spacing)))
+	if _language_row != null:
+		_language_row.add_theme_constant_override("separation", int(round(row_spacing)))
 
-	if margin != null:
-		margin.add_theme_constant_override("margin_left", int(round(horizontal_margin)))
-		margin.add_theme_constant_override("margin_right", int(round(horizontal_margin)))
-		margin.add_theme_constant_override("margin_top", int(round(vertical_margin)))
-		margin.add_theme_constant_override("margin_bottom", int(round(vertical_margin)))
-	content.add_theme_constant_override("separation", int(round(section_spacing)))
-	settings_content.add_theme_constant_override("separation", int(round(section_spacing)))
-	status_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
-	status_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
-	settings_grid.add_theme_constant_override("h_separation", int(round(grid_h_spacing)))
-	settings_grid.add_theme_constant_override("v_separation", int(round(grid_v_spacing)))
-	log_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	log_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	permission_level_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	permission_level_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	language_row.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	language_row.add_theme_constant_override("v_separation", int(round(row_spacing)))
-	buttons.add_theme_constant_override("h_separation", int(round(row_spacing)))
-	buttons.add_theme_constant_override("v_separation", int(round(row_spacing)))
-
-	status_center.custom_minimum_size.x = status_grid_width
-	settings_center.custom_minimum_size.x = content_width
-	settings_content.custom_minimum_size.x = content_width
-	section_divider.custom_minimum_size.x = content_width
-	status_grid.columns = status_columns
-	settings_grid.columns = settings_columns
-	log_level_row.columns = settings_columns
-	permission_level_row.columns = settings_columns
-	language_row.columns = settings_columns
-	buttons.columns = 1 if narrow_layout else (2 if compact_layout else 3)
+	if _status_center != null:
+		_status_center.custom_minimum_size.x = 0.0
+	if _overview_buttons_center != null:
+		_overview_buttons_center.custom_minimum_size.x = 0.0
+	if _overview_buttons != null:
+		_overview_buttons.custom_minimum_size.x = 0.0
+	if _settings_center != null:
+		_settings_center.custom_minimum_size.x = 0.0
+	if _settings_content != null:
+		_settings_content.custom_minimum_size.x = 0.0
+	if _section_divider != null:
+		_section_divider.custom_minimum_size.x = 0.0
+	if _status_grid != null:
+		_status_grid.custom_minimum_size.x = 0.0
+	if _settings_grid != null:
+		_settings_grid.custom_minimum_size.x = 0.0
+	if _log_level_row != null:
+		_log_level_row.custom_minimum_size.x = 0.0
+	if _language_row != null:
+		_language_row.custom_minimum_size.x = 0.0
 
 	var status_titles = [_server_state_title, _endpoint_title, _connections_title, _requests_title, _last_request_title]
-	var settings_titles = [_port_label, _log_level_label, _permission_level_label, _language_label]
+	var settings_titles = [_port_label, _log_level_label, _language_label]
 	for title_label in status_titles + settings_titles:
 		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		var keep_width = false
-		if title_label in status_titles:
-			keep_width = status_columns == 2
-		else:
-			keep_width = settings_columns == 2
-		title_label.custom_minimum_size.x = label_width if keep_width else 0.0
+		title_label.custom_minimum_size.x = label_width
 
 	for value_label in [_state_value, _endpoint_value, _connections_value, _requests_value, _last_request_value]:
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		value_label.custom_minimum_size.x = field_width if status_columns == 2 else content_width
+		value_label.custom_minimum_size.x = 0.0
 
-	_port_spin.custom_minimum_size.y = 32.0 * scale
-	_port_spin.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_log_level_option.custom_minimum_size.y = 32.0 * scale
-	_log_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_permission_level_option.custom_minimum_size.y = 32.0 * scale
-	_permission_level_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_language_option.custom_minimum_size.y = 32.0 * scale
-	_language_option.custom_minimum_size.x = field_width if settings_columns == 2 else content_width
-	_auto_start_check.custom_minimum_size.x = content_width
+	_port_spin.custom_minimum_size.y = 0.0
+	_port_spin.custom_minimum_size.x = setting_field_width
+	_log_level_option.custom_minimum_size.y = 0.0
+	_log_level_option.custom_minimum_size.x = setting_field_width
+	_language_option.custom_minimum_size.y = 0.0
+	_language_option.custom_minimum_size.x = setting_field_width
 
-	var button_width = content_width if buttons.columns == 1 else (content_width - row_spacing * float(buttons.columns - 1)) / float(buttons.columns)
-	for button in [_start_button, _restart_button, _stop_button]:
+	for button in [_start_button, _restart_button, _full_reload_button]:
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.custom_minimum_size.x = button_width
-		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
+		button.custom_minimum_size.x = 0.0
+		button.custom_minimum_size.y = 0.0
+	for button in [_self_diag_copy_button, _self_diag_clear_button]:
+		button.custom_minimum_size.y = 0.0
+		button.custom_minimum_size.x = 72.0 * scale
 
-	_full_reload_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_full_reload_button.custom_minimum_size.x = content_width
-	_full_reload_button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
 
-	for button in [_start_button, _restart_button, _stop_button, _full_reload_button]:
-		button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
-	_self_diag_copy_button.custom_minimum_size.y = (30.0 if ultra_narrow_layout else 32.0) * scale
-	_self_diag_copy_button.custom_minimum_size.x = 72.0 * scale
+func _apply_visual_style(scale: float) -> void:
+	begin_bulk_theme_override()
+	_diagnostics_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
+	_status_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
+	_settings_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
+	for card_margin in [_diagnostics_card_margin, _status_card_margin, _settings_card_margin]:
+		card_margin.add_theme_constant_override("margin_left", int(round(14 * scale)))
+		card_margin.add_theme_constant_override("margin_right", int(round(14 * scale)))
+		card_margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
+		card_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
+	for card_body in [_diagnostics_card_body, _status_card_body, _settings_card_body]:
+		card_body.add_theme_constant_override("separation", int(round(10 * scale)))
+	for title in [_self_diag_title, _status_section_title, _settings_section_title]:
+		title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+		title.remove_theme_font_size_override("font_size")
+	for label in [_server_state_title, _endpoint_title, _connections_title, _requests_title, _last_request_title, _port_label, _log_level_label, _language_label]:
+		label.add_theme_color_override("font_color", _get_muted_text_color())
+	for label in [_state_value, _endpoint_value, _connections_value, _requests_value, _last_request_value, _self_diag_summary, _self_diag_details]:
+		label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	end_bulk_theme_override()
+
+
+func _make_theme_panel_style(scale: float) -> StyleBox:
+	var style := get_theme_stylebox("panel", "PanelContainer").duplicate() as StyleBox
+	style.content_margin_left = 0
+	style.content_margin_top = 0
+	style.content_margin_right = 0
+	style.content_margin_bottom = 0
+	return style
+
+
+func _get_muted_text_color() -> Color:
+	return get_theme_color("font_disabled_color", "Editor")
 
 
 func _on_resized() -> void:
-	_apply_responsive_layout()
-
-
-func _apply_self_diagnostics(model: Dictionary, localization) -> void:
-	var diagnostics = model.get("self_diagnostics", {})
-	_self_diag_copy_text = str(model.get("self_diagnostic_copy_text", ""))
-	_self_diag_title.text = localization.get_text("self_diag_title")
-	_self_diag_copy_button.text = localization.get_text("self_diag_copy")
-
-	if not (diagnostics is Dictionary) or (diagnostics as Dictionary).is_empty():
-		_self_diag_badge.text = ""
-		_self_diag_summary.text = localization.get_text("self_diag_empty")
-		_self_diag_details.text = ""
+	if _layout_update_queued:
 		return
-
-	var diag := diagnostics as Dictionary
-	var status = str(diag.get("status", "ok"))
-	var badge_color = _get_self_diag_status_color(status)
-	_self_diag_badge.text = _get_self_diag_status_text(status, localization)
-	_self_diag_badge.add_theme_color_override("font_color", badge_color)
-
-	var active_incidents = int(diag.get("active_incident_count", 0))
-	var tool_loader = diag.get("tool_loader", {})
-	var tool_load_error_count = 0
-	if tool_loader is Dictionary:
-		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
-	var last_operation_text = localization.get_text("self_diag_last_operation_none")
-	var last_operation = diag.get("last_operation", {})
-	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
-		last_operation_text = "%s (%s ms)" % [
-			str((last_operation as Dictionary).get("kind", "")),
-			str((last_operation as Dictionary).get("duration_ms", 0.0))
-		]
-
-	_self_diag_summary.text = "%s | %s | %s" % [
-		localization.get_text("self_diag_active_incidents") % active_incidents,
-		localization.get_text("self_diag_tool_load_errors") % tool_load_error_count,
-		localization.get_text("self_diag_last_operation") % last_operation_text
-	]
-
-	var recent_lines: Array[String] = []
-	for incident in diag.get("recent_incidents", []):
-		if not (incident is Dictionary):
-			continue
-		var incident_dict := incident as Dictionary
-		recent_lines.append("%s | %s | %s" % [
-			_get_self_diag_category_text(str(incident_dict.get("category", "")), localization),
-			_get_self_diag_code_text(str(incident_dict.get("code", "")), localization),
-			str(incident_dict.get("message", ""))
-		])
-		if recent_lines.size() >= 3:
-			break
-	if recent_lines.is_empty():
-		_self_diag_details.text = localization.get_text("self_diag_empty")
-	else:
-		_self_diag_details.text = "\n".join(recent_lines)
+	_layout_update_queued = true
+	call_deferred("_apply_queued_responsive_layout")
 
 
-func _get_self_diag_status_text(status: String, localization) -> String:
-	match status:
-		"error":
-			return localization.get_text("self_diag_status_error")
-		"warning":
-			return localization.get_text("self_diag_status_warning")
-		_:
-			return localization.get_text("self_diag_status_ok")
-
-
-func _get_self_diag_status_color(status: String) -> Color:
-	match status:
-		"error":
-			return Color(0.9, 0.3, 0.3)
-		"warning":
-			return Color(0.95, 0.7, 0.2)
-		_:
-			return Color(0.2, 0.8, 0.2)
-
-
-func _get_self_diag_category_text(category: String, localization) -> String:
-	var key = "self_diag_category_%s" % category
-	var translated = localization.get_text(key)
-	return translated if translated != key else category
-
-
-func _get_self_diag_code_text(code: String, localization) -> String:
-	var key = "self_diag_code_%s" % code
-	var translated = localization.get_text(key)
-	return translated if translated != key else code
+func _apply_queued_responsive_layout() -> void:
+	_layout_update_queued = false
+	_apply_responsive_layout()
 
 
 func _on_self_diag_copy_pressed() -> void:
 	if _self_diag_copy_text.is_empty():
 		return
-	copy_requested.emit(_self_diag_copy_text, "Plugin Self Diagnostics")
+	var source_name := "Plugin Self Diagnostics"
+	if _state_value != null:
+		source_name = _self_diag_title.text.strip_edges()
+	if source_name.is_empty():
+		source_name = "Plugin Self Diagnostics"
+	copy_requested.emit(_self_diag_copy_text, source_name)
+
+
+func _on_self_diag_clear_pressed() -> void:
+	clear_self_diagnostics_requested.emit()

@@ -25,71 +25,127 @@ theme_override_constants/margin_bottom = 12
 unique_name_in_owner = true
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 16
+theme_override_constants/separation = 12
 
-[node name="ConfigHeader" type="Label" parent="Scroll/Margin/Content"]
+[node name="ConfigIntroCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
-horizontal_alignment = 1
+size_flags_horizontal = 3
 
-[node name="ConfigDescription" type="Label" parent="Scroll/Margin/Content"]
+[node name="ConfigIntroMargin" type="MarginContainer" parent="Scroll/Margin/Content/ConfigIntroCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="ConfigIntroBody" type="VBoxContainer" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="ConfigHeader" type="Label" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="ConfigDescription" type="Label" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="PlatformRow" type="HBoxContainer" parent="Scroll/Margin/Content"]
+[node name="PlatformRow" type="HBoxContainer" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody"]
+unique_name_in_owner = true
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="PlatformLabel" type="Label" parent="Scroll/Margin/Content/PlatformRow"]
+[node name="PlatformLabel" type="Label" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody/PlatformRow"]
 unique_name_in_owner = true
+vertical_alignment = 1
 
-[node name="PlatformOption" type="OptionButton" parent="Scroll/Margin/Content/PlatformRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-
-[node name="DesktopHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+[node name="PlatformOption" type="OptionButton" parent="Scroll/Margin/Content/ConfigIntroCard/ConfigIntroMargin/ConfigIntroBody/PlatformRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="DesktopHeader" type="Label" parent="Scroll/Margin/Content"]
+[node name="PlatformDesktopSeparator" type="HSeparator" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
-horizontal_alignment = 1
+size_flags_horizontal = 3
 
-[node name="DesktopDescription" type="Label" parent="Scroll/Margin/Content"]
+[node name="DesktopCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DesktopCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/DesktopCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="DesktopCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/DesktopCard/DesktopCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="DesktopHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody"]
+unique_name_in_owner = true
+visible = false
+size_flags_horizontal = 3
+
+[node name="DesktopHeader" type="Label" parent="Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="DesktopDescription" type="Label" parent="Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="DesktopClients" type="VBoxContainer" parent="Scroll/Margin/Content"]
+[node name="DesktopClients" type="VBoxContainer" parent="Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
 [node name="Separator" type="HSeparator" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
+visible = false
 
-[node name="CliHeader" type="Label" parent="Scroll/Margin/Content"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-
-[node name="CliHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content"]
+[node name="CliCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="CliDescription" type="Label" parent="Scroll/Margin/Content"]
+[node name="CliCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/CliCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="CliCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/CliCard/CliCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="CliHeaderDivider" type="HSeparator" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody"]
+unique_name_in_owner = true
+visible = false
+size_flags_horizontal = 3
+
+[node name="CliHeader" type="Label" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="CliDescription" type="Label" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody"]
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="ScopeRow" type="HBoxContainer" parent="Scroll/Margin/Content"]
+[node name="ScopeRow" type="HBoxContainer" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody"]
+unique_name_in_owner = true
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="ScopeLabel" type="Label" parent="Scroll/Margin/Content/ScopeRow"]
+[node name="ScopeLabel" type="Label" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/ScopeRow"]
 unique_name_in_owner = true
+vertical_alignment = 1
 
-[node name="ScopeOption" type="OptionButton" parent="Scroll/Margin/Content/ScopeRow"]
+[node name="ScopeOption" type="OptionButton" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody/ScopeRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 
-[node name="CliClients" type="VBoxContainer" parent="Scroll/Margin/Content"]
+[node name="CliClients" type="VBoxContainer" parent="Scroll/Margin/Content/CliCard/CliCardMargin/CliCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 theme_override_constants/separation = 8

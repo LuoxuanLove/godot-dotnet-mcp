@@ -1,0 +1,865 @@
+extends RefCounted
+
+# {"name": "editor_tool_executor_contracts"}
+
+const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor/executor.gd")
+
+
+class FakeMainScreen:
+	extends RefCounted
+
+	var name := "2D"
+
+
+class FakeEditorSettings:
+	extends RefCounted
+
+	var _settings := {
+		"interface/editor/main_font_size": 14,
+		"interface/editor/code_font_size": 16,
+		"filesystem/file_dialog/show_hidden_files": false,
+	}
+
+	func has_setting(setting: String) -> bool:
+		return _settings.has(setting)
+
+	func get_setting(setting: String):
+		return _settings.get(setting)
+
+	func set_setting(setting: String, value) -> void:
+		_settings[setting] = value
+
+
+class FakeUndoRedo:
+	extends RefCounted
+
+	var _has_undo := false
+	var _has_redo := false
+	var _is_committing := false
+	var _actions: Array[String] = []
+
+	func has_undo() -> bool:
+		return _has_undo
+
+	func has_redo() -> bool:
+		return _has_redo
+
+	func is_committing_action() -> bool:
+		return _is_committing
+
+	func create_action(name: String, _merge_mode: int, _context_obj = null) -> void:
+		_actions.append(name)
+		_is_committing = false
+
+	func commit_action() -> void:
+		_has_undo = true
+		_has_redo = false
+		_is_committing = false
+
+	func add_do_property(_node, _property, _value) -> void:
+		pass
+
+	func add_undo_property(_node, _property, _value) -> void:
+		pass
+
+	func add_do_method(_node, _method, _arg0 = null, _arg1 = null, _arg2 = null, _arg3 = null) -> void:
+		pass
+
+	func add_undo_method(_node, _method, _arg0 = null, _arg1 = null, _arg2 = null, _arg3 = null) -> void:
+		pass
+
+	func undo() -> void:
+		_has_undo = false
+		_has_redo = true
+
+	func redo() -> void:
+		_has_undo = true
+		_has_redo = false
+
+
+class FakeInspector:
+	extends RefCounted
+
+	var edited_object = null
+	var selected_path := "speed"
+
+	func get_edited_object():
+		return edited_object
+
+	func get_selected_path() -> String:
+		return selected_path
+
+
+class FakeFileSystem:
+	extends RefCounted
+
+	var scan_calls := 0
+	var last_reimport_paths: PackedStringArray = PackedStringArray()
+
+	func scan() -> void:
+		scan_calls += 1
+
+	func reimport_files(paths: PackedStringArray) -> void:
+		last_reimport_paths = paths
+
+
+class FakeScreenshotImage:
+	extends RefCounted
+
+	var width := 320
+	var height := 180
+
+	func is_empty() -> bool:
+		return false
+
+	func get_width() -> int:
+		return width
+
+	func get_height() -> int:
+		return height
+
+	func get_region(rect: Rect2i):
+		var image := FakeScreenshotImage.new()
+		image.width = rect.size.x
+		image.height = rect.size.y
+		return image
+
+	func save_png(path: String) -> int:
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			return ERR_CANT_CREATE
+		file.store_buffer(PackedByteArray([137, 80, 78, 71, 13, 10, 26, 10]))
+		file.close()
+		return OK
+
+
+class FakeScreenshotTexture:
+	extends RefCounted
+
+	var _image := FakeScreenshotImage.new()
+
+	func get_image():
+		return _image
+
+
+class FakeEditorViewport:
+	extends RefCounted
+
+	var _texture := FakeScreenshotTexture.new()
+	var focus_owner = null
+
+	func get_texture():
+		return _texture
+
+	func gui_get_focus_owner():
+		return focus_owner
+
+
+class FakeEditorBaseControl:
+	extends RefCounted
+
+	var _viewport := FakeEditorViewport.new()
+	var _children: Array = []
+
+	func get_viewport():
+		return _viewport
+
+	func add_popup_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_parent():
+		return null
+
+	func get_path() -> NodePath:
+		return NodePath("/root/Editor")
+
+
+class FakePopupNode:
+	extends RefCounted
+
+	var name := ""
+	var title := ""
+	var text := ""
+	var visible := true
+	var disabled := false
+	var _popup_class := "Control"
+	var _parent_ref: WeakRef = null
+	var _children: Array = []
+	var pressed := false
+
+	func _init(node_name: String = "", popup_class: String = "Control") -> void:
+		name = node_name
+		_popup_class = popup_class
+
+	func set_parent(parent) -> void:
+		_parent_ref = weakref(parent)
+
+	func add_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_parent():
+		return _parent_ref.get_ref() if _parent_ref != null else null
+
+	func get_popup_class() -> String:
+		return _popup_class
+
+	func get_path() -> NodePath:
+		var parent = get_parent()
+		if parent == null or not parent.has_method("get_path"):
+			return NodePath("/" + name)
+		return NodePath(str(parent.get_path()) + "/" + name)
+
+	func is_visible_in_tree() -> bool:
+		return visible
+
+	func hide() -> void:
+		visible = false
+
+	func press() -> void:
+		pressed = true
+
+
+class FakeUiControl:
+	extends RefCounted
+
+	var name := ""
+	var text := ""
+	var title := ""
+	var visible := true
+	var disabled := false
+	var focused := false
+	var pressed := false
+	var _ui_class := "Control"
+	var _parent_ref: WeakRef = null
+	var _children: Array = []
+	var _rect := Rect2(0, 0, 100, 24)
+
+	func _init(node_name: String = "", ui_class: String = "Control", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		name = node_name
+		_ui_class = ui_class
+		_rect = rect
+
+	func set_parent(parent) -> void:
+		_parent_ref = weakref(parent)
+
+	func add_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func get_children() -> Array:
+		return _children
+
+	func get_child_count() -> int:
+		return _children.size()
+
+	func get_parent():
+		return _parent_ref.get_ref() if _parent_ref != null else null
+
+	func get_path() -> NodePath:
+		var parent = get_parent()
+		if parent == null or not parent.has_method("get_path"):
+			return NodePath("/" + name)
+		return NodePath(str(parent.get_path()) + "/" + name)
+
+	func is_visible_in_tree() -> bool:
+		return visible
+
+	func get_global_rect() -> Rect2:
+		return _rect
+
+	func get_ui_class() -> String:
+		return _ui_class
+
+	func grab_focus() -> void:
+		focused = true
+
+	func press() -> void:
+		pressed = true
+
+	func set_text(value: String) -> void:
+		text = value
+
+
+class FakeTabContainer:
+	extends FakeUiControl
+
+	var current_tab := 0
+	var _tab_titles: Array[String] = []
+
+	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		super(node_name, "TabContainer", rect)
+
+	func add_tab(child, title: String) -> void:
+		_tab_titles.append(title)
+		add_child(child)
+		_update_tab_visibility()
+
+	func get_tab_count() -> int:
+		return _children.size()
+
+	func get_tab_control(index: int):
+		if index < 0 or index >= _children.size():
+			return null
+		return _children[index]
+
+	func get_tab_title(index: int) -> String:
+		if index < 0 or index >= _tab_titles.size():
+			return ""
+		return _tab_titles[index]
+
+	func set_current_tab(index: int) -> void:
+		current_tab = index
+		_update_tab_visibility()
+
+	func _update_tab_visibility() -> void:
+		for index in range(_children.size()):
+			var child = _children[index]
+			if child != null:
+				child.visible = index == current_tab
+
+
+class FakeFocusOwner:
+	extends RefCounted
+
+	var name := "InspectorSearch"
+
+	func get_focus_class() -> String:
+		return "LineEdit"
+
+	func get_path() -> NodePath:
+		return NodePath("/root/Editor/InspectorSearch")
+
+
+class FakeSelection:
+	extends RefCounted
+
+	var _nodes: Array = []
+
+	func get_selected_nodes() -> Array:
+		return _nodes
+
+
+class FakeEditorInterface:
+	extends RefCounted
+
+	var _main_screen := FakeMainScreen.new()
+	var _distraction_free := false
+	var _editor_settings := FakeEditorSettings.new()
+	var _undo_redo := FakeUndoRedo.new()
+	var _inspector := FakeInspector.new()
+	var _filesystem := FakeFileSystem.new()
+	var _base_control := FakeEditorBaseControl.new()
+	var _selection := FakeSelection.new()
+	var _edited_scene_root: Node = null
+	var _selected_paths: PackedStringArray = PackedStringArray()
+	var _plugin_states := {}
+	var last_edit_node = null
+	var last_inspected_resource = null
+
+	func get_editor_scale() -> float:
+		return 1.5
+
+	func get_editor_main_screen():
+		return _main_screen
+
+	func set_main_screen_editor(screen: String) -> void:
+		_main_screen.name = screen
+
+	func is_distraction_free_mode_enabled() -> bool:
+		return _distraction_free
+
+	func set_distraction_free_mode(enabled: bool) -> void:
+		_distraction_free = enabled
+
+	func get_editor_settings():
+		return _editor_settings
+
+	func get_editor_undo_redo():
+		return _undo_redo
+
+	func get_base_control():
+		return _base_control
+
+	func get_selection():
+		return _selection
+
+	func get_edited_scene_root() -> Node:
+		return _edited_scene_root
+
+	func get_inspector():
+		return _inspector
+
+	func edit_node(node: Node) -> void:
+		last_edit_node = node
+
+	func inspect_object(object) -> void:
+		_inspector.edited_object = object
+
+	func edit_resource(resource) -> void:
+		last_inspected_resource = resource
+
+	func select_file(path: String) -> void:
+		_selected_paths = PackedStringArray([path])
+
+	func get_selected_paths() -> PackedStringArray:
+		return _selected_paths
+
+	func get_current_path() -> String:
+		return "res://scenes/main.tscn"
+
+	func get_current_directory() -> String:
+		return "res://scenes"
+
+	func get_resource_filesystem():
+		return _filesystem
+
+	func is_plugin_enabled(plugin_name: String) -> bool:
+		return bool(_plugin_states.get(plugin_name, false))
+
+	func set_plugin_enabled(plugin_name: String, enabled: bool) -> void:
+		_plugin_states[plugin_name] = enabled
+
+
+class FakeEditorPlugin:
+	extends RefCounted
+
+	var _editor_interface = null
+	var visible_bottom_panel = null
+
+	func _init(editor_interface = null) -> void:
+		_editor_interface = editor_interface
+
+	func get_editor_interface():
+		return _editor_interface
+
+	func make_bottom_panel_item_visible(control) -> void:
+		visible_bottom_panel = control
+		if control != null:
+			control.visible = true
+
+
+var _scene_root: Node = null
+
+
+func run_case(tree: SceneTree) -> Dictionary:
+	var executor = EditorExecutorScript.new()
+	var editor_interface := FakeEditorInterface.new()
+	var editor_plugin := FakeEditorPlugin.new(editor_interface)
+	_scene_root = _build_scene_fixture(tree)
+	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
+	popup_root.title = "Search"
+	var popup_button := FakePopupNode.new("ConfirmButton", "Button")
+	popup_button.text = "Confirm"
+	var popup_input := FakePopupNode.new("SearchInput", "LineEdit")
+	popup_input.text = "OldValue"
+	var hidden_popup_root := FakePopupNode.new("HiddenDialog", "PopupMenu")
+	hidden_popup_root.visible = false
+	var hidden_popup_button := FakePopupNode.new("HiddenButton", "Button")
+	hidden_popup_root.add_child(hidden_popup_button)
+	var non_popup_button := FakePopupNode.new("ToolbarButton", "Button")
+	var non_popup_input := FakePopupNode.new("ToolbarInput", "LineEdit")
+	non_popup_input.text = "ToolbarOld"
+	var search_panel := FakeUiControl.new("SearchPanel", "PanelContainer", Rect2(16, 16, 200, 72))
+	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
+	search_field.text = "InitialQuery"
+	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	var mcp_dock := FakeUiControl.new("MCPDock", "VBoxContainer", Rect2(220, 16, 200, 160))
+	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
+	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var tools_tab := FakeUiControl.new("ToolsTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var config_tab := FakeUiControl.new("ConfigTab", "VBoxContainer", Rect2(220, 48, 200, 128))
+	var output_panel := FakeUiControl.new("Output", "PanelContainer", Rect2(16, 120, 240, 80))
+	output_panel.title = "Output"
+	output_panel.visible = false
+	mcp_tabs.add_tab(server_tab, "主页")
+	mcp_tabs.add_tab(tools_tab, "工具")
+	mcp_tabs.add_tab(config_tab, "配置")
+	mcp_dock.add_child(mcp_tabs)
+	search_panel.add_child(search_field)
+	search_panel.add_child(refresh_button)
+	popup_root.add_child(popup_button)
+	popup_root.add_child(popup_input)
+	editor_interface.get_base_control().add_popup_child(popup_root)
+	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
+	editor_interface.get_base_control().add_popup_child(non_popup_button)
+	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(search_panel)
+	editor_interface.get_base_control().add_popup_child(mcp_dock)
+	editor_interface.get_base_control().add_popup_child(output_panel)
+	editor_interface._edited_scene_root = _scene_root
+	editor_interface.get_base_control().get_viewport().focus_owner = FakeFocusOwner.new()
+	editor_interface.get_selection()._nodes = [_scene_root.get_node("Target")]
+	editor_interface.get_inspector().edited_object = _scene_root.get_node("Target")
+	executor.configure_context({
+		"editor_interface": editor_interface,
+		"plugin_host": editor_plugin,
+		"undo_redo": editor_interface.get_editor_undo_redo(),
+		"scene_root": _scene_root,
+	})
+
+	var tool_defs: Array[Dictionary] = executor.get_tools()
+	if tool_defs.size() != 10:
+		return _failure("Editor executor should expose 10 tool definitions after UI control is added.")
+
+	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "ui_control", "popup", "inspector", "filesystem", "plugin"]
+	var actual_names: Array[String] = []
+	for tool_def in tool_defs:
+		actual_names.append(str(tool_def.get("name", "")))
+	for expected_name in expected_names:
+		if not actual_names.has(expected_name):
+			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
+
+	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "3D"})
+	if not bool(set_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen failed through the split service path.")
+	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
+	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "3D":
+		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+
+	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
+	if not bool(path_result.get("success", false)):
+		return _failure("Editor status get_godot_path failed through the split service path.")
+	var executable_path := str(path_result.get("data", {}).get("godot_executable_path", ""))
+	var project_root := str(path_result.get("data", {}).get("project_root_path", ""))
+	if executable_path.is_empty() or project_root.is_empty():
+		return _failure("Editor status get_godot_path returned empty paths.")
+	var executable_name := executable_path.get_file().to_lower()
+	if executable_name.find("godot") == -1 or not executable_name.ends_with(".exe"):
+		return _failure("Editor status get_godot_path returned an unexpected executable path.")
+
+	var focus_context_result: Dictionary = executor.execute("status", {"action": "get_focus_context"})
+	if not bool(focus_context_result.get("success", false)):
+		return _failure("Editor status get_focus_context failed through the split service path.")
+	if str(focus_context_result.get("data", {}).get("focus_owner_name", "")) != "InspectorSearch":
+		return _failure("Editor status get_focus_context returned an unexpected focus owner.")
+	if int(focus_context_result.get("data", {}).get("selected_node_count", 0)) != 1:
+		return _failure("Editor status get_focus_context should report one selected scene node.")
+
+	var set_setting_result: Dictionary = executor.execute("settings", {
+		"action": "set",
+		"setting": "interface/editor/code_font_size",
+		"value": 18
+	})
+	if not bool(set_setting_result.get("success", false)):
+		return _failure("Editor settings set failed through the split service path.")
+	var get_setting_result: Dictionary = executor.execute("settings", {
+		"action": "get",
+		"setting": "interface/editor/code_font_size"
+	})
+	if int(get_setting_result.get("data", {}).get("value", 0)) != 18:
+		return _failure("Editor settings get did not return the updated value.")
+
+	var create_action_result: Dictionary = executor.execute("undo_redo", {
+		"action": "create_action",
+		"name": "Rename Target",
+		"context": "local"
+	})
+	if not bool(create_action_result.get("success", false)):
+		return _failure("Editor undo_redo create_action failed through the split service path.")
+	var add_do_property_result: Dictionary = executor.execute("undo_redo", {
+		"action": "add_do_property",
+		"path": "Target",
+		"property": "process_priority",
+		"value": 3
+	})
+	if not bool(add_do_property_result.get("success", false)):
+		return _failure("Editor undo_redo add_do_property failed through the split service path.")
+	var commit_action_result: Dictionary = executor.execute("undo_redo", {"action": "commit_action"})
+	if not bool(commit_action_result.get("success", false)):
+		return _failure("Editor undo_redo commit_action failed through the split service path.")
+
+	var notification_result: Dictionary = executor.execute("notification", {
+		"action": "toast",
+		"message": "Editor executor contract",
+		"severity": "info"
+	})
+	if not bool(notification_result.get("success", false)):
+		return _failure("Editor notification toast failed through the split service path.")
+
+	var search_field_path := str(search_field.get_path())
+	var refresh_button_path := str(refresh_button.get_path())
+	var list_controls_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_visible",
+		"class_name": "LineEdit"
+	})
+	if not bool(list_controls_result.get("success", false)):
+		return _failure("Editor ui_control list_visible failed through the split service path.")
+	if int(list_controls_result.get("data", {}).get("count", 0)) < 1:
+		return _failure("Editor ui_control list_visible should return at least one visible LineEdit.")
+
+	var get_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "get_control",
+		"target_path": search_field_path
+	})
+	if not bool(get_control_result.get("success", false)):
+		return _failure("Editor ui_control get_control failed through the split service path.")
+	if str(get_control_result.get("data", {}).get("control", {}).get("class", "")) != "LineEdit":
+		return _failure("Editor ui_control get_control should preserve the control class.")
+
+	var focus_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "focus_control",
+		"target_path": search_field_path
+	})
+	if not bool(focus_control_result.get("success", false)):
+		return _failure("Editor ui_control focus_control failed through the split service path.")
+	if not bool(search_field.focused):
+		return _failure("Editor ui_control focus_control should grab focus on the target control.")
+
+	var set_text_result: Dictionary = executor.execute("ui_control", {
+		"action": "set_text",
+		"target_path": search_field_path,
+		"text": "Player"
+	})
+	if not bool(set_text_result.get("success", false)):
+		return _failure("Editor ui_control set_text failed through the split service path.")
+	if search_field.text != "Player":
+		return _failure("Editor ui_control set_text should update the target control text.")
+
+	var activate_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_control",
+		"target_path": refresh_button_path
+	})
+	if not bool(activate_control_result.get("success", false)):
+		return _failure("Editor ui_control activate_control failed through the split service path.")
+	if not bool(refresh_button.pressed):
+		return _failure("Editor ui_control activate_control should activate the target control.")
+
+	var capture_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "capture_control",
+		"target_path": search_field_path,
+		"path": "user://editor_executor_control_capture.png"
+	})
+	if not bool(capture_control_result.get("success", false)):
+		return _failure("Editor ui_control capture_control failed through the split service path.")
+	var control_capture_path := ProjectSettings.globalize_path(str(capture_control_result.get("data", {}).get("path", "")))
+	if not FileAccess.file_exists(control_capture_path):
+		return _failure("Editor ui_control capture_control did not create the cropped PNG file.")
+	if not str(capture_control_result.get("data", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control capture_control should normalize root-level user:// PNG paths into the managed control capture directory.")
+
+	var tab_container_path := str(mcp_tabs.get_path())
+	var activate_tab_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"target_path": tab_container_path,
+		"tab_title": "ConfigTab",
+		"path": "user://editor_executor_activate_tab.png"
+	})
+	if not bool(activate_tab_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should switch a TabContainer by child tab title.")
+	if mcp_tabs.current_tab != 2 or not config_tab.visible or server_tab.visible:
+		return _failure("Editor ui_control activate_ui should set current_tab and update visible tab content.")
+	if str(activate_tab_result.get("data", {}).get("active_path", "")) != str(config_tab.get_path()):
+		return _failure("Editor ui_control activate_ui should return the active tab control path.")
+	var activate_tab_capture_path := ProjectSettings.globalize_path(str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")))
+	if not FileAccess.file_exists(activate_tab_capture_path):
+		return _failure("Editor ui_control activate_ui should capture the activated tab when path is provided.")
+	if not str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control activate_ui should normalize root-level user:// PNG paths into the managed control capture directory.")
+
+	var activate_semantic_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/tools"
+	})
+	if not bool(activate_semantic_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should support MCPDock/tools semantic path.")
+	if mcp_tabs.current_tab != 1 or not tools_tab.visible or config_tab.visible:
+		return _failure("Editor ui_control activate_ui semantic path should switch to the requested MCPDock tab.")
+	if str(activate_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/tools":
+		return _failure("Editor ui_control activate_ui should return the semantic path it activated.")
+
+	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"bottom_panel_title": "Output",
+		"path": "user://editor_executor_bottom_panel.png"
+	})
+	if not bool(activate_bottom_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should support bottom panel activation by title.")
+	if editor_plugin.visible_bottom_panel != output_panel or not output_panel.visible:
+		return _failure("Editor ui_control activate_ui should call make_bottom_panel_item_visible on the requested panel.")
+	if str(activate_bottom_result.get("data", {}).get("active_path", "")) != str(output_panel.get_path()):
+		return _failure("Editor ui_control activate_ui should return the active bottom panel path.")
+	var bottom_capture_path := ProjectSettings.globalize_path(str(activate_bottom_result.get("data", {}).get("capture", {}).get("path", "")))
+	if not FileAccess.file_exists(bottom_capture_path):
+		return _failure("Editor ui_control activate_ui should capture the activated bottom panel when path is provided.")
+	if not str(activate_bottom_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor ui_control activate_ui should normalize bottom panel captures into the managed control capture directory.")
+
+	var popup_list_result: Dictionary = executor.execute("popup", {"action": "list_visible"})
+	if not bool(popup_list_result.get("success", false)):
+		return _failure("Editor popup list_visible failed through the split service path.")
+	if int(popup_list_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("Editor popup list_visible should report one visible popup root.")
+	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
+	var popup_button_path := "%s/ConfirmButton" % popup_root_path
+	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var popup_press_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": popup_button_path
+	})
+	if not bool(popup_press_result.get("success", false)):
+		return _failure("Editor popup press_button failed through the split service path.")
+	if not bool(popup_button.pressed):
+		return _failure("Editor popup press_button should activate the target button.")
+
+	var popup_text_result: Dictionary = executor.execute("popup", {
+		"action": "set_text",
+		"target_path": popup_input_path,
+		"text": "NewValue"
+	})
+	if not bool(popup_text_result.get("success", false)):
+		return _failure("Editor popup set_text failed through the split service path.")
+	if popup_input.text != "NewValue":
+		return _failure("Editor popup set_text should update the popup input value.")
+
+	var popup_close_result: Dictionary = executor.execute("popup", {
+		"action": "close_popup",
+		"target_path": popup_root_path
+	})
+	if not bool(popup_close_result.get("success", false)):
+		return _failure("Editor popup close_popup failed through the split service path.")
+	if popup_root.visible:
+		return _failure("Editor popup close_popup should hide the popup root.")
+
+	var hidden_popup_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": str(hidden_popup_button.get_path())
+	})
+	if bool(hidden_popup_result.get("success", false)):
+		return _failure("Editor popup press_button should reject targets inside hidden popup roots.")
+
+	var non_popup_button_result: Dictionary = executor.execute("popup", {
+		"action": "press_button",
+		"target_path": str(non_popup_button.get_path())
+	})
+	if bool(non_popup_button_result.get("success", false)):
+		return _failure("Editor popup press_button should reject targets outside popup roots.")
+
+	var non_popup_input_result: Dictionary = executor.execute("popup", {
+		"action": "set_text",
+		"target_path": str(non_popup_input.get_path()),
+		"text": "ToolbarNew"
+	})
+	if bool(non_popup_input_result.get("success", false)):
+		return _failure("Editor popup set_text should reject targets outside popup roots.")
+
+	var edit_object_result: Dictionary = executor.execute("inspector", {
+		"action": "edit_object",
+		"path": "Target"
+	})
+	if not bool(edit_object_result.get("success", false)):
+		return _failure("Editor inspector edit_object failed through the split service path.")
+	var selected_property_result: Dictionary = executor.execute("inspector", {"action": "get_selected_property"})
+	if str(selected_property_result.get("data", {}).get("selected_path", "")) != "speed":
+		return _failure("Editor inspector get_selected_property returned an unexpected value.")
+
+	var select_file_result: Dictionary = executor.execute("filesystem", {
+		"action": "select_file",
+		"path": "res://scenes/main.tscn"
+	})
+	if not bool(select_file_result.get("success", false)):
+		return _failure("Editor filesystem select_file failed through the split service path.")
+	var selected_files_result: Dictionary = executor.execute("filesystem", {"action": "get_selected"})
+	if int(selected_files_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("Editor filesystem get_selected should report one selected file.")
+
+	var screenshot_result: Dictionary = executor.execute("screenshot", {
+		"action": "capture",
+		"path": "user://editor_executor_contract_screenshot.png"
+	})
+	if not bool(screenshot_result.get("success", false)):
+		return _failure("Editor screenshot capture failed through the split service path.")
+	var screenshot_data: Dictionary = screenshot_result.get("data", {})
+	var screenshot_path := ProjectSettings.globalize_path(str(screenshot_data.get("path", "")))
+	if not FileAccess.file_exists(screenshot_path):
+		return _failure("Editor screenshot capture did not create the PNG file.")
+	if not str(screenshot_data.get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor/"):
+		return _failure("Editor screenshot capture should normalize root-level user:// PNG paths into the managed editor capture directory.")
+	if int(screenshot_data.get("width", 0)) != 320 or int(screenshot_data.get("height", 0)) != 180:
+		return _failure("Editor screenshot capture returned unexpected dimensions.")
+
+	var region_screenshot_result: Dictionary = executor.execute("screenshot", {
+		"action": "capture",
+		"path": "user://editor_executor_contract_region.png",
+		"x": 10,
+		"y": 20,
+		"width": 64,
+		"height": 48
+	})
+	if not bool(region_screenshot_result.get("success", false)):
+		return _failure("Editor screenshot region capture failed through the split service path.")
+	var region_screenshot_data: Dictionary = region_screenshot_result.get("data", {})
+	if str(region_screenshot_data.get("capture_mode", "")) != "region":
+		return _failure("Editor screenshot region capture should report capture_mode=region.")
+	if int(region_screenshot_data.get("width", 0)) != 64 or int(region_screenshot_data.get("height", 0)) != 48:
+		return _failure("Editor screenshot region capture returned unexpected cropped dimensions.")
+
+	var enable_plugin_result: Dictionary = executor.execute("plugin", {
+		"action": "enable",
+		"plugin": "godot_dotnet_mcp"
+	})
+	if not bool(enable_plugin_result.get("success", false)):
+		return _failure("Editor plugin enable failed through the split service path.")
+	var plugin_state_result: Dictionary = executor.execute("plugin", {
+		"action": "is_enabled",
+		"plugin": "godot_dotnet_mcp"
+	})
+	if not bool(plugin_state_result.get("data", {}).get("enabled", false)):
+		return _failure("Editor plugin is_enabled should report the enabled state after enable.")
+
+	return {
+		"name": "editor_tool_executor_contracts",
+		"success": true,
+		"error": "",
+		"details": {
+			"tool_count": tool_defs.size(),
+			"godot_executable_path": executable_path,
+			"project_root_path": project_root,
+			"screenshot_path": screenshot_path,
+			"control_capture_path": control_capture_path,
+			"current_screen": str(get_screen_result.get("data", {}).get("current_screen", "")),
+			"selected_property": str(selected_property_result.get("data", {}).get("selected_path", "")),
+			"selected_file_count": int(selected_files_result.get("data", {}).get("count", 0))
+		}
+	}
+
+
+func cleanup_case(tree: SceneTree) -> void:
+	if _scene_root != null:
+		if _scene_root.get_parent() != null:
+			_scene_root.get_parent().remove_child(_scene_root)
+		_scene_root.queue_free()
+		_scene_root = null
+		await tree.process_frame
+
+
+func _build_scene_fixture(tree: SceneTree) -> Node:
+	var root := Node.new()
+	root.name = "EditorExecutorContracts"
+	tree.root.add_child(root)
+
+	var target := Node.new()
+	target.name = "Target"
+	root.add_child(target)
+	target.owner = root
+
+	return root
+
+
+func _failure(message: String) -> Dictionary:
+	return {
+		"name": "editor_tool_executor_contracts",
+		"success": false,
+		"error": message
+	}

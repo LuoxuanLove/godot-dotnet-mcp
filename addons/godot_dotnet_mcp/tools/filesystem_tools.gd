@@ -4,6 +4,8 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## File system tools for Godot MCP
 ## Provides file and directory operations within the project
 
+const _PLUGIN_ROOT := "res://addons/godot_dotnet_mcp"
+
 
 func get_tools() -> Array[Dictionary]:
 	return [
@@ -284,8 +286,7 @@ func _execute_directory(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	match action:
 		"list":
@@ -334,6 +335,10 @@ func _list_directory(path: String) -> Dictionary:
 
 
 func _create_directory(path: String) -> Dictionary:
+	var protected_error = _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
+
 	var abs_path = ProjectSettings.globalize_path(path)
 	var error = DirAccess.make_dir_recursive_absolute(abs_path)
 
@@ -349,6 +354,10 @@ func _create_directory(path: String) -> Dictionary:
 
 
 func _delete_directory(path: String) -> Dictionary:
+	var protected_error = _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
+
 	var abs_path = ProjectSettings.globalize_path(path)
 
 	if not DirAccess.dir_exists_absolute(abs_path):
@@ -459,8 +468,7 @@ func _read_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
@@ -480,8 +488,11 @@ func _write_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
+
+	var protected_error = _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
 
 	# Ensure directory exists
 	var dir_path = path.get_base_dir()
@@ -510,8 +521,7 @@ func _append_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	# Read existing content if file exists
 	var existing = ""
@@ -528,8 +538,11 @@ func _delete_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
+
+	var protected_error = _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
 
 	var abs_path = ProjectSettings.globalize_path(path)
 
@@ -552,8 +565,7 @@ func _file_exists(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	return _success({
 		"path": path,
@@ -565,10 +577,12 @@ func _copy_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	if not source.begins_with("res://") and not source.begins_with("user://"):
-		source = "res://" + source
-	if not dest.begins_with("res://") and not dest.begins_with("user://"):
-		dest = "res://" + dest
+	source = _normalize_tool_path(source)
+	dest = _normalize_tool_path(dest)
+
+	var protected_error = _guard_protected_plugin_write(dest)
+	if not protected_error.is_empty():
+		return protected_error
 
 	var source_abs = ProjectSettings.globalize_path(source)
 	var dest_abs = ProjectSettings.globalize_path(dest)
@@ -600,10 +614,15 @@ func _move_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	if not source.begins_with("res://") and not source.begins_with("user://"):
-		source = "res://" + source
-	if not dest.begins_with("res://") and not dest.begins_with("user://"):
-		dest = "res://" + dest
+	source = _normalize_tool_path(source)
+	dest = _normalize_tool_path(dest)
+
+	var source_error = _guard_protected_plugin_write(source)
+	if not source_error.is_empty():
+		return source_error
+	var dest_error = _guard_protected_plugin_write(dest)
+	if not dest_error.is_empty():
+		return dest_error
 
 	var source_abs = ProjectSettings.globalize_path(source)
 	var dest_abs = ProjectSettings.globalize_path(dest)
@@ -635,8 +654,7 @@ func _get_file_info(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	if not FileAccess.file_exists(path):
 		return _error("File not found: %s" % path)
@@ -661,8 +679,7 @@ func _execute_json(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://") and not path.begins_with("user://"):
-		path = "res://" + path
+	path = _normalize_tool_path(path)
 
 	match action:
 		"read":
@@ -704,6 +721,21 @@ func _write_json(path: String, data) -> Dictionary:
 	var content = JSON.stringify(normalized_data, "\t")
 
 	return _write_file(path, content)
+
+
+func _normalize_tool_path(path: String) -> String:
+	var normalized = path.strip_edges().replace("\\", "/")
+	if normalized.is_empty():
+		return ""
+	if not normalized.begins_with("res://") and not normalized.begins_with("user://"):
+		normalized = "res://" + normalized
+	return normalized
+
+
+func _guard_protected_plugin_write(path: String) -> Dictionary:
+	if path == _PLUGIN_ROOT or path.begins_with(_PLUGIN_ROOT + "/"):
+		return _error("Writes to plugin files are blocked: %s" % path)
+	return {}
 
 
 func _get_json_value(path: String, key: String) -> Dictionary:

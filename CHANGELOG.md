@@ -1,5 +1,63 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.0-pre1 - 2026-04-28
+
+### Added
+
+- Added an internal .NET bridge library backed by Roslyn, expanding the older C# workflow into C# diagnostics, C# file reading and patching, `.csproj` reading and writing, and solution/project inspection.
+- Added `system_help` so agents can discover the plugin's capabilities, recommended first steps, screenshot guidance, hidden-control discovery, and current tool schema information after connecting.
+- Added `system_editor_state`, `system_editor_log`, and expanded `system_editor_control` so agents can inspect the editor, read or clear Output logs, activate docks and bottom panels, work with popups, and capture editor UI state.
+- Added `system_project_files` and `system_scene_tree` for direct project FileSystem workflows and currently edited scene-tree workflows.
+- Added runtime automation tools: `system_runtime_control`, `system_runtime_capture`, `system_runtime_input`, and `system_runtime_step` for commandable runtime sessions, scripted input, screenshots, and input-wait-capture loops.
+- Added configurable output directories for editor and runtime captures, plus `system_userdata_maintenance` for listing and cleaning managed screenshot/cache files with dry-run preview by default.
+- Added automatic discovery and hot reload for user tools placed in `res://addons/godot_dotnet_mcp/custom_tools/`, including status, source, pending reload, and latest error details in the Tools page.
+- Added one-click setup and clearer install detection for more clients, including Claude Code CLI, Codex CLI/Desktop, Gemini CLI, OpenCode Desktop, Windsurf, Cline, Roo Code, Qwen Code, and Cherry Studio.
+- Added shared tool metadata so the Dock Tools page and MCP tool listings use the same names, descriptions, categories, actions, and internal links.
+- Added protocol fact files for server version and tool schema information, making version changes easier for agents and clients to detect.
+- Added broad localization coverage for the new Home, Config, Tools, user-tool, diagnostics, and tool-description UI text.
+- Added a Godot headless plugin test harness, expanded contract tests for tool executors and runtime services, and validation/publish workflows for release checks.
+
+### Changed
+
+- Reworked the Dock around clearer Home, Config, and Tools pages. The first tab is now `Home`, with service status, endpoint, full reload, and plugin diagnostics in one place.
+- Redesigned the Config page so supported clients show clearer install/remove/open actions and exact install locations when available.
+- Reworked the Tools page to show high-level System tools and User tools in a consistent tree, with localized descriptions, action nodes, counts, and internal implementation links.
+- Migrated the previous Intelligence project, scene, script, runtime-diagnose, and index workflows to `system_*` tool names.
+- Focused the core Agent-facing MCP surface on high-level `system_*` tools while keeping lower-level building blocks internal to the plugin.
+- Renamed and reorganized the former Intelligence tool layer into the System tool layer, matching the public `system_*` API names.
+- Split large tool executors into smaller editor, script, animation, runtime, system, user, shared, and domain-specific services so the plugin is easier to maintain and test.
+- Rebuilt the runtime/server internals around smaller HTTP, JSON-RPC, stdio, tool-routing, reload, diagnostic, and runtime-control services instead of a monolithic server file.
+- Expanded stdio routing so high-level `system_*` tools follow the same public tool path as HTTP clients.
+- Reworked plugin startup, reload, dock coordination, runtime state, diagnostics, and settings projection so the plugin can recover and report its state more clearly after reloads.
+- Reworked user-tool loading into explicit discovery, catalog refresh, runtime reload, and UI refresh steps.
+- Consolidated public logging levels to `debug`, `info`, `warning`, and `error`.
+- Rebuilt the changelog from tag-to-tag git comparisons so each version now records only the changes that actually shipped relative to the previous release.
+- Updated README and architecture, module, UI, testing, release, persistence, and coding-standard docs to match the v1.0 plugin shape.
+
+### Removed
+
+- Removed the old public `intelligence_*` tool names. Most workflows now use matching `system_*` tools instead, such as `system_project_state`, `system_runtime_diagnose`, `system_scene_analyze`, `system_script_analyze`, and `system_bindings_audit`.
+- Removed `intelligence_project_advise` as a separate advice tool. Agents should now inspect state with `system_help`, `system_project_state`, `system_editor_state`, diagnostics, scene/script analysis, and then choose the next tool directly.
+- Removed low-level atomic tool domains as the primary public workflow surface. Scene, script, editor, runtime, filesystem, animation, node, resource, debug, and other lower-level building blocks remain internal implementation details behind high-level tools and the Tools page tree.
+- Removed the old public Intelligence tool tree and documentation page in favor of the System tool tree and `docs/模块/System工具层.md`.
+- Removed the old permission-level UI and Home-tab advanced permission settings; users no longer need to manually choose a capability level.
+- Removed `trace` as a distinct public log level. Legacy `trace` input is still accepted as a compatibility alias for `debug`.
+- Removed the old root-level `user://` cache layout as the active storage model. Plugin-managed captures, runtime data, logs, profiles, and config exchange files now live under `user://godot_dotnet_mcp/`, with explicit maintenance tools for legacy cleanup.
+- Removed stale script-tool and Intelligence dispatcher files from the shipped plugin layout after splitting their behavior into System and script-service implementations.
+
+### Fixed
+
+- Fixed high-level `system_*` tool routing across HTTP and stdio so the same public tools are available through both transports.
+- Fixed plugin reload and dock rebuild flows so reload actions preserve settings, refresh the dock model, and surface diagnostics more reliably.
+- Fixed runtime service shutdown and port reuse behavior to reduce stuck-listener failures after reloads.
+- Fixed `system_project_run` timeout handling so long-running scenes can be stopped automatically when requested.
+- Fixed GDScript diagnostics access and script-edit helper paths after the tool-layer reorganization.
+- Fixed user-tool add, edit, delete, restore, and final-tool cleanup flows so the Tools page returns to the correct empty state without restarting Godot.
+- Fixed tool metadata, category, manifest, and presentation mismatches so the Tools page and MCP tool list stay aligned.
+- Fixed several headless validation and contract-test gaps so CI covers more of the plugin runtime, UI presentation, and tool executor behavior.
+
 ## 0.5.0 - 2026-03-19
 
 ### Added
@@ -99,9 +157,7 @@
 
 ### Fixed
 
-- Fixed duplicate `plugin` registration from the compatibility executor aggregator, preserving the `plugin_runtime`, `plugin_evolution`, and `plugin_developer` entry points.
-- Fixed incomplete tool-domain loading caused by `tool_loader` not fully hot-reloading inherited scripts, restoring stable discovery for the `script` domain and related extension tools.
-- Fixed HTTP transport interruption during plugin enable/disable and runtime reload by switching soft reload to deferred scheduling.
+- Fixed `Tree blocked` / empty-instance errors on the `Tools` page during collapse and rebuild flows, reducing Dock interruptions and cascading UI errors.
 
 ### Known Limitations
 

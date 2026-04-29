@@ -7,7 +7,7 @@ signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
 
-const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 
 const CATEGORY_LABEL_KEYS := {
@@ -19,6 +19,7 @@ const CATEGORY_LABEL_KEYS := {
 	"project": "cat_project",
 	"editor": "cat_editor",
 	"plugin_runtime": "cat_plugin_runtime",
+	"runtime": "cat_runtime",
 	"plugin_evolution": "cat_plugin_evolution",
 	"plugin_developer": "cat_plugin_developer",
 	"debug": "cat_debug",
@@ -36,28 +37,34 @@ const CATEGORY_LABEL_KEYS := {
 	"audio": "cat_audio",
 	"ui": "cat_ui",
 	"user": "cat_user",
-	"intelligence": "cat_intelligence"
+	"system": "cat_system"
 }
 
 const TREE_TEXT_COLUMN := 0
 const TREE_CHECK_COLUMN := 1
-const INTELLIGENCE_CATEGORY := "intelligence"
-const INTELLIGENCE_ROOT_KEY := "intelligence_root"
+const SYSTEM_CATEGORY := "system"
+const USER_TOOL_CUSTOM_ROOT := "res://addons/godot_dotnet_mcp/custom_tools"
+const TREE_TEXT_MIN_WIDTH := 180.0
+const TREE_TEXT_MAX_WIDTH := 300.0
+const TREE_CHECK_MIN_WIDTH := 32.0
+const TREE_CHECK_MAX_WIDTH := 40.0
+const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 
+@onready var _header_card: PanelContainer = %HeaderCard
 @onready var _tool_count_label: Label = %ToolCountLabel
 @onready var _search_edit: LineEdit = %ToolSearchEdit
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
-@onready var _top_shadow: ColorRect = %TopShadow
-@onready var _bottom_shadow: ColorRect = %BottomShadow
+@onready var _tool_list_panel: PanelContainer = %ToolListPanel
 @onready var _tool_preview_panel: PanelContainer = %ToolPreviewPanel
 @onready var _tool_preview_title: Label = %ToolPreviewTitle
 @onready var _tool_preview_text: TextEdit = %ToolPreviewText
 
-const _CTX_COPY_NAME   := 0
-const _CTX_COPY_SCHEMA := 1
+const _CTX_COPY_LOCALIZED_NAME := 0
+const _CTX_COPY_ENGLISH_ID := 1
+const _CTX_COPY_SCHEMA := 2
 const _CTX_DELETE_TOOL := 3
-const _CTX_EXPAND_ALL  := 10
+const _CTX_EXPAND_ALL := 10
 const _CTX_COLLAPSE_ALL := 11
 
 var _tree_syncing := false
@@ -65,6 +72,7 @@ var _current_scale := -1.0
 var _localization = null
 var _context_menu: PopupMenu = null
 var _context_menu_metadata: Dictionary = {}
+var _context_menu_target: TreeItem = null
 var _current_model: Dictionary = {}
 var _selected_tree_kind := ""
 var _selected_tree_key := ""
@@ -80,6 +88,7 @@ func _ready() -> void:
 	_search_edit.text_changed.connect(_on_search_text_changed)
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.gui_input.connect(_on_tree_gui_input)
+	_tool_tree.theme_type_variation = "TreeSecondary"
 	_tool_tree.set_allow_reselect(true)
 	_tool_preview_text.editable = false
 	_tool_preview_text.selecting_enabled = true
@@ -93,13 +102,10 @@ func _ready() -> void:
 	bottom_pane.clip_contents = true
 	tool_list_panel.clip_contents = true
 	_tool_preview_panel.clip_contents = true
-	_configure_tree_shadow(_top_shadow, false)
-	_configure_tree_shadow(_bottom_shadow, true)
-	set_process(true)
 	_context_menu = PopupMenu.new()
 	add_child(_context_menu)
 	_context_menu.id_pressed.connect(_on_context_menu_id_pressed)
-
+	resized.connect(_on_resized)
 
 func apply_model(model: Dictionary) -> void:
 	var localization = model.get("localization")
@@ -109,20 +115,13 @@ func apply_model(model: Dictionary) -> void:
 
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
+	else:
+		_apply_responsive_layout()
 
 	_apply_localized_copy(localization, model)
 
 	var tree_signature = _build_tree_signature(model)
 	_refresh_tree_state(model, tree_signature)
-
-
-func _get_root_label(model: Dictionary) -> String:
-	var counts = _count_intelligence_enabled(model)
-	var localization = model.get("localization")
-	var label = localization.get_text("cat_intelligence") if localization else "Intelligence"
-	if label == "cat_intelligence":
-		label = "Intelligence"
-	return "%s    %d/%d" % [label, int(counts[0]), int(counts[1])]
 
 
 func _render_tool_tree(model: Dictionary) -> void:
@@ -133,24 +132,163 @@ func _render_tool_tree(model: Dictionary) -> void:
 	var root = _tool_tree.create_item()
 	if root == null:
 		_tree_syncing = false
-		call_deferred("_update_tree_shadow_visibility")
+		return
+	if _has_presentation_tree(model):
+		for node in model.get("toolTree", []):
+			if node is Dictionary:
+				_create_presentation_node(root, model, node as Dictionary)
+		_tree_syncing = false
 		return
 
-	# Root node replaces expand/collapse buttons
-	root.set_text(TREE_TEXT_COLUMN, _get_root_label(model))
-	root.set_metadata(TREE_TEXT_COLUMN, {"kind": TreeCollapseState.KIND_ROOT, "key": INTELLIGENCE_ROOT_KEY})
-	root.set_selectable(TREE_TEXT_COLUMN, true)
-	root.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ROOT, INTELLIGENCE_ROOT_KEY)
-
-	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
-		_create_tool_item(root, model, INTELLIGENCE_CATEGORY, tool_def)
+	_create_root_group_item(root, model, SYSTEM_CATEGORY)
+	_create_root_group_item(root, model, "user")
 
 	_tree_syncing = false
-	call_deferred("_update_tree_shadow_visibility")
+
+
+func _has_presentation_tree(model: Dictionary) -> bool:
+	return model.get("toolTree", []) is Array and not (model.get("toolTree", []) as Array).is_empty()
+
+
+func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictionary) -> TreeItem:
+	var filtered_node := _filter_presentation_node(model, node)
+	if filtered_node.is_empty():
+		return null
+	var kind := str(filtered_node.get("kind", ""))
+	var key := str(filtered_node.get("key", filtered_node.get("id", "")))
+	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return null
+	var display_name := _get_presentation_node_display_name(filtered_node)
+	var metadata := _build_presentation_node_metadata(filtered_node, display_name)
+	match kind:
+		"domain", "category":
+			_configure_item_toggle(item, _is_presentation_group_enabled(filtered_node))
+			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", 0)), int(filtered_node.get("totalCount", 0))]
+			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(filtered_node.get("labelKey", ""))))
+		"tool":
+			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
+			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _find_tool_definition(str(filtered_node.get("category", "")), str(filtered_node.get("toolName", "")))))
+		"atomic":
+			_configure_info_row(item, display_name, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, key))
+		"action":
+			_configure_action_item(item, str(filtered_node.get("actionName", filtered_node.get("action", ""))), str(filtered_node.get("parentTool", filtered_node.get("parent_tool", ""))))
+		_:
+			_configure_item_text(item, display_name, metadata)
+	var children: Array = filtered_node.get("children", [])
+	if not children.is_empty() and kind != "atomic":
+		item.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key)
+	for child in children:
+		if child is Dictionary:
+			_create_presentation_node(item, model, child as Dictionary)
+	return item
+
+
+func _filter_presentation_node(model: Dictionary, node: Dictionary) -> Dictionary:
+	var query := _get_search_query()
+	var filtered := node.duplicate(true)
+	var children: Array = []
+	for child in node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var filtered_child := _filter_presentation_node(model, child as Dictionary)
+		if not filtered_child.is_empty():
+			children.append(filtered_child)
+	if query.is_empty() or _presentation_node_matches_search(model, node, query) or not children.is_empty():
+		filtered["children"] = children if not query.is_empty() else node.get("children", [])
+		return filtered
+	return {}
+
+
+func _presentation_node_matches_search(model: Dictionary, node: Dictionary, query: String) -> bool:
+	var display_name := _get_presentation_node_display_name(node).to_lower()
+	if display_name.contains(query) or str(node.get("key", "")).to_lower().contains(query):
+		return true
+	var kind := str(node.get("kind", ""))
+	if kind == "tool" or kind == "atomic":
+		var tool_def := _find_tool_definition(str(node.get("category", "")), str(node.get("toolName", "")))
+		return _get_tool_description(model.get("localization"), str(node.get("key", "")), tool_def).to_lower().contains(query)
+	return false
+
+
+func _get_presentation_node_display_name(node: Dictionary) -> String:
+	var kind := str(node.get("kind", ""))
+	match kind:
+		"domain":
+			return _localization.get_text(str(node.get("labelKey", "domain_other")))
+		"category":
+			return _get_category_label(_localization, str(node.get("category", node.get("key", ""))))
+		"tool", "atomic":
+			var full_name := str(node.get("fullName", node.get("key", "")))
+			return _get_tool_display_name(_localization, full_name, str(node.get("toolName", node.get("tool_name", ""))))
+		"action":
+			return _get_action_display_name(str(node.get("parentTool", node.get("parent_tool", ""))), str(node.get("actionName", node.get("action", ""))))
+	return str(node.get("key", node.get("id", "")))
+
+
+func _build_presentation_node_metadata(node: Dictionary, display_name: String) -> Dictionary:
+	var kind := str(node.get("kind", ""))
+	var key := str(node.get("key", node.get("id", "")))
+	var extra := {
+		"label_key": str(node.get("labelKey", "")),
+		"category": str(node.get("category", "")),
+		"tool_name": str(node.get("toolName", node.get("tool_name", ""))),
+		"source": str(node.get("source", "")),
+		"script_path": str(node.get("script_path", node.get("scriptPath", ""))),
+		"domain_script_path": str(node.get("domain_script_path", node.get("domainScriptPath", ""))),
+		"load_state": str(node.get("loadState", node.get("load_state", ""))),
+		"group_path": node.get("groupPath", [])
+	}
+	if kind == "action":
+		extra["action"] = str(node.get("actionName", node.get("action", "")))
+		extra["tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
+		extra["parent_tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
+	return _build_tree_node_metadata(kind, key, display_name, key, extra)
+
+
+func _is_presentation_group_enabled(node: Dictionary) -> bool:
+	var total := int(node.get("totalCount", 0))
+	return total > 0 and int(node.get("enabledCount", 0)) == total
+
+
+func _presentation_collapse_kind(kind: String) -> String:
+	match kind:
+		"domain":
+			return TreeCollapseState.KIND_DOMAIN
+		"category":
+			return TreeCollapseState.KIND_CATEGORY
+		"tool":
+			return TreeCollapseState.KIND_TOOL
+		"atomic":
+			return TreeCollapseState.KIND_ATOMIC
+	return kind
+
+
+func _create_root_group_item(parent: TreeItem, model: Dictionary, category: String) -> void:
+	var settings: Dictionary = model.get("settings", {})
+	var counts = _count_category(model, category)
+	var item = _tool_tree.create_item(parent)
+	if item == null:
+		return
+	var root_label = _get_category_label(model.get("localization"), category)
+	var root_text = "%s    %d/%d" % [root_label, counts["enabled"], counts["total"]]
+	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
+		root_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
+	var root_tooltip = _get_group_tooltip(model.get("localization"), _get_category_label_key(category))
+	_configure_info_row(item, root_text, _build_tree_node_metadata(TreeCollapseState.KIND_ROOT, category, root_label, category, {
+		"category": category,
+		"label_key": _get_category_label_key(category)
+	}), TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_ROOT, category))
+	if not root_tooltip.is_empty():
+		item.set_tooltip_text(TREE_TEXT_COLUMN, root_tooltip)
+	for tool_def in _get_filtered_tool_definitions(model, category):
+		if bool(tool_def.get("compatibility_alias", false)):
+			continue
+		_create_tool_item(item, model, category, tool_def)
 
 
 func _apply_localized_copy(localization, model: Dictionary) -> void:
-	_tool_count_label.text = localization.get_text("tools_enabled") % _count_intelligence_enabled(model)
+	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
 
 
@@ -170,15 +308,21 @@ func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary, col
 	item.set_text(TREE_TEXT_COLUMN, text)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
 	item.set_metadata(TREE_TEXT_COLUMN, metadata)
-	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.6, 0.6, 0.6))
+	item.set_custom_color(TREE_TEXT_COLUMN, _get_muted_text_color())
 	item.collapsed = collapsed
 
 
 func _configure_action_item(item: TreeItem, action_name: String, parent_tool: String) -> void:
-	item.set_text(TREE_TEXT_COLUMN, "· %s" % action_name)
+	var action_display_name := _get_action_display_name(parent_tool, action_name)
+	item.set_text(TREE_TEXT_COLUMN, action_display_name)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
-	item.set_metadata(TREE_TEXT_COLUMN, {"kind": "action", "key": parent_tool + "." + action_name, "action": action_name, "tool": parent_tool})
-	item.set_custom_color(TREE_TEXT_COLUMN, Color(0.45, 0.45, 0.45))
+	item.set_metadata(TREE_TEXT_COLUMN, _build_tree_node_metadata("action", parent_tool + "." + action_name, action_display_name, action_name, {
+		"action": action_name,
+		"tool": parent_tool,
+		"parent_tool": parent_tool,
+		"description_key": SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+	}))
+	item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 
 
 func _configure_item_toggle(item: TreeItem, checked: bool) -> void:
@@ -203,11 +347,12 @@ func _create_domain_item(root: TreeItem, model: Dictionary, domain_key: String, 
 	if item == null:
 		return
 	_configure_item_toggle(item, _is_domain_fully_enabled(model, categories))
-	var domain_text = "%s    %d/%d" % [model.get("localization").get_text(label_key), counts["enabled"], counts["total"]]
+	var domain_label = model.get("localization").get_text(label_key)
+	var domain_text = "%s    %d/%d" % [domain_label, counts["enabled"], counts["total"]]
 	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
 		domain_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	var domain_tooltip = _get_group_tooltip(model.get("localization"), label_key)
-	_configure_item_text(item, domain_text, {"kind": "domain", "key": domain_key, "label_key": label_key}, domain_tooltip)
+	_configure_item_text(item, domain_text, _build_tree_node_metadata("domain", domain_key, domain_label, domain_key, {"label_key": label_key}), domain_tooltip)
 	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_DOMAIN, domain_key)
 
 	for category in categories:
@@ -223,22 +368,20 @@ func _create_category_item(parent: TreeItem, model: Dictionary, category: String
 	_configure_item_toggle(item, _is_category_fully_enabled(model, category))
 	var label_key = _get_category_label_key(category)
 	var load_error_messages = _get_category_load_error_messages(model, category)
-	var category_text = "%s    %d/%d" % [_get_category_label(model.get("localization"), category), counts["enabled"], counts["total"]]
+	var category_label = _get_category_label(model.get("localization"), category)
+	var category_text = "%s    %d/%d" % [category_label, counts["enabled"], counts["total"]]
 	if counts["enabled"] > 0 and counts["enabled"] < counts["total"]:
 		category_text += " %s" % model.get("localization").get_text("tools_partial_suffix")
 	if not load_error_messages.is_empty():
 		category_text += " %s" % model.get("localization").get_text("tools_load_error_suffix")
-	item.set_text(0, category_text)
-	item.set_selectable(0, true)
-	item.set_metadata(0, {"kind": "category", "key": category, "label_key": label_key})
 	var category_tooltip = _get_group_tooltip(model.get("localization"), label_key)
 	if not load_error_messages.is_empty():
 		if not category_tooltip.is_empty():
 			category_tooltip += "\n\n"
 		category_tooltip += "\n".join(load_error_messages)
-	_configure_item_text(item, category_text, {"kind": "category", "key": category, "label_key": label_key}, category_tooltip)
+	_configure_item_text(item, category_text, _build_tree_node_metadata("category", category, category_label, category, {"label_key": label_key}), category_tooltip)
 	if not load_error_messages.is_empty():
-		item.set_custom_color(TREE_TEXT_COLUMN, Color(0.9, 0.35, 0.35))
+		item.set_custom_color(TREE_TEXT_COLUMN, _get_error_text_color())
 	item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_CATEGORY, category)
 
 	for tool_def in _get_filtered_tool_definitions(model, category):
@@ -254,11 +397,14 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 	if item == null:
 		return
 	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
-	if category == INTELLIGENCE_CATEGORY:
-		var has_children := IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.has(full_name)
+	if category == SYSTEM_CATEGORY:
+		var action_values := _extract_action_values(tool_def)
+		var atomic_children: Array = SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(full_name, [])
+		var has_children := not action_values.is_empty() or not atomic_children.is_empty()
 		if has_children:
 			var settings: Dictionary = model.get("settings", {})
 			item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_TOOL, full_name)
+		_create_action_children(item, full_name, tool_def)
 		var visited := {}
 		visited[full_name] = true
 		_create_atomic_tool_children(item, model, full_name, visited)
@@ -267,18 +413,24 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 func _configure_tool_row(item: TreeItem, model: Dictionary, full_name: String, category: String, tool_name: String, tool_def: Dictionary) -> void:
 	var localization = model.get("localization")
 	_configure_item_toggle(item, not model.get("settings", {}).get("disabled_tools", []).has(full_name))
-	_configure_item_text(item, _get_tool_display_name(localization, full_name, tool_name), {
-		"kind": "tool",
-		"key": full_name,
+	var tool_display_name = _get_tool_display_name(localization, full_name, tool_name)
+	_configure_item_text(item, tool_display_name, _build_tree_node_metadata("tool", full_name, tool_display_name, full_name, {
 		"category": category,
 		"tool_name": tool_name,
 		"source": str(tool_def.get("source", "builtin")),
-		"script_path": str(tool_def.get("script_path", ""))
-	}, _get_tool_description(localization, full_name, tool_def))
+		"script_path": str(tool_def.get("script_path", "")),
+		"runtime_domain": str(tool_def.get("runtime_domain", "")),
+		"runtime_version": int(tool_def.get("runtime_version", 0)),
+		"runtime_state": str(tool_def.get("state", "")),
+		"pending_reload": bool(tool_def.get("pending_reload", false)),
+		"last_error": tool_def.get("last_error", null),
+		"discovery_source": str(tool_def.get("discovery_source", "")),
+		"last_refresh_reason": str(tool_def.get("last_refresh_reason", ""))
+	}), _get_tool_description(localization, full_name, tool_def))
 
 
-func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intelligence_full_name: String, visited: Dictionary = {}) -> void:
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, system_full_name: String, visited: Dictionary = {}) -> void:
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -303,11 +455,15 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intellige
 		if item == null:
 			continue
 		# Atomic tool: info-only row, no checkbox
-		_configure_info_row(item, _get_tool_display_name(_localization, atomic_full_name, tool_name),
-			{"kind": "atomic", "key": atomic_full_name, "category": category, "tool_name": tool_name},
+		var atomic_display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
+		_configure_info_row(item, atomic_display_name,
+			_build_tree_node_metadata("atomic", atomic_full_name, atomic_display_name, atomic_full_name, {
+				"category": category,
+				"tool_name": tool_name
+			}),
 			TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, atomic_full_name))
 
-		if category == INTELLIGENCE_CATEGORY:
+		if category == SYSTEM_CATEGORY:
 			var next_visited = visited.duplicate()
 			next_visited[atomic_full_name] = true
 			_create_atomic_tool_children(item, model, atomic_full_name, next_visited)
@@ -319,30 +475,26 @@ func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, intellige
 				_configure_action_item(action_item, str(action_name), atomic_full_name)
 
 
+func _create_action_children(parent: TreeItem, parent_full_name: String, tool_def: Dictionary) -> void:
+	for action_name in _extract_action_values(tool_def):
+		if not _matches_action_search(parent_full_name, str(action_name), tool_def):
+			continue
+		var action_item = _tool_tree.create_item(parent)
+		if action_item != null:
+			_configure_action_item(action_item, str(action_name), parent_full_name)
+
+
 func _count_enabled_tools(model: Dictionary) -> Array:
 	var total = 0
 	var enabled = 0
-	for category in model.get("tools_by_category", {}).keys():
-		for tool_def in _get_filtered_tool_definitions(model, str(category)):
+	for category in [SYSTEM_CATEGORY, "user"]:
+		for tool_def in _get_filtered_tool_definitions(model, category):
 			if bool(tool_def.get("compatibility_alias", false)):
 				continue
 			total += 1
 			var full_name = "%s_%s" % [category, tool_def.get("name", "")]
 			if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
 				enabled += 1
-	return [enabled, total]
-
-
-func _count_intelligence_enabled(model: Dictionary) -> Array:
-	var total := 0
-	var enabled := 0
-	for tool_def in _get_filtered_tool_definitions(model, INTELLIGENCE_CATEGORY):
-		if bool(tool_def.get("compatibility_alias", false)):
-			continue
-		total += 1
-		var full_name = "%s_%s" % [INTELLIGENCE_CATEGORY, tool_def.get("name", "")]
-		if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
-			enabled += 1
 	return [enabled, total]
 
 
@@ -409,6 +561,46 @@ func _get_tool_description(localization, full_name: String, tool_def: Dictionary
 	return str(tool_def.get("description", ""))
 
 
+func _get_action_display_name(parent_tool: String, action_name: String) -> String:
+	if _localization != null:
+		var specific_key = SystemTreeCatalog.get_action_name_key(parent_tool, action_name)
+		var translated = _localization.get_text(specific_key)
+		if translated != specific_key:
+			return translated
+		var generic_key = SystemTreeCatalog.get_generic_action_name_key(action_name)
+		translated = _localization.get_text(generic_key)
+		if translated != generic_key:
+			return translated
+	return _humanize_identifier(action_name)
+
+
+func _get_action_description(parent_tool: String, action_name: String, tool_def: Dictionary) -> String:
+	var action_display_name = _get_action_display_name(parent_tool, action_name)
+	var parent_display_name = parent_tool
+	if not tool_def.is_empty():
+		var tool_name = str(tool_def.get("name", ""))
+		if not tool_name.is_empty():
+			parent_display_name = _get_tool_display_name(_localization, parent_tool, tool_name)
+	if _localization != null:
+		var specific_key = SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+		var translated = _localization.get_text(specific_key)
+		if translated != specific_key:
+			return translated
+		var generic_key = SystemTreeCatalog.get_generic_action_desc_key(action_name)
+		translated = _localization.get_text(generic_key)
+		if translated != generic_key:
+			return translated
+		var fallback_key = "tool_action_desc_fallback"
+		var fallback_template = _localization.get_text(fallback_key)
+		if fallback_template != fallback_key:
+			var fallback_text = fallback_template % [action_display_name, parent_display_name]
+			var tool_description = _get_tool_description(_localization, parent_tool, tool_def)
+			if not tool_description.is_empty():
+				fallback_text += "\n\n" + tool_description
+			return fallback_text
+	return ""
+
+
 func _humanize_identifier(value: String) -> String:
 	var parts: Array[String] = []
 	for word in value.split("_"):
@@ -459,7 +651,7 @@ func _on_tree_gui_input(event: InputEvent) -> void:
 	if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 		var item = _tool_tree.get_item_at_position(mouse_event.position)
 		if item != null:
-			_show_tree_context_menu(item, _tool_tree.get_global_transform().origin + mouse_event.position)
+			_show_tree_context_menu(item, _get_tree_context_menu_screen_position(mouse_event.position))
 			get_viewport().set_input_as_handled()
 		return
 	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
@@ -518,116 +710,111 @@ func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
 		return
 	var meta := metadata as Dictionary
 	_context_menu_metadata = meta
+	_context_menu_target = item
 	_context_menu.clear()
 	var kind = str(meta.get("kind", ""))
+	var has_children := item.get_child_count() > 0
+	_add_context_menu_item(_localization.get_text("tool_ctx_copy_localized_name"), _CTX_COPY_LOCALIZED_NAME)
+	_add_context_menu_item(_localization.get_text("tool_ctx_copy_english_id"), _CTX_COPY_ENGLISH_ID)
+	_context_menu.add_separator()
+	_add_context_menu_item(_localization.get_text("btn_expand_all"), _CTX_EXPAND_ALL, not has_children)
+	_add_context_menu_item(_localization.get_text("btn_collapse_all"), _CTX_COLLAPSE_ALL, not has_children)
 	match kind:
-		"root":
-			_context_menu.add_item("Expand All", _CTX_EXPAND_ALL)
-			_context_menu.add_item("Collapse All", _CTX_COLLAPSE_ALL)
 		"tool":
-			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
-			_context_menu.add_item("Copy Schema JSON", _CTX_COPY_SCHEMA)
-			if str(meta.get("source", "")) == "user_tool":
-				_context_menu.add_separator()
-				_context_menu.add_item("Delete User Tool", _CTX_DELETE_TOOL)
-		"atomic":
-			_context_menu.add_item("Copy Tool Name", _CTX_COPY_NAME)
-		"action":
-			_context_menu.add_item("Copy Action Name", _CTX_COPY_NAME)
+			_context_menu.add_separator()
+			_add_context_menu_item(_localization.get_text("tool_ctx_copy_schema_json"), _CTX_COPY_SCHEMA)
+			if _is_user_tool_metadata(meta):
+				_add_context_menu_item(_localization.get_text("btn_delete_user_tool"), _CTX_DELETE_TOOL)
 		_:
-			return
+			pass
 	_context_menu.popup(Rect2i(int(global_pos.x), int(global_pos.y), 0, 0))
 
 
+func _get_tree_context_menu_screen_position(local_position: Vector2) -> Vector2:
+	return _tool_tree.get_screen_transform() * local_position
+
+
 func _on_context_menu_id_pressed(id: int) -> void:
-	var kind = str(_context_menu_metadata.get("kind", ""))
 	match id:
-		_CTX_COPY_NAME:
-			var name_to_copy: String
-			if kind == "action":
-				name_to_copy = str(_context_menu_metadata.get("action", ""))
-			else:
-				name_to_copy = str(_context_menu_metadata.get("key", ""))
-			DisplayServer.clipboard_set(name_to_copy)
+		_CTX_COPY_LOCALIZED_NAME:
+			DisplayServer.clipboard_set(_get_context_menu_localized_name())
+		_CTX_COPY_ENGLISH_ID:
+			DisplayServer.clipboard_set(_get_context_menu_english_id())
 		_CTX_COPY_SCHEMA:
 			var full_name = str(_context_menu_metadata.get("key", ""))
 			var tool_def = _get_tool_def_by_full_name(_current_model, full_name)
 			var schema = tool_def.get("inputSchema", {})
 			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
 		_CTX_DELETE_TOOL:
-			var script_path = str(_context_menu_metadata.get("script_path", ""))
+			var script_path = _get_context_menu_user_tool_script_path()
 			if not script_path.is_empty():
 				delete_user_tool_requested.emit(script_path)
 		_CTX_EXPAND_ALL:
-			var root = _tool_tree.get_root()
-			if root != null:
-				_set_subtree_collapsed(root, false)
-				_sync_subtree_collapsed_to_settings(root, false)
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, false)
+				_tree_syncing = false
+				_sync_subtree_collapsed_to_settings(_context_menu_target, false)
 		_CTX_COLLAPSE_ALL:
-			var root = _tool_tree.get_root()
-			if root != null:
-				_set_subtree_collapsed(root, true)
-				_sync_subtree_collapsed_to_settings(root, true)
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, true)
+				_tree_syncing = false
+				_sync_subtree_collapsed_to_settings(_context_menu_target, true)
 
 
-func _configure_tree_shadow(shadow: ColorRect, invert: bool) -> void:
-	var shader := Shader.new()
-	shader.code = """
-shader_type canvas_item;
+func _add_context_menu_item(label: String, id: int, disabled: bool = false) -> void:
+	var index := _context_menu.get_item_count()
+	_context_menu.add_item(label, id)
+	_context_menu.set_item_disabled(index, disabled)
 
-uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 0.58);
-uniform bool invert_gradient = false;
 
-void fragment() {
-	float amount = 1.0 - UV.y;
-	if (invert_gradient) {
-		amount = UV.y;
+func _build_tree_node_metadata(kind: String, key: String, localized_name: String = "", english_id: String = "", extra: Dictionary = {}) -> Dictionary:
+	var metadata := {
+		"kind": kind,
+		"key": key,
+		"english_id": english_id if not english_id.is_empty() else key
 	}
-	float alpha = pow(amount, 1.35) * shadow_color.a;
-	COLOR = vec4(shadow_color.rgb, alpha);
-}
-"""
-	var material := ShaderMaterial.new()
-	material.shader = shader
-	material.set_shader_parameter("shadow_color", Color(0.0, 0.0, 0.0, 0.58))
-	material.set_shader_parameter("invert_gradient", invert)
-	shadow.material = material
-	shadow.color = Color.WHITE
-	shadow.anchor_left = 0.0
-	shadow.anchor_right = 1.0
-	shadow.offset_left = -12.0
-	shadow.offset_right = 12.0
-	shadow.z_index = 8
-	if invert:
-		shadow.anchor_top = 1.0
-		shadow.anchor_bottom = 1.0
-		shadow.offset_top = -18.0
-		shadow.offset_bottom = 0.0
-	else:
-		shadow.anchor_top = 0.0
-		shadow.anchor_bottom = 0.0
-		shadow.offset_top = 0.0
-		shadow.offset_bottom = 18.0
+	if not localized_name.is_empty():
+		metadata["localized_name"] = localized_name
+	for extra_key in extra.keys():
+		metadata[str(extra_key)] = extra[extra_key]
+	return metadata
 
 
-func _process(_delta: float) -> void:
-	_update_tree_shadow_visibility()
+func _get_context_menu_localized_name() -> String:
+	var localized_name := str(_context_menu_metadata.get("localized_name", ""))
+	if not localized_name.is_empty():
+		return localized_name
+	return str(_context_menu_metadata.get("key", ""))
 
 
-func _update_tree_shadow_visibility() -> void:
-	if not is_instance_valid(_tool_tree):
-		_top_shadow.visible = false
-		_bottom_shadow.visible = false
-		return
-	var scroll: Vector2 = _tool_tree.get_scroll()
-	var root = _tool_tree.get_root()
-	var has_items := root != null and root.get_first_child() != null
-	_top_shadow.visible = scroll.y > 0.5
-	_bottom_shadow.visible = has_items and _tree_has_hidden_content_below(root)
+func _get_context_menu_english_id() -> String:
+	var english_id := str(_context_menu_metadata.get("english_id", ""))
+	if not english_id.is_empty():
+		return english_id
+	return str(_context_menu_metadata.get("key", ""))
+
+
+func _is_user_tool_metadata(meta: Dictionary) -> bool:
+	if str(meta.get("category", "")) != "user":
+		return false
+	var script_path = str(meta.get("script_path", ""))
+	return str(meta.get("source", "")) == "user_tool" and script_path.begins_with(USER_TOOL_CUSTOM_ROOT + "/")
+
+
+func _get_context_menu_user_tool_script_path() -> String:
+	var direct_path = str(_context_menu_metadata.get("script_path", ""))
+	if direct_path.begins_with(USER_TOOL_CUSTOM_ROOT + "/"):
+		return direct_path
+	return ""
 
 
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
+	add_theme_constant_override("separation", int(round(8 * scale)))
+	_apply_visual_style(scale)
+	_apply_spacing(scale)
 
 	_tool_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tool_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -637,19 +824,99 @@ func _apply_editor_scale(scale: float) -> void:
 	_tool_tree.custom_minimum_size.x = 0.0
 	_tool_tree.set_column_expand(TREE_TEXT_COLUMN, true)
 	_tool_tree.set_column_expand(TREE_CHECK_COLUMN, false)
-	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(320 * scale)))
-	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(44 * scale)))
-	_tool_preview_panel.custom_minimum_size.y = 88.0 * scale
-	_top_shadow.offset_left = -12.0 * scale
-	_top_shadow.offset_right = 12.0 * scale
-	_top_shadow.custom_minimum_size.y = 14.0 * scale
-	_top_shadow.offset_bottom = 14.0 * scale
-	_bottom_shadow.offset_left = -12.0 * scale
-	_bottom_shadow.offset_right = 12.0 * scale
-	_bottom_shadow.custom_minimum_size.y = 14.0 * scale
-	_bottom_shadow.offset_top = -14.0 * scale
+	_apply_responsive_layout()
+	_tool_preview_panel.custom_minimum_size.y = 148.0 * scale
+	var desired_split := 560.0 * scale
+	if size.y > 0.0:
+		desired_split = max(420.0 * scale, size.y * 0.62)
+	_content_split.split_offset = int(round(desired_split))
 
-	_search_edit.custom_minimum_size.y = 30.0 * scale
+	_search_edit.custom_minimum_size.y = 0.0
+	_tool_count_label.remove_theme_font_size_override("font_size")
+	_tool_preview_title.remove_theme_font_size_override("font_size")
+	_tool_preview_text.remove_theme_font_size_override("font_size")
+
+
+func _apply_responsive_layout() -> void:
+	if _tool_tree == null:
+		return
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	var available_width: float = size.x
+	if available_width <= 0.0:
+		var parent_control := get_parent() as Control
+		if parent_control != null:
+			available_width = parent_control.size.x
+	var check_width: float = min(max(TREE_CHECK_MIN_WIDTH * scale, 32.0 * scale), TREE_CHECK_MAX_WIDTH * scale)
+	var tree_width: float = max(available_width - TREE_HORIZONTAL_CHROME_WIDTH * scale, (TREE_TEXT_MIN_WIDTH + TREE_CHECK_MIN_WIDTH) * scale)
+	var text_width: float = min(max(tree_width - check_width, TREE_TEXT_MIN_WIDTH * scale), TREE_TEXT_MAX_WIDTH * scale)
+	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
+	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(check_width)))
+
+
+func _on_resized() -> void:
+	_apply_responsive_layout()
+
+
+func _apply_spacing(scale: float) -> void:
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/SearchOuterMargin") as MarginContainer, 10, 8, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/ToolListOuterMargin") as MarginContainer, 10, 4, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin") as MarginContainer, 0, 6, 0, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("BottomPane/PreviewOuterMargin") as MarginContainer, 10, 2, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin") as MarginContainer, 0, 2, 0, 12, scale)
+
+
+func _set_margin_constants(margin: MarginContainer, left: int, top: int, right: int, bottom: int, scale: float) -> void:
+	if margin == null:
+		return
+	margin.add_theme_constant_override("margin_left", int(round(left * scale)))
+	margin.add_theme_constant_override("margin_top", int(round(top * scale)))
+	margin.add_theme_constant_override("margin_right", int(round(right * scale)))
+	margin.add_theme_constant_override("margin_bottom", int(round(bottom * scale)))
+
+
+func _apply_visual_style(scale: float) -> void:
+	begin_bulk_theme_override()
+	_header_card.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_tool_list_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "Tree", 0, 0))
+	_tool_preview_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_search_edit.add_theme_stylebox_override("normal", _make_theme_style("normal", "LineEdit", 10, 6))
+	_search_edit.add_theme_stylebox_override("focus", _make_theme_style("focus", "LineEdit", 10, 6))
+	_tool_count_label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_search_edit.add_theme_color_override("font_color", get_theme_color("font_color", "LineEdit"))
+	_search_edit.add_theme_color_override("font_placeholder_color", _get_muted_text_color())
+	_tool_tree.add_theme_color_override("font_color", get_theme_color("font_color", "Tree"))
+	_tool_tree.add_theme_color_override("font_selected_color", get_theme_color("font_selected_color", "Tree"))
+	_tool_tree.add_theme_color_override("guide_color", _get_muted_text_color())
+	_tool_tree.remove_theme_constant_override("v_separation")
+	_tool_preview_title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_tool_preview_text.add_theme_color_override("font_color", get_theme_color("font_color", "TextEdit"))
+	_tool_preview_text.add_theme_color_override("font_readonly_color", get_theme_color("font_readonly_color", "TextEdit"))
+	_tool_preview_text.add_theme_stylebox_override("normal", _make_theme_style("normal", "TextEdit", 8, 6))
+	_tool_preview_text.add_theme_stylebox_override("focus", _make_theme_style("focus", "TextEdit", 8, 6))
+	_tool_preview_text.add_theme_stylebox_override("read_only", _make_theme_style("read_only", "TextEdit", 8, 6))
+	_tool_preview_text.remove_theme_constant_override("line_spacing")
+	end_bulk_theme_override()
+
+
+func _make_theme_style(style_name: String, theme_type: String, horizontal_margin: int, vertical_margin: int) -> StyleBox:
+	var style := get_theme_stylebox(style_name, theme_type).duplicate() as StyleBox
+	style.content_margin_left = horizontal_margin
+	style.content_margin_right = horizontal_margin
+	style.content_margin_top = vertical_margin
+	style.content_margin_bottom = vertical_margin
+	return style
+
+
+func _get_muted_text_color() -> Color:
+	return get_theme_color("font_disabled_color", "Editor")
+
+
+func _get_dim_text_color() -> Color:
+	return get_theme_color("font_disabled_color", "Editor")
+
+
+func _get_error_text_color() -> Color:
+	return get_theme_color("error_color", "Editor")
 
 
 func _category_matches_search(model: Dictionary, category: String) -> bool:
@@ -687,7 +954,12 @@ func _matches_tool_search(model: Dictionary, category: String, tool_def: Diction
 	var full_name = "%s_%s" % [category, tool_name]
 	if _get_tool_display_name(localization, full_name, tool_name).to_lower().contains(query):
 		return true
-	if category != INTELLIGENCE_CATEGORY:
+	if _get_tool_description(localization, full_name, tool_def).to_lower().contains(query):
+		return true
+	for action_name in _extract_action_values(tool_def):
+		if _matches_action_search(full_name, str(action_name), tool_def):
+			return true
+	if category != SYSTEM_CATEGORY:
 		return false
 	return _matches_atomic_tool_search_recursive(model, full_name, {})
 
@@ -704,11 +976,25 @@ func _matches_atomic_tool_search(model: Dictionary, atomic_full_name: String, at
 	return description.to_lower().contains(query)
 
 
-func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_name: String, visited: Dictionary) -> bool:
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+func _matches_action_search(parent_tool: String, action_name: String, tool_def: Dictionary) -> bool:
+	var query = _get_search_query()
+	if query.is_empty():
+		return true
+	if _get_action_display_name(parent_tool, action_name).to_lower().contains(query):
+		return true
+	if action_name.to_lower().contains(query):
+		return true
+	var description = _get_action_description(parent_tool, action_name, tool_def)
+	return description.to_lower().contains(query)
+
+
+func _matches_atomic_tool_search_recursive(model: Dictionary, system_full_name: String, visited: Dictionary) -> bool:
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
+		var actions: Array = []
 		if entry is Dictionary:
 			atomic_full_name = str(entry.get("tool", ""))
+			actions = entry.get("actions", [])
 		else:
 			atomic_full_name = str(entry)
 		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
@@ -718,6 +1004,9 @@ func _matches_atomic_tool_search_recursive(model: Dictionary, intelligence_full_
 			continue
 		if _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
 			return true
+		for action_name in actions:
+			if _matches_action_search(atomic_full_name, str(action_name), atomic_tool_def):
+				return true
 		var next_visited = visited.duplicate()
 		next_visited[atomic_full_name] = true
 		if _matches_atomic_tool_search_recursive(model, atomic_full_name, next_visited):
@@ -837,32 +1126,6 @@ func _find_item_by_selection(item: TreeItem) -> TreeItem:
 	return null
 
 
-func _tree_has_hidden_content_below(root: TreeItem) -> bool:
-	var last_item = _find_last_visible_tree_item(root)
-	if last_item == null:
-		return false
-	var rect = _tool_tree.get_item_area_rect(last_item, TREE_TEXT_COLUMN, -1)
-	return rect.position.y + rect.size.y > _tool_tree.size.y + 1.0
-
-
-func _find_last_visible_tree_item(item: TreeItem) -> TreeItem:
-	if item == null:
-		return null
-	var child = item.get_first_child()
-	if child == null:
-		return item
-
-	var last_visible: TreeItem = null
-	while child != null:
-		last_visible = child
-		if not child.collapsed:
-			var deepest = _find_last_visible_tree_item(child)
-			if deepest != null:
-				last_visible = deepest
-		child = child.get_next()
-	return last_visible
-
-
 func _refresh_preview() -> void:
 	if _localization == null:
 		return
@@ -885,6 +1148,8 @@ func _build_preview_text() -> String:
 	match _selected_tree_kind:
 		"domain":
 			return _build_domain_preview()
+		"root":
+			return _build_category_preview()
 		"category":
 			return _build_category_preview()
 		"tool":
@@ -934,9 +1199,15 @@ func _build_category_preview() -> String:
 		var tool_name = str(tool_def.get("name", ""))
 		var full_name = "%s_%s" % [category, tool_name]
 		lines.append("- %s" % _get_tool_display_name(_localization, full_name, tool_name))
-	if category == "intelligence":
+	if category == "user":
+		var watch_lines = _build_user_watch_preview_lines()
+		if not watch_lines.is_empty():
+			lines.append("")
+			lines.append(_localization.get_text("tool_preview_watch_section"))
+			lines.append_array(watch_lines)
+	if category == "system":
 		lines.append("")
-		var hint_key = "tool_preview_intelligence_category_hint"
+		var hint_key = "tool_preview_system_category_hint"
 		var hint_text = _localization.get_text(hint_key)
 		lines.append(hint_text)
 	return "\n".join(_filter_empty_preview_lines(lines))
@@ -959,17 +1230,15 @@ func _build_tool_preview() -> String:
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
 		"",
 		_localization.get_text("tool_preview_description"),
-		description if not description.is_empty() else _localization.get_text("tool_preview_no_description"),
-		"",
-		_localization.get_text("tool_preview_actions")
+		description if not description.is_empty() else _localization.get_text("tool_preview_no_description")
 	]
 
 	var actions = _extract_action_values(tool_def)
-	if actions.is_empty():
-		lines.append(_localization.get_text("tool_preview_no_actions"))
-	else:
+	if not actions.is_empty():
+		lines.append("")
+		lines.append(_localization.get_text("tool_preview_actions"))
 		for action_value in actions:
-			lines.append("- %s" % action_value)
+			lines.append("- %s" % _get_action_display_name(_selected_tree_key, action_value))
 
 	lines.append("")
 	lines.append(_localization.get_text("tool_preview_params"))
@@ -979,7 +1248,14 @@ func _build_tool_preview() -> String:
 	else:
 		lines.append_array(parameter_lines)
 
-	if category == "intelligence":
+	if category == "user":
+		var runtime_lines = _build_user_runtime_preview_lines(tool_def)
+		if not runtime_lines.is_empty():
+			lines.append("")
+			lines.append(_localization.get_text("tool_preview_runtime_section"))
+			lines.append_array(runtime_lines)
+
+	if category == "system":
 		lines.append("")
 		lines.append(_localization.get_text("tool_preview_atomic_tools"))
 		var atomic_lines = _build_atomic_tool_preview_lines(_selected_tree_key, 0, {})
@@ -988,11 +1264,112 @@ func _build_tool_preview() -> String:
 		else:
 			lines.append_array(atomic_lines)
 		lines.append("")
-		var hint_key = "tool_preview_intelligence_tool_hint"
+		var hint_key = "tool_preview_system_tool_hint"
 		var hint_text = _localization.get_text(hint_key)
 		lines.append(hint_text)
 
 	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _build_user_runtime_preview_lines(tool_def: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var runtime_domain = str(tool_def.get("runtime_domain", ""))
+	if not runtime_domain.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_runtime_domain"), runtime_domain])
+	var runtime_version = int(tool_def.get("runtime_version", 0))
+	if runtime_version > 0:
+		lines.append("%s: %d" % [_localization.get_text("tool_preview_runtime_version"), runtime_version])
+	var runtime_state = _get_user_runtime_state_label(str(tool_def.get("state", "")))
+	if not runtime_state.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_runtime_state"), runtime_state])
+	lines.append("%s: %s" % [
+		_localization.get_text("tool_preview_pending_reload"),
+		_localization.get_text("status_enabled") if bool(tool_def.get("pending_reload", false)) else _localization.get_text("status_disabled")
+	])
+	var discovery_source = _get_user_watch_source_label(str(tool_def.get("discovery_source", "")))
+	if not discovery_source.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_discovery_source"), discovery_source])
+	var last_refresh_reason = _get_user_watch_reason_label(str(tool_def.get("last_refresh_reason", "")))
+	if not last_refresh_reason.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_last_refresh_reason"), last_refresh_reason])
+	var script_path = str(tool_def.get("script_path", ""))
+	if not script_path.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_script_path"), script_path])
+	var last_error = str(tool_def.get("last_error", ""))
+	if not last_error.is_empty():
+		lines.append("%s: %s" % [_localization.get_text("tool_preview_last_error"), last_error])
+	var raw_state = str(tool_def.get("state", ""))
+	if raw_state == "reload_failed":
+		lines.append(_localization.get_text("tool_preview_reload_failed_keeps_old_version"))
+	elif raw_state == "waiting_quiesce":
+		lines.append(_localization.get_text("tool_preview_waiting_quiesce"))
+	return lines
+
+
+func _build_user_watch_preview_lines() -> Array[String]:
+	var lines: Array[String] = []
+	var watch_status: Dictionary = _current_model.get("user_tool_watch", {})
+	if not watch_status.is_empty():
+		var watching = bool(watch_status.get("watching", false))
+		lines.append("%s: %s" % [
+			_localization.get_text("tool_preview_watch_status"),
+			_localization.get_text("status_enabled") if watching else _localization.get_text("status_disabled")
+		])
+		lines.append("%s: %d" % [
+			_localization.get_text("tool_preview_watch_known_scripts"),
+			int(watch_status.get("known_script_count", 0))
+		])
+		var last_reason = _get_user_watch_reason_label(str(watch_status.get("last_change_reason", "")))
+		if not last_reason.is_empty():
+			lines.append("%s: %s" % [_localization.get_text("tool_preview_last_refresh_reason"), last_reason])
+		var last_error = str(watch_status.get("last_error", ""))
+		if not last_error.is_empty():
+			lines.append("%s: %s" % [_localization.get_text("tool_preview_watch_last_error"), last_error])
+	var invalid_tools: Array[String] = []
+	for tool_info in _current_model.get("user_tools", []):
+		if not (tool_info is Dictionary):
+			continue
+		var info := tool_info as Dictionary
+		if bool(info.get("loadable", false)):
+			continue
+		var display_name = str(info.get("display_name", info.get("script_path", "")))
+		var load_error = str(info.get("load_error", ""))
+		invalid_tools.append("%s (%s)" % [display_name, load_error if not load_error.is_empty() else "invalid"])
+	if not invalid_tools.is_empty():
+		lines.append("%s: %d" % [_localization.get_text("tool_preview_watch_invalid_scripts"), invalid_tools.size()])
+		for invalid_entry in invalid_tools:
+			lines.append("- %s" % invalid_entry)
+	return lines
+
+
+func _get_user_runtime_state_label(state: String) -> String:
+	if state.is_empty():
+		return ""
+	var key = "tool_preview_runtime_state_%s" % state
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(state)
+
+
+func _get_user_watch_source_label(source: String) -> String:
+	if source.is_empty():
+		return ""
+	var key = "tool_preview_discovery_source_%s" % source
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(source)
+
+
+func _get_user_watch_reason_label(reason: String) -> String:
+	if reason.is_empty():
+		return ""
+	var key = "tool_preview_watch_reason_%s" % reason
+	var translated = _localization.get_text(key)
+	if translated != key:
+		return translated
+	return _humanize_identifier(reason)
 
 
 func _build_atomic_item_preview() -> String:
@@ -1019,7 +1396,7 @@ func _build_atomic_item_preview() -> String:
 		lines.append("")
 		lines.append(_localization.get_text("tool_preview_actions"))
 		for action_value in actions:
-			lines.append("- %s" % action_value)
+			lines.append("- %s" % _get_action_display_name(atomic_full_name, action_value))
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
@@ -1037,9 +1414,13 @@ func _build_action_item_preview() -> String:
 	var tool_name = str(tool_def.get("name", "")) if not tool_def.is_empty() else parent_tool
 	var display_name = _get_tool_display_name(_localization, parent_tool, tool_name) if not tool_def.is_empty() else parent_tool
 	var lines: Array[String] = [
-		"Action: %s" % action_name,
-		"%s: %s" % [_localization.get_text("tool_preview_tool"), display_name],
+		"%s: %s" % [_localization.get_text("tool_action"), _get_action_display_name(parent_tool, action_name)],
+		"%s: %s" % [_localization.get_text("tool_preview_action_id"), action_name],
+		"%s: %s" % [_localization.get_text("tool_preview_parent_tool"), display_name],
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
+		"",
+		_localization.get_text("tool_preview_description"),
+		_get_action_description(parent_tool, action_name, tool_def),
 	]
 	if not tool_def.is_empty():
 		var param_lines = _build_action_parameter_lines(tool_def)
@@ -1116,9 +1497,9 @@ func _extract_category_from_full_name(model: Dictionary, full_name: String) -> S
 	return ""
 
 
-func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
+func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
 	var lines: Array[String] = []
-	for entry in IntelligenceTreeCatalog.INTELLIGENCE_TOOL_ATOMIC_CHILDREN.get(intelligence_full_name, []):
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
 		if entry is Dictionary:
@@ -1139,8 +1520,8 @@ func _build_atomic_tool_preview_lines(intelligence_full_name: String, depth: int
 		var indent = "  ".repeat(depth)
 		lines.append("%s- %s" % [indent, display_name])
 		for action_name in actions:
-			lines.append("%s  · %s" % [indent, str(action_name)])
-		if category == INTELLIGENCE_CATEGORY:
+			lines.append("%s  - %s" % [indent, _get_action_display_name(atomic_full_name, str(action_name))])
+		if category == SYSTEM_CATEGORY:
 			var next_visited = visited.duplicate()
 			next_visited[atomic_full_name] = true
 			lines.append_array(_build_atomic_tool_preview_lines(atomic_full_name, depth + 1, next_visited))
@@ -1234,7 +1615,8 @@ func _build_tree_signature(model: Dictionary) -> String:
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
-		JSON.stringify(model.get("tool_load_errors", []))
+		JSON.stringify(model.get("tool_load_errors", [])),
+		JSON.stringify(model.get("toolTree", []))
 	]
 	var categories: Array = tools_by_category.keys()
 	categories.sort()

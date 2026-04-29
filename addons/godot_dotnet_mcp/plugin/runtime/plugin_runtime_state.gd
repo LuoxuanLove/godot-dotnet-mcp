@@ -2,127 +2,59 @@
 extends RefCounted
 class_name PluginRuntimeState
 
-const SETTINGS_PATH = "user://godot_dotnet_mcp_settings.json"
-const TOOL_PROFILE_DIR = "user://godot_dotnet_mcp_tool_profiles"
-const PERMISSION_STABLE := "stable"
-const PERMISSION_EVOLUTION := "evolution"
-const PERMISSION_DEVELOPER := "developer"
-const PERMISSION_LEVELS := [PERMISSION_STABLE, PERMISSION_EVOLUTION, PERMISSION_DEVELOPER]
-const PLUGIN_CATEGORY_PERMISSION_LEVELS := {
-	"plugin": PERMISSION_DEVELOPER,
-	"plugin_runtime": PERMISSION_STABLE,
-	"plugin_evolution": PERMISSION_EVOLUTION,
-	"plugin_developer": PERMISSION_DEVELOPER
-}
+const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 
-const ALL_TOOL_CATEGORIES = [
-	"scene", "node", "script", "resource", "filesystem", "project", "editor", "debug",
-	"plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "group", "signal", "animation", "material", "shader", "lighting", "particle", "tilemap", "geometry",
-	"physics", "navigation", "audio", "ui", "user", "intelligence"
-]
+const SETTINGS_PATH := "user://godot_dotnet_mcp/settings.json"
+const TOOL_PROFILE_DIR := ToolProfileCatalog.PROFILE_STORAGE_DIR
 
-const DEFAULT_COLLAPSED_DOMAINS = ["core", "plugin", "visual", "gameplay", "interface", "user", "other"]
-const DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS: Array = [
-	"intelligence_project_state",
-	"intelligence_project_advise",
-	"intelligence_runtime_diagnose",
-	"intelligence_project_configure",
-	"intelligence_project_run",
-	"intelligence_project_stop",
-	"intelligence_bindings_audit",
-	"intelligence_scene_validate",
-	"intelligence_scene_analyze",
-	"intelligence_scene_patch",
-	"intelligence_script_analyze",
-	"intelligence_script_patch",
-	"intelligence_project_index_build",
-	"intelligence_project_symbol_search",
-	"intelligence_scene_dependency_graph"
-]
-
-const BUILTIN_TOOL_PROFILES = [
-	{
-		"id": "intelligence",
-		"name_key": "tool_profile_intelligence",
-		"desc_key": "tool_profile_intelligence_desc",
-		"enabled_categories": ["intelligence"]
-	},
-	{
-		"id": "task",
-		"name_key": "tool_profile_task",
-		"desc_key": "tool_profile_task_desc",
-		"enabled_categories": ["intelligence", "project", "scene", "script", "debug", "plugin_runtime", "plugin_developer", "filesystem"]
-	},
-	{
-		"id": "slim",
-		"name_key": "tool_profile_slim",
-		"desc_key": "tool_profile_slim_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_developer", "debug", "group", "signal", "intelligence"]
-	},
-	{
-		"id": "default",
-		"name_key": "tool_profile_default",
-		"desc_key": "tool_profile_default_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "group", "signal", "animation", "physics", "navigation", "audio", "ui", "intelligence"]
-	},
-	{
-		"id": "full",
-		"name_key": "tool_profile_full",
-		"desc_key": "tool_profile_full_desc",
-		"enabled_categories": [],
-		"excluded_categories": ["user"]
-	}
-]
-
-const TOOL_DOMAIN_DEFS = [
-	{
-		"key": "core",
-		"label": "domain_core",
-		"categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "debug", "group", "signal", "intelligence"]
-	},
-	{
-		"key": "plugin",
-		"label": "domain_plugin",
-		"categories": ["plugin_runtime", "plugin_evolution", "plugin_developer"]
-	},
-	{
-		"key": "visual",
-		"label": "domain_visual",
-		"categories": ["material", "shader", "lighting", "particle", "tilemap", "geometry", "animation"]
-	},
-	{
-		"key": "gameplay",
-		"label": "domain_gameplay",
-		"categories": ["physics", "navigation", "audio"]
-	},
-	{
-		"key": "interface",
-		"label": "domain_interface",
-		"categories": ["ui"]
-	},
-	{
-		"key": "user",
-		"label": "domain_user",
-		"categories": ["user"]
-	}
-]
-
-const DEFAULT_SETTINGS = {
-	"port": 3000,
-	"host": "127.0.0.1",
-	"transport_mode": "http",
+const DEFAULT_SETTINGS: Dictionary = {
 	"auto_start": true,
+	"client_manual_paths": {},
+	"current_cli_scope": "user",
+	"current_config_platform": "claude_desktop",
 	"debug_mode": true,
-	"log_level": "info",
-	"permission_level": PERMISSION_EVOLUTION,
 	"disabled_tools": [],
-	"tool_profile_id": "intelligence",
-	"language": "",
-	"show_user_tools": false,
-	"collapsed_nodes": {}
+	"host": "127.0.0.1",
+	"language": "en",
+	"log_level": "info",
+	"port": 3000,
+	"show_user_tools": true,
+	"tool_profile_id": "default"
 }
 
-var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)
+const ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.ALL_TOOL_CATEGORIES
+const DEFAULT_COLLAPSED_DOMAINS: Array[String] = []
+
+const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL_PROFILES
+const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
+const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
+	"system_bindings_audit",
+	"system_editor_log",
+	"system_editor_state",
+	"system_help",
+	"system_project_configure",
+	"system_project_files",
+	"system_project_index_build",
+	"system_project_run",
+	"system_project_state",
+	"system_project_stop",
+	"system_project_symbol_search",
+	"system_runtime_capture",
+	"system_runtime_control",
+	"system_runtime_diagnose",
+	"system_runtime_input",
+	"system_runtime_step",
+	"system_scene_analyze",
+	"system_scene_dependency_graph",
+	"system_scene_patch",
+	"system_scene_tree",
+	"system_scene_validate",
+	"system_script_analyze",
+	"system_script_patch"
+]
+
+var settings: Dictionary = {}
 var custom_tool_profiles: Dictionary = {}
 var current_cli_scope := "user"
 var current_config_platform := "claude_desktop"
@@ -131,85 +63,17 @@ var restore_focus := false
 var needs_initial_tool_profile_apply := false
 
 
-func resolve_active_language(localization_service) -> String:
-	if not str(settings.get("language", "")).is_empty():
-		return str(settings["language"])
-	if localization_service:
-		return str(localization_service.get_language())
+func resolve_active_language(localization) -> String:
+	if settings is Dictionary:
+		var configured_language = str(settings.get("language", "")).strip_edges()
+		if not configured_language.is_empty():
+			return configured_language
+	if localization != null and localization.has_method("get_language"):
+		var localization_language = str(localization.get_language()).strip_edges()
+		if not localization_language.is_empty():
+			return localization_language
 	return "en"
 
 
-static func normalize_permission_level(raw_level: String) -> String:
-	var level = str(raw_level)
-	if PERMISSION_LEVELS.has(level):
-		return level
-	return PERMISSION_EVOLUTION
-
-
-static func get_category_permission_level(category: String) -> String:
-	# Any category not explicitly listed here is treated as stable by default.
-	return str(PLUGIN_CATEGORY_PERMISSION_LEVELS.get(category, PERMISSION_STABLE))
-
-
-static func get_domain_category_consistency_issues(domain_defs: Array = TOOL_DOMAIN_DEFS) -> Array[String]:
-	var issues: Array[String] = []
-	var known_categories := {}
-	for category in ALL_TOOL_CATEGORIES:
-		known_categories[str(category)] = true
-
-	for domain_def in domain_defs:
-		var domain_key = str(domain_def.get("key", ""))
-		for category in domain_def.get("categories", []):
-			var category_name = str(category)
-			if not known_categories.has(category_name):
-				issues.append("Unknown category '%s' declared in domain '%s'" % [category_name, domain_key])
-			elif domain_key == "plugin" and not PLUGIN_CATEGORY_PERMISSION_LEVELS.has(category_name):
-				issues.append("Plugin category '%s' is missing an explicit permission level" % category_name)
-	return issues
-
-
-static func permission_allows_category(level: String, category: String) -> bool:
-	return _permission_rank(normalize_permission_level(level)) >= _permission_rank(get_category_permission_level(category))
-
-
-static func permission_allows_tool(level: String, tool_name: String) -> bool:
-	var category = extract_category_from_tool_name(tool_name)
-	if category.is_empty():
-		return true
-	return permission_allows_category(level, category)
-
-
-static func extract_category_from_tool_name(tool_name: String) -> String:
-	var best_match := ""
-	for category in PLUGIN_CATEGORY_PERMISSION_LEVELS.keys():
-		var prefix = "%s_" % str(category)
-		if tool_name.begins_with(prefix) and prefix.length() > best_match.length():
-			best_match = str(category)
-	return best_match
-
-
-static func get_domain_permission_level(domain_key: String, domain_defs: Array) -> String:
-	var required_level = PERMISSION_STABLE
-	for domain_def in domain_defs:
-		if str(domain_def.get("key", "")) != domain_key:
-			continue
-		for category in domain_def.get("categories", []):
-			var level = get_category_permission_level(str(category))
-			if _permission_rank(level) > _permission_rank(required_level):
-				required_level = level
-		break
-	return required_level
-
-
-static func permission_allows_domain(level: String, domain_key: String, domain_defs: Array) -> bool:
-	return _permission_rank(normalize_permission_level(level)) >= _permission_rank(get_domain_permission_level(domain_key, domain_defs))
-
-
-static func _permission_rank(level: String) -> int:
-	match normalize_permission_level(level):
-		PERMISSION_DEVELOPER:
-			return 2
-		PERMISSION_EVOLUTION:
-			return 1
-		_:
-			return 0
+static func build_default_settings() -> Dictionary:
+	return DEFAULT_SETTINGS.duplicate(true)

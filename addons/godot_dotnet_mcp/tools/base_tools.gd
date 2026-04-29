@@ -15,6 +15,36 @@ var _node_utils := NodeUtils.new()
 var _script_parser := ScriptParser.new()
 var _file_utils := FileUtils.new()
 var _json_utils := JsonUtils.new()
+var _context: Dictionary = {}
+var _editor_interface_override = null
+var _scene_root_override = null
+var _selection_override = null
+var _filesystem_override = null
+var _undo_redo_override = null
+
+
+func configure_context(context = null) -> void:
+	if context == null:
+		dispose_context()
+		return
+	if context is Dictionary:
+		_context = (context as Dictionary).duplicate(true)
+	else:
+		_context = {}
+	_editor_interface_override = _context.get("editor_interface", null)
+	_scene_root_override = _context.get("scene_root", null)
+	_selection_override = _context.get("selection", null)
+	_filesystem_override = _context.get("filesystem", null)
+	_undo_redo_override = _context.get("undo_redo", null)
+
+
+func dispose_context() -> void:
+	_context = {}
+	_editor_interface_override = null
+	_scene_root_override = null
+	_selection_override = null
+	_filesystem_override = null
+	_undo_redo_override = null
 
 
 func get_tools() -> Array[Dictionary]:
@@ -86,19 +116,44 @@ func _parse_gdscript_metadata(path: String, content: String) -> Dictionary:
 
 
 func _get_editor_interface() -> EditorInterface:
+	if _editor_interface_override != null:
+		return _editor_interface_override
+	if not Engine.is_editor_hint():
+		return null
 	return _node_utils.get_editor_interface()
 
 
 func _get_edited_scene_root() -> Node:
+	if _scene_root_override != null:
+		return _scene_root_override
+	if not Engine.is_editor_hint():
+		return null
 	return _node_utils.get_edited_scene_root()
 
 
 func _get_selection() -> EditorSelection:
+	if _selection_override != null:
+		return _selection_override
+	if not Engine.is_editor_hint():
+		return null
 	return _node_utils.get_selection()
 
 
 func _get_filesystem() -> EditorFileSystem:
+	if _filesystem_override != null:
+		return _filesystem_override
+	if not Engine.is_editor_hint():
+		return null
 	return _node_utils.get_filesystem()
+
+
+func _get_undo_redo():
+	if _undo_redo_override != null:
+		return _undo_redo_override
+	var editor_interface = _get_editor_interface()
+	if editor_interface != null and editor_interface.has_method("get_editor_undo_redo"):
+		return editor_interface.get_editor_undo_redo()
+	return null
 
 
 func _get_scene_path(node: Node) -> String:
@@ -110,7 +165,20 @@ func _node_to_dict(node: Node, include_children: bool = false, max_depth: int = 
 
 
 func _find_node_by_path(path: String) -> Node:
-	return _node_utils.find_node_by_path(path)
+	var root = _scene_root_override
+	if root == null:
+		root = _node_utils.get_edited_scene_root()
+	if root == null:
+		return null
+
+	var normalized_path = _node_utils.normalize_node_path(path, root)
+	if normalized_path.is_empty() or normalized_path == ".":
+		return root
+	if normalized_path.begins_with("/"):
+		var absolute_node = root.get_node_or_null(NodePath(normalized_path))
+		if absolute_node != null:
+			return absolute_node
+	return root.get_node_or_null(NodePath(normalized_path))
 
 
 func _normalize_node_path(path: String, root: Node = null) -> String:

@@ -9,8 +9,8 @@ class_name MCPStdioServer
 ##   godot --headless --path /path/to/project --script res://addons/.../mcp_stdio_entry.gd
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
-const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
 
@@ -19,9 +19,6 @@ var _buffer: PackedByteArray = PackedByteArray()
 var _tool_loader        # injected by server_runtime_controller, shared with HTTP server
 var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
-const MCP_VERSION = "2025-06-18"
-const SERVER_NAME = "godot-mcp-server"
-const SERVER_VERSION = "0.5.0"
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 
 
@@ -56,8 +53,10 @@ func set_disabled_tools(disabled: Array) -> void:
 
 func get_gdscript_lsp_diagnostics_service():
 	if _tool_loader != null and _tool_loader.has_method("get_gdscript_lsp_diagnostics_service"):
-		return _tool_loader.get_gdscript_lsp_diagnostics_service()
-	return GDScriptLspDiagnosticsService.get_singleton()
+		var service = _tool_loader.get_gdscript_lsp_diagnostics_service()
+		if service != null:
+			return service
+	return null
 
 
 func _process(_delta: float) -> void:
@@ -104,7 +103,7 @@ func _try_parse_frame() -> bool:
 
 
 func _handle_request(body: String) -> void:
-	_log("Parsing request (%d bytes)" % body.length(), "trace")
+	_log("Parsing request (%d bytes)" % body.length(), "debug")
 	var json := JSON.new()
 	if json.parse(body) != OK:
 		_write_response(_create_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null))
@@ -132,9 +131,10 @@ func _handle_request(body: String) -> void:
 	match method:
 		"initialize":
 			response = _create_json_rpc_response({
-				"protocolVersion": MCP_VERSION,
+				"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+				"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
 				"capabilities": {"tools": {"listChanged": false}},
-				"serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION}
+				"serverInfo": MCPProtocolFacts.build_server_info()
 			}, id)
 		"initialized", "notifications/initialized":
 			response = _create_json_rpc_response({}, id)
@@ -153,19 +153,22 @@ func _handle_request(body: String) -> void:
 func _handle_tools_list(id) -> Dictionary:
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var tools_list: Array[Dictionary] = []
-	for tool_def in _tool_loader.get_exposed_tool_definitions():
-		tools_list.append({
-			"name": tool_def["name"],
-			"description": tool_def.get("description", ""),
-			"category": tool_def.get("category", ""),
-			"domainKey": tool_def.get("domain_key", "other"),
-			"loadState": tool_def.get("load_state", "definitions_only"),
-			"source": tool_def.get("source", "builtin"),
-			"enabled": bool(tool_def.get("enabled", true)),
-			"inputSchema": tool_def.get("inputSchema", {"type": "object", "properties": {}})
-		})
-	return _create_json_rpc_response({"tools": tools_list}, id)
+	var exposed_tools = _tool_loader.get_exposed_tool_definitions()
+	var all_tools_by_category := {}
+	if _tool_loader.has_method("get_all_tools_by_category"):
+		all_tools_by_category = _tool_loader.get_all_tools_by_category()
+	elif _tool_loader.has_method("get_tools_by_category"):
+		all_tools_by_category = _tool_loader.get_tools_by_category()
+	var domain_states := []
+	if _tool_loader.has_method("get_domain_states"):
+		domain_states = _tool_loader.get_domain_states()
+	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+	return _create_json_rpc_response({
+		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
+		"presentationVersion": int(presentation.get("presentationVersion", 1)),
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", [])
+	}, id)
 
 
 func _handle_tools_call(params: Dictionary, id) -> Dictionary:
@@ -178,6 +181,8 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
 	if _disabled_tools.has(tool_name):
 		return _create_tool_response({"success": false, "error": "Tool '%s' is disabled" % tool_name}, id)
+	if _tool_loader.has_method("is_tool_exposed") and not bool(_tool_loader.is_tool_exposed(tool_name)):
+		return _create_tool_response({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, id)
 
 	var resolved := _resolve_tool_call_name(tool_name)
 	if not bool(resolved.get("success", false)):

@@ -4,11 +4,10 @@ class_name MCPDebugBuffer
 
 const MAX_EVENTS := 200
 const LEVEL_ORDER := {
-	"trace": 0,
-	"debug": 1,
-	"info": 2,
-	"warning": 3,
-	"error": 4
+	"debug": 0,
+	"info": 1,
+	"warning": 2,
+	"error": 3
 }
 
 static var _events: Array[Dictionary] = []
@@ -18,13 +17,14 @@ static var _minimum_level := "info"
 static func record(level: String, source: String, message: String, tool_name: String = "", metadata: Dictionary = {}) -> void:
 	if message.is_empty():
 		return
-	if not _should_record(level):
+	var normalized_level := _normalize_level(level)
+	if not _should_record(normalized_level):
 		return
 
 	var event := {
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
 		"timestamp_text": Time.get_datetime_string_from_system(true, true),
-		"level": level,
+		"level": normalized_level,
 		"source": source,
 		"message": message,
 		"tool_name": tool_name
@@ -67,7 +67,7 @@ static func size() -> int:
 
 
 static func set_minimum_level(level: String) -> void:
-	var normalized = str(level).to_lower()
+	var normalized = _normalize_level(level)
 	_minimum_level = normalized if LEVEL_ORDER.has(normalized) else "info"
 
 
@@ -76,11 +76,18 @@ static func get_minimum_level() -> String:
 
 
 static func get_available_levels() -> Array[String]:
-	return ["trace", "debug", "info", "warning", "error"]
+	return ["debug", "info", "warning", "error"]
 
 
 static func _should_record(level: String) -> bool:
-	var normalized = str(level).to_lower()
+	var normalized = _normalize_level(level)
 	var current_rank = int(LEVEL_ORDER.get(normalized, LEVEL_ORDER["info"]))
 	var threshold_rank = int(LEVEL_ORDER.get(_minimum_level, LEVEL_ORDER["info"]))
 	return current_rank >= threshold_rank
+
+
+static func _normalize_level(level: String) -> String:
+	var normalized = str(level).to_lower()
+	if normalized == "trace":
+		return "debug"
+	return normalized

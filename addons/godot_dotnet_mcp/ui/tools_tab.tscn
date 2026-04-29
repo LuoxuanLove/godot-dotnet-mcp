@@ -1,69 +1,31 @@
 [gd_scene format=3 uid="uid://cxcsjc8225x3f"]
 
-[ext_resource type="Script" uid="uid://dgj3nw3kbbfdq" path="res://addons/godot_dotnet_mcp/ui/tools_tab.gd" id="1"]
-
-[sub_resource type="Shader" id="Shader_pyddu"]
-code = "
-shader_type canvas_item;
-
-uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 0.58);
-uniform bool invert_gradient = false;
-
-void fragment() {
-	float amount = 1.0 - UV.y;
-	if (invert_gradient) {
-		amount = UV.y;
-	}
-	float alpha = pow(amount, 1.35) * shadow_color.a;
-	COLOR = vec4(shadow_color.rgb, alpha);
-}
-"
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_2sfso"]
-shader = SubResource("Shader_pyddu")
-shader_parameter/shadow_color = Color(0, 0, 0, 0.58)
-shader_parameter/invert_gradient = false
-
-[sub_resource type="Shader" id="Shader_28ayu"]
-code = "
-shader_type canvas_item;
-
-uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 0.58);
-uniform bool invert_gradient = false;
-
-void fragment() {
-	float amount = 1.0 - UV.y;
-	if (invert_gradient) {
-		amount = UV.y;
-	}
-	float alpha = pow(amount, 1.35) * shadow_color.a;
-	COLOR = vec4(shadow_color.rgb, alpha);
-}
-"
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_r4egy"]
-shader = SubResource("Shader_28ayu")
-shader_parameter/shadow_color = Color(0, 0, 0, 0.58)
-shader_parameter/invert_gradient = true
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/tools_tab.gd" id="1"]
 
 [node name="ToolsTab" type="VBoxContainer" unique_id=1359971748]
 auto_translate_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1")
+theme_override_constants/separation = 8
 
-[node name="HeaderMargin" type="MarginContainer" parent="." unique_id=1844552649]
+[node name="HeaderCard" type="PanelContainer" parent="." unique_id=1375338534]
+unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 8
+size_flags_horizontal = 3
 
-[node name="HeaderContent" type="VBoxContainer" parent="HeaderMargin" unique_id=84731291]
+[node name="HeaderMargin" type="MarginContainer" parent="HeaderCard" unique_id=1844552649]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="HeaderContent" type="VBoxContainer" parent="HeaderCard/HeaderMargin" unique_id=84731291]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ToolCountLabel" type="Label" parent="HeaderMargin/HeaderContent" unique_id=150408818]
+[node name="ToolCountLabel" type="Label" parent="HeaderCard/HeaderMargin/HeaderContent" unique_id=150408818]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -89,10 +51,10 @@ size_flags_horizontal = 3
 [node name="SearchOuterMargin" type="MarginContainer" parent="ContentSplit/TopPane" unique_id=1080900856]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 4
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
 
 [node name="ToolSearchEdit" type="LineEdit" parent="ContentSplit/TopPane/SearchOuterMargin" unique_id=1258423127]
 unique_name_in_owner = true
@@ -103,12 +65,13 @@ size_flags_horizontal = 3
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 0
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
 
 [node name="ToolListPanel" type="PanelContainer" parent="ContentSplit/TopPane/ToolListOuterMargin" unique_id=1581494068]
+unique_name_in_owner = true
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -127,10 +90,10 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/margin_left = 4
-theme_override_constants/margin_top = 2
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 0
-theme_override_constants/margin_bottom = 2
+theme_override_constants/margin_bottom = 6
 
 [node name="ToolTree" type="Tree" parent="ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin" unique_id=59884650]
 unique_name_in_owner = true
@@ -139,41 +102,8 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 columns = 2
 allow_reselect = true
-hide_root = false
+hide_root = true
 select_mode = 1
-
-[node name="TopShadow" type="ColorRect" parent="ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay" unique_id=786619846]
-unique_name_in_owner = true
-visible = false
-z_index = 8
-material = SubResource("ShaderMaterial_2sfso")
-custom_minimum_size = Vector2(0, 18)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = -12.0
-offset_right = 12.0
-offset_bottom = 18.0
-grow_horizontal = 2
-mouse_filter = 2
-
-[node name="BottomShadow" type="ColorRect" parent="ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay" unique_id=431205526]
-unique_name_in_owner = true
-visible = false
-z_index = 8
-material = SubResource("ShaderMaterial_r4egy")
-custom_minimum_size = Vector2(0, 18)
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -12.0
-offset_top = -18.0
-offset_right = 12.0
-grow_horizontal = 2
-grow_vertical = 0
-mouse_filter = 2
 
 [node name="PreviewSeparator" type="HSeparator" parent="ContentSplit/TopPane" unique_id=491142597]
 unique_name_in_owner = true
@@ -183,16 +113,16 @@ layout_mode = 2
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 
 [node name="PreviewOuterMargin" type="MarginContainer" parent="ContentSplit/BottomPane" unique_id=550482415]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 4
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
 
 [node name="ToolPreviewPanel" type="PanelContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin" unique_id=1363009670]
 unique_name_in_owner = true
@@ -204,14 +134,14 @@ size_flags_vertical = 3
 
 [node name="ToolPreviewMargin" type="MarginContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel" unique_id=1852566438]
 layout_mode = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 12
 
 [node name="ToolPreviewContent" type="VBoxContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin" unique_id=1749691677]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="ToolPreviewTitle" type="Label" parent="ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent" unique_id=89596792]
 unique_name_in_owner = true

@@ -1,5 +1,6 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
+class_name MCPNodeTools
 
 ## Node operation tools for Godot MCP
 ## Comprehensive node management including signals, groups, transforms, properties, and more
@@ -1084,592 +1085,6 @@ func _check_revert(node: Node, property: String) -> Dictionary:
 	return _success(result)
 
 
-# ==================== HIERARCHY ====================
-
-func _execute_hierarchy(args: Dictionary) -> Dictionary:
-	var action = args.get("action", "")
-	var path = args.get("path", "")
-
-	if path.is_empty():
-		return _error("Path is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	match action:
-		"reparent": return _reparent_node(node, args.get("new_parent", ""), args.get("keep_global", true))
-		"reorder": return _reorder_node(node, args.get("index", 0))
-		"move_up": return _move_sibling(node, -1)
-		"move_down": return _move_sibling(node, 1)
-		"move_to_front": return _move_to_front(node)
-		"move_to_back": return _move_to_back(node)
-		"set_owner": return _set_owner(node, args.get("owner_path", ""))
-		"get_owner": return _get_owner(node)
-		_: return _error("Unknown action: %s" % action)
-
-
-func _reparent_node(node: Node, new_parent_path: String, keep_global: bool) -> Dictionary:
-	if new_parent_path.is_empty():
-		return _error("New parent path is required")
-
-	var new_parent = _find_node_by_path(new_parent_path)
-	if not new_parent:
-		return _error("New parent not found: %s" % new_parent_path)
-
-	if node == _get_edited_scene_root():
-		return _error("Cannot reparent scene root")
-
-	var old_parent_path = _get_scene_path(node.get_parent())
-	node.reparent(new_parent, keep_global)
-	node.owner = _get_edited_scene_root()
-
-	return _success({
-		"path": _get_scene_path(node),
-		"old_parent": old_parent_path,
-		"new_parent": new_parent_path,
-		"keep_global": keep_global
-	}, "Node reparented")
-
-
-func _reorder_node(node: Node, index: int) -> Dictionary:
-	var parent = node.get_parent()
-	if not parent:
-		return _error("Node has no parent")
-
-	parent.move_child(node, index)
-
-	return _success({
-		"path": _get_scene_path(node),
-		"new_index": node.get_index()
-	}, "Node reordered")
-
-
-func _move_sibling(node: Node, direction: int) -> Dictionary:
-	var parent = node.get_parent()
-	if not parent:
-		return _error("Node has no parent")
-
-	var current_index = node.get_index()
-	var new_index = current_index + direction
-
-	if new_index < 0 or new_index >= parent.get_child_count():
-		return _error("Cannot move node further in that direction")
-
-	parent.move_child(node, new_index)
-
-	return _success({
-		"path": _get_scene_path(node),
-		"old_index": current_index,
-		"new_index": node.get_index()
-	}, "Node moved")
-
-
-func _move_to_front(node: Node) -> Dictionary:
-	var parent = node.get_parent()
-	if not parent:
-		return _error("Node has no parent")
-
-	parent.move_child(node, parent.get_child_count() - 1)
-	return _success({"path": _get_scene_path(node), "new_index": node.get_index()}, "Node moved to front")
-
-
-func _move_to_back(node: Node) -> Dictionary:
-	var parent = node.get_parent()
-	if not parent:
-		return _error("Node has no parent")
-
-	parent.move_child(node, 0)
-	return _success({"path": _get_scene_path(node), "new_index": node.get_index()}, "Node moved to back")
-
-
-func _set_owner(node: Node, owner_path: String) -> Dictionary:
-	var new_owner = _find_node_by_path(owner_path) if not owner_path.is_empty() else _get_edited_scene_root()
-	if not new_owner:
-		return _error("Owner not found: %s" % owner_path)
-
-	node.owner = new_owner
-	return _success({"path": _get_scene_path(node), "owner": _get_scene_path(new_owner)}, "Owner set")
-
-
-func _get_owner(node: Node) -> Dictionary:
-	var owner = node.owner
-	return _success({
-		"path": _get_scene_path(node),
-		"owner": _get_scene_path(owner) if owner else null
-	})
-
-
-# ==================== SIGNAL ====================
-
-func _execute_signal(args: Dictionary) -> Dictionary:
-	var action = args.get("action", "")
-
-	match action:
-		"list": return _list_signals(args.get("path", ""))
-		"has": return _has_signal(args.get("path", ""), args.get("signal_name", ""))
-		"get_connections": return _get_signal_connections(args.get("path", ""), args.get("signal_name", ""))
-		"get_incoming": return _get_incoming_connections(args.get("path", ""))
-		"connect": return _connect_signal(args)
-		"disconnect": return _disconnect_signal(args)
-		"disconnect_all": return _disconnect_all(args.get("path", ""), args.get("signal_name", ""))
-		"is_connected": return _is_signal_connected(args)
-		"emit": return _emit_signal(args.get("path", ""), args.get("signal_name", ""), args.get("args", []))
-		"add_user_signal": return _add_user_signal(args)
-		"remove_user_signal": return _remove_user_signal(args.get("path", ""), args.get("signal_name", ""))
-		_: return _error("Unknown action: %s" % action)
-
-
-func _list_signals(path: String) -> Dictionary:
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	var signals: Array[Dictionary] = []
-	for sig in node.get_signal_list():
-		var sig_info = {"name": str(sig.name), "args": []}
-		for arg in sig.args:
-			sig_info["args"].append({"name": str(arg.name), "type": arg.type, "type_name": _type_to_string(arg.type)})
-
-		# Get connection count
-		var connections = node.get_signal_connection_list(sig.name)
-		sig_info["connection_count"] = connections.size()
-		signals.append(sig_info)
-
-	return _success({"path": path, "count": signals.size(), "signals": signals})
-
-
-func _has_signal(path: String, signal_name: String) -> Dictionary:
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	return _success({
-		"path": path,
-		"signal_name": signal_name,
-		"exists": node.has_signal(signal_name)
-	})
-
-
-func _get_signal_connections(path: String, signal_name: String) -> Dictionary:
-	if signal_name.is_empty():
-		return _error("Signal name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	var connections: Array[Dictionary] = []
-	for conn in node.get_signal_connection_list(signal_name):
-		var target_obj = conn.callable.get_object()
-		connections.append({
-			"signal": str(conn.signal.get_name()),
-			"target": _get_scene_path(target_obj) if target_obj and target_obj is Node else str(target_obj),
-			"method": str(conn.callable.get_method()),
-			"flags": conn.flags
-		})
-
-	return _success({"path": path, "signal": signal_name, "count": connections.size(), "connections": connections})
-
-
-func _get_incoming_connections(path: String) -> Dictionary:
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	var connections: Array[Dictionary] = []
-	for conn in node.get_incoming_connections():
-		var source_obj = conn.signal.get_object()
-		connections.append({
-			"source": _get_scene_path(source_obj) if source_obj and source_obj is Node else str(source_obj),
-			"signal": str(conn.signal.get_name()),
-			"method": str(conn.callable.get_method())
-		})
-
-	return _success({"path": path, "count": connections.size(), "incoming_connections": connections})
-
-
-func _connect_signal(args: Dictionary) -> Dictionary:
-	var source_path = args.get("source_path", args.get("path", ""))
-	var signal_name = args.get("signal_name", "")
-	var target_path = args.get("target_path", "")
-	var method = args.get("method", "")
-	var flags_array = args.get("flags", [])
-
-	if signal_name.is_empty() or method.is_empty():
-		return _error("Signal name and method are required")
-
-	var source = _find_node_by_path(source_path)
-	if not source:
-		return _error("Source node not found: %s" % source_path)
-
-	var target = _find_node_by_path(target_path)
-	if not target:
-		return _error("Target node not found: %s" % target_path)
-
-	if not source.has_signal(signal_name):
-		return _error("Signal not found: %s" % signal_name)
-
-	var callable = Callable(target, method)
-
-	if source.is_connected(signal_name, callable):
-		return _error("Signal already connected")
-
-	# Build flags
-	var flags = 0
-	for flag in flags_array:
-		match flag.to_lower():
-			"deferred": flags |= CONNECT_DEFERRED
-			"persist": flags |= CONNECT_PERSIST
-			"one_shot": flags |= CONNECT_ONE_SHOT
-
-	var error = source.connect(signal_name, callable, flags)
-	if error != OK:
-		return _error("Failed to connect signal: %s" % error_string(error))
-
-	return _success({
-		"source": source_path,
-		"signal": signal_name,
-		"target": target_path,
-		"method": method,
-		"flags": flags_array
-	}, "Signal connected")
-
-
-func _disconnect_signal(args: Dictionary) -> Dictionary:
-	var source_path = args.get("source_path", args.get("path", ""))
-	var signal_name = args.get("signal_name", "")
-	var target_path = args.get("target_path", "")
-	var method = args.get("method", "")
-
-	if signal_name.is_empty() or method.is_empty():
-		return _error("Signal name and method are required")
-
-	var source = _find_node_by_path(source_path)
-	if not source:
-		return _error("Source node not found: %s" % source_path)
-
-	var target = _find_node_by_path(target_path)
-	if not target:
-		return _error("Target node not found: %s" % target_path)
-
-	var callable = Callable(target, method)
-
-	if not source.is_connected(signal_name, callable):
-		return _error("Signal not connected")
-
-	source.disconnect(signal_name, callable)
-
-	return _success({
-		"source": source_path,
-		"signal": signal_name,
-		"target": target_path,
-		"method": method
-	}, "Signal disconnected")
-
-
-func _disconnect_all(path: String, signal_name: String) -> Dictionary:
-	if signal_name.is_empty():
-		return _error("Signal name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	var connections = node.get_signal_connection_list(signal_name)
-	var count = 0
-
-	for conn in connections:
-		node.disconnect(signal_name, conn.callable)
-		count += 1
-
-	return _success({
-		"path": path,
-		"signal": signal_name,
-		"disconnected_count": count
-	}, "All connections disconnected")
-
-
-func _is_signal_connected(args: Dictionary) -> Dictionary:
-	var source_path = args.get("source_path", args.get("path", ""))
-	var signal_name = args.get("signal_name", "")
-	var target_path = args.get("target_path", "")
-	var method = args.get("method", "")
-
-	var source = _find_node_by_path(source_path)
-	if not source:
-		return _error("Source node not found: %s" % source_path)
-
-	var target = _find_node_by_path(target_path)
-	if not target:
-		return _error("Target node not found: %s" % target_path)
-
-	var is_connected = source.is_connected(signal_name, Callable(target, method))
-
-	return _success({
-		"source": source_path,
-		"signal": signal_name,
-		"target": target_path,
-		"method": method,
-		"connected": is_connected
-	})
-
-
-func _emit_signal(path: String, signal_name: String, args: Array) -> Dictionary:
-	if signal_name.is_empty():
-		return _error("Signal name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	if not node.has_signal(signal_name):
-		return _error("Signal not found: %s" % signal_name)
-
-	match args.size():
-		0: node.emit_signal(signal_name)
-		1: node.emit_signal(signal_name, args[0])
-		2: node.emit_signal(signal_name, args[0], args[1])
-		3: node.emit_signal(signal_name, args[0], args[1], args[2])
-		4: node.emit_signal(signal_name, args[0], args[1], args[2], args[3])
-		5: node.emit_signal(signal_name, args[0], args[1], args[2], args[3], args[4])
-		_: return _error("Too many arguments (max 5)")
-
-	return _success({"path": path, "signal": signal_name, "args_count": args.size()}, "Signal emitted")
-
-
-func _add_user_signal(args: Dictionary) -> Dictionary:
-	var path = args.get("path", "")
-	var signal_name = args.get("signal_name", "")
-	var signal_args = args.get("args", [])
-
-	if signal_name.is_empty():
-		return _error("Signal name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	if node.has_signal(signal_name):
-		return _error("Signal already exists: %s" % signal_name)
-
-	var arg_array: Array = []
-	for arg in signal_args:
-		if arg is Dictionary:
-			arg_array.append({"name": arg.get("name", "arg"), "type": arg.get("type", TYPE_NIL)})
-
-	node.add_user_signal(signal_name, arg_array)
-
-	return _success({
-		"path": path,
-		"signal_name": signal_name,
-		"args": arg_array
-	}, "User signal added")
-
-
-func _remove_user_signal(path: String, signal_name: String) -> Dictionary:
-	if signal_name.is_empty():
-		return _error("Signal name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	if not node.has_signal(signal_name):
-		return _error("Signal not found: %s" % signal_name)
-
-	node.remove_user_signal(signal_name)
-
-	return _success({"path": path, "signal_name": signal_name}, "User signal removed")
-
-
-# ==================== GROUP ====================
-
-func _execute_group(args: Dictionary) -> Dictionary:
-	var action = args.get("action", "")
-
-	match action:
-		"list": return _list_node_groups(args.get("path", ""))
-		"add": return _add_to_group(args.get("path", ""), args.get("group", ""), args.get("persistent", true))
-		"remove": return _remove_from_group(args.get("path", ""), args.get("group", ""))
-		"is_in": return _is_in_group(args.get("path", ""), args.get("group", ""))
-		"get_nodes": return _get_nodes_in_group(args.get("group", ""))
-		"get_first": return _get_first_in_group(args.get("group", ""))
-		"count": return _count_in_group(args.get("group", ""))
-		"call_group": return _call_group_method(args.get("group", ""), args.get("method", ""), args.get("args", []))
-		"notify_group": return _notify_group(args.get("group", ""), args.get("notification", 0))
-		"set_group": return _set_group_property(args.get("group", ""), args.get("property", ""), args.get("value"))
-		_: return _error("Unknown action: %s" % action)
-
-
-func _list_node_groups(path: String) -> Dictionary:
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	var groups: Array[String] = []
-	for group in node.get_groups():
-		groups.append(str(group))
-
-	return _success({"path": path, "count": groups.size(), "groups": groups})
-
-
-func _add_to_group(path: String, group: String, persistent: bool) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	if node.is_in_group(group):
-		return _error("Node already in group: %s" % group)
-
-	node.add_to_group(group, persistent)
-
-	return _success({"path": path, "group": group, "persistent": persistent}, "Node added to group")
-
-
-func _remove_from_group(path: String, group: String) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	if not node.is_in_group(group):
-		return _error("Node not in group: %s" % group)
-
-	node.remove_from_group(group)
-
-	return _success({"path": path, "group": group}, "Node removed from group")
-
-
-func _is_in_group(path: String, group: String) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var node = _find_node_by_path(path)
-	if not node:
-		return _error("Node not found: %s" % path)
-
-	return _success({"path": path, "group": group, "is_in_group": node.is_in_group(group)})
-
-
-func _get_nodes_in_group(group: String) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	var nodes = tree.get_nodes_in_group(group)
-	var result: Array[Dictionary] = []
-
-	for node in nodes:
-		result.append({"name": str(node.name), "path": _get_scene_path(node), "type": str(node.get_class())})
-
-	return _success({"group": group, "count": result.size(), "nodes": result})
-
-
-func _get_first_in_group(group: String) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	var first = tree.get_first_node_in_group(group)
-	if first:
-		return _success(_node_to_dict(first, false))
-	else:
-		return _success({"found": false, "message": "No nodes in group"})
-
-
-func _count_in_group(group: String) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	var count = tree.get_nodes_in_group(group).size()
-	return _success({"group": group, "count": count})
-
-
-func _call_group_method(group: String, method: String, args: Array) -> Dictionary:
-	if group.is_empty() or method.is_empty():
-		return _error("Group name and method are required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	match args.size():
-		0: tree.call_group(group, method)
-		1: tree.call_group(group, method, args[0])
-		2: tree.call_group(group, method, args[0], args[1])
-		3: tree.call_group(group, method, args[0], args[1], args[2])
-		4: tree.call_group(group, method, args[0], args[1], args[2], args[3])
-		_: return _error("Too many arguments (max 4)")
-
-	return _success({"group": group, "method": method, "args_count": args.size()}, "Method called on group")
-
-
-func _notify_group(group: String, notification: int) -> Dictionary:
-	if group.is_empty():
-		return _error("Group name is required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	tree.notify_group(group, notification)
-
-	return _success({"group": group, "notification": notification}, "Group notified")
-
-
-func _set_group_property(group: String, property: String, value) -> Dictionary:
-	if group.is_empty() or property.is_empty():
-		return _error("Group name and property are required")
-
-	var root = _get_edited_scene_root()
-	if not root:
-		return _error("No scene open")
-
-	var tree = root.get_tree()
-	if not tree:
-		return _error("Scene tree not available")
-
-	tree.set_group(group, property, value)
-
-	return _success({"group": group, "property": property, "value": value}, "Group property set")
-
-
 # ==================== PROCESS ====================
 
 func _execute_process(args: Dictionary) -> Dictionary:
@@ -2094,9 +1509,9 @@ func _set_visibility_layer(node: Node, layer: int) -> Dictionary:
 	return _success({"path": _get_scene_path(node), "visibility_layer": layer}, "Visibility layer set")
 
 
-# ==================== PHYSICS ====================
+# ==================== HIERARCHY ====================
 
-func _execute_physics(args: Dictionary) -> Dictionary:
+func _execute_hierarchy(args: Dictionary) -> Dictionary:
 	var action = args.get("action", "")
 	var path = args.get("path", "")
 
@@ -2108,175 +1523,106 @@ func _execute_physics(args: Dictionary) -> Dictionary:
 		return _error("Node not found: %s" % path)
 
 	match action:
-		"get_collision_info": return _get_collision_info(node)
-		"set_collision_layer": return _set_collision_layer(node, args.get("value", 1))
-		"set_collision_mask": return _set_collision_mask(node, args.get("value", 1))
-		"set_collision_layer_value": return _set_collision_layer_value(node, args.get("layer", 1), args.get("value", true))
-		"set_collision_mask_value": return _set_collision_mask_value(node, args.get("layer", 1), args.get("value", true))
-		"apply_impulse": return _apply_impulse(node, args)
-		"apply_force": return _apply_force(node, args)
-		"apply_torque": return _apply_torque(node, args)
-		"set_linear_velocity": return _set_linear_velocity(node, args)
-		"set_angular_velocity": return _set_angular_velocity(node, args)
+		"reparent": return _reparent_node(node, args.get("new_parent", ""), args.get("keep_global", true))
+		"reorder": return _reorder_node(node, args.get("index", 0))
+		"move_up": return _move_sibling(node, -1)
+		"move_down": return _move_sibling(node, 1)
+		"move_to_front": return _move_to_front(node)
+		"move_to_back": return _move_to_back(node)
+		"set_owner": return _set_owner(node, args.get("owner_path", ""))
+		"get_owner": return _get_owner(node)
 		_: return _error("Unknown action: %s" % action)
 
 
-func _get_collision_info(node: Node) -> Dictionary:
-	var info = {"path": _get_scene_path(node)}
+func _reparent_node(node: Node, new_parent_path: String, keep_global: bool) -> Dictionary:
+	if new_parent_path.is_empty():
+		return _error("New parent path is required")
 
-	if node is CollisionObject2D:
-		info["collision_layer"] = node.collision_layer
-		info["collision_mask"] = node.collision_mask
-		info["layers"] = _get_collision_layers(node.collision_layer)
-		info["masks"] = _get_collision_layers(node.collision_mask)
-	elif node is CollisionObject3D:
-		info["collision_layer"] = node.collision_layer
-		info["collision_mask"] = node.collision_mask
-		info["layers"] = _get_collision_layers(node.collision_layer)
-		info["masks"] = _get_collision_layers(node.collision_mask)
-	else:
-		return _error("Node is not a collision object")
+	var new_parent = _find_node_by_path(new_parent_path)
+	if not new_parent:
+		return _error("New parent not found: %s" % new_parent_path)
 
-	return _success(info)
+	if node == _get_edited_scene_root():
+		return _error("Cannot reparent scene root")
 
+	var old_parent_path = _get_scene_path(node.get_parent())
+	node.reparent(new_parent, keep_global)
+	node.owner = _get_edited_scene_root()
 
-func _get_collision_layers(bitmask: int) -> Array:
-	var layers: Array = []
-	for i in range(32):
-		if bitmask & (1 << i):
-			layers.append(i + 1)
-	return layers
+	return _success({
+		"path": _get_scene_path(node),
+		"old_parent": old_parent_path,
+		"new_parent": new_parent_path,
+		"keep_global": keep_global
+	}, "Node reparented")
 
 
-func _set_collision_layer(node: Node, value: int) -> Dictionary:
-	if node is CollisionObject2D:
-		node.collision_layer = value
-	elif node is CollisionObject3D:
-		node.collision_layer = value
-	else:
-		return _error("Node is not a collision object")
+func _reorder_node(node: Node, index: int) -> Dictionary:
+	var parent = node.get_parent()
+	if not parent:
+		return _error("Node has no parent")
 
-	return _success({"path": _get_scene_path(node), "collision_layer": value}, "Collision layer set")
+	parent.move_child(node, index)
 
-
-func _set_collision_mask(node: Node, value: int) -> Dictionary:
-	if node is CollisionObject2D:
-		node.collision_mask = value
-	elif node is CollisionObject3D:
-		node.collision_mask = value
-	else:
-		return _error("Node is not a collision object")
-
-	return _success({"path": _get_scene_path(node), "collision_mask": value}, "Collision mask set")
+	return _success({
+		"path": _get_scene_path(node),
+		"new_index": node.get_index()
+	}, "Node reordered")
 
 
-func _set_collision_layer_value(node: Node, layer: int, value: bool) -> Dictionary:
-	if layer < 1 or layer > 32:
-		return _error("Layer must be between 1 and 32")
+func _move_sibling(node: Node, direction: int) -> Dictionary:
+	var parent = node.get_parent()
+	if not parent:
+		return _error("Node has no parent")
 
-	if node is CollisionObject2D:
-		node.set_collision_layer_value(layer, value)
-	elif node is CollisionObject3D:
-		node.set_collision_layer_value(layer, value)
-	else:
-		return _error("Node is not a collision object")
+	var current_index = node.get_index()
+	var new_index = current_index + direction
 
-	return _success({"path": _get_scene_path(node), "layer": layer, "value": value}, "Collision layer value set")
+	if new_index < 0 or new_index >= parent.get_child_count():
+		return _error("Cannot move node further in that direction")
 
+	parent.move_child(node, new_index)
 
-func _set_collision_mask_value(node: Node, layer: int, value: bool) -> Dictionary:
-	if layer < 1 or layer > 32:
-		return _error("Layer must be between 1 and 32")
-
-	if node is CollisionObject2D:
-		node.set_collision_mask_value(layer, value)
-	elif node is CollisionObject3D:
-		node.set_collision_mask_value(layer, value)
-	else:
-		return _error("Node is not a collision object")
-
-	return _success({"path": _get_scene_path(node), "layer": layer, "value": value}, "Collision mask value set")
+	return _success({
+		"path": _get_scene_path(node),
+		"old_index": current_index,
+		"new_index": node.get_index()
+	}, "Node moved")
 
 
-func _apply_impulse(node: Node, args: Dictionary) -> Dictionary:
-	var x = args.get("x", 0.0)
-	var y = args.get("y", 0.0)
-	var z = args.get("z", 0.0)
+func _move_to_front(node: Node) -> Dictionary:
+	var parent = node.get_parent()
+	if not parent:
+		return _error("Node has no parent")
 
-	if node is RigidBody2D:
-		node.apply_impulse(Vector2(x, y))
-	elif node is RigidBody3D:
-		node.apply_impulse(Vector3(x, y, z))
-	else:
-		return _error("Node is not a RigidBody")
-
-	return _success({"path": _get_scene_path(node), "impulse": {"x": x, "y": y, "z": z}}, "Impulse applied")
+	parent.move_child(node, parent.get_child_count() - 1)
+	return _success({"path": _get_scene_path(node), "new_index": node.get_index()}, "Node moved to front")
 
 
-func _apply_force(node: Node, args: Dictionary) -> Dictionary:
-	var x = args.get("x", 0.0)
-	var y = args.get("y", 0.0)
-	var z = args.get("z", 0.0)
+func _move_to_back(node: Node) -> Dictionary:
+	var parent = node.get_parent()
+	if not parent:
+		return _error("Node has no parent")
 
-	if node is RigidBody2D:
-		node.apply_force(Vector2(x, y))
-	elif node is RigidBody3D:
-		node.apply_force(Vector3(x, y, z))
-	else:
-		return _error("Node is not a RigidBody")
-
-	return _success({"path": _get_scene_path(node), "force": {"x": x, "y": y, "z": z}}, "Force applied")
+	parent.move_child(node, 0)
+	return _success({"path": _get_scene_path(node), "new_index": node.get_index()}, "Node moved to back")
 
 
-func _apply_torque(node: Node, args: Dictionary) -> Dictionary:
-	var torque = args.get("value", args.get("z", 0.0))
+func _set_owner(node: Node, owner_path: String) -> Dictionary:
+	var new_owner = _find_node_by_path(owner_path) if not owner_path.is_empty() else _get_edited_scene_root()
+	if not new_owner:
+		return _error("Owner not found: %s" % owner_path)
 
-	if node is RigidBody2D:
-		node.apply_torque(torque)
-	elif node is RigidBody3D:
-		var tx = args.get("x", 0.0)
-		var ty = args.get("y", 0.0)
-		var tz = args.get("z", 0.0)
-		node.apply_torque(Vector3(tx, ty, tz))
-	else:
-		return _error("Node is not a RigidBody")
-
-	return _success({"path": _get_scene_path(node), "torque": torque}, "Torque applied")
+	node.owner = new_owner
+	return _success({"path": _get_scene_path(node), "owner": _get_scene_path(new_owner)}, "Owner set")
 
 
-func _set_linear_velocity(node: Node, args: Dictionary) -> Dictionary:
-	var x = args.get("x", 0.0)
-	var y = args.get("y", 0.0)
-	var z = args.get("z", 0.0)
-
-	if node is RigidBody2D:
-		node.linear_velocity = Vector2(x, y)
-	elif node is RigidBody3D:
-		node.linear_velocity = Vector3(x, y, z)
-	elif node is CharacterBody2D:
-		node.velocity = Vector2(x, y)
-	elif node is CharacterBody3D:
-		node.velocity = Vector3(x, y, z)
-	else:
-		return _error("Node does not support velocity")
-
-	return _success({"path": _get_scene_path(node), "velocity": {"x": x, "y": y, "z": z}}, "Velocity set")
-
-
-func _set_angular_velocity(node: Node, args: Dictionary) -> Dictionary:
-	var value = args.get("value", args.get("z", 0.0))
-
-	if node is RigidBody2D:
-		node.angular_velocity = value
-	elif node is RigidBody3D:
-		var x = args.get("x", 0.0)
-		var y = args.get("y", 0.0)
-		var z = args.get("z", 0.0)
-		node.angular_velocity = Vector3(x, y, z)
-	else:
-		return _error("Node is not a RigidBody")
-
-	return _success({"path": _get_scene_path(node), "angular_velocity": value}, "Angular velocity set")
+func _get_owner(node: Node) -> Dictionary:
+	var owner = node.owner
+	return _success({
+		"path": _get_scene_path(node),
+		"owner": _get_scene_path(owner) if owner else null
+	})
 
 
 # ==================== HELPERS ====================

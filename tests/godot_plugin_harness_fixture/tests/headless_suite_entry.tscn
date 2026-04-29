@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://HeadlessCSharpBootstrap.cs" id="1_bootstrap"]
+[ext_resource type="Script" path="res://tests/headless_suite_entry.gd" id="2_runner"]
+
+[node name="HeadlessSuiteRoot" type="Node"]
+script = ExtResource("1_bootstrap")
+
+[node name="HeadlessSuiteEntry" type="Node" parent="."]
+script = ExtResource("2_runner")

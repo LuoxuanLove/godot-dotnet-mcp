@@ -1,10 +1,11 @@
-@tool
+﻿@tool
 extends RefCounted
 class_name SettingsStore
 
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
-const IntelligenceTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/intelligence_tree_catalog.gd")
+const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
+const TOOL_CONFIG_EXCHANGE_ROOT := "user://godot_dotnet_mcp/config_exchange"
 
 
 func load_plugin_settings(default_settings: Dictionary, settings_path: String, all_categories: Array, default_domains: Array) -> Dictionary:
@@ -24,8 +25,8 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 		settings["collapsed_nodes"] = {
 			TreeCollapseState.KIND_DOMAIN: default_domains.duplicate(),
 			TreeCollapseState.KIND_CATEGORY: all_categories.duplicate(),
-			TreeCollapseState.KIND_TOOL: PluginRuntimeState.DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS.duplicate(),
-			TreeCollapseState.KIND_ATOMIC: IntelligenceTreeCatalog.get_default_collapsed_atomic_tools()
+			TreeCollapseState.KIND_TOOL: PluginRuntimeState.DEFAULT_COLLAPSED_SYSTEM_TOOLS.duplicate(),
+			TreeCollapseState.KIND_ATOMIC: SystemTreeCatalog.get_default_collapsed_atomic_tools()
 		}
 
 	if str(settings.get("tool_profile_id", "")).is_empty():
@@ -35,7 +36,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 		settings,
 		all_categories,
 		default_domains,
-		PluginRuntimeState.DEFAULT_COLLAPSED_INTELLIGENCE_TOOLS
+		PluginRuntimeState.DEFAULT_COLLAPSED_SYSTEM_TOOLS
 	)
 
 	return {
@@ -201,17 +202,17 @@ func rename_custom_profile(profile_dir: String, profile_id: String, profile_name
 
 
 func export_tool_config(file_path: String, profile_id: String, disabled_tools: Array) -> Dictionary:
-	var trimmed_path = file_path.strip_edges()
-	if trimmed_path.is_empty():
+	var normalized_path = _normalize_tool_config_exchange_path(file_path)
+	if normalized_path.is_empty():
 		return {"success": false, "error_code": "config_path_required"}
 
-	var ensure_result = _ensure_parent_dir(trimmed_path)
+	var ensure_result = _ensure_parent_dir(normalized_path)
 	if not bool(ensure_result.get("success", false)):
 		return ensure_result
 
-	var file = FileAccess.open(trimmed_path, FileAccess.WRITE)
+	var file = FileAccess.open(normalized_path, FileAccess.WRITE)
 	if file == null:
-		return {"success": false, "error_code": "config_write_failed", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_write_failed", "file_path": normalized_path}
 
 	file.store_string(JSON.stringify({
 		"format_version": 1,
@@ -220,50 +221,50 @@ func export_tool_config(file_path: String, profile_id: String, disabled_tools: A
 	}, "\t"))
 	file.close()
 
-	return {"success": true, "file_path": trimmed_path}
+	return {"success": true, "file_path": normalized_path}
 
 
 func import_tool_config(file_path: String) -> Dictionary:
-	var trimmed_path = file_path.strip_edges()
-	if trimmed_path.is_empty():
+	var normalized_path = _normalize_tool_config_exchange_path(file_path)
+	if normalized_path.is_empty():
 		return {"success": false, "error_code": "config_path_required"}
-	if not FileAccess.file_exists(trimmed_path):
-		return {"success": false, "error_code": "config_not_found", "file_path": trimmed_path}
+	if not FileAccess.file_exists(normalized_path):
+		return {"success": false, "error_code": "config_not_found", "file_path": normalized_path}
 
-	var file = FileAccess.open(trimmed_path, FileAccess.READ)
+	var file = FileAccess.open(normalized_path, FileAccess.READ)
 	if file == null:
-		return {"success": false, "error_code": "config_open_failed", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_open_failed", "file_path": normalized_path}
 
 	var json = JSON.new()
 	var text = file.get_as_text()
 	file.close()
 	if json.parse(text) != OK:
-		return {"success": false, "error_code": "config_parse_failed", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_parse_failed", "file_path": normalized_path}
 
 	var data = json.get_data()
 	if not (data is Dictionary):
-		return {"success": false, "error_code": "config_parse_failed", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_parse_failed", "file_path": normalized_path}
 
 	var profile_id = str(data.get("profile_id", "")).strip_edges()
 	if profile_id.is_empty():
-		return {"success": false, "error_code": "config_profile_required", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_profile_required", "file_path": normalized_path}
 
 	var disabled_tools = data.get("disabled_tools", null)
 	if not (disabled_tools is Array):
-		return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+		return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": normalized_path}
 
 	var normalized_disabled_tools: Array[String] = []
 	for tool_name in disabled_tools:
 		if not (tool_name is String):
-			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": normalized_path}
 		var normalized_name = str(tool_name).strip_edges()
 		if normalized_name.is_empty():
-			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": trimmed_path}
+			return {"success": false, "error_code": "config_disabled_tools_invalid", "file_path": normalized_path}
 		normalized_disabled_tools.append(normalized_name)
 
 	return {
 		"success": true,
-		"file_path": trimmed_path,
+		"file_path": normalized_path,
 		"data": {
 			"format_version": int(data.get("format_version", 1)),
 			"profile_id": profile_id,
@@ -289,6 +290,26 @@ func _custom_profile_slug_from_id(profile_id: String) -> String:
 	if not profile_id.begins_with("custom:"):
 		return ""
 	return profile_id.trim_prefix("custom:")
+
+
+func _normalize_tool_config_exchange_path(file_path: String) -> String:
+	var normalized = file_path.strip_edges().replace("\\", "/")
+	if normalized.is_empty():
+		return ""
+	if not normalized.begins_with("user://"):
+		normalized = "%s/%s" % [TOOL_CONFIG_EXCHANGE_ROOT, normalized.trim_prefix("/")]
+	if not normalized.ends_with(".json"):
+		normalized += ".json"
+
+	var global_root = ProjectSettings.globalize_path(TOOL_CONFIG_EXCHANGE_ROOT).replace("\\", "/")
+	var global_path = ProjectSettings.globalize_path(normalized).replace("\\", "/")
+	if not global_path.begins_with(global_root + "/"):
+		return ""
+
+	var localized = ProjectSettings.localize_path(global_path).replace("\\", "/")
+	if not localized.begins_with(TOOL_CONFIG_EXCHANGE_ROOT + "/"):
+		return ""
+	return localized
 
 
 func _read_custom_profile_file(file_path: String) -> Dictionary:
