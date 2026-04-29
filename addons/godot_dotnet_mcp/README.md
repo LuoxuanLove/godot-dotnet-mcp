@@ -3,7 +3,7 @@
 
 > An MCP server plugin running inside the Godot editor —agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
 
-![Godot .NET MCP Tools](asset_library/preview-tools-en.png)
+![Godot .NET MCP Tools](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/main/asset_library/tools-en.png)
 
 ## What It Is
 
@@ -23,7 +23,7 @@ To extend the tool set: place a `.gd` file in `custom_tools/` implementing `hand
 
 - **Editor-native**: Runs inside the Godot process. Scene queries, script reads, and property changes reflect the actual live editor state.
 - **Godot.NET first**: C# binding inspection (`system_bindings_audit`), exported member analysis, and `.cs` script patching are built in.
-- **System-first**: `system_project_state` / `system_editor_state` → `system_project_files` / `system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` → `system_scene_tree` / `system_scene_patch` / targeted action is the intended workflow. Tool selection is left to AI/LLM based on tool descriptions.
+- **Inspect before editing**: agents can first read project health, editor state, recent errors, and available tools, then move into files, scenes, scripts, runtime diagnostics, or UI control.
 - **User-extensible**: `custom_tools/` scripts are loaded as first-class tools with no plugin rebuild. `plugin_evolution` manages the lifecycle.
 
 ## Requirements
