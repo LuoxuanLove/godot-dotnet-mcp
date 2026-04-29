@@ -1,122 +1,126 @@
 # Godot .NET MCP
-[![最新版本](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest)
-[![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-> 插件内 MCP 服务端：Roslyn 语法分析运行在 Godot .NET 运行时内部。
+[![最新版本](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-![Godot .NET MCP 工具预览](asset_library/preview-tools-cn.png)
+> 一个面向 Godot 4.6+ 的编辑器 MCP 插件，让 AI Agent 可以在 Godot 编辑器内部读取项目状态、编辑场景、分析脚本、控制运行时、截图、读取日志并完成客户端接入配置。
 
-## 产品模型
+Godot .NET MCP 面向的不是“只看文件然后猜”的 Agent，而是需要真正进入 Godot 编辑器工作流的 Agent。它让 Agent 能直接读取项目健康状态、检查场景、修改脚本、控制运行、截图、读取日志并配置 MCP 客户端；C# 分析由插件内 Roslyn 语法层完成，不需要外部宿主进程。
 
-- Godot 插件通过 HTTP 在进程内暴露 MCP 端点。
-- C# 分析使用插件内 Roslyn（纯语法，syntax-first）。
-- `system_*` 工具从运行中的 Godot 进程内部读取实时编辑器状态。
-- 无子进程兜底。
+![Godot .NET MCP 工具页](asset_library/tools-cn.png)
 
-## 仓库结构
+## 为什么需要它
 
-- `addons/godot_dotnet_mcp/`
-  Godot 插件本体：MCP HTTP 服务端、工具路由、运行时服务及插件内 Roslyn façade。
-- `addons/godot_dotnet_mcp/dotnet_bridge/`
-  供 façade 使用的插件内 Roslyn 语法库。
-- `tests/godot_plugin_harness/`、`tests/godot_plugin_harness_fixture/`
-  用于插件运行时验证的 Headless Harness。
-- `docs/`
-  架构、模块与发布文档。
+AI 编程 Agent 在 Godot 中要真正可靠，不能只读 `.tscn` 和脚本文件。它还需要知道当前打开的场景、Dock 状态、运行时报错、编辑器界面、客户端配置、截图结果，以及工具实际是否可用。Godot .NET MCP 的目标，是把这些用户真正关心的编辑器任务变成 Agent 可以安全调用的工具。
 
-## 安装
+这个项目的设计哲学很直接：提供真实的编辑器工具，而不是伪装成“分析能力”的固定结论。Agent 应先观察项目与编辑器状态，再选择最小、最安全的操作。README 只讲用户能得到什么；内部实现细节留给工具页和技术文档。
 
-### 方式一：发布包
+## 亮点
 
-从 Releases 页面下载：
+- **编辑器内 MCP 服务端**：HTTP MCP 端点运行在 Godot 内部，工具读取的是当前编辑器会话，而不是过期的磁盘快照。
+- **先看清项目，再动手修改**：Agent 可以先读取当前项目、编辑器状态、最近错误和可用工具，再进入文件、场景、脚本、运行时诊断或 UI 控制。
+- **Godot .NET 支持**：插件内 Roslyn 支持 C# 语法诊断、C# 文件读取与补丁修改、`.csproj` 读写、解决方案 / 项目信息检查，以及 C# 场景绑定审计。
+- **可视化编辑器感知**：Agent 可以截取编辑器界面、枚举可见或隐藏控件、通过 Godot API 激活 Dock 和底部面板；除非用户明确授权，不需要系统级鼠标自动化。
+- **运行时自动化闭环**：支持运行 / 停止场景、启用 runtime control、注入输入、捕获画面，并通过 `system_runtime_step` 完成“输入 -> 等待 -> 截图”的循环。
+- **一键客户端接入**：配置页面向常见 CLI 与桌面 Agent，展示检测到的路径、配置目标、生成的 JSON，以及可用的一键安装 / 移除动作。
+- **用户工具扩展**：将 `user_*` GDScript 工具放入 `custom_tools/`，插件即可自动发现和热重载，无需重建插件。
 
-```text
-https://github.com/LuoxuanLove/godot-dotnet-mcp/releases
-```
+## 截图
 
-解压后保持目录结构：
+| 主页 | 工具 | 配置 |
+|---|---|---|
+| ![主页仪表盘](asset_library/home-cn.png) | ![工具浏览](asset_library/tools-cn.png) | ![客户端配置](asset_library/config-cn.png) |
 
-```text
-addons/godot_dotnet_mcp
-```
+主页展示服务健康、MCP 端点、连接活动、自检结果、重载控制、端口、日志级别与语言。工具页让用户搜索可用的 Agent 工具、查看启用状态，并理解每个工具能做什么。配置页为桌面端与 CLI Agent 生成接入配置，并显示检测到的路径与可复制内容。
 
-然后：
+## Agent 能做什么
 
-1. 用 Godot 打开项目。
-2. 进入 `Project Settings > Plugins`。
-3. 启用 `Godot .NET MCP`。
-4. 打开 `MCPDock`。
-5. 在 `主页` 页签中启动服务。
+### 理解项目与编辑器
 
-### 方式二：源码 / 开发流程
+- `system_help` 返回当前能力说明、推荐起手顺序、截图优先提示、隐藏控件提示与 schema 信息。
+- `system_project_state` 汇总项目健康、文件数量、运行状态、最近错误、编译错误和可选运行时健康摘要。
+- `system_editor_state` 聚合当前编辑器工作区、Inspector / FileSystem 选择、项目运行摘要和 runtime-control 状态。
 
-将插件复制到 Godot 项目：
+### 操作文件、场景与脚本
 
-```text
-addons/godot_dotnet_mcp
-```
+- `system_project_files` 覆盖常见项目文件树操作。
+- `system_scene_validate`、`system_scene_analyze`、`system_scene_tree`、`system_scene_patch` 用结构化方式检查和修改场景。
+- `system_script_analyze`、`system_script_patch`、`system_bindings_audit` 检查 GDScript / C# 结构和 C# 场景绑定。
+- `system_project_symbol_search`、`system_scene_dependency_graph` 提供项目符号搜索和场景依赖图。
 
-然后按上述步骤 1-5 启用。
+### 控制编辑器与运行时
+
+- `system_editor_control` 可激活工作区、Dock、底部面板、控件、弹窗，并截取编辑器界面。
+- `system_editor_log` 可读取、筛选或清空编辑器 Output 面板。
+- `system_project_run`、`system_project_stop`、`system_runtime_diagnose`、`system_runtime_control`、`system_runtime_capture`、`system_runtime_input`、`system_runtime_step` 覆盖场景运行、运行时诊断、截图和脚本化输入。
+- `system_userdata_maintenance` 可列出和清理 `user://godot_dotnet_mcp/` 下由插件管理的编辑器 / 运行时截图缓存，默认先 dry-run 预览。
 
 ## 环境要求
 
-- Godot `4.6+`（需 .NET 支持，即 Mono/.NET build）
-- 可接入的 MCP 客户端，例如 Claude Code、Codex CLI、Gemini CLI、OpenCode、Qwen Code、Claude Desktop、Cursor、Trae、Windsurf、Cline、Roo Code 或 Cherry Studio
+- Godot `4.6+`，需要 .NET 支持。
+- 如果需要 C# 分析，目标 Godot 项目需启用 .NET 脚本支持。
+- 一个支持 MCP 的客户端。配置页当前覆盖常见客户端，包括 Claude Code、Codex、Gemini CLI、OpenCode、Qwen Code、Claude Desktop、Cursor、Trae、Windsurf、Cline、Roo Code 与 Cherry Studio。
+
+## 安装
+
+### 发布包
+
+从 [Releases](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) 页面下载最新插件包，解压后让 Godot 项目中包含：
+
+```text
+addons/godot_dotnet_mcp
+```
+
+然后用 Godot 打开项目，进入 `Project Settings > Plugins`，启用 `Godot .NET MCP`，打开 `MCPDock`，在 `主页` 页签启动服务。
+
+### 源码方式
+
+如果用于开发或本地调试，将本仓库中的 `addons/godot_dotnet_mcp/` 复制到目标 Godot 项目的 `addons/` 目录，再按同样方式启用插件。
 
 ## 快速开始
 
-### 1. 启用插件
+1. 启用插件并打开 `MCPDock > 主页`。
+2. 确认服务端点，通常是 `http://127.0.0.1:3000/mcp`。
+3. 打开 `MCPDock > 配置`，选择客户端，复制或写入生成的配置。
+4. Agent 连接后先调用 `system_help`。
+5. 修改前优先调用 `system_project_state` 或 `system_editor_state`。
 
-以下实时编辑器工具依赖插件：
+基础检查：
 
-- `system_project_state`
-- `system_help`
-- `system_editor_state`
-- `system_project_files`
-- `system_runtime_diagnose`
-- `system_runtime_control`
-- `system_runtime_capture`
-- `system_runtime_input`
-- `system_runtime_step`
-- `system_scene_tree`
-- `system_scene_patch`
-- `system_scene_analyze`
-- `system_script_analyze`
-- `system_bindings_audit`
+```text
+GET  http://127.0.0.1:3000/health
+GET  http://127.0.0.1:3000/api/tools
+POST http://127.0.0.1:3000/mcp
+```
 
-### 2. 连接 MCP 客户端
+## 一分钟架构说明
 
-MCP 端点为 `http://127.0.0.1:3000/mcp`（或 `MCPDock > 主页` 中显示的当前端口）。
+Godot .NET MCP 是一个自包含的 Godot 编辑器插件。HTTP 服务、MCP JSON-RPC 路由、工具注册表、运行时状态、客户端配置、UI model、本地化和 Roslyn 语法支持都位于 `addons/godot_dotnet_mcp/` 中。
 
-将 MCP 客户端配置连接到该 HTTP 端点即可。
+对 Agent 暴露的工具刻意按任务组织，而不是把底层编辑器操作直接丢给用户选择。检查项目状态、修改场景、读取日志、截图、控制运行时这些常见工作都被整理成稳定工具；想了解实现细节的用户，可以在工具页查看每个工具背后的关联信息。
 
-### 3. 验证
-
-- `GET http://127.0.0.1:3000/health` 返回正常。
-- `GET http://127.0.0.1:3000/api/tools` 返回工具列表。
-- `system_help` 返回当前能力说明，包含编辑器截图优先提示与隐藏控件枚举提示。
+C# 层采用 syntax-first 方式：提取有用的语法结构，不加载完整 SemanticModel，也不依赖外部 Roslyn 宿主。这样可以让插件保持轻量、可分发，并贴近 Godot 编辑器运行时。
 
 ## 自定义工具
 
-用户扩展放在：
+用户工具放在：
 
 ```text
 addons/godot_dotnet_mcp/custom_tools/
 ```
 
-每个 `.gd` 文件应实现 `handles()`、`get_tools()`、`execute()`，工具名统一以 `user_` 开头。
+每个 `.gd` 文件应实现 `handles()`、`get_tools()`、`execute()`，工具名必须使用 `user_` 前缀。合法工具会和 System 工具一起显示在工具页与 MCP 工具列表中。
 
-## 架构说明
+## 文档
 
-- C# 解析由运行在 Godot .NET 运行时内的插件内 Roslyn 处理。
-- 分析为纯语法优先：只提取语法树信息，无 SemanticModel 或项目编译。
-- `addons/godot_dotnet_mcp/dotnet_bridge/` 目录包含插件内 Roslyn 语法库。
-- 无 attach 协议、无子进程，插件完全自包含。
+- [English README](README.md)
+- [更新日志](CHANGELOG.zh-CN.md)
+- [文档概述](docs/概述.md)
+- [架构概述](docs/架构/概述.md)
+- [System 工具层](docs/模块/System工具层.md)
+- [工具系统](docs/模块/工具系统.md)
+- [用户扩展](docs/模块/用户扩展.md)
+- [安装与发布](docs/架构/安装与发布.md)
 
-## 文档入口
+## 当前状态
 
-- [README.md](README.md)
-- [addons/godot_dotnet_mcp/README.zh-CN.md](addons/godot_dotnet_mcp/README.zh-CN.md)
-- [docs/概述.md](docs/概述.md)
-- [docs/架构/概述.md](docs/架构/概述.md)
-- [docs/架构/安装与发布.md](docs/架构/安装与发布.md)
+`v1.0.0-pre1` 是一个预发布版本，重点覆盖 System 工具层、编辑器 / 运行时自动化、客户端接入配置、插件内 Roslyn 支持、用户工具热重载、本地化 Dock UI 与发布验证。完整版本记录见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。

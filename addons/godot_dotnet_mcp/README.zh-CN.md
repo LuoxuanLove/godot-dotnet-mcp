@@ -3,7 +3,7 @@
 
 > 运行在 Godot 编辑器进程内的 MCP 插件——Agent 直接读取活的项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
 
-![Godot .NET MCP 工具页](asset_library/preview-tools-cn.png)
+![Godot .NET MCP 工具页](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/main/asset_library/tools-cn.png)
 
 ## 这是什么
 
@@ -21,7 +21,7 @@
 
 - **运行在编辑器内部**：在 Godot 进程中运行，场景查询、脚本读取和属性修改直接反映编辑器的真实状态。
 - **Godot.NET 优先**：C# 绑定检查（`system_bindings_audit`）、导出成员分析、`.cs` 脚本修补均内置，不是附加功能。
-- **系统优先**：`system_project_state` / `system_editor_state` → `system_project_files` / `system_scene_analyze` / `system_script_analyze` / `system_runtime_diagnose` → `system_scene_tree` / `system_scene_patch` / 具体操作，是推荐的工作流起点。工具选择由 AI/LLM 根据工具描述自行判断。
+- **先看清项目，再动手修改**：Agent 可以先读取项目健康、编辑器状态、最近错误和可用工具，再进入文件、场景、脚本、运行时诊断或 UI 控制。
 - **可用户扩展**：`custom_tools/` 中的脚本作为一等工具加载，无需重建插件。`plugin_evolution` 管理全生命周期。
 
 ## 环境要求
