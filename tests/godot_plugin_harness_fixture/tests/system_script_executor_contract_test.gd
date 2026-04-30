@@ -46,11 +46,15 @@ class FakeToolLoader extends RefCounted:
 
 class FakeBridge extends RefCounted:
 	var tool_loader = null
+	var last_atomic_tool := ""
+	var last_atomic_args: Dictionary = {}
 
 	func get_tool_loader():
 		return tool_loader
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+		last_atomic_tool = tool_name
+		last_atomic_args = args.duplicate(true)
 		match tool_name:
 			"scene_bindings", "scene_audit":
 				return success({"issues": [], "binding_count": 0})
@@ -167,6 +171,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(patch_preview.get("success", false)):
 		return _failure("script_patch dry_run did not succeed through the split patch service.")
+
+	var patch_apply: Dictionary = executor.execute("script_patch", {
+		"script": gd_path,
+		"ops": [{"op": "add_variable", "name": "answer", "type": "int", "default_value": "7"}],
+		"dry_run": false
+	})
+	if not bool(patch_apply.get("success", false)):
+		return _failure("script_patch apply did not succeed through the split patch service.")
+	if bridge.last_atomic_tool != "script_edit_gd":
+		return _failure("script_patch add_variable should call the GDScript edit atomic tool.")
+	if str(bridge.last_atomic_args.get("default_value", "")) != "7":
+		return _failure("script_patch add_variable should forward default_value to the atomic GDScript edit tool.")
 
 	var invalid_script: Dictionary = executor.execute("script_analyze", {"script": "res://bad.txt"})
 	if bool(invalid_script.get("success", false)):

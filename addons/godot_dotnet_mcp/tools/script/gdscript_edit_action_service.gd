@@ -137,7 +137,7 @@ func add_variable(path: String, args: Dictionary) -> Dictionary:
 			break
 
 	var var_type = str(args.get("type", ""))
-	var value = str(args.get("value", ""))
+	var value = str(args.get("value", args.get("default_value", "")))
 	var var_line = "var %s" % name
 	if not var_type.is_empty():
 		var_line += ": %s" % var_type

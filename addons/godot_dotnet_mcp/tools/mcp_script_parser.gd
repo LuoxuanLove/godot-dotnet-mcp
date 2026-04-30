@@ -14,6 +14,7 @@ var _rx_cs_field: RegEx
 var _rx_gd_classname: RegEx
 var _rx_gd_extends: RegEx
 var _rx_gd_method: RegEx
+var _rx_gd_variable: RegEx
 var _rx_gd_export: RegEx
 
 
@@ -27,6 +28,7 @@ func _init() -> void:
 	_rx_gd_classname = _compile_regex("(?m)^\\s*class_name\\s+([A-Za-z_][A-Za-z0-9_]*)")
 	_rx_gd_extends = _compile_regex("(?m)^\\s*extends\\s+(.+)$")
 	_rx_gd_method = _compile_regex("(?m)^\\s*func\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z0-9_]+))?")
+	_rx_gd_variable = _compile_regex("(?m)^(?:@onready\\s+)?var\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s*:\\s*([^=\\r\\n]+))?(?:\\s*=\\s*([^\\r\\n]+))?")
 	_rx_gd_export = _compile_regex("@export(?:_[a-z_]+)?\\s+var\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s*:\\s*([^=]+))?")
 
 
@@ -168,6 +170,7 @@ func parse_gdscript_metadata(path: String, content: String) -> Dictionary:
 		"class_name": "",
 		"base_type": "",
 		"methods": [],
+		"variables": [],
 		"symbols": [],
 		"exports": [],
 		"export_groups": []
@@ -191,6 +194,24 @@ func parse_gdscript_metadata(path: String, content: String) -> Dictionary:
 		}
 		result["methods"].append(method_info)
 		result["symbols"].append(method_info)
+
+	for variable_match in _rx_gd_variable.search_all(content):
+		var variable_info = {
+			"kind": "variable",
+			"name": variable_match.get_string(1)
+		}
+		var variable_type := variable_match.get_string(2).strip_edges()
+		if variable_type.ends_with("\r"):
+			variable_type = variable_type.trim_suffix("\r")
+		if not variable_type.is_empty():
+			variable_info["type"] = variable_type
+		var default_value := variable_match.get_string(3).strip_edges()
+		if default_value.ends_with("\r"):
+			default_value = default_value.trim_suffix("\r")
+		if not default_value.is_empty():
+			variable_info["default"] = default_value
+		result["variables"].append(variable_info)
+		result["symbols"].append(variable_info)
 
 	var current_group = ""
 	for raw_line in content.split("\n"):
