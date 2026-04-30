@@ -144,7 +144,7 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		_connection_state.clear_processing(client)
 		return
 
-	var response: Dictionary = await _route_request_async.call(method, path, request_body)
+	var response: Dictionary = await _route_request_async.call(method, path, request_body, headers)
 	var no_body := bool(response.get("_no_body", false))
 	if response.has("_no_body"):
 		response.erase("_no_body")
