@@ -107,6 +107,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(health.get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("Health response did not expose the unified tool schema version.")
 
+	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST", "Content-Type, Accept")
+	var cors_headers: Dictionary = cors_response.get("_headers", {})
+	if int(cors_response.get("_status_code", 0)) != 204 or not bool(cors_response.get("_no_body", false)):
+		return _failure("CORS response did not preserve preflight no-body semantics.")
+	if str(cors_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
+		return _failure("CORS response did not echo the configured origin.")
+	if str(cors_headers.get("Access-Control-Allow-Origin", "")) == "*":
+		return _failure("CORS response must not emit wildcard origins.")
+	if str(cors_headers.get("Vary", "")) != "Origin":
+		return _failure("CORS response did not include Vary: Origin.")
+
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,
 		"node_path": NodePath("root/player"),
