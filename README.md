@@ -62,15 +62,15 @@ The Home page shows service health, endpoint, connection activity, self-diagnost
 
 ## Installation
 
-### Release package
+### Godot Asset Library
 
-Download the latest package from the [Releases](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) page, then extract it so your Godot project contains:
+Open your project in Godot, go to the `AssetLib` tab, search for `Godot .NET MCP`, and click `Install`. You can also open its [Godot Asset Library page](https://godotengine.org/asset-library/asset/4923). After installation, your Godot project should contain:
 
 ```text
 addons/godot_dotnet_mcp
 ```
 
-Open the project in Godot, go to `Project Settings > Plugins`, enable `Godot .NET MCP`, open `MCPDock`, and start the service from the `Home` tab.
+Go to `Project Settings > Plugins`, enable `Godot .NET MCP`, open `MCPDock`, and start the service from the `Home` tab.
 
 ### Source workflow
 
@@ -98,7 +98,7 @@ Godot .NET MCP is a self-contained Godot editor plugin. The HTTP server, MCP JSO
 
 The tools exposed to agents are intentionally task-oriented. Instead of asking users to pick low-level editor operations, the plugin groups common work such as checking project state, editing scenes, reading logs, capturing screenshots, and controlling runtime sessions into stable tools. Detailed implementation links remain available in the Tools page for users who want to inspect how each tool is wired.
 
-The C# layer is syntax-first: it extracts useful structure without loading a full SemanticModel or requiring an external Roslyn host. That keeps the plugin portable and aligned with the Godot editor runtime.
+The C# layer uses Roslyn's official syntax tree APIs in a syntax-first mode: it extracts useful structure from `CSharpSyntaxTree` without loading a full SemanticModel or project workspace. That keeps the plugin portable, lightweight, and aligned with the Godot editor runtime.
 
 ## Custom tools
 

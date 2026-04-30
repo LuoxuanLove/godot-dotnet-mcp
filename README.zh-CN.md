@@ -62,15 +62,15 @@ AI 编程 Agent 在 Godot 中要真正可靠，不能只读 `.tscn` 和脚本文
 
 ## 安装
 
-### 发布包
+### Godot 插件商城
 
-从 [Releases](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) 页面下载最新插件包，解压后让 Godot 项目中包含：
+用 Godot 打开目标项目，进入 `AssetLib` 页签，搜索 `Godot .NET MCP` 并点击 `Install`。也可以打开 [Godot 插件商城页面](https://godotengine.org/asset-library/asset/4923)。安装完成后，Godot 项目中应包含：
 
 ```text
 addons/godot_dotnet_mcp
 ```
 
-然后用 Godot 打开项目，进入 `Project Settings > Plugins`，启用 `Godot .NET MCP`，打开 `MCPDock`，在 `主页` 页签启动服务。
+然后进入 `Project Settings > Plugins`，启用 `Godot .NET MCP`，打开 `MCPDock`，在 `主页` 页签启动服务。
 
 ### 源码方式
 
@@ -98,7 +98,7 @@ Godot .NET MCP 是一个自包含的 Godot 编辑器插件。HTTP 服务、MCP J
 
 对 Agent 暴露的工具刻意按任务组织，而不是把底层编辑器操作直接丢给用户选择。检查项目状态、修改场景、读取日志、截图、控制运行时这些常见工作都被整理成稳定工具；想了解实现细节的用户，可以在工具页查看每个工具背后的关联信息。
 
-C# 层采用 syntax-first 方式：提取有用的语法结构，不加载完整 SemanticModel，也不依赖外部 Roslyn 宿主。这样可以让插件保持轻量、可分发，并贴近 Godot 编辑器运行时。
+C# 层使用 Roslyn 官方语法树 API，并采用 syntax-first 方式：从 `CSharpSyntaxTree` 提取有用的语法结构，不加载完整 SemanticModel，也不加载项目级 Workspace。这样可以让插件保持轻量、可分发，并贴近 Godot 编辑器运行时。
 
 ## 自定义工具
 

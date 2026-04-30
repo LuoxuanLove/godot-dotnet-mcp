@@ -70,15 +70,15 @@ git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dot
 
 插件位于 `_godot-dotnet-mcp/addons/godot_dotnet_mcp/`，将该目录复制或符号链接到项目的 `addons/` 下即可。如需更简单的方式，推荐使用方式三。
 
-### 方式三：使用发布包
+### 方式三：从 Godot 插件商城安装
 
-从 GitHub Releases 页面下载最新发布包：
+用 Godot 打开目标项目，进入 `AssetLib` 页签，搜索 `Godot .NET MCP` 并点击 `Install`。也可以打开 Godot 插件商城页面：
 
 ```text
-https://github.com/LuoxuanLove/godot-dotnet-mcp/releases
+https://godotengine.org/asset-library/asset/4923
 ```
 
-解压后保持目录结构为：
+安装完成后目录结构应为：
 
 ```text
 addons/godot_dotnet_mcp

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Updated installation documentation to use the Godot Asset Library as the user-facing install path instead of GitHub Release ZIP downloads.
+
 ## 1.0.0-pre1 - 2026-04-28
 
 ### Added

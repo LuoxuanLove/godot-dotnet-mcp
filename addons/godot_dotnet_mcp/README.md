@@ -72,15 +72,15 @@ git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dot
 
 The plugin is located at `_godot-dotnet-mcp/addons/godot_dotnet_mcp/`. Copy or symlink that directory into your project's `addons/`. For a simpler setup, use Option 3.
 
-### Option 3: Use the release package
+### Option 3: Install from Godot Asset Library
 
-Download the latest package from:
+Open your project in Godot, go to the `AssetLib` tab, search for `Godot .NET MCP`, and click `Install`. You can also open its Godot Asset Library page:
 
 ```text
-https://github.com/LuoxuanLove/godot-dotnet-mcp/releases
+https://godotengine.org/asset-library/asset/4923
 ```
 
-Extract it so the final structure is:
+After installation, the final structure should be:
 
 ```text
 addons/godot_dotnet_mcp
