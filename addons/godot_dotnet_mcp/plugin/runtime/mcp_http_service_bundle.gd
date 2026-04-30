@@ -170,6 +170,8 @@ func _ensure_http_request_router() -> void:
 			_editor_lifecycle_endpoint
 		)
 	)
+	if _server != null and _http_request_router.has_method("set_allowed_hosts"):
+		_http_request_router.set_allowed_hosts([str(_server.get("_host"))])
 
 
 func _ensure_http_request_decoder() -> void:

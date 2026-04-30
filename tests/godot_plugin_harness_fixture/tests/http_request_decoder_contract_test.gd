@@ -10,6 +10,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var content_length_request := (
 		"POST /mcp HTTP/1.1\r\n"
 		+ "Host: localhost\r\n"
+		+ "Origin: http://localhost:5173\r\n"
+		+ "Content-Type: application/json\r\n"
+		+ "Authorization: Bearer test-token\r\n"
 		+ "Content-Length: %d\r\n\r\n%sNEXT"
 	) % [body.to_utf8_buffer().size(), body]
 	var decoded_content_length: Dictionary = decoder.decode_pending_request(content_length_request)
@@ -19,6 +22,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Decoded Content-Length request did not preserve the HTTP method.")
 	if str((decoded_content_length.get("headers", {}) as Dictionary).get("path", "")) != "/mcp":
 		return _failure("Decoded Content-Length request did not preserve the request path.")
+	if str((decoded_content_length.get("headers", {}) as Dictionary).get("origin", "")) != "http://localhost:5173":
+		return _failure("Decoded Content-Length request did not preserve the Origin header.")
+	if str((decoded_content_length.get("headers", {}) as Dictionary).get("content-type", "")) != "application/json":
+		return _failure("Decoded Content-Length request did not preserve the Content-Type header.")
+	if str((decoded_content_length.get("headers", {}) as Dictionary).get("authorization", "")) != "Bearer test-token":
+		return _failure("Decoded Content-Length request did not preserve the Authorization header.")
 	if str(decoded_content_length.get("request_body", "")) != body:
 		return _failure("Decoded Content-Length request did not preserve the request body.")
 	if str(decoded_content_length.get("remaining_data", "")) != "NEXT":

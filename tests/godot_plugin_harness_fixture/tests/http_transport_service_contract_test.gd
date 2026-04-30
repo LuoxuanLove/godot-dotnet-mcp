@@ -13,6 +13,7 @@ var _write_count := 0
 var _last_method := ""
 var _last_path := ""
 var _last_body := ""
+var _last_headers: Dictionary = {}
 var _last_no_body := false
 
 
@@ -50,6 +51,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 			var frame := (
 				"POST /mcp HTTP/1.1\r\n"
 				+ "Host: localhost\r\n"
+				+ "Origin: http://localhost:5173\r\n"
+				+ "Content-Type: application/json; charset=utf-8\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [body.to_utf8_buffer().size(), body]
 			client.put_data(frame.to_utf8_buffer())
@@ -67,6 +70,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("HTTP transport did not preserve the routed request method or path.")
 	if _last_body != "{\"ping\":true}":
 		return _failure("HTTP transport did not preserve the routed request body.")
+	if str(_last_headers.get("origin", "")) != "http://localhost:5173":
+		return _failure("HTTP transport did not preserve the Origin header for route security decisions.")
+	if str(_last_headers.get("content-type", "")) != "application/json; charset=utf-8":
+		return _failure("HTTP transport did not preserve the Content-Type header for route security decisions.")
 	if _tick_count <= 0:
 		return _failure("HTTP transport should tick the tool loader callback during processing.")
 	var stats: Dictionary = connection_state.get_connection_stats()
@@ -101,10 +108,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 	}
 
 
-func _route_request_async(method: String, path: String, body: String) -> Dictionary:
+func _route_request_async(method: String, path: String, body: String, headers: Dictionary) -> Dictionary:
 	_last_method = method
 	_last_path = path
 	_last_body = body
+	_last_headers = headers.duplicate(true)
 	return {
 		"status": 200,
 		"body": "ok"
@@ -149,6 +157,7 @@ func _reset_state() -> void:
 	_last_method = ""
 	_last_path = ""
 	_last_body = ""
+	_last_headers = {}
 	_last_no_body = false
 
 

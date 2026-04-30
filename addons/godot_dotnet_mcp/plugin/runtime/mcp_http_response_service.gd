@@ -93,10 +93,18 @@ func build_health_response() -> Dictionary:
 	}
 
 
-func build_cors_response() -> Dictionary:
+func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept") -> Dictionary:
+	var response_headers := {}
+	if not origin.strip_edges().is_empty():
+		response_headers["Access-Control-Allow-Origin"] = origin.strip_edges()
+		response_headers["Access-Control-Allow-Methods"] = allow_methods
+		response_headers["Access-Control-Allow-Headers"] = allow_headers
+		response_headers["Access-Control-Max-Age"] = "86400"
+		response_headers["Vary"] = "Origin"
 	return {
-		"status": 204,
-		"cors": true
+		"_status_code": 204,
+		"_no_body": true,
+		"_headers": response_headers
 	}
 
 
@@ -122,10 +130,6 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 	if not no_body:
 		headers += "Content-Type: application/json; charset=utf-8\r\n"
 	headers += "Content-Length: %d\r\n" % body_bytes.size()
-	headers += "Access-Control-Allow-Origin: *\r\n"
-	headers += "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-	headers += "Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With, Authorization\r\n"
-	headers += "Access-Control-Max-Age: 86400\r\n"
 	headers += "Connection: keep-alive\r\n"
 	for header_name in extra_headers:
 		headers += "%s: %s\r\n" % [header_name, extra_headers[header_name]]
@@ -210,9 +214,11 @@ func _status_text_for(status_code: int) -> String:
 		200: "OK",
 		202: "Accepted",
 		204: "No Content",
+		403: "Forbidden",
 		400: "Bad Request",
 		404: "Not Found",
 		405: "Method Not Allowed",
+		415: "Unsupported Media Type",
 		500: "Internal Server Error"
 	}
 	return str(status_texts.get(status_code, "OK"))

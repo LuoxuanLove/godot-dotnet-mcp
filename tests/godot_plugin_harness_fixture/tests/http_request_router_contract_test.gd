@@ -43,10 +43,16 @@ class FakeCallbacks:
 			"body": body
 		}
 
-	func build_cors_response() -> Dictionary:
+	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept") -> Dictionary:
 		return {
-			"status": 204,
-			"cors": true
+			"_status_code": 204,
+			"_no_body": true,
+			"_headers": {
+				"Access-Control-Allow-Origin": origin,
+				"Access-Control-Allow-Methods": allow_methods,
+				"Access-Control-Allow-Headers": allow_headers,
+				"Vary": "Origin"
+			}
 		}
 
 
@@ -61,6 +67,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
 	context.build_cors_response = Callable(callbacks, "build_cors_response")
 	router.configure(context)
+	router.set_allowed_cors_origins(["http://localhost:5173"])
+	router.set_allowed_hosts(["10.0.0.8"])
 
 	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}")
 	if str(mcp_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\"}":
@@ -79,8 +87,39 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not route lifecycle status requests.")
 
 	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "")
-	if int(options_response.get("status", 0)) != 204 or not bool(options_response.get("cors", false)):
-		return _failure("HTTP request router did not route OPTIONS requests to the CORS responder.")
+	var options_headers: Dictionary = options_response.get("_headers", {})
+	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "POST":
+		return _failure("HTTP request router did not reject non-CORS OPTIONS requests with the allowed methods.")
+
+	var denied_origin_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"origin": "https://example.com", "host": "localhost:3000"})
+	if int(denied_origin_response.get("status", 0)) != 403:
+		return _failure("HTTP request router did not reject disallowed CORS origins.")
+
+	var allowed_origin_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"origin": "http://localhost:5173", "host": "localhost:3000"})
+	var allowed_origin_headers: Dictionary = allowed_origin_response.get("_headers", {})
+	if int(allowed_origin_response.get("_status_code", 0)) != 204:
+		return _failure("HTTP request router did not allow configured CORS preflight origins.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
+		return _failure("HTTP request router did not echo the configured CORS origin.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) == "*":
+		return _failure("HTTP request router must not use wildcard CORS origins.")
+
+	var host_denied_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "example.com:3000"})
+	if int(host_denied_response.get("status", 0)) != 403:
+		return _failure("HTTP request router did not reject non-loopback Host headers.")
+
+	var configured_host_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "10.0.0.8:3000"})
+	if int(configured_host_response.get("status", 0)) == 403:
+		return _failure("HTTP request router rejected the configured server Host header.")
+
+	var content_type_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "text/plain"})
+	if int(content_type_denied_response.get("status", 0)) != 415:
+		return _failure("HTTP request router did not reject non-JSON POST content types.")
+
+	var allowed_origin_health: Dictionary = await router.route_request_async("GET", "/health", "", {"origin": "http://localhost:5173", "host": "localhost:3000"})
+	var allowed_origin_health_headers: Dictionary = allowed_origin_health.get("_headers", {})
+	if str(allowed_origin_health_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
+		return _failure("HTTP request router did not add CORS headers to allowed actual requests.")
 
 	var not_found_response: Dictionary = await router.route_request_async("GET", "/missing", "")
 	if int(not_found_response.get("status", 0)) != 404:

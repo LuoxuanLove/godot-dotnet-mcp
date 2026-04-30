@@ -133,9 +133,9 @@ tests/godot_plugin_harness_fixture/
 | `client_config_file_transaction_contracts` | 验证 `client_config_file_transaction.gd` 的 merge、remove、backup 与 opencode 阻断写入 |
 | `client_config_launcher_adapter_contracts` | 验证 `client_config_launcher_adapter.gd` 的 CLI invocation 与 Windows command line 包装 |
 | `http_server_contracts` | 验证 `mcp_http_server` 的 lifecycle、`tools/list`、`tools/call` 结构契约 |
-| `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、CORS 与 404 语义 |
-| `http_request_decoder_contracts` | 验证 `mcp_http_request_decoder` 的 `Content-Length` / chunked body 解码、等待态与 trailing data 保留 |
-| `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影与 JSON 清洗 |
+| `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、默认拒绝跨源、显式 CORS allowlist、Host / Content-Type 校验与 404 语义 |
+| `http_request_decoder_contracts` | 验证 `mcp_http_request_decoder` 的 `Content-Length` / chunked body 解码、header 保留、等待态与 trailing data 保留 |
+| `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影、精确 Origin CORS 响应与 JSON 清洗 |
 | `json_rpc_router_contracts` | 验证 `mcp_json_rpc_router` 的 initialize、notification 无响应与 method-not-found 语义 |
 | `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
 | `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
