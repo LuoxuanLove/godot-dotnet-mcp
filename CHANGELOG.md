@@ -2,6 +2,11 @@
 
 ## Unreleased - 1.0.0-pre2
 
+### Fixed
+
+- Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
+- Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
+
 ## 1.0.0-pre1 - 2026-04-28
 
 ### Added
