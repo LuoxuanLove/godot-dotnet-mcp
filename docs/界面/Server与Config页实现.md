@@ -17,6 +17,8 @@
 - 触发完整插件重载
 - 展示插件自身诊断摘要
 
+当前 Home 页不直接暴露 CORS allowlist。浏览器型客户端需要跨源访问本地 HTTP MCP 时，通过环境变量 `GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS` 配置精确 origin；CLI 与桌面配置文件类客户端默认不需要 CORS。
+
 ### 控制器职责
 
 `server_tab.gd` 当前主要做四件事：
