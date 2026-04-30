@@ -100,13 +100,22 @@ func apply_model(model: Dictionary) -> void:
 
 
 func _rebuild_client_cards(container: VBoxContainer, clients: Array, supports_write: bool, localization) -> void:
+	var signature := _make_client_cards_signature(clients, supports_write, localization)
+	if str(container.get_meta("client_cards_signature", "")) == signature:
+		return
+	var hovered_client_ids := _collect_hovered_content_client_ids(container)
 	for child in container.get_children():
 		child.queue_free()
 	for client in clients:
-		container.add_child(_create_client_card(client, supports_write, localization))
+		container.add_child(_create_client_card(client, supports_write, localization, hovered_client_ids))
+	container.set_meta("client_cards_signature", signature)
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.call_deferred("update_mouse_cursor_state")
 
 
-func _create_client_card(client: Dictionary, supports_write: bool, localization) -> Control:
+func _create_client_card(client: Dictionary, supports_write: bool, localization, hovered_client_ids: Array) -> Control:
+	var client_id := str(client.get("id", ""))
 	var panel = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
@@ -207,6 +216,8 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 	var content_text = str(client.get("content", ""))
 	if not content_text.is_empty():
 		var content_panel = PanelContainer.new()
+		content_panel.name = "ClientConfigContentPanel"
+		content_panel.set_meta("client_id", client_id)
 		content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		content_panel.clip_contents = true
 		content_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -220,6 +231,7 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		var content_height = max(68.0, 18.0 + float(estimated_wrap_lines) * 24.0) * _current_scale
 		content_panel.custom_minimum_size.y = content_height
 		var content_overlay = Control.new()
+		content_overlay.name = "ClientConfigContentOverlay"
 		content_overlay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		content_overlay.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		content_overlay.custom_minimum_size.y = content_height
@@ -251,9 +263,11 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		content_margin.add_child(content)
 
 		var content_copy_button = Button.new()
+		content_copy_button.name = "ClientConfigContentCopyButton"
 		content_copy_button.visible = false
 		content_copy_button.focus_mode = Control.FOCUS_NONE
-		content_copy_button.mouse_filter = Control.MOUSE_FILTER_STOP
+		content_copy_button.mouse_filter = Control.MOUSE_FILTER_PASS
+		content_copy_button.set_meta("client_id", client_id)
 		content_copy_button.tooltip_text = localization.get_text("btn_copy")
 		content_copy_button.custom_minimum_size = Vector2(26.0, 26.0) * _current_scale
 		if has_theme_icon("ActionCopy", "EditorIcons"):
@@ -271,39 +285,10 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		content_copy_button.offset_top = copy_button_margin
 		content_copy_button.offset_bottom = copy_button_margin + copy_button_size
 		content_copy_button.pressed.connect(Callable(self, "_on_copy_client_pressed").bind(content_text, localization.get_text(str(client.get("name_key", "")))))
-		var show_copy_button := func() -> void:
-			content_copy_button.visible = true
-		var hide_copy_button_if_outside := func() -> void:
-			if not is_instance_valid(content_panel) or not is_instance_valid(content_copy_button):
-				return
-			var mouse_position := content_panel.get_viewport().get_mouse_position()
-			if not content_panel.get_global_rect().has_point(mouse_position):
-				content_copy_button.visible = false
-		var sync_copy_button_hover := func() -> void:
-			if not is_instance_valid(content_panel) or not is_instance_valid(content_copy_button):
-				return
-			var mouse_position := content_panel.get_viewport().get_mouse_position()
-			content_copy_button.visible = content_panel.get_global_rect().has_point(mouse_position)
-		content_panel.mouse_entered.connect(func() -> void:
-			show_copy_button.call()
-		)
-		content_panel.mouse_exited.connect(func() -> void:
-			hide_copy_button_if_outside.call_deferred()
-		)
-		content_overlay.mouse_entered.connect(func() -> void:
-			show_copy_button.call()
-		)
-		content_overlay.mouse_exited.connect(func() -> void:
-			hide_copy_button_if_outside.call_deferred()
-		)
-		content_copy_button.mouse_entered.connect(func() -> void:
-			show_copy_button.call()
-		)
-		content_copy_button.mouse_exited.connect(func() -> void:
-			hide_copy_button_if_outside.call_deferred()
-		)
 		content_overlay.add_child(content_copy_button)
-		sync_copy_button_hover.call_deferred()
+		_connect_content_copy_button_hover(content_panel, content_overlay, content_copy_button)
+		if hovered_client_ids.has(client_id):
+			content_copy_button.visible = true
 		body.add_child(content_panel)
 
 		var content_actions_gap = Control.new()
@@ -395,6 +380,164 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization)
 		actions.add_child(button)
 
 	return panel
+
+
+func _connect_content_copy_button_hover(content_panel: PanelContainer, content_overlay: Control, copy_button: Button) -> void:
+	var panel_ref: WeakRef = weakref(content_panel)
+	var button_ref: WeakRef = weakref(copy_button)
+	var show_callable: Callable = Callable(self, "_show_content_copy_button").bind(button_ref)
+	var hide_callable: Callable = Callable(self, "_request_content_copy_button_hide").bind(panel_ref, button_ref)
+	content_panel.mouse_entered.connect(show_callable)
+	content_overlay.mouse_entered.connect(show_callable)
+	copy_button.mouse_entered.connect(show_callable)
+	content_panel.mouse_exited.connect(hide_callable)
+	content_overlay.mouse_exited.connect(hide_callable)
+	copy_button.mouse_exited.connect(hide_callable)
+
+
+func _show_content_copy_button(button_ref: WeakRef) -> void:
+	var copy_button = button_ref.get_ref() as Button
+	if copy_button != null and is_instance_valid(copy_button):
+		copy_button.visible = true
+
+
+func _request_content_copy_button_hide(panel_ref: WeakRef, button_ref: WeakRef) -> void:
+	call_deferred("_hide_content_copy_button_if_outside", panel_ref, button_ref)
+
+
+func _hide_content_copy_button_if_outside(panel_ref: WeakRef, button_ref: WeakRef, force_hide := false) -> void:
+	var content_panel = panel_ref.get_ref() as PanelContainer
+	var copy_button = button_ref.get_ref() as Button
+	if content_panel == null or copy_button == null or not is_instance_valid(content_panel) or not is_instance_valid(copy_button):
+		return
+	if force_hide or not _is_mouse_inside_content_copy_target(content_panel, copy_button):
+		copy_button.visible = false
+
+
+func _is_mouse_inside_content_copy_target(content_panel: PanelContainer, copy_button: Button) -> bool:
+	if not content_panel.is_visible_in_tree():
+		return false
+	var viewport: Viewport = get_viewport()
+	if viewport != null:
+		var hovered_control: Control = viewport.gui_get_hovered_control()
+		if hovered_control != null:
+			if _is_control_self_or_ancestor(content_panel, hovered_control) or _is_control_self_or_ancestor(copy_button, hovered_control):
+				return true
+	return _is_global_mouse_inside_content_copy_target(content_panel, copy_button)
+
+
+func _is_control_self_or_ancestor(root: Control, candidate: Control) -> bool:
+	return root == candidate or root.is_ancestor_of(candidate)
+
+
+func _is_global_mouse_inside_content_copy_target(content_panel: PanelContainer, copy_button: Button) -> bool:
+	var mouse_position := get_global_mouse_position()
+	var padding := max(2.0, 2.0 * _current_scale)
+	if content_panel.get_global_rect().grow(padding).has_point(mouse_position):
+		return true
+	return copy_button.is_visible_in_tree() and copy_button.get_global_rect().grow(padding).has_point(mouse_position)
+
+
+func _collect_hovered_content_client_ids(container: VBoxContainer) -> Array:
+	var hovered_ids: Array = []
+	for panel_variant in container.find_children("ClientConfigContentPanel", "PanelContainer", true, false):
+		var content_panel = panel_variant as PanelContainer
+		if content_panel == null:
+			continue
+		var copy_button = content_panel.find_child("ClientConfigContentCopyButton", true, false) as Button
+		if copy_button == null:
+			continue
+		if copy_button.visible or _is_mouse_inside_content_copy_target(content_panel, copy_button):
+			var client_id := str(content_panel.get_meta("client_id", ""))
+			if not client_id.is_empty() and not hovered_ids.has(client_id):
+				hovered_ids.append(client_id)
+	return hovered_ids
+
+
+func _make_client_cards_signature(clients: Array, supports_write: bool, localization) -> String:
+	var localized_keys := [
+		"config_client_install_status_label",
+		"config_client_runtime_status_label",
+		"config_client_entry_status_label",
+		"config_client_path_source_label",
+		"config_file_path",
+		"btn_write_config",
+		"btn_remove_plugin_config",
+		"btn_copy",
+		"config_client_action_choose_program_path",
+		"config_client_action_clear_custom_path",
+		"config_client_action_open_config_dir",
+		"config_client_action_open_config_file",
+		"config_client_action_open_project"
+	]
+	var localization_signature := {}
+	for key in localized_keys:
+		localization_signature[key] = localization.get_text(key)
+	var client_signatures: Array = []
+	for client_variant in clients:
+		var client := client_variant as Dictionary
+		if client == null:
+			continue
+		client_signatures.append(_make_client_card_signature(client, localization))
+	return JSON.stringify({
+		"scale": _current_scale,
+		"supports_write": supports_write,
+		"localization": localization_signature,
+		"clients": client_signatures
+	})
+
+
+func _make_client_card_signature(client: Dictionary, localization) -> Dictionary:
+	var key_fields := [
+		"id",
+		"name_key",
+		"summary_text",
+		"summary_key",
+		"install_status_text",
+		"runtime_status_text",
+		"entry_status_text",
+		"path_source_text",
+		"path_label_text",
+		"path",
+		"detail_label_text",
+		"detail_value",
+		"explanation_text",
+		"guidance_text",
+		"content",
+		"primary_action_label_key",
+		"primary_action_enabled",
+		"launch_supported",
+		"launch_action_label_key",
+		"launch_enabled",
+		"path_pick_supported",
+		"path_pick_action_label_key",
+		"path_pick_enabled",
+		"path_clear_supported",
+		"path_clear_enabled",
+		"open_config_dir_supported",
+		"open_config_dir_enabled",
+		"open_config_file_supported",
+		"open_config_file_enabled",
+		"writeable",
+		"remove_supported",
+		"remove_enabled"
+	]
+	var signature := {}
+	for field in key_fields:
+		signature[field] = client.get(field)
+	var label_keys := [
+		str(client.get("name_key", "")),
+		str(client.get("summary_key", "")),
+		str(client.get("primary_action_label_key", "")),
+		str(client.get("launch_action_label_key", "")),
+		str(client.get("path_pick_action_label_key", ""))
+	]
+	var localized_labels := {}
+	for key in label_keys:
+		if not key.is_empty():
+			localized_labels[key] = localization.get_text(key)
+	signature["localized_labels"] = localized_labels
+	return signature
 
 
 func _create_info_block(label_text: String, value_text: String) -> Control:

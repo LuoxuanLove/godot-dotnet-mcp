@@ -66,7 +66,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.config_remove_requested.connect(Callable(recorder, "on_remove"))
 	_instance.copy_requested.connect(Callable(recorder, "on_copy"))
 
-	_instance.apply_model({
+	var base_model := {
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
 		"current_config_platform": "cursor",
@@ -95,7 +95,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 			}
 		],
 		"cli_clients": []
-	})
+	}
+	_instance.apply_model(base_model)
 	await tree.process_frame
 
 	var desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
@@ -134,6 +135,48 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if recorder.copied_text != "{\"mcpServers\":{}}":
 		return _failure("Config tab should forward copy actions through the original signal.")
 
+	var content_panel := _find_content_panel_for_copy_button(copy_button)
+	if content_panel == null:
+		return _failure("Config tab copy button should be anchored inside the generated content panel.")
+	var content_panel_ref: WeakRef = weakref(content_panel)
+	var copy_button_ref: WeakRef = weakref(copy_button)
+	_instance.call("_hide_content_copy_button_if_outside", content_panel_ref, copy_button_ref, true)
+	if copy_button.visible:
+		return _failure("Config tab content copy button should stay hidden while the mouse is outside the content panel.")
+	_instance.call("_show_content_copy_button", copy_button_ref)
+	if not copy_button.visible:
+		return _failure("Config tab content copy button should become visible while the mouse hovers inside the content panel.")
+	_instance.call("_show_content_copy_button", copy_button_ref)
+	if not copy_button.visible:
+		return _failure("Config tab content copy button should remain visible while hover state is refreshed.")
+	_instance.call("_hide_content_copy_button_if_outside", content_panel_ref, copy_button_ref, true)
+	if copy_button.visible:
+		return _failure("Config tab content copy button should hide after the mouse leaves the content panel.")
+	if copy_button.mouse_filter != Control.MOUSE_FILTER_PASS:
+		return _failure("Config tab content copy button should receive clicks without breaking parent hover state.")
+	_instance.apply_model(base_model)
+	await tree.process_frame
+	await tree.process_frame
+	var same_model_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var same_model_copy_button = _find_button(same_model_desktop_clients.get_child(0).find_children("*", "Button", true, false), "Copy")
+	if same_model_copy_button != copy_button:
+		return _failure("Config tab should not rebuild client cards when the rendered model signature is unchanged.")
+	_instance.call("_show_content_copy_button", copy_button_ref)
+	var changed_model: Dictionary = base_model.duplicate(true)
+	changed_model["desktop_clients"][0]["install_status_text"] = "Installed to\nC:/Users/Test/AppData/Roaming/Cursor/User/changed-mcp.json"
+	_instance.apply_model(changed_model)
+	await tree.process_frame
+	await tree.process_frame
+	var rebuilt_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var rebuilt_copy_button = _find_button(rebuilt_desktop_clients.get_child(0).find_children("*", "Button", true, false), "Copy")
+	if rebuilt_copy_button == null or rebuilt_copy_button == copy_button:
+		return _failure("Config tab content copy button should be recreated only after a rendered model change.")
+	var rebuilt_content_panel := _find_content_panel_for_copy_button(rebuilt_copy_button)
+	if rebuilt_content_panel == null:
+		return _failure("Config tab rebuilt copy button should stay anchored inside the generated content panel.")
+	if not rebuilt_copy_button.visible:
+		return _failure("Config tab content copy button should preserve hover visibility across a rendered model rebuild.")
+
 	return {
 		"name": "config_tab_rendering_contracts",
 		"success": true,
@@ -158,6 +201,16 @@ func _find_button(buttons: Array, text: String) -> Button:
 		var button = button_variant as Button
 		if button != null and (button.text == text or button.tooltip_text == text):
 			return button
+	return null
+
+
+func _find_content_panel_for_copy_button(button: Button) -> PanelContainer:
+	var parent := button.get_parent()
+	while parent != null:
+		var panel := parent as PanelContainer
+		if panel != null:
+			return panel
+		parent = parent.get_parent()
 	return null
 
 
