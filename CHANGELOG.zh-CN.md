@@ -2,10 +2,6 @@
 
 ## Unreleased - 1.0.0-pre2
 
-### Changed
-
-- 更新安装文档，将面向用户的安装路径改为 Godot 插件商城 / Asset Library，不再使用 GitHub Release ZIP 下载方式。
-
 ## 1.0.0-pre1 - 2026-04-28
 
 ### Added
