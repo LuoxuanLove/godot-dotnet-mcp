@@ -92,6 +92,8 @@ GET  http://127.0.0.1:3000/api/tools
 POST http://127.0.0.1:3000/mcp
 ```
 
+Security note: the local HTTP server does not return wildcard CORS headers by default. CLI and desktop MCP clients that connect directly to `127.0.0.1` do not need CORS. Browser-based clients must be explicitly allowlisted with the `GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS` environment variable, using comma-separated exact origins such as `http://localhost:5173`.
+
 ## Architecture in one minute
 
 Godot .NET MCP is a self-contained Godot editor plugin. The HTTP server, MCP JSON-RPC routing, tool registry, runtime state, client configuration, UI model, localization, and Roslyn syntax support all live inside `addons/godot_dotnet_mcp/`.

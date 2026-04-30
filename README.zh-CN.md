@@ -92,6 +92,8 @@ GET  http://127.0.0.1:3000/api/tools
 POST http://127.0.0.1:3000/mcp
 ```
 
+安全说明：本地 HTTP 服务默认不返回 wildcard CORS headers。直接连接 `127.0.0.1` 的 CLI 与桌面 MCP 客户端不需要 CORS；浏览器型客户端必须通过 `GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS` 环境变量显式加入 allowlist，多个精确 origin 用英文逗号分隔，例如 `http://localhost:5173`。
+
 ## 一分钟架构说明
 
 Godot .NET MCP 是一个自包含的 Godot 编辑器插件。HTTP 服务、MCP JSON-RPC 路由、工具注册表、运行时状态、客户端配置、UI model、本地化和 Roslyn 语法支持都位于 `addons/godot_dotnet_mcp/` 中。
