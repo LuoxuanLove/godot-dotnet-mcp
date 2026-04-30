@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Unreleased - 1.0.0-pre2
 
 ### Changed
 
