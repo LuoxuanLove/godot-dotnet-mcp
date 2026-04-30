@@ -15,6 +15,5 @@ tmp/
 release-notes-*.tmp.md
 *.log
 tmp_*.log
-agent_workflow/
 custom_tools/
 history_rewrite_messages.ps1
