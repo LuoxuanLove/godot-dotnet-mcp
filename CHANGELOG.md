@@ -6,6 +6,7 @@
 
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
 - Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
+- Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are written to the script file, and `system_script_analyze` now reports ordinary GDScript variables with default values instead of returning `variable_count = 0`.
 
 ## 1.0.0-pre1 - 2026-04-28
 
