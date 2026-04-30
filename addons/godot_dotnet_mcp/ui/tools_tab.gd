@@ -1612,6 +1612,7 @@ func _filter_empty_preview_lines(lines: Array[String]) -> Array[String]:
 func _build_tree_signature(model: Dictionary) -> String:
 	var tools_by_category = model.get("tools_by_category", {})
 	var parts: Array[String] = [
+		_get_tree_language_signature(model),
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
@@ -1634,3 +1635,13 @@ func _build_tree_signature(model: Dictionary) -> String:
 				str(tool_dict.get("load_state", ""))
 			])
 	return "\n".join(parts)
+
+
+func _get_tree_language_signature(model: Dictionary) -> String:
+	var current_language := str(model.get("current_language", ""))
+	if not current_language.is_empty():
+		return current_language
+	var localization = model.get("localization")
+	if localization != null and localization.has_method("get_language"):
+		return str(localization.call("get_language"))
+	return ""

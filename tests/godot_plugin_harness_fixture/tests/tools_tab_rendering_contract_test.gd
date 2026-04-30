@@ -48,6 +48,13 @@ class FakeLocalization extends RefCounted:
 		return str(_texts.get(key, key))
 
 
+class RefreshLocalization extends FakeLocalization:
+	func _init() -> void:
+		_texts = _texts.duplicate(true)
+		_texts["tools_enabled"] = "已启用 %d/%d"
+		_texts["tool_system_editor_log_name"] = "编辑器日志（刷新）"
+
+
 func run_case(tree: SceneTree) -> Dictionary:
 	_instance = ToolsTabScene.instantiate() as VBoxContainer
 	if _instance == null:
@@ -57,8 +64,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var tools_by_category := _build_tools_by_category()
 	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
-	_instance.apply_model({
+	var base_model := {
 		"localization": FakeLocalization.new(),
+		"current_language": "en",
 		"editor_scale": 1.0,
 		"settings": {
 			"disabled_tools": [],
@@ -69,7 +77,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"toolGroups": presentation.get("toolGroups", []),
 		"tool_presentation": presentation,
 		"tool_load_errors": []
-	})
+	}
+	_instance.apply_model(base_model)
 	await tree.process_frame
 
 	var tool_count_label = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel") as Label
@@ -144,6 +153,20 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():
 		return _failure(catalog_error)
+	var refreshed_model := base_model.duplicate(true)
+	refreshed_model["localization"] = RefreshLocalization.new()
+	refreshed_model["current_language"] = "zh_CN"
+	_instance.apply_model(refreshed_model)
+	await tree.process_frame
+	await tree.process_frame
+	if tool_count_label.text != "已启用 %d/%d" % [expected_visible_tool_count, expected_visible_tool_count]:
+		return _failure("Tools tab should refresh localized header copy when language changes.")
+	var refreshed_root = tool_tree.get_root()
+	var refreshed_core_domain = _find_child_by_metadata(refreshed_root, "domain", "core")
+	var refreshed_system_category = _find_child_by_metadata(refreshed_core_domain, "category", "system")
+	var refreshed_editor_log_tool = _find_child_by_metadata(refreshed_system_category, "tool", "system_editor_log")
+	if refreshed_editor_log_tool == null or refreshed_editor_log_tool.get_text(0) != "编辑器日志（刷新）":
+		return _failure("Tools tab should rebuild tree item text when the active language changes.")
 
 	return {
 		"name": "tools_tab_rendering_contracts",
