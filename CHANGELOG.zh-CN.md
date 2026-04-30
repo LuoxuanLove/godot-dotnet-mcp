@@ -6,6 +6,7 @@
 
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
 - 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、高层工具内部项和 action 标签会立即刷新，无需完全重启插件。
+- 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值写入：`default_value` 现在会正确落盘，`system_script_analyze` 也会统计普通 GDScript 变量及其默认值，不再返回 `variable_count = 0`。
 
 ## 1.0.0-pre1 - 2026-04-28
 
