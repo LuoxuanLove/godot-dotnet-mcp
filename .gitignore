@@ -12,6 +12,7 @@ tmp/
 .tmp_central_home_status/
 .dotnet_home/
 *.tmp
+release-notes-*.tmp.md
 *.log
 tmp_*.log
 agent_workflow/
