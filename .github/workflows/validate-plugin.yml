@@ -6,8 +6,8 @@ on:
   push:
     branches:
       - main
-      - develop
-      - "v*-dev"
+      - "feature/**"
+      - "fix/**"
 
 jobs:
   validate-plugin-harness:
