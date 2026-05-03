@@ -1,6 +1,6 @@
 # Tools 页实现
 
-本文档说明 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 与 [tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 的节点结构、工具树、预览面板与当前布局约束。
+本文档说明 `addons/godot_dotnet_mcp/ui/tools_tab.tscn` 与 `addons/godot_dotnet_mcp/ui/tools_tab.gd` 的节点结构、工具树、预览面板与当前布局约束。
 
 ---
 
@@ -106,7 +106,7 @@ root
 
 ## 控制器职责
 
-[tools_tab.gd](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.gd) 当前负责：
+`tools_tab.gd` 当前负责：
 
 - 接收 model 并刷新文案
 - 优先消费 model 中的 `toolTree` / `toolGroups` / `tool_presentation` 构建 TreeItem
@@ -201,7 +201,7 @@ root
 - 工具树上下留白
 - 预览区与分隔线距离
 
-都应优先在 [tools_tab.tscn](/E:/Project/Mechoes/addons/godot_dotnet_mcp/ui/tools_tab.tscn) 中手动修改。
+都应优先在 `tools_tab.tscn` 中手动修改。
 
 脚本仍保留的 UI 级控制主要是：
 
