@@ -15,6 +15,7 @@ const MCPToolsApiServiceContextScript = preload("res://addons/godot_dotnet_mcp/p
 const MCPHttpResponseContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_context.gd")
 const MCPHttpTransportContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_context.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
@@ -126,6 +127,8 @@ func build_http_response_context(server, tool_loader_supervisor):
 			"last_request_method": str(connection_stats.get("last_request_method", "")),
 			"last_request_at_unix": int(connection_stats.get("last_request_at_unix", 0))
 		}
+	context.get_freshness_snapshot = func() -> Dictionary:
+		return PluginInstanceFreshness.get_freshness_snapshot()
 	context.log = func(message: String, level: String = "debug") -> void:
 		MCPDebugBuffer.record(level, "server", message)
 		if bool(server.get("_debug_mode")):

@@ -5,6 +5,7 @@ class_name MCPHttpResponseService
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
 var _get_server_stats := Callable()
+var _get_freshness_snapshot := Callable()
 var _log := Callable()
 var _server_name := ""
 var _server_version := ""
@@ -19,6 +20,7 @@ func configure(context = null) -> void:
 	_get_tool_loader = context.get_tool_loader
 	_get_tool_loader_status = context.get_tool_loader_status
 	_get_server_stats = context.get_server_stats
+	_get_freshness_snapshot = context.get_freshness_snapshot
 	_log = context.log
 	_server_name = str(context.server_name)
 	_server_version = str(context.server_version)
@@ -30,6 +32,7 @@ func dispose() -> void:
 	_get_tool_loader = Callable()
 	_get_tool_loader_status = Callable()
 	_get_server_stats = Callable()
+	_get_freshness_snapshot = Callable()
 	_log = Callable()
 	_server_name = ""
 	_server_version = ""
@@ -89,6 +92,7 @@ func build_health_response() -> Dictionary:
 		"tool_loader_status": loader_status,
 		"domain_states": domain_states,
 		"reload_status": reload_status,
+		"freshness": _get_freshness_snapshot_safe(),
 		"performance": performance
 	}
 
@@ -206,6 +210,14 @@ func _get_server_stats_safe() -> Dictionary:
 		var stats = _get_server_stats.call()
 		if stats is Dictionary:
 			return (stats as Dictionary).duplicate(true)
+	return {}
+
+
+func _get_freshness_snapshot_safe() -> Dictionary:
+	if _get_freshness_snapshot.is_valid():
+		var snapshot = _get_freshness_snapshot.call()
+		if snapshot is Dictionary:
+			return (snapshot as Dictionary).duplicate(true)
 	return {}
 
 
