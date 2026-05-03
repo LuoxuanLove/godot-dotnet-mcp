@@ -28,7 +28,7 @@ tools/system/
 ### 能力说明
 - `system_help`：返回面向 Agent 的 MCP 能力说明、推荐起手顺序、编辑器截图优先提示、隐藏控件枚举提示、运行时自动化能力与当前工具 schema 版本。
 
-连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
+连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。插件不提供系统级鼠标 / 键盘注入、物理光标移动、强制前台或系统窗口移动能力；如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
 
 ### 项目级
 - `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位。
@@ -43,7 +43,7 @@ tools/system/
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
 ### 编辑器界面级
-- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、坐标映射、焦点移动、按钮类控件激活、控件本地坐标左键 / 右键点击，以及可见弹窗的最小安全交互。
+- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、坐标映射、焦点移动、按钮类控件激活、控件本地坐标左键 / 右键点击，以及可见弹窗的最小安全交互。点击动作通过 Godot `Viewport` / `Control` 内部事件派发，不移动用户物理鼠标，也不接管系统窗口。
 - `system_editor_log`：以高层入口读取当前 Output 面板、按错误/警告过滤输出，并清空 Output 面板。
 
 这组工具当前由 `tools/system/impl_editor.gd` 承载，并通过 `atomic_bridge.gd` 聚合底层 `editor_status`、`editor_screenshot`、`editor_ui_control`、`editor_popup` 与 `editor_log` 原子工具，适合作为 Agent 处理编辑器界面和 Output 面板任务时的稳定入口。
@@ -117,7 +117,7 @@ system_editor_state
 	-> system_editor_control(action=focus_control / activate_control / click_control / right_click_control / set_control_text)
 ```
 
-其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；`click_control` / `right_click_control` 使用 `local_x` / `local_y` 的 Control 本地坐标并返回 viewport、screen、截图与 OS 窗口 rect 的换算信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
+其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；`click_control` / `right_click_control` 使用 `local_x` / `local_y` 的 Control 本地坐标并返回 viewport、screen、截图与编辑器窗口只读边界信息的换算信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
 
 ---
 
