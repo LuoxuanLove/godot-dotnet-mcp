@@ -42,7 +42,7 @@ tools/system/
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
 ### 编辑器界面级
-- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、焦点移动、按钮类控件激活，以及可见弹窗的最小安全交互。
+- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、坐标映射、焦点移动、按钮类控件激活、控件本地坐标左键 / 右键点击，以及可见弹窗的最小安全交互。
 - `system_editor_log`：以高层入口读取当前 Output 面板、按错误/警告过滤输出，并清空 Output 面板。
 
 这组工具当前由 `tools/system/impl_editor.gd` 承载，并通过 `atomic_bridge.gd` 聚合底层 `editor_status`、`editor_screenshot`、`editor_ui_control`、`editor_popup` 与 `editor_log` 原子工具，适合作为 Agent 处理编辑器界面和 Output 面板任务时的稳定入口。
@@ -112,10 +112,10 @@ system_editor_state
 	-> system_editor_control(action=activate_ui)
 	-> system_editor_control(action=list_controls)
 	-> system_editor_control(action=get_control / capture_control)
-	-> system_editor_control(action=focus_control / activate_control / set_control_text)
+	-> system_editor_control(action=focus_control / activate_control / click_control / right_click_control / set_control_text)
 ```
 
-其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
+其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；`click_control` / `right_click_control` 使用 `local_x` / `local_y` 的 Control 本地坐标并返回 viewport、screen、截图与 OS 窗口 rect 的换算信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
 
 ---
 
