@@ -39,6 +39,7 @@ AI 编程 Agent 在 Godot 中要真正可靠，不能只读 `.tscn` 和脚本文
 - `system_help` 返回当前能力说明、推荐起手顺序、截图优先提示、隐藏控件提示与 schema 信息。
 - `system_project_state` 汇总项目健康、文件数量、运行状态、最近错误、编译错误和可选运行时健康摘要。
 - `system_editor_state` 聚合当前编辑器工作区、Inspector / FileSystem 选择、项目运行摘要和 runtime-control 状态。
+- `system_plugin_reload` 提供同步 addon 文件后使用的稳定 Agent 可调用插件生命周期重载入口和 freshness 检查。
 
 ### 操作文件、场景与脚本
 
@@ -75,7 +76,7 @@ addons/godot_dotnet_mcp
 
 ### 源码方式
 
-如果用于开发或本地调试，将本仓库中的 `addons/godot_dotnet_mcp/` 复制到目标 Godot 项目的 `addons/` 目录，再按同样方式启用插件。
+如果用于开发或本地调试，将本仓库中的 `addons/godot_dotnet_mcp/` 复制到目标 Godot 项目的 `addons/` 目录，再按同样方式启用插件。复制文件只会更新磁盘副本：已经运行中的 Godot 编辑器仍会保留旧插件实例，直到调用 `system_plugin_reload(action="full_reload_plugin")` 或在插件设置中禁用后重新启用。验证同步后的 addon 时，可查看 `/health`、`system_plugin_reload(action="get_freshness")` 或 `plugin_runtime_state(action="get_self_health")` 中的 `freshness.needs_lifecycle_reload`。
 
 ## 快速开始
 
