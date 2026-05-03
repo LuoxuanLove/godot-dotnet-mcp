@@ -601,6 +601,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_state_desc": "彙總當前項目狀態，包括文件計數、最近錯誤與運行狀態。",
 	"tool_system_project_configure_name": "項目配置",
 	"tool_system_project_configure_desc": "讀取或修改項目設置、輸入動作與自動載入配置。",
+	"tool_system_resource_reference_audit_name": "資源引用審計",
+	"tool_system_resource_reference_audit_desc": "掃描場景和資源中的陳舊 UID / 路徑引用，以及 C# 自訂 Resource 腳本不匹配風險。",
 	"tool_system_project_run_name": "運行項目",
 	"tool_system_project_run_desc": "在 Godot 編輯器中啓動項目運行。",
 	"tool_system_project_stop_name": "停止項目",
