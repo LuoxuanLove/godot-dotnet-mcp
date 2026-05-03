@@ -8,6 +8,7 @@
 - Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
 - Added a stable Agent-callable plugin lifecycle reload path through `system_plugin_reload(action="full_reload_plugin")`, plus freshness metadata in health snapshots to compare the running plugin instance with disk files after addon sync.
 - Added localized Tools-page metadata and CI required-subset coverage for the plugin freshness and lifecycle reload contracts.
+- Added editor session identity metadata to `/health`, `system_editor_state`, and `system_project_state.runtime_capabilities.editor_context`, plus harness-owned process registry cleanup so external validation processes can be distinguished from the current MCP editor process.
 
 ### Fixed
 

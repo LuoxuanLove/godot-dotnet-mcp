@@ -8,6 +8,7 @@
 - 新增 `system_project_state` 与 `system_editor_state` 的运行能力位，并增强 `system_project_run` 失败上下文，用于区分只读项目访问、项目启动、运行时控制和运行时截图能力是否就绪。
 - 新增通过 `system_plugin_reload(action="full_reload_plugin")` 调用的稳定插件生命周期重载入口，并在健康快照中加入 freshness 元数据，用于同步 addon 后对比当前运行插件实例与磁盘文件。
 - 新增插件 freshness / 生命周期重载契约的 Tools 页本地化元数据与 CI required subset 覆盖。
+- 新增 `/health`、`system_editor_state` 与 `system_project_state.runtime_capabilities.editor_context` 中的编辑器会话身份信息，并为 harness 自己启动的外部验证进程加入登记清理，便于区分当前 MCP 编辑器进程与临时验证进程。
 
 ### Fixed
 

@@ -175,12 +175,14 @@ tests/godot_plugin_harness_fixture/
 2. 复制 `addons/godot_dotnet_mcp/`
 3. 在新的临时 `stageRoot` 中启动 Godot
 4. 运行 `res://tests/headless_suite_runner.gd`
+5. 将 harness 自己启动的 `dotnet build` 与 headless Godot PID 登记到 `.tmp/godot_plugin_harness/processes/<runId>.json`
 
 这样做的好处是：
 
 - 测试环境更接近真实装配路径
 - 不直接污染工作目录
 - 失败时可通过 `--keep-stage-root` 保留现场排查
+- 进程清理只针对 registry 中登记的 harness-owned 临时进程；不会按 `godot` / `dotnet` 进程名泛杀，也不会把当前承载 MCP 的编辑器会话视为可清理对象
 
 ### 2. suite 已支持单 case 运行
 
@@ -264,6 +266,7 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 常用附加选项：
 
 - `--keep-stage-root`
+- `--cleanup-stale-processes`：只清理 owner harness 进程已退出且 PID / 启动时间匹配的登记子进程，并输出清理摘要。`scripts/test_plugin_side_roslyn.ps1` 的 `finally` 会先调用该清理入口，再删除 `.tmp/godot_plugin_harness`。
 
 当前返回内容包括：
 
