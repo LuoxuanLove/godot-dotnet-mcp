@@ -4,18 +4,18 @@
 
 ### Added
 
-- Added `system_editor_control` support for control-local left/right mouse clicks, richer popup metadata, and coordinate mapping between control, screenshot, screen, and OS window rectangles for visual QA workflows.
-- Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
-- Added a stable Agent-callable plugin lifecycle reload path through `system_plugin_reload(action="full_reload_plugin")`, plus freshness metadata in health snapshots to compare the running plugin instance with disk files after addon sync.
-- Added localized Tools-page metadata and CI required-subset coverage for the plugin freshness and lifecycle reload contracts.
-- Added editor session identity metadata to `/health`, `system_editor_state`, and `system_project_state.runtime_capabilities.editor_context`, plus harness-owned process registry cleanup so external validation processes can be distinguished from the current MCP editor process.
+- Added `system_editor_control` support for local left/right control clicks, popup metadata, and coordinate mapping across controls, screenshots, screens, and OS windows for more reliable editor UI automation.
+- Added clearer runtime capability reporting to `system_project_state` and `system_editor_state`, with richer `system_project_run` failure context for project launch, runtime control, and capture readiness.
+- Added `system_plugin_reload(action="full_reload_plugin")` with health checks and localized Tools-page descriptions so agents can reload the plugin and verify that the running instance matches the installed files.
+- Added editor session identity details to `/health`, `system_editor_state`, and `system_project_state` so agents can distinguish the active MCP editor session from other Godot processes.
 
 ### Fixed
 
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
 - Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
-- Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are written to the script file, and `system_script_analyze` now reports ordinary GDScript variables with default values instead of returning `variable_count = 0`.
-- Fixed full plugin lifecycle reload so the next server/tool-loader startup force-refreshes Godot script resources, ensuring new System tools and schema changes appear after reconnecting.
+- Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are saved correctly and reported by `system_script_analyze`.
+- Fixed full plugin reload so newly added System tools and schema changes are available after reconnecting.
+- Fixed local HTTP CORS handling so browser-based clients no longer receive wildcard cross-origin access by default, while configured browser clients can still pass origin validation.
 
 ## 1.0.0-pre1 - 2026-04-28
 
