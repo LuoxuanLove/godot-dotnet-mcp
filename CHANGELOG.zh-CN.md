@@ -4,18 +4,18 @@
 
 ### Added
 
-- 新增 `system_editor_control` 对控件本地坐标左键 / 右键点击、弹窗元数据和控件 / 截图 / 屏幕 / OS 窗口 rect 坐标映射的支持，便于视觉 QA 工作流定位真实编辑器 UI。
-- 新增 `system_project_state` 与 `system_editor_state` 的运行能力位，并增强 `system_project_run` 失败上下文，用于区分只读项目访问、项目启动、运行时控制和运行时截图能力是否就绪。
-- 新增通过 `system_plugin_reload(action="full_reload_plugin")` 调用的稳定插件生命周期重载入口，并在健康快照中加入 freshness 元数据，用于同步 addon 后对比当前运行插件实例与磁盘文件。
-- 新增插件 freshness / 生命周期重载契约的 Tools 页本地化元数据与 CI required subset 覆盖。
-- 新增 `/health`、`system_editor_state` 与 `system_project_state.runtime_capabilities.editor_context` 中的编辑器会话身份信息，并为 harness 自己启动的外部验证进程加入登记清理，便于区分当前 MCP 编辑器进程与临时验证进程。
+- 新增 `system_editor_control` 的控件本地左键 / 右键点击、弹窗元数据和多坐标系映射支持，让 Agent 更可靠地定位并操作编辑器 UI。
+- `system_project_state` 与 `system_editor_state` 新增更清晰的运行时能力报告，并增强 `system_project_run` 失败上下文，便于判断项目启动、运行时控制和截图能力是否就绪。
+- 新增 `system_plugin_reload(action="full_reload_plugin")`、健康状态检查和 Tools 页本地化说明，Agent 可重载插件并确认当前运行实例已匹配已安装文件。
+- 在 `/health`、`system_editor_state` 与 `system_project_state` 中新增编辑器会话标识，便于 Agent 区分当前 MCP 编辑器会话与其他 Godot 进程。
 
 ### Fixed
 
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
-- 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、高层工具内部项和 action 标签会立即刷新，无需完全重启插件。
-- 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值写入：`default_value` 现在会正确落盘，`system_script_analyze` 也会统计普通 GDScript 变量及其默认值，不再返回 `variable_count = 0`。
-- 修复完整插件生命周期重载后的工具缓存刷新：下一次 server / tool loader 启动会强制刷新 Godot 脚本资源，确保重新连接后能看到新的 System 工具与 schema 变化。
+- 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、内部节点和 action 标签会立即刷新，无需完全重启插件。
+- 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值处理：`default_value` 现在会正确写入脚本文件，并可被 `system_script_analyze` 统计和报告。
+- 修复完整插件重载后的工具刷新问题，重新连接后即可看到新增的 System 工具和 schema 变化。
+- 修复本地 HTTP 服务的 CORS 处理：默认不再向任意来源开放跨源访问，同时已配置的浏览器客户端仍可通过来源校验。
 
 ## 1.0.0-pre1 - 2026-04-28
 
