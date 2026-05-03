@@ -51,6 +51,12 @@ class FakeBridge extends RefCounted:
 						return success({"target_path": str(args.get("target_path", ""))})
 					"activate_control":
 						return success({"target_path": str(args.get("target_path", ""))})
+					"click_control", "right_click_control":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"local_x": args.get("local_x", null),
+							"local_y": args.get("local_y", null)
+						})
 					"set_text":
 						return success({"target_path": str(args.get("target_path", "")), "text": str(args.get("text", ""))})
 					_:
@@ -102,6 +108,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_control schema should expose tab_title/tab_index for TabContainer activation.")
 	if not editor_control_properties.has("bottom_panel_title") or not editor_control_properties.has("bottom_panel_path"):
 		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
+	if not editor_control_properties.has("local_x") or not editor_control_properties.has("local_y"):
+		return _failure("editor_control schema should expose local_x/local_y for control-local mouse clicks.")
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
@@ -109,6 +117,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("system editor_control should delegate set_main_screen.")
+
+	var capture_editor_result: Dictionary = impl.execute("editor_control", {
+		"action": "capture_editor"
+	})
+	if not bool(capture_editor_result.get("success", false)):
+		return _failure("system editor_control should delegate capture_editor.")
+	if int(capture_editor_result.get("data", {}).get("visible_popup_count", -1)) != 1:
+		return _failure("system editor_control capture_editor should attach visible popup count.")
+	if str(capture_editor_result.get("data", {}).get("visible_popups", [{}])[0].get("node_path", "")) != "/root/Editor/SearchDialog":
+		return _failure("system editor_control capture_editor should attach visible popup metadata.")
 
 	var list_controls_result: Dictionary = impl.execute("editor_control", {
 		"action": "list_controls",
@@ -180,6 +198,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(capture_control_result.get("success", false)):
 		return _failure("system editor_control should delegate capture_control.")
+
+	var click_control_result: Dictionary = impl.execute("editor_control", {
+		"action": "click_control",
+		"target_path": "/root/Editor/SearchPanel/SearchField",
+		"local_x": 12,
+		"local_y": 8
+	})
+	if not bool(click_control_result.get("success", false)):
+		return _failure("system editor_control should delegate click_control.")
+	if int(click_control_result.get("data", {}).get("local_x", 0)) != 12:
+		return _failure("system editor_control should preserve click_control local_x.")
+
+	var right_click_control_result: Dictionary = impl.execute("editor_control", {
+		"action": "right_click_control",
+		"target_path": "/root/Editor/SearchPanel/SearchField",
+		"local_y": 9
+	})
+	if not bool(right_click_control_result.get("success", false)):
+		return _failure("system editor_control should delegate right_click_control.")
 
 	var popup_result: Dictionary = impl.execute("editor_control", {"action": "list_popups"})
 	if not bool(popup_result.get("success", false)):

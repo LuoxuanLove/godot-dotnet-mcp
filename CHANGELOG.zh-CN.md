@@ -2,6 +2,11 @@
 
 ## Unreleased - 1.0.0-pre2
 
+### Added
+
+- 新增 `system_editor_control` 对控件本地坐标左键 / 右键点击、弹窗元数据和控件 / 截图 / 屏幕 / OS 窗口 rect 坐标映射的支持，便于视觉 QA 工作流定位真实编辑器 UI。
+- 新增 `system_project_state` 与 `system_editor_state` 的运行能力位，并增强 `system_project_run` 失败上下文，用于区分只读项目访问、项目启动、运行时控制和运行时截图能力是否就绪。
+
 ### Fixed
 
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。

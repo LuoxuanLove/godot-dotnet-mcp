@@ -30,7 +30,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, scene_paths[], script_paths[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, and runtime capability bits. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -47,7 +47,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "editor_state",
-			"description": "EDITOR STATE: Unified read-only editor session snapshot. Aggregates current editor UI state, Inspector summary, FileSystem selection, project runtime summary, and runtime control status into one payload for agent orientation.",
+			"description": "EDITOR STATE: Unified read-only editor session snapshot. Aggregates current editor UI state, Inspector summary, FileSystem selection, project runtime summary, runtime control status, and runtime_capabilities into one payload for agent orientation.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {}
@@ -104,7 +104,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_run",
-			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state for compile errors before running. Pair with project_stop. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout.",
+			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -307,7 +307,10 @@ func _build_runtime_control_state_section() -> Dictionary:
 	if service == null or not service.has_method("get_status"):
 		return _section_failure("Runtime control service is unavailable.", {}, {
 			"armed": false,
-			"message": "Runtime control service is unavailable."
+			"message": "Runtime control service is unavailable.",
+			"can_enable_runtime_control": false,
+			"can_control_runtime": false,
+			"can_capture_runtime": false
 		})
 	var status = service.get_status()
 	if status is Dictionary:
@@ -316,14 +319,84 @@ func _build_runtime_control_state_section() -> Dictionary:
 			copied["available"] = true
 		if not copied.has("error"):
 			copied["error"] = ""
+		_enrich_runtime_control_capabilities(copied)
 		return copied
 	return _section_failure("Runtime control status is unavailable.", {}, {
 		"armed": false,
-		"message": "Runtime control status is unavailable."
+		"message": "Runtime control status is unavailable.",
+		"can_enable_runtime_control": false,
+		"can_control_runtime": false,
+		"can_capture_runtime": false
 	})
 
 
-func _build_project_state_summary(args: Dictionary = {}) -> Dictionary:
+func _enrich_runtime_control_capabilities(status: Dictionary) -> void:
+	var available := bool(status.get("available", false))
+	var armed := bool(status.get("armed", false))
+	var session_snapshot_raw = status.get("session_snapshot", {})
+	var session_snapshot: Dictionary = session_snapshot_raw if session_snapshot_raw is Dictionary else {}
+	var commandable_session_count := int(session_snapshot.get("commandable_session_count", 1 if available else 0))
+	var active_session_count := int(session_snapshot.get("active_session_count", 1 if available else 0))
+	status["runtime_session_attached"] = active_session_count > 0
+	status["commandable_session_count"] = commandable_session_count
+	status["can_enable_runtime_control"] = available
+	status["can_control_runtime"] = available and armed and commandable_session_count > 0
+	status["can_capture_runtime"] = bool(status.get("can_control_runtime", false))
+	status["external_visible_process_registered"] = false
+
+
+func _build_runtime_capabilities(project_info: Dictionary, dotnet_build_data: Dictionary, runtime_summary: Dictionary, runtime_control_status: Dictionary = {}) -> Dictionary:
+	var main_scene := str(project_info.get("main_scene", ""))
+	var compile_error_count := int(dotnet_build_data.get("error_count", 0))
+	var editor_context := _build_editor_runtime_context()
+	var editor_interface_available := bool(editor_context.get("editor_interface_available", false))
+	var main_scene_exists := not main_scene.is_empty() and FileAccess.file_exists(main_scene)
+	var runtime_control := runtime_control_status.duplicate(true)
+	if runtime_control.is_empty():
+		runtime_control = _build_runtime_control_state_section()
+	var blocking_reasons: Array[String] = []
+	if not editor_interface_available:
+		blocking_reasons.append("editor_interface_unavailable")
+	if main_scene.is_empty():
+		blocking_reasons.append("main_scene_missing")
+	elif not main_scene_exists:
+		blocking_reasons.append("main_scene_not_found")
+	if compile_error_count > 0:
+		blocking_reasons.append("compile_errors_present")
+	var can_start_project := blocking_reasons.is_empty()
+	return {
+		"editor_interface_available": editor_interface_available,
+		"editor_run_available": editor_interface_available,
+		"can_start_project": can_start_project,
+		"can_enable_runtime_control": bool(runtime_control.get("can_enable_runtime_control", false)),
+		"can_control_runtime": bool(runtime_control.get("can_control_runtime", false)),
+		"can_capture_runtime": bool(runtime_control.get("can_capture_runtime", false)),
+		"runtime_session_attached": bool(runtime_control.get("runtime_session_attached", false)),
+		"runtime_launched_by_editor": int(runtime_summary.get("session_count", 0)) > 0,
+		"runtime_message_channel_available": bool(runtime_control.get("can_enable_runtime_control", false)),
+		"runtime_bridge_installed": not str(runtime_summary.get("bridge_status", "")).is_empty() and str(runtime_summary.get("bridge_status", "unknown")) != "unknown",
+		"runtime_control_armed": bool(runtime_control.get("armed", false)),
+		"runtime_session_count": int(runtime_summary.get("session_count", 0)),
+		"commandable_session_count": int(runtime_control.get("commandable_session_count", 0)),
+		"external_visible_process_registered": false,
+		"blocking_reasons": blocking_reasons,
+		"editor_context": editor_context
+	}
+
+
+func _build_editor_runtime_context() -> Dictionary:
+	var godot_path_result: Dictionary = bridge.call_atomic("editor_status", {"action": "get_godot_path"})
+	var godot_path := _safe_extract_data(godot_path_result)
+	var available := bool(godot_path_result.get("success", false))
+	return {
+		"editor_interface_available": available,
+		"error": "" if available else _result_error_text(godot_path_result, "Editor interface is unavailable."),
+		"godot_executable_path": str(godot_path.get("godot_executable_path", "")),
+		"project_root_path": str(godot_path.get("project_root_path", ProjectSettings.globalize_path("res://")))
+	}
+
+
+func _build_project_state_summary(_args: Dictionary = {}) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
 	var dotnet_result: Dictionary = bridge.call_atomic("project_dotnet", {})
 	var runtime_summary_result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_summary"})
@@ -338,13 +411,17 @@ func _build_project_state_summary(args: Dictionary = {}) -> Dictionary:
 	var runtime_summary: Dictionary = bridge.extract_data(runtime_summary_result)
 	var scene_snapshot: Dictionary = bridge.extract_data(scene_snapshot_result)
 	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var runtime_control_status := _build_runtime_control_state_section()
+	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
 	var state_data := {
 		"running": _is_runtime_running(runtime_summary),
 		"runtime_bridge_status": str(runtime_summary.get("bridge_status", "unknown")),
 		"error_count": int(runtime_summary.get("error_count", 0)),
 		"compile_error_count": int(dotnet_build_data.get("error_count", 0)),
 		"current_scene": str(scene_snapshot.get("current_scene", scene_snapshot.get("scene", ""))),
-		"dotnet_project_count": int(dotnet_data.get("count", 0))
+		"dotnet_project_count": int(dotnet_data.get("count", 0)),
+		"runtime_capabilities": runtime_capabilities
 	}
 	if failed_result is Dictionary and not failed_result.is_empty():
 		return _section_failure("Project state is unavailable.", failed_result, state_data)
@@ -354,7 +431,8 @@ func _build_project_state_summary(args: Dictionary = {}) -> Dictionary:
 		"error_count": int(state_data.get("error_count", 0)),
 		"compile_error_count": int(state_data.get("compile_error_count", 0)),
 		"current_scene": str(state_data.get("current_scene", "")),
-		"dotnet_project_count": int(state_data.get("dotnet_project_count", 0))
+		"dotnet_project_count": int(state_data.get("dotnet_project_count", 0)),
+		"runtime_capabilities": runtime_capabilities
 	})
 
 
@@ -482,7 +560,7 @@ func _is_runtime_running(summary: Dictionary) -> bool:
 # --- tool implementations ---
 
 func _execute_project_state(args: Dictionary) -> Dictionary:
-	var error_limit := max(int(args.get("error_limit", 10)), 0)
+	var error_limit: int = max(int(args.get("error_limit", 10)), 0)
 	var include_runtime_health := bool(args.get("include_runtime_health", false))
 	MCPDebugBuffer.record("debug", "system", "project_state: collecting stats (error_limit=%d)" % error_limit)
 	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
@@ -502,8 +580,9 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	all_resources.sort()
 
 	var compile_error_count := 0
+	var dotnet_errors_data: Dictionary = {}
 	if bool(dotnet_result.get("success", false)):
-		var dotnet_errors_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
+		dotnet_errors_data = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(dotnet_errors_data.get("error_count", 0))
 
 	var current_scene := ""
@@ -512,6 +591,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		current_scene = str(scene_snapshot.get("current_scene", scene_snapshot.get("scene", "")))
 
 	var main_scene := str(project_info.get("main_scene", ""))
+	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_errors_data, runtime_summary, _build_runtime_control_state_section())
 	var result_data := {
 		"project_name": str(project_info.get("name", "Untitled")),
 		"project_description": str(project_info.get("description", "")),
@@ -537,6 +617,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		"running": _is_runtime_running(runtime_summary),
 		"runtime_bridge_status": str(runtime_summary.get("bridge_status", "unknown")),
 		"session_count": int(runtime_summary.get("session_count", 0)),
+		"runtime_capabilities": runtime_capabilities,
 		"recent_errors": recent_errors,
 		"recent_warnings": recent_warnings,
 		"error_count": recent_errors.size(),
@@ -546,18 +627,22 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		result_data["runtime_health"] = {
 			"self_diagnostics": _get_self_diagnostics_health_summary(),
 			"lsp_diagnostics": _get_lsp_runtime_health_summary(),
-			"tool_loader": _get_tool_loader_health_summary()
+			"tool_loader": _get_tool_loader_health_summary(),
+			"capabilities": runtime_capabilities
 		}
 	return bridge.success(result_data)
 
 
 func _execute_editor_state(_args: Dictionary) -> Dictionary:
+	var runtime_control_status := _build_runtime_control_state_section()
+	var project_section := _build_project_state_summary()
 	var result_data := {
 		"editor": _build_editor_state_section(),
 		"inspector": _build_inspector_state_section(),
 		"filesystem": _build_filesystem_state_section(),
-		"project": _build_project_state_summary(),
-		"runtime_control": _build_runtime_control_state_section()
+		"project": project_section,
+		"runtime_control": runtime_control_status,
+		"runtime_capabilities": project_section.get("runtime_capabilities", {}) if project_section is Dictionary else {}
 	}
 	return bridge.success(result_data, "Editor state snapshot fetched")
 
@@ -656,7 +741,7 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
 			"project_run failed: %s" % str(run_result.get("error", "unknown")))
-		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")))
+		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_run_failure_context(custom_scene, run_result))
 	var auto_stop_enabled := timeout_ms > 0
 	if auto_stop_enabled:
 		_schedule_project_auto_stop(timeout_ms, custom_scene if not custom_scene.is_empty() else "main")
@@ -666,8 +751,42 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 		"started": true,
 		"scene": custom_scene if not custom_scene.is_empty() else "main",
 		"auto_stop_scheduled": auto_stop_enabled,
-		"timeout_ms": timeout_ms if auto_stop_enabled else 0
+		"timeout_ms": timeout_ms if auto_stop_enabled else 0,
+		"runtime_capabilities": _build_project_run_success_capabilities(custom_scene)
 	}, str(run_result.get("message", "Project started")))
+
+
+func _build_project_run_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
+	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
+	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
+	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var runtime_summary := _get_runtime_summary()
+	var runtime_control_status := _build_runtime_control_state_section()
+	var main_scene := str(project_info.get("main_scene", ""))
+	var requested_scene := custom_scene if not custom_scene.is_empty() else main_scene
+	var scene_exists := not requested_scene.is_empty() and FileAccess.file_exists(requested_scene)
+	return {
+		"error_code": "project_run_failed",
+		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
+		"resolved_scene": requested_scene,
+		"scene_exists": scene_exists,
+		"main_scene": main_scene,
+		"main_scene_exists": not main_scene.is_empty() and FileAccess.file_exists(main_scene),
+		"compile_error_count": int(dotnet_build_data.get("error_count", 0)),
+		"editor_context": _build_editor_runtime_context(),
+		"runtime_control_status": runtime_control_status,
+		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status),
+		"run_result": run_result.duplicate(true)
+	}
+
+
+func _build_project_run_success_capabilities(custom_scene: String) -> Dictionary:
+	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
+	if not custom_scene.is_empty():
+		project_info["main_scene"] = custom_scene
+	var dotnet_build_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
+	return _build_runtime_capabilities(project_info, dotnet_build_data, _get_runtime_summary(), _build_runtime_control_state_section())
 
 
 func _execute_project_stop(_args: Dictionary) -> Dictionary:
@@ -685,7 +804,7 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	var include_compile_errors := bool(args.get("include_compile_errors", true))
 	var include_performance := bool(args.get("include_performance", false))
 	var include_gd_errors := bool(args.get("include_gd_errors", false))
-	var tail := max(int(args.get("tail", 20)), 1)
+	var tail: int = max(int(args.get("tail", 20)), 1)
 
 	var runtime_errors_raw: Array = bridge.extract_array(
 		bridge.call_atomic("debug_runtime_bridge", {"action": "get_errors_context", "limit": tail}),

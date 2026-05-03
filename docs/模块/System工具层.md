@@ -31,18 +31,18 @@ tools/system/
 连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
 
 ### 项目级
-- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误和运行状态。
-- `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要与 runtime control 状态。
+- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位。
+- `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要、runtime control 状态与 `runtime_capabilities` 能力位。
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
 - `system_project_files`：高层项目文件树入口，支持列目录、创建/删除目录、读写/复制/移动/删除文件、选中文件、扫描与重导入。
-- `system_project_run`：运行主场景或指定场景。
+- `system_project_run`：运行主场景或指定场景；失败时返回编辑器接口、项目、场景和 runtime control 上下文，便于判断缺失的是启动能力还是运行时接管能力。
 - `system_project_stop`：停止当前运行中的项目。
 
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
 ### 编辑器界面级
-- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、焦点移动、按钮类控件激活，以及可见弹窗的最小安全交互。
+- `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、坐标映射、焦点移动、按钮类控件激活、控件本地坐标左键 / 右键点击，以及可见弹窗的最小安全交互。
 - `system_editor_log`：以高层入口读取当前 Output 面板、按错误/警告过滤输出，并清空 Output 面板。
 
 这组工具当前由 `tools/system/impl_editor.gd` 承载，并通过 `atomic_bridge.gd` 聚合底层 `editor_status`、`editor_screenshot`、`editor_ui_control`、`editor_popup` 与 `editor_log` 原子工具，适合作为 Agent 处理编辑器界面和 Output 面板任务时的稳定入口。
@@ -74,6 +74,7 @@ tools/system/
 
 运行时自动化工具的边界固定为：
 
+- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_capture` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime` 和 `blocking_reasons`。
 - 仅支持通过 Godot 编辑器启动的运行态。
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
@@ -112,10 +113,10 @@ system_editor_state
 	-> system_editor_control(action=activate_ui)
 	-> system_editor_control(action=list_controls)
 	-> system_editor_control(action=get_control / capture_control)
-	-> system_editor_control(action=focus_control / activate_control / set_control_text)
+	-> system_editor_control(action=focus_control / activate_control / click_control / right_click_control / set_control_text)
 ```
 
-其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
+其中 `activate_ui` 负责按 dock 标题、底部面板标题/路径、插件语义路径（如 `MCPDock/config`、`MCPDock/tools`）或 TabContainer 路径切换界面，成功后返回可见性与可选截图信息；`click_control` / `right_click_control` 使用 `local_x` / `local_y` 的 Control 本地坐标并返回 viewport、screen、截图与 OS 窗口 rect 的换算信息；更复杂的多步 UI 流程仍由 Agent 在外层自行编排。
 
 ---
 

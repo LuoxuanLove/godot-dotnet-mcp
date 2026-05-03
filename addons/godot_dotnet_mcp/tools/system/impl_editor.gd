@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls, capture a specific control, focus or activate controls, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -37,6 +37,8 @@ func get_tools() -> Array[Dictionary]:
 							"capture_control",
 							"focus_control",
 							"activate_control",
+							"click_control",
+							"right_click_control",
 							"set_control_text",
 							"list_popups",
 							"press_popup_button",
@@ -85,6 +87,14 @@ func get_tools() -> Array[Dictionary]:
 					"text": {
 						"type": "string",
 						"description": "Text for set_control_text/set_popup_text"
+					},
+					"local_x": {
+						"type": "number",
+						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+					},
+					"local_y": {
+						"type": "number",
+						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
 					},
 					"class_name": {
 						"type": "string",
@@ -155,14 +165,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"screen": str(args.get("screen", "")).strip_edges()
 			})
 		"capture_editor":
-			return bridge.call_atomic("editor_screenshot", {
-				"action": "capture",
-				"path": str(args.get("path", "")).strip_edges(),
-				"x": args.get("x", null),
-				"y": args.get("y", null),
-				"width": args.get("width", null),
-				"height": args.get("height", null)
-			})
+			return _capture_editor(args)
 		"list_controls":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "list_visible",
@@ -218,6 +221,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"action": "activate_control",
 				"target_path": str(args.get("target_path", "")).strip_edges()
 			})
+		"click_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "click_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
+		"right_click_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "right_click_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
 		"set_control_text":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "set_text",
@@ -244,6 +261,27 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			})
 		_:
 			return bridge.error("Unknown action: %s" % action)
+
+
+func _capture_editor(args: Dictionary) -> Dictionary:
+	var capture_result: Dictionary = bridge.call_atomic("editor_screenshot", {
+		"action": "capture",
+		"path": str(args.get("path", "")).strip_edges(),
+		"x": args.get("x", null),
+		"y": args.get("y", null),
+		"width": args.get("width", null),
+		"height": args.get("height", null)
+	})
+	if not bool(capture_result.get("success", false)):
+		return capture_result
+	var popup_result: Dictionary = bridge.call_atomic("editor_popup", {"action": "list_visible"})
+	if bool(popup_result.get("success", false)):
+		var data: Dictionary = capture_result.get("data", {})
+		var popup_data: Dictionary = popup_result.get("data", {})
+		data["visible_popup_count"] = int(popup_data.get("count", 0))
+		data["visible_popups"] = popup_data.get("popups", [])
+		capture_result["data"] = data
+	return capture_result
 
 
 func _execute_editor_log(args: Dictionary) -> Dictionary:

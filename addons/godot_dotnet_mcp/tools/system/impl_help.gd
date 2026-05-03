@@ -70,6 +70,13 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"analysis": ["scene validation", "scene analysis", "script analysis", "C# binding audit", "Godot LSP diagnostics", "project symbol search", "scene dependency graph"],
 			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"]
 		},
+		"runtime_capability_guidance": {
+			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
+			"read_only_tools_note": "Project, scene, and editor read-only tools can be available even when project launch, runtime control, or runtime capture is unavailable.",
+			"check_before_running": ["can_start_project", "blocking_reasons"],
+			"check_before_runtime_automation": ["can_control_runtime", "can_capture_runtime", "commandable_session_count"],
+			"external_process_note": "Externally launched visible Godot processes are not treated as commandable runtime sessions unless they attach through the editor debugger bridge."
+		},
 		"visual_guidance": {
 			"prefer_editor_screenshot": true,
 			"screenshot_tool": "system_editor_control",
