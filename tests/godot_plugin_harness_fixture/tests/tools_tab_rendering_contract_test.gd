@@ -98,11 +98,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if core_domain == null or user_domain == null:
 		return _failure("Tools tab should render presentation domain roots.")
 	var expected_context_position := tool_tree.get_screen_transform() * Vector2(24, 24)
-	var actual_context_position = _instance.call("_get_tree_context_menu_screen_position", Vector2(24, 24))
+	var actual_context_position: Variant = _instance.call("_get_tree_context_menu_screen_position", Vector2(24, 24))
 	if not (actual_context_position is Vector2) or (actual_context_position as Vector2).distance_to(expected_context_position) > 2.0:
 		return _failure("Tools tab context menu position should be transformed through ToolTree.get_screen_transform().")
-	_instance.call("_show_tree_context_menu", core_domain, expected_context_position)
+	var popup_rect: Variant = _instance.call("_show_tree_context_menu", core_domain, expected_context_position)
+	if not (popup_rect is Rect2i) or (popup_rect as Rect2i).position != Vector2i(int(expected_context_position.x), int(expected_context_position.y)):
+		return _failure("Tools tab context PopupMenu should pass the tested screen coordinate helper result into popup(Rect2i).")
 	await tree.process_frame
+	var popup_nodes := _collect_context_popups(_instance)
+	if popup_nodes.size() != 1:
+		return _failure("Tools tab should keep every Dock-created PopupMenu/PopupPanel covered by this coordinate contract.")
 	var popup_menu := _find_context_popup(_instance)
 	if popup_menu == null:
 		return _failure("Tools tab should create a context popup for right-clicked tree items.")
@@ -323,6 +328,14 @@ func _find_context_popup(root: Node) -> PopupMenu:
 		if child is PopupMenu:
 			return child as PopupMenu
 	return null
+
+
+func _collect_context_popups(root: Node) -> Array:
+	var popups: Array = []
+	for child in root.get_children():
+		if child is PopupMenu or child is PopupPanel:
+			popups.append(child)
+	return popups
 
 
 func _failure(message: String) -> Dictionary:
