@@ -1,7 +1,7 @@
 # 系统工具层
 系统工具层是插件的高层工具入口，统一暴露当前公开的系统工具，用于读取 MCP 能力说明、项目状态、汇总编辑器态、驱动编辑器界面与运行态、读取和清理编辑器 Output、分析场景与脚本、建立符号索引，并为 Agent 提供可执行的建议与补丁入口。
 
-默认 `system` 预设只启用这一层，适合先理解上下文，再决定是否下钻到底层原子工具。
+默认 `system` 预设只启用这一层，适合先理解上下文，再选择合适的高层 `system_*` 工具；底层原子工具仅作为内部实现链路展示。
 
 ---
 
@@ -13,7 +13,7 @@ tools/system/
 ├─ atomic_bridge.gd    # 原子桥：call_atomic() 调用下层原子 executor，附带写保护逻辑
 ├─ impl_help.gd        # 连接后能力说明与 Agent 推荐工作流（1 个公开工具）
 ├─ impl_editor.gd      # 编辑器 UI 控制与 Output 日志聚合入口（2 个公开工具）
-├─ impl_runtime.gd     # 运行时控制 / 统一截图 / 输入 / step（4 个公开工具）
+├─ impl_runtime.gd     # 运行时控制 / 统一运行时 I/O（2 个公开工具）
 ├─ impl_scene.gd       # 场景级工具实现（4 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 ├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
@@ -52,9 +52,7 @@ tools/system/
 
 ### 运行时自动化级
 - `system_runtime_control`：查询、启用或关闭当前编辑器调试会话的 runtime control 安全闸。
-- `system_runtime_capture`：统一截图入口；默认抓取单帧，传 `frame_count > 1` 时按 `interval_frames` 抓取低频多帧序列；默认写入固定运行时截图缓存目录，也可通过 `capture_dir` 指定输出目录。
-- `system_runtime_input`：注入 `InputMap action` 或原始键盘输入，支持 `press/release/tap/hold`。
-- `system_runtime_step`：标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环；当 `capture=true` 时同样支持 `capture_dir`。
+- `system_runtime_step`：统一运行时 I/O 入口；`action=step` 标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环，`action=capture` 提供单帧 / 低频多帧截图，`action=input` 注入 `InputMap action` 或原始键盘输入。
 
 默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理缓存；需要查看或整理当前截图缓存时，由 Agent 显式调用 `system_userdata_maintenance(action=list_capture_cache)` 或 `system_userdata_maintenance(action=cleanup_capture_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。当前截图缓存清理会跳过 symlink、Windows junction 与 reparse point。需要整理历史遗留根级文件时，调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 
@@ -80,7 +78,7 @@ tools/system/
 
 运行时自动化工具的边界固定为：
 
-- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_capture` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime` 和 `blocking_reasons`。
+- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime` 和 `blocking_reasons`。
 - 仅支持通过 Godot 编辑器启动的运行态。
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
@@ -96,7 +94,7 @@ tools/system/
 ```text
 system_editor_state / system_project_state
   -> system_project_files / system_scene_analyze / system_script_analyze / system_runtime_diagnose
-  -> system_scene_tree / system_scene_patch / system_script_patch / 具体原子工具
+  -> system_scene_tree / system_scene_patch / system_script_patch / 对应高层 system 工具
 ```
 
 这条链路适合先获取全局上下文，再进入局部修改，避免一开始就落到过细的原子操作上。
@@ -106,11 +104,11 @@ system_editor_state / system_project_state
 ```text
 system_project_run
   -> system_runtime_control(action=enable)
-  -> system_runtime_step
-  -> system_runtime_capture / system_runtime_input
+  -> system_runtime_step(action=step)
+  -> system_runtime_step(action=capture / input)
 ```
 
-其中 `system_runtime_step` 是长期主闭环；更复杂的循环应由 Agent 或客户端在外层多次调用完成。
+其中 `system_runtime_step(action=step)` 是长期主闭环；更复杂的循环应由 Agent 或客户端在外层多次调用完成。
 
 如果目标是编辑器界面内的控件查找与交互，推荐顺序改为：
 
@@ -132,7 +130,7 @@ system_editor_state
 
 好处是：
 - 上层工作流更稳定，便于 Agent 先理解问题再采取行动。
-- 下层 executor 仍保持细粒度能力，可在需要时直接调用。
+- 下层 executor 仍保持细粒度能力，供高层工具通过 Atomic Bridge 复用，并在 Tools 树中作为实现链路展示。
 - 写保护可以集中在 Atomic Bridge 层统一执行。
 
 ---
