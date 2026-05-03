@@ -173,7 +173,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"soft_reload_plugin":
 					return _call_plugin_method("runtime_soft_reload", [], "Plugin soft reload bridge is unavailable")
 				"full_reload_plugin":
-					return _call_plugin_method("runtime_full_reload", [], "Plugin full reload bridge is unavailable")
+					return _call_plugin_method("request_plugin_lifecycle_reload_from_tools", [], "Plugin lifecycle reload bridge is unavailable")
 				_:
 					return _error("Unknown action: %s" % str(args.get("action", "")))
 		"server":

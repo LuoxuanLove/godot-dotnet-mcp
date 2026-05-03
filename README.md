@@ -39,6 +39,7 @@ The Home page shows service health, endpoint, connection activity, self-diagnost
 - `system_help` returns the current capability guide, recommended first steps, screenshot guidance, hidden-control hints, and schema facts.
 - `system_project_state` summarizes project health, file counts, runtime state, recent errors, compile errors, and optional runtime health.
 - `system_editor_state` aggregates the editor workspace, Inspector/FileSystem selection, project runtime summary, and runtime-control state.
+- `system_plugin_reload` provides the stable Agent-callable plugin lifecycle reload and freshness check used after syncing addon files.
 
 ### Work with files, scenes, and scripts
 
@@ -75,7 +76,7 @@ Go to `Project Settings > Plugins`, enable `Godot .NET MCP`, open `MCPDock`, and
 
 ### Source workflow
 
-For development or local testing, copy `addons/godot_dotnet_mcp/` from this repository into the target Godot project's `addons/` directory, then enable the plugin in the same way.
+For development or local testing, copy `addons/godot_dotnet_mcp/` from this repository into the target Godot project's `addons/` directory, then enable the plugin in the same way. Copying files only updates the disk copy: an already-running Godot editor keeps the old plugin instance until you call `system_plugin_reload(action="full_reload_plugin")` or disable and re-enable the plugin. Check `/health`, `system_plugin_reload(action="get_freshness")`, or `plugin_runtime_state(action="get_self_health")` for `freshness.needs_lifecycle_reload` when validating a synced addon.
 
 ## Quick start
 

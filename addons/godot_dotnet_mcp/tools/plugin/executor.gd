@@ -184,9 +184,9 @@ func _execute_runtime(args: Dictionary) -> Dictionary:
 				return _error("Plugin soft reload bridge is unavailable")
 			return plugin.runtime_soft_reload()
 		"full_reload_plugin":
-			if plugin == null or not plugin.has_method("runtime_full_reload"):
-				return _error("Plugin full reload bridge is unavailable")
-			return plugin.runtime_full_reload()
+			if plugin == null or not plugin.has_method("request_plugin_lifecycle_reload_from_tools"):
+				return _error("Plugin lifecycle reload bridge is unavailable")
+			return plugin.request_plugin_lifecycle_reload_from_tools()
 		"set_tool_enabled":
 			if plugin == null or not plugin.has_method("set_tool_enabled_from_tools"):
 				return _error("Plugin tool toggle bridge is unavailable")

@@ -46,6 +46,9 @@ class FakeCallbacks:
 	func get_server_stats() -> Dictionary:
 		return server_stats.duplicate(true)
 
+	func get_freshness_snapshot() -> Dictionary:
+		return {"status": "fresh", "needs_lifecycle_reload": false}
+
 	func log(message: String, level: String) -> void:
 		last_log = {
 			"message": message,
@@ -75,6 +78,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.get_tool_loader = Callable(callbacks, "get_tool_loader")
 	context.get_tool_loader_status = Callable(callbacks, "get_tool_loader_status")
 	context.get_server_stats = Callable(callbacks, "get_server_stats")
+	context.get_freshness_snapshot = Callable(callbacks, "get_freshness_snapshot")
 	context.log = Callable(callbacks, "log")
 	context.server_name = str(server_facts.get("server_name", ""))
 	context.server_version = str(server_facts.get("server_version", ""))
@@ -106,6 +110,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not expose the unified protocol version.")
 	if str(health.get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("Health response did not expose the unified tool schema version.")
+	var freshness: Dictionary = health.get("freshness", {})
+	if str(freshness.get("status", "")) != "fresh" or bool(freshness.get("needs_lifecycle_reload", true)):
+		return _failure("Health response should expose plugin instance freshness.")
 
 	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST", "Content-Type, Accept")
 	var cors_headers: Dictionary = cors_response.get("_headers", {})

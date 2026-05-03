@@ -18,6 +18,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_scene_snapshot", "get_errors_context", "get_recent_filtered"]},
 		{"tool": "debug_dotnet",         "actions": ["build"]}
 	],
+	"system_plugin_reload": [],
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["set_main_screen"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
