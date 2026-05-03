@@ -8,16 +8,30 @@ const PLUGIN_CFG_PATH := ADDON_ROOT + "/plugin.cfg"
 const PROTOCOL_FACTS_PATH := ADDON_ROOT + "/plugin/runtime/mcp_protocol_facts.json"
 const PLUGIN_SCRIPT_PATH := ADDON_ROOT + "/plugin.gd"
 const SYNC_MARKER_PATH := ADDON_ROOT + "/.mcp_sync.json"
+const SYNC_MARKER_MAX_BYTES := 16384
+const FINGERPRINT_EXTENSIONS := ["cfg", "gd", "json", "tscn"]
+const FINGERPRINT_EXCLUDED_DIRS := {
+	".git": true,
+	"custom_tools": true,
+	"dotnet_bridge/bin": true,
+	"dotnet_bridge/obj": true
+}
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 static var _running_instance: Dictionary = {}
 static var _lifecycle_reload: Dictionary = {
+	"state": "idle",
 	"pending": false,
 	"last_requested_at_unix": 0,
+	"last_scheduled_at_unix": 0,
 	"last_completed_at_unix": 0,
 	"last_request_id": "",
-	"last_source": ""
+	"last_source": "",
+	"last_error": "",
+	"completed_instance_id": "",
+	"completion_observed": false,
+	"force_fresh_load_pending": false
 }
 
 
@@ -37,7 +51,8 @@ static func capture_running_instance(source: String = "plugin_enter_tree") -> Di
 		"tool_schema_version": MCPProtocolFacts.get_tool_schema_version(),
 		"source_fingerprint": _build_fingerprint()
 	}
-	_complete_lifecycle_reload_if_pending(now_unix)
+	if source != "freshness_lazy_capture":
+		_complete_lifecycle_reload_if_pending(now_unix)
 	return _running_instance.duplicate(true)
 
 
@@ -45,11 +60,65 @@ static func mark_lifecycle_reload_requested(source: String = "tool") -> Dictiona
 	var now_unix := int(Time.get_unix_time_from_system())
 	var request_id := "reload_%d_%d" % [now_unix, Time.get_ticks_usec()]
 	_lifecycle_reload["pending"] = true
+	_lifecycle_reload["state"] = "requested"
 	_lifecycle_reload["last_requested_at_unix"] = now_unix
+	_lifecycle_reload["last_scheduled_at_unix"] = 0
 	_lifecycle_reload["last_completed_at_unix"] = 0
 	_lifecycle_reload["last_request_id"] = request_id
 	_lifecycle_reload["last_source"] = source
+	_lifecycle_reload["last_error"] = ""
+	_lifecycle_reload["completed_instance_id"] = ""
+	_lifecycle_reload["completion_observed"] = false
+	_lifecycle_reload["force_fresh_load_pending"] = true
 	return _lifecycle_reload.duplicate(true)
+
+
+static func mark_lifecycle_reload_scheduled(request_id: String = "") -> Dictionary:
+	if not request_id.is_empty() and str(_lifecycle_reload.get("last_request_id", "")) != request_id:
+		return _lifecycle_reload.duplicate(true)
+	_lifecycle_reload["state"] = "scheduled"
+	_lifecycle_reload["pending"] = true
+	_lifecycle_reload["last_scheduled_at_unix"] = int(Time.get_unix_time_from_system())
+	_lifecycle_reload["last_error"] = ""
+	_lifecycle_reload["force_fresh_load_pending"] = true
+	return _lifecycle_reload.duplicate(true)
+
+
+static func mark_lifecycle_reload_failed(error_message: String, request_id: String = "") -> Dictionary:
+	if not request_id.is_empty() and str(_lifecycle_reload.get("last_request_id", "")) != request_id:
+		return _lifecycle_reload.duplicate(true)
+	_lifecycle_reload["state"] = "failed"
+	_lifecycle_reload["pending"] = false
+	_lifecycle_reload["last_error"] = error_message
+	_lifecycle_reload["force_fresh_load_pending"] = false
+	return _lifecycle_reload.duplicate(true)
+
+
+static func consume_force_fresh_load() -> bool:
+	var should_force := bool(_lifecycle_reload.get("force_fresh_load_pending", false))
+	_lifecycle_reload["force_fresh_load_pending"] = false
+	return should_force
+
+
+static func should_force_fresh_load() -> bool:
+	return bool(_lifecycle_reload.get("force_fresh_load_pending", false))
+
+
+static func reset_for_contract_tests() -> void:
+	_running_instance = {}
+	_lifecycle_reload = {
+		"state": "idle",
+		"pending": false,
+		"last_requested_at_unix": 0,
+		"last_scheduled_at_unix": 0,
+		"last_completed_at_unix": 0,
+		"last_request_id": "",
+		"last_source": "",
+		"last_error": "",
+		"completed_instance_id": "",
+		"completion_observed": false,
+		"force_fresh_load_pending": false
+	}
 
 
 static func get_freshness_snapshot() -> Dictionary:
@@ -62,6 +131,7 @@ static func get_freshness_snapshot() -> Dictionary:
 	var status := "unknown"
 	if bool(comparison.get("version_changed_since_load", false)) or \
 		bool(comparison.get("schema_changed_since_load", false)) or \
+		bool(comparison.get("source_fingerprint_changed_since_load", false)) or \
 		bool(comparison.get("disk_newer_than_running", false)) or \
 		bool(comparison.get("sync_newer_than_running", false)):
 		status = "stale"
@@ -81,8 +151,11 @@ static func get_freshness_snapshot() -> Dictionary:
 static func _complete_lifecycle_reload_if_pending(completed_at_unix: int) -> void:
 	if not bool(_lifecycle_reload.get("pending", false)):
 		return
+	_lifecycle_reload["state"] = "completed"
 	_lifecycle_reload["pending"] = false
 	_lifecycle_reload["last_completed_at_unix"] = completed_at_unix
+	_lifecycle_reload["completed_instance_id"] = str(_running_instance.get("instance_id", ""))
+	_lifecycle_reload["completion_observed"] = true
 
 
 static func _build_disk_source_snapshot() -> Dictionary:
@@ -93,7 +166,7 @@ static func _build_disk_source_snapshot() -> Dictionary:
 		"server_version": MCPProtocolFacts.get_server_version(),
 		"protocol_version": MCPProtocolFacts.get_protocol_version(),
 		"tool_schema_version": MCPProtocolFacts.get_tool_schema_version(),
-		"latest_modified_at_unix": _latest_modified_time([PLUGIN_CFG_PATH, PROTOCOL_FACTS_PATH, PLUGIN_SCRIPT_PATH]),
+		"latest_modified_at_unix": _latest_modified_time(_get_fingerprint_paths()),
 		"source_fingerprint": _build_fingerprint()
 	}
 
@@ -102,17 +175,26 @@ static func _build_sync_snapshot() -> Dictionary:
 	var snapshot := {
 		"marker_path": SYNC_MARKER_PATH,
 		"marker_available": false,
-		"last_sync_at_unix": _latest_modified_time([PLUGIN_CFG_PATH, PROTOCOL_FACTS_PATH, PLUGIN_SCRIPT_PATH]),
+		"last_sync_at_unix": _latest_modified_time(_get_fingerprint_paths()),
 		"source_repo_path": "",
 		"target_addon_path": ADDON_ROOT,
 		"source_git_commit": "",
-		"fallback_used": true
+		"fallback_used": true,
+		"error": ""
 	}
 	if not FileAccess.file_exists(SYNC_MARKER_PATH):
 		return snapshot
-	var raw_text := FileAccess.get_file_as_string(SYNC_MARKER_PATH)
+	var marker_file := FileAccess.open(SYNC_MARKER_PATH, FileAccess.READ)
+	if marker_file == null:
+		snapshot["error"] = "sync_marker_open_failed"
+		return snapshot
+	if marker_file.get_length() > SYNC_MARKER_MAX_BYTES:
+		snapshot["error"] = "sync_marker_too_large"
+		return snapshot
+	var raw_text := marker_file.get_as_text()
 	var json := JSON.new()
 	if json.parse(raw_text) != OK:
+		snapshot["error"] = "sync_marker_parse_failed"
 		return snapshot
 	var data = json.get_data()
 	if not (data is Dictionary):
@@ -133,6 +215,7 @@ static func _compare_running_to_disk(running: Dictionary, disk_source: Dictionar
 	var last_sync_at := int(sync_snapshot.get("last_sync_at_unix", 0))
 	var version_changed := str(running.get("source_version", "")) != str(disk_source.get("source_version", ""))
 	var schema_changed := str(running.get("tool_schema_version", "")) != str(disk_source.get("tool_schema_version", ""))
+	var fingerprint_changed := str(running.get("source_fingerprint", "")) != str(disk_source.get("source_fingerprint", ""))
 	var disk_newer := loaded_at > 0 and disk_modified_at > loaded_at
 	var sync_newer := loaded_at > 0 and last_sync_at > loaded_at
 	var reasons: Array[String] = []
@@ -140,6 +223,8 @@ static func _compare_running_to_disk(running: Dictionary, disk_source: Dictionar
 		reasons.append("version_changed_since_load")
 	if schema_changed:
 		reasons.append("schema_changed_since_load")
+	if fingerprint_changed:
+		reasons.append("source_fingerprint_changed_since_load")
 	if disk_newer:
 		reasons.append("disk_newer_than_running")
 	if sync_newer:
@@ -149,6 +234,7 @@ static func _compare_running_to_disk(running: Dictionary, disk_source: Dictionar
 		"sync_newer_than_running": sync_newer,
 		"version_changed_since_load": version_changed,
 		"schema_changed_since_load": schema_changed,
+		"source_fingerprint_changed_since_load": fingerprint_changed,
 		"staleness_reason": reasons
 	}
 
@@ -164,9 +250,43 @@ static func _read_plugin_cfg_version(path: String) -> String:
 
 static func _build_fingerprint() -> String:
 	var parts := PackedStringArray()
-	for path in [PLUGIN_CFG_PATH, PROTOCOL_FACTS_PATH, PLUGIN_SCRIPT_PATH]:
+	for path in _get_fingerprint_paths():
 		parts.append("%s:%d" % [path, FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else 0])
 	return "|".join(parts)
+
+
+static func _get_fingerprint_paths() -> Array[String]:
+	var paths: Array[String] = []
+	_collect_fingerprint_paths(ADDON_ROOT, "", paths)
+	paths.sort()
+	return paths
+
+
+static func _collect_fingerprint_paths(dir_path: String, relative_dir: String, paths: Array[String]) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	while true:
+		var entry := dir.get_next()
+		if entry.is_empty():
+			break
+		if entry == "." or entry == "..":
+			continue
+		var relative_path := entry if relative_dir.is_empty() else "%s/%s" % [relative_dir, entry]
+		var full_path := "%s/%s" % [dir_path, entry]
+		if dir.current_is_dir():
+			if not FINGERPRINT_EXCLUDED_DIRS.has(relative_path):
+				_collect_fingerprint_paths(full_path, relative_path, paths)
+			continue
+		if _is_fingerprint_file(entry):
+			paths.append(full_path)
+	dir.list_dir_end()
+
+
+static func _is_fingerprint_file(file_name: String) -> bool:
+	var extension := file_name.get_extension().to_lower()
+	return extension in FINGERPRINT_EXTENSIONS
 
 
 static func _latest_modified_time(paths: Array) -> int:
