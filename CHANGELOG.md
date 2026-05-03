@@ -5,6 +5,7 @@
 ### Added
 
 - Added `system_editor_control` support for control-local left/right mouse clicks, richer popup metadata, and coordinate mapping between control, screenshot, screen, and OS window rectangles for visual QA workflows.
+- Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
 
 ### Fixed
 
