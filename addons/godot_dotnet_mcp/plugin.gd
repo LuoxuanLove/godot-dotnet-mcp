@@ -20,6 +20,7 @@ const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runti
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
@@ -56,6 +57,7 @@ var _dock_recreate_attempted := false
 func _enter_tree() -> void:
 	PluginSelfDiagnosticStore.clear()
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_enter_tree", "_enter_tree")
+	PluginInstanceFreshness.capture_running_instance("plugin_enter_tree")
 	_refresh_service_instances()
 	_load_state()
 	LocalizationService.reset_instance()
@@ -592,16 +594,46 @@ func _on_stop_requested() -> void:
 
 
 func _on_full_reload_requested() -> void:
+	_request_plugin_lifecycle_reload("ui")
+
+
+func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
+	return _request_plugin_lifecycle_reload("tool")
+
+
+func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 	if _plugin_reenable_pending:
-		return
+		return {
+			"success": false,
+			"error": "Plugin lifecycle reload already scheduled",
+			"data": {"freshness": PluginInstanceFreshness.get_freshness_snapshot()}
+		}
 	var focus_snapshot := {}
 	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
 		focus_snapshot = _dock.capture_focus_snapshot()
 	_store_pending_focus_snapshot(focus_snapshot)
 	_save_settings()
+	var lifecycle_reload: Dictionary = PluginInstanceFreshness.mark_lifecycle_reload_requested(source)
 	_plugin_reenable_pending = true
-	if not _schedule_plugin_reenable():
+	if not _schedule_plugin_reenable_deferred():
 		_plugin_reenable_pending = false
+		return {
+			"success": false,
+			"error": "Plugin lifecycle reload bridge is unavailable",
+			"data": {"lifecycle_reload": lifecycle_reload, "freshness": PluginInstanceFreshness.get_freshness_snapshot()}
+		}
+	return {
+		"success": true,
+		"message": "Plugin lifecycle reload scheduled",
+		"deferred": true,
+		"data": {
+			"mode": "plugin_lifecycle_reload",
+			"source": source,
+			"lifecycle_reload": lifecycle_reload,
+			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
+			"reconnect_hint": "The MCP transport may disconnect while the Godot editor disables and re-enables the plugin. Reconnect and fetch tools again after reload."
+		}
+	}
 
 
 func _on_log_level_changed(level: String) -> void:
@@ -1458,6 +1490,7 @@ func _build_self_diagnostic_health_snapshot() -> Dictionary:
 	var dock_count = _count_dock_instances()
 	var tool_load_errors = _server_controller.get_tool_load_errors()
 	return PluginSelfDiagnosticStore.get_health_snapshot({
+		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 		"autoload": {
 			"installed": bool(bridge_status.get("installed", false)),
 			"autoload_name": str(bridge_status.get("autoload_name", RUNTIME_BRIDGE_AUTOLOAD_NAME)),
@@ -1613,6 +1646,26 @@ func _schedule_plugin_reenable() -> bool:
 	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
 	base_control.add_child(coordinator)
 	return true
+
+
+func _schedule_plugin_reenable_deferred() -> bool:
+	var editor_interface = get_editor_interface()
+	if editor_interface == null:
+		return false
+	var base_control = editor_interface.get_base_control()
+	if base_control == null:
+		return false
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var timer := tree.create_timer(0.05)
+	timer.timeout.connect(Callable(self, "_complete_plugin_reenable_schedule"), CONNECT_ONE_SHOT)
+	return true
+
+
+func _complete_plugin_reenable_schedule() -> void:
+	if not _schedule_plugin_reenable():
+		_plugin_reenable_pending = false
 
 
 func _create_reload_coordinator():
