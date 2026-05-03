@@ -10,6 +10,11 @@ class FakeRuntimeControlService extends RefCounted:
 		return {
 			"available": true,
 			"armed": true,
+			"session_snapshot": {
+				"active_session_count": 1,
+				"commandable_session_count": 1,
+				"sessions": [{"id": 1, "commandable": true}]
+			},
 			"message": "Runtime control is armed."
 		}
 
@@ -205,6 +210,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_control: Dictionary = payload.get("runtime_control", {})
 	if not bool(runtime_control.get("available", false)) or not bool(runtime_control.get("armed", false)):
 		return _failure("editor_state.runtime_control should preserve runtime control status when the service is available.")
+	if not bool(runtime_control.get("can_control_runtime", false)) or not bool(runtime_control.get("can_capture_runtime", false)):
+		return _failure("editor_state.runtime_control should expose runtime control and capture capability bits.")
+	var runtime_capabilities: Dictionary = payload.get("runtime_capabilities", {})
+	if not bool(runtime_capabilities.get("can_control_runtime", false)) or not bool(runtime_capabilities.get("can_capture_runtime", false)):
+		return _failure("editor_state should expose aggregate runtime capability bits.")
+	if bool(runtime_capabilities.get("can_start_project", true)):
+		return _failure("editor_state runtime capabilities should block project start when compile errors are present.")
 
 	var failing_executor = SystemProjectImplScript.new()
 	failing_executor.bridge = FakeFailingProjectBridge.new()

@@ -19,6 +19,13 @@ class FakeBridge extends RefCounted:
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
+			"editor_status":
+				if str(args.get("action", "")) == "get_godot_path":
+					return success({
+						"godot_executable_path": "C:/Godot/Godot.exe",
+						"project_root_path": "E:/Project/LuoxuanLove/Mechoes"
+					})
+				return error("Unsupported editor_status action")
 			"project_info":
 				if str(args.get("action", "")) == "get_info":
 					return success({
@@ -122,6 +129,14 @@ class FakeBridge extends RefCounted:
 		return {"success": false, "error": "bridge_error", "message": message, "data": data}
 
 
+class FakeFailingRunBridge extends FakeBridge:
+	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+		if tool_name == "scene_run":
+			scene_run_actions.append(str(args.get("action", "")))
+			return error("Editor interface not available")
+		return super.call_atomic(tool_name, args)
+
+
 class FakeToolLoader extends RefCounted:
 	func get_gdscript_lsp_diagnostics_service():
 		return null
@@ -176,6 +191,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
+	var runtime_capabilities = (project_state_data as Dictionary).get("runtime_capabilities", {})
+	if not (runtime_capabilities is Dictionary):
+		return _failure("project_state should return runtime_capabilities.")
+	if not (runtime_health_dict.get("capabilities", {}) is Dictionary):
+		return _failure("project_state runtime_health should include capability bits.")
+	if not bool((runtime_capabilities as Dictionary).get("editor_interface_available", false)):
+		return _failure("runtime_capabilities should report editor_interface_available when editor status is available.")
+	if bool((runtime_capabilities as Dictionary).get("can_start_project", true)):
+		return _failure("runtime_capabilities should block can_start_project when compile errors are present.")
+	if not ((runtime_capabilities as Dictionary).get("blocking_reasons", []) as Array).has("compile_errors_present"):
+		return _failure("runtime_capabilities should include compile_errors_present as a blocking reason.")
 
 	var layout_result: Dictionary = executor.execute("userdata_maintenance", {"action": "ensure_layout"})
 	if not bool(layout_result.get("success", false)):
@@ -229,6 +255,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
+
+	var failing_run_executor = SystemProjectExecutorScript.new()
+	failing_run_executor.bridge = FakeFailingRunBridge.new(FakeToolLoader.new())
+	failing_run_executor.configure_runtime({})
+	var failing_run: Dictionary = failing_run_executor.execute("project_run", {"scene": "res://Missing.tscn"})
+	if bool(failing_run.get("success", false)):
+		return _failure("project_run should fail when the scene_run atomic tool fails.")
+	var failing_run_data = failing_run.get("data", {})
+	if not (failing_run_data is Dictionary):
+		return _failure("project_run failure should return structured data.")
+	if str((failing_run_data as Dictionary).get("error_code", "")) != "project_run_failed":
+		return _failure("project_run failure should include project_run_failed error_code.")
+	if not ((failing_run_data as Dictionary).get("runtime_capabilities", {}) is Dictionary):
+		return _failure("project_run failure should include runtime capability context.")
+	if not ((failing_run_data as Dictionary).get("runtime_control_status", {}) is Dictionary):
+		return _failure("project_run failure should include runtime_control_status.")
 
 	var runtime_diagnose: Dictionary = executor.execute("runtime_diagnose", {
 		"include_compile_errors": true,

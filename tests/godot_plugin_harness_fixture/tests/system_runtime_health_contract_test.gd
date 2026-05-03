@@ -17,6 +17,10 @@ class FakeBridge extends RefCounted:
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
+			"editor_status":
+				if str(args.get("action", "")) == "get_godot_path":
+					return success({"godot_executable_path": "C:/Godot/Godot.exe", "project_root_path": "E:/Project/LuoxuanLove/Mechoes"})
+				return error("Unsupported editor_status action")
 			"project_info":
 				if str(args.get("action", "")) == "get_info":
 					return success({
@@ -120,6 +124,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for key in ["self_diagnostics", "lsp_diagnostics", "tool_loader"]:
 		if not runtime_health_dict.has(key) or not (runtime_health_dict.get(key) is Dictionary):
 			return _failure("runtime_health is missing dictionary section '%s'." % key)
+	if not (runtime_health_dict.get("capabilities", {}) is Dictionary):
+		return _failure("runtime_health should include runtime capability bits.")
+	var capabilities: Dictionary = runtime_health_dict.get("capabilities", {})
+	if not capabilities.has("can_start_project") or not capabilities.has("can_control_runtime") or not capabilities.has("can_capture_runtime"):
+		return _failure("runtime_health.capabilities should expose start/control/capture bits.")
 
 	var self_diagnostics: Dictionary = runtime_health_dict.get("self_diagnostics", {})
 	if str(self_diagnostics.get("status", "")) != "warning":
