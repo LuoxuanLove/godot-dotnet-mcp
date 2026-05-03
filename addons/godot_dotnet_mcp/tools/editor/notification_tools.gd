@@ -176,11 +176,15 @@ func _collect_visible_popups(node, out: Array[Dictionary]) -> void:
 func _describe_popup_root(popup_root) -> Dictionary:
 	return {
 		"node_path": _safe_control_path(popup_root),
+		"parent_path": _resolve_parent_path(popup_root),
 		"class": _control_class_name(popup_root),
 		"name": str(popup_root.name),
 		"title": _read_popup_title(popup_root),
+		"text": _read_popup_text(popup_root),
 		"visible": _is_control_visible(popup_root),
 		"disabled": _is_control_disabled(popup_root),
+		"rect": _rect2_to_dict(_read_node_rect(popup_root)),
+		"items": _collect_popup_menu_items(popup_root),
 		"actionable_children": _collect_actionable_children(popup_root)
 	}
 
@@ -201,11 +205,14 @@ func _collect_actionable_children_recursive(node, out: Array[Dictionary]) -> voi
 		if ACTIONABLE_CONTROL_CLASSES.has(control_class) and _is_control_visible(child):
 			out.append({
 				"node_path": _safe_control_path(child),
+				"parent_path": _resolve_parent_path(child),
 				"class": control_class,
 				"name": str(child.name),
 				"title": _read_popup_title(child),
+				"text": _read_popup_text(child),
 				"visible": _is_control_visible(child),
-				"disabled": _is_control_disabled(child)
+				"disabled": _is_control_disabled(child),
+				"rect": _rect2_to_dict(_read_node_rect(child))
 			})
 		_collect_actionable_children_recursive(child, out)
 
@@ -280,6 +287,73 @@ func _read_popup_title(node) -> String:
 		if text != null:
 			return str(text)
 	return ""
+
+
+func _read_popup_text(node) -> String:
+	if node == null:
+		return ""
+	if node.has_method("get"):
+		var text = node.get("text")
+		if text != null:
+			return str(text)
+	return ""
+
+
+func _collect_popup_menu_items(node) -> Array[Dictionary]:
+	var items: Array[Dictionary] = []
+	if node == null or _control_class_name(node) != "PopupMenu" or not node.has_method("get_item_count"):
+		return items
+	var count := int(node.get_item_count())
+	for index in range(count):
+		var item := {"index": index}
+		if node.has_method("get_item_id"):
+			item["id"] = int(node.get_item_id(index))
+		if node.has_method("get_item_text"):
+			item["text"] = str(node.get_item_text(index))
+		if node.has_method("is_item_disabled"):
+			item["disabled"] = bool(node.is_item_disabled(index))
+		if node.has_method("is_item_separator"):
+			item["separator"] = bool(node.is_item_separator(index))
+		if node.has_method("get_item_submenu"):
+			item["submenu"] = str(node.get_item_submenu(index))
+		items.append(item)
+	return items
+
+
+func _read_node_rect(node) -> Rect2:
+	if node == null:
+		return Rect2()
+	if node.has_method("get_global_rect"):
+		var rect_value = node.get_global_rect()
+		if rect_value is Rect2:
+			return rect_value
+		if rect_value is Rect2i:
+			return Rect2((rect_value as Rect2i).position, (rect_value as Rect2i).size)
+	var position := Vector2()
+	var size := Vector2()
+	if node.has_method("get"):
+		var position_value = node.get("position")
+		if position_value is Vector2:
+			position = position_value
+		elif position_value is Vector2i:
+			position = Vector2(position_value)
+		var size_value = node.get("size")
+		if size_value is Vector2:
+			size = size_value
+		elif size_value is Vector2i:
+			size = Vector2(size_value)
+	return Rect2(position, size)
+
+
+func _resolve_parent_path(node) -> String:
+	if node == null or not node.has_method("get_parent"):
+		return ""
+	var parent = node.get_parent()
+	return _safe_control_path(parent) if parent != null else ""
+
+
+func _rect2_to_dict(rect: Rect2) -> Dictionary:
+	return {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y}
 
 
 func _is_control_visible(node) -> bool:

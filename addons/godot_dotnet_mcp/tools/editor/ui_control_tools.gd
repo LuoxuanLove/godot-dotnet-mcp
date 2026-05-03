@@ -31,6 +31,10 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _focus_control(ei, str(args.get("target_path", "")).strip_edges())
 		"activate_control":
 			return _activate_control(ei, str(args.get("target_path", "")).strip_edges())
+		"click_control":
+			return _click_control(ei, args, MOUSE_BUTTON_LEFT, "left")
+		"right_click_control":
+			return _click_control(ei, args, MOUSE_BUTTON_RIGHT, "right")
 		"set_text":
 			return _set_control_text(ei, str(args.get("target_path", "")).strip_edges(), str(args.get("text", "")))
 		_:
@@ -195,6 +199,42 @@ func _activate_control(ei, target_path: String) -> Dictionary:
 		"target_path": target_path,
 		"class": _control_class_name(control)
 	}, "Editor control activated")
+
+
+func _click_control(ei, args: Dictionary, button_index: int, button_name: String) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var control = _find_control(ei, target_path)
+	if control == null:
+		return _error("Editor control not found: %s" % target_path)
+	if not _is_control_visible(control):
+		return _error("Editor control is not visible: %s" % target_path)
+	if _is_control_disabled(control):
+		return _error("Editor control is disabled: %s" % target_path)
+	if not _has_non_empty_rect(control):
+		return _error("Editor control rect is empty: %s" % target_path)
+
+	var local_position := _resolve_local_click_position(control, args)
+	var local_rect := _read_control_local_rect(control)
+	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x > local_rect.size.x or local_position.y > local_rect.size.y:
+		return _error("local_x/local_y is outside the control rect: %s" % target_path)
+
+	var viewport_position := _control_local_to_viewport_position(control, local_position)
+	var screen_position := _viewport_to_screen_position(control, viewport_position)
+	var dispatch_result := _dispatch_control_mouse_click(control, button_index, viewport_position)
+	if not bool(dispatch_result.get("success", false)):
+		return dispatch_result
+
+	return _success({
+		"target_path": target_path,
+		"class": _control_class_name(control),
+		"button": button_name,
+		"local_position": _vector2_to_dict(local_position),
+		"viewport_position": _vector2_to_dict(viewport_position),
+		"screen_position": _vector2_to_dict(screen_position),
+		"coordinate_mapping": _build_control_coordinate_mapping(control)
+	}, "Editor control %s-click dispatched" % button_name)
 
 
 func _set_control_text(ei, target_path: String, text: String) -> Dictionary:
@@ -596,7 +636,8 @@ func _describe_control(control, parent_path: String, depth: int) -> Dictionary:
 			"y": rect.position.y,
 			"width": rect.size.x,
 			"height": rect.size.y
-		}
+		},
+		"coordinate_mapping": _build_control_coordinate_mapping(control)
 	}
 	if control != null and control.has_method("get_child_count"):
 		summary["child_count"] = int(control.get_child_count())
@@ -613,6 +654,9 @@ func _build_actionable_actions(control) -> Array[String]:
 		actions.append("focus_control")
 	if _supports_activation(control):
 		actions.append("activate_control")
+	if _has_non_empty_rect(control):
+		actions.append("click_control")
+		actions.append("right_click_control")
 	if _supports_text_input(control):
 		actions.append("set_text")
 	return actions
@@ -690,6 +734,164 @@ func _normalize_capture_rect(rect_value, image) -> Rect2i:
 	var width := mini(int(ceil(rect.size.x)), image.get_width() - x)
 	var height := mini(int(ceil(rect.size.y)), image.get_height() - y)
 	return Rect2i(x, y, width, height)
+
+
+func _resolve_local_click_position(control, args: Dictionary) -> Vector2:
+	var local_rect := _read_control_local_rect(control)
+	var x := local_rect.size.x * 0.5
+	var y := local_rect.size.y * 0.5
+	if args.has("local_x") and args.get("local_x") != null:
+		x = float(args.get("local_x", x))
+	if args.has("local_y") and args.get("local_y") != null:
+		y = float(args.get("local_y", y))
+	return Vector2(x, y)
+
+
+func _dispatch_control_mouse_click(control, button_index: int, viewport_position: Vector2) -> Dictionary:
+	var viewport = _resolve_viewport_for_control(control)
+	if viewport == null or not viewport.has_method("push_input"):
+		return _error("Editor viewport does not support GUI input dispatch")
+	var button_mask := _mouse_button_mask(button_index)
+	var press_event := InputEventMouseButton.new()
+	press_event.button_index = button_index
+	press_event.pressed = true
+	press_event.position = viewport_position
+	press_event.global_position = viewport_position
+	press_event.button_mask = button_mask
+	viewport.push_input(press_event, false)
+
+	var release_event := InputEventMouseButton.new()
+	release_event.button_index = button_index
+	release_event.pressed = false
+	release_event.position = viewport_position
+	release_event.global_position = viewport_position
+	release_event.button_mask = 0
+	viewport.push_input(release_event, false)
+	return _success({"event_count": 2})
+
+
+func _mouse_button_mask(button_index: int) -> int:
+	if button_index <= 0:
+		return 0
+	return 1 << (button_index - 1)
+
+
+func _build_control_coordinate_mapping(control) -> Dictionary:
+	var local_rect := _read_control_local_rect(control)
+	var viewport_rect := _read_control_rect(control)
+	var screen_rect := _control_viewport_rect_to_screen_rect(control, viewport_rect)
+	var viewport_visible_rect := _read_viewport_visible_rect(control)
+	var screenshot_size := _read_viewport_image_size(control)
+	return {
+		"control_local_rect": _rect2_to_dict(local_rect),
+		"viewport_rect": _rect2_to_dict(viewport_rect),
+		"screen_rect": _rect2_to_dict(screen_rect),
+		"os_window_rect": _rect2i_to_dict(_read_os_window_rect()),
+		"viewport_visible_rect": _rect2_to_dict(viewport_visible_rect),
+		"screenshot_size": _vector2i_to_dict(screenshot_size),
+		"viewport_to_screenshot_scale": _calculate_viewport_to_screenshot_scale(viewport_visible_rect, screenshot_size)
+	}
+
+
+func _read_control_local_rect(control) -> Rect2:
+	var size := Vector2()
+	if control != null and _has_property(control, "size"):
+		var value = control.get("size")
+		if value is Vector2:
+			size = value
+		elif value is Vector2i:
+			size = Vector2(value)
+	if size.x <= 0.0 or size.y <= 0.0:
+		size = _read_control_rect(control).size
+	return Rect2(Vector2.ZERO, size)
+
+
+func _control_local_to_viewport_position(control, local_position: Vector2) -> Vector2:
+	if control != null and control.has_method("get_global_transform_with_canvas"):
+		return control.get_global_transform_with_canvas() * local_position
+	return _read_control_rect(control).position + local_position
+
+
+func _viewport_to_screen_position(control, viewport_position: Vector2) -> Vector2:
+	var viewport = _resolve_viewport_for_control(control)
+	if viewport != null and viewport.has_method("get_screen_transform"):
+		return viewport.get_screen_transform() * viewport_position
+	return viewport_position
+
+
+func _control_viewport_rect_to_screen_rect(control, viewport_rect: Rect2) -> Rect2:
+	var top_left := _viewport_to_screen_position(control, viewport_rect.position)
+	var bottom_right := _viewport_to_screen_position(control, viewport_rect.position + viewport_rect.size)
+	var min_x := minf(top_left.x, bottom_right.x)
+	var min_y := minf(top_left.y, bottom_right.y)
+	var max_x := maxf(top_left.x, bottom_right.x)
+	var max_y := maxf(top_left.y, bottom_right.y)
+	return Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x, max_y - min_y))
+
+
+func _resolve_viewport_for_control(control):
+	var current = control
+	while current != null:
+		if current.has_method("get_viewport"):
+			var viewport = current.get_viewport()
+			if viewport != null:
+				return viewport
+		if current.has_method("get_parent"):
+			current = current.get_parent()
+		else:
+			current = null
+	return null
+
+
+func _read_viewport_visible_rect(control) -> Rect2:
+	var viewport = _resolve_viewport_for_control(control)
+	if viewport != null and viewport.has_method("get_visible_rect"):
+		return _read_rect2(viewport.get_visible_rect())
+	var image_size := _read_viewport_image_size(control)
+	return Rect2(Vector2.ZERO, Vector2(image_size))
+
+
+func _read_viewport_image_size(control) -> Vector2i:
+	var viewport = _resolve_viewport_for_control(control)
+	if viewport == null or not viewport.has_method("get_texture"):
+		return Vector2i()
+	var texture = viewport.get_texture()
+	if texture == null or not texture.has_method("get_image"):
+		return Vector2i()
+	var image = texture.get_image()
+	if image == null:
+		return Vector2i()
+	return Vector2i(int(image.get_width()), int(image.get_height()))
+
+
+func _read_os_window_rect() -> Rect2i:
+	return Rect2i(DisplayServer.window_get_position(), DisplayServer.window_get_size())
+
+
+func _calculate_viewport_to_screenshot_scale(viewport_rect: Rect2, screenshot_size: Vector2i) -> Dictionary:
+	var scale_x := 0.0
+	var scale_y := 0.0
+	if viewport_rect.size.x > 0.0:
+		scale_x = float(screenshot_size.x) / viewport_rect.size.x
+	if viewport_rect.size.y > 0.0:
+		scale_y = float(screenshot_size.y) / viewport_rect.size.y
+	return {"x": scale_x, "y": scale_y}
+
+
+func _rect2_to_dict(rect: Rect2) -> Dictionary:
+	return {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y}
+
+
+func _rect2i_to_dict(rect: Rect2i) -> Dictionary:
+	return {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y}
+
+
+func _vector2_to_dict(value: Vector2) -> Dictionary:
+	return {"x": value.x, "y": value.y}
+
+
+func _vector2i_to_dict(value: Vector2i) -> Dictionary:
+	return {"x": value.x, "y": value.y}
 
 
 func _read_control_rect(control) -> Rect2:

@@ -147,12 +147,19 @@ class FakeEditorViewport:
 
 	var _texture := FakeScreenshotTexture.new()
 	var focus_owner = null
+	var pushed_events: Array = []
 
 	func get_texture():
 		return _texture
 
 	func gui_get_focus_owner():
 		return focus_owner
+
+	func get_visible_rect() -> Rect2:
+		return Rect2(0, 0, 320, 180)
+
+	func push_input(event, _in_local_coords: bool = false) -> void:
+		pushed_events.append(event)
 
 
 class FakeEditorBaseControl:
@@ -191,6 +198,7 @@ class FakePopupNode:
 	var _parent_ref: WeakRef = null
 	var _children: Array = []
 	var pressed := false
+	var _rect := Rect2(0, 0, 100, 24)
 
 	func _init(node_name: String = "", popup_class: String = "Control") -> void:
 		name = node_name
@@ -221,6 +229,9 @@ class FakePopupNode:
 
 	func is_visible_in_tree() -> bool:
 		return visible
+
+	func get_global_rect() -> Rect2:
+		return _rect
 
 	func hide() -> void:
 		visible = false
@@ -647,6 +658,35 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control capture_control did not create the cropped PNG file.")
 	if not str(capture_control_result.get("data", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
 		return _failure("Editor ui_control capture_control should normalize root-level user:// PNG paths into the managed control capture directory.")
+	var coordinate_mapping: Dictionary = capture_control_result.get("data", {}).get("control", {}).get("coordinate_mapping", {})
+	if coordinate_mapping.is_empty() or not coordinate_mapping.has("os_window_rect"):
+		return _failure("Editor ui_control capture_control should expose coordinate mapping with OS window rect information.")
+
+	var click_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "click_control",
+		"target_path": search_field_path,
+		"local_x": 8,
+		"local_y": 6
+	})
+	if not bool(click_control_result.get("success", false)):
+		return _failure("Editor ui_control click_control failed through the split service path.")
+	var right_click_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "right_click_control",
+		"target_path": search_field_path,
+		"local_x": 9,
+		"local_y": 7
+	})
+	if not bool(right_click_control_result.get("success", false)):
+		return _failure("Editor ui_control right_click_control failed through the split service path.")
+	var pushed_events: Array = editor_interface.get_base_control().get_viewport().pushed_events
+	if pushed_events.size() != 4:
+		return _failure("Editor ui_control click actions should dispatch press/release input events.")
+	if int(pushed_events[0].button_index) != MOUSE_BUTTON_LEFT or not bool(pushed_events[0].pressed):
+		return _failure("Editor ui_control click_control should dispatch a left-button press first.")
+	if int(pushed_events[2].button_index) != MOUSE_BUTTON_RIGHT or not bool(pushed_events[2].pressed):
+		return _failure("Editor ui_control right_click_control should dispatch a right-button press first.")
+	if Vector2(pushed_events[0].position) != Vector2(32, 30):
+		return _failure("Editor ui_control click_control should convert local coordinates to viewport coordinates.")
 
 	var tab_container_path := str(mcp_tabs.get_path())
 	var activate_tab_result: Dictionary = executor.execute("ui_control", {
@@ -700,6 +740,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor popup list_visible failed through the split service path.")
 	if int(popup_list_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("Editor popup list_visible should report one visible popup root.")
+	var popup_summary: Dictionary = popup_list_result.get("data", {}).get("popups", [{}])[0]
+	if str(popup_summary.get("parent_path", "")).is_empty() or not popup_summary.has("rect"):
+		return _failure("Editor popup list_visible should expose popup parent_path and rect metadata.")
+	if str(popup_summary.get("text", "")) != "":
+		return _failure("Editor popup list_visible should expose popup text separately from title.")
 	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
 	var popup_button_path := "%s/ConfirmButton" % popup_root_path
 	var popup_input_path := "%s/SearchInput" % popup_root_path
