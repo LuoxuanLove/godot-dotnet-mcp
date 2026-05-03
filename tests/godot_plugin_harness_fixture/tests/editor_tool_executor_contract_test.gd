@@ -548,6 +548,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var executable_name := executable_path.get_file().to_lower()
 	if executable_name.find("godot") == -1 or not executable_name.ends_with(".exe"):
 		return _failure("Editor status get_godot_path returned an unexpected executable path.")
+	var session_identity: Dictionary = path_result.get("data", {}).get("editor_session_identity", {})
+	if str(session_identity.get("session_id", "")).is_empty():
+		return _failure("Editor status get_godot_path should include a stable editor session id.")
+	if int(session_identity.get("pid", 0)) <= 0:
+		return _failure("Editor status get_godot_path should include the current editor process id.")
+	if bool(session_identity.get("safe_to_terminate", true)) or bool(session_identity.get("external_validation_process", true)):
+		return _failure("Editor session identity must mark the current MCP editor process as non-terminable and non-external.")
 
 	var focus_context_result: Dictionary = executor.execute("status", {"action": "get_focus_context"})
 	if not bool(focus_context_result.get("success", false)):
