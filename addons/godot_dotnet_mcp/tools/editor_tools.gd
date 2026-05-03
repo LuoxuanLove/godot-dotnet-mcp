@@ -335,7 +335,7 @@ EXAMPLES:
 		},
 		{
 			"name": "ui_control",
-			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, and write text into text-editing controls.
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks, and write text into text-editing controls.
 
 ACTIONS:
 - list_visible: Enumerate visible editor controls
@@ -346,6 +346,8 @@ ACTIONS:
 - capture_control: Capture a screenshot cropped to one control
 - focus_control: Move editor focus to a control
 - activate_control: Activate a button-like control
+- click_control: Dispatch a left mouse click at local_x/local_y inside a control
+- right_click_control: Dispatch a right mouse click at local_x/local_y inside a control
 - set_text: Write text into a text-editing control
 
 EXAMPLES:
@@ -359,13 +361,14 @@ EXAMPLES:
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
+- Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCPDock/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -404,6 +407,14 @@ EXAMPLES:
 						"type": "string",
 						"description": "Text for set_text"
 					},
+					"local_x": {
+						"type": "number",
+						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+					},
+					"local_y": {
+						"type": "number",
+						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
+					},
 					"class_name": {
 						"type": "string",
 						"description": "Optional class filter for list_visible"
@@ -430,10 +441,10 @@ EXAMPLES:
 		},
 		{
 			"name": "popup",
-			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups and perform minimal safe interactions.
+			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups, including popup rect/text/parent metadata and PopupMenu items, and perform minimal safe interactions.
 
 ACTIONS:
-- list_visible: List visible popup/window roots and actionable children
+- list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
 - press_button: Activate a popup button by target_path
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
 - close_popup: Close a popup/window by target_path
