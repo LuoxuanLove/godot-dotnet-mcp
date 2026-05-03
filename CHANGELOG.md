@@ -6,6 +6,7 @@
 
 - Added `system_editor_control` support for control-local left/right mouse clicks, richer popup metadata, and coordinate mapping between control, screenshot, screen, and OS window rectangles for visual QA workflows.
 - Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
+- Added a stable Agent-callable plugin lifecycle reload path through `system_plugin_reload(action="full_reload_plugin")`, plus freshness metadata in health snapshots to compare the running plugin instance with disk files after addon sync.
 
 ### Fixed
 
