@@ -126,11 +126,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("runtime_health is missing dictionary section '%s'." % key)
 	if not (runtime_health_dict.get("capabilities", {}) is Dictionary):
 		return _failure("runtime_health should include runtime capability bits.")
+	if not (runtime_health_dict.get("freshness", {}) is Dictionary):
+		return _failure("runtime_health should include plugin instance freshness metadata.")
+	var freshness: Dictionary = runtime_health_dict.get("freshness", {})
+	if not freshness.has("running_instance") or not freshness.has("disk_source") or not freshness.has("comparison"):
+		return _failure("runtime_health.freshness should expose running, disk and comparison sections.")
 	var capabilities: Dictionary = runtime_health_dict.get("capabilities", {})
 	if not capabilities.has("can_start_project") or not capabilities.has("can_control_runtime") or not capabilities.has("can_capture_runtime"):
 		return _failure("runtime_health.capabilities should expose start/control/capture bits.")
 
 	var self_diagnostics: Dictionary = runtime_health_dict.get("self_diagnostics", {})
+	if not (self_diagnostics.get("freshness", {}) is Dictionary):
+		return _failure("runtime_health.self_diagnostics should include freshness metadata.")
 	if str(self_diagnostics.get("status", "")) != "warning":
 		return _failure("runtime_health.self_diagnostics should surface the recorded warning status.")
 	if int(self_diagnostics.get("active_incident_count", 0)) <= 0:

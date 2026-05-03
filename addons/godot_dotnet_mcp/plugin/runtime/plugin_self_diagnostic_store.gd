@@ -2,6 +2,8 @@
 extends RefCounted
 class_name PluginSelfDiagnosticStore
 
+const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
+
 const MAX_INCIDENTS := 200
 const MAX_OPERATIONS := 100
 const DEFAULT_LIMIT := 50
@@ -255,6 +257,9 @@ static func get_health_snapshot(snapshot: Dictionary = {}, limit: int = 3) -> Di
 		last_operation = operations[0]
 
 	var tool_loader = snapshot.get("tool_loader", {})
+	var freshness = snapshot.get("freshness", {})
+	if not (freshness is Dictionary):
+		freshness = PluginInstanceFreshness.get_freshness_snapshot()
 	var tool_load_error_count = 0
 	if tool_loader is Dictionary:
 		tool_load_error_count = int((tool_loader as Dictionary).get("tool_load_error_count", 0))
@@ -284,6 +289,7 @@ static func get_health_snapshot(snapshot: Dictionary = {}, limit: int = 3) -> Di
 		"server": (snapshot.get("server", {}) if snapshot.get("server", {}) is Dictionary else {}).duplicate(true),
 		"dock": (snapshot.get("dock", {}) if snapshot.get("dock", {}) is Dictionary else {}).duplicate(true),
 		"tool_loader": (tool_loader if tool_loader is Dictionary else {}).duplicate(true),
+		"freshness": (freshness if freshness is Dictionary else {}).duplicate(true),
 		"recent_incidents": recent_incidents
 	}
 
