@@ -3,13 +3,16 @@ extends RefCounted
 # {"name": "system_project_executor_contracts"}
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
+const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 
 
 class FakeBridge extends RefCounted:
 	var _tool_loader
 	var scene_run_actions: Array[String] = []
+	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
 		_tool_loader = tool_loader
@@ -70,6 +73,10 @@ class FakeBridge extends RefCounted:
 				return success({"value": 60})
 			"debug_editor_log":
 				return success({"error_count": 0, "errors": []})
+			"resource_query":
+				return success({"dependencies": ["uid://missing_project_contract::::res://tests_tmp/system_project_executor_contracts/MissingResource.cs"]})
+			"script_inspect":
+				return success({"language": "csharp", "class_name": "WrongResourceName", "base_type": "Node"})
 			"scene_run":
 				scene_run_actions.append(str(args.get("action", "")))
 				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))}, "ok")
@@ -132,6 +139,15 @@ class FakeBridge extends RefCounted:
 			return (value as Array).duplicate(true) if value is Array else []
 		return []
 
+	func parse_dependency_reference(raw_path: String, source_path: String = "") -> Dictionary:
+		return atomic_bridge.parse_dependency_reference(raw_path, source_path)
+
+	func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
+		return atomic_bridge.build_issue(severity, issue_type, message, extra)
+
+	func append_unique_issue(issues: Array, issue: Dictionary) -> void:
+		atomic_bridge.append_unique_issue(issues, issue)
+
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
 
@@ -159,6 +175,12 @@ class FakeToolLoader extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	_prepare_temp_root()
+	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
+	var script_path := TEMP_ROOT.path_join("ConfigResource.cs")
+	_write_text(script_path, "using Godot;\n[GlobalClass]\npublic partial class ConfigResource : Resource {}\n")
+	_write_text(resource_path, "[gd_resource type=\"Resource\" script_class=\"ConfigResource\" format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[resource]\nscript = ExtResource(\"1_script\")\n" % script_path)
+
 	PluginSelfDiagnosticStore.clear()
 	PluginSelfDiagnosticStore.record_incident(
 		"warning",
@@ -173,14 +195,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 9:
-		return _failure("System project implementation should expose 9 tool definitions including plugin_reload, project_files and userdata_maintenance.")
+	if tool_defs.size() != 10:
+		return _failure("System project implementation should expose 10 tool definitions including plugin_reload, project_files, resource_reference_audit and userdata_maintenance.")
 	if not _has_tool(tool_defs, "plugin_reload"):
 		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
 	if not _has_tool(tool_defs, "userdata_maintenance"):
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 	if not _has_tool(tool_defs, "project_files"):
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
+	if not _has_tool(tool_defs, "resource_reference_audit"):
+		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
+
+	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
+	if not bool(reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should run on a .tres fixture.")
+	var reference_data: Dictionary = reference_audit.get("data", {})
+	if int(reference_data.get("issue_count", 0)) < 1:
+		return _failure("resource_reference_audit should report UID/path or C# Resource script issues.")
+	if str(reference_data.get("build_status", "")) != "dotnet_build_may_pass":
+		return _failure("resource_reference_audit should distinguish resource inconsistency from dotnet build status.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -321,7 +354,44 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 
 func cleanup_case(_tree: SceneTree) -> void:
 	PluginSelfDiagnosticStore.clear()
+	_remove_tree(TEMP_ROOT)
 	MCPUserDataPaths.cleanup_capture_cache(false)
+
+
+func _prepare_temp_root() -> void:
+	_remove_tree(TEMP_ROOT)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))
+
+
+func _write_text(path: String, content: String) -> void:
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("Failed to create system project contract fixture: %s" % path)
+		return
+	file.store_string(content)
+	file.close()
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	var dir = DirAccess.open(absolute_path)
+	if dir == null:
+		DirAccess.remove_absolute(absolute_path)
+		return
+	dir.list_dir_begin()
+	var entry = dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var child_path := absolute_path.path_join(entry)
+			if dir.current_is_dir():
+				_remove_tree(ProjectSettings.localize_path(child_path))
+			else:
+				DirAccess.remove_absolute(child_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
 
 
 func _create_user_file(path: String, content: String) -> void:
