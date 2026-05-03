@@ -23,7 +23,17 @@ class FakeBridge extends RefCounted:
 				if str(args.get("action", "")) == "get_godot_path":
 					return success({
 						"godot_executable_path": "C:/Godot/Godot.exe",
-						"project_root_path": "E:/Project/LuoxuanLove/Mechoes"
+						"project_root_path": "E:/Project/LuoxuanLove/Mechoes",
+						"editor_session_identity": {
+							"session_id": "project-contract-session",
+							"identity_scope": "current_editor_process",
+							"process_owner": "godot_dotnet_mcp_editor",
+							"external_validation_process": false,
+							"safe_to_terminate": false,
+							"pid": 5252,
+							"cmdline_args": ["--path", "E:/Project/LuoxuanLove/Mechoes"],
+							"headless": false
+						}
 					})
 				return error("Unsupported editor_status action")
 			"project_info":
@@ -204,6 +214,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities should block can_start_project when compile errors are present.")
 	if not ((runtime_capabilities as Dictionary).get("blocking_reasons", []) as Array).has("compile_errors_present"):
 		return _failure("runtime_capabilities should include compile_errors_present as a blocking reason.")
+	var editor_context: Dictionary = (runtime_capabilities as Dictionary).get("editor_context", {})
+	var context_identity: Dictionary = editor_context.get("editor_session_identity", {})
+	if str(context_identity.get("session_id", "")) != "project-contract-session":
+		return _failure("runtime_capabilities.editor_context should expose the current editor session identity.")
+	if bool(context_identity.get("safe_to_terminate", true)) or bool(context_identity.get("external_validation_process", true)):
+		return _failure("runtime_capabilities.editor_context should mark the current editor process as non-terminable and non-external.")
 
 	var layout_result: Dictionary = executor.execute("userdata_maintenance", {"action": "ensure_layout"})
 	if not bool(layout_result.get("success", false)):

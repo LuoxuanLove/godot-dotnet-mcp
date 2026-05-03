@@ -9,6 +9,7 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -274,6 +275,7 @@ func _build_editor_state_section() -> Dictionary:
 	var focus_context := _safe_extract_data(focus_context_result)
 	var distraction_free := _safe_extract_data(distraction_free_result)
 	var godot_path := _safe_extract_data(godot_path_result)
+	var session_identity := _enrich_editor_session_identity(godot_path.get("editor_session_identity", {}))
 	var payload := {
 		"godot_version": str(info.get("godot_version", "")),
 		"version_string": str(info.get("version_string", "")),
@@ -284,7 +286,8 @@ func _build_editor_state_section() -> Dictionary:
 		"focus_context": focus_context,
 		"distraction_free": bool(distraction_free.get("enabled", false)),
 		"godot_executable_path": str(godot_path.get("godot_executable_path", "")),
-		"project_root_path": str(godot_path.get("project_root_path", ""))
+		"project_root_path": str(godot_path.get("project_root_path", "")),
+		"editor_session_identity": session_identity
 	}
 	if failed_result is Dictionary and not failed_result.is_empty():
 		return _section_failure("Editor status is unavailable.", failed_result, payload)
@@ -426,12 +429,41 @@ func _build_editor_runtime_context() -> Dictionary:
 	var godot_path_result: Dictionary = bridge.call_atomic("editor_status", {"action": "get_godot_path"})
 	var godot_path := _safe_extract_data(godot_path_result)
 	var available := bool(godot_path_result.get("success", false))
+	var session_identity := _enrich_editor_session_identity(godot_path.get("editor_session_identity", {}))
 	return {
 		"editor_interface_available": available,
 		"error": "" if available else _result_error_text(godot_path_result, "Editor interface is unavailable."),
 		"godot_executable_path": str(godot_path.get("godot_executable_path", "")),
-		"project_root_path": str(godot_path.get("project_root_path", ProjectSettings.globalize_path("res://")))
+		"project_root_path": str(godot_path.get("project_root_path", ProjectSettings.globalize_path("res://"))),
+		"editor_session_identity": session_identity
 	}
+
+
+func _get_server_listen_endpoint() -> Dictionary:
+	var server = _runtime_context.get("server", null)
+	if server != null and is_instance_valid(server) and server.has_method("get_listen_endpoint"):
+		var endpoint = server.get_listen_endpoint()
+		if endpoint is Dictionary:
+			return (endpoint as Dictionary).duplicate(true)
+	return {}
+
+
+func _enrich_editor_session_identity(raw_identity) -> Dictionary:
+	var identity: Dictionary = raw_identity.duplicate(true) if raw_identity is Dictionary else MCPEditorSessionIdentity.build_identity()
+	var endpoint := _get_server_listen_endpoint()
+	if endpoint.is_empty():
+		return identity
+	var listen := {
+		"host": str(endpoint.get("host", "")),
+		"port": int(endpoint.get("port", 0)),
+		"url": str(endpoint.get("url", "")),
+		"running": bool(endpoint.get("running", false))
+	}
+	identity["listen"] = listen
+	identity["listen_host"] = str(listen.get("host", ""))
+	identity["listen_port"] = int(listen.get("port", 0))
+	identity["listen_url"] = str(listen.get("url", ""))
+	return identity
 
 
 func _build_project_state_summary(_args: Dictionary = {}) -> Dictionary:

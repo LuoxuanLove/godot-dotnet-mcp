@@ -23,6 +23,14 @@ class FakeServer extends RefCounted:
 	func get_runtime_control_service():
 		return FakeRuntimeControlService.new()
 
+	func get_listen_endpoint() -> Dictionary:
+		return {
+			"host": "127.0.0.1",
+			"port": 3000,
+			"url": "http://127.0.0.1:3000/mcp",
+			"running": true
+		}
+
 
 class FakeBridge extends RefCounted:
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -55,7 +63,17 @@ class FakeBridge extends RefCounted:
 					"get_godot_path":
 						return success({
 							"godot_executable_path": "C:/Godot/Godot.exe",
-							"project_root_path": "E:/Project/LuoxuanLove/Mechoes"
+							"project_root_path": "E:/Project/LuoxuanLove/Mechoes",
+							"editor_session_identity": {
+								"session_id": "editor-contract-session",
+								"identity_scope": "current_editor_process",
+								"process_owner": "godot_dotnet_mcp_editor",
+								"external_validation_process": false,
+								"safe_to_terminate": false,
+								"pid": 4242,
+								"cmdline_args": ["--path", "E:/Project/LuoxuanLove/Mechoes"],
+								"headless": false
+							}
 						})
 					_:
 						return error("Unsupported editor_status action")
@@ -192,6 +210,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_state.editor.focus_context should preserve the focus owner snapshot.")
 	if int(focus_context.get("selected_node_count", 0)) != 1:
 		return _failure("editor_state.editor.focus_context should preserve selected scene nodes.")
+	var editor_identity: Dictionary = editor.get("editor_session_identity", {})
+	if str(editor_identity.get("session_id", "")) != "editor-contract-session":
+		return _failure("editor_state.editor should expose the current editor session identity.")
+	if int(editor_identity.get("listen_port", 0)) != 3000 or str(editor_identity.get("listen_host", "")) != "127.0.0.1":
+		return _failure("editor_state.editor session identity should include the MCP listen endpoint when available.")
+	if bool(editor_identity.get("safe_to_terminate", true)) or bool(editor_identity.get("external_validation_process", true)):
+		return _failure("editor_state.editor session identity must distinguish the current MCP editor from external validation processes.")
 
 	var inspector: Dictionary = payload.get("inspector", {})
 	if str(inspector.get("selected_property", "")) != "transform/origin":
@@ -217,6 +242,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_state should expose aggregate runtime capability bits.")
 	if bool(runtime_capabilities.get("can_start_project", true)):
 		return _failure("editor_state runtime capabilities should block project start when compile errors are present.")
+	var editor_context: Dictionary = runtime_capabilities.get("editor_context", {})
+	var context_identity: Dictionary = editor_context.get("editor_session_identity", {})
+	if str(context_identity.get("session_id", "")) != "editor-contract-session":
+		return _failure("editor_state runtime capabilities should carry the editor session identity.")
 
 	var failing_executor = SystemProjectImplScript.new()
 	failing_executor.bridge = FakeFailingProjectBridge.new()
