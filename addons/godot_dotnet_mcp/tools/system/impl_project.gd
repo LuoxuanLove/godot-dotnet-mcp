@@ -285,18 +285,19 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 			if id_end != -1:
 				used_script_ids[line.substr(id_start, id_end - id_start)] = line_no
 
-	for resource_id in used_script_ids.keys():
-		if not script_resources.has(resource_id):
-			var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
-			bridge.append_unique_issue(issues, unresolved_issue)
-			continue
-		var script_ref: Dictionary = script_resources[resource_id]
-		var script_path := str(script_ref.get("normalized_path", ""))
-		if script_path.ends_with(".cs") or str(script_ref.get("declared_path", "")).ends_with(".cs"):
-			csharp_resource_script_count += 1
-			var script_issues := _audit_csharp_resource_script_reference(path, int(used_script_ids[resource_id]), script_ref, header, include_warnings)
-			for script_issue in script_issues:
-				bridge.append_unique_issue(issues, script_issue)
+	if path.ends_with(".tres"):
+		for resource_id in used_script_ids.keys():
+			if not script_resources.has(resource_id):
+				var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
+				bridge.append_unique_issue(issues, unresolved_issue)
+				continue
+			var script_ref: Dictionary = script_resources[resource_id]
+			var script_path := str(script_ref.get("normalized_path", ""))
+			if script_path.ends_with(".cs") or str(script_ref.get("declared_path", "")).ends_with(".cs"):
+				csharp_resource_script_count += 1
+				var script_issues := _audit_csharp_resource_script_reference(path, int(used_script_ids[resource_id]), script_ref, header, include_warnings)
+				for script_issue in script_issues:
+					bridge.append_unique_issue(issues, script_issue)
 
 	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": path})
 	var dep_data: Dictionary = bridge.extract_data(dep_result)
