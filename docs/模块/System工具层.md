@@ -17,7 +17,7 @@ tools/system/
 ├─ impl_scene.gd       # 场景级工具实现（4 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 ├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
-├─ impl_project.gd     # 项目级与编辑器态聚合工具实现（8 个公开工具）
+├─ impl_project.gd     # 项目级、编辑器态与插件 freshness / 生命周期重载聚合工具实现（9 个公开工具）
 └─ impl_script.gd      # 脚本与绑定审计工具实现（3 个公开工具）
 ```
 
@@ -38,6 +38,7 @@ tools/system/
 - `system_project_files`：高层项目文件树入口，支持列目录、创建/删除目录、读写/复制/移动/删除文件、选中文件、扫描与重导入。
 - `system_project_run`：运行主场景或指定场景；失败时返回编辑器接口、项目、场景和 runtime control 上下文，便于判断缺失的是启动能力还是运行时接管能力。
 - `system_project_stop`：停止当前运行中的项目。
+- `system_plugin_reload`：读取运行中插件实例与磁盘 / 同步状态的 freshness；或调度一次不依赖前台 UI 的插件 disable/enable 生命周期重载。该调用只表示已接受调度，重载期间 MCP transport 可能断开，完成后应重新连接并重新拉取工具清单。
 
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 

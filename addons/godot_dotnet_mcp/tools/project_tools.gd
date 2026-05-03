@@ -48,7 +48,7 @@ FEATURES:
 
 EXAMPLES:
 - Auto-discover: {}
-- Read a specific project: {"path": "res://Mechoes.csproj"}""",
+- Read a specific project: {"path": "res://YourGame.csproj"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {

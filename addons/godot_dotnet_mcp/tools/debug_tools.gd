@@ -148,9 +148,9 @@ NOTES:
 - timeout defaults to 30 seconds
 
 EXAMPLES:
-- Restore: {"action": "restore", "path": "res://Mechoes.csproj"}
-- Build: {"action": "build", "path": "res://Mechoes.csproj"}
-- Build with timeout: {"action": "build", "path": "res://Mechoes.csproj", "timeout_sec": 45}""",
+- Restore: {"action": "restore", "path": "res://YourGame.csproj"}
+- Build: {"action": "build", "path": "res://YourGame.csproj"}
+- Build with timeout: {"action": "build", "path": "res://YourGame.csproj", "timeout_sec": 45}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {

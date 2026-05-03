@@ -53,7 +53,7 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	_debug_mode = debug
 	set_disabled_tools(disabled_tools)
 	_ensure_service_bundle()
-	var force_reload_tools = reason == "tool_soft_reload" or reason == "tool_full_reload"
+	var force_reload_tools = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "plugin_lifecycle_reload" or reason == "auto_start"
 	_service_bundle.get_tool_loader_supervisor().register_tools(reason, force_reload_tools)
 	MCPDebugBuffer.record("info", "server", "Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
 	if _debug_mode:

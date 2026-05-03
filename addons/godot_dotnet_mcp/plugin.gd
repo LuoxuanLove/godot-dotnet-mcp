@@ -616,7 +616,6 @@ func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 	var lifecycle_reload: Dictionary = PluginInstanceFreshness.mark_lifecycle_reload_requested(source)
 	_plugin_reenable_pending = true
 	if not _schedule_plugin_reenable_deferred():
-		_plugin_reenable_pending = false
 		return {
 			"success": false,
 			"error": "Plugin lifecycle reload bridge is unavailable",
@@ -629,6 +628,9 @@ func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 		"data": {
 			"mode": "plugin_lifecycle_reload",
 			"source": source,
+			"request_id": str(lifecycle_reload.get("last_request_id", "")),
+			"state": "scheduled",
+			"completion_observed": false,
 			"lifecycle_reload": lifecycle_reload,
 			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 			"reconnect_hint": "The MCP transport may disconnect while the Godot editor disables and re-enables the plugin. Reconnect and fetch tools again after reload."
@@ -1655,9 +1657,11 @@ func _schedule_plugin_reenable_deferred() -> bool:
 	var base_control = editor_interface.get_base_control()
 	if base_control == null:
 		return false
+	if not is_inside_tree():
+		return _schedule_plugin_reenable()
 	var tree := get_tree()
 	if tree == null:
-		return false
+		return _schedule_plugin_reenable()
 	var timer := tree.create_timer(0.05)
 	timer.timeout.connect(Callable(self, "_complete_plugin_reenable_schedule"), CONNECT_ONE_SHOT)
 	return true
@@ -1665,7 +1669,7 @@ func _schedule_plugin_reenable_deferred() -> bool:
 
 func _complete_plugin_reenable_schedule() -> void:
 	if not _schedule_plugin_reenable():
-		_plugin_reenable_pending = false
+		return
 
 
 func _create_reload_coordinator():

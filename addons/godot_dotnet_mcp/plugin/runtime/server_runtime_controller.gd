@@ -85,7 +85,8 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 
 func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String, track_operation: bool) -> bool:
 	var operation := PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason}) if track_operation else {}
-	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload"
+	var effective_reason := "plugin_lifecycle_reload" if reason == "auto_start" else reason
+	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "auto_start"
 	if force_reload_server:
 		stop()
 		_node_lifecycle.dispose_server_node(_server)
@@ -125,7 +126,7 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 			str(runtime_settings.get("host", ServerRuntimeSettingsProjectionService.DEFAULT_HOST)),
 			bool(runtime_settings.get("debug_mode", true)),
 			disabled_tools,
-			reason
+			effective_reason
 		)
 	else:
 		if _has_server_method("stop"):
@@ -141,7 +142,7 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 			_server.set_disabled_tools(disabled_tools)
 
 	if track_operation:
-		_finish_operation(operation, true, "server_runtime_controller", reason)
+		_finish_operation(operation, true, "server_runtime_controller", effective_reason)
 	return true
 
 

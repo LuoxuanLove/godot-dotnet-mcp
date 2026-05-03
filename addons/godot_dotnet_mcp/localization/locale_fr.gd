@@ -201,6 +201,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_from_path_name": "Charger 脿 partir du chemin",
 	"tool_action_get_base_type_name": "Obtenir le type de base",
 	"tool_action_get_current_name": "Soyez 脿 jour",
+	"tool_action_get_freshness_name": "Vérifier la fraîcheur",
+	"tool_action_full_reload_plugin_name": "Rechargement complet du plugin",
 	"tool_action_get_dependencies_name": "Obtenir les d茅pendances",
 	"tool_action_get_errors_context_name": "Obtenir le contexte d'erreur",
 	"tool_action_get_files_name": "Liste des fichiers",
@@ -231,6 +233,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_get_recent_filtered_desc": "Lisez les 茅v茅nements r茅cents du pont d鈥檈x茅cution filtr茅s par gravit茅.",
 	"tool_action_get_files_desc": "脡num茅rez les fichiers correspondants 脿 partir de l鈥檌ndex du r茅pertoire du projet.",
 	"tool_action_get_info_desc": "Lisez le r茅sum茅 actuel de l'objet ou de la ressource 脿 partir de l'outil cible.",
+	"tool_action_get_freshness_desc": "Compare l'instance du plugin en cours avec les métadonnées du disque et de synchronisation.",
+	"tool_action_full_reload_plugin_desc": "Planifie une recharge complète du cycle de vie désactiver/activer du plugin Godot et reconnecte ensuite.",
 	"tool_action_from_path_desc": "Chargez et analysez les donn茅es 脿 partir d鈥檜n chemin de projet explicite.",
 	"tool_action_restore_desc": "Ex茅cutez la restauration ou la pr茅paration des d茅pendances avant les diagnostics.",
 	"cat_scene": "Sc猫ne",
@@ -482,6 +486,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_audit_desc": "Probl猫mes de sc猫ne de rapport d茅riv茅s des liaisons export茅es",
 	"tool_system_project_state_name": "脡tat du projet",
 	"tool_system_project_state_desc": "R茅sumez l鈥櫭﹖at actuel du projet, y compris les d茅comptes, les erreurs r茅centes et l鈥櫭﹖at d鈥檈x茅cution.",
+	"tool_system_plugin_reload_name": "Rechargement du plugin",
+	"tool_system_plugin_reload_desc": "Vérifie si l'instance du plugin en cours est fraîche, ou planifie une recharge complète du cycle de vie sans dépendre de l'UI au premier plan.",
 	"tool_system_project_configure_name": "Configurer le projet",
 	"tool_system_project_configure_desc": "Lisez ou modifiez les param猫tres du projet, les actions de saisie et la configuration de chargement automatique.",
 	"tool_system_project_run_name": "Ex茅cuter le projet",
@@ -742,4 +748,3 @@ static func get_translations() -> Dictionary:
 		translations = LocaleEn.get_translations().duplicate(true)
 	translations.merge(TRANSLATIONS, true)
 	return translations
-
