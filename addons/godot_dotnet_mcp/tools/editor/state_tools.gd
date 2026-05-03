@@ -2,6 +2,7 @@
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
 
 ## Editor state tools for Godot MCP
 
@@ -135,9 +136,11 @@ func _set_distraction_free(ei, enabled: bool) -> Dictionary:
 
 
 func _get_godot_path() -> Dictionary:
+	var identity: Dictionary = MCPEditorSessionIdentity.build_identity()
 	return _success({
-		"godot_executable_path": OS.get_executable_path(),
-		"project_root_path": ProjectSettings.globalize_path("res://")
+		"godot_executable_path": str(identity.get("godot_executable_path", OS.get_executable_path())),
+		"project_root_path": str(identity.get("project_root_path", ProjectSettings.globalize_path("res://"))),
+		"editor_session_identity": identity
 	})
 
 

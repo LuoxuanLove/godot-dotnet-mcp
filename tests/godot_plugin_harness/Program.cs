@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -19,11 +20,21 @@ internal static class Program
         var allowSkipMissingGodot = args.Any(arg => string.Equals(arg, "--allow-skip-missing-godot", StringComparison.OrdinalIgnoreCase));
         var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
         var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
+        var cleanupStaleProcesses = args.Any(arg => string.Equals(arg, "--cleanup-stale-processes", StringComparison.OrdinalIgnoreCase));
         var onlyCase = Environment.GetEnvironmentVariable("GODOT_PLUGIN_HARNESS_ONLY_CASE");
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
         var editorProbeMode = string.Equals(onlyCase, "plugin_entrypoint_contracts", StringComparison.Ordinal);
+
+        if (cleanupStaleProcesses)
+        {
+            var cleanupResult = HarnessProcessRegistry.CleanupOrphanedEntries(repoRoot);
+            Console.WriteLine(JsonSerializer.Serialize(cleanupResult, new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
+
+        HarnessProcessRegistry.CleanupOrphanedEntries(repoRoot);
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
         {
@@ -40,6 +51,7 @@ internal static class Program
 
         var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stageRoot);
+        using var processRegistry = HarnessProcessRegistry.Create(repoRoot, stageRoot, onlyCase ?? (listCases ? "list-cases" : "all-cases"));
         Process? process = null;
         Task<string>? stdoutTask = null;
         Task<string>? stderrTask = null;
@@ -60,7 +72,7 @@ internal static class Program
             Directory.CreateDirectory(appDataRoot);
             Directory.CreateDirectory(localAppDataRoot);
 
-            var stageBuild = await BuildStageRootProject(stageRoot);
+            var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
             if (!stageBuild.Succeeded)
             {
                 preserveStageRoot = keepStageRoot;
@@ -110,6 +122,7 @@ internal static class Program
             process.StartInfo.ArgumentList.Add(stageRoot);
 
             process.Start();
+            processRegistry.Register(process, "godot-headless", explicitGodotPath, stageRoot, process.StartInfo.ArgumentList);
             stdoutTask = process.StandardOutput.ReadToEndAsync();
             stderrTask = process.StandardError.ReadToEndAsync();
 
@@ -118,6 +131,7 @@ internal static class Program
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
+            processRegistry.Unregister(process);
 
             if (listCases)
             {
@@ -158,6 +172,7 @@ internal static class Program
         {
             preserveStageRoot = keepStageRoot;
             TryKillProcessTree(process);
+            processRegistry.Unregister(process);
             var stdout = await TryReadOutputAsync(stdoutTask);
             var stderr = await TryReadOutputAsync(stderrTask);
             var summary = new
@@ -168,6 +183,7 @@ internal static class Program
                 timeoutMs = HarnessTimeoutMs,
                 stageRoot,
                 stageKept = preserveStageRoot,
+                processRegistryPath = processRegistry.EntryPath,
                 suite = TryParseLastJsonLine(stdout),
                 stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
@@ -300,7 +316,7 @@ internal static class Program
         }
     }
 
-    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> BuildStageRootProject(string stageRoot)
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> BuildStageRootProject(string stageRoot, HarnessProcessRegistry processRegistry)
     {
         Process? process = null;
         Task<string>? stdoutTask = null;
@@ -325,6 +341,7 @@ internal static class Program
             process.StartInfo.ArgumentList.Add("Debug");
             process.StartInfo.ArgumentList.Add("--nologo");
             process.Start();
+            processRegistry.Register(process, "dotnet-build", "dotnet", stageRoot, process.StartInfo.ArgumentList);
             stdoutTask = process.StandardOutput.ReadToEndAsync();
             stderrTask = process.StandardError.ReadToEndAsync();
 
@@ -333,6 +350,7 @@ internal static class Program
 
             var stdout = await TryReadOutputAsync(stdoutTask);
             var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
             return (process.ExitCode == 0, process.ExitCode, stdout, stderr, false);
         }
         catch (OperationCanceledException)
@@ -340,6 +358,7 @@ internal static class Program
             TryKillProcessTree(process);
             var stdout = await TryReadOutputAsync(stdoutTask);
             var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
             return (false, -1, stdout, stderr, true);
         }
     }
@@ -441,5 +460,308 @@ internal static class Program
         }
 
         return LeakWarningMarkers.Any(stderr.Contains);
+    }
+
+    private sealed class HarnessProcessRegistry : IDisposable
+    {
+        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        private readonly string _repoRoot;
+        private readonly string _stageRoot;
+        private readonly string _runId;
+        private readonly string _caseName;
+        private readonly List<HarnessRegisteredProcess> _children = [];
+        private bool _disposed;
+
+        private HarnessProcessRegistry(string repoRoot, string stageRoot, string caseName)
+        {
+            _repoRoot = Path.GetFullPath(repoRoot);
+            _stageRoot = Path.GetFullPath(stageRoot);
+            _caseName = caseName;
+            _runId = Path.GetFileName(_stageRoot);
+            EntryPath = Path.Combine(GetRegistryRoot(_repoRoot), _runId + ".json");
+            Directory.CreateDirectory(Path.GetDirectoryName(EntryPath)!);
+            WriteSnapshot();
+        }
+
+        public string EntryPath { get; }
+
+        public static HarnessProcessRegistry Create(string repoRoot, string stageRoot, string caseName)
+        {
+            return new HarnessProcessRegistry(repoRoot, stageRoot, caseName);
+        }
+
+        public static object CleanupOrphanedEntries(string repoRoot)
+        {
+            var registryRoot = GetRegistryRoot(Path.GetFullPath(repoRoot));
+            var scanned = 0;
+            var removedEntries = 0;
+            var killedProcesses = 0;
+            var warnings = new List<string>();
+            if (!Directory.Exists(registryRoot))
+            {
+                return new
+                {
+                    success = true,
+                    action = "cleanup_stale_processes",
+                    registryRoot,
+                    scanned,
+                    removedEntries,
+                    killedProcesses,
+                    warnings,
+                };
+            }
+
+            foreach (var entryPath in Directory.EnumerateFiles(registryRoot, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                scanned++;
+                try
+                {
+                    var entry = JsonSerializer.Deserialize<HarnessProcessRegistryEntry>(File.ReadAllText(entryPath));
+                    if (entry is null || !IsHarnessStageRoot(repoRoot, entry.StageRoot))
+                    {
+                        warnings.Add($"Skipped invalid registry entry: {entryPath}");
+                        continue;
+                    }
+
+                    if (IsProcessAlive(entry.OwnerPid))
+                    {
+                        continue;
+                    }
+
+                    foreach (var child in entry.Children)
+                    {
+                        if (TryKillRegisteredProcess(child))
+                        {
+                            killedProcesses++;
+                        }
+                    }
+
+                    File.Delete(entryPath);
+                    removedEntries++;
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add($"Failed to process registry entry '{entryPath}': {ex.Message}");
+                }
+            }
+
+            return new
+            {
+                success = true,
+                action = "cleanup_stale_processes",
+                registryRoot,
+                scanned,
+                removedEntries,
+                killedProcesses,
+                warnings,
+            };
+        }
+
+        public void Register(Process process, string kind, string executablePath, string workingDirectory, Collection<string> arguments)
+        {
+            if (_disposed || process.HasExited)
+            {
+                return;
+            }
+
+            var child = new HarnessRegisteredProcess
+            {
+                Pid = process.Id,
+                Kind = kind,
+                ExecutablePath = executablePath,
+                WorkingDirectory = Path.GetFullPath(workingDirectory),
+                CommandLineHint = BuildCommandLineHint(executablePath, arguments),
+                StartedAtUtc = TryGetProcessStartTimeUtc(process),
+            };
+            _children.RemoveAll(existing => existing.Pid == child.Pid);
+            _children.Add(child);
+            WriteSnapshot();
+        }
+
+        public void Unregister(Process? process)
+        {
+            if (process is null || _disposed)
+            {
+                return;
+            }
+
+            _children.RemoveAll(child => child.Pid == process.Id);
+            WriteSnapshot();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            try
+            {
+                if (File.Exists(EntryPath))
+                {
+                    File.Delete(EntryPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[harness] Failed to delete process registry entry '{EntryPath}': {ex.Message}");
+            }
+        }
+
+        private static string GetRegistryRoot(string repoRoot)
+        {
+            return Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", "processes");
+        }
+
+        private static bool IsHarnessStageRoot(string repoRoot, string stageRoot)
+        {
+            if (string.IsNullOrWhiteSpace(stageRoot))
+            {
+                return false;
+            }
+
+            var harnessRoot = Path.GetFullPath(Path.Combine(repoRoot, ".tmp", "godot_plugin_harness"));
+            var resolvedStageRoot = Path.GetFullPath(stageRoot);
+            var normalizedHarnessRoot = harnessRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return resolvedStageRoot.StartsWith(normalizedHarnessRoot, StringComparison.OrdinalIgnoreCase)
+                && !resolvedStageRoot.StartsWith(GetRegistryRoot(Path.GetFullPath(repoRoot)), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsProcessAlive(int pid)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                return !process.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryKillRegisteredProcess(HarnessRegisteredProcess child)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(child.Pid);
+                if (process.HasExited || !ProcessStartMatches(process, child.StartedAtUtc))
+                {
+                    return false;
+                }
+
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5_000);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[harness] Failed to kill registered process {child.Pid}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool ProcessStartMatches(Process process, DateTimeOffset registeredStart)
+        {
+            try
+            {
+                var actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero);
+                return Math.Abs((actualStart - registeredStart).TotalSeconds) <= 10;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[harness] Failed to verify process start time for {process.Id}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static DateTimeOffset TryGetProcessStartTimeUtc(Process process)
+        {
+            try
+            {
+                return new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[harness] Failed to read process start time for {process.Id}: {ex.Message}");
+                return DateTimeOffset.UtcNow;
+            }
+        }
+
+        private static string BuildCommandLineHint(string executablePath, Collection<string> arguments)
+        {
+            var parts = new List<string> { QuoteArgument(executablePath) };
+            foreach (var argument in arguments)
+            {
+                parts.Add(QuoteArgument(argument));
+            }
+
+            return string.Join(" ", parts);
+        }
+
+        private static string QuoteArgument(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "\"\"";
+            }
+
+            return value.Any(char.IsWhiteSpace) ? "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"" : value;
+        }
+
+        private void WriteSnapshot()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var entry = new HarnessProcessRegistryEntry
+            {
+                RunId = _runId,
+                CaseName = _caseName,
+                RepoRoot = _repoRoot,
+                StageRoot = _stageRoot,
+                OwnerPid = Environment.ProcessId,
+                StartedAtUtc = DateTimeOffset.UtcNow,
+                Children = [.. _children],
+            };
+            File.WriteAllText(EntryPath, JsonSerializer.Serialize(entry, JsonOptions), Encoding.UTF8);
+        }
+    }
+
+    private sealed class HarnessProcessRegistryEntry
+    {
+        public string RunId { get; set; } = string.Empty;
+        public string CaseName { get; set; } = string.Empty;
+        public string RepoRoot { get; set; } = string.Empty;
+        public string StageRoot { get; set; } = string.Empty;
+        public int OwnerPid { get; set; }
+        public DateTimeOffset StartedAtUtc { get; set; }
+        public List<HarnessRegisteredProcess> Children { get; set; } = [];
+    }
+
+    private sealed class HarnessRegisteredProcess
+    {
+        public int Pid { get; set; }
+        public string Kind { get; set; } = string.Empty;
+        public string ExecutablePath { get; set; } = string.Empty;
+        public string WorkingDirectory { get; set; } = string.Empty;
+        public string CommandLineHint { get; set; } = string.Empty;
+        public DateTimeOffset StartedAtUtc { get; set; }
     }
 }
