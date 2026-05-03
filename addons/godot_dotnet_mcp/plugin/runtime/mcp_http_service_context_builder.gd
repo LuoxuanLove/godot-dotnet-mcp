@@ -15,6 +15,7 @@ const MCPToolsApiServiceContextScript = preload("res://addons/godot_dotnet_mcp/p
 const MCPHttpResponseContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_context.gd")
 const MCPHttpTransportContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_context.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -119,14 +120,21 @@ func build_http_response_context(server, tool_loader_supervisor):
 	context.get_tool_loader_status = Callable(tool_loader_supervisor, "get_status")
 	context.get_server_stats = func() -> Dictionary:
 		var connection_stats = server.get_connection_stats()
+		var listen_endpoint = server.get_listen_endpoint() if server.has_method("get_listen_endpoint") else {}
 		return {
 			"running": server.is_running(),
+			"listen_host": str(listen_endpoint.get("host", connection_stats.get("listen_host", ""))),
+			"listen_port": int(listen_endpoint.get("port", connection_stats.get("listen_port", 0))),
+			"listen_url": str(listen_endpoint.get("url", connection_stats.get("listen_url", ""))),
 			"connections": int(connection_stats.get("connections", 0)),
 			"total_connections": int(connection_stats.get("total_connections", 0)),
 			"total_requests": int(connection_stats.get("total_requests", 0)),
 			"last_request_method": str(connection_stats.get("last_request_method", "")),
 			"last_request_at_unix": int(connection_stats.get("last_request_at_unix", 0))
 		}
+	context.get_editor_session_identity = func() -> Dictionary:
+		var endpoint = server.get_listen_endpoint() if server.has_method("get_listen_endpoint") else {}
+		return MCPEditorSessionIdentity.build_identity(endpoint)
 	context.get_freshness_snapshot = func() -> Dictionary:
 		return PluginInstanceFreshness.get_freshness_snapshot()
 	context.log = func(message: String, level: String = "debug") -> void:
