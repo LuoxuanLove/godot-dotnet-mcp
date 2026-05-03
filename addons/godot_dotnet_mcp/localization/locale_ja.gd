@@ -490,6 +490,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_plugin_reload_desc": "実行中のプラグインインスタンスが最新か確認し、前面 UI に依存せず完全なライフサイクル再読み込みを予約します。",
 	"tool_system_project_configure_name": "プロジェクトの構成",
 	"tool_system_project_configure_desc": "プロジェクト設定、入力アクション、および自動ロード構成を読み取りまたは変更します。",
+	"tool_system_resource_reference_audit_name": "リソース参照監査",
+	"tool_system_resource_reference_audit_desc": "シーンとリソースの古い UID / パス参照、および C# custom Resource スクリプトの不一致をスキャンします。",
 	"tool_system_project_run_name": "プロジェクトの実行",
 	"tool_system_project_run_desc": "Godot エディタ内でプロジェクトの実行を開始します。",
 	"tool_system_project_stop_name": "プロジェクトの停止",

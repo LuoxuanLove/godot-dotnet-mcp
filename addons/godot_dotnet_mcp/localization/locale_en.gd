@@ -658,6 +658,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_configure_desc": "Read or modify project settings, input actions, and autoload configuration.",
 	"tool_system_project_files_name": "Project Files",
 	"tool_system_project_files_desc": "Read, change, select, scan and reimport project FileSystem tree entries through a high-level workflow.",
+	"tool_system_resource_reference_audit_name": "Resource Reference Audit",
+	"tool_system_resource_reference_audit_desc": "Scan scenes and resources for stale UID/path references and C# custom Resource script mismatches.",
 	"tool_system_userdata_maintenance_name": "Userdata Maintenance",
 	"tool_system_userdata_maintenance_desc": "Create the current user:// directory layout, list or clean managed screenshot caches, or inspect and clean legacy MCP cache files.",
 	"tool_system_project_run_name": "Run Project",
