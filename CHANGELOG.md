@@ -8,6 +8,7 @@
 - Added clearer runtime capability reporting to `system_project_state` and `system_editor_state`, with richer `system_project_run` failure context for project launch, runtime control, and capture readiness.
 - Added `system_plugin_reload(action="full_reload_plugin")` with health checks and localized Tools-page descriptions so agents can reload the plugin and verify that the running instance matches the installed files.
 - Added editor session identity details to `/health`, `system_editor_state`, and `system_project_state` so agents can distinguish the active MCP editor session from other Godot processes.
+- Added `system_resource_reference_audit` and richer `system_scene_validate` UID/fallback-path hints for stale `.tscn` / `.tres` references and C# custom Resource script mismatches that can remain even when `dotnet build` succeeds.
 
 ### Fixed
 

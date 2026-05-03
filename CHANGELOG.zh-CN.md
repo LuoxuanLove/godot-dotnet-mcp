@@ -8,6 +8,7 @@
 - `system_project_state` 与 `system_editor_state` 新增更清晰的运行时能力报告，并增强 `system_project_run` 失败上下文，便于判断项目启动、运行时控制和截图能力是否就绪。
 - 新增 `system_plugin_reload(action="full_reload_plugin")`、健康状态检查和 Tools 页本地化说明，Agent 可重载插件并确认当前运行实例已匹配已安装文件。
 - 在 `/health`、`system_editor_state` 与 `system_project_state` 中新增编辑器会话标识，便于 Agent 区分当前 MCP 编辑器会话与其他 Godot 进程。
+- 新增 `system_resource_reference_audit`，并增强 `system_scene_validate` 的 UID / fallback path 提示，用于发现 `.tscn` / `.tres` 陈旧引用和 C# custom Resource 脚本不匹配等 `dotnet build` 通过后仍可能存在的加载风险。
 
 ### Fixed
 
