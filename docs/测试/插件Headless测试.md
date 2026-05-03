@@ -150,7 +150,7 @@ tests/godot_plugin_harness_fixture/
 | `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
 | `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
 | `lsp_service_access_contracts` | 验证 `mcp_http_server.gd` 与 `mcp_stdio_server.gd` 只暴露 loader-owned 的 GDScript diagnostics service，不再自行创建或回退 singleton |
-| `tools_tab_rendering_contracts` | 验证 `tools_tab.gd` 的 TreeItem 渲染、树交互、上下文菜单与预览回流语义 |
+| `tools_tab_rendering_contracts` | 验证 `tools_tab.gd` 的 TreeItem 渲染、树交互、上下文菜单、Dock 内自建 Popup 坐标契约与预览回流语义 |
 | `editor_lifecycle_endpoint_contracts` | 验证 `mcp_editor_lifecycle_endpoint.gd` 的请求解析与 action 分派 |
 | `plugin_entrypoint_contracts` | 验证 `plugin.gd` 的真实运行时入口生命周期：`_enter_tree/_exit_tree` 期间的 autoload、debugger bridge、dock attach/detach 与 server controller 装配；该 case 通过 editor probe 运行 |
 
