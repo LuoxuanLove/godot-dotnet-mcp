@@ -6,6 +6,7 @@ extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
 var bridge
@@ -14,7 +15,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload"
 ]
 
 
@@ -51,6 +52,17 @@ func get_tools() -> Array[Dictionary]:
 			"inputSchema": {
 				"type": "object",
 				"properties": {}
+			}
+		},
+		{
+			"name": "plugin_reload",
+			"description": "PLUGIN RELOAD: Stable Agent-callable plugin lifecycle reload entry and freshness check. action=get_freshness reports running instance vs disk state; action=full_reload_plugin schedules a Godot plugin disable/enable lifecycle reload without relying on MCPDock visibility. The MCP transport may disconnect during reload; reconnect and fetch tools again.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["get_freshness", "full_reload_plugin"], "description": "Plugin reload action"}
+				},
+				"required": ["action"]
 			}
 		},
 		{
@@ -154,6 +166,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"project_state":     return _execute_project_state(args)
 		"editor_state":      return _execute_editor_state(args)
+		"plugin_reload":     return _execute_plugin_reload(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
 		"project_run":       return _execute_project_run(args)
@@ -164,6 +177,30 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 # --- private helpers ---
+
+
+func _execute_plugin_reload(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"get_freshness":
+			return bridge.success(PluginInstanceFreshness.get_freshness_snapshot(), "Plugin freshness fetched")
+		"full_reload_plugin":
+			var plugin = _get_plugin_from_runtime_context()
+			if plugin == null or not plugin.has_method("request_plugin_lifecycle_reload_from_tools"):
+				return bridge.error("Plugin lifecycle reload bridge is unavailable", {"freshness": PluginInstanceFreshness.get_freshness_snapshot()})
+			var result = plugin.request_plugin_lifecycle_reload_from_tools()
+			if result is Dictionary:
+				return result
+			return bridge.error("Plugin lifecycle reload returned an invalid response", {"freshness": PluginInstanceFreshness.get_freshness_snapshot()})
+		_:
+			return bridge.error("Unknown plugin_reload action: %s" % action)
+
+
+func _get_plugin_from_runtime_context():
+	var server = _runtime_context.get("server", null)
+	if server == null or not is_instance_valid(server):
+		return null
+	return server.get_parent()
 
 
 func _execute_userdata_maintenance(args: Dictionary) -> Dictionary:
@@ -539,6 +576,7 @@ func _get_tool_loader_health_summary() -> Dictionary:
 
 func _get_self_diagnostics_health_summary() -> Dictionary:
 	return PluginSelfDiagnosticStore.get_health_snapshot({
+		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 		"tool_loader": _get_tool_loader_health_summary()
 	}, 3)
 
@@ -628,6 +666,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 			"self_diagnostics": _get_self_diagnostics_health_summary(),
 			"lsp_diagnostics": _get_lsp_runtime_health_summary(),
 			"tool_loader": _get_tool_loader_health_summary(),
+			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 			"capabilities": runtime_capabilities
 		}
 	return bridge.success(result_data)
