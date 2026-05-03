@@ -52,6 +52,7 @@ AI 编程 Agent 在 Godot 中要真正可靠，不能只读 `.tscn` 和脚本文
 - `system_editor_control` 可激活工作区、Dock、底部面板、控件、弹窗，截取编辑器界面，返回 UI 坐标映射，并派发控件本地坐标左键 / 右键点击。
 - `system_editor_log` 可读取、筛选或清空编辑器 Output 面板。
 - `system_project_run`、`system_project_stop`、`system_runtime_diagnose`、`system_runtime_control`、`system_runtime_capture`、`system_runtime_input`、`system_runtime_step` 覆盖场景运行、运行时诊断、截图和脚本化输入。
+- `system_project_state(include_runtime_health=true)` 与 `system_editor_state` 会暴露 `runtime_capabilities`，方便 Agent 区分只读项目访问、启动项目、控制运行时和运行时截图能力是否真实可用。
 - `system_userdata_maintenance` 可列出和清理 `user://godot_dotnet_mcp/` 下由插件管理的编辑器 / 运行时截图缓存，默认先 dry-run 预览。
 
 ## 环境要求

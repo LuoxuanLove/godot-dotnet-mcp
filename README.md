@@ -52,6 +52,7 @@ The Home page shows service health, endpoint, connection activity, self-diagnost
 - `system_editor_control` activates workspaces, docks, bottom panels, controls, popups, captures the editor UI, reports UI coordinate mapping, and can dispatch control-local left/right clicks.
 - `system_editor_log` reads, filters, or clears the editor Output panel.
 - `system_project_run`, `system_project_stop`, `system_runtime_diagnose`, `system_runtime_control`, `system_runtime_capture`, `system_runtime_input`, and `system_runtime_step` provide scene execution, runtime diagnostics, screenshots, and scripted input loops.
+- `system_project_state(include_runtime_health=true)` and `system_editor_state` expose `runtime_capabilities` so agents can distinguish read-only project access from the ability to start, control, or capture a runtime session.
 - `system_userdata_maintenance` lists and cleans plugin-managed editor/runtime capture caches under `user://godot_dotnet_mcp/` with dry-run previews by default.
 
 ## Requirements
