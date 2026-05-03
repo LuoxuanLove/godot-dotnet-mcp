@@ -17,6 +17,7 @@
 - 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值处理：`default_value` 现在会正确写入脚本文件，并可被 `system_script_analyze` 统计和报告。
 - 修复完整插件重载后的工具刷新问题，重新连接后即可看到新增的 System 工具和 schema 变化。
 - 修复本地 HTTP 服务的 CORS 处理：默认不再向任意来源开放跨源访问，同时已配置的浏览器客户端仍可通过来源校验。
+- 修复资源引用审计：当 UID 目标和 fallback path 都缺失时会正确报告错误，并避免把普通 `.tscn` C# 节点脚本误判为 custom Resource 脚本。
 
 ## 1.0.0-pre1 - 2026-04-28
 

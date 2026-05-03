@@ -17,6 +17,7 @@
 - Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are saved correctly and reported by `system_script_analyze`.
 - Fixed full plugin reload so newly added System tools and schema changes are available after reconnecting.
 - Fixed local HTTP CORS handling so browser-based clients no longer receive wildcard cross-origin access by default, while configured browser clients can still pass origin validation.
+- Fixed resource reference auditing so it reports missing UID targets with missing fallback paths and avoids treating ordinary `.tscn` C# node scripts as custom Resource scripts.
 
 ## 1.0.0-pre1 - 2026-04-28
 
