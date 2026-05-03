@@ -102,9 +102,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose system_editor_state under the default tool access provider.")
 	if not exposed_names.has("system_plugin_reload"):
 		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
-	for runtime_tool_name in ["system_runtime_control", "system_runtime_capture", "system_runtime_input", "system_runtime_step"]:
+	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
+	for merged_runtime_tool_name in ["system_runtime_capture", "system_runtime_input"]:
+		if exposed_names.has(merged_runtime_tool_name):
+			return _failure("Tool loader should merge runtime I/O into system_runtime_step, not expose '%s'." % merged_runtime_tool_name)
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
