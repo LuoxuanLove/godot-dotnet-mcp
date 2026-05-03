@@ -2,6 +2,10 @@
 
 ## Unreleased - 1.0.0-pre2
 
+### Added
+
+- Added `system_editor_control` support for control-local left/right mouse clicks, richer popup metadata, and coordinate mapping between control, screenshot, screen, and OS window rectangles for visual QA workflows.
+
 ### Fixed
 
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
