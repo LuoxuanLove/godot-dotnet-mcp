@@ -10,6 +10,7 @@ const TEMP_ROOT := "res://tests_tmp/system_scene_executor_contracts"
 class FakeBridge extends RefCounted:
 	var calls: Array[Dictionary] = []
 	var atomic_bridge = AtomicBridgeScript.new()
+	var existing_missing_uid_text := ""
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		calls.append({"tool_name": tool_name, "args": args.duplicate(true)})
@@ -17,7 +18,10 @@ class FakeBridge extends RefCounted:
 			"scene_audit":
 				return success({"issues": []})
 			"resource_query":
-				return success({"dependencies": ["uid://missing_scene_contract::::res://tests_tmp/system_scene_executor_contracts/missing_dependency.cs"]})
+				return success({"dependencies": [
+					"uid://missing_scene_contract::::res://tests_tmp/system_scene_executor_contracts/missing_dependency.cs",
+					"%s::::res://tests_tmp/system_scene_executor_contracts/missing_fallback.cs" % existing_missing_uid_text
+				]})
 			"scene_hierarchy":
 				return success({"tool_name": tool_name, "action": str(args.get("action", ""))})
 			"scene_management":
@@ -66,6 +70,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var executor = SystemSceneExecutorScript.new()
 	var bridge = FakeBridge.new()
+	var missing_uid_id := ResourceUID.create_id()
+	bridge.existing_missing_uid_text = ResourceUID.id_to_text(missing_uid_id)
+	ResourceUID.add_id(missing_uid_id, TEMP_ROOT.path_join("missing_uid_target.cs"))
 	executor.bridge = bridge
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
@@ -125,6 +132,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var validate_issues: Array = validate_data.get("issues", [])
 	if not _has_issue_type(validate_issues, "missing_uid_and_path"):
 		return _failure("scene_validate should classify missing UID plus fallback path references.")
+	if _count_issue_type(validate_issues, "missing_uid_and_path") < 2:
+		return _failure("scene_validate should also classify known UID references when both resolved and fallback paths are missing.")
+	ResourceUID.remove_id(missing_uid_id)
 
 	return {
 		"name": "system_scene_executor_contracts",
@@ -153,6 +163,14 @@ func _has_issue_type(issues: Array, issue_type: String) -> bool:
 		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
 			return true
 	return false
+
+
+func _count_issue_type(issues: Array, issue_type: String) -> int:
+	var count := 0
+	for issue in issues:
+		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
+			count += 1
+	return count
 
 
 func _prepare_temp_root() -> void:

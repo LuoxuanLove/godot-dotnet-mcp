@@ -359,6 +359,10 @@ func parse_dependency_reference(raw_path: String, source_path: String = "") -> D
 			result["consistency"] = "stale_uid"
 			result["risk"] = "warning"
 			result["hint"] = "Fallback path exists but UID no longer resolves; reimport or re-save to refresh the UID cache."
+		else:
+			result["consistency"] = "missing_uid_and_path"
+			result["risk"] = "error"
+			result["hint"] = "Neither UID nor fallback path can be resolved; fix the reference path or regenerate the resource UID."
 	elif primary.begins_with("uid://") and not bool(result.get("uid_exists", false)):
 		if _resource_path_exists(normalized_declared):
 			result["consistency"] = "stale_uid"

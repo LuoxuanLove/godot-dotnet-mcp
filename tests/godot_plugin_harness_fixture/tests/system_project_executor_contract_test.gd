@@ -74,6 +74,8 @@ class FakeBridge extends RefCounted:
 			"debug_editor_log":
 				return success({"error_count": 0, "errors": []})
 			"resource_query":
+				if str(args.get("path", "")).ends_with(".tscn"):
+					return success({"dependencies": []})
 				return success({"dependencies": ["uid://missing_project_contract::::res://tests_tmp/system_project_executor_contracts/MissingResource.cs"]})
 			"script_inspect":
 				return success({"language": "csharp", "class_name": "WrongResourceName", "base_type": "Node"})
@@ -178,8 +180,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_prepare_temp_root()
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var script_path := TEMP_ROOT.path_join("ConfigResource.cs")
+	var scene_path := TEMP_ROOT.path_join("NodeScriptScene.tscn")
+	var node_script_path := TEMP_ROOT.path_join("NodeController.cs")
 	_write_text(script_path, "using Godot;\n[GlobalClass]\npublic partial class ConfigResource : Resource {}\n")
+	_write_text(node_script_path, "using Godot;\npublic partial class NodeController : Node {}\n")
 	_write_text(resource_path, "[gd_resource type=\"Resource\" script_class=\"ConfigResource\" format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[resource]\nscript = ExtResource(\"1_script\")\n" % script_path)
+	_write_text(scene_path, "[gd_scene load_steps=2 format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[node name=\"Root\" type=\"Node\"]\nscript = ExtResource(\"1_script\")\n" % node_script_path)
 
 	PluginSelfDiagnosticStore.clear()
 	PluginSelfDiagnosticStore.record_incident(
@@ -214,6 +220,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resource_reference_audit should report UID/path or C# Resource script issues.")
 	if str(reference_data.get("build_status", "")) != "dotnet_build_may_pass":
 		return _failure("resource_reference_audit should distinguish resource inconsistency from dotnet build status.")
+	var scene_reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": scene_path})
+	if not bool(scene_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should run on a .tscn fixture.")
+	var scene_reference_data: Dictionary = scene_reference_audit.get("data", {})
+	var scene_issues: Array = scene_reference_data.get("issues", [])
+	if _has_issue_type(scene_issues, "resource_script_base_type_unconfirmed") or _has_issue_type(scene_issues, "resource_script_missing_global_class_attribute"):
+		return _failure("resource_reference_audit should not treat ordinary .tscn C# node scripts as custom Resource scripts.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -348,6 +361,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 	for tool_def in tool_defs:
 		if str(tool_def.get("name", "")) == name:
+			return true
+	return false
+
+
+func _has_issue_type(issues: Array, issue_type: String) -> bool:
+	for issue in issues:
+		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
 			return true
 	return false
 
