@@ -7,12 +7,14 @@
 - 新增 `system_editor_control` 对控件本地坐标左键 / 右键点击、弹窗元数据和控件 / 截图 / 屏幕 / OS 窗口 rect 坐标映射的支持，便于视觉 QA 工作流定位真实编辑器 UI。
 - 新增 `system_project_state` 与 `system_editor_state` 的运行能力位，并增强 `system_project_run` 失败上下文，用于区分只读项目访问、项目启动、运行时控制和运行时截图能力是否就绪。
 - 新增通过 `system_plugin_reload(action="full_reload_plugin")` 调用的稳定插件生命周期重载入口，并在健康快照中加入 freshness 元数据，用于同步 addon 后对比当前运行插件实例与磁盘文件。
+- 新增插件 freshness / 生命周期重载契约的 Tools 页本地化元数据与 CI required subset 覆盖。
 
 ### Fixed
 
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
 - 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、高层工具内部项和 action 标签会立即刷新，无需完全重启插件。
 - 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值写入：`default_value` 现在会正确落盘，`system_script_analyze` 也会统计普通 GDScript 变量及其默认值，不再返回 `variable_count = 0`。
+- 修复完整插件生命周期重载后的工具缓存刷新：下一次 server / tool loader 启动会强制刷新 Godot 脚本资源，确保重新连接后能看到新的 System 工具与 schema 变化。
 
 ## 1.0.0-pre1 - 2026-04-28
 
