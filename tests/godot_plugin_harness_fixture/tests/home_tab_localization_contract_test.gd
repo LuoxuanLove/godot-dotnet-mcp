@@ -3,6 +3,12 @@ extends RefCounted
 const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
 const LocaleZhCn = preload("res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd")
 const LocaleZhTw = preload("res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd")
+const LocaleDe = preload("res://addons/godot_dotnet_mcp/localization/locale_de.gd")
+const LocaleEs = preload("res://addons/godot_dotnet_mcp/localization/locale_es.gd")
+const LocaleFr = preload("res://addons/godot_dotnet_mcp/localization/locale_fr.gd")
+const LocaleJa = preload("res://addons/godot_dotnet_mcp/localization/locale_ja.gd")
+const LocalePt = preload("res://addons/godot_dotnet_mcp/localization/locale_pt.gd")
+const LocaleRu = preload("res://addons/godot_dotnet_mcp/localization/locale_ru.gd")
 const ServerPanelScene = preload("res://addons/godot_dotnet_mcp/ui/server_panel.tscn")
 
 
@@ -10,6 +16,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var en := LocaleEn.get_translations()
 	var zh_cn := LocaleZhCn.get_translations()
 	var zh_tw := LocaleZhTw.get_translations()
+	var de := LocaleDe.get_translations()
+	var es := LocaleEs.get_translations()
+	var fr := LocaleFr.get_translations()
+	var ja := LocaleJa.get_translations()
+	var pt := LocalePt.get_translations()
+	var ru := LocaleRu.get_translations()
 	if str(en.get("tab_server", "")) != "Home":
 		return _failure("English localization should expose the first Dock tab as Home after the service-page-to-homepage migration.")
 	if str(zh_cn.get("tab_server", "")) != "主页":
@@ -48,6 +60,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]:
 		if not en.has(key) or not zh_cn.has(key) or not zh_tw.has(key):
 			return _failure("All supported locales should define visible Tools-page key: %s" % key)
+	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, pt, ru]
+	for key in [
+		"tool_action_step_name",
+		"tool_action_capture_name",
+		"tool_action_input_name",
+		"tool_system_runtime_control_name",
+		"tool_system_runtime_control_desc",
+		"tool_system_runtime_step_name",
+		"tool_system_runtime_step_desc",
+		"tool_runtime_control_name",
+		"tool_runtime_control_desc",
+		"tool_runtime_capture_name",
+		"tool_runtime_capture_desc",
+		"tool_runtime_input_name",
+		"tool_runtime_input_desc",
+		"tool_runtime_step_name",
+		"tool_runtime_step_desc"
+	]:
+		for locale in supported_locales:
+			if not locale.has(key):
+				return _failure("All supported locales should define runtime Tools-page key: %s" % key)
 
 	var server_panel = ServerPanelScene.instantiate() as Control
 	if server_panel == null:
