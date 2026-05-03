@@ -17,7 +17,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "resource_reference_audit"
 ]
 
 
@@ -45,6 +45,17 @@ func get_tools() -> Array[Dictionary]:
 						"type": "boolean",
 						"description": "Include lightweight plugin runtime health summary, including self_diagnostics, lsp_diagnostics, and tool_loader health (default: false)"
 					}
+				}
+			}
+		},
+		{
+			"name": "resource_reference_audit",
+			"description": "RESOURCE REFERENCE AUDIT: Project-level scan for .tscn/.tres UID + fallback path consistency and C# [GlobalClass] Resource script references. Reports stale UID/cache/path issues separately from C# build errors so agents can fix scenes/resources even when dotnet build passes. Optional path limits the audit to one .tscn/.tres file; include_warnings defaults to true.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"path": {"type": "string", "description": "Optional .tscn/.tres path to audit; omit to scan the project"},
+					"include_warnings": {"type": "boolean", "description": "Include warning-level stale UID/path and C# resource script risks (default: true)"}
 				}
 			}
 		},
@@ -169,6 +180,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"project_state":     return _execute_project_state(args)
 		"editor_state":      return _execute_editor_state(args)
 		"plugin_reload":     return _execute_plugin_reload(args)
+		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
 		"project_run":       return _execute_project_run(args)
@@ -179,6 +191,258 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 # --- private helpers ---
+
+
+func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("path", "")).strip_edges()
+	var include_warnings := bool(args.get("include_warnings", true))
+	var paths: Array[String] = []
+	if not target_path.is_empty():
+		if not (target_path.ends_with(".tscn") or target_path.ends_with(".tres")):
+			return bridge.error("resource_reference_audit path must be a .tscn or .tres file")
+		if not FileAccess.file_exists(target_path):
+			return bridge.error("Resource file not found: %s" % target_path)
+		paths.append(target_path)
+	else:
+		for scene_path in bridge.collect_files("*.tscn"):
+			paths.append(str(scene_path))
+		for resource_path in bridge.collect_files("*.tres"):
+			paths.append(str(resource_path))
+	paths.sort()
+
+	var issues: Array = []
+	var file_results: Array = []
+	var files_with_issues := 0
+	var error_count := 0
+	var warning_count := 0
+	for path in paths:
+		var file_result := _audit_resource_reference_file(path, include_warnings)
+		file_results.append(file_result)
+		var file_issue_count := int(file_result.get("issue_count", 0))
+		if file_issue_count > 0:
+			files_with_issues += 1
+		for raw_issue in file_result.get("issues", []):
+			if not (raw_issue is Dictionary):
+				continue
+			var issue: Dictionary = (raw_issue as Dictionary).duplicate(true)
+			if str(issue.get("severity", "")) == "error":
+				error_count += 1
+			elif str(issue.get("severity", "")) == "warning":
+				warning_count += 1
+			bridge.append_unique_issue(issues, issue)
+
+	var risk_level := "clean"
+	if error_count > 0:
+		risk_level = "error"
+	elif warning_count > 0:
+		risk_level = "warning"
+	return bridge.success({
+		"path": target_path,
+		"scanned_file_count": paths.size(),
+		"files_with_issues": files_with_issues,
+		"issue_count": issues.size(),
+		"error_count": error_count,
+		"warning_count": warning_count,
+		"risk_level": risk_level,
+		"build_status": "dotnet_build_may_pass",
+		"summary": _build_resource_reference_summary(risk_level, error_count, warning_count),
+		"issues": issues,
+		"files": file_results
+	})
+
+
+func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dictionary:
+	var issues: Array = []
+	var ext_resource_count := 0
+	var csharp_resource_script_count := 0
+	var read_text := FileAccess.get_file_as_string(path)
+	if read_text.is_empty() and FileAccess.get_open_error() != OK:
+		var read_issue: Dictionary = bridge.build_issue("error", "resource_reference_read_failed", "Failed to read resource text: %s" % path, {"file": path})
+		return {"file": path, "issue_count": 1, "issues": [read_issue], "ext_resource_count": 0, "csharp_resource_script_count": 0}
+
+	var header := _extract_resource_header(read_text)
+	var script_resources := {}
+	var used_script_ids := {}
+	var lines := read_text.split("\n")
+	for index in range(lines.size()):
+		var line_no := index + 1
+		var line := str(lines[index]).strip_edges()
+		if line.begins_with("[ext_resource"):
+			ext_resource_count += 1
+			var ref_data := _parse_ext_resource_line(path, line, line_no)
+			var ref_issues := _build_ext_resource_issues(path, ref_data, include_warnings)
+			for ref_issue in ref_issues:
+				bridge.append_unique_issue(issues, ref_issue)
+			if str(ref_data.get("type", "")) == "Script":
+				var resource_id := str(ref_data.get("id", ""))
+				if not resource_id.is_empty():
+					script_resources[resource_id] = ref_data
+		var script_marker := "script = ExtResource(\""
+		var script_marker_index := line.find(script_marker)
+		if script_marker_index != -1:
+			var id_start := script_marker_index + script_marker.length()
+			var id_end := line.find("\")", id_start)
+			if id_end != -1:
+				used_script_ids[line.substr(id_start, id_end - id_start)] = line_no
+
+	for resource_id in used_script_ids.keys():
+		if not script_resources.has(resource_id):
+			var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
+			bridge.append_unique_issue(issues, unresolved_issue)
+			continue
+		var script_ref: Dictionary = script_resources[resource_id]
+		var script_path := str(script_ref.get("normalized_path", ""))
+		if script_path.ends_with(".cs") or str(script_ref.get("declared_path", "")).ends_with(".cs"):
+			csharp_resource_script_count += 1
+			var script_issues := _audit_csharp_resource_script_reference(path, int(used_script_ids[resource_id]), script_ref, header, include_warnings)
+			for script_issue in script_issues:
+				bridge.append_unique_issue(issues, script_issue)
+
+	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": path})
+	var dep_data: Dictionary = bridge.extract_data(dep_result)
+	for raw_dep in dep_data.get("dependencies", []):
+		var dep_ref: Dictionary = bridge.parse_dependency_reference(str(raw_dep), path) if bridge.has_method("parse_dependency_reference") else {"risk": "none"}
+		var risk := str(dep_ref.get("risk", "none"))
+		if risk == "error" or (include_warnings and risk == "warning"):
+			var dep_issue := _build_dependency_issue(path, dep_ref, 0, "resource_loader_dependencies")
+			bridge.append_unique_issue(issues, dep_issue)
+
+	return {
+		"file": path,
+		"issue_count": issues.size(),
+		"issues": issues,
+		"ext_resource_count": ext_resource_count,
+		"csharp_resource_script_count": csharp_resource_script_count
+	}
+
+
+func _parse_ext_resource_line(source_path: String, line: String, line_no: int) -> Dictionary:
+	var resource_type := _extract_resource_attribute(line, "type")
+	var uid_text := _extract_resource_attribute(line, "uid")
+	var declared_path := _extract_resource_attribute(line, "path")
+	var resource_id := _extract_resource_attribute(line, "id")
+	var raw_ref := declared_path
+	if not uid_text.is_empty():
+		raw_ref = "%s::%s::%s" % [uid_text, resource_type, declared_path]
+	var parsed: Dictionary = bridge.parse_dependency_reference(raw_ref, source_path) if bridge.has_method("parse_dependency_reference") else {"normalized_path": declared_path, "risk": "none"}
+	parsed["file"] = source_path
+	parsed["line"] = line_no
+	parsed["type"] = resource_type
+	parsed["id"] = resource_id
+	parsed["source"] = "ext_resource"
+	return parsed
+
+
+func _build_ext_resource_issues(file_path: String, ref_data: Dictionary, include_warnings: bool) -> Array:
+	var issues: Array = []
+	var risk := str(ref_data.get("risk", "none"))
+	if risk == "error" or (include_warnings and risk == "warning"):
+		issues.append(_build_dependency_issue(file_path, ref_data, int(ref_data.get("line", 0)), "ext_resource"))
+	return issues
+
+
+func _build_dependency_issue(file_path: String, dep_ref: Dictionary, line_no: int, source: String) -> Dictionary:
+	var consistency := str(dep_ref.get("consistency", "dependency_reference_inconsistent"))
+	var severity := str(dep_ref.get("risk", "warning"))
+	var uid_text := str(dep_ref.get("uid", ""))
+	var declared_path := str(dep_ref.get("declared_path", ""))
+	var resolved_uid_path := str(dep_ref.get("resolved_uid_path", ""))
+	var message := "Resource reference may be inconsistent: %s" % str(dep_ref.get("raw", ""))
+	match consistency:
+		"stale_fallback_path":
+			message = "UID resolves to %s, but the fallback path is stale: %s." % [resolved_uid_path, declared_path]
+		"stale_uid":
+			message = "Fallback path exists but UID is stale or unknown: %s -> %s." % [uid_text, declared_path]
+		"uid_path_mismatch":
+			message = "UID resolves to %s, which differs from fallback path %s." % [resolved_uid_path, declared_path]
+		"missing_uid_and_path":
+			message = "Neither UID nor fallback path can be resolved: %s -> %s." % [uid_text, declared_path]
+		"missing_path":
+			message = "Referenced path does not exist: %s." % declared_path
+	return bridge.build_issue(severity, consistency, message, {
+		"file": file_path,
+		"line": line_no,
+		"source": source,
+		"uid": uid_text,
+		"declared_path": declared_path,
+		"resolved_uid_path": resolved_uid_path,
+		"path": str(dep_ref.get("normalized_path", "")),
+		"hint": str(dep_ref.get("hint", "Reimport, fix the path, or re-save the scene/resource to normalize references.")),
+		"build_status": "dotnet_build_may_pass"
+	})
+
+
+func _audit_csharp_resource_script_reference(file_path: String, line_no: int, script_ref: Dictionary, header: Dictionary, include_warnings: bool) -> Array:
+	var issues: Array = []
+	var script_path := str(script_ref.get("normalized_path", ""))
+	var declared_path := str(script_ref.get("declared_path", ""))
+	if script_path.is_empty():
+		script_path = declared_path
+	if script_path.is_empty() or not FileAccess.file_exists(script_path):
+		issues.append(bridge.build_issue("error", "missing_resource_script_path", "C# Resource script path is missing: %s" % declared_path, {"file": file_path, "line": line_no, "script": declared_path, "id": str(script_ref.get("id", "")), "build_status": "dotnet_build_may_pass", "hint": "Fix the .tres script ExtResource path or re-save the resource after moving the script."}))
+		return issues
+
+	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var script_class_name := str(inspect_data.get("class_name", ""))
+	var base_type := str(inspect_data.get("base_type", ""))
+	var header_script_class := str(header.get("script_class", ""))
+	var file_class_name := script_path.get_file().get_basename()
+	if script_class_name.is_empty():
+		issues.append(bridge.build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "build_status": "dotnet_build_may_pass"}))
+		return issues
+	if not header_script_class.is_empty() and header_script_class != script_class_name:
+		issues.append(bridge.build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "build_status": "dotnet_build_may_pass"}))
+	if include_warnings and file_class_name != script_class_name:
+		issues.append(bridge.build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
+	if include_warnings and not _is_resource_base_type(base_type):
+		issues.append(bridge.build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
+	if include_warnings and not _csharp_script_has_global_class_attribute(script_path):
+		issues.append(bridge.build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
+	return issues
+
+
+func _extract_resource_header(content: String) -> Dictionary:
+	for raw_line in content.split("\n"):
+		var line := str(raw_line).strip_edges()
+		if line.begins_with("[gd_resource"):
+			return {
+				"type": _extract_resource_attribute(line, "type"),
+				"script_class": _extract_resource_attribute(line, "script_class"),
+				"uid": _extract_resource_attribute(line, "uid")
+			}
+	return {}
+
+
+func _extract_resource_attribute(line: String, attribute_name: String) -> String:
+	var marker := "%s=\"" % attribute_name
+	var start := line.find(marker)
+	if start == -1:
+		return ""
+	start += marker.length()
+	var finish := line.find("\"", start)
+	if finish == -1:
+		return ""
+	return line.substr(start, finish - start).strip_edges()
+
+
+func _is_resource_base_type(base_type: String) -> bool:
+	var normalized := base_type.strip_edges()
+	return normalized == "Resource" or normalized == "Godot.Resource" or normalized.ends_with(".Resource")
+
+
+func _csharp_script_has_global_class_attribute(script_path: String) -> bool:
+	if script_path.is_empty() or not FileAccess.file_exists(script_path):
+		return false
+	var content := FileAccess.get_file_as_string(script_path)
+	return content.find("[GlobalClass") != -1 or content.find("GlobalClassAttribute") != -1
+
+
+func _build_resource_reference_summary(risk_level: String, error_count: int, warning_count: int) -> String:
+	if risk_level == "error":
+		return "Resource references contain %d error(s); scene/resource loading may fail even if dotnet build passes." % error_count
+	if risk_level == "warning":
+		return "Resource references contain %d warning(s); reimport or re-save resources to refresh UID/path metadata." % warning_count
+	return "No resource reference consistency issues were found."
 
 
 func _execute_plugin_reload(args: Dictionary) -> Dictionary:

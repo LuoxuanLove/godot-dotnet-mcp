@@ -490,6 +490,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_plugin_reload_desc": "Vérifie si l'instance du plugin en cours est fraîche, ou planifie une recharge complète du cycle de vie sans dépendre de l'UI au premier plan.",
 	"tool_system_project_configure_name": "Configurer le projet",
 	"tool_system_project_configure_desc": "Lisez ou modifiez les param猫tres du projet, les actions de saisie et la configuration de chargement automatique.",
+	"tool_system_resource_reference_audit_name": "Audit des références",
+	"tool_system_resource_reference_audit_desc": "Analyse les scènes et ressources pour les UID/chemins obsolètes et les incohérences de scripts C# custom Resource.",
 	"tool_system_project_run_name": "Ex茅cuter le projet",
 	"tool_system_project_run_desc": "Commencez 脿 ex茅cuter le projet dans l'茅diteur Godot.",
 	"tool_system_project_stop_name": "Arr锚ter le projet",

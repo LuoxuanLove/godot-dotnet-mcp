@@ -490,6 +490,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_plugin_reload_desc": "Проверяет актуальность запущенного экземпляра плагина или планирует полную перезагрузку жизненного цикла без зависимости от UI на переднем плане.",
 	"tool_system_project_configure_name": "Настройка проекта",
 	"tool_system_project_configure_desc": "Чтение или изменение настроек проекта, действий ввода и конфигурации автозагрузки.",
+	"tool_system_resource_reference_audit_name": "Аудит ссылок ресурсов",
+	"tool_system_resource_reference_audit_desc": "Сканируйте сцены и ресурсы на устаревшие UID/пути и несоответствия скриптов C# custom Resource.",
 	"tool_system_project_run_name": "Запустить проект",
 	"tool_system_project_run_desc": "Запустите проект в редакторе Godot.",
 	"tool_system_project_stop_name": "Остановить проект",

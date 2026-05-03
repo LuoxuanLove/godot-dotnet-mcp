@@ -490,6 +490,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_plugin_reload_desc": "Prüfen Sie, ob die laufende Plugin-Instanz aktuell ist, oder planen Sie ein vollständiges Plugin-Lifecycle-Reload ohne Vordergrund-UI.",
 	"tool_system_project_configure_name": "Projekt konfigurieren",
 	"tool_system_project_configure_desc": "Projekteinstellungen, Eingabeaktionen und Autoload-Konfiguration lesen oder ändern.",
+	"tool_system_resource_reference_audit_name": "Ressourcenreferenz-Audit",
+	"tool_system_resource_reference_audit_desc": "Szenen und Ressourcen auf veraltete UID/Pfad-Referenzen und C# custom Resource-Skriptinkonsistenzen prüfen.",
 	"tool_system_project_run_name": "Projekt ausführen",
 	"tool_system_project_run_desc": "Beginnen Sie mit der Ausführung des Projekts im Godot-Editor.",
 	"tool_system_project_stop_name": "Projekt stoppen",

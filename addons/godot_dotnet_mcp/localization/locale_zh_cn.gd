@@ -658,6 +658,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_configure_desc": "读取或修改项目设置、输入动作与自动加载配置。",
 	"tool_system_project_files_name": "项目文件",
 	"tool_system_project_files_desc": "通过高层流程读取、修改、选中、扫描和重导入项目文件系统树条目。",
+	"tool_system_resource_reference_audit_name": "资源引用审计",
+	"tool_system_resource_reference_audit_desc": "扫描场景和资源中的陈旧 UID / 路径引用，以及 C# 自定义 Resource 脚本不匹配风险。",
 	"tool_system_userdata_maintenance_name": "用户数据维护",
 	"tool_system_userdata_maintenance_desc": "创建当前 user:// 分层目录，列出或清理受管理截图缓存，或检查并清理旧版 MCP 缓存文件。",
 	"tool_system_project_run_name": "运行项目",
