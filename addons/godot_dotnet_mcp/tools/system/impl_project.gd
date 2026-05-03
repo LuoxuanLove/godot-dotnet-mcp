@@ -1,8 +1,9 @@
 @tool
 extends RefCounted
 
-## System implementation: project_state, project_configure,
-## project_files, project_run, project_stop, runtime_diagnose
+## System implementation: project_state, editor_state, plugin_reload,
+## project_configure, userdata_maintenance, project_files, project_run,
+## project_stop, runtime_diagnose
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
