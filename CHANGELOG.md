@@ -10,6 +10,10 @@
 - Added editor session identity details to `/health`, `system_editor_state`, and `system_project_state` so agents can distinguish the active MCP editor session from other Godot processes.
 - Added `system_resource_reference_audit` and richer `system_scene_validate` UID/fallback-path hints for stale `.tscn` / `.tres` references and C# custom Resource script mismatches that can remain even when `dotnet build` succeeds.
 
+### Changed
+
+- Consolidated runtime screenshot and input entry points into `system_runtime_step(action=step|capture|input)` so the public runtime automation surface stays high-level while retaining internal atomic tools in the Tools tree.
+
 ### Fixed
 
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
@@ -41,7 +45,6 @@
 - Reworked the Dock around clearer Home, Config, and Tools pages. The first tab is now `Home`, with service status, endpoint, full reload, and plugin diagnostics in one place.
 - Redesigned the Config page so supported clients show clearer install/remove/open actions and exact install locations when available.
 - Reworked the Tools page to show high-level System tools and User tools in a consistent tree, with localized descriptions, action nodes, counts, and internal implementation links.
-- Consolidated runtime screenshot and input entry points into `system_runtime_step(action=step|capture|input)` so the public runtime automation surface stays high-level while retaining internal atomic tools in the Tools tree.
 - Migrated the previous Intelligence project, scene, script, runtime-diagnose, and index workflows to `system_*` tool names.
 - Focused the core Agent-facing MCP surface on high-level `system_*` tools while keeping lower-level building blocks internal to the plugin.
 - Renamed and reorganized the former Intelligence tool layer into the System tool layer, matching the public `system_*` API names.

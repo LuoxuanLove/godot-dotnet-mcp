@@ -10,6 +10,10 @@
 - 在 `/health`、`system_editor_state` 与 `system_project_state` 中新增编辑器会话标识，便于 Agent 区分当前 MCP 编辑器会话与其他 Godot 进程。
 - 新增 `system_resource_reference_audit`，并增强 `system_scene_validate` 的 UID / fallback path 提示，用于发现 `.tscn` / `.tres` 陈旧引用和 C# custom Resource 脚本不匹配等 `dotnet build` 通过后仍可能存在的加载风险。
 
+### Changed
+
+- 将运行时截图与输入入口合并到 `system_runtime_step(action=step|capture|input)`，让公开运行时自动化工具保持高层粒度，同时在工具树中保留内部原子工具关联。
+
 ### Fixed
 
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
@@ -41,7 +45,6 @@
 - 重新整理 Dock 的 Home、配置页和工具页。第一个页签现在叫 `主页`，服务状态、端点、完全重载和插件自检都集中放在这里。
 - 配置页改得更直观：支持的客户端会显示更明确的安装、移除、打开动作，并在可用时显示具体安装位置。
 - 工具页改为统一的树状展示，高层 System 工具和 User Tool 都有一致的本地化名称、说明、动作节点、数量统计和内部实现关联。
-- 将运行时截图与输入入口合并到 `system_runtime_step(action=step|capture|input)`，让公开运行时自动化工具保持高层粒度，同时在工具树中保留内部原子工具关联。
 - 将上一版 Intelligence 中的项目、场景、脚本、运行时诊断和索引工作流迁移为 `system_*` 工具名。
 - 面向 Agent 的核心 MCP 公开面收敛到高层 `system_*` 工具；底层工具保留在插件内部。
 - 原来的 Intelligence 工具层重命名并整理为 System 工具层，与公开的 `system_*` API 名称保持一致。
