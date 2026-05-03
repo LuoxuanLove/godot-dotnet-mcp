@@ -59,7 +59,7 @@ tools/system/
 默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理缓存；需要查看或整理当前截图缓存时，由 Agent 显式调用 `system_userdata_maintenance(action=list_capture_cache)` 或 `system_userdata_maintenance(action=cleanup_capture_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。当前截图缓存清理会跳过 symlink、Windows junction 与 reparse point。需要整理历史遗留根级文件时，调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 
 ### 场景级
-- `system_scene_validate`：做场景完整性检查与依赖缺失检测。
+- `system_scene_validate`：做场景完整性检查、依赖缺失检测，并在发现 `uid://...::::res://...` 依赖时提示 UID 缓存或 fallback 路径陈旧风险。
 - `system_scene_analyze`：分析节点、脚本、绑定和结构问题。
 - `system_scene_tree`：高层当前编辑场景树入口，支持获取/选择节点、添加/移除/重命名/重设父节点/排序节点、挂载脚本、读写属性与移动节点。
 - `system_scene_patch`：以结构化方式修改 `.tscn` 内容。
@@ -70,6 +70,9 @@ tools/system/
 - `system_script_patch`：以成员级方式补丁脚本内容。
 
 这些工具当前由 `tools/system/impl_script.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `script_*`、`scene_*` 与 `filesystem_*` 原子工具。
+
+### 项目资源审计级
+- `system_resource_reference_audit`：扫描项目内 `.tscn` / `.tres` 文本资源，检查 `ExtResource` 的 UID 与 fallback path 是否能被当前资源数据库解析，并检查 `.tres` 中 C# custom `Resource` 脚本路径、`script_class`、文件名 / 类名和直接基类风险。该工具会把问题标记为 `dotnet_build_may_pass`，用于区分“C# 构建通过但场景 / 资源引用仍不一致”的加载风险。
 
 ### 索引级
 - `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，长会话中文件变化时会自动重建，必要时仍可 `refresh_index=true` 强制刷新。

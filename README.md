@@ -44,6 +44,7 @@ The Home page shows service health, endpoint, connection activity, self-diagnost
 ### Work with files, scenes, and scripts
 
 - `system_project_files` covers common project FileSystem operations.
+- `system_resource_reference_audit` scans `.tscn` / `.tres` UID + fallback path consistency and C# custom Resource script references, including risks that can remain after `dotnet build` succeeds.
 - `system_scene_validate`, `system_scene_analyze`, `system_scene_tree`, and `system_scene_patch` inspect and edit scenes through structured workflows.
 - `system_script_analyze`, `system_script_patch`, and `system_bindings_audit` inspect GDScript/C# structure and C# scene bindings.
 - `system_project_symbol_search` and `system_scene_dependency_graph` provide indexed project lookup and scene dependency views.

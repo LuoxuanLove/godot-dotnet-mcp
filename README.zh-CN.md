@@ -44,6 +44,7 @@ AI 编程 Agent 在 Godot 中要真正可靠，不能只读 `.tscn` 和脚本文
 ### 操作文件、场景与脚本
 
 - `system_project_files` 覆盖常见项目文件树操作。
+- `system_resource_reference_audit` 扫描 `.tscn` / `.tres` 的 UID + fallback path 一致性和 C# custom Resource 脚本引用，包括 `dotnet build` 通过后仍可能存在的资源加载风险。
 - `system_scene_validate`、`system_scene_analyze`、`system_scene_tree`、`system_scene_patch` 用结构化方式检查和修改场景。
 - `system_script_analyze`、`system_script_patch`、`system_bindings_audit` 检查 GDScript / C# 结构和 C# 场景绑定。
 - `system_project_symbol_search`、`system_scene_dependency_graph` 提供项目符号搜索和场景依赖图。
