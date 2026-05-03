@@ -1,13 +1,13 @@
 @tool
 extends RefCounted
 
-## System implementation: runtime_control, runtime_capture, runtime_input, runtime_step
+## System implementation: runtime_control, runtime_step
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
 
-const HANDLED_TOOLS := ["runtime_control", "runtime_capture", "runtime_input", "runtime_step"]
+const HANDLED_TOOLS := ["runtime_control", "runtime_step"]
 
 
 func handles(tool_name: String) -> bool:
@@ -33,42 +33,18 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
-			"name": "runtime_capture",
-			"description": "RUNTIME CAPTURE: Capture the running game's viewport as PNG. Supports single-frame or sequence capture via frame_count and interval_frames. Returns capture metadata plus the runtime state snapshot.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"frame_count": {"type": "integer", "description": "Number of frames to capture (default: 1)"},
-					"interval_frames": {"type": "integer", "description": "Frames to wait between captures (default: 1)"},
-					"capture_dir": {"type": "string", "description": "Optional output directory. Defaults to the fixed runtime capture cache directory."},
-					"capture_label": {"type": "string", "description": "Optional file name prefix"},
-					"include_runtime_state": {"type": "boolean", "description": "Include runtime state snapshot in the response (default: true)"},
-					"timeout_ms": {"type": "integer", "description": "Optional timeout in milliseconds"}
-				}
-			}
-		},
-		{
-			"name": "runtime_input",
-			"description": "RUNTIME INPUT: Send a scripted batch of runtime inputs to the running game. Each entry supports action or key input kinds and is executed in order.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"inputs": {"type": "array", "items": {"type": "object"}, "description": "Runtime input entries"},
-					"timeout_ms": {"type": "integer", "description": "Optional timeout in milliseconds"}
-				},
-				"required": ["inputs"]
-			}
-		},
-		{
 			"name": "runtime_step",
-			"description": "RUNTIME STEP: Apply optional runtime inputs, wait a number of frames, and optionally capture a frame. This is the atomic 'input then observe' helper for agents.",
+			"description": "RUNTIME STEP: Unified runtime automation I/O entry. ACTIONS: step (default) applies optional inputs, waits, and optionally captures one frame; capture captures single or multiple frames; input sends scripted inputs only. Use runtime_control first to arm the current runtime session.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
+					"action": {"type": "string", "enum": ["step", "capture", "input"], "description": "Runtime automation action (default: step)"},
 					"inputs": {"type": "array", "items": {"type": "object"}, "description": "Optional runtime input entries"},
 					"wait_frames": {"type": "integer", "description": "Frames to wait before capture (default: 1)"},
+					"frame_count": {"type": "integer", "description": "Number of frames for action=capture (default: 1)"},
+					"interval_frames": {"type": "integer", "description": "Frames to wait between captures for action=capture (default: 1)"},
 					"capture": {"type": "boolean", "description": "Capture a frame after waiting (default: true)"},
-					"capture_dir": {"type": "string", "description": "Optional output directory when capture=true. Defaults to the fixed runtime capture cache directory."},
+					"capture_dir": {"type": "string", "description": "Optional output directory. Defaults to the fixed runtime capture cache directory."},
 					"capture_label": {"type": "string", "description": "Optional capture label"},
 					"include_runtime_state": {"type": "boolean", "description": "Include runtime state snapshot in the response (default: true)"},
 					"timeout_ms": {"type": "integer", "description": "Optional timeout in milliseconds"}
@@ -83,7 +59,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"runtime_control":
 			return bridge.call_atomic("runtime_control", args)
-		"runtime_capture", "runtime_input", "runtime_step":
+		"runtime_step":
 			return _async_required_error(tool_name)
 		_:
 			return _unknown_tool_error(tool_name)
@@ -94,12 +70,8 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"runtime_control":
 			return await bridge.call_atomic_async("runtime_control", args)
-		"runtime_capture":
-			return await bridge.call_atomic_async("runtime_capture", args)
-		"runtime_input":
-			return await bridge.call_atomic_async("runtime_input", args)
 		"runtime_step":
-			return await bridge.call_atomic_async("runtime_step", args)
+			return await _execute_runtime_step(args)
 		_:
 			return _unknown_tool_error(tool_name)
 
@@ -113,6 +85,21 @@ func _error(error_code: String, message: String, data: Dictionary = {}) -> Dicti
 	if not data.is_empty():
 		out["data"] = data.duplicate(true)
 	return out
+
+
+func _execute_runtime_step(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "step")).strip_edges()
+	match action:
+		"step":
+			return await bridge.call_atomic_async("runtime_step", args)
+		"capture":
+			return await bridge.call_atomic_async("runtime_capture", args)
+		"input":
+			return await bridge.call_atomic_async("runtime_input", args)
+		_:
+			return _error("invalid_argument", "Unknown runtime_step action: %s" % action, {
+				"hint": "Valid actions: step, capture, input"
+			})
 
 
 func _invalid_action_error(action: String) -> Dictionary:
