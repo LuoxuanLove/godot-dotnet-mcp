@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- Fixed runtime port projection so an explicit non-default Settings port, such as `3001` or JSON-loaded `3001.0`, is not overridden by inherited MCP server environment variables from another editor session.
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
 - Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
 - Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are saved correctly and reported by `system_script_analyze`.
