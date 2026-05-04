@@ -16,7 +16,9 @@ const SUPPORTED_TRANSPORT_MODES := {
 
 func project(settings: Dictionary) -> Dictionary:
 	var runtime_settings := settings.duplicate(true)
-	_apply_environment_overrides(runtime_settings)
+	var has_explicit_host := _has_explicit_host(runtime_settings.get("host", DEFAULT_HOST))
+	var has_explicit_port := _has_explicit_port(runtime_settings.get("port", DEFAULT_PORT))
+	_apply_environment_overrides(runtime_settings, has_explicit_host, has_explicit_port)
 	runtime_settings["host"] = _resolve_host(runtime_settings.get("host", DEFAULT_HOST))
 	runtime_settings["port"] = _resolve_port(runtime_settings.get("port", DEFAULT_PORT))
 	runtime_settings["debug_mode"] = _coerce_bool(runtime_settings.get("debug_mode", true))
@@ -25,15 +27,23 @@ func project(settings: Dictionary) -> Dictionary:
 	return runtime_settings
 
 
-func _apply_environment_overrides(runtime_settings: Dictionary) -> void:
-	if OS.has_environment(ENV_RUNTIME_SERVER_HOST):
+func _apply_environment_overrides(runtime_settings: Dictionary, has_explicit_host: bool, has_explicit_port: bool) -> void:
+	if not has_explicit_host and OS.has_environment(ENV_RUNTIME_SERVER_HOST):
 		var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
 		if not env_host.is_empty():
 			runtime_settings["host"] = env_host
-	if OS.has_environment(ENV_RUNTIME_SERVER_PORT):
+	if not has_explicit_port and OS.has_environment(ENV_RUNTIME_SERVER_PORT):
 		var env_port_text := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
 		if env_port_text.is_valid_int() and int(env_port_text) > 0:
 			runtime_settings["port"] = int(env_port_text)
+
+
+func _has_explicit_host(value) -> bool:
+	return _resolve_host(value) != DEFAULT_HOST
+
+
+func _has_explicit_port(value) -> bool:
+	return _resolve_port(value) != DEFAULT_PORT
 
 
 func _resolve_host(value) -> String:
@@ -45,6 +55,8 @@ func _resolve_host(value) -> String:
 
 func _resolve_port(value) -> int:
 	if value is int and int(value) > 0:
+		return int(value)
+	if value is float and float(value) > 0.0 and is_equal_approx(float(value), float(int(value))):
 		return int(value)
 	if value is String and String(value).strip_edges().is_valid_int():
 		var parsed_port := int(String(value).strip_edges())

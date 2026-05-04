@@ -155,6 +155,7 @@ $RequiredCases = @(
     "plugin_instance_freshness_contracts"
     "plugin_runtime_reload_executor_contracts"
     "plugin_runtime_state_contracts"
+    "server_runtime_settings_projection_service_contracts"
     "external_host_removal_audit"
     "system_help_contracts"
     "json_rpc_request_service_contracts"
