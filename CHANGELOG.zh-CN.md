@@ -16,7 +16,7 @@
 
 ### Fixed
 
-- 修复运行时端口投影：当 Settings 中显式设置了 `3001` 或 JSON 读取后的 `3001.0` 等非默认端口时，不再被另一个编辑器会话继承来的 MCP server 环境变量覆盖。
+- 修复插件显示与使用的 MCP server 端口：当 Settings 中显式配置了 `3001` 等非默认端口时，多 Godot 编辑器会话下也会保持该配置，不再被继承的服务环境变量覆盖。
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
 - 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、内部节点和 action 标签会立即刷新，无需完全重启插件。
 - 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值处理：`default_value` 现在会正确写入脚本文件，并可被 `system_script_analyze` 统计和报告。
