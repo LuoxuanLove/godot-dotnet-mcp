@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- Fixed custom User tools loaded from `custom_tools/` so they are exposed through MCP `tools/list` and callable by clients instead of only appearing in the Tools page state.
 - Fixed the MCP server port shown and used by the plugin so an explicitly configured non-default Settings port, such as `3001`, stays stable across multiple Godot editor sessions instead of being overridden by inherited server environment variables.
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
 - Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
