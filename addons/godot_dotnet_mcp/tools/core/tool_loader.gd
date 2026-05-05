@@ -930,7 +930,8 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
 	if _as_bool(tool_def.get("compatibility_alias", false)):
 		return false
-	return str(tool_def.get("category", "")) == "system"
+	var category := str(tool_def.get("category", ""))
+	return category == "system" or category == "user"
 
 
 func _get_tool_access_provider():
