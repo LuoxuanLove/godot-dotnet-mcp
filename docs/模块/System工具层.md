@@ -28,7 +28,7 @@ tools/system/
 ### 能力说明
 - `system_help`：返回面向 Agent 的 MCP 能力说明、推荐起手顺序、编辑器截图优先提示、隐藏控件枚举提示、运行时自动化能力与当前工具 schema 版本。
 
-连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
+连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
 
 ### 项目级
 - `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位。
@@ -42,7 +42,7 @@ tools/system/
 
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
-`system_editor_state.editor.editor_session_identity` 与 `system_project_state.runtime_capabilities.editor_context.editor_session_identity` 会暴露当前承载 MCP 的编辑器会话只读标识，包括 `session_id`、`pid`、启动参数、项目路径、headless/editor 状态，以及可用时的 MCP 监听端点。该身份固定标注 `identity_scope=current_editor_process`、`external_validation_process=false`、`safe_to_terminate=false`，用于帮助 Agent 把当前 MCP 编辑器会话与测试 harness 等外部验证进程区分开，而不是作为进程清理指令。
+`system_editor_state.editor.editor_session_identity` 与 `system_project_state.runtime_capabilities.editor_context.editor_session_identity` 会暴露当前承载 MCP 的编辑器会话只读标识，包括 `session_id`、`pid`、启动参数、项目路径、headless/editor 状态，以及可用时的 MCP 服务地址。该身份固定标注 `identity_scope=current_editor_process`、`external_validation_process=false`、`safe_to_terminate=false`，用于帮助 Agent 把当前 MCP 编辑器会话与测试 harness 等外部验证进程区分开，而不是作为进程清理指令。
 
 ### 编辑器界面级
 - `system_editor_control`：统一封装编辑器主屏幕切换、基于 Godot API 的无感 Dock/插件页签/底部面板激活、整窗截图、可见控件枚举、单控件截图、坐标映射、焦点移动、按钮类控件激活、控件本地坐标左键 / 右键点击，以及可见弹窗的最小安全交互。
