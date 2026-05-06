@@ -1,5 +1,5 @@
 # Godot .NET MCP
-[![最新正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![最新预发布版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%3Fper_page%3D1&query=%24%5B0%5D.tag_name&label=%E9%A2%84%E5%8F%91%E5%B8%83%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
+[![最新正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![最新预发布版](https://img.shields.io/badge/%E9%A2%84%E5%8F%91%E5%B8%83%E7%89%88-v1.0.0--pre2-orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
 > 运行在 Godot 编辑器进程内的 MCP 插件。支持 MCP 的客户端可读取当前项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
 
