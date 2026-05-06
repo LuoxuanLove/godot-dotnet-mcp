@@ -1,17 +1,17 @@
 # Godot .NET MCP
 [![最新正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![最新预发布版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%3Fper_page%3D1&query=%24%5B0%5D.tag_name&label=%E9%A2%84%E5%8F%91%E5%B8%83%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
-> 运行在 Godot 编辑器进程内的 MCP 插件——Agent 直接读取活的项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
+> 运行在 Godot 编辑器进程内的 MCP 插件。MCP 客户端可读取当前项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
 
 ![Godot .NET MCP 工具页](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/main/asset_library/tools-cn.png)
 
 ## 这是什么
 
-嵌入 Godot 编辑器进程的 MCP 服务端。调用 `system_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再根据观察到的问题，用场景、脚本、节点或资源工具做精准修改。
+嵌入 Godot 编辑器进程的 MCP 服务。调用 `system_project_state` 获取当前项目的真实快照——场景数、脚本数、错误统计、运行状态——再根据观察到的问题，用场景、脚本、节点或资源工具做精准修改。
 
 系统层是 Agent 的推荐起点，覆盖项目快照、项目文件树修改、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、当前场景树修改、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
 
-连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。
+连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。
 
 插件侧运行态细节仍推荐通过 `plugin_runtime_state` 获取；其中 `action=get_lsp_diagnostics_status` 是详细 LSP 自检入口，而 `system_project_state(include_runtime_health=true)` 只返回轻量 `self_diagnostics`、`lsp_diagnostics` 与 `tool_loader` 健康摘要。
 

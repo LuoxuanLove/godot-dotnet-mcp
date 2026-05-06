@@ -2,24 +2,22 @@
 
 [![Latest Stable](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=stable&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Latest Pre-release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%3Fper_page%3D1&query=%24%5B0%5D.tag_name&label=pre-release&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![中文 README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
-> A Godot 4.6+ editor plugin that gives AI agents a real MCP interface to the live Godot editor: project state, scene editing, script analysis, runtime control, screenshots, logs, and client setup from inside the editor itself.
+> A Godot 4.6+ editor plugin that exposes the live Godot editor through MCP: project state, scene editing, script analysis, runtime control, screenshots, logs, and client setup from inside the editor itself.
 
-Godot .NET MCP is built for agents that need to work inside Godot instead of guessing from files alone. It gives agents practical editor actions for reading project health, inspecting scenes, editing scripts, controlling play mode, capturing screenshots, and setting up MCP clients. C# analysis stays self-contained through a plugin-internal Roslyn syntax layer, with no external host process required.
+Godot .NET MCP is built for clients that need the current editor state instead of file snapshots alone. It provides MCP tools for reading project health, inspecting scenes, editing scripts, controlling play mode, capturing screenshots, and setting up clients. C# analysis stays self-contained through a plugin-internal Roslyn syntax layer, with no external host process required.
 
 ![Godot .NET MCP Tools](asset_library/tools-en.png)
 
 ## Why it exists
 
-AI coding agents are much more useful in Godot when they can observe and operate the editor directly. A file-only assistant can read `.tscn` and scripts, but it cannot reliably see the active scene, the current dock state, runtime errors, editor UI, client configuration, or screenshots. Godot .NET MCP closes that gap by giving agents safe, explicit tools for the editor tasks users actually ask them to perform.
-
-The design philosophy is simple: provide real editor tools, not fake analysis. Agents should first inspect the project and editor state, then choose the smallest safe action. The README focuses on what users gain; the internal implementation details stay in the tool browser and technical docs.
+Godot editor work often depends on state that is not fully represented by files: the active scene, current dock state, runtime errors, editor UI, client configuration, screenshots, and whether a tool is available in the running session. Godot .NET MCP exposes those states and operations as explicit MCP tools so clients can inspect the editor before changing scenes, scripts, resources, or runtime state.
 
 ## Highlights
 
-- **Editor-native MCP server**: the HTTP MCP endpoint runs inside Godot, so tools observe the current editor session instead of a stale copy of the project.
+- **Editor-native MCP service**: the local MCP service runs inside Godot, so tools observe the current editor session instead of a stale copy of the project.
 - **Inspect before editing**: agents can first read the open project, active editor state, recent errors, and available tools, then move into files, scenes, scripts, runtime diagnostics, or UI control.
 - **Godot .NET support**: plugin-internal Roslyn powers C# syntax diagnostics, C# file reading/patching, `.csproj` support, solution/project inspection, and C# scene binding audits.
-- **Visual editor awareness**: agents can capture the editor, inspect visible or hidden controls, activate docks and bottom panels through Godot APIs, and avoid OS-level mouse automation unless explicitly authorized.
+- **Visual editor awareness**: agents can capture the editor, inspect visible or hidden controls, and activate docks, bottom panels, controls, and popups through Godot editor APIs.
 - **Runtime automation loop**: run/stop scenes, enable runtime control, inject inputs, capture frames, and use `system_runtime_step` for input-wait-capture workflows.
 - **One-click client setup**: the Config page helps connect common CLI and desktop agents, showing detected paths, config targets, generated JSON, and install/remove actions where supported.
 - **User-extensible tools**: drop `user_*` GDScript tools into `custom_tools/`; the plugin discovers and hot-reloads them without rebuilding the plugin.
@@ -30,7 +28,7 @@ The design philosophy is simple: provide real editor tools, not fake analysis. A
 |---|---|---|
 | ![Home dashboard](asset_library/home-en.png) | ![Tool browser](asset_library/tools-en.png) | ![Client configuration](asset_library/config-en.png) |
 
-The Home page shows service health, endpoint, connection activity, self-diagnostics, reload controls, port, log level, and language. The Tools page lets users search available Agent tools, see what is enabled, and inspect what each tool does. The Config page generates client setup for desktop and CLI agents, including detected paths and copyable configuration.
+The Home page shows service health, service address, connection activity, self-diagnostics, reload controls, port, log level, and language. The Tools page lists available tools, enabled state, and tool descriptions. The Config page generates client setup for desktop and CLI clients, including detected paths and copyable configuration.
 
 ## What agents can do
 
@@ -82,7 +80,7 @@ For development or local testing, copy `addons/godot_dotnet_mcp/` from this repo
 ## Quick start
 
 1. Enable the plugin and open `MCPDock > Home`.
-2. Confirm the service endpoint, usually `http://127.0.0.1:3000/mcp`.
+2. Confirm the service address, usually `http://127.0.0.1:3000/mcp`.
 3. Open `MCPDock > Config`, choose your client, and copy or write the generated configuration.
 4. From the agent, call `system_help` first.
 5. Use `system_project_state` or `system_editor_state` before editing.
@@ -128,4 +126,4 @@ Each `.gd` file should expose `handles()`, `get_tools()`, and `execute()`. Tool 
 
 ## Current status
 
-`v1.0.0-pre2` is the current unreleased pre-release target, continuing the System tool layer, editor/runtime automation, client setup, plugin-internal Roslyn support, user-tool hot reload, localized Dock UI, and release validation work. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.
+`v1.0.0-pre2` is the current pre-release, covering the System tool layer, editor/runtime automation, client setup, plugin-internal Roslyn support, user-tool hot reload, localized Dock UI, and release validation work. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.

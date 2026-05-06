@@ -1,17 +1,17 @@
 # Godot .NET MCP
 [![Latest Stable](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=stable&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Latest Pre-release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%3Fper_page%3D1&query=%24%5B0%5D.tag_name&label=pre-release&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![Chinese README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
-> An MCP server plugin running inside the Godot editor —agents read live project state, manipulate scenes and scripts directly, and diagnose C# bindings without any external process.
+> An MCP server plugin running inside the Godot editor. MCP clients can read live project state, manipulate scenes and scripts, and diagnose C# bindings without any external process.
 
 ![Godot .NET MCP Tools](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/main/asset_library/tools-en.png)
 
 ## What It Is
 
-An MCP endpoint embedded in the Godot editor process. Call `system_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then use scene, script, node, or resource tools to make targeted changes based on the observed state.
+An MCP service embedded in the Godot editor process. Call `system_project_state` to get a real snapshot of the open project —scene count, script count, errors, run state —then use scene, script, node, or resource tools to make targeted changes based on the observed state.
 
 The System layer is the intended starting point for agents. It provides project-level snapshots, project file-tree changes, editor-session snapshots, editor UI control, editor log access, runtime diagnostics, scene analysis, current scene-tree changes, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
-After connecting, call `system_help` for the current capability guide and schema version. For any Dock, popup, layout, focus, or button-visibility task, prefer `system_editor_control(action=activate_ui)` and `system_editor_control(action=capture_editor)` through Godot editor APIs before acting; do not use OS mouse/window automation unless the user explicitly authorizes foreground automation. If visible control enumeration misses the target, retry `system_editor_control(action=list_controls, include_hidden=true)`.
+After connecting, call `system_help` for the current capability guide and schema version. For any Dock, popup, layout, focus, or button-visibility task, prefer `system_editor_control(action=activate_ui)` and `system_editor_control(action=capture_editor)` through Godot editor APIs before acting. If visible control enumeration misses the target, retry `system_editor_control(action=list_controls, include_hidden=true)`.
 
 For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; System tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `self_diagnostics`, `lsp_diagnostics`, and `tool_loader` status.
 
@@ -106,7 +106,7 @@ Tool list:
 GET http://127.0.0.1:3000/api/tools
 ```
 
-MCP endpoint:
+MCP service address:
 
 ```text
 POST http://127.0.0.1:3000/mcp
@@ -125,7 +125,7 @@ Open `MCPDock > Config`, choose a target platform, then inspect or copy the gene
 Recommended order:
 
 1. Select the target client.
-2. Confirm the generated endpoint and config content.
+2. Confirm the generated service address and config content.
 3. Use `Write Config` if you want the plugin to update the target file.
 4. Use `Copy` if you want to apply the config manually.
 
