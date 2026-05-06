@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - 1.0.0-pre2
+## 1.0.0-pre2 - 2026-05-06
 
 ### Added
 
