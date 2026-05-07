@@ -126,4 +126,4 @@ addons/godot_dotnet_mcp/custom_tools/
 
 ## 当前状态
 
-`v1.0.0-pre2` 是当前预发布版本，覆盖 System 工具层、编辑器 / 运行时自动化、客户端接入配置、插件内 Roslyn 支持、用户工具热重载、本地化 Dock UI 与发布验证。完整版本记录见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。
+当前源码树跟踪 `v1.0.0-pre3` 开发中版本，重点修复运行时调试桥消息格式与工具上下文辅助函数问题。最后一个已发布预发布版本仍是 `v1.0.0-pre2`。完整版本记录见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。
