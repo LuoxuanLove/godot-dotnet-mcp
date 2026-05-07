@@ -44,7 +44,29 @@ System 工具层是推荐起点，覆盖项目快照、项目文件树修改、�
 
 ## 安装
 
-### 方式一：直接复制插件目录
+### 方式一：从 Godot 插件商城安装
+
+用 Godot 打开目标项目，进入 `AssetLib` 页签，搜索 `Godot .NET MCP` 并点击 `Install`。也可以打开 Godot 插件商城页面：
+
+```text
+https://godotengine.org/asset-library/asset/4923
+```
+
+安装完成后目录结构应为：
+
+```text
+addons/godot_dotnet_mcp
+```
+
+然后：
+
+1. 用 Godot 打开项目。
+2. 进入 `Project Settings > Plugins`。
+3. 启用 `Godot .NET MCP`。
+4. 在右侧 Dock 中打开 `MCPDock`。
+5. 确认端口后启动服务。
+
+### 方式二：直接复制源文件
 
 将插件放到你的 Godot 项目内：
 
@@ -59,32 +81,6 @@ addons/godot_dotnet_mcp
 3. 启用 `Godot .NET MCP`。
 4. 在右侧 Dock 中打开 `MCPDock`。
 5. 确认端口后启动服务。
-
-### 方式二：作为 Git Submodule
-
-仓库根目录内含 `addons/godot_dotnet_mcp/`。添加子模块时，克隆到父级目录：
-
-```bash
-git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dotnet-mcp
-```
-
-插件位于 `_godot-dotnet-mcp/addons/godot_dotnet_mcp/`，将该目录复制或符号链接到项目的 `addons/` 下即可。如需更简单的方式，推荐使用方式三。
-
-### 方式三：从 Godot 插件商城安装
-
-用 Godot 打开目标项目，进入 `AssetLib` 页签，搜索 `Godot .NET MCP` 并点击 `Install`。也可以打开 Godot 插件商城页面：
-
-```text
-https://godotengine.org/asset-library/asset/4923
-```
-
-安装完成后目录结构应为：
-
-```text
-addons/godot_dotnet_mcp
-```
-
-再按"方式一"启用即可。
 
 ## 快速开始
 

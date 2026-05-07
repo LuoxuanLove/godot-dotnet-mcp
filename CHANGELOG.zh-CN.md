@@ -1,5 +1,14 @@
 # 变更日志
 
+## Unreleased
+
+目标版本：`1.0.0-pre3`。
+
+### Fixed
+
+- 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
+- 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
+
 ## 1.0.0-pre2 - 2026-05-06
 
 ### Added

@@ -24,7 +24,9 @@ func _has_capture(message: String) -> bool:
 
 func _capture(message: String, data, session_id: int) -> bool:
 	var payload := _extract_payload(data)
-	match str(message):
+	var channel := _resolve_channel(message, payload)
+	payload.erase("_mcp_channel")
+	match channel:
 		EVENT_CHANNEL:
 			var event_name := str(payload.get("event", "runtime_event"))
 			MCPRuntimeDebugStore.record_runtime_event("runtime_event", payload, session_id)
@@ -52,6 +54,21 @@ func _capture(message: String, data, session_id: int) -> bool:
 			return true
 		_:
 			return false
+
+
+func _resolve_channel(message: String, payload: Dictionary) -> String:
+	var text := str(message)
+	if text == EVENT_CHANNEL or text == LOG_CHANNEL or text == REPLY_CHANNEL:
+		return text
+	var separator := text.find(":")
+	if separator > 0:
+		var prefix := text.substr(0, separator)
+		if prefix == EVENT_CHANNEL or prefix == LOG_CHANNEL or prefix == REPLY_CHANNEL:
+			return prefix
+	var payload_channel := str(payload.get("_mcp_channel", ""))
+	if payload_channel == EVENT_CHANNEL or payload_channel == LOG_CHANNEL or payload_channel == REPLY_CHANNEL:
+		return payload_channel
+	return text
 
 
 func _setup_session(session_id: int) -> void:

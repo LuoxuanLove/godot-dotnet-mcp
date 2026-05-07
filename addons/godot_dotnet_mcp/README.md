@@ -46,7 +46,29 @@ To extend the tool set: place a `.gd` file in `custom_tools/` implementing `hand
 
 ## Installation
 
-### Option 1: Copy the plugin directory
+### Option 1: Install from Godot Asset Library
+
+Open your project in Godot, go to the `AssetLib` tab, search for `Godot .NET MCP`, and click `Install`. You can also open its Godot Asset Library page:
+
+```text
+https://godotengine.org/asset-library/asset/4923
+```
+
+After installation, the final structure should be:
+
+```text
+addons/godot_dotnet_mcp
+```
+
+Then:
+
+1. Open the project in Godot.
+2. Go to `Project Settings > Plugins`.
+3. Enable `Godot .NET MCP`.
+4. Open `MCPDock` from the right-side dock.
+5. Confirm the port and start the service.
+
+### Option 2: Copy source files directly
 
 Place the plugin in your Godot project:
 
@@ -61,32 +83,6 @@ Then:
 3. Enable `Godot .NET MCP`.
 4. Open `MCPDock` from the right-side dock.
 5. Confirm the port and start the service.
-
-### Option 2: Use Git submodule
-
-The repository root contains `addons/godot_dotnet_mcp/` inside it (not at root level). When adding as a submodule, clone to a parent folder:
-
-```bash
-git submodule add https://github.com/LuoxuanLove/godot-dotnet-mcp.git _godot-dotnet-mcp
-```
-
-The plugin is located at `_godot-dotnet-mcp/addons/godot_dotnet_mcp/`. Copy or symlink that directory into your project's `addons/`. For a simpler setup, use Option 3.
-
-### Option 3: Install from Godot Asset Library
-
-Open your project in Godot, go to the `AssetLib` tab, search for `Godot .NET MCP`, and click `Install`. You can also open its Godot Asset Library page:
-
-```text
-https://godotengine.org/asset-library/asset/4923
-```
-
-After installation, the final structure should be:
-
-```text
-addons/godot_dotnet_mcp
-```
-
-Then enable it as described in Option 1.
 
 ## Quick Start
 

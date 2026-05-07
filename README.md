@@ -126,4 +126,4 @@ Each `.gd` file should expose `handles()`, `get_tools()`, and `execute()`. Tool 
 
 ## Current status
 
-`v1.0.0-pre2` is the current pre-release, covering the System tool layer, editor/runtime automation, client setup, plugin-internal Roslyn support, user-tool hot reload, localized Dock UI, and release validation work. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.
+The source tree currently tracks `v1.0.0-pre3` development work, focused on runtime debugger bridge message stability and tool context helper fixes. The latest published pre-release remains `v1.0.0-pre2`. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.
