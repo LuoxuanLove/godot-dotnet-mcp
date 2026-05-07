@@ -8,6 +8,10 @@ on:
       - dev
       - "feature/**"
       - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "hotfix/**"
+      - "release/**"
 
 jobs:
   validate-plugin-harness:

@@ -47,6 +47,8 @@ tests/
 1. Build plugin Roslyn library
 2. Run plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
 
+`validate-plugin.yml` 在 PR、`dev`、`feature/**`、`fix/**`、`docs/**`、`chore/**`、`hotfix/**` 与 `release/**` 分支推送时运行。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check。
+
 ---
 
 ## 5. 当前门禁边界
@@ -55,10 +57,12 @@ tests/
 
 - dotnet bridge library build
 - plugin headless harness required subset
+- 远程 `dev` 合并前应要求 PR、至少 1 个 approving review、最新提交重新审批、conversation resolved、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证
 
 ### 仍是软门禁或环境依赖的部分
 
 - `tests/godot_plugin_harness` 支持 `--allow-skip-missing-godot`，但 CI 入口 `scripts/test_plugin_side_roslyn.ps1` 要求真实 Godot 可执行文件；其余可发现 case 不自动进入 CI 硬门禁
+- Agent 可创建、提交和按授权推送短分支，但合并远程 `dev` 只能由作者在 GitHub PR 页面手动批准并执行；Agent 不得本地合并后推送 `dev` 或绕过 required checks
 
 ---
 
