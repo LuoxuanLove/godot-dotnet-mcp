@@ -208,7 +208,7 @@ func _create_empty_tileset(args: Dictionary) -> Dictionary:
 	if error != OK:
 		return _error("Failed to save TileSet: %s" % error_string(error))
 
-	var fs := _get_filesystem()
+	var fs = _get_filesystem()
 	if fs:
 		fs.scan()
 
