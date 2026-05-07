@@ -58,3 +58,15 @@ body:
     attributes:
       label: Suggested Verification
       description: How should maintainers verify this feature in Godot, MCP, or CI?
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution Support
+      options:
+        - label: I can help test this in a Godot .NET project
+          required: false
+        - label: I can help provide documentation or examples
+          required: false
+        - label: I am willing to submit or review a PR for this change
+          required: false
