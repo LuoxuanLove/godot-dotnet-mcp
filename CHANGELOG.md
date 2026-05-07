@@ -7,6 +7,8 @@ Target version: `1.0.0-pre3`.
 ### Changed
 
 - Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
+- Added GitHub PR and issue templates, workflow linting, and release/agent runbooks for a stricter short-branch workflow.
+- Updated the plugin release workflow to verify and create GitHub releases without producing zip package assets.
 
 ### Fixed
 

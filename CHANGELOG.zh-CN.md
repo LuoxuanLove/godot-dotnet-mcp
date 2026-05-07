@@ -7,6 +7,8 @@
 ### Changed
 
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
+- 新增 GitHub PR / Issue 模板、workflow lint 和发布 / Agent runbook，以约束更严格的短分支流程。
+- 更新插件发布工作流：只执行验证并创建 GitHub Release，不再产出 zip 包资产。
 
 ### Fixed
 
