@@ -13,7 +13,20 @@ on:
       - "hotfix/**"
       - "release/**"
 
+permissions:
+  contents: read
+
 jobs:
+  block-non-dev-pr:
+    if: github.event_name == 'pull_request' && github.base_ref != 'dev'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Block non-dev PR target
+        run: |
+          echo "::error::All pull requests must target dev. Change the PR base branch to dev before merging."
+          exit 1
+
   validate-plugin-harness:
     runs-on: windows-latest
 
