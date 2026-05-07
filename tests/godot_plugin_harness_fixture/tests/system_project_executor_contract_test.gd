@@ -20,7 +20,7 @@ class FakeBridge extends RefCounted:
 	func get_tool_loader():
 		return _tool_loader
 
-	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
 		match tool_name:
 			"editor_status":
 				if str(args.get("action", "")) == "get_godot_path":
@@ -158,11 +158,16 @@ class FakeBridge extends RefCounted:
 
 
 class FakeFailingRunBridge extends FakeBridge:
-	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
 		if tool_name == "scene_run":
 			scene_run_actions.append(str(args.get("action", "")))
 			return error("Editor interface not available")
 		return super.call_atomic(tool_name, args)
+
+
+class FakeEmptyCollectBridge extends FakeBridge:
+	func collect_files(_pattern: String) -> Array:
+		return []
 
 
 class FakeToolLoader extends RefCounted:
@@ -176,8 +181,24 @@ class FakeToolLoader extends RefCounted:
 		return {"status": "ready", "tool_count": 115, "exposed_tool_count": 18, "last_error": ""}
 
 
+class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
+	var last_args: Dictionary = {}
+
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
+		if tool_name != "filesystem_directory":
+			return error("Unexpected atomic tool: %s" % tool_name)
+		last_args = args.duplicate(true)
+		return success({"files": ["res://Player.gd"]})
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	_prepare_temp_root()
+	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
+	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
+	if atomic_files.size() != 1:
+		return _failure("AtomicBridge.collect_files should return files from filesystem_directory.")
+	if str(atomic_collect_bridge.last_args.get("path", "")) != "res://":
+		return _failure("AtomicBridge.collect_files should pass res:// as the filesystem_directory root path.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var script_path := TEMP_ROOT.path_join("ConfigResource.cs")
 	var scene_path := TEMP_ROOT.path_join("NodeScriptScene.tscn")
@@ -266,6 +287,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities.editor_context should expose the current editor session identity.")
 	if bool(context_identity.get("safe_to_terminate", true)) or bool(context_identity.get("external_validation_process", true)):
 		return _failure("runtime_capabilities.editor_context should mark the current editor process as non-terminable and non-external.")
+
+	var empty_executor = SystemProjectExecutorScript.new()
+	empty_executor.bridge = FakeEmptyCollectBridge.new(FakeToolLoader.new())
+	empty_executor.configure_runtime({})
+	var empty_reference_audit: Dictionary = empty_executor.execute("resource_reference_audit", {})
+	if not bool(empty_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should return structured diagnostics when project-level collection is empty.")
+	var empty_audit_data: Dictionary = empty_reference_audit.get("data", {})
+	if int(empty_audit_data.get("scanned_file_count", -1)) != 0:
+		return _failure("resource_reference_audit empty-scope fixture should report scanned_file_count=0.")
+	if bool(empty_audit_data.get("valid_scan_scope", true)):
+		return _failure("resource_reference_audit should mark empty project-level scans as invalid scan scope.")
+	if str(empty_audit_data.get("risk_level", "")) == "clean":
+		return _failure("resource_reference_audit should not report clean when no files were scanned.")
+	if str(empty_audit_data.get("scan_status", "")) != "invalid_scan_scope":
+		return _failure("resource_reference_audit should expose invalid_scan_scope for empty project-level scans.")
+	if int(empty_audit_data.get("issue_count", -1)) != 0:
+		return _failure("resource_reference_audit should keep resource issue_count separate from scan diagnostics.")
+	if not _has_diagnostic_code(empty_audit_data.get("enumeration_diagnostics", []), "resource_reference_scan_scope_empty"):
+		return _failure("resource_reference_audit should include a stable empty scan diagnostic code.")
+	var empty_project_state: Dictionary = empty_executor.execute("project_state", {})
+	if not bool(empty_project_state.get("success", false)):
+		return _failure("project_state should succeed while reporting suspect file enumeration.")
+	var empty_project_data: Dictionary = empty_project_state.get("data", {})
+	if bool(empty_project_data.get("valid_file_enumeration", true)):
+		return _failure("project_state should mark empty script and scene enumeration as suspect.")
+	if str(empty_project_data.get("file_enumeration_status", "")) != "suspect":
+		return _failure("project_state should expose suspect file_enumeration_status for empty script and scene enumeration.")
+	if not _has_diagnostic_code(empty_project_data.get("enumeration_diagnostics", []), "project_file_enumeration_empty"):
+		return _failure("project_state should include a stable empty project enumeration diagnostic code.")
 
 	var layout_result: Dictionary = executor.execute("userdata_maintenance", {"action": "ensure_layout"})
 	if not bool(layout_result.get("success", false)):
@@ -368,6 +419,13 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 func _has_issue_type(issues: Array, issue_type: String) -> bool:
 	for issue in issues:
 		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
+			return true
+	return false
+
+
+func _has_diagnostic_code(diagnostics: Array, code: String) -> bool:
+	for diagnostic in diagnostics:
+		if diagnostic is Dictionary and str((diagnostic as Dictionary).get("code", "")) == code:
 			return true
 	return false
 

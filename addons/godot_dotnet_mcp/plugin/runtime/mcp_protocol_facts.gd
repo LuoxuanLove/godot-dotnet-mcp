@@ -1,6 +1,5 @@
 @tool
 extends RefCounted
-class_name MCPProtocolFacts
 
 const FACTS_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.json"
 
@@ -90,7 +89,7 @@ static func _load_facts() -> Dictionary:
 static func _default_facts() -> Dictionary:
 	return {
 		"protocol_version": "2025-06-18",
-		"tool_schema_version": "2026-05-03.8",
+		"tool_schema_version": "2026-05-03.9",
 		"server_name": "godot-dotnet-mcp",
 		"server_version": "1.0.0-pre3",
 		"error_codes": {
