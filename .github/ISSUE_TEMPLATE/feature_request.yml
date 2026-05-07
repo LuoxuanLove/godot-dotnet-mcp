@@ -1,0 +1,60 @@
+name: Feature Request
+description: Suggest a Godot .NET MCP capability or improvement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and pull requests for duplicates
+          required: true
+        - label: This request is specific to Godot .NET MCP, not Mechoes or OrbitPilot
+          required: true
+        - label: I checked the existing documentation and tool list
+          required: true
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      options:
+        - New MCP tool
+        - Existing tool enhancement
+        - Editor automation
+        - Runtime control
+        - Scene/script/resource analysis
+        - Documentation
+        - CI / release workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Use Case
+      description: What workflow or limitation should this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired behavior and expected inputs/outputs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Existing tools, workarounds, or approaches you tried.
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Suggested Verification
+      description: How should maintainers verify this feature in Godot, MCP, or CI?

@@ -1,0 +1,35 @@
+name: lint-workflows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  push:
+    branches:
+      - dev
+      - "feature/**"
+      - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "hotfix/**"
+      - "release/**"
+    paths:
+      - ".github/workflows/**"
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install actionlint
+        shell: bash
+        run: |
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.10/scripts/download-actionlint.bash)
+
+      - name: Run actionlint
+        shell: bash
+        run: ./actionlint -color

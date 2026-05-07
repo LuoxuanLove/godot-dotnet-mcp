@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Godot .NET MCP documentation
+    url: https://github.com/LuoxuanLove/godot-dotnet-mcp/tree/dev/docs
+    about: Check the docs before opening a new issue.
