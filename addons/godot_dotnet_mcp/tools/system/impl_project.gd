@@ -13,6 +13,16 @@ const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/r
 
 var bridge
 var _runtime_context: Dictionary = {}
+
+const _PROJECT_FILE_SCAN_ROOT := "res://"
+const _RESOURCE_AUDIT_SCAN_GLOBS: Array[String] = ["*.tscn", "*.tres"]
+const _PROJECT_STATE_SCAN_GLOBS: Array[String] = ["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"]
+const _SCAN_RECOVERY_SUGGESTIONS: Array[String] = [
+	"Call system_project_files(action=scan) to refresh the Godot FileSystem.",
+	"Reload the MCP plugin and retry the project-level scan.",
+	"Verify the project path and scan glob match the expected resources.",
+	"Retry resource_reference_audit with an explicit .tscn or .tres path."
+]
 var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
@@ -33,7 +43,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, and runtime capability bits. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -50,7 +60,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "resource_reference_audit",
-			"description": "RESOURCE REFERENCE AUDIT: Project-level scan for .tscn/.tres UID + fallback path consistency and C# [GlobalClass] Resource script references. Reports stale UID/cache/path issues separately from C# build errors so agents can fix scenes/resources even when dotnet build passes. Optional path limits the audit to one .tscn/.tres file; include_warnings defaults to true.",
+			"description": "RESOURCE REFERENCE AUDIT: Project-level scan for .tscn/.tres UID + fallback path consistency and C# [GlobalClass] Resource script references. Reports stale UID/cache/path issues separately from C# build errors so agents can fix scenes/resources even when dotnet build passes. Empty project-level scans are reported with scan_status=invalid_scan_scope, valid_scan_scope=false, and enumeration_diagnostics instead of being treated as clean. Optional path limits the audit to one .tscn/.tres file; include_warnings defaults to true.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -197,17 +207,34 @@ func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
 	var target_path := str(args.get("path", "")).strip_edges()
 	var include_warnings := bool(args.get("include_warnings", true))
 	var paths: Array[String] = []
+	var scan_globs: Array[String] = []
+	var enumeration_diagnostics: Array = []
+	var scan_status := "ok"
+	var valid_scan_scope := true
+	var scan_counts := {}
 	if not target_path.is_empty():
 		if not (target_path.ends_with(".tscn") or target_path.ends_with(".tres")):
 			return bridge.error("resource_reference_audit path must be a .tscn or .tres file")
 		if not FileAccess.file_exists(target_path):
 			return bridge.error("Resource file not found: %s" % target_path)
 		paths.append(target_path)
+		scan_status = "explicit_path"
 	else:
-		for scene_path in bridge.collect_files("*.tscn"):
+		scan_globs = _RESOURCE_AUDIT_SCAN_GLOBS.duplicate()
+		for scene_path in _collect_project_files("*.tscn"):
 			paths.append(str(scene_path))
-		for resource_path in bridge.collect_files("*.tres"):
+		for resource_path in _collect_project_files("*.tres"):
 			paths.append(str(resource_path))
+		scan_counts = {"*.tscn": _count_matching_paths(paths, ".tscn"), "*.tres": _count_matching_paths(paths, ".tres")}
+		if paths.is_empty():
+			valid_scan_scope = false
+			scan_status = "invalid_scan_scope"
+			enumeration_diagnostics.append(_build_file_enumeration_diagnostic(
+				"resource_reference_scan_scope_empty",
+				"Project-level resource reference audit found no .tscn or .tres files, so the result cannot prove resource references are clean.",
+				scan_globs,
+				scan_counts
+			))
 	paths.sort()
 
 	var issues: Array = []
@@ -234,18 +261,28 @@ func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
 	var risk_level := "clean"
 	if error_count > 0:
 		risk_level = "error"
-	elif warning_count > 0:
+	elif warning_count > 0 or not valid_scan_scope:
 		risk_level = "warning"
+	var scan_warning_count := enumeration_diagnostics.size()
 	return bridge.success({
 		"path": target_path,
 		"scanned_file_count": paths.size(),
 		"files_with_issues": files_with_issues,
 		"issue_count": issues.size(),
 		"error_count": error_count,
-		"warning_count": warning_count,
+		"warning_count": warning_count + scan_warning_count,
+		"resource_warning_count": warning_count,
+		"scan_warning_count": scan_warning_count,
 		"risk_level": risk_level,
+		"scan_status": scan_status,
+		"valid_scan_scope": valid_scan_scope,
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"scan_globs": scan_globs,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"enumeration_diagnostics": enumeration_diagnostics,
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate(),
 		"build_status": "dotnet_build_may_pass",
-		"summary": _build_resource_reference_summary(risk_level, error_count, warning_count),
+		"summary": _build_resource_reference_summary(risk_level, error_count, warning_count + scan_warning_count, valid_scan_scope),
 		"issues": issues,
 		"files": file_results
 	})
@@ -438,7 +475,68 @@ func _csharp_script_has_global_class_attribute(script_path: String) -> bool:
 	return content.find("[GlobalClass") != -1 or content.find("GlobalClassAttribute") != -1
 
 
-func _build_resource_reference_summary(risk_level: String, error_count: int, warning_count: int) -> String:
+func _collect_project_files(pattern: String) -> Array[String]:
+	var collected: Array[String] = []
+	for raw_path in bridge.collect_files(pattern):
+		collected.append(str(raw_path))
+	collected.sort()
+	return collected
+
+
+func _count_matching_paths(paths: Array[String], extension: String) -> int:
+	var count := 0
+	for path in paths:
+		if str(path).ends_with(extension):
+			count += 1
+	return count
+
+
+func _build_file_enumeration_diagnostic(code: String, message: String, scan_globs: Array, counts: Dictionary = {}) -> Dictionary:
+	return {
+		"severity": "warning",
+		"code": code,
+		"type": code,
+		"message": message,
+		"source": "filesystem_directory.get_files",
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"scan_globs": scan_globs.duplicate(),
+		"counts": counts.duplicate(true),
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate()
+	}
+
+
+func _build_file_enumeration_status(gd_scripts: Array, cs_scripts: Array, scene_paths: Array, resource_paths: Array) -> Dictionary:
+	var counts := {
+		"gd_scripts": gd_scripts.size(),
+		"cs_scripts": cs_scripts.size(),
+		"scripts": gd_scripts.size() + cs_scripts.size(),
+		"scenes": scene_paths.size(),
+		"resources": resource_paths.size()
+	}
+	var diagnostics: Array = []
+	if int(counts.get("scripts", 0)) == 0 and int(counts.get("scenes", 0)) == 0:
+		diagnostics.append(_build_file_enumeration_diagnostic(
+			"project_file_enumeration_empty",
+			"Project file enumeration found no scripts or scenes, so project_state file counts may be incomplete even if explicit path tools still work.",
+			_PROJECT_STATE_SCAN_GLOBS,
+			counts
+		))
+	return {
+		"status": "suspect" if not diagnostics.is_empty() else "ok",
+		"valid": diagnostics.is_empty(),
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"scan_globs": _PROJECT_STATE_SCAN_GLOBS.duplicate(),
+		"counts": counts,
+		"diagnostics": diagnostics,
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate()
+	}
+
+
+func _build_resource_reference_summary(risk_level: String, error_count: int, warning_count: int, valid_scan_scope: bool = true) -> String:
+	if not valid_scan_scope:
+		return "Resource reference audit scanned no project files; the result is inconclusive rather than clean. Refresh the Godot FileSystem or retry with an explicit resource path."
 	if risk_level == "error":
 		return "Resource references contain %d error(s); scene/resource loading may fail even if dotnet build passes." % error_count
 	if risk_level == "warning":
@@ -905,15 +1003,16 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	var runtime_summary := _get_runtime_summary()
 	var recent_errors := _get_runtime_errors(error_limit)
 	var recent_warnings := _get_runtime_warnings(min(error_limit, 10))
-	var gd_scripts: Array = bridge.collect_files("*.gd")
-	var cs_scripts: Array = bridge.collect_files("*.cs")
-	var scene_paths: Array = bridge.collect_files("*.tscn")
-	var resources_tres: Array = bridge.collect_files("*.tres")
-	var resources_res: Array = bridge.collect_files("*.res")
+	var gd_scripts: Array[String] = _collect_project_files("*.gd")
+	var cs_scripts: Array[String] = _collect_project_files("*.cs")
+	var scene_paths: Array[String] = _collect_project_files("*.tscn")
+	var resources_tres: Array[String] = _collect_project_files("*.tres")
+	var resources_res: Array[String] = _collect_project_files("*.res")
 	var all_resources: Array = []
 	all_resources.append_array(resources_tres)
 	all_resources.append_array(resources_res)
 	all_resources.sort()
+	var file_enumeration := _build_file_enumeration_status(gd_scripts, cs_scripts, scene_paths, all_resources)
 
 	var compile_error_count := 0
 	var dotnet_errors_data: Dictionary = {}
@@ -946,6 +1045,10 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		"scene_paths": scene_paths,
 		"script_paths": gd_scripts + cs_scripts,
 		"resource_paths": all_resources,
+		"file_enumeration_status": str(file_enumeration.get("status", "ok")),
+		"valid_file_enumeration": bool(file_enumeration.get("valid", true)),
+		"file_enumeration": file_enumeration,
+		"enumeration_diagnostics": file_enumeration.get("diagnostics", []),
 		"has_dotnet": bool(dotnet_result.get("success", false)),
 		"dotnet_project_count": int(dotnet_data.get("count", 0)),
 		"dotnet_projects": dotnet_data.get("projects", []),

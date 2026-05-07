@@ -254,7 +254,7 @@ func extract_array(result: Dictionary, key: String) -> Array:
 
 
 func collect_files(filter: String) -> Array:
-	var result := call_atomic("filesystem_directory", {"action": "get_files", "filter": filter, "recursive": true})
+	var result := call_atomic("filesystem_directory", {"action": "get_files", "path": "res://", "filter": filter, "recursive": true})
 	var files = extract_array(result, "files")
 	return files
 
