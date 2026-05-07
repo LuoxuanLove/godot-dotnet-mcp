@@ -11,6 +11,7 @@
 - 更新插件发布工作流：只执行验证并创建 GitHub Release，不再产出 zip 包资产。
 - 新增非 `dev` 目标 PR 的 CI 反馈、发布 preflight 检查、`next` 草稿发布说明自动化，并强化 issue 诊断表单。
 - 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可在不引入额外 machine user 的前提下提交基于 patch 的短分支 PR。
+- 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
 
 ### Fixed
 
