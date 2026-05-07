@@ -4,6 +4,10 @@
 
 目标版本：`1.0.0-pre3`。
 
+### Changed
+
+- 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
+
 ### Fixed
 
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。

@@ -4,6 +4,10 @@
 
 Target version: `1.0.0-pre3`.
 
+### Changed
+
+- Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
+
 ### Fixed
 
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
