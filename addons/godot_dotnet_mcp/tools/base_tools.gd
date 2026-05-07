@@ -115,7 +115,7 @@ func _parse_gdscript_metadata(path: String, content: String) -> Dictionary:
 	return _script_parser.parse_gdscript_metadata(path, content)
 
 
-func _get_editor_interface() -> EditorInterface:
+func _get_editor_interface():
 	if _editor_interface_override != null:
 		return _editor_interface_override
 	if not Engine.is_editor_hint():
@@ -123,7 +123,7 @@ func _get_editor_interface() -> EditorInterface:
 	return _node_utils.get_editor_interface()
 
 
-func _get_edited_scene_root() -> Node:
+func _get_edited_scene_root():
 	if _scene_root_override != null:
 		return _scene_root_override
 	if not Engine.is_editor_hint():
@@ -131,7 +131,7 @@ func _get_edited_scene_root() -> Node:
 	return _node_utils.get_edited_scene_root()
 
 
-func _get_selection() -> EditorSelection:
+func _get_selection():
 	if _selection_override != null:
 		return _selection_override
 	if not Engine.is_editor_hint():
@@ -139,7 +139,7 @@ func _get_selection() -> EditorSelection:
 	return _node_utils.get_selection()
 
 
-func _get_filesystem() -> EditorFileSystem:
+func _get_filesystem():
 	if _filesystem_override != null:
 		return _filesystem_override
 	if not Engine.is_editor_hint():

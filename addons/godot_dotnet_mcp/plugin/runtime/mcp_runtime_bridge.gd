@@ -172,7 +172,9 @@ func _send(channel: String, payload: Dictionary) -> void:
 		_flush_to_disk()
 	if not EngineDebugger.is_active():
 		return
-	EngineDebugger.send_message(channel, [payload])
+	var debugger_payload := payload.duplicate(true)
+	debugger_payload["_mcp_channel"] = channel
+	EngineDebugger.send_message("%s:emit" % channel, [debugger_payload])
 
 
 func _get_current_scene_path() -> String:
