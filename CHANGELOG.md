@@ -10,6 +10,7 @@ Target version: `1.0.0-pre3`.
 - Added GitHub PR and issue templates, workflow linting, and release/agent runbooks for a stricter short-branch workflow.
 - Updated the plugin release workflow to verify and create GitHub releases without producing zip package assets.
 - Added CI feedback for PRs that target branches other than `dev`, release preflight checks, `next` draft release notes automation, and stronger issue diagnostics forms.
+- Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests without a separate machine user.
 
 ### Fixed
 
