@@ -1,0 +1,50 @@
+name: Workflow / Process Change
+description: Propose a CI, branching, release, or agent workflow change
+title: "[Process]: "
+labels: ["process", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I checked the current branch and PR workflow documentation
+          required: true
+        - label: This request does not require direct pushes to `dev`
+          required: true
+        - label: This request does not ask agents to merge protected branches
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Process Area
+      options:
+        - Branching / PR gate
+        - CI validation
+        - Release workflow
+        - Agent / bot account
+        - Changelog / documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risks / Rollback
+      description: What could break, and how should this be reverted?
