@@ -13,6 +13,7 @@
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
+- 修复 TileMap 工具脚本解析问题，使 TileMap 工具域可在 MCP 工具注册期间正常实例化。
 
 ## 1.0.0-pre2 - 2026-05-06
 

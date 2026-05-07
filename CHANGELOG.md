@@ -13,6 +13,7 @@ Target version: `1.0.0-pre3`.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
+- Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
 
 ## 1.0.0-pre2 - 2026-05-06
 
