@@ -31,7 +31,7 @@ tools/system/
 连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
 
 ### 项目级
-- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位。
+- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位；同时返回 `file_enumeration_status`、`valid_file_enumeration`、`file_enumeration` 与 `enumeration_diagnostics`，用于区分“项目确实没有匹配文件”和“文件枚举范围可疑”。
 - `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要、runtime control 状态与 `runtime_capabilities` 能力位。
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
@@ -70,7 +70,7 @@ tools/system/
 这些工具当前由 `tools/system/impl_script.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `script_*`、`scene_*` 与 `filesystem_*` 原子工具。
 
 ### 项目资源审计级
-- `system_resource_reference_audit`：扫描项目内 `.tscn` / `.tres` 文本资源，检查 `ExtResource` 的 UID 与 fallback path 是否能被当前资源数据库解析，并检查 `.tres` 中 C# custom `Resource` 脚本路径、`script_class`、文件名 / 类名和直接基类风险。该工具会把问题标记为 `dotnet_build_may_pass`，用于区分“C# 构建通过但场景 / 资源引用仍不一致”的加载风险。
+- `system_resource_reference_audit`：扫描项目内 `.tscn` / `.tres` 文本资源，检查 `ExtResource` 的 UID 与 fallback path 是否能被当前资源数据库解析，并检查 `.tres` 中 C# custom `Resource` 脚本路径、`script_class`、文件名 / 类名和直接基类风险。该工具会把问题标记为 `dotnet_build_may_pass`，用于区分“C# 构建通过但场景 / 资源引用仍不一致”的加载风险。项目级扫描若没有枚举到任何 `.tscn` / `.tres`，会返回 `scan_status=invalid_scan_scope`、`valid_scan_scope=false`、`scan_warning_count` 与 `enumeration_diagnostics`，表示结果不可证明资源引用 clean；显式传入单个 `.tscn` / `.tres` 路径时则返回 `scan_status=explicit_path`。
 
 ### 索引级
 - `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，长会话中文件变化时会自动重建，必要时仍可 `refresh_index=true` 强制刷新。
