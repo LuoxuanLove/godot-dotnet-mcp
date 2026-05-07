@@ -57,7 +57,7 @@ tests/
 
 - dotnet bridge library build
 - plugin headless harness required subset
-- 远程 `dev` 合并前应要求 PR、至少 1 个 approving review、最新提交重新审批、conversation resolved、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证
+- 远程 `dev` 合并前应要求 PR、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证；当前 ruleset 不要求 approving review
 
 ### 仍是软门禁或环境依赖的部分
 
