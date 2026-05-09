@@ -24,8 +24,10 @@ tests/
 
 .github/workflows/
 ├─ actions-bot-relay.yml
+├─ dotnet-build.yml
 ├─ draft-release-notes.yml
 ├─ lint-workflows.yml
+├─ pr-policy.yml
 ├─ publish-plugin.yml
 └─ validate-plugin.yml
 ```
@@ -37,7 +39,7 @@ tests/
 - Plugin headless harness 已接入 CI 的 required subset
 - 多个合约测试 case 仍可被 harness 发现，但不等于当前硬门禁
 - `plugin_entrypoint_contracts` 通过 editor probe 运行，退出时的 editor shutdown warning 在 harness 中按非致命噪音处理
-- PR 目标分支、发布 tag 版本一致性和下一版 draft release 已进入 workflow 管理
+- PR 目标分支、快速 .NET build、发布 tag 版本一致性和下一版 draft release 已进入 workflow 管理
 - `actions-bot-relay` 可用 `github-actions[bot]` 从维护者提供的 patch 创建短分支和 PR
 
 ---
@@ -47,22 +49,24 @@ tests/
 当前工作流：
 
 - `.github/workflows/actions-bot-relay.yml`
+- `.github/workflows/dotnet-build.yml`
 - `.github/workflows/draft-release-notes.yml`
 - `.github/workflows/lint-workflows.yml`
+- `.github/workflows/pr-policy.yml`
 - `.github/workflows/publish-plugin.yml`
 - `.github/workflows/validate-plugin.yml`
 
 当前包含：
 
 1. `actions-bot-relay`: 手动接收 base64 patch，由 `github-actions[bot]` 创建 `actions-bot/*` 分支和指向 `dev` 的 PR
-2. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
-3. `validate-plugin`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`
-4. `validate-plugin-harness`: Build plugin Roslyn library
-5. `validate-plugin-harness`: Run plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
+2. `pr-policy`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`
+3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
+4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
+5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
 6. `publish-plugin`: tag 发布前执行版本一致性 preflight，并创建不含包资产的 GitHub Release
 7. `draft-release-notes`: `dev` 更新后创建或刷新 `next` draft release，作为下一版说明草稿
 
-`validate-plugin.yml` 在 PR、`dev`、`feature/**`、`fix/**`、`docs/**`、`chore/**`、`hotfix/**` 与 `release/**` 分支推送时运行。`lint-workflows.yml` 在 workflow 文件变更时运行。`actions-bot-relay` 创建 PR 后会显式触发 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check。
+`validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml` 和 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
 
 ---
 
@@ -72,7 +76,8 @@ tests/
 
 - workflow YAML syntax lint（仅 workflow 文件变更时）
 - PR 目标分支检查，错误目标分支会失败并提示改投 `dev`
-- dotnet bridge library build
+- dotnet bridge library、harness runner 与 fixture build
+- refactor guardrails
 - plugin headless harness required subset
 - tag 发布前的 `plugin.cfg`、tag 和中英文 changelog 版本一致性检查
 - 远程 `dev` 合并前应要求 PR、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证；当前 ruleset 不要求 approving review
@@ -106,4 +111,4 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 
 ## 7. 结论
 
-当前 harness 与 CI 已经形成基础闭环，门禁边界也已清晰：workflow lint 覆盖 workflow 语法，required subset 走 CI，PR 目标和发布版本一致性由 workflow 提供早期反馈，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。
+当前 harness 与 CI 已经形成分层闭环：`pr-policy` 提前拦截错误目标分支，`dotnet-build` 提供快速 .NET build 和 guardrail 反馈，`validate-plugin-harness` 保持稳定 required check 名称并运行重型 Godot harness，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。

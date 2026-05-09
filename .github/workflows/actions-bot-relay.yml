@@ -160,6 +160,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          gh workflow run dotnet-build.yml --ref "$branch"
           gh workflow run validate-plugin.yml --ref "$branch"
 
           if git diff --name-only "origin/dev...HEAD" | grep -q '^\.github/workflows/'; then

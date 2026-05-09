@@ -19,7 +19,7 @@
 - Agent 可在验证通过后提交并推送当前短分支。
 - 每个短分支和 PR 必须只包含该分支目标范围内的修改。
 - 如果发现夹带其它任务、其它修复或历史未合并提交，应拆分为独立 PR，或从最新 `origin/dev` 重建干净分支。
-- 所有 PR 必须指向 `dev`；`validate-plugin` 会对错误目标分支给出失败反馈。
+- 所有 PR 必须指向 `dev`；`pr-policy` 会对错误目标分支给出失败反馈。
 - `actions-bot-relay` 创建的短分支必须使用 `actions-bot/*` 前缀。
 
 ---
@@ -51,7 +51,7 @@
 执行边界：
 
 - workflow 只接受 patch，不执行任意用户脚本。
-- workflow 会主动触发 `validate-plugin.yml`；如果 patch 修改 `.github/workflows/**`，还会触发 `lint-workflows.yml`。
+- workflow 会主动触发 `dotnet-build.yml` 和 `validate-plugin.yml`；如果 patch 修改 `.github/workflows/**`，还会触发 `lint-workflows.yml`。
 - 因为 `GITHUB_TOKEN` 触发的 push/PR 事件不会像普通用户 push 一样自动触发所有 workflow，relay 必须显式触发验证 workflow。
 - 维护者仍需在 GitHub PR 页面审查、批准并合并。
 
