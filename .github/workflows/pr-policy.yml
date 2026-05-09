@@ -13,8 +13,10 @@ jobs:
 
     steps:
       - name: Require dev target branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [[ "${{ github.base_ref }}" != "dev" ]]; then
+          if [[ "$BASE_REF" != "dev" ]]; then
             echo "::error::All pull requests must target dev. Change the PR base branch to dev before merging."
             exit 1
           fi
