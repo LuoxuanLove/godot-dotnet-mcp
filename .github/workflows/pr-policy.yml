@@ -1,0 +1,20 @@
+name: pr-policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-target-dev:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require dev target branch
+        run: |
+          if [[ "${{ github.base_ref }}" != "dev" ]]; then
+            echo "::error::All pull requests must target dev. Change the PR base branch to dev before merging."
+            exit 1
+          fi
