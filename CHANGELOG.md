@@ -8,7 +8,7 @@
 - Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
 - Added a stable Agent-callable plugin lifecycle reload path through `system_plugin_reload(action="full_reload_plugin")`, plus freshness metadata in health snapshots to compare the running plugin instance with disk files after addon sync.
 - Added localized Tools-page metadata and CI required-subset coverage for the plugin freshness and lifecycle reload contracts.
-- Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the local/canvas/viewport/screen boundary used by Dock popup placement.
+- Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
 
 ### Fixed
 
