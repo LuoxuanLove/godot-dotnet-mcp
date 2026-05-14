@@ -97,13 +97,30 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var user_domain = _find_child_by_metadata(root, "domain", "user")
 	if core_domain == null or user_domain == null:
 		return _failure("Tools tab should render presentation domain roots.")
-	var expected_context_position := tool_tree.get_screen_transform() * Vector2(24, 24)
-	var actual_context_position: Variant = _instance.call("_get_tree_context_menu_screen_position", Vector2(24, 24))
+	var context_local_position_value: Variant = _get_item_local_center(tool_tree, core_domain)
+	if context_local_position_value == null:
+		return _failure("Tools tab rendering test could not resolve a local right-click position for the context menu contract.")
+	var context_local_position := context_local_position_value as Vector2
+	var expected_context_position := tool_tree.get_screen_transform() * context_local_position
+	var actual_context_position: Variant = _instance.call("_get_tree_context_menu_screen_position", context_local_position)
 	if not (actual_context_position is Vector2) or (actual_context_position as Vector2).distance_to(expected_context_position) > 2.0:
 		return _failure("Tools tab context menu position should be transformed through ToolTree.get_screen_transform().")
-	var popup_rect: Variant = _instance.call("_show_tree_context_menu", core_domain, expected_context_position)
+	var popup_rect: Variant = _instance.call("_show_tree_context_menu", user_domain, expected_context_position)
 	if not (popup_rect is Rect2i) or (popup_rect as Rect2i).position != Vector2i(int(expected_context_position.x), int(expected_context_position.y)):
 		return _failure("Tools tab context PopupMenu should pass the tested screen coordinate helper result into popup(Rect2i).")
+	var initial_popup_menu := _find_context_popup(_instance)
+	if initial_popup_menu == null:
+		return _failure("Tools tab should create a context popup for right-clicked tree items.")
+	initial_popup_menu.hide()
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	right_click.position = context_local_position
+	_instance.call("_on_tree_gui_input", right_click)
+	await tree.process_frame
+	var event_popup_menu := _find_context_popup(_instance)
+	if event_popup_menu == null or str(_instance.call("_get_context_menu_english_id")) != "core":
+		return _failure("Tools tab real right-click path should open the context PopupMenu for the hit TreeItem.")
 	await tree.process_frame
 	var popup_nodes := _collect_context_popups(_instance)
 	if popup_nodes.size() != 1:
@@ -324,18 +341,34 @@ func _find_child_by_metadata(parent: TreeItem, kind: String, key: String) -> Tre
 
 
 func _find_context_popup(root: Node) -> PopupMenu:
+	if root is PopupMenu:
+		return root as PopupMenu
 	for child in root.get_children():
-		if child is PopupMenu:
-			return child as PopupMenu
+		var found := _find_context_popup(child)
+		if found != null:
+			return found
 	return null
+
+
+func _get_item_local_center(tree: Tree, item: TreeItem) -> Variant:
+	var item_rect := tree.get_item_area_rect(item, 0)
+	if item_rect.size.x <= 0.0 or item_rect.size.y <= 0.0:
+		return null
+	return item_rect.position + item_rect.size * 0.5
 
 
 func _collect_context_popups(root: Node) -> Array:
 	var popups: Array = []
+	_collect_context_popups_recursive(root, popups)
+	return popups
+
+
+func _collect_context_popups_recursive(root: Node, popups: Array) -> void:
 	for child in root.get_children():
 		if child is PopupMenu or child is PopupPanel:
 			popups.append(child)
-	return popups
+			continue
+		_collect_context_popups_recursive(child, popups)
 
 
 func _failure(message: String) -> Dictionary:

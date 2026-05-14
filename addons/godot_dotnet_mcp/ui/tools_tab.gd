@@ -704,7 +704,7 @@ func _sync_item_collapsed_to_settings(item: TreeItem, want_collapsed: bool) -> v
 		tree_collapse_changed.emit(kind, key, want_collapsed)
 
 
-func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> Rect2i:
+func _show_tree_context_menu(item: TreeItem, screen_position: Vector2) -> Rect2i:
 	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
 	if not (metadata is Dictionary):
 		return Rect2i()
@@ -727,7 +727,7 @@ func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> Rect2i:
 				_add_context_menu_item(_localization.get_text("btn_delete_user_tool"), _CTX_DELETE_TOOL)
 		_:
 			pass
-	var popup_rect := _get_tree_context_menu_popup_rect(global_pos)
+	var popup_rect := _get_tree_context_menu_popup_rect(screen_position)
 	_context_menu.popup(popup_rect)
 	return popup_rect
 
