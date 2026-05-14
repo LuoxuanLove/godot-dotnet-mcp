@@ -7,6 +7,64 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+function Format-Duration {
+    param(
+        [TimeSpan]$Duration
+    )
+
+    return "{0:n1}s" -f $Duration.TotalSeconds
+}
+
+function New-TimingRecord {
+    param(
+        [string]$Name,
+        [TimeSpan]$Duration
+    )
+
+    return [pscustomobject]@{
+        Name = $Name
+        Duration = $Duration
+    }
+}
+
+function Write-HarnessTimingSummary {
+    param(
+        [object[]]$Timings,
+        [TimeSpan]$TotalDuration
+    )
+
+    Write-Host ""
+    Write-Host "Harness timing summary:"
+    Write-Host "  Total: $(Format-Duration -Duration $TotalDuration)"
+    foreach ($timing in $Timings) {
+        Write-Host "  - $($timing.Name): $(Format-Duration -Duration $timing.Duration)"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+        return
+    }
+
+    try {
+        $summaryLines = @(
+            "### Plugin harness timing"
+            ""
+            "Total duration: $(Format-Duration -Duration $TotalDuration)"
+            ""
+            "| Stage | Duration |"
+            "| --- | ---: |"
+        )
+
+        foreach ($timing in $Timings) {
+            $summaryLines += "| $($timing.Name) | $(Format-Duration -Duration $timing.Duration) |"
+        }
+
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $summaryLines -Encoding UTF8
+    }
+    catch {
+        Write-Warning "Unable to write GitHub Step Summary: $($_.Exception.Message)"
+    }
+}
+
 function Resolve-GodotPath {
     param(
         [string]$GodotPath
@@ -29,104 +87,19 @@ function Invoke-CommandOrThrow {
     )
 
     Write-Host "==> $Description"
-    & $Command
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Description failed with exit code $LASTEXITCODE."
-    }
-}
-
-function Format-Duration {
-    param(
-        [TimeSpan]$Duration
-    )
-
-    return "{0:hh\:mm\:ss\.fff}" -f $Duration
-}
-
-function Add-TimingRecord {
-    param(
-        [System.Collections.ArrayList]$Records,
-        [string]$Stage,
-        [string]$Name,
-        [TimeSpan]$Duration
-    )
-
-    [void]$Records.Add([pscustomobject]@{
-        Stage = $Stage
-        Name = $Name
-        Duration = $Duration
-    })
-}
-
-function Invoke-TimedCommand {
-    param(
-        [System.Collections.ArrayList]$Records,
-        [string]$Stage,
-        [string]$Description,
-        [scriptblock]$Command
-    )
-
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        Invoke-CommandOrThrow -Description $Description -Command $Command
-    }
-    finally {
-        $stopwatch.Stop()
-        Add-TimingRecord -Records $Records -Stage $Stage -Name $Description -Duration $stopwatch.Elapsed
-    }
-}
-
-function Invoke-TimedHarness {
-    param(
-        [System.Collections.ArrayList]$Records,
-        [string]$Stage,
-        [string]$Description,
-        [string[]]$ExtraArgs
-    )
-
-    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    try {
-        return Invoke-Harness -Description $Description -ExtraArgs $ExtraArgs
-    }
-    finally {
-        $stopwatch.Stop()
-        Add-TimingRecord -Records $Records -Stage $Stage -Name $Description -Duration $stopwatch.Elapsed
-    }
-}
-
-function Write-HarnessTimingSummary {
-    param(
-        [System.Collections.ArrayList]$Records,
-        [TimeSpan]$TotalDuration
-    )
-
-    Write-Host ""
-    Write-Host "Harness timing summary:"
-    Write-Host ("  Total: {0}" -f (Format-Duration -Duration $TotalDuration))
-    foreach ($record in $Records) {
-        Write-Host ("  [{0}] {1}: {2}" -f $record.Stage, $record.Name, (Format-Duration -Duration $record.Duration))
-    }
-
-    if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-        return
-    }
-
-    try {
-        $summaryLines = New-Object System.Collections.Generic.List[string]
-        $summaryLines.Add("## Plugin Harness Timing")
-        $summaryLines.Add("")
-        $summaryLines.Add(('- Total: `{0}`' -f (Format-Duration -Duration $TotalDuration)))
-        $summaryLines.Add("")
-        $summaryLines.Add("| Stage | Item | Duration |")
-        $summaryLines.Add("| --- | --- | --- |")
-        foreach ($record in $Records) {
-            $summaryLines.Add(('| {0} | {1} | `{2}` |' -f $record.Stage, $record.Name, (Format-Duration -Duration $record.Duration)))
+        & $Command
+        if ($LASTEXITCODE -ne 0) {
+            throw "$Description failed with exit code $LASTEXITCODE."
         }
-        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ($summaryLines -join [Environment]::NewLine) -Encoding UTF8
     }
-    catch {
-        Write-Warning "Failed to write GitHub Step Summary timing output: $($_.Exception.Message)"
+    finally {
+        $stopwatch.Stop()
+        Write-Host "==> $Description completed in $(Format-Duration -Duration $stopwatch.Elapsed)"
     }
+
+    return New-TimingRecord -Name $Description -Duration $stopwatch.Elapsed
 }
 
 function Get-LastJsonObject {
@@ -171,27 +144,35 @@ function Invoke-Harness {
     ) + $ExtraArgs
 
     Write-Host "==> $Description"
-    $outputLines = & dotnet @arguments 2>&1 | ForEach-Object { $_.ToString() }
-    $exitCode = $LASTEXITCODE
-    $outputText = ($outputLines -join [Environment]::NewLine).Trim()
-    $json = $null
-    if ($outputLines.Count -gt 0) {
-        $json = Get-LastJsonObject -Lines $outputLines -Description $Description
-    }
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $outputLines = & dotnet @arguments 2>&1 | ForEach-Object { $_.ToString() }
+        $exitCode = $LASTEXITCODE
+        $outputText = ($outputLines -join [Environment]::NewLine).Trim()
+        $json = $null
+        if ($outputLines.Count -gt 0) {
+            $json = Get-LastJsonObject -Lines $outputLines -Description $Description
+        }
 
-    if ($exitCode -ne 0) {
-        $details = if ([string]::IsNullOrWhiteSpace($outputText)) { "<no output>" } else { $outputText }
-        throw "$Description failed with exit code $exitCode.`n$details"
-    }
+        if ($exitCode -ne 0) {
+            $details = if ([string]::IsNullOrWhiteSpace($outputText)) { "<no output>" } else { $outputText }
+            throw "$Description failed with exit code $exitCode.`n$details"
+        }
 
-    if ($json -ne $null -and ($json.PSObject.Properties.Name -contains "success") -and -not [bool]$json.success) {
-        throw "$Description reported success=false.`n$($outputText)"
+        if ($json -ne $null -and ($json.PSObject.Properties.Name -contains "success") -and -not [bool]$json.success) {
+            throw "$Description reported success=false.`n$($outputText)"
+        }
+    }
+    finally {
+        $stopwatch.Stop()
+        Write-Host "==> $Description completed in $(Format-Duration -Duration $stopwatch.Elapsed)"
     }
 
     return [pscustomobject]@{
         ExitCode = $exitCode
         Json = $json
         Output = $outputText
+        Duration = $stopwatch.Elapsed
     }
 }
 
@@ -229,8 +210,6 @@ function Invoke-HarnessProcessCleanup {
 }
 
 $GodotExe = Resolve-GodotPath -GodotPath $GodotPath
-$scriptStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-$timingRecords = New-Object System.Collections.ArrayList
 $RequiredCases = @(
     "plugin_roslyn_service_contracts"
     "roslyn_parsing_contracts"
@@ -272,20 +251,24 @@ $RequiredCases = @(
     "tools_tab_rendering_contracts"
 )
 
+$TimingRecords = New-Object System.Collections.Generic.List[object]
+$OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
 try {
-    Invoke-TimedCommand -Records $timingRecords -Stage "build" -Description "Build plugin Roslyn library" -Command {
+    $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
         dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
-    }
+    }))
 
-    Invoke-TimedCommand -Records $timingRecords -Stage "build" -Description "Build harness runner" -Command {
+    $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build harness runner" -Command {
         dotnet build .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
-    }
+    }))
 
-    Invoke-TimedCommand -Records $timingRecords -Stage "build" -Description "Build fixture Godot C# project" -Command {
+    $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build fixture Godot C# project" -Command {
         dotnet build .\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj -c Release
-    }
+    }))
 
-    $manifestResult = Invoke-TimedHarness -Records $timingRecords -Stage "list" -Description "List harness cases" -ExtraArgs @("--list-cases")
+    $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases")
+    $TimingRecords.Add((New-TimingRecord -Name "List harness cases" -Duration $manifestResult.Duration))
     $discoveredCases = @()
     if ($manifestResult.Json -ne $null -and $manifestResult.Json.PSObject.Properties.Name -contains "discovered") {
         $discoveredCases = @($manifestResult.Json.discovered | ForEach-Object { [string]$_.name })
@@ -299,21 +282,20 @@ try {
 
     foreach ($caseName in $RequiredCases) {
         $env:GODOT_PLUGIN_HARNESS_ONLY_CASE = $caseName
-        Invoke-TimedHarness -Records $timingRecords -Stage "case" -Description "Run harness case: $caseName" -ExtraArgs @()
+        $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs @()
+        $TimingRecords.Add((New-TimingRecord -Name "Run harness case: $caseName" -Duration $caseResult.Duration))
     }
 
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
 
-    Invoke-TimedCommand -Records $timingRecords -Stage "guardrails" -Description "Validate refactor guardrails" -Command {
+    $TimingRecords.Add((Invoke-CommandOrThrow -Description "Validate refactor guardrails" -Command {
         .\scripts\validate_refactor_guardrails.ps1
-    }
+    }))
 
     Write-Host "Plugin harness verification completed successfully."
 }
 finally {
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
-    $scriptStopwatch.Stop()
-    Write-HarnessTimingSummary -Records $timingRecords -TotalDuration $scriptStopwatch.Elapsed
     Invoke-HarnessProcessCleanup
 
     $cleanupPaths = @(
@@ -331,4 +313,7 @@ finally {
     foreach ($path in $cleanupPaths) {
         Remove-IfExists -Path (Join-Path $repoRoot $path)
     }
+
+    $OverallStopwatch.Stop()
+    Write-HarnessTimingSummary -Timings $TimingRecords.ToArray() -TotalDuration $OverallStopwatch.Elapsed
 }
