@@ -11,7 +11,7 @@
 
 系统层是 Agent 的推荐起点，覆盖项目快照、项目文件树修改、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、当前场景树修改、脚本结构检查、C# 绑定审计与符号搜索，读取的是活的编辑器状态，而不是磁盘上的文件快照。
 
-连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。
+连接后可先调用 `system_help` 获取当前能力说明与 schema 版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 与 `system_editor_control(action=capture_editor)`；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。Dock 自建弹窗 UI 需要明确区分坐标空间：Control 本地点击坐标应按场景转换为 viewport 或 screen 坐标，`PopupMenu.popup(Rect2i)` 必须接收 screen 坐标，而不是 local 或 canvas global 坐标。
 
 插件侧运行态细节仍推荐通过 `plugin_runtime_state` 获取；其中 `action=get_lsp_diagnostics_status` 是详细 LSP 自检入口，而 `system_project_state(include_runtime_health=true)` 只返回轻量 `self_diagnostics`、`lsp_diagnostics` 与 `tool_loader` 健康摘要。
 
