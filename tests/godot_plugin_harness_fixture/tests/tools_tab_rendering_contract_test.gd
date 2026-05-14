@@ -37,7 +37,9 @@ class FakeLocalization extends RefCounted:
 		"tool_system_editor_state_name": "编辑器状态",
 		"tool_system_editor_log_name": "编辑器日志",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
-		"tool_system_runtime_capture_name": "运行时捕获",
+		"tool_system_runtime_step_name": "运行时步进",
+		"tool_runtime_step_name": "步进",
+		"tool_runtime_step_desc": "内部运行时步进：应用可选运行时输入、等待指定帧数，并按需捕获一帧画面。",
 		"tool_runtime_capture_name": "捕获",
 		"tool_runtime_capture_desc": "内部运行时捕获：通过已启用的运行时会话，将正在运行游戏的视口捕获为 PNG。",
 		"tool_project_info_name": "Project Info",
@@ -137,30 +139,29 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var editor_state_tool = _find_child_by_metadata(system_category, "tool", "system_editor_state")
 	var system_tool = _find_child_by_metadata(system_category, "tool", "system_project_state")
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
-	var runtime_capture_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_capture")
-	var runtime_input_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_input")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or runtime_control_tool == null or runtime_capture_tool == null or runtime_input_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
 	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or userdata_tool.get_text(0) != "用户数据维护":
 		return _failure("Tools tab should localize newly added system tool rows.")
-	var runtime_capture_atomic = _find_child_by_metadata(runtime_capture_tool, "atomic", "runtime_capture")
-	if runtime_capture_tool.get_text(0) != "运行时捕获" or runtime_capture_atomic == null or runtime_capture_atomic.get_text(0) != "捕获":
+	var runtime_step_atomic = _find_child_by_metadata(runtime_step_tool, "atomic", "runtime_step")
+	var runtime_capture_atomic = _find_child_by_metadata(runtime_step_tool, "atomic", "runtime_capture")
+	if runtime_step_tool.get_text(0) != "运行时步进" or runtime_step_atomic == null or runtime_step_atomic.get_text(0) != "步进" or runtime_capture_atomic == null or runtime_capture_atomic.get_text(0) != "捕获":
 		return _failure("Tools tab should localize runtime atomic tool rows.")
-	_instance.call("_apply_selection_metadata", runtime_capture_atomic.get_metadata(0))
+	_instance.call("_apply_selection_metadata", runtime_step_atomic.get_metadata(0))
 	await tree.process_frame
 	var preview_text = _instance.get_node("ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText") as TextEdit
 	if preview_text == null:
 		return _failure("Tools tab rendering test could not resolve the preview text control.")
-	if not preview_text.text.contains("工具: 捕获") or not preview_text.text.contains("分类: 运行时") or not preview_text.text.contains("内部运行时捕获"):
+	if not preview_text.text.contains("工具: 步进") or not preview_text.text.contains("分类: 运行时") or not preview_text.text.contains("内部运行时步进"):
 		return _failure("Tools tab should localize runtime atomic preview text.")
-	if preview_text.text.contains("RUNTIME CAPTURE ATOMIC"):
+	if preview_text.text.contains("RUNTIME STEP ATOMIC"):
 		return _failure("Tools tab should not fall back to the runtime atomic English description.")
 
 	var atomic_tool = _find_child_by_metadata(system_tool, "atomic", "project_info")
@@ -284,6 +285,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["ensure_layout", "list_capture_cache", "cleanup_capture_cache", "cleanup_legacy_cache"]
 		"system_runtime_control":
 			return ["status", "enable", "disable"]
+		"system_runtime_step":
+			return ["step", "capture", "input"]
 		"system_editor_control":
 			return ["set_main_screen", "capture_editor", "list_controls", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_control_text", "list_popups", "press_popup_button", "set_popup_text", "close_popup"]
 		"system_project_configure":

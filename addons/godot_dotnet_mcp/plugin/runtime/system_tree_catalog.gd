@@ -34,9 +34,11 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "debug_performance",    "actions": ["get_fps", "get_memory", "get_render_info"]}
 	],
 	"system_runtime_control": [{"tool": "runtime_control", "actions": ["status", "enable", "disable"]}],
-	"system_runtime_capture": [{"tool": "runtime_capture", "actions": []}],
-	"system_runtime_input": [{"tool": "runtime_input", "actions": []}],
-	"system_runtime_step": [{"tool": "runtime_step", "actions": []}],
+	"system_runtime_step": [
+		{"tool": "runtime_step", "actions": ["step", "capture", "input"]},
+		{"tool": "runtime_capture", "actions": []},
+		{"tool": "runtime_input", "actions": []}
+	],
 	"system_project_configure": [
 		{"tool": "project_info",     "actions": ["get_settings"]},
 		{"tool": "project_settings", "actions": ["set"]},

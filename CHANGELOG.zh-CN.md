@@ -1,21 +1,53 @@
 # 变更日志
 
-## Unreleased - 1.0.0-pre2
+## Unreleased
+
+目标版本：`1.0.0-pre3`。
 
 ### Added
 
-- 新增 `system_editor_control` 对控件本地坐标左键 / 右键点击、弹窗元数据和控件 / 截图 / 屏幕 / OS 窗口 rect 坐标映射的支持，便于视觉 QA 工作流定位真实编辑器 UI。
-- 新增 `system_project_state` 与 `system_editor_state` 的运行能力位，并增强 `system_project_run` 失败上下文，用于区分只读项目访问、项目启动、运行时控制和运行时截图能力是否就绪。
-- 新增通过 `system_plugin_reload(action="full_reload_plugin")` 调用的稳定插件生命周期重载入口，并在健康快照中加入 freshness 元数据，用于同步 addon 后对比当前运行插件实例与磁盘文件。
-- 新增插件 freshness / 生命周期重载契约的 Tools 页本地化元数据与 CI required subset 覆盖。
 - 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
+
+### Changed
+
+- 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
+- 新增 GitHub PR / Issue 模板、workflow lint 和发布 / Agent runbook，以约束更严格的短分支流程。
+- 更新插件发布工作流：只执行验证并创建 GitHub Release，不再产出 zip 包资产。
+- 新增非 `dev` 目标 PR 的 CI 反馈、发布 preflight 检查、`next` 草稿发布说明自动化，并强化 issue 诊断表单。
+- 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可在不引入额外 machine user 的前提下提交基于 patch 的短分支 PR。
+- 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
 
 ### Fixed
 
+- 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
+- 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
+- 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
+- 修复 TileMap 工具脚本解析问题，使 TileMap 工具域可在 MCP 工具注册期间正常实例化。
+
+## 1.0.0-pre2 - 2026-05-06
+
+### Added
+
+- 新增 `system_editor_control` 的控件本地左键 / 右键点击、弹窗元数据和多坐标系映射支持，让 Agent 更可靠地定位并操作编辑器 UI。
+- `system_project_state` 与 `system_editor_state` 新增更清晰的运行时能力报告，并增强 `system_project_run` 失败上下文，便于判断项目启动、运行时控制和截图能力是否就绪。
+- 新增 `system_plugin_reload(action="full_reload_plugin")`、健康状态检查和 Tools 页本地化说明，Agent 可重载插件并确认当前运行实例已匹配已安装文件。
+- 在 `/health`、`system_editor_state` 与 `system_project_state` 中新增编辑器会话标识，便于 Agent 区分当前 MCP 编辑器会话与其他 Godot 进程。
+- 新增 `system_resource_reference_audit`，并增强 `system_scene_validate` 的 UID / fallback path 提示，用于发现 `.tscn` / `.tres` 陈旧引用和 C# custom Resource 脚本不匹配等 `dotnet build` 通过后仍可能存在的加载风险。
+
+### Changed
+
+- 将运行时截图与输入入口合并到 `system_runtime_step(action=step|capture|input)`，让公开运行时自动化工具保持高层粒度，同时在工具树中保留内部原子工具关联。
+
+### Fixed
+
+- 修复从 `custom_tools/` 加载的 User 工具未进入 MCP `tools/list` 的问题，现在客户端可直接发现并调用这些用户工具，而不只是能在 Tools 页状态中看到。
+- 修复插件显示与使用的 MCP server 端口：当 Settings 中显式配置了 `3001` 等非默认端口时，多 Godot 编辑器会话下也会保持该配置，不再被继承的服务环境变量覆盖。
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
-- 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、高层工具内部项和 action 标签会立即刷新，无需完全重启插件。
-- 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值写入：`default_value` 现在会正确落盘，`system_script_analyze` 也会统计普通 GDScript 变量及其默认值，不再返回 `variable_count = 0`。
-- 修复完整插件生命周期重载后的工具缓存刷新：下一次 server / tool loader 启动会强制刷新 Godot 脚本资源，确保重新连接后能看到新的 System 工具与 schema 变化。
+- 修复 Tools 页工具树语言刷新：切换 Dock 语言后，工具、内部节点和 action 标签会立即刷新，无需完全重启插件。
+- 修复 `system_script_patch` / `edit_gd add_variable` 的 GDScript 变量默认值处理：`default_value` 现在会正确写入脚本文件，并可被 `system_script_analyze` 统计和报告。
+- 修复完整插件重载后的工具刷新问题，重新连接后即可看到新增的 System 工具和 schema 变化。
+- 修复本地 HTTP 服务的 CORS 处理：默认不再向任意来源开放跨源访问，同时已配置的浏览器客户端仍可通过来源校验。
+- 修复资源引用审计：当 UID 目标和 fallback path 都缺失时会正确报告错误，并避免把普通 `.tscn` C# 节点脚本误判为 custom Resource 脚本。
 
 ## 1.0.0-pre1 - 2026-04-28
 

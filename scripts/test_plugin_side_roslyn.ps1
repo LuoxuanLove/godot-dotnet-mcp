@@ -111,6 +111,29 @@ function Remove-IfExists {
     }
 }
 
+function Invoke-HarnessProcessCleanup {
+    Write-Host "==> Cleanup stale harness-owned processes"
+    $arguments = @(
+        "run"
+        "--project"
+        ".\tests\godot_plugin_harness\GodotPluginHarness.csproj"
+        "-c"
+        "Release"
+        "--"
+        "--cleanup-stale-processes"
+    )
+
+    try {
+        & dotnet @arguments 2>&1 | ForEach-Object { Write-Host $_.ToString() }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Harness-owned process cleanup exited with code $LASTEXITCODE. Directory cleanup will continue."
+        }
+    }
+    catch {
+        Write-Warning "Harness-owned process cleanup failed: $($_.Exception.Message)"
+    }
+}
+
 $GodotExe = Resolve-GodotPath -GodotPath $GodotPath
 $RequiredCases = @(
     "plugin_roslyn_service_contracts"
@@ -132,6 +155,7 @@ $RequiredCases = @(
     "plugin_instance_freshness_contracts"
     "plugin_runtime_reload_executor_contracts"
     "plugin_runtime_state_contracts"
+    "server_runtime_settings_projection_service_contracts"
     "external_host_removal_audit"
     "system_help_contracts"
     "json_rpc_request_service_contracts"
@@ -192,6 +216,7 @@ try {
 }
 finally {
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
+    Invoke-HarnessProcessCleanup
 
     $cleanupPaths = @(
         ".\tests\godot_plugin_harness\bin",

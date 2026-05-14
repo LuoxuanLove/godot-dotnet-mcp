@@ -1,0 +1,50 @@
+name: dotnet-build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+      - "feature/**"
+      - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "hotfix/**"
+      - "release/**"
+      - "actions-bot/**"
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build plugin Roslyn library
+        shell: pwsh
+        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+
+      - name: Build harness runner
+        shell: pwsh
+        run: dotnet build .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
+
+      - name: Build fixture Godot C# project
+        shell: pwsh
+        run: dotnet build .\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj -c Release
+
+      - name: Validate refactor guardrails
+        shell: pwsh
+        run: .\scripts\validate_refactor_guardrails.ps1

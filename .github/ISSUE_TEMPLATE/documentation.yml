@@ -1,0 +1,34 @@
+name: Documentation Issue
+description: Report missing, outdated, or unclear Godot .NET MCP documentation
+title: "[Docs]: "
+labels: ["documentation", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I checked the current `dev` documentation
+          required: true
+        - label: This documentation issue is about Godot .NET MCP only
+          required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: Affected Page / File
+      placeholder: "docs/... or README.md"
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested-change
+    attributes:
+      label: Suggested Change

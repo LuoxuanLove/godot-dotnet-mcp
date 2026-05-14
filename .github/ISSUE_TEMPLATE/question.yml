@@ -1,0 +1,55 @@
+name: Question / Usage Help
+description: Ask about setup, tool behavior, or usage guidance
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I checked the README and docs before asking
+          required: true
+        - label: This question is about Godot .NET MCP, not Mechoes or OrbitPilot
+          required: true
+        - label: I removed secrets, tokens, private paths, and unrelated project data from logs
+          required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do you need help understanding or deciding?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation / enablement
+        - MCP client configuration
+        - Editor automation
+        - Runtime control / screenshots
+        - Scene / script / resource tools
+        - C# / Roslyn bridge
+        - CI / release workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Describe your Godot version, plugin version or commit, target workflow, and what you already tried.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional Diagnostics
+      description: Paste relevant `system_project_state`, editor Output, harness output, or MCP client logs if they help explain the question.
+      render: shell

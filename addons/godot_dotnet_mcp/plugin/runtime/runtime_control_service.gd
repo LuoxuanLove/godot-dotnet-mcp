@@ -151,7 +151,7 @@ func capture(args: Dictionary) -> Dictionary:
 func send_inputs(args: Dictionary) -> Dictionary:
 	var inputs = args.get("inputs", [])
 	if not (inputs is Array) or (inputs as Array).is_empty():
-		return _error_mapper.error("invalid_argument", "system_runtime_input requires a non-empty inputs array", {}, "input")
+		return _error_mapper.error("invalid_argument", "system_runtime_step(action=input) requires a non-empty inputs array", {}, "input")
 	var timeout_ms := _resolve_timeout_ms(args, DEFAULT_COMMAND_TIMEOUT_MS)
 	return await _request_runtime_command("input", {
 		"inputs": (inputs as Array).duplicate(true)

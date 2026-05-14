@@ -123,6 +123,14 @@ func set_port(port: int) -> void: _port = port
 func set_debug_mode(debug: bool) -> void: _debug_mode = debug
 func get_connection_count() -> int: return _connection_state.get_connection_count() if _connection_state != null else 0
 
+func get_listen_endpoint() -> Dictionary:
+	return {
+		"host": _host,
+		"port": _port,
+		"url": "http://%s:%d/mcp" % [_host, _port],
+		"running": _running
+	}
+
 func get_connection_stats() -> Dictionary:
 	if _connection_state == null:
 		return {
@@ -132,6 +140,9 @@ func get_connection_stats() -> Dictionary:
 	var stats = _connection_state.get_connection_stats()
 	if not stats.has("active_connections"):
 		stats["active_connections"] = int(stats.get("connections", 0))
+	stats["listen_host"] = _host
+	stats["listen_port"] = _port
+	stats["listen_url"] = "http://%s:%d/mcp" % [_host, _port]
 	return stats
 
 func set_disabled_tools(disabled: Array) -> void: _ensure_service_bundle(); _service_bundle.get_tool_loader_supervisor().set_disabled_tools(disabled)

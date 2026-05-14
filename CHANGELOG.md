@@ -1,21 +1,53 @@
 # Changelog
 
-## Unreleased - 1.0.0-pre2
+## Unreleased
+
+Target version: `1.0.0-pre3`.
 
 ### Added
 
-- Added `system_editor_control` support for control-local left/right mouse clicks, richer popup metadata, and coordinate mapping between control, screenshot, screen, and OS window rectangles for visual QA workflows.
-- Added runtime capability bits to `system_project_state` and `system_editor_state`, plus richer `system_project_run` failure context to distinguish read-only project access from project launch, runtime control, and runtime capture readiness.
-- Added a stable Agent-callable plugin lifecycle reload path through `system_plugin_reload(action="full_reload_plugin")`, plus freshness metadata in health snapshots to compare the running plugin instance with disk files after addon sync.
-- Added localized Tools-page metadata and CI required-subset coverage for the plugin freshness and lifecycle reload contracts.
 - Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
+
+### Changed
+
+- Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
+- Added GitHub PR and issue templates, workflow linting, and release/agent runbooks for a stricter short-branch workflow.
+- Updated the plugin release workflow to verify and create GitHub releases without producing zip package assets.
+- Added CI feedback for PRs that target branches other than `dev`, release preflight checks, `next` draft release notes automation, and stronger issue diagnostics forms.
+- Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests without a separate machine user.
+- Split PR target policy and fast .NET build checks from the heavy Godot harness while preserving the `validate-plugin-harness` check name.
 
 ### Fixed
 
+- Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
+- Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
+- Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
+- Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
+
+## 1.0.0-pre2 - 2026-05-06
+
+### Added
+
+- Added `system_editor_control` support for local left/right control clicks, popup metadata, and coordinate mapping across controls, screenshots, screens, and OS windows for more reliable editor UI automation.
+- Added clearer runtime capability reporting to `system_project_state` and `system_editor_state`, with richer `system_project_run` failure context for project launch, runtime control, and capture readiness.
+- Added `system_plugin_reload(action="full_reload_plugin")` with health checks and localized Tools-page descriptions so agents can reload the plugin and verify that the running instance matches the installed files.
+- Added editor session identity details to `/health`, `system_editor_state`, and `system_project_state` so agents can distinguish the active MCP editor session from other Godot processes.
+- Added `system_resource_reference_audit` and richer `system_scene_validate` UID/fallback-path hints for stale `.tscn` / `.tres` references and C# custom Resource script mismatches that can remain even when `dotnet build` succeeds.
+
+### Changed
+
+- Consolidated runtime screenshot and input entry points into `system_runtime_step(action=step|capture|input)` so the public runtime automation surface stays high-level while retaining internal atomic tools in the Tools tree.
+
+### Fixed
+
+- Fixed custom User tools loaded from `custom_tools/` so they are exposed through MCP `tools/list` and callable by clients instead of only appearing in the Tools page state.
+- Fixed the MCP server port shown and used by the plugin so an explicitly configured non-default Settings port, such as `3001`, stays stable across multiple Godot editor sessions instead of being overridden by inherited server environment variables.
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
 - Fixed the Tools page tree so switching the Dock language refreshes tool, atomic tool, and action labels without requiring a full plugin restart.
-- Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are written to the script file, and `system_script_analyze` now reports ordinary GDScript variables with default values instead of returning `variable_count = 0`.
-- Fixed full plugin lifecycle reload so the next server/tool-loader startup force-refreshes Godot script resources, ensuring new System tools and schema changes appear after reconnecting.
+- Fixed `system_script_patch` / `edit_gd add_variable` so GDScript variable `default_value` expressions are saved correctly and reported by `system_script_analyze`.
+- Fixed full plugin reload so newly added System tools and schema changes are available after reconnecting.
+- Fixed local HTTP CORS handling so browser-based clients no longer receive wildcard cross-origin access by default, while configured browser clients can still pass origin validation.
+- Fixed resource reference auditing so it reports missing UID targets with missing fallback paths and avoids treating ordinary `.tscn` C# node scripts as custom Resource scripts.
 
 ## 1.0.0-pre1 - 2026-04-28
 

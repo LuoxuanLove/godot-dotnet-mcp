@@ -9,14 +9,25 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
+
+const _PROJECT_FILE_SCAN_ROOT := "res://"
+const _RESOURCE_AUDIT_SCAN_GLOBS: Array[String] = ["*.tscn", "*.tres"]
+const _PROJECT_STATE_SCAN_GLOBS: Array[String] = ["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"]
+const _SCAN_RECOVERY_SUGGESTIONS: Array[String] = [
+	"Call system_project_files(action=scan) to refresh the Godot FileSystem.",
+	"Reload the MCP plugin and retry the project-level scan.",
+	"Verify the project path and scan glob match the expected resources.",
+	"Retry resource_reference_audit with an explicit .tscn or .tres path."
+]
 var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "resource_reference_audit"
 ]
 
 
@@ -32,7 +43,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, and runtime capability bits. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -44,6 +55,17 @@ func get_tools() -> Array[Dictionary]:
 						"type": "boolean",
 						"description": "Include lightweight plugin runtime health summary, including self_diagnostics, lsp_diagnostics, and tool_loader health (default: false)"
 					}
+				}
+			}
+		},
+		{
+			"name": "resource_reference_audit",
+			"description": "RESOURCE REFERENCE AUDIT: Project-level scan for .tscn/.tres UID + fallback path consistency and C# [GlobalClass] Resource script references. Reports stale UID/cache/path issues separately from C# build errors so agents can fix scenes/resources even when dotnet build passes. Empty project-level scans are reported with scan_status=invalid_scan_scope, valid_scan_scope=false, and enumeration_diagnostics instead of being treated as clean. Optional path limits the audit to one .tscn/.tres file; include_warnings defaults to true.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"path": {"type": "string", "description": "Optional .tscn/.tres path to audit; omit to scan the project"},
+					"include_warnings": {"type": "boolean", "description": "Include warning-level stale UID/path and C# resource script risks (default: true)"}
 				}
 			}
 		},
@@ -168,6 +190,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"project_state":     return _execute_project_state(args)
 		"editor_state":      return _execute_editor_state(args)
 		"plugin_reload":     return _execute_plugin_reload(args)
+		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
 		"project_run":       return _execute_project_run(args)
@@ -178,6 +201,347 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 # --- private helpers ---
+
+
+func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("path", "")).strip_edges()
+	var include_warnings := bool(args.get("include_warnings", true))
+	var paths: Array[String] = []
+	var scan_globs: Array[String] = []
+	var enumeration_diagnostics: Array = []
+	var scan_status := "ok"
+	var valid_scan_scope := true
+	var scan_counts := {}
+	if not target_path.is_empty():
+		if not (target_path.ends_with(".tscn") or target_path.ends_with(".tres")):
+			return bridge.error("resource_reference_audit path must be a .tscn or .tres file")
+		if not FileAccess.file_exists(target_path):
+			return bridge.error("Resource file not found: %s" % target_path)
+		paths.append(target_path)
+		scan_status = "explicit_path"
+	else:
+		scan_globs = _RESOURCE_AUDIT_SCAN_GLOBS.duplicate()
+		for scene_path in _collect_project_files("*.tscn"):
+			paths.append(str(scene_path))
+		for resource_path in _collect_project_files("*.tres"):
+			paths.append(str(resource_path))
+		scan_counts = {"*.tscn": _count_matching_paths(paths, ".tscn"), "*.tres": _count_matching_paths(paths, ".tres")}
+		if paths.is_empty():
+			valid_scan_scope = false
+			scan_status = "invalid_scan_scope"
+			enumeration_diagnostics.append(_build_file_enumeration_diagnostic(
+				"resource_reference_scan_scope_empty",
+				"Project-level resource reference audit found no .tscn or .tres files, so the result cannot prove resource references are clean.",
+				scan_globs,
+				scan_counts
+			))
+	paths.sort()
+
+	var issues: Array = []
+	var file_results: Array = []
+	var files_with_issues := 0
+	var error_count := 0
+	var warning_count := 0
+	for path in paths:
+		var file_result := _audit_resource_reference_file(path, include_warnings)
+		file_results.append(file_result)
+		var file_issue_count := int(file_result.get("issue_count", 0))
+		if file_issue_count > 0:
+			files_with_issues += 1
+		for raw_issue in file_result.get("issues", []):
+			if not (raw_issue is Dictionary):
+				continue
+			var issue: Dictionary = (raw_issue as Dictionary).duplicate(true)
+			if str(issue.get("severity", "")) == "error":
+				error_count += 1
+			elif str(issue.get("severity", "")) == "warning":
+				warning_count += 1
+			bridge.append_unique_issue(issues, issue)
+
+	var risk_level := "clean"
+	if error_count > 0:
+		risk_level = "error"
+	elif warning_count > 0 or not valid_scan_scope:
+		risk_level = "warning"
+	var scan_warning_count := enumeration_diagnostics.size()
+	return bridge.success({
+		"path": target_path,
+		"scanned_file_count": paths.size(),
+		"files_with_issues": files_with_issues,
+		"issue_count": issues.size(),
+		"error_count": error_count,
+		"warning_count": warning_count + scan_warning_count,
+		"resource_warning_count": warning_count,
+		"scan_warning_count": scan_warning_count,
+		"risk_level": risk_level,
+		"scan_status": scan_status,
+		"valid_scan_scope": valid_scan_scope,
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"scan_globs": scan_globs,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"enumeration_diagnostics": enumeration_diagnostics,
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate(),
+		"build_status": "dotnet_build_may_pass",
+		"summary": _build_resource_reference_summary(risk_level, error_count, warning_count + scan_warning_count, valid_scan_scope),
+		"issues": issues,
+		"files": file_results
+	})
+
+
+func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dictionary:
+	var issues: Array = []
+	var ext_resource_count := 0
+	var csharp_resource_script_count := 0
+	var read_text := FileAccess.get_file_as_string(path)
+	if read_text.is_empty() and FileAccess.get_open_error() != OK:
+		var read_issue: Dictionary = bridge.build_issue("error", "resource_reference_read_failed", "Failed to read resource text: %s" % path, {"file": path})
+		return {"file": path, "issue_count": 1, "issues": [read_issue], "ext_resource_count": 0, "csharp_resource_script_count": 0}
+
+	var header := _extract_resource_header(read_text)
+	var script_resources := {}
+	var used_script_ids := {}
+	var lines := read_text.split("\n")
+	for index in range(lines.size()):
+		var line_no := index + 1
+		var line := str(lines[index]).strip_edges()
+		if line.begins_with("[ext_resource"):
+			ext_resource_count += 1
+			var ref_data := _parse_ext_resource_line(path, line, line_no)
+			var ref_issues := _build_ext_resource_issues(path, ref_data, include_warnings)
+			for ref_issue in ref_issues:
+				bridge.append_unique_issue(issues, ref_issue)
+			if str(ref_data.get("type", "")) == "Script":
+				var resource_id := str(ref_data.get("id", ""))
+				if not resource_id.is_empty():
+					script_resources[resource_id] = ref_data
+		var script_marker := "script = ExtResource(\""
+		var script_marker_index := line.find(script_marker)
+		if script_marker_index != -1:
+			var id_start := script_marker_index + script_marker.length()
+			var id_end := line.find("\")", id_start)
+			if id_end != -1:
+				used_script_ids[line.substr(id_start, id_end - id_start)] = line_no
+
+	if path.ends_with(".tres"):
+		for resource_id in used_script_ids.keys():
+			if not script_resources.has(resource_id):
+				var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
+				bridge.append_unique_issue(issues, unresolved_issue)
+				continue
+			var script_ref: Dictionary = script_resources[resource_id]
+			var script_path := str(script_ref.get("normalized_path", ""))
+			if script_path.ends_with(".cs") or str(script_ref.get("declared_path", "")).ends_with(".cs"):
+				csharp_resource_script_count += 1
+				var script_issues := _audit_csharp_resource_script_reference(path, int(used_script_ids[resource_id]), script_ref, header, include_warnings)
+				for script_issue in script_issues:
+					bridge.append_unique_issue(issues, script_issue)
+
+	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": path})
+	var dep_data: Dictionary = bridge.extract_data(dep_result)
+	for raw_dep in dep_data.get("dependencies", []):
+		var dep_ref: Dictionary = bridge.parse_dependency_reference(str(raw_dep), path) if bridge.has_method("parse_dependency_reference") else {"risk": "none"}
+		var risk := str(dep_ref.get("risk", "none"))
+		if risk == "error" or (include_warnings and risk == "warning"):
+			var dep_issue := _build_dependency_issue(path, dep_ref, 0, "resource_loader_dependencies")
+			bridge.append_unique_issue(issues, dep_issue)
+
+	return {
+		"file": path,
+		"issue_count": issues.size(),
+		"issues": issues,
+		"ext_resource_count": ext_resource_count,
+		"csharp_resource_script_count": csharp_resource_script_count
+	}
+
+
+func _parse_ext_resource_line(source_path: String, line: String, line_no: int) -> Dictionary:
+	var resource_type := _extract_resource_attribute(line, "type")
+	var uid_text := _extract_resource_attribute(line, "uid")
+	var declared_path := _extract_resource_attribute(line, "path")
+	var resource_id := _extract_resource_attribute(line, "id")
+	var raw_ref := declared_path
+	if not uid_text.is_empty():
+		raw_ref = "%s::%s::%s" % [uid_text, resource_type, declared_path]
+	var parsed: Dictionary = bridge.parse_dependency_reference(raw_ref, source_path) if bridge.has_method("parse_dependency_reference") else {"normalized_path": declared_path, "risk": "none"}
+	parsed["file"] = source_path
+	parsed["line"] = line_no
+	parsed["type"] = resource_type
+	parsed["id"] = resource_id
+	parsed["source"] = "ext_resource"
+	return parsed
+
+
+func _build_ext_resource_issues(file_path: String, ref_data: Dictionary, include_warnings: bool) -> Array:
+	var issues: Array = []
+	var risk := str(ref_data.get("risk", "none"))
+	if risk == "error" or (include_warnings and risk == "warning"):
+		issues.append(_build_dependency_issue(file_path, ref_data, int(ref_data.get("line", 0)), "ext_resource"))
+	return issues
+
+
+func _build_dependency_issue(file_path: String, dep_ref: Dictionary, line_no: int, source: String) -> Dictionary:
+	var consistency := str(dep_ref.get("consistency", "dependency_reference_inconsistent"))
+	var severity := str(dep_ref.get("risk", "warning"))
+	var uid_text := str(dep_ref.get("uid", ""))
+	var declared_path := str(dep_ref.get("declared_path", ""))
+	var resolved_uid_path := str(dep_ref.get("resolved_uid_path", ""))
+	var message := "Resource reference may be inconsistent: %s" % str(dep_ref.get("raw", ""))
+	match consistency:
+		"stale_fallback_path":
+			message = "UID resolves to %s, but the fallback path is stale: %s." % [resolved_uid_path, declared_path]
+		"stale_uid":
+			message = "Fallback path exists but UID is stale or unknown: %s -> %s." % [uid_text, declared_path]
+		"uid_path_mismatch":
+			message = "UID resolves to %s, which differs from fallback path %s." % [resolved_uid_path, declared_path]
+		"missing_uid_and_path":
+			message = "Neither UID nor fallback path can be resolved: %s -> %s." % [uid_text, declared_path]
+		"missing_path":
+			message = "Referenced path does not exist: %s." % declared_path
+	return bridge.build_issue(severity, consistency, message, {
+		"file": file_path,
+		"line": line_no,
+		"source": source,
+		"uid": uid_text,
+		"declared_path": declared_path,
+		"resolved_uid_path": resolved_uid_path,
+		"path": str(dep_ref.get("normalized_path", "")),
+		"hint": str(dep_ref.get("hint", "Reimport, fix the path, or re-save the scene/resource to normalize references.")),
+		"build_status": "dotnet_build_may_pass"
+	})
+
+
+func _audit_csharp_resource_script_reference(file_path: String, line_no: int, script_ref: Dictionary, header: Dictionary, include_warnings: bool) -> Array:
+	var issues: Array = []
+	var script_path := str(script_ref.get("normalized_path", ""))
+	var declared_path := str(script_ref.get("declared_path", ""))
+	if script_path.is_empty():
+		script_path = declared_path
+	if script_path.is_empty() or not FileAccess.file_exists(script_path):
+		issues.append(bridge.build_issue("error", "missing_resource_script_path", "C# Resource script path is missing: %s" % declared_path, {"file": file_path, "line": line_no, "script": declared_path, "id": str(script_ref.get("id", "")), "build_status": "dotnet_build_may_pass", "hint": "Fix the .tres script ExtResource path or re-save the resource after moving the script."}))
+		return issues
+
+	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var script_class_name := str(inspect_data.get("class_name", ""))
+	var base_type := str(inspect_data.get("base_type", ""))
+	var header_script_class := str(header.get("script_class", ""))
+	var file_class_name := script_path.get_file().get_basename()
+	if script_class_name.is_empty():
+		issues.append(bridge.build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "build_status": "dotnet_build_may_pass"}))
+		return issues
+	if not header_script_class.is_empty() and header_script_class != script_class_name:
+		issues.append(bridge.build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "build_status": "dotnet_build_may_pass"}))
+	if include_warnings and file_class_name != script_class_name:
+		issues.append(bridge.build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
+	if include_warnings and not _is_resource_base_type(base_type):
+		issues.append(bridge.build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
+	if include_warnings and not _csharp_script_has_global_class_attribute(script_path):
+		issues.append(bridge.build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
+	return issues
+
+
+func _extract_resource_header(content: String) -> Dictionary:
+	for raw_line in content.split("\n"):
+		var line := str(raw_line).strip_edges()
+		if line.begins_with("[gd_resource"):
+			return {
+				"type": _extract_resource_attribute(line, "type"),
+				"script_class": _extract_resource_attribute(line, "script_class"),
+				"uid": _extract_resource_attribute(line, "uid")
+			}
+	return {}
+
+
+func _extract_resource_attribute(line: String, attribute_name: String) -> String:
+	var marker := "%s=\"" % attribute_name
+	var start := line.find(marker)
+	if start == -1:
+		return ""
+	start += marker.length()
+	var finish := line.find("\"", start)
+	if finish == -1:
+		return ""
+	return line.substr(start, finish - start).strip_edges()
+
+
+func _is_resource_base_type(base_type: String) -> bool:
+	var normalized := base_type.strip_edges()
+	return normalized == "Resource" or normalized == "Godot.Resource" or normalized.ends_with(".Resource")
+
+
+func _csharp_script_has_global_class_attribute(script_path: String) -> bool:
+	if script_path.is_empty() or not FileAccess.file_exists(script_path):
+		return false
+	var content := FileAccess.get_file_as_string(script_path)
+	return content.find("[GlobalClass") != -1 or content.find("GlobalClassAttribute") != -1
+
+
+func _collect_project_files(pattern: String) -> Array[String]:
+	var collected: Array[String] = []
+	for raw_path in bridge.collect_files(pattern):
+		collected.append(str(raw_path))
+	collected.sort()
+	return collected
+
+
+func _count_matching_paths(paths: Array[String], extension: String) -> int:
+	var count := 0
+	for path in paths:
+		if str(path).ends_with(extension):
+			count += 1
+	return count
+
+
+func _build_file_enumeration_diagnostic(code: String, message: String, scan_globs: Array, counts: Dictionary = {}) -> Dictionary:
+	return {
+		"severity": "warning",
+		"code": code,
+		"type": code,
+		"message": message,
+		"source": "filesystem_directory.get_files",
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"scan_globs": scan_globs.duplicate(),
+		"counts": counts.duplicate(true),
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate()
+	}
+
+
+func _build_file_enumeration_status(gd_scripts: Array, cs_scripts: Array, scene_paths: Array, resource_paths: Array) -> Dictionary:
+	var counts := {
+		"gd_scripts": gd_scripts.size(),
+		"cs_scripts": cs_scripts.size(),
+		"scripts": gd_scripts.size() + cs_scripts.size(),
+		"scenes": scene_paths.size(),
+		"resources": resource_paths.size()
+	}
+	var diagnostics: Array = []
+	if int(counts.get("scripts", 0)) == 0 and int(counts.get("scenes", 0)) == 0:
+		diagnostics.append(_build_file_enumeration_diagnostic(
+			"project_file_enumeration_empty",
+			"Project file enumeration found no scripts or scenes, so project_state file counts may be incomplete even if explicit path tools still work.",
+			_PROJECT_STATE_SCAN_GLOBS,
+			counts
+		))
+	return {
+		"status": "suspect" if not diagnostics.is_empty() else "ok",
+		"valid": diagnostics.is_empty(),
+		"scan_root": _PROJECT_FILE_SCAN_ROOT,
+		"project_path": ProjectSettings.globalize_path(_PROJECT_FILE_SCAN_ROOT),
+		"scan_globs": _PROJECT_STATE_SCAN_GLOBS.duplicate(),
+		"counts": counts,
+		"diagnostics": diagnostics,
+		"recovery_suggestions": _SCAN_RECOVERY_SUGGESTIONS.duplicate()
+	}
+
+
+func _build_resource_reference_summary(risk_level: String, error_count: int, warning_count: int, valid_scan_scope: bool = true) -> String:
+	if not valid_scan_scope:
+		return "Resource reference audit scanned no project files; the result is inconclusive rather than clean. Refresh the Godot FileSystem or retry with an explicit resource path."
+	if risk_level == "error":
+		return "Resource references contain %d error(s); scene/resource loading may fail even if dotnet build passes." % error_count
+	if risk_level == "warning":
+		return "Resource references contain %d warning(s); reimport or re-save resources to refresh UID/path metadata." % warning_count
+	return "No resource reference consistency issues were found."
 
 
 func _execute_plugin_reload(args: Dictionary) -> Dictionary:
@@ -274,6 +638,7 @@ func _build_editor_state_section() -> Dictionary:
 	var focus_context := _safe_extract_data(focus_context_result)
 	var distraction_free := _safe_extract_data(distraction_free_result)
 	var godot_path := _safe_extract_data(godot_path_result)
+	var session_identity := _enrich_editor_session_identity(godot_path.get("editor_session_identity", {}))
 	var payload := {
 		"godot_version": str(info.get("godot_version", "")),
 		"version_string": str(info.get("version_string", "")),
@@ -284,7 +649,8 @@ func _build_editor_state_section() -> Dictionary:
 		"focus_context": focus_context,
 		"distraction_free": bool(distraction_free.get("enabled", false)),
 		"godot_executable_path": str(godot_path.get("godot_executable_path", "")),
-		"project_root_path": str(godot_path.get("project_root_path", ""))
+		"project_root_path": str(godot_path.get("project_root_path", "")),
+		"editor_session_identity": session_identity
 	}
 	if failed_result is Dictionary and not failed_result.is_empty():
 		return _section_failure("Editor status is unavailable.", failed_result, payload)
@@ -426,12 +792,41 @@ func _build_editor_runtime_context() -> Dictionary:
 	var godot_path_result: Dictionary = bridge.call_atomic("editor_status", {"action": "get_godot_path"})
 	var godot_path := _safe_extract_data(godot_path_result)
 	var available := bool(godot_path_result.get("success", false))
+	var session_identity := _enrich_editor_session_identity(godot_path.get("editor_session_identity", {}))
 	return {
 		"editor_interface_available": available,
 		"error": "" if available else _result_error_text(godot_path_result, "Editor interface is unavailable."),
 		"godot_executable_path": str(godot_path.get("godot_executable_path", "")),
-		"project_root_path": str(godot_path.get("project_root_path", ProjectSettings.globalize_path("res://")))
+		"project_root_path": str(godot_path.get("project_root_path", ProjectSettings.globalize_path("res://"))),
+		"editor_session_identity": session_identity
 	}
+
+
+func _get_server_listen_endpoint() -> Dictionary:
+	var server = _runtime_context.get("server", null)
+	if server != null and is_instance_valid(server) and server.has_method("get_listen_endpoint"):
+		var endpoint = server.get_listen_endpoint()
+		if endpoint is Dictionary:
+			return (endpoint as Dictionary).duplicate(true)
+	return {}
+
+
+func _enrich_editor_session_identity(raw_identity) -> Dictionary:
+	var identity: Dictionary = raw_identity.duplicate(true) if raw_identity is Dictionary else MCPEditorSessionIdentity.build_identity()
+	var endpoint := _get_server_listen_endpoint()
+	if endpoint.is_empty():
+		return identity
+	var listen := {
+		"host": str(endpoint.get("host", "")),
+		"port": int(endpoint.get("port", 0)),
+		"url": str(endpoint.get("url", "")),
+		"running": bool(endpoint.get("running", false))
+	}
+	identity["listen"] = listen
+	identity["listen_host"] = str(listen.get("host", ""))
+	identity["listen_port"] = int(listen.get("port", 0))
+	identity["listen_url"] = str(listen.get("url", ""))
+	return identity
 
 
 func _build_project_state_summary(_args: Dictionary = {}) -> Dictionary:
@@ -608,15 +1003,16 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	var runtime_summary := _get_runtime_summary()
 	var recent_errors := _get_runtime_errors(error_limit)
 	var recent_warnings := _get_runtime_warnings(min(error_limit, 10))
-	var gd_scripts: Array = bridge.collect_files("*.gd")
-	var cs_scripts: Array = bridge.collect_files("*.cs")
-	var scene_paths: Array = bridge.collect_files("*.tscn")
-	var resources_tres: Array = bridge.collect_files("*.tres")
-	var resources_res: Array = bridge.collect_files("*.res")
+	var gd_scripts: Array[String] = _collect_project_files("*.gd")
+	var cs_scripts: Array[String] = _collect_project_files("*.cs")
+	var scene_paths: Array[String] = _collect_project_files("*.tscn")
+	var resources_tres: Array[String] = _collect_project_files("*.tres")
+	var resources_res: Array[String] = _collect_project_files("*.res")
 	var all_resources: Array = []
 	all_resources.append_array(resources_tres)
 	all_resources.append_array(resources_res)
 	all_resources.sort()
+	var file_enumeration := _build_file_enumeration_status(gd_scripts, cs_scripts, scene_paths, all_resources)
 
 	var compile_error_count := 0
 	var dotnet_errors_data: Dictionary = {}
@@ -649,6 +1045,10 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 		"scene_paths": scene_paths,
 		"script_paths": gd_scripts + cs_scripts,
 		"resource_paths": all_resources,
+		"file_enumeration_status": str(file_enumeration.get("status", "ok")),
+		"valid_file_enumeration": bool(file_enumeration.get("valid", true)),
+		"file_enumeration": file_enumeration,
+		"enumeration_diagnostics": file_enumeration.get("diagnostics", []),
 		"has_dotnet": bool(dotnet_result.get("success", false)),
 		"dotnet_project_count": int(dotnet_data.get("count", 0)),
 		"dotnet_projects": dotnet_data.get("projects", []),

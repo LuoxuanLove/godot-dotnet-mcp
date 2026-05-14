@@ -80,12 +80,11 @@ root
   │   │   ├─ system_runtime_control
   │   │   │   ├─ status / enable / disable
   │   │   │   └─ runtime_control
-  │   │   ├─ system_runtime_capture
-  │   │   │   └─ runtime_capture
-  │   │   ├─ system_runtime_input
-  │   │   │   └─ runtime_input
   │   │   ├─ system_runtime_step
-  │   │   │   └─ runtime_step
+  │   │   │   ├─ step / capture / input
+  │   │   │   ├─ runtime_step
+  │   │   │   ├─ runtime_capture
+  │   │   │   └─ runtime_input
   │   │   └─ ...
   │   └─ ... internal atomic categories
   └─ user

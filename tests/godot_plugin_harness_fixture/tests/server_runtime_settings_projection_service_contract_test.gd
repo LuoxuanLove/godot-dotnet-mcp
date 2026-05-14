@@ -38,11 +38,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(env_projection.get("host", "")) != "10.0.0.8":
 		return _failure("Runtime settings projection should let environment host override the incoming host.")
 	if int(env_projection.get("port", 0)) != 4100:
-		return _failure("Runtime settings projection should let environment port override the incoming port.")
+		return _failure("Runtime settings projection should let environment port override the default incoming port.")
 	if not bool(env_projection.get("debug_mode", false)):
 		return _failure("Runtime settings projection should normalize 'on' into true.")
 	if str(env_projection.get("transport_mode", "")) != "both":
 		return _failure("Runtime settings projection should preserve supported transport modes.")
+
+	var explicit_port_projection = service.project({
+		"host": "127.0.0.1",
+		"port": 3001,
+		"debug_mode": true,
+		"transport_mode": "http",
+		"disabled_tools": []
+	})
+	if int(explicit_port_projection.get("port", 0)) != 3001:
+		return _failure("Runtime settings projection should preserve an explicit non-default settings port over the environment port.")
+
+	var explicit_float_port_projection = service.project({
+		"host": "127.0.0.1",
+		"port": 3001.0,
+		"debug_mode": true,
+		"transport_mode": "http",
+		"disabled_tools": []
+	})
+	if int(explicit_float_port_projection.get("port", 0)) != 3001:
+		return _failure("Runtime settings projection should preserve JSON-loaded float ports over the environment port.")
 
 	return {
 		"name": "server_runtime_settings_projection_service_contracts",
@@ -53,6 +73,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"default_port": int(default_projection.get("port", 0)),
 			"env_host": str(env_projection.get("host", "")),
 			"env_port": int(env_projection.get("port", 0)),
+			"explicit_port": int(explicit_port_projection.get("port", 0)),
+			"explicit_float_port": int(explicit_float_port_projection.get("port", 0)),
 			"disabled_tool_count": default_disabled_tools.size()
 		}
 	}

@@ -1,0 +1,123 @@
+name: Bug Report
+description: Report a reproducible Godot .NET MCP bug
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and pull requests for duplicates
+          required: true
+        - label: I can reproduce this with the current `dev` branch or the latest released plugin version
+          required: true
+        - label: I removed secrets, tokens, private paths, and unrelated project data from logs
+          required: true
+
+  - type: input
+    id: godot-version
+    attributes:
+      label: Godot Version
+      placeholder: "4.6.stable.mono"
+    validations:
+      required: true
+
+  - type: input
+    id: dotnet-version
+    attributes:
+      label: .NET SDK Version
+      placeholder: "8.0.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin Version / Commit
+      placeholder: "1.0.0-pre3 or commit SHA"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected-area
+    attributes:
+      label: Affected Area
+      options:
+        - MCP server / client connection
+        - Editor UI automation
+        - Runtime control / screenshots
+        - Scene / script / resource tools
+        - C# / Roslyn bridge
+        - Plugin UI / configuration
+        - CI / release workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What failed, and what user-visible behavior did you observe?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Open a Godot .NET project with...
+        2. Enable the plugin...
+        3. Call tool/action...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: project-state
+    attributes:
+      label: MCP Project State / Diagnostics
+      description: For tool calls, runtime control, editor automation, resource/script analysis, or plugin UI bugs, paste relevant `system_project_state`, `system_runtime_diagnose`, editor Output, or harness output. Remove secrets, private paths, and project business data.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste minimal relevant logs. Remove secrets and private data.
+      render: shell
+
+  - type: textarea
+    id: minimal-repro
+    attributes:
+      label: Minimal Reproduction
+      description: Link to or describe a minimal Godot project if the bug depends on project files, scenes, resources, or scripts.

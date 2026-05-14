@@ -3,13 +3,16 @@ extends RefCounted
 # {"name": "system_project_executor_contracts"}
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
+const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 
 
 class FakeBridge extends RefCounted:
 	var _tool_loader
 	var scene_run_actions: Array[String] = []
+	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
 		_tool_loader = tool_loader
@@ -17,13 +20,23 @@ class FakeBridge extends RefCounted:
 	func get_tool_loader():
 		return _tool_loader
 
-	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
 		match tool_name:
 			"editor_status":
 				if str(args.get("action", "")) == "get_godot_path":
 					return success({
 						"godot_executable_path": "C:/Godot/Godot.exe",
-						"project_root_path": "E:/Project/LuoxuanLove/Mechoes"
+						"project_root_path": "E:/Project/LuoxuanLove/Mechoes",
+						"editor_session_identity": {
+							"session_id": "project-contract-session",
+							"identity_scope": "current_editor_process",
+							"process_owner": "godot_dotnet_mcp_editor",
+							"external_validation_process": false,
+							"safe_to_terminate": false,
+							"pid": 5252,
+							"cmdline_args": ["--path", "E:/Project/LuoxuanLove/Mechoes"],
+							"headless": false
+						}
 					})
 				return error("Unsupported editor_status action")
 			"project_info":
@@ -60,6 +73,12 @@ class FakeBridge extends RefCounted:
 				return success({"value": 60})
 			"debug_editor_log":
 				return success({"error_count": 0, "errors": []})
+			"resource_query":
+				if str(args.get("path", "")).ends_with(".tscn"):
+					return success({"dependencies": []})
+				return success({"dependencies": ["uid://missing_project_contract::::res://tests_tmp/system_project_executor_contracts/MissingResource.cs"]})
+			"script_inspect":
+				return success({"language": "csharp", "class_name": "WrongResourceName", "base_type": "Node"})
 			"scene_run":
 				scene_run_actions.append(str(args.get("action", "")))
 				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))}, "ok")
@@ -122,6 +141,15 @@ class FakeBridge extends RefCounted:
 			return (value as Array).duplicate(true) if value is Array else []
 		return []
 
+	func parse_dependency_reference(raw_path: String, source_path: String = "") -> Dictionary:
+		return atomic_bridge.parse_dependency_reference(raw_path, source_path)
+
+	func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
+		return atomic_bridge.build_issue(severity, issue_type, message, extra)
+
+	func append_unique_issue(issues: Array, issue: Dictionary) -> void:
+		atomic_bridge.append_unique_issue(issues, issue)
+
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
 
@@ -130,11 +158,16 @@ class FakeBridge extends RefCounted:
 
 
 class FakeFailingRunBridge extends FakeBridge:
-	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
 		if tool_name == "scene_run":
 			scene_run_actions.append(str(args.get("action", "")))
 			return error("Editor interface not available")
 		return super.call_atomic(tool_name, args)
+
+
+class FakeEmptyCollectBridge extends FakeBridge:
+	func collect_files(_pattern: String) -> Array:
+		return []
 
 
 class FakeToolLoader extends RefCounted:
@@ -148,7 +181,33 @@ class FakeToolLoader extends RefCounted:
 		return {"status": "ready", "tool_count": 115, "exposed_tool_count": 18, "last_error": ""}
 
 
+class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
+	var last_args: Dictionary = {}
+
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
+		if tool_name != "filesystem_directory":
+			return error("Unexpected atomic tool: %s" % tool_name)
+		last_args = args.duplicate(true)
+		return success({"files": ["res://Player.gd"]})
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
+	_prepare_temp_root()
+	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
+	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
+	if atomic_files.size() != 1:
+		return _failure("AtomicBridge.collect_files should return files from filesystem_directory.")
+	if str(atomic_collect_bridge.last_args.get("path", "")) != "res://":
+		return _failure("AtomicBridge.collect_files should pass res:// as the filesystem_directory root path.")
+	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
+	var script_path := TEMP_ROOT.path_join("ConfigResource.cs")
+	var scene_path := TEMP_ROOT.path_join("NodeScriptScene.tscn")
+	var node_script_path := TEMP_ROOT.path_join("NodeController.cs")
+	_write_text(script_path, "using Godot;\n[GlobalClass]\npublic partial class ConfigResource : Resource {}\n")
+	_write_text(node_script_path, "using Godot;\npublic partial class NodeController : Node {}\n")
+	_write_text(resource_path, "[gd_resource type=\"Resource\" script_class=\"ConfigResource\" format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[resource]\nscript = ExtResource(\"1_script\")\n" % script_path)
+	_write_text(scene_path, "[gd_scene load_steps=2 format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[node name=\"Root\" type=\"Node\"]\nscript = ExtResource(\"1_script\")\n" % node_script_path)
+
 	PluginSelfDiagnosticStore.clear()
 	PluginSelfDiagnosticStore.record_incident(
 		"warning",
@@ -163,14 +222,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 9:
-		return _failure("System project implementation should expose 9 tool definitions including plugin_reload, project_files and userdata_maintenance.")
+	if tool_defs.size() != 10:
+		return _failure("System project implementation should expose 10 tool definitions including plugin_reload, project_files, resource_reference_audit and userdata_maintenance.")
 	if not _has_tool(tool_defs, "plugin_reload"):
 		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
 	if not _has_tool(tool_defs, "userdata_maintenance"):
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 	if not _has_tool(tool_defs, "project_files"):
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
+	if not _has_tool(tool_defs, "resource_reference_audit"):
+		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
+
+	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
+	if not bool(reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should run on a .tres fixture.")
+	var reference_data: Dictionary = reference_audit.get("data", {})
+	if int(reference_data.get("issue_count", 0)) < 1:
+		return _failure("resource_reference_audit should report UID/path or C# Resource script issues.")
+	if str(reference_data.get("build_status", "")) != "dotnet_build_may_pass":
+		return _failure("resource_reference_audit should distinguish resource inconsistency from dotnet build status.")
+	var scene_reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": scene_path})
+	if not bool(scene_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should run on a .tscn fixture.")
+	var scene_reference_data: Dictionary = scene_reference_audit.get("data", {})
+	var scene_issues: Array = scene_reference_data.get("issues", [])
+	if _has_issue_type(scene_issues, "resource_script_base_type_unconfirmed") or _has_issue_type(scene_issues, "resource_script_missing_global_class_attribute"):
+		return _failure("resource_reference_audit should not treat ordinary .tscn C# node scripts as custom Resource scripts.")
 
 	var project_state: Dictionary = executor.execute("project_state", {
 		"error_limit": 5,
@@ -204,6 +281,42 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities should block can_start_project when compile errors are present.")
 	if not ((runtime_capabilities as Dictionary).get("blocking_reasons", []) as Array).has("compile_errors_present"):
 		return _failure("runtime_capabilities should include compile_errors_present as a blocking reason.")
+	var editor_context: Dictionary = (runtime_capabilities as Dictionary).get("editor_context", {})
+	var context_identity: Dictionary = editor_context.get("editor_session_identity", {})
+	if str(context_identity.get("session_id", "")) != "project-contract-session":
+		return _failure("runtime_capabilities.editor_context should expose the current editor session identity.")
+	if bool(context_identity.get("safe_to_terminate", true)) or bool(context_identity.get("external_validation_process", true)):
+		return _failure("runtime_capabilities.editor_context should mark the current editor process as non-terminable and non-external.")
+
+	var empty_executor = SystemProjectExecutorScript.new()
+	empty_executor.bridge = FakeEmptyCollectBridge.new(FakeToolLoader.new())
+	empty_executor.configure_runtime({})
+	var empty_reference_audit: Dictionary = empty_executor.execute("resource_reference_audit", {})
+	if not bool(empty_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should return structured diagnostics when project-level collection is empty.")
+	var empty_audit_data: Dictionary = empty_reference_audit.get("data", {})
+	if int(empty_audit_data.get("scanned_file_count", -1)) != 0:
+		return _failure("resource_reference_audit empty-scope fixture should report scanned_file_count=0.")
+	if bool(empty_audit_data.get("valid_scan_scope", true)):
+		return _failure("resource_reference_audit should mark empty project-level scans as invalid scan scope.")
+	if str(empty_audit_data.get("risk_level", "")) == "clean":
+		return _failure("resource_reference_audit should not report clean when no files were scanned.")
+	if str(empty_audit_data.get("scan_status", "")) != "invalid_scan_scope":
+		return _failure("resource_reference_audit should expose invalid_scan_scope for empty project-level scans.")
+	if int(empty_audit_data.get("issue_count", -1)) != 0:
+		return _failure("resource_reference_audit should keep resource issue_count separate from scan diagnostics.")
+	if not _has_diagnostic_code(empty_audit_data.get("enumeration_diagnostics", []), "resource_reference_scan_scope_empty"):
+		return _failure("resource_reference_audit should include a stable empty scan diagnostic code.")
+	var empty_project_state: Dictionary = empty_executor.execute("project_state", {})
+	if not bool(empty_project_state.get("success", false)):
+		return _failure("project_state should succeed while reporting suspect file enumeration.")
+	var empty_project_data: Dictionary = empty_project_state.get("data", {})
+	if bool(empty_project_data.get("valid_file_enumeration", true)):
+		return _failure("project_state should mark empty script and scene enumeration as suspect.")
+	if str(empty_project_data.get("file_enumeration_status", "")) != "suspect":
+		return _failure("project_state should expose suspect file_enumeration_status for empty script and scene enumeration.")
+	if not _has_diagnostic_code(empty_project_data.get("enumeration_diagnostics", []), "project_file_enumeration_empty"):
+		return _failure("project_state should include a stable empty project enumeration diagnostic code.")
 
 	var layout_result: Dictionary = executor.execute("userdata_maintenance", {"action": "ensure_layout"})
 	if not bool(layout_result.get("success", false)):
@@ -303,9 +416,60 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 	return false
 
 
+func _has_issue_type(issues: Array, issue_type: String) -> bool:
+	for issue in issues:
+		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
+			return true
+	return false
+
+
+func _has_diagnostic_code(diagnostics: Array, code: String) -> bool:
+	for diagnostic in diagnostics:
+		if diagnostic is Dictionary and str((diagnostic as Dictionary).get("code", "")) == code:
+			return true
+	return false
+
+
 func cleanup_case(_tree: SceneTree) -> void:
 	PluginSelfDiagnosticStore.clear()
+	_remove_tree(TEMP_ROOT)
 	MCPUserDataPaths.cleanup_capture_cache(false)
+
+
+func _prepare_temp_root() -> void:
+	_remove_tree(TEMP_ROOT)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))
+
+
+func _write_text(path: String, content: String) -> void:
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("Failed to create system project contract fixture: %s" % path)
+		return
+	file.store_string(content)
+	file.close()
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	var dir = DirAccess.open(absolute_path)
+	if dir == null:
+		DirAccess.remove_absolute(absolute_path)
+		return
+	dir.list_dir_begin()
+	var entry = dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var child_path := absolute_path.path_join(entry)
+			if dir.current_is_dir():
+				_remove_tree(ProjectSettings.localize_path(child_path))
+			else:
+				DirAccess.remove_absolute(child_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
 
 
 func _create_user_file(path: String, content: String) -> void:

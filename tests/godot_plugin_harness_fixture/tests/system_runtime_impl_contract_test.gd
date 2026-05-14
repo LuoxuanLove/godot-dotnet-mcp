@@ -125,12 +125,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	impl.configure_runtime(runtime_context)
 
 	var tool_defs: Array[Dictionary] = impl.get_tools()
-	if tool_defs.size() != 4:
-		return _failure("runtime system impl should expose exactly four tools.")
+	if tool_defs.size() != 2:
+		return _failure("runtime system impl should expose exactly two high-level tools after merging runtime I/O.")
 	var tool_names: Array[String] = []
 	for tool_def in tool_defs:
 		tool_names.append(str(tool_def.get("name", "")))
-	for expected_name in ["runtime_control", "runtime_capture", "runtime_input", "runtime_step"]:
+	for expected_name in ["runtime_control", "runtime_step"]:
 		if not tool_names.has(expected_name):
 			return _failure("runtime system impl is missing tool '%s'." % expected_name)
 
@@ -161,11 +161,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (invalid_action_data is Dictionary) or str((invalid_action_data as Dictionary).get("hint", "")).find("status, enable, disable") == -1:
 		return _failure("runtime_control bogus action response is missing a hint.")
 
-	var invalid_capture: Dictionary = await impl.execute_async("runtime_capture", {"frame_count": 0})
+	var invalid_capture: Dictionary = await impl.execute_async("runtime_step", {"action": "capture", "frame_count": 0})
 	if str(invalid_capture.get("error", "")) != "invalid_argument":
-		return _failure("runtime_capture(frame_count=0) did not return invalid_argument.")
+		return _failure("runtime_step(action=capture, frame_count=0) did not return invalid_argument.")
 
-	var capture_result: Dictionary = await impl.execute_async("runtime_capture", {
+	var capture_result: Dictionary = await impl.execute_async("runtime_step", {
+		"action": "capture",
 		"frame_count": 2,
 		"interval_frames": 3,
 		"capture_dir": "user://contract_runtime_captures"
@@ -186,7 +187,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(fake_service.last_capture_args.get("capture_dir", "")) != "user://contract_runtime_captures":
 		return _failure("runtime_capture did not forward capture_dir to the runtime control service.")
 
-	var input_result: Dictionary = await impl.execute_async("runtime_input", {
+	var input_result: Dictionary = await impl.execute_async("runtime_step", {
+		"action": "input",
 		"inputs": [
 			{"kind": "key", "target": "Space", "op": "tap", "duration_ms": 15}
 		]
@@ -197,6 +199,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_input did not forward inputs to the runtime control service.")
 
 	var step_result: Dictionary = await impl.execute_async("runtime_step", {
+		"action": "step",
 		"wait_frames": 4,
 		"capture": true,
 		"capture_dir": "user://contract_step_captures",
@@ -218,6 +221,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_atomic in ["runtime_control", "runtime_capture", "runtime_input", "runtime_step"]:
 		if not fake_bridge.calls.has(expected_atomic):
 			return _failure("runtime system impl should route through atomic bridge for %s." % expected_atomic)
+	var unknown_step_action: Dictionary = await impl.execute_async("runtime_step", {"action": "bogus"})
+	if str(unknown_step_action.get("error", "")) != "invalid_argument":
+		return _failure("runtime_step should reject unknown merged runtime action.")
 
 	return {
 		"name": "system_runtime_impl_contracts",

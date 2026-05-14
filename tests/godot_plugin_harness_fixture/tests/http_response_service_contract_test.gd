@@ -46,6 +46,19 @@ class FakeCallbacks:
 	func get_server_stats() -> Dictionary:
 		return server_stats.duplicate(true)
 
+	func get_editor_session_identity() -> Dictionary:
+		return {
+			"session_id": "health-contract-session",
+			"identity_scope": "current_editor_process",
+			"process_owner": "godot_dotnet_mcp_editor",
+			"external_validation_process": false,
+			"safe_to_terminate": false,
+			"pid": 6363,
+			"listen_host": "127.0.0.1",
+			"listen_port": 3000,
+			"listen_url": "http://127.0.0.1:3000/mcp"
+		}
+
 	func get_freshness_snapshot() -> Dictionary:
 		return {"status": "fresh", "needs_lifecycle_reload": false}
 
@@ -66,6 +79,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		},
 		{
 			"running": true,
+			"listen_host": "127.0.0.1",
+			"listen_port": 3000,
+			"listen_url": "http://127.0.0.1:3000/mcp",
 			"connections": 3,
 			"total_connections": 5,
 			"total_requests": 12,
@@ -78,6 +94,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.get_tool_loader = Callable(callbacks, "get_tool_loader")
 	context.get_tool_loader_status = Callable(callbacks, "get_tool_loader_status")
 	context.get_server_stats = Callable(callbacks, "get_server_stats")
+	context.get_editor_session_identity = Callable(callbacks, "get_editor_session_identity")
 	context.get_freshness_snapshot = Callable(callbacks, "get_freshness_snapshot")
 	context.log = Callable(callbacks, "log")
 	context.server_name = str(server_facts.get("server_name", ""))
@@ -100,6 +117,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not reflect a healthy loader state.")
 	if int(health.get("connections", -1)) != 3:
 		return _failure("Health response did not project server stats.")
+	if str(health.get("listen_host", "")) != "127.0.0.1" or int(health.get("listen_port", 0)) != 3000:
+		return _failure("Health response should expose the MCP listen endpoint.")
+	var health_identity: Dictionary = health.get("editor_session_identity", {})
+	if str(health_identity.get("session_id", "")) != "health-contract-session":
+		return _failure("Health response should expose the current editor session identity.")
+	if bool(health_identity.get("safe_to_terminate", true)) or bool(health_identity.get("external_validation_process", true)):
+		return _failure("Health response session identity must distinguish the current MCP editor from external validation processes.")
 	if int(health.get("exposed_tool_count", 0)) != 2:
 		return _failure("Health response did not count exposed tools from the loader.")
 	if str(health.get("server_name", "")) != MCPProtocolFacts.get_server_name():

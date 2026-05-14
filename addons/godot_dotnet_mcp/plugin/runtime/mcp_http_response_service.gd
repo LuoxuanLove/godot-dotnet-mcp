@@ -5,6 +5,7 @@ class_name MCPHttpResponseService
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
 var _get_server_stats := Callable()
+var _get_editor_session_identity := Callable()
 var _get_freshness_snapshot := Callable()
 var _log := Callable()
 var _server_name := ""
@@ -20,6 +21,7 @@ func configure(context = null) -> void:
 	_get_tool_loader = context.get_tool_loader
 	_get_tool_loader_status = context.get_tool_loader_status
 	_get_server_stats = context.get_server_stats
+	_get_editor_session_identity = context.get_editor_session_identity
 	_get_freshness_snapshot = context.get_freshness_snapshot
 	_log = context.log
 	_server_name = str(context.server_name)
@@ -32,6 +34,7 @@ func dispose() -> void:
 	_get_tool_loader = Callable()
 	_get_tool_loader_status = Callable()
 	_get_server_stats = Callable()
+	_get_editor_session_identity = Callable()
 	_get_freshness_snapshot = Callable()
 	_log = Callable()
 	_server_name = ""
@@ -82,6 +85,10 @@ func build_health_response() -> Dictionary:
 		"protocol_version": _protocol_version,
 		"tool_schema_version": _tool_schema_version,
 		"running": bool(server_stats.get("running", false)),
+		"listen_host": str(server_stats.get("listen_host", "")),
+		"listen_port": int(server_stats.get("listen_port", 0)),
+		"listen_url": str(server_stats.get("listen_url", "")),
+		"editor_session_identity": _get_editor_session_identity_safe(),
 		"connections": int(server_stats.get("connections", 0)),
 		"total_connections": int(server_stats.get("total_connections", 0)),
 		"total_requests": int(server_stats.get("total_requests", 0)),
@@ -210,6 +217,14 @@ func _get_server_stats_safe() -> Dictionary:
 		var stats = _get_server_stats.call()
 		if stats is Dictionary:
 			return (stats as Dictionary).duplicate(true)
+	return {}
+
+
+func _get_editor_session_identity_safe() -> Dictionary:
+	if _get_editor_session_identity.is_valid():
+		var identity = _get_editor_session_identity.call()
+		if identity is Dictionary:
+			return (identity as Dictionary).duplicate(true)
 	return {}
 
 

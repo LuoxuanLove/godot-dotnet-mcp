@@ -3,11 +3,22 @@ name: validate-plugin
 on:
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
+    types: [checks_requested]
   push:
     branches:
       - dev
       - "feature/**"
       - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "hotfix/**"
+      - "release/**"
+      - "actions-bot/**"
+
+permissions:
+  contents: read
 
 jobs:
   validate-plugin-harness:

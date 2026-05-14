@@ -17,7 +17,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "scene_validate",
-			"description": "SCENE VALIDATE: Quick integrity check of a .tscn file — structural errors and missing file references. Lighter than scene_analyze; use first to confirm a scene is loadable. Returns: valid, issues[]{severity, type, message}, missing_dependencies[]. Requires: scene (.tscn path).",
+			"description": "SCENE VALIDATE: Quick integrity check of a .tscn file — structural errors, missing file references, and UID/fallback path consistency hints. Lighter than scene_analyze; use first to confirm a scene is loadable. Returns: valid, issues[]{severity, type, message}, missing_dependencies[], dependency_reference_issues[]. Requires: scene (.tscn path).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -234,10 +234,28 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 			var typed_issue: Dictionary = raw_issue
 			bridge.append_unique_issue(issues, typed_issue.duplicate(true))
 	var missing_deps: Array = []
+	var dependency_reference_issues: Array = []
 	for raw_dep in dep_data.get("dependencies", []):
-		var dep_path: String = bridge.normalize_dependency_path(str(raw_dep))
+		var dep_ref: Dictionary = bridge.parse_dependency_reference(str(raw_dep), scene_path) if bridge.has_method("parse_dependency_reference") else {"normalized_path": bridge.normalize_dependency_path(str(raw_dep)), "risk": "none"}
+		var dep_path: String = str(dep_ref.get("normalized_path", ""))
 		if dep_path.is_empty():
 			continue
+		var ref_risk := str(dep_ref.get("risk", "none"))
+		if ref_risk == "warning" or ref_risk == "error":
+			var ref_issue_type := str(dep_ref.get("consistency", "dependency_reference_inconsistent"))
+			var ref_message := _build_dependency_reference_message(dep_ref)
+			var ref_issue: Dictionary = bridge.build_issue(ref_risk, ref_issue_type, ref_message, {
+				"scene": scene_path,
+				"raw": str(dep_ref.get("raw", str(raw_dep))),
+				"uid": str(dep_ref.get("uid", "")),
+				"path": dep_path,
+				"declared_path": str(dep_ref.get("declared_path", "")),
+				"resolved_uid_path": str(dep_ref.get("resolved_uid_path", "")),
+				"hint": str(dep_ref.get("hint", "")),
+				"build_status": "build_may_pass"
+			})
+			dependency_reference_issues.append(ref_issue.duplicate(true))
+			bridge.append_unique_issue(issues, ref_issue)
 		var is_tscn: bool = dep_path.ends_with(".tscn")
 		var is_gd: bool = dep_path.ends_with(".gd")
 		var is_cs: bool = dep_path.ends_with(".cs")
@@ -247,12 +265,38 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 			continue
 		missing_deps.append(dep_path)
 		var msg: String = "Referenced file not found: %s" % dep_path
-		var extra: Dictionary = {"path": dep_path, "scene": scene_path}
+		var extra: Dictionary = {"path": dep_path, "scene": scene_path, "build_status": "build_may_pass"}
+		if str(dep_ref.get("uid", "")).begins_with("uid://"):
+			msg = "Referenced file not found: %s. This dependency came from a UID/fallback path reference; the UID cache or fallback path may be stale." % dep_path
+			extra["uid"] = str(dep_ref.get("uid", ""))
+			extra["declared_path"] = str(dep_ref.get("declared_path", ""))
+			extra["resolved_uid_path"] = str(dep_ref.get("resolved_uid_path", ""))
+			extra["hint"] = "Reimport, fix the resource path, or re-save the scene/resource to normalize UID references."
 		var new_issue: Dictionary = bridge.build_issue("error", "missing_dependency", msg, extra)
 		bridge.append_unique_issue(issues, new_issue)
 	var is_valid: bool = not bridge.has_severity(issues, "error")
-	var out: Dictionary = {"scene": scene_path, "valid": is_valid, "issue_count": issues.size(), "issues": issues, "missing_dependency_count": missing_deps.size(), "missing_dependencies": missing_deps}
+	var out: Dictionary = {"scene": scene_path, "valid": is_valid, "issue_count": issues.size(), "issues": issues, "missing_dependency_count": missing_deps.size(), "missing_dependencies": missing_deps, "dependency_reference_issue_count": dependency_reference_issues.size(), "dependency_reference_issues": dependency_reference_issues}
 	return bridge.success(out)
+
+
+func _build_dependency_reference_message(dep_ref: Dictionary) -> String:
+	var consistency := str(dep_ref.get("consistency", "dependency_reference_inconsistent"))
+	var uid := str(dep_ref.get("uid", ""))
+	var declared_path := str(dep_ref.get("declared_path", ""))
+	var resolved_uid_path := str(dep_ref.get("resolved_uid_path", ""))
+	match consistency:
+		"stale_fallback_path":
+			return "UID %s resolves to %s, but the fallback path is stale: %s." % [uid, resolved_uid_path, declared_path]
+		"stale_uid":
+			return "Fallback path exists but UID is stale or unknown: %s -> %s." % [uid, declared_path]
+		"uid_path_mismatch":
+			return "UID %s resolves to %s, which differs from fallback path %s." % [uid, resolved_uid_path, declared_path]
+		"missing_uid_and_path":
+			return "Neither UID nor fallback path can be resolved: %s -> %s." % [uid, declared_path]
+		"missing_path":
+			return "Referenced path does not exist: %s." % declared_path
+		_:
+			return "Dependency reference may be inconsistent: %s." % str(dep_ref.get("raw", ""))
 
 
 func _execute_scene_analyze(args: Dictionary) -> Dictionary:
