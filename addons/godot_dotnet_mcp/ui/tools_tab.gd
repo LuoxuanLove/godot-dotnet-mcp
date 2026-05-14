@@ -704,10 +704,10 @@ func _sync_item_collapsed_to_settings(item: TreeItem, want_collapsed: bool) -> v
 		tree_collapse_changed.emit(kind, key, want_collapsed)
 
 
-func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
+func _show_tree_context_menu(item: TreeItem, screen_position: Vector2) -> Rect2i:
 	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
 	if not (metadata is Dictionary):
-		return
+		return Rect2i()
 	var meta := metadata as Dictionary
 	_context_menu_metadata = meta
 	_context_menu_target = item
@@ -727,11 +727,17 @@ func _show_tree_context_menu(item: TreeItem, global_pos: Vector2) -> void:
 				_add_context_menu_item(_localization.get_text("btn_delete_user_tool"), _CTX_DELETE_TOOL)
 		_:
 			pass
-	_context_menu.popup(Rect2i(int(global_pos.x), int(global_pos.y), 0, 0))
+	var popup_rect := _get_tree_context_menu_popup_rect(screen_position)
+	_context_menu.popup(popup_rect)
+	return popup_rect
 
 
 func _get_tree_context_menu_screen_position(local_position: Vector2) -> Vector2:
 	return _tool_tree.get_screen_transform() * local_position
+
+
+func _get_tree_context_menu_popup_rect(screen_position: Vector2) -> Rect2i:
+	return Rect2i(int(screen_position.x), int(screen_position.y), 0, 0)
 
 
 func _on_context_menu_id_pressed(id: int) -> void:
@@ -1135,7 +1141,9 @@ func _refresh_preview() -> void:
 	var selection_changed := current_preview_key != _last_preview_key
 	_last_preview_key = current_preview_key
 	# Preserve scroll position when re-rendering without a selection change
-	var saved_v_scroll := _tool_preview_text.get_v_scroll() if not selection_changed else 0
+	var saved_v_scroll: int = 0
+	if not selection_changed:
+		saved_v_scroll = int(_tool_preview_text.get_v_scroll())
 	_tool_preview_text.clear()
 	_tool_preview_text.set_text(_build_preview_text())
 	_tool_preview_text.set_v_scroll(saved_v_scroll)

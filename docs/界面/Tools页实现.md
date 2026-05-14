@@ -103,6 +103,21 @@ root
 
 ---
 
+## 右键菜单与弹窗坐标契约
+
+Tools 页当前只在工具树上创建一个 Dock 内自建 `PopupMenu`，用于复制名称、英文 ID、schema，以及展开 / 折叠树节点。`Tree.gui_input` 收到的 `mouse_event.position` 是 `ToolTree` 的 Control 本地坐标，不能直接传给 `PopupMenu.popup(Rect2i)`。
+
+坐标边界约定如下：
+
+- **local**：某个 `Control` 自身的本地坐标，例如 `ToolTree.gui_input` 中的 `mouse_event.position`。
+- **canvas global**：经过 Control / CanvasItem 变换后的画布坐标，可由 `get_global_transform_with_canvas()` 等路径得到，适合控件命中与 viewport 内输入换算。
+- **viewport**：当前 `Viewport` 内的坐标，用于 `Viewport.push_input()`、截图裁剪和 viewport 可见区域换算。
+- **screen**：屏幕坐标，`PopupMenu.popup(Rect2i)` 这类编辑器浮层定位入口必须使用该坐标；这里仅指 Godot 弹窗定位换算，不代表桌面级窗口控制。
+
+因此右键菜单定位必须走 `_get_tree_context_menu_screen_position(local_position)` 这类可测试 helper，并通过 `ToolTree.get_screen_transform() * local_position` 或等价的本地到屏幕变换得到 screen 坐标。不要把 `mouse_event.position`、`get_screen_position() + local_position` 或 canvas global 坐标直接传给 `popup(Rect2i)`；后续若新增 Dock 内 `PopupMenu` / `PopupPanel`，也应先封装同类 helper 并补充轻量契约测试。
+
+---
+
 ## 控制器职责
 
 `tools_tab.gd` 当前负责：

@@ -4,6 +4,10 @@
 
 目标版本：`1.0.0-pre3`。
 
+### Added
+
+- 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
+
 ### Changed
 
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。

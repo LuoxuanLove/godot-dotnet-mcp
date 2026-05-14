@@ -4,6 +4,10 @@
 
 Target version: `1.0.0-pre3`.
 
+### Added
+
+- Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
+
 ### Changed
 
 - Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
