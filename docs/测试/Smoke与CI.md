@@ -68,6 +68,8 @@ tests/
 
 `validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml` 和 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
 
+`validate-plugin-harness` 执行 `scripts/test_plugin_side_roslyn.ps1` 时会输出各 build、case 与 guardrails 阶段耗时；在 GitHub Actions 中还会写入 Job Summary，便于定位慢阶段或慢 case。
+
 ---
 
 ## 5. 当前门禁边界
