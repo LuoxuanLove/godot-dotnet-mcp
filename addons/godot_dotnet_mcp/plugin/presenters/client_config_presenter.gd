@@ -481,12 +481,13 @@ func _build_client_capability_model(client_id: String, model: Dictionary, detect
 	var launch_supported := bool(detection.get("launch_supported", false))
 	var path_pick_supported := bool(detection.get("path_pick_supported", false))
 	var path_clear_supported := bool(detection.get("path_clear_supported", false))
+	var visible_write_supported := bool(model.get("writeable", false)) or bool(model.get("remove_supported", false))
 	var has_manual_config_guidance := _has_manual_config_guidance(client_id, config_path, entry_status)
 	var kind := "copy_guidance"
-	if write_supported:
-		kind = "full_write"
-	elif auto_add_supported:
+	if auto_add_supported:
 		kind = "auto_add"
+	elif write_supported and visible_write_supported:
+		kind = "full_write"
 	elif has_manual_config_guidance:
 		kind = "manual_guidance"
 	elif launch_supported or path_pick_supported or path_clear_supported:

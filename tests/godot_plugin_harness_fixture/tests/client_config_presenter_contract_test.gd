@@ -239,6 +239,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"status": "ready",
 				"config_path": "E:/Project/Test/.gemini/settings.json",
 				"config_entry_status": {"status": "present"},
+				"write_supported": true,
 				"auto_add_supported": true,
 				"launch_supported": true,
 				"path_pick_supported": true,
@@ -284,6 +285,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Gemini CLI should launch through the terminal flow, not the desktop-app flow.")
 	if str(gemini_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
 		return _failure("Gemini CLI should switch the primary action to Remove when godot-mcp is already installed.")
+	if str(gemini_model.get("capability", {}).get("kind", "")) != "auto_add":
+		return _failure("A CLI client with write_supported and auto_add_supported should prefer the auto-add capability summary.")
 	var qwen_model: Dictionary = cli_models[4]
 	if str(qwen_model.get("install_status_text", "")).find("E:/Project/Test/.qwen/settings.json") == -1:
 		return _failure("Qwen Code CLI status should surface the active config file path once godot-mcp is already installed.")
