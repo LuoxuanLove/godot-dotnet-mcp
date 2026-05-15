@@ -72,6 +72,8 @@ tests/
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
 
+`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
+
 ---
 
 ## 5. 当前门禁边界
