@@ -6,6 +6,7 @@
 
 ### Added
 
+- 为 `system_project_run` 新增可选 runtime bridge 日志 marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式默认自动停止，并通过 fake runtime events 补充契约覆盖。
 - 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
 
 ### Changed

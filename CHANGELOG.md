@@ -6,6 +6,7 @@ Target version: `1.0.0-pre3`.
 
 ### Added
 
+- Added optional `system_project_run` runtime bridge log marker validation with success/failure marker matching, timeout handling, default marker-mode auto-stop, and contract coverage using fake runtime events.
 - Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
 
 ### Changed
