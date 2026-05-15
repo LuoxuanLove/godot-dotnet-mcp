@@ -89,7 +89,7 @@
 ### Removed
 
 - 移除旧的公开 `intelligence_*` 工具名。大多数工作流现在改用对应的 `system_*` 工具，例如 `system_project_state`、`system_runtime_diagnose`、`system_scene_analyze`、`system_script_analyze` 和 `system_bindings_audit`。
-- 移除独立的 `intelligence_project_advise` 建议工具。Agent 现在应通过 `system_help`、`system_project_state`、`system_editor_state`、诊断工具、场景 / 脚本分析工具先观察状态，再自行选择下一步。
+- 移除独立的 `intelligence_project_advise` 建议工具。Agent 现在应通过 `system_help`、`system_project_state`、`system_editor_state`、诊断工具、场景 / 脚本分析工具先观察状态，再自行选择下一步工具。
 - 移除低层原子工具域作为主要公开工作流入口。场景、脚本、编辑器、运行时、文件系统、动画、节点、资源、调试等底层能力仍作为高层工具和工具页树背后的内部实现保留。
 - 移除旧的公开 Intelligence 工具树和对应文档页，统一改为 System 工具树与 `docs/模块/System工具层.md`。
 - 移除旧的权限级别界面和主页高级权限设置，用户不再需要手动选择能力等级。
@@ -152,13 +152,13 @@
 
 - 重构 `Tools` 页树结构：顶层直接显示 Intelligence 工具，每个工具可展开查看其依赖的原子工具链，原子工具还可继续展开到 Action 节点。
 - 新增 `Shift` 递归展开/折叠，以及右键菜单（复制工具名、Schema、删除用户工具）。
-- 重构 `MCPDebugBuffer` 日志系统：统一 source 命名、增加日志级别（`trace/debug/info/warning/error`），并补齐 `tool_loader`、`intelligence`、`atomic_bridge` 和 `impl_*` 的关键日志点。
+- 重构 `MCPDebugBuffer` 日志系统：统一 source 命名、增加日志级别（`trace/debug/info/warning/error`），并补齐 `tool_loader`、`intelligence`、`atomic_bridge`、`impl_*` 的关键日志点。
 - 仓库目录重组为 Godot Asset Library 规范的 `addons/godot_dotnet_mcp/` 布局，并新增 `.gitattributes` 控制发布 ZIP 内容。
 
 ### Removed
 
 - 移除 `Tools` 页 Profile 预设管理 UI；Profile 管理迁移到 `plugin_developer_*` 工具组中通过 MCP 完成。
-- 暂时移除 `Tools` 页用户工具管理 UI；用户工具的创建、删除与恢复目前统一通过 `plugin_evolution_*` 工具组处理，后续版本可能恢复独立 UI。
+- 暂时移除 `Tools` 页用户工具管理 UI；用户工具的创建、删除与恢复目前统一通过 `plugin_evolution_*` 工具组完成，后续版本可能恢复独立 UI。
 
 ### Fixed
 
@@ -201,7 +201,7 @@
 ### Changed
 
 - 重新整理工具分组与插件分类，减少单个工具入口暴露过多动作的问题，提升可发现性。
-- 简化 Dock 界面布局与文档，重点优化 `Server`、`Config` 和 `Tools` 在窄宽度下的可用性。
+- 简化 Dock 界面布局与文档，重点优化 `Server`、`Config`、`Tools` 在窄宽度下的可用性。
 - 补充更多分类、工具说明与提示的多语言内容，减少未翻译标记。
 - 同步 `README`、中文 README 与发布文档，使首次接入、安装与配置流程保持一致。
 
@@ -223,7 +223,7 @@
 - 75 个顶层 MCP 工具。
 - 场景、节点、资源、脚本、动画、材质、TileMap、导航、物理、音频与 UI 能力。
 - Godot .NET / C# 场景绑定分析与导出成员审计。
-- TileSet 最小闭环支持：`create_empty` 和 `assign_to_tilemap`。
+- TileSet 最小闭环支持：`create_empty` 与 `assign_to_tilemap`。
 - 调试事件缓冲与基础运行时诊断回读工具。
 - 受控的临时场景目录与场景保存链路。
 - 继承感知的资源类型过滤。
