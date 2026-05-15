@@ -362,8 +362,6 @@ func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> Strin
 func _build_client_ui_model(client_id: String, client: Dictionary, client_install_statuses: Dictionary, localization) -> Dictionary:
 	var model = client.duplicate(true)
 	var detection: Dictionary = client_install_statuses.get(client_id, {})
-	var codex_cli_detection: Dictionary = client_install_statuses.get("codex", {})
-	var opencode_cli_detection: Dictionary = client_install_statuses.get("opencode", {})
 	model["path_label_text"] = localization.get_text("config_client_write_path_label")
 	if detection.is_empty():
 		return model
@@ -465,7 +463,70 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 				model["primary_action_disabled_reason"] = _get_client_install_message_text(client_id, status, localization)
 		"claude_code", "opencode":
 			model["writeable"] = false
+
+	var capability := _build_client_capability_model(client_id, model, detection)
+	model["capability"] = capability
+	model["guidance_text"] = _append_guidance_text(
+		str(model.get("guidance_text", "")),
+		_build_client_capability_summary_text(capability, localization)
+	)
 	return model
+
+
+func _build_client_capability_model(client_id: String, model: Dictionary, detection: Dictionary) -> Dictionary:
+	var entry_status := str(detection.get("config_entry_status", {}).get("status", ""))
+	var config_path := str(detection.get("config_path", model.get("path", ""))).strip_edges()
+	var write_supported := bool(detection.get("write_supported", false))
+	var auto_add_supported := bool(detection.get("auto_add_supported", false))
+	var launch_supported := bool(detection.get("launch_supported", false))
+	var path_pick_supported := bool(detection.get("path_pick_supported", false))
+	var path_clear_supported := bool(detection.get("path_clear_supported", false))
+	var has_manual_config_guidance := _has_manual_config_guidance(client_id, config_path, entry_status)
+	var kind := "copy_guidance"
+	if write_supported:
+		kind = "full_write"
+	elif auto_add_supported:
+		kind = "auto_add"
+	elif has_manual_config_guidance:
+		kind = "manual_guidance"
+	elif launch_supported or path_pick_supported or path_clear_supported:
+		kind = "launch_path"
+
+	return {
+		"kind": kind,
+		"client_id": client_id,
+		"write_supported": write_supported,
+		"auto_add_supported": auto_add_supported,
+		"launch_supported": launch_supported,
+		"path_pick_supported": path_pick_supported,
+		"path_clear_supported": path_clear_supported,
+		"config_path": config_path,
+		"entry_status": entry_status,
+		"one_click_supported": write_supported or auto_add_supported
+	}
+
+
+func _has_manual_config_guidance(client_id: String, config_path: String, entry_status: String) -> bool:
+	return not config_path.is_empty() or not entry_status.is_empty() or client_id == "cherry_studio" or client_id == "opencode_desktop"
+
+
+func _build_client_capability_summary_text(capability: Dictionary, localization) -> String:
+	var kind := str(capability.get("kind", "copy_guidance"))
+	var summary_key := "config_client_capability_%s" % kind
+	var summary: String = localization.get_text(summary_key)
+	if summary == summary_key:
+		return ""
+	return "%s: %s" % [localization.get_text("config_client_capability_summary_label"), summary]
+
+
+func _append_guidance_text(existing_text: String, additional_text: String) -> String:
+	var existing := existing_text.strip_edges()
+	var additional := additional_text.strip_edges()
+	if additional.is_empty():
+		return existing
+	if existing.is_empty():
+		return additional
+	return "%s\n%s" % [existing, additional]
 
 
 func _build_client_install_status_text(client_id: String, model: Dictionary, detection: Dictionary, localization) -> String:
