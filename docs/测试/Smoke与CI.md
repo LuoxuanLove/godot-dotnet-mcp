@@ -72,6 +72,8 @@ tests/
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
 
+Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
+
 ---
 
 ## 5. 当前门禁边界
