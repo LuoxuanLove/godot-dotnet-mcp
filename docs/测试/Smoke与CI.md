@@ -1,4 +1,4 @@
-﻿# Smoke 与 CI
+# Smoke 与 CI
 
 本文档说明当前测试结构、CI 接入状态和后续门禁策略方向。
 
@@ -71,8 +71,8 @@ tests/
 `dotnet-build.yml` 和 `validate-plugin.yml` 只会对同一 PR 的新运行启用 concurrency cancellation，避免同一 PR 的旧 build 或 harness 继续占用 runner。`dev`、`push`、`workflow_dispatch`、`merge_group`、tag、release 等非 PR 运行会使用唯一的 run id 作为 concurrency group，因此不会互相取消。`dotnet-build` job 的 timeout 为 30 分钟，`validate-plugin-harness` job 的 timeout 为 90 分钟，check 名称保持不变。
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
+`dotnet-build.yml` 和 `scripts/test_plugin_side_roslyn.ps1` 的 .NET build 阶段会识别符合 `CS2012`、Godot `.godot/mono/temp` 路径以及文件占用 / 安全软件扫描信号的失败，并输出 `transient_file_lock` 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 `.godot` 或终止进程。
 
-dotnet-build.yml 和 scripts/test_plugin_side_roslyn.ps1 的 .NET build 阶段会识别符合 CS2012、Godot .godot/mono/temp 路径以及文件占用 / 安全软件扫描信号的失败，并输出 	ransient_file_lock 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 .godot 或终止进程。
 
 ---
 
