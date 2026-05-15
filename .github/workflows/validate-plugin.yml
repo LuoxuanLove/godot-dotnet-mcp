@@ -60,5 +60,6 @@ jobs:
         with:
           name: plugin-harness-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .tmp/godot_plugin_harness/**
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
