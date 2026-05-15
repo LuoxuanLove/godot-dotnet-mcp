@@ -53,3 +53,12 @@ jobs:
       - name: Run plugin harness verification
         shell: pwsh
         run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
+
+      - name: Upload harness failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-harness-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tmp/godot_plugin_harness/**
+          if-no-files-found: ignore
+          retention-days: 7
