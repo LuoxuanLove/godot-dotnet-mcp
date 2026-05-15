@@ -12,6 +12,8 @@ const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 class FakeBridge extends RefCounted:
 	var _tool_loader
 	var scene_run_actions: Array[String] = []
+	var runtime_events: Array = []
+	var runtime_events_after_start: Array = []
 	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
@@ -61,8 +63,12 @@ class FakeBridge extends RefCounted:
 						return success({"bridge_status": "ready", "session_count": 1, "sessions": {"a": {"state": "running"}}, "error_count": 1, "warning_count": 0})
 					"get_errors_context":
 						return success({"errors": [{"message": "Boom", "script": "res://Player.gd", "line": 5, "stacktrace": []}]})
+					"get_recent":
+						var recent_events := _tail_runtime_events(int(args.get("limit", 50)))
+						return success({"bridge_status": "ready", "count": recent_events.size(), "events": recent_events})
 					"get_recent_filtered":
-						return success({"events": []})
+						var filtered_events := _tail_runtime_events(int(args.get("tail", args.get("limit", 50))))
+						return success({"bridge_status": "ready", "count": filtered_events.size(), "events": filtered_events})
 					"get_scene_snapshot":
 						return success({"current_scene": "res://tests/project_contract_fixture/Main.tscn"})
 					_:
@@ -80,8 +86,12 @@ class FakeBridge extends RefCounted:
 			"script_inspect":
 				return success({"language": "csharp", "class_name": "WrongResourceName", "base_type": "Node"})
 			"scene_run":
-				scene_run_actions.append(str(args.get("action", "")))
-				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))}, "ok")
+				var scene_action := str(args.get("action", ""))
+				scene_run_actions.append(scene_action)
+				if scene_action in ["play_main", "play_custom"] and not runtime_events_after_start.is_empty():
+					runtime_events.append_array(runtime_events_after_start)
+					runtime_events_after_start.clear()
+				return success({"action": scene_action, "path": str(args.get("path", ""))}, "ok")
 			"project_settings":
 				return success({"applied": true})
 			"project_autoload":
@@ -129,6 +139,14 @@ class FakeBridge extends RefCounted:
 				return ["res://mat/test.tres"]
 			_:
 				return []
+
+	func _tail_runtime_events(limit: int) -> Array:
+		var resolved_limit: int = max(limit, 0)
+		if resolved_limit == 0:
+			return []
+		if runtime_events.size() <= resolved_limit:
+			return runtime_events.duplicate(true)
+		return runtime_events.slice(runtime_events.size() - resolved_limit)
 
 	func extract_data(result: Dictionary) -> Dictionary:
 		var data = result.get("data", {})
@@ -370,6 +388,82 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
+
+	var marker_success_executor = SystemProjectExecutorScript.new()
+	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_success_bridge.runtime_events_after_start = [{"kind": "runtime_log", "payload": {"message": "BOOT READY", "level": "info"}}]
+	marker_success_executor.bridge = marker_success_bridge
+	marker_success_executor.configure_runtime({})
+	var marker_success: Dictionary = await marker_success_executor.execute_async("project_run", {
+		"success_markers": ["BOOT READY"],
+		"failure_markers": ["BOOT FAIL"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if not bool(marker_success.get("success", false)):
+		return _failure("project_run marker validation should pass when a success marker appears in runtime bridge events.")
+	var marker_success_data: Dictionary = marker_success.get("data", {})
+	var marker_success_validation: Dictionary = marker_success_data.get("validation", {})
+	if str(marker_success_validation.get("status", "")) != "passed" or str(marker_success_validation.get("matched_marker", "")) != "BOOT READY":
+		return _failure("project_run marker validation should report passed status and matched success marker details.")
+	if marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
+		return _failure("project_run marker validation should auto-stop through scene_run stop by default.")
+
+	var marker_failure_executor = SystemProjectExecutorScript.new()
+	var marker_failure_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_failure_bridge.runtime_events_after_start = [{"kind": "runtime_log", "payload": {"message": "BOOT READY then BOOT FAIL", "level": "error"}}]
+	marker_failure_executor.bridge = marker_failure_bridge
+	marker_failure_executor.configure_runtime({})
+	var marker_failure: Dictionary = await marker_failure_executor.execute_async("project_run", {
+		"success_markers": ["BOOT READY"],
+		"failure_markers": ["BOOT FAIL"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if bool(marker_failure.get("success", false)):
+		return _failure("project_run marker validation should fail when a failure marker appears, even if success text also appears.")
+	var marker_failure_data: Dictionary = marker_failure.get("data", {})
+	if str(marker_failure_data.get("error_code", "")) != "run_log_failure_marker_matched":
+		return _failure("project_run marker validation failure should include run_log_failure_marker_matched error_code.")
+	var marker_failure_validation: Dictionary = marker_failure_data.get("validation", {})
+	if str(marker_failure_validation.get("status", "")) != "failed" or str(marker_failure_validation.get("matched_marker", "")) != "BOOT FAIL":
+		return _failure("project_run marker validation should report failed status and matched failure marker details.")
+
+	var marker_timeout_executor = SystemProjectExecutorScript.new()
+	var marker_timeout_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_timeout_executor.bridge = marker_timeout_bridge
+	marker_timeout_executor.configure_runtime({})
+	var marker_timeout: Dictionary = await marker_timeout_executor.execute_async("project_run", {
+		"success_markers": ["NEVER READY"],
+		"timeout_ms": 5,
+		"poll_interval_ms": 1,
+		"log_tail": 10,
+		"auto_stop": false
+	})
+	if bool(marker_timeout.get("success", false)):
+		return _failure("project_run marker validation should fail when no marker appears before timeout.")
+	var marker_timeout_data: Dictionary = marker_timeout.get("data", {})
+	if str(marker_timeout_data.get("error_code", "")) != "run_log_marker_timeout":
+		return _failure("project_run marker validation timeout should include run_log_marker_timeout error_code.")
+	if marker_timeout_bridge.scene_run_actions != ["play_main"]:
+		return _failure("project_run marker validation should respect auto_stop=false and avoid scene_run stop.")
+
+	var invalid_marker_executor = SystemProjectExecutorScript.new()
+	var invalid_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	invalid_marker_executor.bridge = invalid_marker_bridge
+	invalid_marker_executor.configure_runtime({})
+	var invalid_marker: Dictionary = await invalid_marker_executor.execute_async("project_run", {
+		"success_markers": ["x".repeat(300)]
+	})
+	if bool(invalid_marker.get("success", false)):
+		return _failure("project_run marker validation should reject oversized markers.")
+	var invalid_marker_data: Dictionary = invalid_marker.get("data", {})
+	if str(invalid_marker_data.get("error_code", "")) != "invalid_argument":
+		return _failure("project_run marker validation should report invalid_argument for oversized markers.")
+	if not invalid_marker_bridge.scene_run_actions.is_empty():
+		return _failure("project_run marker validation should reject invalid marker arguments before starting the project.")
 
 	var failing_run_executor = SystemProjectExecutorScript.new()
 	failing_run_executor.bridge = FakeFailingRunBridge.new(FakeToolLoader.new())
