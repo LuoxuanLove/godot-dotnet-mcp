@@ -1368,22 +1368,16 @@ func _build_runtime_event_baseline(events: Array) -> Dictionary:
 		var event_dict := event as Dictionary
 		if event_dict.has("event_id"):
 			max_event_id = maxi(max_event_id, int(event_dict.get("event_id", -1)))
-	return {
-		"max_event_id": max_event_id,
-		"event_count": events.size()
-	}
+	return {"max_event_id": max_event_id}
 
 
 func _filter_new_runtime_events(events: Array, baseline: Dictionary) -> Array:
 	var max_event_id := int(baseline.get("max_event_id", -1))
-	var baseline_event_count := int(baseline.get("event_count", 0))
 	var filtered: Array = []
-	for event_index in range(events.size()):
-		var event = events[event_index]
-		if event is Dictionary and (event as Dictionary).has("event_id"):
-			if int((event as Dictionary).get("event_id", -1)) <= max_event_id:
-				continue
-		elif event_index < baseline_event_count:
+	for event in events:
+		if not (event is Dictionary) or not (event as Dictionary).has("event_id"):
+			continue
+		if int((event as Dictionary).get("event_id", -1)) <= max_event_id:
 			continue
 		filtered.append(event)
 	return filtered

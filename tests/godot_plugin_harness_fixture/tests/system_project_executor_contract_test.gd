@@ -393,7 +393,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var marker_success_executor = SystemProjectExecutorScript.new()
 	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
-	marker_success_bridge.runtime_events_after_start = [{"kind": "runtime_log", "payload": {"message": "BOOT READY", "level": "info"}}]
+	marker_success_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY", "level": "info"}}]
 	marker_success_executor.bridge = marker_success_bridge
 	marker_success_executor.configure_runtime({})
 	var marker_success: Dictionary = await marker_success_executor.execute_async("project_run", {
@@ -444,7 +444,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var marker_failure_executor = SystemProjectExecutorScript.new()
 	var marker_failure_bridge = FakeBridge.new(FakeToolLoader.new())
-	marker_failure_bridge.runtime_events_after_start = [{"kind": "runtime_log", "payload": {"message": "BOOT READY then BOOT FAIL", "level": "error"}}]
+	marker_failure_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY then BOOT FAIL", "level": "error"}}]
 	marker_failure_executor.bridge = marker_failure_bridge
 	marker_failure_executor.configure_runtime({})
 	var marker_failure: Dictionary = await marker_failure_executor.execute_async("project_run", {
