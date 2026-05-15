@@ -138,10 +138,7 @@ function Invoke-DotnetBuildWithDiagnostics {
         throw "$Description failed with exit code $exitCode.`n$details"
     }
 
-    return [pscustomobject]@{
-        ExitCode = $exitCode
-        Output = $outputText
-    }
+
 }
 
 function Assert-DiagnosticCondition {
@@ -193,3 +190,4 @@ if ($MyInvocation.InvocationName -ne ".") {
         exit 1
     }
 }
+
