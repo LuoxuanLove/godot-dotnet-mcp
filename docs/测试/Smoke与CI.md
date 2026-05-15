@@ -58,7 +58,7 @@ tests/
 
 当前包含：
 
-1. `actions-bot-relay`: 手动接收 base64 patch，由 `github-actions[bot]` 创建 `actions-bot/*` 分支和指向 `dev` 的 PR
+1. `actions-bot-relay`: 手动接收 base64 patch，由 `github-actions[bot]` 创建 `actions-bot/*` 分支和指向 `dev` 的 PR，并在 PR 正文追加 base/head SHA、changed paths、diffstat、触发者、run URL 与验证 workflow 链接
 2. `pr-policy`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`
 3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
@@ -90,7 +90,7 @@ tests/
 
 - `tests/godot_plugin_harness` 支持 `--allow-skip-missing-godot`，但 CI 入口 `scripts/test_plugin_side_roslyn.ps1` 要求真实 Godot 可执行文件；其余可发现 case 不自动进入 CI 硬门禁
 - `actions-bot-relay` 依赖仓库 Settings 允许 GitHub Actions 创建 pull request；如果禁用该权限，workflow 会在创建 PR 时失败
-- `actions-bot-relay` 只应用维护者提供的 patch，不负责生成或理解需求；patch 内容仍需由维护者审查
+- `actions-bot-relay` 只应用维护者提供的 patch，不负责生成或理解需求；patch 内容仍需由维护者审查。relay 追加的元数据只用于辅助审查，不替代验证结果或人工判断
 - `next` draft release 只辅助维护发布说明，不代表正式发布，也不上传包资产
 - Agent 可创建、提交和按授权推送短分支，但合并远程 `dev` 只能由作者在 GitHub PR 页面手动确认并执行；Agent 不得本地合并后推送 `dev` 或绕过 required checks
 - 每个 PR 应只包含对应短分支目标范围内的修改；若夹带其他修复或历史未合并提交，应拆成独立 PR 或从最新 `origin/dev` 重建干净分支

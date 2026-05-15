@@ -10,6 +10,7 @@
 
 ### Changed
 
+- 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
 - 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
