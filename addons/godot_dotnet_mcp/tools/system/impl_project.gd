@@ -1229,14 +1229,14 @@ func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
 	var poll_interval_ms: int = clamp(int(args.get("poll_interval_ms", _RUN_LOG_MARKER_DEFAULT_POLL_INTERVAL_MS)), _RUN_LOG_MARKER_MIN_POLL_INTERVAL_MS, _RUN_LOG_MARKER_MAX_POLL_INTERVAL_MS)
 	var log_tail: int = clamp(int(args.get("log_tail", _RUN_LOG_MARKER_DEFAULT_LOG_TAIL)), 1, _RUN_LOG_MARKER_MAX_LOG_TAIL)
 	var auto_stop := bool(args.get("auto_stop", true))
-	var baseline_counts := _build_runtime_event_signature_counts(_fetch_runtime_log_events(log_tail))
+	var baseline := _build_runtime_event_baseline(_fetch_runtime_log_events(log_tail))
 	var run_result := _start_project_run(custom_scene)
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
 			"project_run failed: %s" % str(run_result.get("error", "unknown")))
 		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_run_failure_context(custom_scene, run_result))
 	_project_run_timeout_token += 1
-	var validation: Dictionary = await _wait_for_runtime_log_marker(success_markers, failure_markers, baseline_counts, timeout_ms, poll_interval_ms, log_tail)
+	var validation: Dictionary = await _wait_for_runtime_log_marker(success_markers, failure_markers, baseline, timeout_ms, poll_interval_ms, log_tail)
 	var stop_result: Dictionary = {}
 	if auto_stop:
 		stop_result = _stop_project_after_marker_validation(custom_scene if not custom_scene.is_empty() else "main", str(validation.get("status", "unknown")))
@@ -1310,12 +1310,12 @@ func _validate_run_log_markers(success_markers: Array[String], failure_markers: 
 	return {}
 
 
-func _wait_for_runtime_log_marker(success_markers: Array[String], failure_markers: Array[String], baseline_counts: Dictionary, timeout_ms: int, poll_interval_ms: int, log_tail: int) -> Dictionary:
+func _wait_for_runtime_log_marker(success_markers: Array[String], failure_markers: Array[String], baseline: Dictionary, timeout_ms: int, poll_interval_ms: int, log_tail: int) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
 	var started_ms := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - started_ms <= timeout_ms:
 		var elapsed_ms := Time.get_ticks_msec() - started_ms
-		var recent_events := _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), baseline_counts)
+		var recent_events := _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), baseline)
 		var failure_match := _find_marker_match(recent_events, failure_markers, "failure")
 		if not failure_match.is_empty():
 			failure_match["elapsed_ms"] = elapsed_ms
@@ -1360,29 +1360,33 @@ func _fetch_runtime_log_events(log_tail: int) -> Array:
 	return bridge.extract_array(result, "events")
 
 
-func _build_runtime_event_signature_counts(events: Array) -> Dictionary:
-	var counts := {}
+func _build_runtime_event_baseline(events: Array) -> Dictionary:
+	var max_event_id := -1
 	for event in events:
-		var signature := _build_runtime_event_signature(event)
-		counts[signature] = int(counts.get(signature, 0)) + 1
-	return counts
+		if not (event is Dictionary):
+			continue
+		var event_dict := event as Dictionary
+		if event_dict.has("event_id"):
+			max_event_id = maxi(max_event_id, int(event_dict.get("event_id", -1)))
+	return {
+		"max_event_id": max_event_id,
+		"event_count": events.size()
+	}
 
 
-func _filter_new_runtime_events(events: Array, baseline_counts: Dictionary) -> Array:
-	var remaining := baseline_counts.duplicate(true)
+func _filter_new_runtime_events(events: Array, baseline: Dictionary) -> Array:
+	var max_event_id := int(baseline.get("max_event_id", -1))
+	var baseline_event_count := int(baseline.get("event_count", 0))
 	var filtered: Array = []
-	for event in events:
-		var signature := _build_runtime_event_signature(event)
-		var baseline_count := int(remaining.get(signature, 0))
-		if baseline_count > 0:
-			remaining[signature] = baseline_count - 1
+	for event_index in range(events.size()):
+		var event = events[event_index]
+		if event is Dictionary and (event as Dictionary).has("event_id"):
+			if int((event as Dictionary).get("event_id", -1)) <= max_event_id:
+				continue
+		elif event_index < baseline_event_count:
 			continue
 		filtered.append(event)
 	return filtered
-
-
-func _build_runtime_event_signature(event) -> String:
-	return JSON.stringify(event)
 
 
 func _find_marker_match(events: Array, markers: Array[String], marker_type: String) -> Dictionary:

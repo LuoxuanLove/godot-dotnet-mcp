@@ -3,8 +3,10 @@ extends RefCounted
 # {"name": "system_project_executor_contracts"}
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
+const DebugToolsScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPRuntimeDebugStoreShared = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 
@@ -409,6 +411,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run marker validation should report passed status and matched success marker details.")
 	if marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
 		return _failure("project_run marker validation should auto-stop through scene_run stop by default.")
+
+	var repeated_marker_executor = SystemProjectExecutorScript.new()
+	var repeated_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	repeated_marker_bridge.runtime_events = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "REPEAT READY", "level": "info"}}]
+	repeated_marker_bridge.runtime_events_after_start = [{"event_id": 2, "kind": "runtime_log", "payload": {"message": "REPEAT READY", "level": "info"}}]
+	repeated_marker_executor.bridge = repeated_marker_bridge
+	repeated_marker_executor.configure_runtime({})
+	var repeated_marker: Dictionary = await repeated_marker_executor.execute_async("project_run", {
+		"success_markers": ["REPEAT READY"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if not bool(repeated_marker.get("success", false)):
+		return _failure("project_run marker validation should not filter out a new event that has the same text as a pre-run baseline event.")
+	var repeated_marker_validation: Dictionary = repeated_marker.get("data", {}).get("validation", {})
+	var repeated_matched_event: Dictionary = repeated_marker_validation.get("matched_event", {})
+	if int(repeated_matched_event.get("event_id", 0)) != 2:
+		return _failure("project_run marker validation should match the post-start event_id instead of the pre-run baseline event.")
+
+	MCPRuntimeDebugStoreShared.clear()
+	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
+	var debug_tools = DebugToolsScript.new()
+	var live_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	if not bool(live_shared_result.get("success", false)):
+		return _failure("debug_runtime_bridge get_recent should read the shared runtime debug store.")
+	var live_shared_events: Array = live_shared_result.get("data", {}).get("events", [])
+	if live_shared_events.is_empty() or str((live_shared_events[0] as Dictionary).get("payload", {}).get("message", "")) != "LIVE SHARED READY":
+		return _failure("debug_runtime_bridge get_recent should expose live events recorded in the shared runtime debug store.")
+	MCPRuntimeDebugStoreShared.clear()
 
 	var marker_failure_executor = SystemProjectExecutorScript.new()
 	var marker_failure_bridge = FakeBridge.new(FakeToolLoader.new())
