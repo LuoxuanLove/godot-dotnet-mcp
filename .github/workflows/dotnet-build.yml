@@ -1,4 +1,4 @@
-name: dotnet-build
+﻿name: dotnet-build
 
 on:
   workflow_dispatch:
@@ -40,16 +40,17 @@ jobs:
 
       - name: Build plugin Roslyn library
         shell: pwsh
-        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
 
       - name: Build harness runner
         shell: pwsh
-        run: dotnet build .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build harness runner" -ProjectPath ".\tests\godot_plugin_harness\GodotPluginHarness.csproj" -Configuration Release
 
       - name: Build fixture Godot C# project
         shell: pwsh
-        run: dotnet build .\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj -c Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build fixture Godot C# project" -ProjectPath ".\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj" -Configuration Release
 
       - name: Validate refactor guardrails
         shell: pwsh
         run: .\scripts\validate_refactor_guardrails.ps1
+

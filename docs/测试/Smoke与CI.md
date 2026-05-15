@@ -1,4 +1,4 @@
-# Smoke 与 CI
+﻿# Smoke 与 CI
 
 本文档说明当前测试结构、CI 接入状态和后续门禁策略方向。
 
@@ -72,6 +72,8 @@ tests/
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
 
+dotnet-build.yml 和 scripts/test_plugin_side_roslyn.ps1 的 .NET build 阶段会识别符合 CS2012、Godot .godot/mono/temp 路径以及文件占用 / 安全软件扫描信号的失败，并输出 	ransient_file_lock 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 .godot 或终止进程。
+
 ---
 
 ## 5. 当前门禁边界
@@ -116,3 +118,4 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 ## 7. 结论
 
 当前 harness 与 CI 已经形成分层闭环：`pr-policy` 提前拦截错误目标分支，`dotnet-build` 提供快速 .NET build 和 guardrail 反馈，`validate-plugin-harness` 保持稳定 required check 名称并运行重型 Godot harness，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。
+

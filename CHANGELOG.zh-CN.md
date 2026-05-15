@@ -1,4 +1,4 @@
-# 变更日志
+﻿# 变更日志
 
 ## Unreleased
 
@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
@@ -42,6 +43,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复从 `custom_tools/` 加载的 User 工具未进入 MCP `tools/list` 的问题，现在客户端可直接发现并调用这些用户工具，而不只是能在 Tools 页状态中看到。
 - 修复插件显示与使用的 MCP server 端口：当 Settings 中显式配置了 `3001` 等非默认端口时，多 Godot 编辑器会话下也会保持该配置，不再被继承的服务环境变量覆盖。
 - 修复 Config 页代码块复制按钮：鼠标悬停在生成的配置内容上时按钮保持可见，并且周期性 UI 刷新不会再导致复制按钮隐藏或复制动作丢失。
@@ -98,6 +100,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复高层 `system_*` 工具在 HTTP 和 stdio 两种通道中的路由一致性，让同一批公开工具能通过两种连接方式使用。
 - 修复插件重载和 Dock 重建流程，重载后能更可靠地保留设置、刷新 Dock 模型并展示诊断状态。
 - 修复运行时服务关闭和端口复用问题，降低重载后端口仍被占用导致服务启动失败的概率。
@@ -130,6 +133,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复 `soft_reload_plugin` 偶发出现的“HTTP 服务仍在线但工具注册表为空”问题；现在会一起重建 server/controller 与 tool loader，保持 `/health`、`/api/tools` 与 `tools/call` 一致。
 - 修复 Tools 树在递归展开/折叠后的状态回填错乱；根节点与 `atomic` 层现在会按统一状态模型正确恢复，不再反复回弹。
 
@@ -161,6 +165,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复多项 MCP 工具在 `array` 类型参数缺少 `items` 定义时触发的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
 - 修复 `editor_status` 与 `node_transform` 对非法参数类型过于宽松的问题，增强输入校验鲁棒性。
 
@@ -184,6 +189,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复兼容执行器聚合导致的重复插件注册，保留 `plugin_runtime`、`plugin_evolution`、`plugin_developer` 三个独立入口。
 - 修复继承脚本热重载不完整导致的工具域加载缺失，恢复 `script` 域及其扩展工具的稳定发现。
 - 修复插件启停与运行时重载期间 HTTP 传输中断的问题，将软重载改为延迟调度。
@@ -206,6 +212,7 @@
 
 ### Fixed
 
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot .godot/mono/temp 产物触发 CS2012 文件锁错误时，会分类为 	ransient_file_lock 并输出可执行的恢复建议。
 - 修复 `Tools` 页在折叠和重建过程中出现的 `Tree blocked` / 空实例报错，减少 Dock 使用时的中断和连锁错误。
 
 ### Known Limitations
@@ -231,3 +238,4 @@
 ### Known Limitations
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
+
