@@ -10,7 +10,6 @@
 
 ### Changed
 
-- 为快速 .NET build 与重型插件 harness workflow 新增 NuGet、Godot 4.6 缓存以及 harness 失败证据 artifact 上传。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
 - 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
@@ -163,7 +162,7 @@
 
 ### Fixed
 
-- 修复多项 MCP 工具在 `array` 类型参数缺少 `items` 定义时触发的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
+- 修复多项 MCP 工具在 `array` 类型参数缺少 `items` 定义时触发的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等。
 - 修复 `editor_status` 与 `node_transform` 对非法参数类型过于宽松的问题，增强输入校验鲁棒性。
 
 ## 0.3.0 - 2026-03-12

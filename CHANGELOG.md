@@ -10,7 +10,6 @@ Target version: `1.0.0-pre3`.
 
 ### Changed
 
-- Added NuGet and Godot 4.6 caching plus harness failure evidence artifacts to the fast .NET build and heavy plugin harness workflows.
 - Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
 - Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify in CI.
 - Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
