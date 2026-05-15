@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- 修复 Config 页客户端卡片能力说明：现在会明确区分完整一键配置、CLI 一键添加、仅打开 / 路径管理以及手动接入引导类客户端。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
