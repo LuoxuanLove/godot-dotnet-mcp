@@ -134,6 +134,49 @@ jobs:
           set -euo pipefail
           git push --force-with-lease --set-upstream origin "HEAD:$branch"
 
+      - name: Prepare relay metadata
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+        run: |
+          set -euo pipefail
+
+          metadata_file="$RUNNER_TEMP/actions-bot-relay-metadata.md"
+          base_sha=$(git rev-parse "origin/$BASE_BRANCH")
+          head_sha=$(git rev-parse HEAD)
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+          {
+            echo ""
+            echo "---"
+            echo "## actions-bot relay metadata"
+            echo ""
+            echo "- Base branch: \`$BASE_BRANCH\`"
+            echo "- Base SHA: \`$base_sha\`"
+            echo "- Head branch: \`$branch\`"
+            echo "- Head SHA: \`$head_sha\`"
+            echo "- Triggered by: \`@$GITHUB_ACTOR\`"
+            echo "- Relay run: $run_url"
+            echo "- Validation workflows: [dotnet-build](https://github.com/$GITHUB_REPOSITORY/actions/workflows/dotnet-build.yml), [validate-plugin](https://github.com/$GITHUB_REPOSITORY/actions/workflows/validate-plugin.yml), [lint-workflows](https://github.com/$GITHUB_REPOSITORY/actions/workflows/lint-workflows.yml)"
+            echo ""
+            echo "<details>"
+            echo "<summary>Changed paths</summary>"
+            echo ""
+            echo '```text'
+            git diff --name-only "$base_sha...HEAD"
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "<details>"
+            echo "<summary>Diffstat</summary>"
+            echo ""
+            echo '```text'
+            git diff --stat "$base_sha...HEAD"
+            echo '```'
+            echo "</details>"
+          } > "$metadata_file"
+
+          echo "relay_metadata_file=$metadata_file" >> "$GITHUB_ENV"
+
       - name: Create or update pull request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -145,6 +188,7 @@ jobs:
 
           pr_body_file="$RUNNER_TEMP/actions-bot-relay-pr-body.md"
           printf '%s\n' "$PR_BODY" > "$pr_body_file"
+          cat "$relay_metadata_file" >> "$pr_body_file"
 
           existing_pr=$(gh pr list --head "$branch" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number // empty')
           if [[ -n "$existing_pr" ]]; then
