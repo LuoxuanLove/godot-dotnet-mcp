@@ -10,6 +10,7 @@ var _pending_events: Array[Dictionary] = []
 var _fallback_cache: Array[Dictionary] = []
 var _fallback_cache_loaded := false
 var _next_event_id: int = 1
+var _next_event_id_initialized := false
 
 
 func configure(options: Dictionary = {}) -> void:
@@ -18,7 +19,7 @@ func configure(options: Dictionary = {}) -> void:
 
 
 func append_event(kind: String, payload: Dictionary, session_id: int = -1) -> void:
-	_ensure_fallback_cache_loaded()
+	_ensure_next_event_id_initialized()
 	var event := {
 		"event_id": _next_event_id,
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
@@ -60,10 +61,17 @@ func clear_memory() -> void:
 	_fallback_cache.clear()
 	_fallback_cache_loaded = false
 	_next_event_id = 1
+	_next_event_id_initialized = false
 
 
 func dispose() -> void:
 	clear_memory()
+
+
+func _ensure_next_event_id_initialized() -> void:
+	if _next_event_id_initialized:
+		return
+	_sync_next_event_id(_read_fallback_events())
 
 
 func _ensure_fallback_cache_loaded() -> void:
@@ -79,6 +87,7 @@ func _sync_next_event_id(events: Array[Dictionary]) -> void:
 	for event in events:
 		max_event_id = maxi(max_event_id, int(event.get("event_id", 0)))
 	_next_event_id = max(_next_event_id, max_event_id + 1)
+	_next_event_id_initialized = true
 
 
 func _read_fallback_events() -> Array[Dictionary]:
@@ -120,6 +129,9 @@ func _trim_cached_events() -> void:
 	if projected_size <= _max_stored_events:
 		return
 	var overflow := projected_size - _max_stored_events
+	while overflow > 0 and not _fallback_cache.is_empty():
+		_fallback_cache.remove_at(0)
+		overflow -= 1
 	while overflow > 0 and not _pending_events.is_empty():
 		_pending_events.remove_at(0)
 		overflow -= 1
