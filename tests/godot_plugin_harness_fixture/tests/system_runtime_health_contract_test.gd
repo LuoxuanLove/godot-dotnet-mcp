@@ -132,7 +132,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not freshness.has("running_instance") or not freshness.has("disk_source") or not freshness.has("comparison"):
 		return _failure("runtime_health.freshness should expose running, disk and comparison sections.")
 	var capabilities: Dictionary = runtime_health_dict.get("capabilities", {})
-	if not capabilities.has("can_start_project") or not capabilities.has("can_control_runtime") or not capabilities.has("can_capture_runtime") or not capabilities.has("can_run_without_focus") or not capabilities.has("no_focus_launch_supported"):
+	if not capabilities.has("can_start_project") or not capabilities.has("can_control_runtime") or not capabilities.has("can_capture_runtime") or not capabilities.has("can_run_without_focus") or not capabilities.has("no_focus_launch_supported") or not capabilities.has("foreground_window_fallbacks"):
 		return _failure("runtime_health.capabilities should expose start/control/capture and foreground policy bits.")
 
 	var self_diagnostics: Dictionary = runtime_health_dict.get("self_diagnostics", {})

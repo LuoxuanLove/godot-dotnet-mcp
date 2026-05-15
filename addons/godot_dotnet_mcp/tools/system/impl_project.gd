@@ -43,7 +43,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {

@@ -79,7 +79,7 @@ tools/system/
 
 运行时自动化工具的边界固定为：
 
-- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime`、`can_run_without_focus`、`no_focus_launch_supported`、`foreground_window_policy` 和 `blocking_reasons`。
+- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime`、`headless_logic_ok`、`visible_capture_required`、`can_run_without_focus`、`no_focus_launch_supported`、`foreground_window_policy`、`foreground_window_fallbacks` 和 `blocking_reasons`。
 - 仅支持通过 Godot 编辑器启动的运行态。
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
