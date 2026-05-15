@@ -1,11 +1,60 @@
 param(
-    [string]$GodotPath
+    [string]$GodotPath,
+    [string]$EvidenceDirectory = ".\.tmp\godot_plugin_harness_evidence",
+    [switch]$KeepFailureEvidence
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+
+$script:EvidenceRoot = Join-Path $repoRoot $EvidenceDirectory
+
+function Convert-ToSafeFileName {
+    param(
+        [string]$Name
+    )
+
+    $safeName = $Name
+    foreach ($invalidChar in [System.IO.Path]::GetInvalidFileNameChars()) {
+        $safeName = $safeName.Replace($invalidChar, "_")
+    }
+
+    return $safeName.Replace(":", "_")
+}
+
+function Initialize-HarnessEvidenceDirectory {
+    if (Test-Path -LiteralPath $script:EvidenceRoot) {
+        Remove-Item -LiteralPath $script:EvidenceRoot -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $script:EvidenceRoot -Force | Out-Null
+}
+
+function Write-HarnessEvidenceFile {
+    param(
+        [string]$Name,
+        [string]$Content
+    )
+
+    $path = Join-Path $script:EvidenceRoot $Name
+    $parent = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    Set-Content -LiteralPath $path -Value $Content -Encoding UTF8
+}
+
+function Copy-HarnessFailureEvidence {
+    $harnessTempRoot = Join-Path $repoRoot ".\.tmp\godot_plugin_harness"
+    if (Test-Path -LiteralPath $harnessTempRoot) {
+        Copy-Item -LiteralPath $harnessTempRoot -Destination (Join-Path $script:EvidenceRoot "godot_plugin_harness") -Recurse -Force
+    }
+}
+
+Initialize-HarnessEvidenceDirectory
 
 function Format-Duration {
     param(
@@ -40,12 +89,27 @@ function Write-HarnessTimingSummary {
         Write-Host "  - $($timing.Name): $(Format-Duration -Duration $timing.Duration)"
     }
 
+    $summaryLines = @(
+        "# Plugin harness timing",
+        "",
+        "Total duration: $(Format-Duration -Duration $TotalDuration)",
+        "",
+        "| Stage | Duration |",
+        "| --- | ---: |"
+    )
+
+    foreach ($timing in $Timings) {
+        $summaryLines += "| $($timing.Name) | $(Format-Duration -Duration $timing.Duration) |"
+    }
+
+    Write-HarnessEvidenceFile -Name "timing-summary.md" -Content ($summaryLines -join [Environment]::NewLine)
+
     if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         return
     }
 
     try {
-        $summaryLines = @(
+        $stepSummaryLines = @(
             "### Plugin harness timing"
             ""
             "Total duration: $(Format-Duration -Duration $TotalDuration)"
@@ -55,10 +119,10 @@ function Write-HarnessTimingSummary {
         )
 
         foreach ($timing in $Timings) {
-            $summaryLines += "| $($timing.Name) | $(Format-Duration -Duration $timing.Duration) |"
+            $stepSummaryLines += "| $($timing.Name) | $(Format-Duration -Duration $timing.Duration) |"
         }
 
-        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $summaryLines -Encoding UTF8
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $stepSummaryLines -Encoding UTF8
     }
     catch {
         Write-Warning "Unable to write GitHub Step Summary: $($_.Exception.Message)"
@@ -89,9 +153,19 @@ function Invoke-CommandOrThrow {
     Write-Host "==> $Description"
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        & $Command
+        $outputLines = & $Command 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            Write-Host $line
+            $line
+        }
+
+        $outputText = ($outputLines -join [Environment]::NewLine).Trim()
+        $safeDescription = Convert-ToSafeFileName -Name $Description
+        Write-HarnessEvidenceFile -Name "command-output\$safeDescription.log" -Content $outputText
+
         if ($LASTEXITCODE -ne 0) {
-            throw "$Description failed with exit code $LASTEXITCODE."
+            $details = if ([string]::IsNullOrWhiteSpace($outputText)) { "<no output>" } else { $outputText }
+            throw "$Description failed with exit code $LASTEXITCODE.`n$details"
         }
     }
     finally {
@@ -149,6 +223,9 @@ function Invoke-Harness {
         $outputLines = & dotnet @arguments 2>&1 | ForEach-Object { $_.ToString() }
         $exitCode = $LASTEXITCODE
         $outputText = ($outputLines -join [Environment]::NewLine).Trim()
+        $safeDescription = Convert-ToSafeFileName -Name $Description
+        Write-HarnessEvidenceFile -Name "harness-output\$safeDescription.log" -Content $outputText
+
         $json = $null
         if ($outputLines.Count -gt 0) {
             $json = Get-LastJsonObject -Lines $outputLines -Description $Description
@@ -220,6 +297,7 @@ $RequiredCases = @(
     "system_runtime_health_contracts"
     "system_plugin_reload_contracts"
     "system_runtime_impl_contracts"
+    "http_server_listen_diagnostics_contracts"
     "runtime_command_service_contracts"
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
@@ -253,6 +331,7 @@ $RequiredCases = @(
 
 $TimingRecords = New-Object System.Collections.Generic.List[object]
 $OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$Succeeded = $false
 
 try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
@@ -282,7 +361,12 @@ try {
 
     foreach ($caseName in $RequiredCases) {
         $env:GODOT_PLUGIN_HARNESS_ONLY_CASE = $caseName
-        $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs @()
+        $caseArgs = @()
+        if ($KeepFailureEvidence) {
+            $caseArgs += "--keep-stage-root"
+        }
+
+        $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs $caseArgs
         $TimingRecords.Add((New-TimingRecord -Name "Run harness case: $caseName" -Duration $caseResult.Duration))
     }
 
@@ -293,10 +377,19 @@ try {
     }))
 
     Write-Host "Plugin harness verification completed successfully."
+    $Succeeded = $true
 }
 finally {
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
     Invoke-HarnessProcessCleanup
+
+    $OverallStopwatch.Stop()
+    Write-HarnessTimingSummary -Timings $TimingRecords.ToArray() -TotalDuration $OverallStopwatch.Elapsed
+
+    if (-not $Succeeded -and $KeepFailureEvidence) {
+        Copy-HarnessFailureEvidence
+        Write-Host "Harness failure evidence retained at $script:EvidenceRoot"
+    }
 
     $cleanupPaths = @(
         ".\tests\godot_plugin_harness\bin",
@@ -313,7 +406,4 @@ finally {
     foreach ($path in $cleanupPaths) {
         Remove-IfExists -Path (Join-Path $repoRoot $path)
     }
-
-    $OverallStopwatch.Stop()
-    Write-HarnessTimingSummary -Timings $TimingRecords.ToArray() -TotalDuration $OverallStopwatch.Elapsed
 }

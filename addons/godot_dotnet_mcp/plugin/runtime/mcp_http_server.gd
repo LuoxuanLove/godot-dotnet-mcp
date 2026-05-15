@@ -77,13 +77,14 @@ func start() -> bool:
 		return true
 	var error = _tcp_server.listen(_port, _host)
 	if error != OK:
+		var failure_context := _build_listen_failure_context(error)
 		push_error("[MCP] Failed to start server on port %d: %s" % [_port, error_string(error)])
 		PluginSelfDiagnosticStore.record_incident(
 			"error", "server_error", "server_listen_failed",
-			"Embedded MCP server failed to listen on the configured endpoint",
+			"Embedded MCP server failed to listen on the configured endpoint (%s)" % str(failure_context.get("failure_reason", "unknown")),
 			"mcp_http_server", "start", "", "", "", true,
-			"Check whether the configured host/port is already in use.",
-			{"host": _host, "port": _port, "error_code": error, "error_text": error_string(error)}
+			_build_listen_failure_suggested_action(failure_context),
+			failure_context
 		)
 		return false
 	_running = true
@@ -223,3 +224,51 @@ func _get_runtime_control_service(ensure_initialized: bool = true):
 	if _service_bundle == null:
 		return null
 	return _service_bundle.get_runtime_control_service()
+
+
+func _build_listen_failure_context(error_code: int, error_text_override: String = "") -> Dictionary:
+	var error_text := error_text_override if not error_text_override.is_empty() else error_string(error_code)
+	var failure_reason := _classify_listen_failure(error_code, error_text)
+	var context := {
+		"host": _host,
+		"port": _port,
+		"endpoint": "http://%s:%d/mcp" % [_host, _port],
+		"error_code": error_code,
+		"error_text": error_text,
+		"failure_reason": failure_reason,
+		"platform": OS.get_name(),
+		"diagnostic_commands": []
+	}
+	if failure_reason == "port_excluded_or_reserved":
+		context["diagnostic_commands"] = [
+			"netsh interface ipv4 show excludedportrange protocol=tcp",
+			"netsh interface ipv6 show excludedportrange protocol=tcp"
+		]
+		context["requires_client_config_update"] = true
+	elif failure_reason == "address_in_use":
+		context["requires_client_config_update"] = false
+	else:
+		context["requires_client_config_update"] = false
+	return context
+
+
+func _classify_listen_failure(_error_code: int, error_text: String) -> String:
+	var normalized := error_text.to_lower().replace(" ", "").replace("_", "")
+	var windows := OS.get_name().to_lower().find("windows") != -1
+	if normalized.find("alreadyinuse") != -1 or normalized.find("addressinuse") != -1 or normalized.find("eaddrinuse") != -1:
+		return "address_in_use"
+	if normalized.find("accessdenied") != -1 or normalized.find("permissiondenied") != -1 or normalized.find("10013") != -1:
+		return "port_excluded_or_reserved" if windows else "access_denied"
+	return "listen_failed"
+
+
+func _build_listen_failure_suggested_action(context: Dictionary) -> String:
+	match str(context.get("failure_reason", "")):
+		"address_in_use":
+			return "Check whether another process or stale plugin instance is already listening on this host/port."
+		"port_excluded_or_reserved":
+			return "On Windows, check excluded TCP port ranges with netsh and choose a bindable port, then update client MCP configuration."
+		"access_denied":
+			return "Check OS permissions or security policy for binding the configured host/port."
+		_:
+			return "Check whether the configured host/port is bindable and update the MCP server/client configuration if needed."

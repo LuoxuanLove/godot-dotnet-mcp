@@ -21,6 +21,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
@@ -42,6 +43,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed custom User tools loaded from `custom_tools/` so they are exposed through MCP `tools/list` and callable by clients instead of only appearing in the Tools page state.
 - Fixed the MCP server port shown and used by the plugin so an explicitly configured non-default Settings port, such as `3001`, stays stable across multiple Godot editor sessions instead of being overridden by inherited server environment variables.
 - Fixed the Config page code block copy button so it remains visible while hovering over generated configuration content and reliably forwards copy actions without being hidden by periodic UI refreshes.
@@ -98,6 +100,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed high-level `system_*` tool routing across HTTP and stdio so the same public tools are available through both transports.
 - Fixed plugin reload and dock rebuild flows so reload actions preserve settings, refresh the dock model, and surface diagnostics more reliably.
 - Fixed runtime service shutdown and port reuse behavior to reduce stuck-listener failures after reloads.
@@ -130,6 +133,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed the intermittent issue where `soft_reload_plugin` left the HTTP server running while the tool registry was empty. The server/controller and tool loader are now rebuilt together, keeping `/health`, `/api/tools`, and `tools/call` consistent.
 - Fixed the persistent state mismatch in the Tools tree when recursively expanding/collapsing. The root node and `atomic` layer now restore correctly under the unified state model and no longer bounce back or require repeated Shift clicks.
 
@@ -161,6 +165,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed `Invalid schema` errors caused by missing `items` definitions on array-type MCP tools, affecting tools such as `node_call`, `undo_redo`, `group`, `signal`, and `collision_shape`.
 - Fixed permissive acceptance of invalid parameter types in `editor_status` and `node_transform` tools to improve validation robustness.
 
@@ -184,6 +189,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed repeated plugin registration caused by the compatibility executor aggregator, keeping the separate `plugin_runtime`, `plugin_evolution`, and `plugin_developer` entry points.
 - Fixed incomplete tool-domain loading caused by inherited-script hot reload issues, restoring stable discovery for the `script` domain and related extension tools.
 - Fixed the HTTP transport interruption during plugin enable/disable and runtime reload, changing soft reload into deferred scheduling.
@@ -206,6 +212,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed `Tree blocked` / empty-instance errors on the `Tools` page during collapse and rebuild flows, reducing Dock interruptions and cascading UI errors.
 
 ### Known Limitations
