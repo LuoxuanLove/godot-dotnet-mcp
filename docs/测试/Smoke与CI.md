@@ -72,6 +72,8 @@ tests/
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
 
+`validate-plugin-harness` 失败时会保留 `.tmp/godot_plugin_harness` 并上传 7 天 artifact，供维护者下载 stage root、process registry 等失败现场；成功运行仍会清理该目录。
+
 ---
 
 ## 5. 当前门禁边界
