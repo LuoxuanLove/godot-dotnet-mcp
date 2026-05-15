@@ -10,6 +10,7 @@ Target version: `1.0.0-pre3`.
 
 ### Changed
 
+- Added NuGet and Godot 4.6 caching plus harness failure evidence artifacts to the fast .NET build and heavy plugin harness workflows.
 - Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
 - Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify in CI.
 - Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
@@ -23,6 +24,7 @@ Target version: `1.0.0-pre3`.
 
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
+- Fixed `system_project_run` failure diagnostics so inconsistent `Editor interface not available` launch failures report state-probe versus run-invoker details, recovery suggestions, and a CLI fallback when enough paths are known.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
 - Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
 
