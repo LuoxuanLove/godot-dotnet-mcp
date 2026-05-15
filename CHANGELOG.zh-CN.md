@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增运行时前台窗口能力位，并在不支持 background / minimized / no_focus 项目运行时返回 `requires_foreground_window` 结构化降级信息。
 - 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
 
 ### Changed

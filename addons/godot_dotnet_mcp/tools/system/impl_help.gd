@@ -73,8 +73,9 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"runtime_capability_guidance": {
 			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
 			"read_only_tools_note": "Project, scene, and editor read-only tools can be available even when project launch, runtime control, or runtime capture is unavailable.",
-			"check_before_running": ["can_start_project", "blocking_reasons"],
+			"check_before_running": ["can_start_project", "blocking_reasons", "can_run_without_focus", "foreground_window_policy"],
 			"check_before_runtime_automation": ["can_control_runtime", "can_capture_runtime", "commandable_session_count"],
+			"foreground_window_note": "This plugin does not guarantee background, minimized, or no-focus runtime launch. Unsupported requests return requires_foreground_window with fallback guidance.",
 			"external_process_note": "Externally launched visible Godot processes are not treated as commandable runtime sessions unless they attach through the editor debugger bridge."
 		},
 		"visual_guidance": {

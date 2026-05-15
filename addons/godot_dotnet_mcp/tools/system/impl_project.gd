@@ -43,7 +43,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, can_run_without_focus, foreground_window_policy, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -139,12 +139,15 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_run",
-			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout.",
+			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"scene": {"type": "string", "description": "Custom scene to run (optional, runs main scene if omitted)"},
-					"timeout_ms": {"type": "integer", "description": "Optional auto-stop timeout in milliseconds. If the run is still open when the timeout elapses, the project is stopped automatically."}
+					"timeout_ms": {"type": "integer", "description": "Optional auto-stop timeout in milliseconds. If the run is still open when the timeout elapses, the project is stopped automatically."},
+					"background": {"type": "boolean", "description": "Request non-foreground launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"minimized": {"type": "boolean", "description": "Request minimized launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"no_focus": {"type": "boolean", "description": "Request launch without taking focus. Currently unsupported; returns requires_foreground_window instead of starting."}
 				}
 			}
 		},
@@ -775,6 +778,12 @@ func _build_runtime_capabilities(project_info: Dictionary, dotnet_build_data: Di
 		"can_enable_runtime_control": bool(runtime_control.get("can_enable_runtime_control", false)),
 		"can_control_runtime": bool(runtime_control.get("can_control_runtime", false)),
 		"can_capture_runtime": bool(runtime_control.get("can_capture_runtime", false)),
+		"headless_logic_ok": true,
+		"visible_capture_required": true,
+		"can_run_without_focus": false,
+		"no_focus_launch_supported": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"foreground_window_fallbacks": ["headless_logic_test", "editor_screenshot"],
 		"runtime_session_attached": bool(runtime_control.get("runtime_session_attached", false)),
 		"runtime_launched_by_editor": int(runtime_summary.get("session_count", 0)) > 0,
 		"runtime_message_channel_available": bool(runtime_control.get("can_enable_runtime_control", false)),
@@ -1171,6 +1180,8 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 func _execute_project_run(args: Dictionary) -> Dictionary:
 	var custom_scene := str(args.get("scene", "")).strip_edges()
 	var timeout_ms := int(args.get("timeout_ms", 0))
+	if _project_run_foreground_options_requested(args):
+		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
 	MCPDebugBuffer.record("debug", "system",
 		"project_run: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
 	var run_result: Dictionary
@@ -1194,6 +1205,38 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 		"timeout_ms": timeout_ms if auto_stop_enabled else 0,
 		"runtime_capabilities": _build_project_run_success_capabilities(custom_scene)
 	}, str(run_result.get("message", "Project started")))
+
+
+func _project_run_foreground_options_requested(args: Dictionary) -> bool:
+	return bool(args.get("background", false)) or bool(args.get("minimized", false)) or bool(args.get("no_focus", false))
+
+
+func _build_project_run_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
+	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
+	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
+	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var runtime_summary := _get_runtime_summary()
+	var runtime_control_status := _build_runtime_control_state_section()
+	return {
+		"error_code": "requires_foreground_window",
+		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
+		"requested_options": {
+			"background": bool(args.get("background", false)),
+			"minimized": bool(args.get("minimized", false)),
+			"no_focus": bool(args.get("no_focus", false))
+		},
+		"can_run_without_focus": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"degradation_paths": ["headless_logic_test", "editor_screenshot"],
+		"recovery_suggestions": [
+			"Run without background/minimized/no_focus when foreground runtime interaction is acceptable.",
+			"Use headless logic tests for non-visual acceptance flows.",
+			"Use editor screenshots when visual QA can be performed without starting a runtime window."
+		],
+		"runtime_control_status": runtime_control_status,
+		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	}
 
 
 func _build_project_run_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
