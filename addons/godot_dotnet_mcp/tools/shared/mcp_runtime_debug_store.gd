@@ -1,6 +1,5 @@
 @tool
 extends RefCounted
-class_name MCPRuntimeDebugStoreShared
 
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
@@ -13,6 +12,7 @@ static var _fallback_cache: Array[Dictionary] = []
 static var _fallback_dirty := true
 static var _fallback_modified_unix := -1
 static var _fallback_size_bytes := -1
+static var _next_event_id: int = 1
 static var _bridge_status := {
 	"installed": false,
 	"autoload_name": "MCPRuntimeBridge",
@@ -23,12 +23,14 @@ static var _bridge_status := {
 
 static func record_runtime_event(kind: String, payload: Dictionary, session_id: int = -1) -> Dictionary:
 	var event := {
+		"event_id": _next_event_id,
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
 		"timestamp_text": Time.get_datetime_string_from_system(true, true),
 		"kind": kind,
 		"session_id": session_id,
 		"payload": payload.duplicate(true)
 	}
+	_next_event_id += 1
 	_events.append(event)
 	if _events.size() > MAX_EVENTS:
 		_events = _events.slice(_events.size() - MAX_EVENTS)
@@ -58,8 +60,11 @@ static func get_recent(limit: int = 50) -> Array[Dictionary]:
 static func get_errors(limit: int = 50) -> Array[Dictionary]:
 	var filtered: Array[Dictionary] = []
 	for event in _get_merged_events():
-		var payload := event.get("payload", {})
-		var level := str((payload if payload is Dictionary else {}).get("level", ""))
+		var payload: Variant = event.get("payload", {})
+		var payload_dict: Dictionary = {}
+		if payload is Dictionary:
+			payload_dict = payload
+		var level := str(payload_dict.get("level", ""))
 		if level in ["warning", "error"]:
 			filtered.append(_decorate_runtime_error_event(event))
 
@@ -102,6 +107,7 @@ static func clear() -> void:
 	_fallback_dirty = true
 	_fallback_modified_unix = -1
 	_fallback_size_bytes = -1
+	_next_event_id = 1
 	_clear_fallback_events()
 
 
@@ -116,8 +122,10 @@ static func _decorate_runtime_error_event(event: Dictionary) -> Dictionary:
 
 
 static func _extract_runtime_error_context(payload: Dictionary) -> Dictionary:
-	var metadata := payload.get("metadata", {})
-	var metadata_dict := metadata if metadata is Dictionary else {}
+	var metadata: Variant = payload.get("metadata", {})
+	var metadata_dict: Dictionary = {}
+	if metadata is Dictionary:
+		metadata_dict = metadata
 	var source_file = _normalize_runtime_source_file(str(
 		metadata_dict.get("source_file", metadata_dict.get("source_path", metadata_dict.get("path", metadata_dict.get("script", ""))))
 	))
@@ -269,7 +277,7 @@ static func _get_merged_events() -> Array[Dictionary]:
 				continue
 			seen[key] = true
 			merged.append(copied)
-	merged.sort_custom(Callable(MCPRuntimeDebugStoreShared, "_sort_event_chronologically"))
+	merged.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _sort_event_chronologically(a, b))
 	if merged.size() > MAX_EVENTS:
 		merged = merged.slice(merged.size() - MAX_EVENTS)
 	return merged
@@ -279,6 +287,10 @@ static func _sort_event_chronologically(a: Dictionary, b: Dictionary) -> bool:
 	var a_time = int(a.get("timestamp_unix", 0))
 	var b_time = int(b.get("timestamp_unix", 0))
 	if a_time == b_time:
+		var a_event_id := int(a.get("event_id", -1))
+		var b_event_id := int(b.get("event_id", -1))
+		if a_event_id != b_event_id:
+			return a_event_id < b_event_id
 		return str(a.get("timestamp_text", "")) < str(b.get("timestamp_text", ""))
 	return a_time < b_time
 
