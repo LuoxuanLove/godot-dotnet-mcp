@@ -76,6 +76,10 @@ jobs:
                       continue
                   if re.fullmatch(r"- \[[ xX]\].*", line):
                       continue
+                  if line.startswith("# Example:") or "<Godot Editor Path>" in line:
+                      continue
+                  if re.fullmatch(r"- (CHANGELOG\.md|CHANGELOG\.zh-CN\.md|Docs|Mechoes sync):", line, re.IGNORECASE):
+                      continue
                   return True
               return False
 
