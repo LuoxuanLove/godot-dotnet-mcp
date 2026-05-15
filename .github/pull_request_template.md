@@ -25,6 +25,17 @@
 .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "<Godot Editor Path>"
 ```
 
+## Changelog / Docs / Mechoes Sync
+
+- CHANGELOG.md: <!-- updated / not required because ... -->
+- CHANGELOG.zh-CN.md: <!-- updated / not required because ... -->
+- Docs: <!-- updated / not required because ... -->
+- Mechoes sync: <!-- required / not required because ... -->
+
+## Risk / Process Impact
+
+<!-- For workflow, release, branch, bot, or process changes, describe the impact and mitigation. Otherwise state "None beyond the scoped change." -->
+
 ## Checklist
 
 - [ ] PR only contains the target branch scope; unrelated fixes are split out
