@@ -135,6 +135,7 @@ internal static class Program
 
             if (listCases)
             {
+                preserveStageRoot = keepStageRoot && process.ExitCode != 0;
                 var manifest = TryParsePrefixedJsonLine(stdout, "HARNESS_LIST_CASES_MANIFEST:")
                     ?? TryParseLastJsonLine(stdout)
                     ?? new
