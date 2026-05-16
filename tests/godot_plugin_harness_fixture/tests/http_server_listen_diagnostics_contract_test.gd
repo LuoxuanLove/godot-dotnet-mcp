@@ -43,6 +43,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if reserved_reason != "access_denied":
 			return _failure("Non-Windows AccessDenied should classify as access_denied.")
 
+	var netsh_output := ["Protocol tcp Port Exclusion Ranges\n\nStart Port    End Port\n----------    --------\n      3000        3010     *\n"]
+	if not server._netsh_excluded_ranges_include_port(netsh_output, 3000):
+		return _failure("Netsh excluded range parsing should match the configured start port.")
+	if not server._netsh_excluded_ranges_include_port(netsh_output, 3005):
+		return _failure("Netsh excluded range parsing should match ports inside the range.")
+	if server._netsh_excluded_ranges_include_port(netsh_output, 3011):
+		return _failure("Netsh excluded range parsing should not match ports outside the range.")
+
 	var reserved_hint: String = server._build_listen_failure_suggested_action(reserved)
 	if reserved_reason == "port_excluded_or_reserved" and reserved_hint.find("netsh") == -1:
 		return _failure("Reserved port suggested action should mention netsh.")

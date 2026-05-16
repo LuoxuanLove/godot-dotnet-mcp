@@ -227,8 +227,11 @@ func _get_runtime_control_service(ensure_initialized: bool = true):
 
 
 func _build_listen_failure_context(error_code: int, error_text_override: String = "") -> Dictionary:
-	var error_text := error_text_override if not error_text_override.is_empty() else error_string(error_code)
+	var has_error_text_override := not error_text_override.is_empty()
+	var error_text := error_text_override if has_error_text_override else error_string(error_code)
 	var failure_reason := _classify_listen_failure(error_code, error_text)
+	if not has_error_text_override and failure_reason == "address_in_use" and _is_configured_port_in_windows_excluded_range():
+		failure_reason = "port_excluded_or_reserved"
 	var context := {
 		"host": _host,
 		"port": _port,
@@ -240,19 +243,15 @@ func _build_listen_failure_context(error_code: int, error_text_override: String 
 		"diagnostic_commands": []
 	}
 	if failure_reason == "port_excluded_or_reserved":
-		context["diagnostic_commands"] = [
-			"netsh interface ipv4 show excludedportrange protocol=tcp",
-			"netsh interface ipv6 show excludedportrange protocol=tcp"
-		]
+		context["diagnostic_commands"] = _build_windows_excluded_port_diagnostic_commands()
 		context["requires_client_config_update"] = true
 	elif failure_reason == "access_denied":
-		if OS.get_name().to_lower().find("windows") != -1:
-			context["diagnostic_commands"] = [
-				"netsh interface ipv4 show excludedportrange protocol=tcp",
-				"netsh interface ipv6 show excludedportrange protocol=tcp"
-			]
+		if _is_windows():
+			context["diagnostic_commands"] = _build_windows_excluded_port_diagnostic_commands()
 		context["requires_client_config_update"] = false
 	elif failure_reason == "address_in_use":
+		if _is_windows():
+			context["diagnostic_commands"] = _build_windows_excluded_port_diagnostic_commands()
 		context["requires_client_config_update"] = false
 	else:
 		context["requires_client_config_update"] = false
@@ -261,10 +260,9 @@ func _build_listen_failure_context(error_code: int, error_text_override: String 
 
 func _classify_listen_failure(_error_code: int, error_text: String) -> String:
 	var normalized := error_text.to_lower().replace(" ", "").replace("_", "").replace("-", "")
-	var windows := OS.get_name().to_lower().find("windows") != -1
 	if normalized.find("alreadyinuse") != -1 or normalized.find("addressinuse") != -1 or normalized.find("eaddrinuse") != -1:
 		return "address_in_use"
-	if windows and normalized.find("port") != -1 and (normalized.find("excluded") != -1 or normalized.find("reserved") != -1):
+	if _is_windows() and normalized.find("port") != -1 and (normalized.find("excluded") != -1 or normalized.find("reserved") != -1):
 		return "port_excluded_or_reserved"
 	if normalized.find("accessdenied") != -1 or normalized.find("permissiondenied") != -1 or normalized.find("forbidden") != -1 or normalized.find("10013") != -1:
 		return "access_denied"
@@ -274,6 +272,8 @@ func _classify_listen_failure(_error_code: int, error_text: String) -> String:
 func _build_listen_failure_suggested_action(context: Dictionary) -> String:
 	match str(context.get("failure_reason", "")):
 		"address_in_use":
+			if str(context.get("platform", "")).to_lower().find("windows") != -1:
+				return "Check whether another process or stale plugin instance is already listening on this host/port. If no listener is present, inspect Windows excluded TCP port ranges with netsh."
 			return "Check whether another process or stale plugin instance is already listening on this host/port."
 		"port_excluded_or_reserved":
 			return "On Windows, check excluded TCP port ranges with netsh and choose a bindable port, then update client MCP configuration."
@@ -283,3 +283,49 @@ func _build_listen_failure_suggested_action(context: Dictionary) -> String:
 			return "Check OS permissions or security policy for binding the configured host/port."
 		_:
 			return "Check whether the configured host/port is bindable and update the MCP server/client configuration if needed."
+
+
+func _is_windows() -> bool:
+	return OS.get_name().to_lower().find("windows") != -1
+
+
+func _build_windows_excluded_port_diagnostic_commands() -> Array[String]:
+	return [
+		"netsh interface ipv4 show excludedportrange protocol=tcp",
+		"netsh interface ipv6 show excludedportrange protocol=tcp"
+	]
+
+
+func _is_configured_port_in_windows_excluded_range() -> bool:
+	if not _is_windows():
+		return false
+	for family in ["ipv4", "ipv6"]:
+		var output: Array = []
+		var exit_code := OS.execute(
+			"netsh.exe",
+			PackedStringArray(["interface", str(family), "show", "excludedportrange", "protocol=tcp"]),
+			output,
+			true,
+			false
+		)
+		if exit_code == 0 and _netsh_excluded_ranges_include_port(output, _port):
+			return true
+	return false
+
+
+func _netsh_excluded_ranges_include_port(output: Array, port: int) -> bool:
+	for chunk in output:
+		var text := str(chunk).replace("\r", "\n")
+		for raw_line in text.split("\n", false):
+			var parts := raw_line.strip_edges().split(" ", false)
+			if parts.size() < 2:
+				continue
+			var start_text := str(parts[0])
+			var end_text := str(parts[1])
+			if not start_text.is_valid_int() or not end_text.is_valid_int():
+				continue
+			var start_port := int(start_text)
+			var end_port := int(end_text)
+			if start_port <= port and port <= end_port:
+				return true
+	return false
