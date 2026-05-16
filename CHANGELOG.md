@@ -22,8 +22,10 @@ Target version: `1.0.0-pre3`.
 ### Fixed
 
 - Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
+- Fixed runtime capture so headless or dummy rendering backends return structured skipped results instead of attempting unavailable viewport screenshots.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
+- Fixed `system_project_run` failure diagnostics so inconsistent `Editor interface not available` launch failures report state-probe versus run-invoker details, recovery suggestions, and a CLI fallback when enough paths are known.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
 - Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
 
@@ -169,7 +171,7 @@ Target version: `1.0.0-pre3`.
 
 ### Added
 
-- Added Godot .NET / C# workflow support: `.csproj` parsing, template-based C# script writes, cross-file script reference indexing, and `dotnet restore/build`-based structural diagnostics.
+- Added Godot .NET / C# workflow support: `.csproj` parsing, template-based C# script writes, cross-file script reference indexing, and dotnet restore/build-based structural diagnostics.
 - Added structured runtime and plugin self-diagnostics, covering runtime error context, compile-error positioning, plugin self-summary, error timelines, and health lookup.
 - Added user tool governance features, including script versioning and compatibility checks, audit filtering and conversation labeling, backup-before-delete and recent-restore access.
 - Added tool usage statistics for call counts and recent usage timestamps.
