@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- 修复 MCP 服务器监听失败自诊断：端口占用、绑定被拒绝与 Windows 保留 / 排除 TCP 端口现在会报告不同原因与处理提示。
 - 修复运行时截图：headless 或 dummy 渲染后端现在会返回结构化 skipped 结果，不再尝试不可用的 viewport 截图。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。

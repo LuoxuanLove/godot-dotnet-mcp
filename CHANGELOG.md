@@ -21,6 +21,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
 - Fixed runtime capture so headless or dummy rendering backends return structured skipped results instead of attempting unavailable viewport screenshots.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
