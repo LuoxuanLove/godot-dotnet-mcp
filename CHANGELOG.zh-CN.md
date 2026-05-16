@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- 修复运行时截图：headless 或 dummy 渲染后端现在会返回结构化 skipped 结果，不再尝试不可用的 viewport 截图。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
 - 修复 `system_project_run` 失败诊断：当项目启动出现不一致的 `Editor interface not available` 时，现在会报告 state probe 与 run invoker 对比、恢复建议，并在路径信息足够时提供 CLI fallback。

@@ -21,6 +21,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed runtime capture so headless or dummy rendering backends return structured skipped results instead of attempting unavailable viewport screenshots.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
 - Fixed `system_project_run` failure diagnostics so inconsistent `Editor interface not available` launch failures report state-probe versus run-invoker details, recovery suggestions, and a CLI fallback when enough paths are known.
