@@ -10,7 +10,7 @@
 
 ### Changed
 
-- 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档 / Mechoes 同步和流程风险字段。
+- 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
 - 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。

@@ -51,7 +51,7 @@ jobs:
               "Root Cause / Why",
               "Changes",
               "Verification",
-              "Changelog / Docs / Mechoes Sync",
+              "Changelog / Docs",
               "Risk / Process Impact",
               "Checklist",
           ]
@@ -78,7 +78,7 @@ jobs:
                       continue
                   if line.startswith("# Example:") or "<Godot Editor Path>" in line:
                       continue
-                  if re.fullmatch(r"- (CHANGELOG\.md|CHANGELOG\.zh-CN\.md|Docs|Mechoes sync):", line, re.IGNORECASE):
+                  if re.fullmatch(r"- (CHANGELOG\.md|CHANGELOG\.zh-CN\.md|Docs):", line, re.IGNORECASE):
                       continue
                   return True
               return False
@@ -87,16 +87,14 @@ jobs:
               if section_match(section) is None:
                   errors.append(f"PR body must include '## {section}'.")
 
-          for section in ["Summary", "Verification", "Changelog / Docs / Mechoes Sync", "Risk / Process Impact"]:
+          for section in ["Summary", "Verification", "Changelog / Docs", "Risk / Process Impact"]:
               if section_match(section) is not None and not has_substantive_content(section):
                   errors.append(f"PR body section '## {section}' must include a concrete statement, not only template placeholders.")
 
-          changelog_sync = section_text("Changelog / Docs / Mechoes Sync")
-          if section_match("Changelog / Docs / Mechoes Sync") is not None:
-              if "CHANGELOG.md" not in changelog_sync or "CHANGELOG.zh-CN.md" not in changelog_sync:
-                  errors.append("'## Changelog / Docs / Mechoes Sync' must mention both CHANGELOG.md and CHANGELOG.zh-CN.md, or explain why each is not required.")
-              if not re.search(r"Mechoes\s+sync", changelog_sync, re.IGNORECASE):
-                  errors.append("'## Changelog / Docs / Mechoes Sync' must state whether Mechoes sync is required.")
+          changelog_docs = section_text("Changelog / Docs")
+          if section_match("Changelog / Docs") is not None:
+              if "CHANGELOG.md" not in changelog_docs or "CHANGELOG.zh-CN.md" not in changelog_docs:
+                  errors.append("'## Changelog / Docs' must mention both CHANGELOG.md and CHANGELOG.zh-CN.md, or explain why each is not required.")
 
           if errors:
               for error in errors:
