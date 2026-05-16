@@ -245,6 +245,13 @@ func _build_listen_failure_context(error_code: int, error_text_override: String 
 			"netsh interface ipv6 show excludedportrange protocol=tcp"
 		]
 		context["requires_client_config_update"] = true
+	elif failure_reason == "access_denied":
+		if OS.get_name().to_lower().find("windows") != -1:
+			context["diagnostic_commands"] = [
+				"netsh interface ipv4 show excludedportrange protocol=tcp",
+				"netsh interface ipv6 show excludedportrange protocol=tcp"
+			]
+		context["requires_client_config_update"] = false
 	elif failure_reason == "address_in_use":
 		context["requires_client_config_update"] = false
 	else:
@@ -253,12 +260,14 @@ func _build_listen_failure_context(error_code: int, error_text_override: String 
 
 
 func _classify_listen_failure(_error_code: int, error_text: String) -> String:
-	var normalized := error_text.to_lower().replace(" ", "").replace("_", "")
+	var normalized := error_text.to_lower().replace(" ", "").replace("_", "").replace("-", "")
 	var windows := OS.get_name().to_lower().find("windows") != -1
 	if normalized.find("alreadyinuse") != -1 or normalized.find("addressinuse") != -1 or normalized.find("eaddrinuse") != -1:
 		return "address_in_use"
-	if normalized.find("accessdenied") != -1 or normalized.find("permissiondenied") != -1 or normalized.find("10013") != -1:
-		return "port_excluded_or_reserved" if windows else "access_denied"
+	if windows and normalized.find("port") != -1 and (normalized.find("excluded") != -1 or normalized.find("reserved") != -1):
+		return "port_excluded_or_reserved"
+	if normalized.find("accessdenied") != -1 or normalized.find("permissiondenied") != -1 or normalized.find("forbidden") != -1 or normalized.find("10013") != -1:
+		return "access_denied"
 	return "listen_failed"
 
 
@@ -269,6 +278,8 @@ func _build_listen_failure_suggested_action(context: Dictionary) -> String:
 		"port_excluded_or_reserved":
 			return "On Windows, check excluded TCP port ranges with netsh and choose a bindable port, then update client MCP configuration."
 		"access_denied":
+			if str(context.get("platform", "")).to_lower().find("windows") != -1:
+				return "Check OS permissions or security policy for binding this host/port. On Windows, netsh excluded port ranges can help rule out reserved ports."
 			return "Check OS permissions or security policy for binding the configured host/port."
 		_:
 			return "Check whether the configured host/port is bindable and update the MCP server/client configuration if needed."
