@@ -1206,7 +1206,9 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 	var main_scene := str(project_info.get("main_scene", ""))
 	var requested_scene := custom_scene if not custom_scene.is_empty() else main_scene
 	var scene_exists := not requested_scene.is_empty() and FileAccess.file_exists(requested_scene)
-	return {
+	var editor_context := _build_editor_runtime_context()
+	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	var context := {
 		"error_code": "project_run_failed",
 		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
 		"resolved_scene": requested_scene,
@@ -1214,10 +1216,67 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 		"main_scene": main_scene,
 		"main_scene_exists": not main_scene.is_empty() and FileAccess.file_exists(main_scene),
 		"compile_error_count": int(dotnet_build_data.get("error_count", 0)),
-		"editor_context": _build_editor_runtime_context(),
+		"editor_context": editor_context,
 		"runtime_control_status": runtime_control_status,
-		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status),
+		"runtime_capabilities": runtime_capabilities,
 		"run_result": run_result.duplicate(true)
+	}
+	if _is_editor_interface_unavailable_inconsistent(run_result, editor_context, runtime_capabilities):
+		context["error_code"] = "editor_run_interface_unavailable_despite_state_available"
+		context["state_probe_vs_run_invoker"] = _build_project_run_state_probe_comparison(editor_context, runtime_capabilities, run_result)
+		context["recovery_suggestions"] = _build_project_run_editor_interface_recovery_suggestions()
+		var cli_fallback := _build_project_run_cli_fallback(editor_context, requested_scene, scene_exists)
+		if not cli_fallback.is_empty():
+			context["cli_fallback"] = cli_fallback
+	return context
+
+
+func _is_editor_interface_unavailable_inconsistent(run_result: Dictionary, editor_context: Dictionary, runtime_capabilities: Dictionary) -> bool:
+	var run_error := "%s %s" % [str(run_result.get("error", "")), str(run_result.get("message", ""))]
+	if not run_error.contains("Editor interface not available"):
+		return false
+	return bool(runtime_capabilities.get("can_start_project", false)) or bool(editor_context.get("editor_interface_available", false))
+
+
+func _build_project_run_state_probe_comparison(editor_context: Dictionary, runtime_capabilities: Dictionary, run_result: Dictionary) -> Dictionary:
+	return {
+		"state_probe": {
+			"editor_interface_available": bool(editor_context.get("editor_interface_available", false)),
+			"can_start_project": bool(runtime_capabilities.get("can_start_project", false)),
+			"blocking_reasons": runtime_capabilities.get("blocking_reasons", []),
+			"godot_executable_path": str(editor_context.get("godot_executable_path", "")),
+			"project_root_path": str(editor_context.get("project_root_path", ""))
+		},
+		"run_invoker": {
+			"success": bool(run_result.get("success", false)),
+			"error": str(run_result.get("error", "")),
+			"message": str(run_result.get("message", ""))
+		},
+		"interpretation": "State probing reported the editor run path as available, but the scene run invoker could not access EditorInterface."
+	}
+
+
+func _build_project_run_editor_interface_recovery_suggestions() -> Array[String]:
+	return [
+		"Retry system_project_state or system_editor_state to confirm the current MCP connection is attached to the intended Godot editor session.",
+		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_run.",
+		"If multiple Godot editors are open, close stale sessions or reconnect to the editor that owns this project.",
+		"If editor launching remains unavailable, use the cli_fallback command from this response to run the scene outside the editor."
+	]
+
+
+func _build_project_run_cli_fallback(editor_context: Dictionary, requested_scene: String, scene_exists: bool) -> Dictionary:
+	var godot_executable_path := str(editor_context.get("godot_executable_path", ""))
+	var project_root_path := str(editor_context.get("project_root_path", ""))
+	if godot_executable_path.is_empty() or project_root_path.is_empty() or requested_scene.is_empty() or not scene_exists:
+		return {}
+	var scene_path := requested_scene
+	if scene_path.begins_with("res://"):
+		scene_path = ProjectSettings.globalize_path(scene_path)
+	return {
+		"description": "Safe CLI fallback for manual verification when the editor run invoker cannot access EditorInterface.",
+		"command": [godot_executable_path, "--path", project_root_path, scene_path],
+		"working_directory": project_root_path
 	}
 
 
