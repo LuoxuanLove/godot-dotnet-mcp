@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$GodotPath
 )
 
@@ -6,6 +6,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+
+. (Join-Path $repoRoot "scripts\dotnet_build_failure_diagnostics.ps1")
 
 function Format-Duration {
     param(
@@ -257,15 +259,15 @@ $OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
-        dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build harness runner" -Command {
-        dotnet build .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build harness runner" -ProjectPath ".\tests\godot_plugin_harness\GodotPluginHarness.csproj" -Configuration Release
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build fixture Godot C# project" -Command {
-        dotnet build .\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build fixture Godot C# project" -ProjectPath ".\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj" -Configuration Release
     }))
 
     $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases")
@@ -318,3 +320,4 @@ finally {
     $OverallStopwatch.Stop()
     Write-HarnessTimingSummary -Timings $TimingRecords.ToArray() -TotalDuration $OverallStopwatch.Elapsed
 }
+
