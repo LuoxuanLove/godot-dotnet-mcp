@@ -22,8 +22,11 @@
 ### Fixed
 
 - 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot `.godot/mono/temp` 产物触发 `CS2012` 文件锁错误时，会分类为 `transient_file_lock` 并输出可执行的恢复建议。
+- 修复 MCP 服务器监听失败自诊断：端口占用、绑定被拒绝与 Windows 保留 / 排除 TCP 端口现在会报告不同原因与处理提示。
+- 修复运行时截图：headless 或 dummy 渲染后端现在会返回结构化 skipped 结果，不再尝试不可用的 viewport 截图。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
+- 修复 `system_project_run` 失败诊断：当项目启动出现不一致的 `Editor interface not available` 时，现在会报告 state probe 与 run invoker 对比、恢复建议，并在路径信息足够时提供 CLI fallback。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
 - 修复 TileMap 工具脚本解析问题，使 TileMap 工具域可在 MCP 工具注册期间正常实例化。
 
@@ -232,4 +235,3 @@
 ### Known Limitations
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
-

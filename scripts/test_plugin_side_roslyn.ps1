@@ -222,6 +222,7 @@ $RequiredCases = @(
     "system_runtime_health_contracts"
     "system_plugin_reload_contracts"
     "system_runtime_impl_contracts"
+    "http_server_listen_diagnostics_contracts"
     "runtime_command_service_contracts"
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
