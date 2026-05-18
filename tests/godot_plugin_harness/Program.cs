@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -148,7 +148,11 @@ internal static class Program
                 return process.ExitCode == 0 ? 0 : 1;
             }
 
-            var leakWarningsDetected = editorProbeMode ? false : ContainsLeakWarnings(stderr);
+            var suite = TryParseLastJsonLine(stdout);
+            var suiteSuccess = TryGetJsonBooleanProperty(suite, "success");
+            var exitCleanupWarningMarkers = CollectLeakWarningMarkers(stderr);
+            var exitCleanupWarningsDetected = exitCleanupWarningMarkers.Length > 0;
+            var leakWarningsDetected = !editorProbeMode && exitCleanupWarningsDetected;
             var succeeded = process.ExitCode == 0 && !leakWarningsDetected;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
@@ -156,12 +160,18 @@ internal static class Program
                 success = succeeded,
                 skipped = false,
                 exitCode = process.ExitCode,
+                suiteSuccess,
+                successMarkerDetected = suiteSuccess.HasValue,
                 leakWarningsDetected,
+                exitCleanupWarningsDetected,
+                exitCleanupWarningMarkers,
+                exitCleanupWarningPolicy = exitCleanupWarningsDetected ? (editorProbeMode ? "ignored_editor_probe" : "fail_harness") : "none",
+                failureClass = leakWarningsDetected ? "exit_cleanup_warning" : string.Empty,
                 reason = leakWarningsDetected ? "godot_exit_leaks_detected" : string.Empty,
                 godotPath = explicitGodotPath,
                 stageRoot,
                 stageKept = preserveStageRoot,
-                suite = TryParseLastJsonLine(stdout),
+                suite,
                 stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
 
@@ -452,14 +462,31 @@ internal static class Program
         return null;
     }
 
-    private static bool ContainsLeakWarnings(string stderr)
+    private static string[] CollectLeakWarningMarkers(string stderr)
     {
         if (string.IsNullOrWhiteSpace(stderr))
         {
-            return false;
+            return [];
         }
 
-        return LeakWarningMarkers.Any(stderr.Contains);
+        return LeakWarningMarkers
+            .Where(marker => stderr.Contains(marker, StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    private static bool? TryGetJsonBooleanProperty(object? json, string propertyName)
+    {
+        if (json is not JsonElement element || element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
+        {
+            return null;
+        }
+
+        return property.GetBoolean();
     }
 
     private sealed class HarnessProcessRegistry : IDisposable

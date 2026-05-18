@@ -6,11 +6,14 @@ Target version: `1.0.0-pre3`.
 
 ### Added
 
+- Added optional `system_project_run` runtime bridge log marker validation with success/failure marker matching, timeout handling, default marker-mode auto-stop, and contract coverage using fake runtime events.
+- Added explicit runtime foreground-window capability bits and `requires_foreground_window` rejection data for unsupported background, minimized, or no-focus project runs.
 - Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
 
 ### Changed
 
 - Documented the Agent completion definition so public behavior changes must close implementation, contract test, documentation, changelog, and review-feedback gaps before PRs are considered ready.
+- Clarified plugin headless harness reports so suite success markers are separated from Godot exit cleanup warnings without weakening the existing leak-warning gate.
 - Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
 - Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify in CI.
 - Extended `validate-plugin` branch coverage to documentation, chore, hotfix, and release short branches, and documented the protected `dev` PR gate.
@@ -22,8 +25,14 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed Config-page client cards so the visible capability summary distinguishes full one-click config support from CLI auto-add, launch/path-only, and manual-guidance clients.
+- Fixed fast .NET build and plugin harness build failures so Godot `.godot/mono/temp` `CS2012` file-lock errors are classified as `transient_file_lock` with actionable recovery guidance.
+- Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.
+- Fixed runtime capture so headless or dummy rendering backends return structured skipped results instead of attempting unavailable viewport screenshots.
 - Fixed runtime debugger bridge messages so project startup no longer emits Godot `Invalid message received` errors when runtime event, log, or reply messages are sent.
+- Fixed `system_project_run` marker validation to read live shared runtime bridge events, avoid filtering out a new run event that repeats pre-run marker text, and drain marker events by event-id cursor so high log volume does not hide a matched marker behind the latest tail window while merged live/fallback event cursors stay ordered across inserted fallback events and full buffer trimming, and full tail batches yield between polls.
 - Fixed tool context helpers so editor-interface overrides no longer trigger Godot GDScript VM internal errors during tool execution.
+- Fixed `system_project_run` failure diagnostics so inconsistent `Editor interface not available` launch failures report state-probe versus run-invoker details, recovery suggestions, and a CLI fallback when enough paths are known.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
 - Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
 

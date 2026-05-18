@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 
 const ConfigPanelScene = preload("res://addons/godot_dotnet_mcp/ui/config_panel.tscn")
 
@@ -87,6 +87,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 				"install_status_text": "Installed to\nC:/Users/Test/AppData/Roaming/Cursor/User/mcp.json",
 				"path": "C:/Users/Test/AppData/Roaming/Cursor/User/mcp.json",
 				"content": "{\"mcpServers\":{}}",
+				"guidance_text": "Capability: Full one-click config write and remove are available.",
 				"primary_action_label_key": "config_client_action_apply",
 				"primary_action_enabled": true,
 				"writeable": true,
@@ -110,6 +111,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels = desktop_card.find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Installed to") == null or _find_label_containing(labels, "C:/Users/Test/AppData/Roaming/Cursor/User/mcp.json") == null:
 		return _failure("Config tab should visibly render the concrete 'Installed to <path>' status for installed clients.")
+	if _find_label_containing(labels, "Capability: Full one-click") == null:
+		return _failure("Config tab should render presenter-provided capability guidance through the generic guidance text slot.")
 	var buttons = desktop_card.find_children("*", "Button", true, false)
 	if buttons.size() < 4:
 		return _failure("Config tab client card should render action buttons for apply/write/remove/copy.")
