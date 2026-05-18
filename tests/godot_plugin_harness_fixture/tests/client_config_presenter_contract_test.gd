@@ -16,6 +16,8 @@ class FakeLocalization extends RefCounted:
 			"config_client_roo_code": "Roo Code",
 			"config_client_cherry_studio": "Cherry Studio",
 			"config_client_codex": "Codex CLI",
+			"config_client_codex_desktop": "Codex Desktop",
+			"config_client_opencode_desktop": "OpenCode Desktop",
 			"config_transport_http_fallback": "HTTP",
 			"config_client_write_path_label": "Config Write Location",
 			"config_client_cli_entry_label": "Detected CLI Entry",
@@ -44,6 +46,12 @@ class FakeLocalization extends RefCounted:
 			"config_client_action_add": "One-Click Add",
 			"config_client_action_open_project": "Open Project",
 			"config_client_action_open_app": "Open App",
+			"config_client_capability_summary_label": "Capability",
+			"config_client_capability_full_write": "Full one-click config write and remove are available for this client.",
+			"config_client_capability_auto_add": "One-click CLI add or remove is available through the detected executable.",
+			"config_client_capability_manual_guidance": "Manual setup guidance is available; this client is not a full one-click integration here.",
+			"config_client_capability_launch_path": "Launch and path management are available; MCP setup should use the recommended manual or CLI flow.",
+			"config_client_capability_copy_guidance": "Copyable setup guidance is available, but automatic client changes are not supported.",
 			"tool_action_remove_name": "Remove",
 			"scope_user": "User (Global)",
 			"scope_project": "Project (Current Only)",
@@ -152,6 +160,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"path_pick_supported": true,
 				"path_clear_supported": false,
 				"runtime_status": {"status": "not_running"}
+			},
+			"codex_desktop": {
+				"status": "ready",
+				"write_supported": false,
+				"auto_add_supported": false,
+				"launch_supported": true,
+				"path_pick_supported": true,
+				"path_clear_supported": false,
+				"runtime_status": {"status": "unknown"},
+				"executable_path": "C:/Apps/Codex/Codex.exe"
+			},
+			"cherry_studio": {
+				"status": "config_only",
+				"config_path": "C:/Users/Test/AppData/Roaming/CherryStudio",
+				"config_entry_status": {"status": "deferred"},
+				"write_supported": false,
+				"auto_add_supported": false,
+				"launch_supported": false,
+				"path_pick_supported": true,
+				"path_clear_supported": false,
+				"runtime_status": {"status": "unknown"}
 			}
 		},
 		localization,
@@ -162,6 +191,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Presenter should expose all supported desktop clients in the config page model.")
 	if str(cursor_model.get("install_status_text", "")).find("C:/Users/Test/.cursor/mcp.json") == -1:
 		return _failure("Desktop client status should surface the concrete config path once godot-mcp is installed.")
+	if str(cursor_model.get("capability", {}).get("kind", "")) != "full_write":
+		return _failure("A writeable desktop client should be labelled as a full one-click config integration.")
+	if str(cursor_model.get("guidance_text", "")).find("Full one-click config write and remove") == -1:
+		return _failure("Writeable desktop client guidance should summarize full one-click capabilities.")
+	var codex_desktop_model: Dictionary = desktop_models[3]
+	if str(codex_desktop_model.get("capability", {}).get("kind", "")) != "launch_path":
+		return _failure("A launch-only desktop client should not be labelled as a full one-click integration.")
+	if str(codex_desktop_model.get("guidance_text", "")).find("Launch and path management") == -1:
+		return _failure("Launch-only desktop client guidance should summarize launch/path-only support.")
+	var cherry_model: Dictionary = desktop_models[8]
+	if str(cherry_model.get("capability", {}).get("kind", "")) != "manual_guidance":
+		return _failure("A config/manual guidance client should be labelled separately from full one-click clients.")
+	if str(cherry_model.get("guidance_text", "")).find("Manual setup guidance") == -1:
+		return _failure("Manual guidance client summary should explain that it is not full one-click support.")
 	var windsurf_model: Dictionary = desktop_models[5]
 	if str(windsurf_model.get("name_key", "")) != "config_client_windsurf":
 		return _failure("Presenter should include Windsurf in the desktop client list.")
@@ -196,6 +239,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"status": "ready",
 				"config_path": "E:/Project/Test/.gemini/settings.json",
 				"config_entry_status": {"status": "present"},
+				"write_supported": true,
 				"auto_add_supported": true,
 				"launch_supported": true,
 				"path_pick_supported": true,
@@ -230,6 +274,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Codex status should surface the concrete config file path once godot-mcp is already installed.")
 	if str(codex_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
 		return _failure("Codex should switch the primary action to Remove when godot-mcp is already installed.")
+	if str(codex_model.get("capability", {}).get("kind", "")) != "auto_add":
+		return _failure("A CLI auto-add client should be labelled as one-click CLI add/remove support.")
+	if str(codex_model.get("guidance_text", "")).find("One-click CLI add or remove") == -1:
+		return _failure("CLI auto-add client guidance should summarize one-click CLI capabilities.")
 	var gemini_model: Dictionary = cli_models[2]
 	if str(gemini_model.get("install_status_text", "")).find("E:/Project/Test/.gemini/settings.json") == -1:
 		return _failure("Gemini CLI status should surface the active config file path once godot-mcp is already installed.")
@@ -237,6 +285,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Gemini CLI should launch through the terminal flow, not the desktop-app flow.")
 	if str(gemini_model.get("primary_action_label_key", "")) != "tool_action_remove_name":
 		return _failure("Gemini CLI should switch the primary action to Remove when godot-mcp is already installed.")
+	if str(gemini_model.get("capability", {}).get("kind", "")) != "auto_add":
+		return _failure("A CLI client with write_supported and auto_add_supported should prefer the auto-add capability summary.")
 	var qwen_model: Dictionary = cli_models[4]
 	if str(qwen_model.get("install_status_text", "")).find("E:/Project/Test/.qwen/settings.json") == -1:
 		return _failure("Qwen Code CLI status should surface the active config file path once godot-mcp is already installed.")
