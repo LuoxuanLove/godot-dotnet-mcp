@@ -1342,6 +1342,7 @@ func _wait_for_runtime_log_marker(success_markers: Array[String], failure_marker
 		if tree == null:
 			break
 		if recent_events.size() >= log_tail:
+			await tree.process_frame
 			continue
 		var remaining_ms: int = timeout_ms - elapsed_ms
 		if remaining_ms <= 0:

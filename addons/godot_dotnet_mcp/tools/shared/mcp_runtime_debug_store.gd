@@ -288,7 +288,15 @@ static func _get_merged_events() -> Array[Dictionary]:
 	merged.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _sort_event_chronologically(a, b))
 	if merged.size() > MAX_EVENTS:
 		merged = merged.slice(merged.size() - MAX_EVENTS)
+	_normalize_merged_event_ids(merged)
 	return merged
+
+
+static func _normalize_merged_event_ids(events: Array[Dictionary]) -> void:
+	var next_merged_event_id := 1
+	for event in events:
+		event["event_id"] = next_merged_event_id
+		next_merged_event_id += 1
 
 
 static func _sort_event_chronologically(a: Dictionary, b: Dictionary) -> bool:

@@ -488,7 +488,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	MCPRuntimeDebugStoreShared.clear()
 	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
-		"event_id": 25,
+		"event_id": 100,
 		"timestamp_unix": 25,
 		"timestamp_text": "2026-01-01T00:00:25",
 		"kind": "runtime_log",
@@ -496,24 +496,64 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"payload": {"message": "OLD SHARED", "level": "info"}
 	}]))
 	var debug_tools = DebugToolsScript.new()
+	var baseline_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	if not bool(baseline_shared_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should read fallback runtime events before cursor checks.")
+	var baseline_shared_events: Array = baseline_shared_result.get("data", {}).get("events", [])
+	if baseline_shared_events.is_empty():
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose seeded fallback runtime events.")
+	var baseline_shared_cursor := int((baseline_shared_events[baseline_shared_events.size() - 1] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 100,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}, {
+		"event_id": 1,
+		"timestamp_unix": 26,
+		"timestamp_text": "2026-01-01T00:00:26",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "NEW FALLBACK", "level": "info"}
+	}]))
+	var fallback_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": baseline_shared_cursor, "limit": 5})
+	if not bool(fallback_cursor_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read fallback events after a normalized cursor.")
+	var fallback_cursor_events: Array = fallback_cursor_result.get("data", {}).get("events", [])
+	if fallback_cursor_events.is_empty() or str((fallback_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "NEW FALLBACK":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should handle newer fallback events with lower raw event_id values.")
+	MCPRuntimeDebugStoreShared.clear()
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 25,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}]))
 	var shared_recorded_event := MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
 	if int(shared_recorded_event.get("event_id", 0)) <= 25:
-		return _failure("shared runtime debug store should assign live event_id values after persisted fallback events.")
-	var shared_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": 25, "limit": 5})
+		return _shared_store_failure("shared runtime debug store should assign live event_id values after persisted fallback events.")
+	var shared_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": 1, "limit": 5})
 	if not bool(shared_cursor_result.get("success", false)):
-		return _failure("debug_runtime_bridge get_since_event_id should read shared runtime events after a fallback cursor.")
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read shared runtime events after a fallback cursor.")
 	var shared_cursor_events: Array = shared_cursor_result.get("data", {}).get("events", [])
 	if shared_cursor_events.is_empty() or str((shared_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "LIVE SHARED READY":
-		return _failure("debug_runtime_bridge get_since_event_id should not treat a live event as older than persisted fallback history.")
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not treat a live event as older than persisted fallback history.")
 	MCPRuntimeDebugStoreShared.clear()
 	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
 	var live_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	var live_shared_events: Array = live_shared_result.get("data", {}).get("events", [])
+	var live_shared_message := ""
+	if not live_shared_events.is_empty() and live_shared_events[0] is Dictionary:
+		live_shared_message = str((live_shared_events[0] as Dictionary).get("payload", {}).get("message", ""))
+	MCPRuntimeDebugStoreShared.clear()
 	if not bool(live_shared_result.get("success", false)):
 		return _failure("debug_runtime_bridge get_recent should read the shared runtime debug store.")
-	var live_shared_events: Array = live_shared_result.get("data", {}).get("events", [])
-	if live_shared_events.is_empty() or str((live_shared_events[0] as Dictionary).get("payload", {}).get("message", "")) != "LIVE SHARED READY":
+	if live_shared_events.is_empty() or live_shared_message != "LIVE SHARED READY":
 		return _failure("debug_runtime_bridge get_recent should expose live events recorded in the shared runtime debug store.")
-	MCPRuntimeDebugStoreShared.clear()
 
 	var marker_failure_executor = SystemProjectExecutorScript.new()
 	var marker_failure_bridge = FakeBridge.new(FakeToolLoader.new())
@@ -681,6 +721,11 @@ func _create_user_file(path: String, content: String) -> void:
 	if file != null:
 		file.store_string(content)
 		file.close()
+
+
+func _shared_store_failure(message: String) -> Dictionary:
+	MCPRuntimeDebugStoreShared.clear()
+	return _failure(message)
 
 
 func _failure(message: String) -> Dictionary:
