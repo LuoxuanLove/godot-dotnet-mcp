@@ -22,6 +22,7 @@ static var _bridge_status := {
 
 
 static func record_runtime_event(kind: String, payload: Dictionary, session_id: int = -1) -> Dictionary:
+	_sync_next_event_id(_read_fallback_events_cached())
 	var event := {
 		"event_id": _next_event_id,
 		"timestamp_unix": int(Time.get_unix_time_from_system()),
@@ -109,6 +110,13 @@ static func clear() -> void:
 	_fallback_size_bytes = -1
 	_next_event_id = 1
 	_clear_fallback_events()
+
+
+static func _sync_next_event_id(events: Array[Dictionary]) -> void:
+	var max_event_id := 0
+	for event in events:
+		max_event_id = maxi(max_event_id, int(event.get("event_id", 0)))
+	_next_event_id = maxi(_next_event_id, max_event_id + 1)
 
 
 static func _decorate_runtime_error_event(event: Dictionary) -> Dictionary:

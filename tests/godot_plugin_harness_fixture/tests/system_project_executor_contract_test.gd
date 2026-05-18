@@ -487,8 +487,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run marker validation should not miss a marker that is followed by more events than log_tail.")
 
 	MCPRuntimeDebugStoreShared.clear()
-	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 25,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}]))
 	var debug_tools = DebugToolsScript.new()
+	var shared_recorded_event := MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
+	if int(shared_recorded_event.get("event_id", 0)) <= 25:
+		return _failure("shared runtime debug store should assign live event_id values after persisted fallback events.")
+	var shared_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": 25, "limit": 5})
+	if not bool(shared_cursor_result.get("success", false)):
+		return _failure("debug_runtime_bridge get_since_event_id should read shared runtime events after a fallback cursor.")
+	var shared_cursor_events: Array = shared_cursor_result.get("data", {}).get("events", [])
+	if shared_cursor_events.is_empty() or str((shared_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "LIVE SHARED READY":
+		return _failure("debug_runtime_bridge get_since_event_id should not treat a live event as older than persisted fallback history.")
+	MCPRuntimeDebugStoreShared.clear()
+	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
 	var live_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
 	if not bool(live_shared_result.get("success", false)):
 		return _failure("debug_runtime_bridge get_recent should read the shared runtime debug store.")
@@ -662,6 +680,7 @@ func _create_user_file(path: String, content: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(content)
+		file.close()
 
 
 func _failure(message: String) -> Dictionary:
