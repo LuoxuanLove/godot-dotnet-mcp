@@ -36,7 +36,7 @@ tools/system/
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
 - `system_project_files`：高层项目文件树入口，支持列目录、创建/删除目录、读写/复制/移动/删除文件、选中文件、扫描与重导入。
-- `system_project_run`：运行主场景或指定场景；失败时返回编辑器接口、项目、场景和 runtime control 上下文，便于判断缺失的是启动能力还是运行时接管能力。
+- `system_project_run`：运行主场景或指定场景；未提供 `success_markers` / `failure_markers` 时保持立即返回，`timeout_ms` 仅调度自动停止；提供 marker 时会通过异步 MCP tool path 等待 `debug_runtime_bridge` 结构化运行时事件中的 kind / payload 文本，失败 marker 优先于成功 marker，`timeout_ms` 作为带上限的等待超时，`log_tail` 会限幅，`auto_stop` 默认通过 `scene_run stop` 停止运行态但不会杀进程。失败时返回编辑器接口、项目、场景和 runtime control 上下文，便于判断缺失的是启动能力还是运行时接管能力。
 - `system_project_run(background|minimized|no_focus=true)` 当前不会尝试抢占或控制 OS 窗口；这类请求会返回 `requires_foreground_window`，并给出 headless 逻辑测试或编辑器截图等降级路径。
 - `system_project_stop`：停止当前运行中的项目。
 - `system_plugin_reload`：读取运行中插件实例与磁盘 / 同步状态的 freshness；或调度一次不依赖前台 UI 的插件 disable/enable 生命周期重载。该调用只表示已接受调度，重载期间 MCP transport 可能断开，完成后应重新连接并重新拉取工具清单。
@@ -80,6 +80,7 @@ tools/system/
 运行时自动化工具的边界固定为：
 
 - `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime`、`headless_logic_ok`、`visible_capture_required`、`can_run_without_focus`、`no_focus_launch_supported`、`foreground_window_policy`、`foreground_window_fallbacks` 和 `blocking_reasons`。
+- `system_project_run` 的 marker 等待只读取 runtime bridge 结构化日志事件，不是通用 stdout 捕获，也不定义项目专属 PASS / FAIL 约定；marker 参数、等待时间、轮询间隔和日志尾部数量都有固定限幅。
 - 仅支持通过 Godot 编辑器启动的运行态。
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
