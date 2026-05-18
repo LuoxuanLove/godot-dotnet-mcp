@@ -298,13 +298,17 @@ static func _get_merged_events() -> Array[Dictionary]:
 
 static func _normalize_merged_event_ids(events: Array[Dictionary]) -> void:
 	var active_keys: Dictionary = {}
+	var previous_cursor_id := 0
 	for event in events:
 		var cursor_key := JSON.stringify(event)
 		active_keys[cursor_key] = true
-		if not _merged_event_cursor_ids.has(cursor_key):
-			_merged_event_cursor_ids[cursor_key] = _next_merged_event_id
+		var cursor_id := int(_merged_event_cursor_ids.get(cursor_key, 0))
+		if cursor_id <= previous_cursor_id:
+			cursor_id = _next_merged_event_id
 			_next_merged_event_id += 1
-		event["event_id"] = int(_merged_event_cursor_ids.get(cursor_key, -1))
+			_merged_event_cursor_ids[cursor_key] = cursor_id
+		previous_cursor_id = cursor_id
+		event["event_id"] = cursor_id
 	for cursor_key in _merged_event_cursor_ids.keys():
 		if not active_keys.has(cursor_key):
 			_merged_event_cursor_ids.erase(cursor_key)

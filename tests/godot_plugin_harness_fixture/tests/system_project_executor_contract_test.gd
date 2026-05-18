@@ -525,6 +525,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if fallback_cursor_events.is_empty() or str((fallback_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "NEW FALLBACK":
 		return _shared_store_failure("debug_runtime_bridge get_since_event_id should handle newer fallback events with lower raw event_id values.")
 	MCPRuntimeDebugStoreShared.clear()
+	var ordered_event_a := _runtime_log_event(10, "ORDER A")
+	var ordered_event_b := _runtime_log_event(20, "ORDER B")
+	var ordered_event_c := _runtime_log_event(30, "ORDER C")
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([ordered_event_a, ordered_event_c]))
+	var ordered_baseline_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	if not bool(ordered_baseline_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should seed ordered fallback cursor pagination.")
+	var ordered_baseline_events: Array = ordered_baseline_result.get("data", {}).get("events", [])
+	if ordered_baseline_events.size() != 2:
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose the seeded ordered fallback events.")
+	var ordered_a_cursor := int((ordered_baseline_events[0] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([ordered_event_a, ordered_event_b, ordered_event_c]))
+	var ordered_first_page_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": ordered_a_cursor, "limit": 1})
+	if not bool(ordered_first_page_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should page ordered fallback events after insertion.")
+	var ordered_first_page_events: Array = ordered_first_page_result.get("data", {}).get("events", [])
+	if ordered_first_page_events.is_empty() or str((ordered_first_page_events[0] as Dictionary).get("payload", {}).get("message", "")) != "ORDER B":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should return the inserted middle event on the first limited page.")
+	var ordered_b_cursor := int((ordered_first_page_events[0] as Dictionary).get("event_id", -1))
+	var ordered_second_page_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": ordered_b_cursor, "limit": 1})
+	if not bool(ordered_second_page_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should continue ordered fallback pagination.")
+	var ordered_second_page_events: Array = ordered_second_page_result.get("data", {}).get("events", [])
+	if ordered_second_page_events.is_empty() or str((ordered_second_page_events[0] as Dictionary).get("payload", {}).get("message", "")) != "ORDER C":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not skip an already-seen later event after an inserted middle event.")
+	MCPRuntimeDebugStoreShared.clear()
 	var full_fallback_events: Array = []
 	for event_id in range(1, 302):
 		full_fallback_events.append(_runtime_log_event(event_id, "BUFFER %d" % event_id))
