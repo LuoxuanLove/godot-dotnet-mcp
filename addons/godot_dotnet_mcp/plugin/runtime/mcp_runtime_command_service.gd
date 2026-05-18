@@ -9,6 +9,7 @@ var _get_tree := Callable()
 var _get_viewport := Callable()
 var _get_current_scene_path := Callable()
 var _build_runtime_state := Callable()
+var _get_capture_availability := Callable()
 var _capture_root_dir := MCPUserDataPaths.RUNTIME_CAPTURE_ROOT
 var _max_capture_files_per_session := 24
 var _capture_files_by_session: Dictionary = {}
@@ -21,6 +22,7 @@ func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: 
 	_build_runtime_state = build_runtime_state_callback
 	_capture_root_dir = capture_root_dir
 	_max_capture_files_per_session = maxi(max_capture_files_per_session, 1)
+	_get_capture_availability = Callable()
 
 
 func execute_action_async(session_id: int, action: String, args: Dictionary) -> Dictionary:
@@ -46,6 +48,7 @@ func dispose() -> void:
 	_get_viewport = Callable()
 	_get_current_scene_path = Callable()
 	_build_runtime_state = Callable()
+	_get_capture_availability = Callable()
 
 
 func _capture_async(session_id: int, args: Dictionary) -> Dictionary:
@@ -81,6 +84,9 @@ func _capture_single_frame_async(session_id: int, args: Dictionary) -> Dictionar
 	var include_runtime_state := bool(args.get("include_runtime_state", true))
 	var capture_label := str(args.get("capture_label", ""))
 	await _await_capture_ready()
+	var capture_availability := _get_capture_availability_safe()
+	if not bool(capture_availability.get("available", true)):
+		return _capture_skipped(session_id, include_runtime_state, capture_availability)
 	var viewport = _get_viewport_safe()
 	if viewport == null:
 		return _failure("runtime_capture_failed", "Viewport is unavailable.")
@@ -89,7 +95,11 @@ func _capture_single_frame_async(session_id: int, args: Dictionary) -> Dictionar
 		return _failure("runtime_capture_failed", "Viewport texture is unavailable.")
 	var image = texture.get_image()
 	if image == null or image.is_empty():
-		return _failure("runtime_capture_failed", "Viewport image is unavailable.")
+		var unavailable_context := _build_runtime_capture_availability_context()
+		unavailable_context["available"] = false
+		unavailable_context["skip_reason"] = "skipped_capture_unavailable"
+		unavailable_context["hint"] = "Viewport image is unavailable; headless or dummy rendering may not support runtime screenshots."
+		return _capture_skipped(session_id, include_runtime_state, unavailable_context)
 
 	var session_key := _session_key(session_id)
 	var capture_dir := _resolve_capture_dir(session_key, args)
@@ -126,6 +136,21 @@ func _capture_single_frame_async(session_id: int, args: Dictionary) -> Dictionar
 		"captured_at": Time.get_datetime_string_from_system(true, true),
 		"runtime_state": runtime_state
 	}, "Runtime frame captured")
+
+
+func _capture_skipped(session_id: int, include_runtime_state: bool, availability: Dictionary) -> Dictionary:
+	var runtime_state := _build_runtime_state_safe(session_id) if include_runtime_state else {}
+	var skip_reason := str(availability.get("skip_reason", "skipped_capture_unavailable"))
+	return _success({
+		"skipped": true,
+		"skip_reason": skip_reason,
+		"capture_available": false,
+		"scene": _get_current_scene_path_safe(),
+		"session_id": session_id,
+		"captured_at": Time.get_datetime_string_from_system(true, true),
+		"runtime_state": runtime_state,
+		"capture_context": availability.duplicate(true)
+	}, "Runtime capture skipped: %s" % skip_reason)
 
 
 func _apply_inputs_async(session_id: int, args: Dictionary) -> Dictionary:
@@ -351,6 +376,46 @@ func _get_current_scene_path_safe() -> String:
 	if _get_current_scene_path.is_valid():
 		return str(_get_current_scene_path.call())
 	return ""
+
+
+func _get_capture_availability_safe() -> Dictionary:
+	if _get_capture_availability.is_valid():
+		var callback_result = _get_capture_availability.call()
+		if callback_result is Dictionary:
+			return (callback_result as Dictionary).duplicate(true)
+	return _build_runtime_capture_availability_context()
+
+
+func _build_runtime_capture_availability_context() -> Dictionary:
+	var context := {
+		"available": true,
+		"skip_reason": "",
+		"headless": OS.has_feature("headless"),
+		"display_server": DisplayServer.get_name()
+	}
+	if RenderingServer.has_method("get_current_rendering_method"):
+		context["rendering_method"] = str(RenderingServer.call("get_current_rendering_method"))
+	if RenderingServer.has_method("get_current_rendering_driver_name"):
+		context["rendering_driver"] = str(RenderingServer.call("get_current_rendering_driver_name"))
+	if RenderingServer.has_method("get_video_adapter_name"):
+		context["video_adapter"] = str(RenderingServer.call("get_video_adapter_name"))
+	if _runtime_capture_context_matches(context, "headless"):
+		context["available"] = false
+		context["skip_reason"] = "skipped_headless"
+		context["hint"] = "Runtime screenshots require a visible rendering backend; use editor screenshots or a visible run for visual QA."
+	elif _runtime_capture_context_matches(context, "dummy"):
+		context["available"] = false
+		context["skip_reason"] = "skipped_dummy_rendering"
+		context["hint"] = "Runtime screenshots are unavailable with the dummy rendering backend; use a visible rendering driver for capture."
+	return context
+
+
+func _runtime_capture_context_matches(context: Dictionary, marker: String) -> bool:
+	var target := marker.to_lower()
+	for key in ["display_server", "rendering_method", "rendering_driver", "video_adapter"]:
+		if str(context.get(key, "")).to_lower().find(target) != -1:
+			return true
+	return target == "headless" and bool(context.get("headless", false))
 
 
 func _build_runtime_state_safe(session_id: int) -> Dictionary:

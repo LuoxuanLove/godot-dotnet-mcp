@@ -401,8 +401,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failing_run_data = failing_run.get("data", {})
 	if not (failing_run_data is Dictionary):
 		return _failure("project_run failure should return structured data.")
-	if str((failing_run_data as Dictionary).get("error_code", "")) != "project_run_failed":
-		return _failure("project_run failure should include project_run_failed error_code.")
+	if str((failing_run_data as Dictionary).get("error_code", "")) != "editor_run_interface_unavailable_despite_state_available":
+		return _failure("project_run failure should identify inconsistent EditorInterface availability.")
+	if not ((failing_run_data as Dictionary).get("state_probe_vs_run_invoker", {}) is Dictionary):
+		return _failure("project_run inconsistent EditorInterface failure should include state/run comparison.")
+	if ((failing_run_data as Dictionary).get("recovery_suggestions", []) as Array).is_empty():
+		return _failure("project_run inconsistent EditorInterface failure should include recovery suggestions.")
 	if not ((failing_run_data as Dictionary).get("runtime_capabilities", {}) is Dictionary):
 		return _failure("project_run failure should include runtime capability context.")
 	if not ((failing_run_data as Dictionary).get("runtime_control_status", {}) is Dictionary):
