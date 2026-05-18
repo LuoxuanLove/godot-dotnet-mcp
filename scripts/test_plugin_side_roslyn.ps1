@@ -16,7 +16,6 @@ function Format-Duration {
 
     return "{0:n1}s" -f $Duration.TotalSeconds
 }
-
 function New-TimingRecord {
     param(
         [string]$Name,
@@ -320,4 +319,3 @@ finally {
     $OverallStopwatch.Stop()
     Write-HarnessTimingSummary -Timings $TimingRecords.ToArray() -TotalDuration $OverallStopwatch.Elapsed
 }
-

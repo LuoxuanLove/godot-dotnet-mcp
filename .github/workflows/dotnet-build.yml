@@ -53,4 +53,3 @@ jobs:
       - name: Validate refactor guardrails
         shell: pwsh
         run: .\scripts\validate_refactor_guardrails.ps1
-

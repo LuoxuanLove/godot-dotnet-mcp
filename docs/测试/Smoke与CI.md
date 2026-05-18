@@ -118,4 +118,3 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 ## 7. 结论
 
 当前 harness 与 CI 已经形成分层闭环：`pr-policy` 提前拦截错误目标分支，`dotnet-build` 提供快速 .NET build 和 guardrail 反馈，`validate-plugin-harness` 保持稳定 required check 名称并运行重型 Godot harness，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。
-

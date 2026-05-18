@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- 修复 Config 页客户端卡片能力说明：现在会明确区分完整一键配置、CLI 一键添加、仅打开 / 路径管理以及手动接入引导类客户端。
 - 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot `.godot/mono/temp` 产物触发 `CS2012` 文件锁错误时，会分类为 `transient_file_lock` 并输出可执行的恢复建议。
 - 修复 MCP 服务器监听失败自诊断：端口占用、绑定被拒绝与 Windows 保留 / 排除 TCP 端口现在会报告不同原因与处理提示。
 - 修复运行时截图：headless 或 dummy 渲染后端现在会返回结构化 skipped 结果，不再尝试不可用的 viewport 截图。

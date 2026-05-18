@@ -82,7 +82,6 @@ function Get-DotnetBuildFailureDiagnostic {
         )
     }
 }
-
 function Format-DotnetBuildFailureDiagnostic {
     param(
         [Parameter(Mandatory = $true)]
@@ -190,4 +189,3 @@ if ($MyInvocation.InvocationName -ne ".") {
         exit 1
     }
 }
-
