@@ -52,7 +52,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -148,7 +148,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_run",
-			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_run waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true.",
+			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_run waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -158,7 +158,10 @@ func get_tools() -> Array[Dictionary]:
 					"failure_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation failure. Failure markers take precedence over success markers."},
 					"auto_stop": {"type": "boolean", "description": "Marker wait mode only: stop the running scene through scene_run stop after success, failure, or timeout (default true). Does not kill processes."},
 					"poll_interval_ms": {"type": "integer", "description": "Marker wait mode only: runtime bridge poll interval in milliseconds (default 100)."},
-					"log_tail": {"type": "integer", "description": "Marker wait mode only: number of recent structured runtime bridge events to inspect per poll (default 100, max 500)."}
+					"log_tail": {"type": "integer", "description": "Marker wait mode only: number of recent structured runtime bridge events to inspect per poll (default 100, max 500)."},
+					"background": {"type": "boolean", "description": "Request non-foreground launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"minimized": {"type": "boolean", "description": "Request minimized launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"no_focus": {"type": "boolean", "description": "Request launch without taking focus. Currently unsupported; returns requires_foreground_window instead of starting."}
 				}
 			}
 		},
@@ -796,6 +799,12 @@ func _build_runtime_capabilities(project_info: Dictionary, dotnet_build_data: Di
 		"can_enable_runtime_control": bool(runtime_control.get("can_enable_runtime_control", false)),
 		"can_control_runtime": bool(runtime_control.get("can_control_runtime", false)),
 		"can_capture_runtime": bool(runtime_control.get("can_capture_runtime", false)),
+		"headless_logic_ok": true,
+		"visible_capture_required": true,
+		"can_run_without_focus": false,
+		"no_focus_launch_supported": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"foreground_window_fallbacks": ["headless_logic_test", "editor_screenshot"],
 		"runtime_session_attached": bool(runtime_control.get("runtime_session_attached", false)),
 		"runtime_launched_by_editor": int(runtime_summary.get("session_count", 0)) > 0,
 		"runtime_message_channel_available": bool(runtime_control.get("can_enable_runtime_control", false)),
@@ -1197,6 +1206,8 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 		})
 	var custom_scene := str(args.get("scene", "")).strip_edges()
 	var timeout_ms := int(args.get("timeout_ms", 0))
+	if _project_run_foreground_options_requested(args):
+		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
 	var run_result := _start_project_run(custom_scene)
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
@@ -1218,6 +1229,8 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 
 func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
 	var custom_scene := str(args.get("scene", "")).strip_edges()
+	if _project_run_foreground_options_requested(args):
+		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
 	var success_markers := _normalize_marker_list(args.get("success_markers", []))
 	var failure_markers := _normalize_marker_list(args.get("failure_markers", []))
 	if success_markers.is_empty() and failure_markers.is_empty():
@@ -1426,6 +1439,38 @@ func _stop_project_after_marker_validation(scene_label: String, validation_statu
 	return bridge.call_atomic("scene_run", {"action": "stop"})
 
 
+func _project_run_foreground_options_requested(args: Dictionary) -> bool:
+	return bool(args.get("background", false)) or bool(args.get("minimized", false)) or bool(args.get("no_focus", false))
+
+
+func _build_project_run_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
+	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
+	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
+	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var runtime_summary := _get_runtime_summary()
+	var runtime_control_status := _build_runtime_control_state_section()
+	return {
+		"error_code": "requires_foreground_window",
+		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
+		"requested_options": {
+			"background": bool(args.get("background", false)),
+			"minimized": bool(args.get("minimized", false)),
+			"no_focus": bool(args.get("no_focus", false))
+		},
+		"can_run_without_focus": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"degradation_paths": ["headless_logic_test", "editor_screenshot"],
+		"recovery_suggestions": [
+			"Run without background/minimized/no_focus when foreground runtime interaction is acceptable.",
+			"Use headless logic tests for non-visual acceptance flows.",
+			"Use editor screenshots when visual QA can be performed without starting a runtime window."
+		],
+		"runtime_control_status": runtime_control_status,
+		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	}
+
+
 func _build_project_run_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
 	var project_info: Dictionary = bridge.extract_data(project_info_result)
@@ -1436,7 +1481,9 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 	var main_scene := str(project_info.get("main_scene", ""))
 	var requested_scene := custom_scene if not custom_scene.is_empty() else main_scene
 	var scene_exists := not requested_scene.is_empty() and FileAccess.file_exists(requested_scene)
-	return {
+	var editor_context := _build_editor_runtime_context()
+	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	var context := {
 		"error_code": "project_run_failed",
 		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
 		"resolved_scene": requested_scene,
@@ -1444,10 +1491,67 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 		"main_scene": main_scene,
 		"main_scene_exists": not main_scene.is_empty() and FileAccess.file_exists(main_scene),
 		"compile_error_count": int(dotnet_build_data.get("error_count", 0)),
-		"editor_context": _build_editor_runtime_context(),
+		"editor_context": editor_context,
 		"runtime_control_status": runtime_control_status,
-		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status),
+		"runtime_capabilities": runtime_capabilities,
 		"run_result": run_result.duplicate(true)
+	}
+	if _is_editor_interface_unavailable_inconsistent(run_result, editor_context, runtime_capabilities):
+		context["error_code"] = "editor_run_interface_unavailable_despite_state_available"
+		context["state_probe_vs_run_invoker"] = _build_project_run_state_probe_comparison(editor_context, runtime_capabilities, run_result)
+		context["recovery_suggestions"] = _build_project_run_editor_interface_recovery_suggestions()
+		var cli_fallback := _build_project_run_cli_fallback(editor_context, requested_scene, scene_exists)
+		if not cli_fallback.is_empty():
+			context["cli_fallback"] = cli_fallback
+	return context
+
+
+func _is_editor_interface_unavailable_inconsistent(run_result: Dictionary, editor_context: Dictionary, runtime_capabilities: Dictionary) -> bool:
+	var run_error := "%s %s" % [str(run_result.get("error", "")), str(run_result.get("message", ""))]
+	if not run_error.contains("Editor interface not available"):
+		return false
+	return bool(runtime_capabilities.get("can_start_project", false)) or bool(editor_context.get("editor_interface_available", false))
+
+
+func _build_project_run_state_probe_comparison(editor_context: Dictionary, runtime_capabilities: Dictionary, run_result: Dictionary) -> Dictionary:
+	return {
+		"state_probe": {
+			"editor_interface_available": bool(editor_context.get("editor_interface_available", false)),
+			"can_start_project": bool(runtime_capabilities.get("can_start_project", false)),
+			"blocking_reasons": runtime_capabilities.get("blocking_reasons", []),
+			"godot_executable_path": str(editor_context.get("godot_executable_path", "")),
+			"project_root_path": str(editor_context.get("project_root_path", ""))
+		},
+		"run_invoker": {
+			"success": bool(run_result.get("success", false)),
+			"error": str(run_result.get("error", "")),
+			"message": str(run_result.get("message", ""))
+		},
+		"interpretation": "State probing reported the editor run path as available, but the scene run invoker could not access EditorInterface."
+	}
+
+
+func _build_project_run_editor_interface_recovery_suggestions() -> Array[String]:
+	return [
+		"Retry system_project_state or system_editor_state to confirm the current MCP connection is attached to the intended Godot editor session.",
+		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_run.",
+		"If multiple Godot editors are open, close stale sessions or reconnect to the editor that owns this project.",
+		"If editor launching remains unavailable, use the cli_fallback command from this response to run the scene outside the editor."
+	]
+
+
+func _build_project_run_cli_fallback(editor_context: Dictionary, requested_scene: String, scene_exists: bool) -> Dictionary:
+	var godot_executable_path := str(editor_context.get("godot_executable_path", ""))
+	var project_root_path := str(editor_context.get("project_root_path", ""))
+	if godot_executable_path.is_empty() or project_root_path.is_empty() or requested_scene.is_empty() or not scene_exists:
+		return {}
+	var scene_path := requested_scene
+	if scene_path.begins_with("res://"):
+		scene_path = ProjectSettings.globalize_path(scene_path)
+	return {
+		"description": "Safe CLI fallback for manual verification when the editor run invoker cannot access EditorInterface.",
+		"command": [godot_executable_path, "--path", project_root_path, scene_path],
+		"working_directory": project_root_path
 	}
 
 

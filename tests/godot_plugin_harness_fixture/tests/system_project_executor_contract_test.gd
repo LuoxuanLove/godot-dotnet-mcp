@@ -307,6 +307,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities.editor_context should expose the current editor session identity.")
 	if bool(context_identity.get("safe_to_terminate", true)) or bool(context_identity.get("external_validation_process", true)):
 		return _failure("runtime_capabilities.editor_context should mark the current editor process as non-terminable and non-external.")
+	if not bool((runtime_capabilities as Dictionary).get("headless_logic_ok", false)):
+		return _failure("runtime_capabilities should declare that headless logic validation is a supported fallback.")
+	if not bool((runtime_capabilities as Dictionary).get("visible_capture_required", false)):
+		return _failure("runtime_capabilities should declare that visual QA requires visible capture.")
+	if bool((runtime_capabilities as Dictionary).get("can_run_without_focus", true)) or bool((runtime_capabilities as Dictionary).get("no_focus_launch_supported", true)):
+		return _failure("runtime_capabilities should explicitly report that no-focus runtime launch is unsupported.")
+	if str((runtime_capabilities as Dictionary).get("foreground_window_policy", "")) != "requires_foreground_window":
+		return _failure("runtime_capabilities should expose the foreground-window policy.")
 
 	var empty_executor = SystemProjectExecutorScript.new()
 	empty_executor.bridge = FakeEmptyCollectBridge.new(FakeToolLoader.new())
@@ -390,6 +398,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
+	var run_action_count_before_no_focus := int(executor.bridge.scene_run_actions.size())
+	var no_focus_run: Dictionary = executor.execute("project_run", {"no_focus": true})
+	if bool(no_focus_run.get("success", false)):
+		return _failure("project_run should reject unsupported no_focus launches instead of starting the project.")
+	if executor.bridge.scene_run_actions.size() != run_action_count_before_no_focus:
+		return _failure("project_run should not call scene_run when no_focus launch is unsupported.")
+	var no_focus_data = no_focus_run.get("data", {})
+	if not (no_focus_data is Dictionary):
+		return _failure("project_run no_focus rejection should include structured data.")
+	if str((no_focus_data as Dictionary).get("error_code", "")) != "requires_foreground_window":
+		return _failure("project_run no_focus rejection should expose requires_foreground_window.")
+	if bool((no_focus_data as Dictionary).get("can_run_without_focus", true)):
+		return _failure("project_run no_focus rejection should report can_run_without_focus=false.")
 
 	var marker_success_executor = SystemProjectExecutorScript.new()
 	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
@@ -506,8 +527,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failing_run_data = failing_run.get("data", {})
 	if not (failing_run_data is Dictionary):
 		return _failure("project_run failure should return structured data.")
-	if str((failing_run_data as Dictionary).get("error_code", "")) != "project_run_failed":
-		return _failure("project_run failure should include project_run_failed error_code.")
+	if str((failing_run_data as Dictionary).get("error_code", "")) != "editor_run_interface_unavailable_despite_state_available":
+		return _failure("project_run failure should identify inconsistent EditorInterface availability.")
+	if not ((failing_run_data as Dictionary).get("state_probe_vs_run_invoker", {}) is Dictionary):
+		return _failure("project_run inconsistent EditorInterface failure should include state/run comparison.")
+	if ((failing_run_data as Dictionary).get("recovery_suggestions", []) as Array).is_empty():
+		return _failure("project_run inconsistent EditorInterface failure should include recovery suggestions.")
 	if not ((failing_run_data as Dictionary).get("runtime_capabilities", {}) is Dictionary):
 		return _failure("project_run failure should include runtime capability context.")
 	if not ((failing_run_data as Dictionary).get("runtime_control_status", {}) is Dictionary):
