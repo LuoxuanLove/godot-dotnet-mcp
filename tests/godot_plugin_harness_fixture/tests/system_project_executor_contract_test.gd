@@ -525,6 +525,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if fallback_cursor_events.is_empty() or str((fallback_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "NEW FALLBACK":
 		return _shared_store_failure("debug_runtime_bridge get_since_event_id should handle newer fallback events with lower raw event_id values.")
 	MCPRuntimeDebugStoreShared.clear()
+	var full_fallback_events: Array = []
+	for event_id in range(1, 302):
+		full_fallback_events.append(_runtime_log_event(event_id, "BUFFER %d" % event_id))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify(full_fallback_events.slice(0, 300)))
+	var full_buffer_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 300})
+	if not bool(full_buffer_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should read a full runtime event buffer.")
+	var full_buffer_events: Array = full_buffer_result.get("data", {}).get("events", [])
+	if full_buffer_events.size() != 300:
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose the full seeded runtime event buffer.")
+	var full_buffer_cursor := int((full_buffer_events[full_buffer_events.size() - 1] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify(full_fallback_events))
+	var trimmed_buffer_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": full_buffer_cursor, "limit": 5})
+	if not bool(trimmed_buffer_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read after a full buffer cursor.")
+	var trimmed_buffer_events: Array = trimmed_buffer_result.get("data", {}).get("events", [])
+	if trimmed_buffer_events.is_empty() or str((trimmed_buffer_events[0] as Dictionary).get("payload", {}).get("message", "")) != "BUFFER 301":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not skip a new event after the merged buffer reaches its max size.")
+	MCPRuntimeDebugStoreShared.clear()
 	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
 		"event_id": 25,
 		"timestamp_unix": 25,
@@ -721,6 +740,17 @@ func _create_user_file(path: String, content: String) -> void:
 	if file != null:
 		file.store_string(content)
 		file.close()
+
+
+func _runtime_log_event(event_id: int, message: String) -> Dictionary:
+	return {
+		"event_id": event_id,
+		"timestamp_unix": event_id,
+		"timestamp_text": "2026-01-01T00:%02d:%02d" % [int(event_id / 60), event_id % 60],
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": message, "level": "info"}
+	}
 
 
 func _shared_store_failure(message: String) -> Dictionary:

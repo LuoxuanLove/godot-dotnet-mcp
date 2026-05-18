@@ -12,6 +12,8 @@ static var _fallback_cache: Array[Dictionary] = []
 static var _fallback_dirty := true
 static var _fallback_modified_unix := -1
 static var _fallback_size_bytes := -1
+static var _merged_event_cursor_ids: Dictionary = {}
+static var _next_merged_event_id: int = 1
 static var _next_event_id: int = 1
 static var _bridge_status := {
 	"installed": false,
@@ -108,6 +110,8 @@ static func clear() -> void:
 	_fallback_dirty = true
 	_fallback_modified_unix = -1
 	_fallback_size_bytes = -1
+	_merged_event_cursor_ids.clear()
+	_next_merged_event_id = 1
 	_next_event_id = 1
 	_clear_fallback_events()
 
@@ -293,10 +297,17 @@ static func _get_merged_events() -> Array[Dictionary]:
 
 
 static func _normalize_merged_event_ids(events: Array[Dictionary]) -> void:
-	var next_merged_event_id := 1
+	var active_keys: Dictionary = {}
 	for event in events:
-		event["event_id"] = next_merged_event_id
-		next_merged_event_id += 1
+		var cursor_key := JSON.stringify(event)
+		active_keys[cursor_key] = true
+		if not _merged_event_cursor_ids.has(cursor_key):
+			_merged_event_cursor_ids[cursor_key] = _next_merged_event_id
+			_next_merged_event_id += 1
+		event["event_id"] = int(_merged_event_cursor_ids.get(cursor_key, -1))
+	for cursor_key in _merged_event_cursor_ids.keys():
+		if not active_keys.has(cursor_key):
+			_merged_event_cursor_ids.erase(cursor_key)
 
 
 static func _sort_event_chronologically(a: Dictionary, b: Dictionary) -> bool:
