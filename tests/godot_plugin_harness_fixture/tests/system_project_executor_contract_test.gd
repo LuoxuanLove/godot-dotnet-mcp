@@ -452,6 +452,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(repeated_matched_event.get("event_id", 0)) != 2:
 		return _failure("project_run marker validation should match the post-start event_id instead of the pre-run baseline event.")
 
+	var high_volume_marker_executor = SystemProjectExecutorScript.new()
+	var high_volume_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	high_volume_marker_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "HIGH VOLUME READY", "level": "info"}}]
+	for event_id in range(2, 40):
+		high_volume_marker_bridge.runtime_events_after_start.append({"event_id": event_id, "kind": "runtime_log", "payload": {"message": "noise %d" % event_id, "level": "info"}})
+	high_volume_marker_executor.bridge = high_volume_marker_bridge
+	high_volume_marker_executor.configure_runtime({})
+	var high_volume_marker: Dictionary = await high_volume_marker_executor.execute_async("project_run", {
+		"success_markers": ["HIGH VOLUME READY"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 1
+	})
+	if not bool(high_volume_marker.get("success", false)):
+		return _failure("project_run marker validation should not miss a marker that is followed by more events than log_tail.")
+
 	MCPRuntimeDebugStoreShared.clear()
 	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
 	var debug_tools = DebugToolsScript.new()

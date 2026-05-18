@@ -1328,7 +1328,7 @@ func _wait_for_runtime_log_marker(success_markers: Array[String], failure_marker
 	var started_ms := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - started_ms <= timeout_ms:
 		var elapsed_ms := Time.get_ticks_msec() - started_ms
-		var recent_events := _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), baseline)
+		var recent_events := _filter_new_runtime_events(_fetch_runtime_log_events(_RUN_LOG_MARKER_MAX_LOG_TAIL), baseline)
 		var failure_match := _find_marker_match(recent_events, failure_markers, "failure")
 		if not failure_match.is_empty():
 			failure_match["elapsed_ms"] = elapsed_ms
