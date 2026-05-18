@@ -74,6 +74,8 @@ tests/
 `dotnet-build.yml` 和 `scripts/test_plugin_side_roslyn.ps1` 的 .NET build 阶段会识别符合 `CS2012`、Godot `.godot/mono/temp` 路径以及文件占用 / 安全软件扫描信号的失败，并输出 `transient_file_lock` 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 `.godot` 或终止进程。
 
 
+Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
+
 ---
 
 ## 5. 当前门禁边界
