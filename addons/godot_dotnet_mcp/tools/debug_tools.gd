@@ -95,6 +95,7 @@ EXAMPLES:
 
 ACTIONS:
 - get_recent: Read recent runtime bridge events
+- get_since_event_id: Read the next runtime bridge events after an event_id cursor
 - get_errors: Read runtime bridge warning/error events
 - get_sessions: Read editor debugger session states
 - get_summary: Read a combined runtime bridge summary
@@ -105,6 +106,7 @@ ACTIONS:
 
 EXAMPLES:
 - Read runtime events: {"action": "get_recent", "limit": 20}
+- Read runtime events after a cursor: {"action": "get_since_event_id", "after_event_id": 42, "limit": 20}
 - Read runtime errors: {"action": "get_errors", "limit": 20}
 - Read debugger sessions: {"action": "get_sessions"}
 - Filtered by level: {"action": "get_recent_filtered", "level": "error", "tail": 10}
@@ -115,8 +117,12 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_recent", "get_errors", "get_sessions", "get_summary", "clear_buffer", "get_recent_filtered", "get_errors_context", "get_scene_snapshot"],
+						"enum": ["get_recent", "get_since_event_id", "get_errors", "get_sessions", "get_summary", "clear_buffer", "get_recent_filtered", "get_errors_context", "get_scene_snapshot"],
 						"description": "Runtime bridge action"
+					},
+					"after_event_id": {
+						"type": "integer",
+						"description": "Return events with event_id greater than this cursor (for get_since_event_id)"
 					},
 					"limit": {
 						"type": "integer",
@@ -404,6 +410,13 @@ func _execute_runtime_bridge(args: Dictionary) -> Dictionary:
 				"count": recent_events.size(),
 				"events": recent_events
 			})
+		"get_since_event_id":
+			var cursor_events := _get_runtime_events_after_event_id(int(args.get("after_event_id", -1)), int(args.get("limit", 50)))
+			return _success({
+				"bridge_status": MCPRuntimeDebugStore.get_bridge_status(),
+				"count": cursor_events.size(),
+				"events": cursor_events
+			})
 		"get_errors":
 			var events := MCPRuntimeDebugStore.get_errors(int(args.get("limit", 50)))
 			return _success({
@@ -431,6 +444,20 @@ func _execute_runtime_bridge(args: Dictionary) -> Dictionary:
 			return _execute_runtime_bridge_scene_snapshot(args)
 		_:
 			return _error("Unknown action: %s" % str(args.get("action", "")))
+
+
+func _get_runtime_events_after_event_id(after_event_id: int, limit: int) -> Array[Dictionary]:
+	var resolved_limit := maxi(limit, 0)
+	var filtered: Array[Dictionary] = []
+	if resolved_limit == 0:
+		return filtered
+	for event in MCPRuntimeDebugStore.get_recent(100000):
+		if int(event.get("event_id", -1)) <= after_event_id:
+			continue
+		filtered.append(event.duplicate(true))
+		if filtered.size() >= resolved_limit:
+			break
+	return filtered
 
 
 func _execute_runtime_bridge_filtered(args: Dictionary) -> Dictionary:

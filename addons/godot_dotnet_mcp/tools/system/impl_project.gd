@@ -1326,9 +1326,11 @@ func _validate_run_log_markers(success_markers: Array[String], failure_markers: 
 func _wait_for_runtime_log_marker(success_markers: Array[String], failure_markers: Array[String], baseline: Dictionary, timeout_ms: int, poll_interval_ms: int, log_tail: int) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
 	var started_ms := Time.get_ticks_msec()
+	var cursor_event_id := int(baseline.get("max_event_id", -1))
 	while Time.get_ticks_msec() - started_ms <= timeout_ms:
 		var elapsed_ms := Time.get_ticks_msec() - started_ms
-		var recent_events := _filter_new_runtime_events(_fetch_runtime_log_events(_RUN_LOG_MARKER_MAX_LOG_TAIL), baseline)
+		var recent_events := _fetch_runtime_log_events_after(cursor_event_id, log_tail)
+		cursor_event_id = _max_runtime_event_id(recent_events, cursor_event_id)
 		var failure_match := _find_marker_match(recent_events, failure_markers, "failure")
 		if not failure_match.is_empty():
 			failure_match["elapsed_ms"] = elapsed_ms
@@ -1339,6 +1341,8 @@ func _wait_for_runtime_log_marker(success_markers: Array[String], failure_marker
 			return _build_marker_validation_result("passed", success_match, success_markers, failure_markers)
 		if tree == null:
 			break
+		if recent_events.size() >= log_tail:
+			continue
 		var remaining_ms: int = timeout_ms - elapsed_ms
 		if remaining_ms <= 0:
 			break
@@ -1371,6 +1375,21 @@ func _fetch_runtime_log_events(log_tail: int) -> Array:
 	if not bool(result.get("success", false)):
 		result = bridge.call_atomic("debug_runtime_bridge", {"action": "get_recent_filtered", "limit": log_tail, "tail": log_tail})
 	return bridge.extract_array(result, "events")
+
+
+func _fetch_runtime_log_events_after(after_event_id: int, log_tail: int) -> Array:
+	var result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_since_event_id", "after_event_id": after_event_id, "limit": log_tail})
+	if bool(result.get("success", false)):
+		return bridge.extract_array(result, "events")
+	return _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), {"max_event_id": after_event_id})
+
+
+func _max_runtime_event_id(events: Array, fallback_event_id: int) -> int:
+	var max_event_id := fallback_event_id
+	for event in events:
+		if event is Dictionary and (event as Dictionary).has("event_id"):
+			max_event_id = maxi(max_event_id, int((event as Dictionary).get("event_id", -1)))
+	return max_event_id
 
 
 func _build_runtime_event_baseline(events: Array) -> Dictionary:

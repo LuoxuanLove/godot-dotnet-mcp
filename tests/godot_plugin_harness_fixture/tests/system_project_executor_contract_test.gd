@@ -68,6 +68,9 @@ class FakeBridge extends RefCounted:
 					"get_recent":
 						var recent_events := _tail_runtime_events(int(args.get("limit", 50)))
 						return success({"bridge_status": "ready", "count": recent_events.size(), "events": recent_events})
+					"get_since_event_id":
+						var cursor_events := _runtime_events_after_event_id(int(args.get("after_event_id", -1)), int(args.get("limit", 50)))
+						return success({"bridge_status": "ready", "count": cursor_events.size(), "events": cursor_events})
 					"get_recent_filtered":
 						var filtered_events := _tail_runtime_events(int(args.get("tail", args.get("limit", 50))))
 						return success({"bridge_status": "ready", "count": filtered_events.size(), "events": filtered_events})
@@ -149,6 +152,21 @@ class FakeBridge extends RefCounted:
 		if runtime_events.size() <= resolved_limit:
 			return runtime_events.duplicate(true)
 		return runtime_events.slice(runtime_events.size() - resolved_limit)
+
+	func _runtime_events_after_event_id(after_event_id: int, limit: int) -> Array:
+		var resolved_limit: int = max(limit, 0)
+		var events: Array = []
+		if resolved_limit == 0:
+			return events
+		for event in runtime_events:
+			if not (event is Dictionary):
+				continue
+			if int((event as Dictionary).get("event_id", -1)) <= after_event_id:
+				continue
+			events.append((event as Dictionary).duplicate(true))
+			if events.size() >= resolved_limit:
+				break
+		return events
 
 	func extract_data(result: Dictionary) -> Dictionary:
 		var data = result.get("data", {})
