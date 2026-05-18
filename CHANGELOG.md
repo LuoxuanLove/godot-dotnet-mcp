@@ -6,6 +6,7 @@ Target version: `1.0.0-pre3`.
 
 ### Added
 
+- Added explicit runtime foreground-window capability bits and `requires_foreground_window` rejection data for unsupported background, minimized, or no-focus project runs.
 - Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
 
 ### Changed

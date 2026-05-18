@@ -37,6 +37,7 @@ tools/system/
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。
 - `system_project_files`：高层项目文件树入口，支持列目录、创建/删除目录、读写/复制/移动/删除文件、选中文件、扫描与重导入。
 - `system_project_run`：运行主场景或指定场景；失败时返回编辑器接口、项目、场景和 runtime control 上下文，便于判断缺失的是启动能力还是运行时接管能力。
+- `system_project_run(background|minimized|no_focus=true)` 当前不会尝试抢占或控制 OS 窗口；这类请求会返回 `requires_foreground_window`，并给出 headless 逻辑测试或编辑器截图等降级路径。
 - `system_project_stop`：停止当前运行中的项目。
 - `system_plugin_reload`：读取运行中插件实例与磁盘 / 同步状态的 freshness；或调度一次不依赖前台 UI 的插件 disable/enable 生命周期重载。该调用只表示已接受调度，重载期间 MCP transport 可能断开，完成后应重新连接并重新拉取工具清单。
 
@@ -78,7 +79,7 @@ tools/system/
 
 运行时自动化工具的边界固定为：
 
-- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime` 和 `blocking_reasons`。
+- `system_project_state`、`system_editor_state`、`system_scene_validate` 等只读工具可用，不代表 `system_project_run`、`system_runtime_control` 或 `system_runtime_step(action=capture)` 可用；Agent 应先读取 `runtime_capabilities.can_start_project`、`can_control_runtime`、`can_capture_runtime`、`headless_logic_ok`、`visible_capture_required`、`can_run_without_focus`、`no_focus_launch_supported`、`foreground_window_policy`、`foreground_window_fallbacks` 和 `blocking_reasons`。
 - 仅支持通过 Godot 编辑器启动的运行态。
 - 默认关闭，必须先调用 `system_runtime_control(action=enable)`。
 - 控制权限只对当前 debugger session 生效，不持久化。
