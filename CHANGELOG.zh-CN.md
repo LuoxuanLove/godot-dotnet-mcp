@@ -21,7 +21,6 @@
 - 明确区分插件 headless harness 的 suite 成功标记与 Godot 退出清理警告，同时保持现有泄漏告警门禁不变。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
 - 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
-- 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
 - 新增 GitHub PR / Issue 模板、workflow lint 和发布 / Agent runbook，以约束更严格的短分支流程。
 - 更新插件发布工作流：只执行验证并创建 GitHub Release，不再产出 zip 包资产。
 - 新增非 `dev` 目标 PR 的 CI 反馈、发布 preflight 检查、`next` 草稿发布说明自动化，并强化 issue 诊断表单。
