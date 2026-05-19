@@ -12,6 +12,7 @@
 
 ### Changed
 
+- 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
 - 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
 - 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
 - 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
