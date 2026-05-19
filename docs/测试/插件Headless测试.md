@@ -266,7 +266,7 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 常用附加选项：
 
 - `--keep-stage-root`
-- `--cleanup-stale-processes`：只清理 owner harness 进程已退出且 PID / 启动时间匹配的登记子进程，并输出清理摘要。`scripts/test_plugin_side_roslyn.ps1` 的 `finally` 会先调用该清理入口，再删除 `.tmp/godot_plugin_harness`。
+- `--cleanup-stale-processes`：只清理 owner harness 进程已退出且 PID / 启动时间匹配的登记子进程，并输出清理摘要。`scripts/test_plugin_side_roslyn.ps1` 的 `finally` 会先调用该清理入口；成功时删除 `.tmp/godot_plugin_harness`，失败时保留该目录供 CI artifact 上传。
 
 当前返回内容包括：
 

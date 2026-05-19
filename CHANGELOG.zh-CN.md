@@ -12,6 +12,7 @@
 
 ### Changed
 
+- 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
 - 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
 - 补充 Agent 完成定义：公开行为变化必须同时收口实现、契约测试、文档、变更记录和 Review 反馈缺口后，PR 才可视为就绪。
 - 明确区分插件 headless harness 的 suite 成功标记与 Godot 退出清理警告，同时保持现有泄漏告警门禁不变。
