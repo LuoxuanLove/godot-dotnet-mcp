@@ -2,7 +2,7 @@
 extends RefCounted
 class_name PluginRuntimeCoordinator
 
-const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_debug_store.gd")
+const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 
 
 func ensure_runtime_bridge_autoload(plugin, autoload_name: String, runtime_bridge_path: String) -> void:

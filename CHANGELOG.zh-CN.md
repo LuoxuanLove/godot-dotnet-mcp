@@ -6,11 +6,18 @@
 
 ### Added
 
+- 为 `system_project_run` 新增可选 runtime bridge 日志 marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式默认自动停止，并通过 fake runtime events 补充契约覆盖。
+- 新增运行时前台窗口能力位，并在不支持 background / minimized / no_focus 项目运行时返回 `requires_foreground_window` 结构化降级信息。
 - 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
 
 ### Changed
 
 - 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
+- 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
+- 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
+- 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
+- 补充 Agent 完成定义：公开行为变化必须同时收口实现、契约测试、文档、变更记录和 Review 反馈缺口后，PR 才可视为就绪。
+- 明确区分插件 headless harness 的 suite 成功标记与 Godot 退出清理警告，同时保持现有泄漏告警门禁不变。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
 - 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
 - 扩展 `validate-plugin` 对文档、杂项、hotfix 与 release 短分支的触发覆盖，并记录受保护 `dev` 的 PR 门禁要求。
@@ -22,8 +29,14 @@
 
 ### Fixed
 
+- 修复 Config 页客户端卡片能力说明：现在会明确区分完整一键配置、CLI 一键添加、仅打开 / 路径管理以及手动接入引导类客户端。
+- 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot `.godot/mono/temp` 产物触发 `CS2012` 文件锁错误时，会分类为 `transient_file_lock` 并输出可执行的恢复建议。
+- 修复 MCP 服务器监听失败自诊断：端口占用、绑定被拒绝与 Windows 保留 / 排除 TCP 端口现在会报告不同原因与处理提示。
+- 修复运行时截图：headless 或 dummy 渲染后端现在会返回结构化 skipped 结果，不再尝试不可用的 viewport 截图。
 - 修复运行时调试桥消息格式，避免项目启动发送 runtime event / log / reply 时在 Godot 输出中出现 `Invalid message received` 错误。
+- 修复 `system_project_run` marker 校验读取 live shared runtime bridge 事件、避免新运行事件与运行前 marker 文本相同时被过滤掉，并按 event-id 游标消化 marker 事件，避免高日志量下匹配 marker 被最新 tail 窗口挤掉，同时确保合并后的 live / fallback 事件游标在插入 fallback 事件和完整缓冲裁剪后仍保持有序，并在 tail 批次满载时让出轮询。
 - 修复工具上下文辅助函数，避免使用 editor interface 覆盖对象执行工具时触发 Godot GDScript VM 内部错误。
+- 修复 `system_project_run` 失败诊断：当项目启动出现不一致的 `Editor interface not available` 时，现在会报告 state probe 与 run invoker 对比、恢复建议，并在路径信息足够时提供 CLI fallback。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
 - 修复 TileMap 工具脚本解析问题，使 TileMap 工具域可在 MCP 工具注册期间正常实例化。
 
