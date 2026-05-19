@@ -12,6 +12,7 @@
 
 ### Changed
 
+- 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
 - 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
 - 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
 - 补充 Agent 完成定义：公开行为变化必须同时收口实现、契约测试、文档、变更记录和 Review 反馈缺口后，PR 才可视为就绪。

@@ -12,6 +12,7 @@ Target version: `1.0.0-pre3`.
 
 ### Changed
 
+- Added lightweight PR standards checks for objective PR title, verification, changelog/docs, and process-risk fields.
 - Preserved and uploaded plugin harness failure diagnostics from CI while keeping successful harness runs cleaned up.
 - Added NuGet package caching to CI build workflows and cached the Godot 4.6 mono extraction used by the plugin harness while preserving existing check names.
 - Documented the Agent completion definition so public behavior changes must close implementation, contract test, documentation, changelog, and review-feedback gaps before PRs are considered ready.
