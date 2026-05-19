@@ -71,6 +71,14 @@ tests/
 `dotnet-build.yml` 和 `validate-plugin.yml` 只会对同一 PR 的新运行启用 concurrency cancellation，避免同一 PR 的旧 build 或 harness 继续占用 runner。`dev`、`push`、`workflow_dispatch`、`merge_group`、tag、release 等非 PR 运行会使用唯一的 run id 作为 concurrency group，因此不会互相取消。`dotnet-build` job 的 timeout 为 30 分钟，`validate-plugin-harness` job 的 timeout 为 90 分钟，check 名称保持不变。
 
 重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
+`dotnet-build.yml` 和 `scripts/test_plugin_side_roslyn.ps1` 的 .NET build 阶段会识别符合 `CS2012`、Godot `.godot/mono/temp` 路径以及文件占用 / 安全软件扫描信号的失败，并输出 `transient_file_lock` 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 `.godot` 或终止进程。
+
+
+Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
+
+`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
+
+`validate-plugin-harness` 失败时会保留 `.tmp/godot_plugin_harness` 并上传 7 天 artifact，供维护者下载 stage root、process registry 等失败现场；成功运行仍会清理该目录。
 
 ---
 

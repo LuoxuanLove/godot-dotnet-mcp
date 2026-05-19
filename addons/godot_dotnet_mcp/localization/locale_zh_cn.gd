@@ -570,6 +570,12 @@ const TRANSLATIONS: Dictionary = {
 	"config_client_custom_path_explainer": "当前使用的是你手动选择的自定义路径。清除后会恢复为自动发现结果。",
 	"config_client_pick_path_explainer": "如果自动发现失败，可以手动选择程序路径；插件会记住这条路径并优先使用。",
 	"config_client_manual_path_invalid_msg": "已保存的自定义路径当前不可用。请重新选择，或清除后改用自动发现。",
+	"config_client_capability_summary_label": "能力",
+	"config_client_capability_full_write": "此客户端支持完整的一键写入与移除配置。",
+	"config_client_capability_auto_add": "检测到 CLI 后可一键添加或移除 MCP 服务。",
+	"config_client_capability_manual_guidance": "提供手动接入引导；此客户端在这里不是完整一键接入。",
+	"config_client_capability_launch_path": "支持打开应用与管理路径；MCP 接入请使用推荐的手动或 CLI 流程。",
+	"config_client_capability_copy_guidance": "提供可复制的接入引导，但不支持自动改写客户端。",
 
 	# Messages
 	"msg_config_success": "%s 配置成功！",

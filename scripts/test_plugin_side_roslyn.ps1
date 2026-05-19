@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$GodotPath
 )
 
@@ -7,6 +7,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+. (Join-Path $repoRoot "scripts\dotnet_build_failure_diagnostics.ps1")
+
 function Format-Duration {
     param(
         [TimeSpan]$Duration
@@ -14,7 +16,6 @@ function Format-Duration {
 
     return "{0:n1}s" -f $Duration.TotalSeconds
 }
-
 function New-TimingRecord {
     param(
         [string]$Name,
@@ -220,6 +221,7 @@ $RequiredCases = @(
     "system_runtime_health_contracts"
     "system_plugin_reload_contracts"
     "system_runtime_impl_contracts"
+    "http_server_listen_diagnostics_contracts"
     "runtime_command_service_contracts"
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
@@ -253,21 +255,22 @@ $RequiredCases = @(
 
 $TimingRecords = New-Object System.Collections.Generic.List[object]
 $OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$HarnessSucceeded = $false
 
 try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
-        dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build harness runner" -Command {
-        dotnet build .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build harness runner" -ProjectPath ".\tests\godot_plugin_harness\GodotPluginHarness.csproj" -Configuration Release
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build fixture Godot C# project" -Command {
-        dotnet build .\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj -c Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build fixture Godot C# project" -ProjectPath ".\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj" -Configuration Release
     }))
 
-    $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases")
+    $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases", "--keep-stage-root")
     $TimingRecords.Add((New-TimingRecord -Name "List harness cases" -Duration $manifestResult.Duration))
     $discoveredCases = @()
     if ($manifestResult.Json -ne $null -and $manifestResult.Json.PSObject.Properties.Name -contains "discovered") {
@@ -282,7 +285,7 @@ try {
 
     foreach ($caseName in $RequiredCases) {
         $env:GODOT_PLUGIN_HARNESS_ONLY_CASE = $caseName
-        $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs @()
+        $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs @("--keep-stage-root")
         $TimingRecords.Add((New-TimingRecord -Name "Run harness case: $caseName" -Duration $caseResult.Duration))
     }
 
@@ -292,6 +295,7 @@ try {
         .\scripts\validate_refactor_guardrails.ps1
     }))
 
+    $HarnessSucceeded = $true
     Write-Host "Plugin harness verification completed successfully."
 }
 finally {
@@ -305,10 +309,13 @@ finally {
         ".\tests\godot_plugin_harness_fixture\.godot",
         ".\addons\godot_dotnet_mcp\dotnet_bridge\bin",
         ".\addons\godot_dotnet_mcp\dotnet_bridge\obj",
-        ".\.tmp\godot_plugin_harness",
         ".\dist",
         ".\release_dist"
     )
+
+    if ($HarnessSucceeded) {
+        $cleanupPaths += ".\.tmp\godot_plugin_harness"
+    }
 
     foreach ($path in $cleanupPaths) {
         Remove-IfExists -Path (Join-Path $repoRoot $path)

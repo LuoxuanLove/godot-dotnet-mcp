@@ -73,8 +73,10 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"runtime_capability_guidance": {
 			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
 			"read_only_tools_note": "Project, scene, and editor read-only tools can be available even when project launch, runtime control, or runtime capture is unavailable.",
-			"check_before_running": ["can_start_project", "blocking_reasons"],
+			"check_before_running": ["can_start_project", "blocking_reasons", "headless_logic_ok", "visible_capture_required", "can_run_without_focus", "no_focus_launch_supported", "foreground_window_policy", "foreground_window_fallbacks"],
 			"check_before_runtime_automation": ["can_control_runtime", "can_capture_runtime", "commandable_session_count"],
+			"project_run_log_marker_validation": "system_project_run can optionally wait for success_markers or failure_markers in structured debug_runtime_bridge events through the async MCP tool path. This is not universal stdout capture; markers are matched against runtime bridge event kind and payload text. In marker mode failure markers take precedence, timeout_ms is clamped as the wait timeout, log_tail is capped, and auto_stop defaults to true via scene_run stop only.",
+			"foreground_window_note": "This plugin does not guarantee background, minimized, or no-focus runtime launch. Unsupported requests return requires_foreground_window with fallback guidance.",
 			"external_process_note": "Externally launched visible Godot processes are not treated as commandable runtime sessions unless they attach through the editor debugger bridge."
 		},
 		"visual_guidance": {
