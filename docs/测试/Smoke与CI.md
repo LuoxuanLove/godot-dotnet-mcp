@@ -76,6 +76,8 @@ tests/
 
 Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
 
+`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
+
 ---
 
 ## 5. 当前门禁边界

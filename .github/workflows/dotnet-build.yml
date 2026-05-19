@@ -38,6 +38,14 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('Directory.Build.props', '**/*.csproj', '**/*.props', '**/*.targets', 'global.json', 'Directory.Packages.props', 'packages.lock.json', '**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-v1-
+
       - name: Build plugin Roslyn library
         shell: pwsh
         run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
