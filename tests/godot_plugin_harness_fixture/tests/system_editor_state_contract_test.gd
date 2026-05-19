@@ -242,6 +242,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_state should expose aggregate runtime capability bits.")
 	if bool(runtime_capabilities.get("can_start_project", true)):
 		return _failure("editor_state runtime capabilities should block project start when compile errors are present.")
+	if bool(runtime_capabilities.get("can_run_without_focus", true)) or str(runtime_capabilities.get("foreground_window_policy", "")) != "requires_foreground_window":
+		return _failure("editor_state runtime capabilities should expose the foreground-window launch policy.")
 	var editor_context: Dictionary = runtime_capabilities.get("editor_context", {})
 	var context_identity: Dictionary = editor_context.get("editor_session_identity", {})
 	if str(context_identity.get("session_id", "")) != "editor-contract-session":

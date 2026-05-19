@@ -570,6 +570,12 @@ const TRANSLATIONS: Dictionary = {
 	"config_client_custom_path_explainer": "The current executable comes from your saved custom path. Clear it to fall back to automatic discovery.",
 	"config_client_pick_path_explainer": "If auto-discovery fails, choose the executable manually. The plugin will remember and prefer that path later.",
 	"config_client_manual_path_invalid_msg": "The saved custom path is no longer available. Choose a new path, or clear it and fall back to automatic discovery.",
+	"config_client_capability_summary_label": "Capability",
+	"config_client_capability_full_write": "Full one-click config write and remove are available for this client.",
+	"config_client_capability_auto_add": "One-click CLI add or remove is available through the detected executable.",
+	"config_client_capability_manual_guidance": "Manual setup guidance is available; this client is not a full one-click integration here.",
+	"config_client_capability_launch_path": "Launch and path management are available; MCP setup should use the recommended manual or CLI flow.",
+	"config_client_capability_copy_guidance": "Copyable setup guidance is available, but automatic client changes are not supported.",
 
 	# Messages
 	"msg_config_success": "%s configured successfully!",

@@ -23,6 +23,15 @@ const _SCAN_RECOVERY_SUGGESTIONS: Array[String] = [
 	"Verify the project path and scan glob match the expected resources.",
 	"Retry resource_reference_audit with an explicit .tscn or .tres path."
 ]
+const _RUN_LOG_MARKER_DEFAULT_TIMEOUT_MS := 10000
+const _RUN_LOG_MARKER_MAX_TIMEOUT_MS := 300000
+const _RUN_LOG_MARKER_DEFAULT_POLL_INTERVAL_MS := 100
+const _RUN_LOG_MARKER_MIN_POLL_INTERVAL_MS := 50
+const _RUN_LOG_MARKER_MAX_POLL_INTERVAL_MS := 5000
+const _RUN_LOG_MARKER_DEFAULT_LOG_TAIL := 100
+const _RUN_LOG_MARKER_MAX_LOG_TAIL := 500
+const _RUN_LOG_MARKER_MAX_COUNT := 32
+const _RUN_LOG_MARKER_MAX_LENGTH := 256
 var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
@@ -43,7 +52,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -139,12 +148,20 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_run",
-			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop if the run stays open past the timeout.",
+			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_run waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"scene": {"type": "string", "description": "Custom scene to run (optional, runs main scene if omitted)"},
-					"timeout_ms": {"type": "integer", "description": "Optional auto-stop timeout in milliseconds. If the run is still open when the timeout elapses, the project is stopped automatically."}
+					"timeout_ms": {"type": "integer", "description": "Without markers: optional auto-stop timeout in milliseconds. With markers: marker wait timeout in milliseconds (default 10000)."},
+					"success_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation success. If omitted or empty with failure_markers empty, project_run returns immediately as before."},
+					"failure_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation failure. Failure markers take precedence over success markers."},
+					"auto_stop": {"type": "boolean", "description": "Marker wait mode only: stop the running scene through scene_run stop after success, failure, or timeout (default true). Does not kill processes."},
+					"poll_interval_ms": {"type": "integer", "description": "Marker wait mode only: runtime bridge poll interval in milliseconds (default 100)."},
+					"log_tail": {"type": "integer", "description": "Marker wait mode only: number of recent structured runtime bridge events to inspect per poll (default 100, max 500)."},
+					"background": {"type": "boolean", "description": "Request non-foreground launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"minimized": {"type": "boolean", "description": "Request minimized launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"no_focus": {"type": "boolean", "description": "Request launch without taking focus. Currently unsupported; returns requires_foreground_window instead of starting."}
 				}
 			}
 		},
@@ -198,6 +215,13 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"runtime_diagnose":  return _execute_runtime_diagnose(args)
 		"userdata_maintenance": return _execute_userdata_maintenance(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
+
+
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	MCPDebugBuffer.record("debug", "system", "tool_async: %s" % tool_name)
+	if tool_name == "project_run" and _has_run_log_markers(args):
+		return await _execute_project_run_with_log_markers(args)
+	return execute(tool_name, args)
 
 
 # --- private helpers ---
@@ -775,6 +799,12 @@ func _build_runtime_capabilities(project_info: Dictionary, dotnet_build_data: Di
 		"can_enable_runtime_control": bool(runtime_control.get("can_enable_runtime_control", false)),
 		"can_control_runtime": bool(runtime_control.get("can_control_runtime", false)),
 		"can_capture_runtime": bool(runtime_control.get("can_capture_runtime", false)),
+		"headless_logic_ok": true,
+		"visible_capture_required": true,
+		"can_run_without_focus": false,
+		"no_focus_launch_supported": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"foreground_window_fallbacks": ["headless_logic_test", "editor_screenshot"],
 		"runtime_session_attached": bool(runtime_control.get("runtime_session_attached", false)),
 		"runtime_launched_by_editor": int(runtime_summary.get("session_count", 0)) > 0,
 		"runtime_message_channel_available": bool(runtime_control.get("can_enable_runtime_control", false)),
@@ -1169,15 +1199,16 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 
 
 func _execute_project_run(args: Dictionary) -> Dictionary:
+	if _has_run_log_markers(args):
+		return bridge.error("project_run marker validation requires async tool execution", {
+			"error_code": "project_run_marker_validation_requires_async",
+			"hint": "Call system_project_run through the async MCP tool path when success_markers or failure_markers are supplied."
+		})
 	var custom_scene := str(args.get("scene", "")).strip_edges()
 	var timeout_ms := int(args.get("timeout_ms", 0))
-	MCPDebugBuffer.record("debug", "system",
-		"project_run: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
-	var run_result: Dictionary
-	if custom_scene.is_empty():
-		run_result = bridge.call_atomic("scene_run", {"action": "play_main"})
-	else:
-		run_result = bridge.call_atomic("scene_run", {"action": "play_custom", "path": custom_scene})
+	if _project_run_foreground_options_requested(args):
+		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
+	var run_result := _start_project_run(custom_scene)
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
 			"project_run failed: %s" % str(run_result.get("error", "unknown")))
@@ -1196,6 +1227,270 @@ func _execute_project_run(args: Dictionary) -> Dictionary:
 	}, str(run_result.get("message", "Project started")))
 
 
+func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
+	var custom_scene := str(args.get("scene", "")).strip_edges()
+	if _project_run_foreground_options_requested(args):
+		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
+	var success_markers := _normalize_marker_list(args.get("success_markers", []))
+	var failure_markers := _normalize_marker_list(args.get("failure_markers", []))
+	if success_markers.is_empty() and failure_markers.is_empty():
+		return _execute_project_run(args)
+	var validation_error := _validate_run_log_markers(success_markers, failure_markers)
+	if not validation_error.is_empty():
+		return bridge.error(str(validation_error.get("message", "Invalid runtime log marker arguments.")), validation_error)
+	var timeout_ms: int = clamp(int(args.get("timeout_ms", _RUN_LOG_MARKER_DEFAULT_TIMEOUT_MS)), 1, _RUN_LOG_MARKER_MAX_TIMEOUT_MS)
+	var poll_interval_ms: int = clamp(int(args.get("poll_interval_ms", _RUN_LOG_MARKER_DEFAULT_POLL_INTERVAL_MS)), _RUN_LOG_MARKER_MIN_POLL_INTERVAL_MS, _RUN_LOG_MARKER_MAX_POLL_INTERVAL_MS)
+	var log_tail: int = clamp(int(args.get("log_tail", _RUN_LOG_MARKER_DEFAULT_LOG_TAIL)), 1, _RUN_LOG_MARKER_MAX_LOG_TAIL)
+	var auto_stop := bool(args.get("auto_stop", true))
+	var baseline := _build_runtime_event_baseline(_fetch_runtime_log_events(log_tail))
+	var run_result := _start_project_run(custom_scene)
+	if not bool(run_result.get("success", false)):
+		MCPDebugBuffer.record("warning", "system",
+			"project_run failed: %s" % str(run_result.get("error", "unknown")))
+		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_run_failure_context(custom_scene, run_result))
+	_project_run_timeout_token += 1
+	var validation: Dictionary = await _wait_for_runtime_log_marker(success_markers, failure_markers, baseline, timeout_ms, poll_interval_ms, log_tail)
+	var stop_result: Dictionary = {}
+	if auto_stop:
+		stop_result = _stop_project_after_marker_validation(custom_scene if not custom_scene.is_empty() else "main", str(validation.get("status", "unknown")))
+	var result_data := {
+		"started": true,
+		"scene": custom_scene if not custom_scene.is_empty() else "main",
+		"auto_stop_scheduled": false,
+		"auto_stop": auto_stop,
+		"timeout_ms": timeout_ms,
+		"poll_interval_ms": poll_interval_ms,
+		"log_tail": log_tail,
+		"validation": validation,
+		"runtime_capabilities": _build_project_run_success_capabilities(custom_scene)
+	}
+	if auto_stop:
+		result_data["stop_result"] = stop_result
+	match str(validation.get("status", "")):
+		"passed":
+			return bridge.success(result_data, "Project started and runtime log marker validation passed")
+		"failed":
+			result_data["error_code"] = "run_log_failure_marker_matched"
+			return bridge.error("Runtime log failure marker matched: %s" % str(validation.get("matched_marker", "")), result_data)
+		_:
+			result_data["error_code"] = "run_log_marker_timeout"
+			return bridge.error("Runtime log marker validation timed out after %d ms" % timeout_ms, result_data)
+
+
+func _start_project_run(custom_scene: String) -> Dictionary:
+	MCPDebugBuffer.record("debug", "system",
+		"project_run: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
+	if custom_scene.is_empty():
+		return bridge.call_atomic("scene_run", {"action": "play_main"})
+	return bridge.call_atomic("scene_run", {"action": "play_custom", "path": custom_scene})
+
+
+func _has_run_log_markers(args: Dictionary) -> bool:
+	return not _normalize_marker_list(args.get("success_markers", [])).is_empty() or not _normalize_marker_list(args.get("failure_markers", [])).is_empty()
+
+
+func _normalize_marker_list(raw_value) -> Array[String]:
+	var markers: Array[String] = []
+	if raw_value is Array:
+		for raw_marker in raw_value:
+			var marker := str(raw_marker).strip_edges()
+			if not marker.is_empty():
+				markers.append(marker)
+	elif raw_value is String:
+		var marker := str(raw_value).strip_edges()
+		if not marker.is_empty():
+			markers.append(marker)
+	return markers
+
+
+func _validate_run_log_markers(success_markers: Array[String], failure_markers: Array[String]) -> Dictionary:
+	var marker_count := success_markers.size() + failure_markers.size()
+	if marker_count > _RUN_LOG_MARKER_MAX_COUNT:
+		return {
+			"error_code": "invalid_argument",
+			"message": "Runtime log marker validation accepts at most %d markers." % _RUN_LOG_MARKER_MAX_COUNT,
+			"max_marker_count": _RUN_LOG_MARKER_MAX_COUNT,
+			"marker_count": marker_count
+		}
+	for marker in success_markers + failure_markers:
+		if marker.length() > _RUN_LOG_MARKER_MAX_LENGTH:
+			return {
+				"error_code": "invalid_argument",
+				"message": "Runtime log markers must be at most %d characters." % _RUN_LOG_MARKER_MAX_LENGTH,
+				"max_marker_length": _RUN_LOG_MARKER_MAX_LENGTH,
+				"marker_length": marker.length()
+			}
+	return {}
+
+
+func _wait_for_runtime_log_marker(success_markers: Array[String], failure_markers: Array[String], baseline: Dictionary, timeout_ms: int, poll_interval_ms: int, log_tail: int) -> Dictionary:
+	var tree := Engine.get_main_loop() as SceneTree
+	var started_ms := Time.get_ticks_msec()
+	var cursor_event_id := int(baseline.get("max_event_id", -1))
+	while Time.get_ticks_msec() - started_ms <= timeout_ms:
+		var elapsed_ms := Time.get_ticks_msec() - started_ms
+		var recent_events := _fetch_runtime_log_events_after(cursor_event_id, log_tail)
+		cursor_event_id = _max_runtime_event_id(recent_events, cursor_event_id)
+		var failure_match := _find_marker_match(recent_events, failure_markers, "failure")
+		if not failure_match.is_empty():
+			failure_match["elapsed_ms"] = elapsed_ms
+			return _build_marker_validation_result("failed", failure_match, success_markers, failure_markers)
+		var success_match := _find_marker_match(recent_events, success_markers, "success")
+		if not success_match.is_empty():
+			success_match["elapsed_ms"] = elapsed_ms
+			return _build_marker_validation_result("passed", success_match, success_markers, failure_markers)
+		if tree == null:
+			break
+		if recent_events.size() >= log_tail:
+			await tree.process_frame
+			continue
+		var remaining_ms: int = timeout_ms - elapsed_ms
+		if remaining_ms <= 0:
+			break
+		await tree.create_timer(float(min(poll_interval_ms, remaining_ms)) / 1000.0).timeout
+	return {
+		"status": "timeout",
+		"error_code": "run_log_marker_timeout",
+		"timeout_ms": timeout_ms,
+		"success_markers": success_markers,
+		"failure_markers": failure_markers,
+		"message": "No runtime bridge log marker matched before timeout."
+	}
+
+
+func _build_marker_validation_result(status: String, marker_match: Dictionary, success_markers: Array[String], failure_markers: Array[String]) -> Dictionary:
+	return {
+		"status": status,
+		"matched_marker": str(marker_match.get("marker", "")),
+		"matched_type": str(marker_match.get("marker_type", "")),
+		"matched_event": marker_match.get("event", {}),
+		"matched_text": str(marker_match.get("text", "")),
+		"elapsed_ms": int(marker_match.get("elapsed_ms", 0)),
+		"success_markers": success_markers,
+		"failure_markers": failure_markers
+	}
+
+
+func _fetch_runtime_log_events(log_tail: int) -> Array:
+	var result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_recent", "limit": log_tail})
+	if not bool(result.get("success", false)):
+		result = bridge.call_atomic("debug_runtime_bridge", {"action": "get_recent_filtered", "limit": log_tail, "tail": log_tail})
+	return bridge.extract_array(result, "events")
+
+
+func _fetch_runtime_log_events_after(after_event_id: int, log_tail: int) -> Array:
+	var result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_since_event_id", "after_event_id": after_event_id, "limit": log_tail})
+	if bool(result.get("success", false)):
+		return bridge.extract_array(result, "events")
+	return _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), {"max_event_id": after_event_id})
+
+
+func _max_runtime_event_id(events: Array, fallback_event_id: int) -> int:
+	var max_event_id := fallback_event_id
+	for event in events:
+		if event is Dictionary and (event as Dictionary).has("event_id"):
+			max_event_id = maxi(max_event_id, int((event as Dictionary).get("event_id", -1)))
+	return max_event_id
+
+
+func _build_runtime_event_baseline(events: Array) -> Dictionary:
+	var max_event_id := -1
+	for event in events:
+		if not (event is Dictionary):
+			continue
+		var event_dict := event as Dictionary
+		if event_dict.has("event_id"):
+			max_event_id = maxi(max_event_id, int(event_dict.get("event_id", -1)))
+	return {"max_event_id": max_event_id}
+
+
+func _filter_new_runtime_events(events: Array, baseline: Dictionary) -> Array:
+	var max_event_id := int(baseline.get("max_event_id", -1))
+	var filtered: Array = []
+	for event in events:
+		if not (event is Dictionary) or not (event as Dictionary).has("event_id"):
+			continue
+		if int((event as Dictionary).get("event_id", -1)) <= max_event_id:
+			continue
+		filtered.append(event)
+	return filtered
+
+
+func _find_marker_match(events: Array, markers: Array[String], marker_type: String) -> Dictionary:
+	if markers.is_empty():
+		return {}
+	for event_index in range(events.size()):
+		var event = events[event_index]
+		if not (event is Dictionary):
+			continue
+		var search_text := _build_runtime_event_search_text(event)
+		for marker in markers:
+			if search_text.find(marker) != -1:
+				return {
+					"marker": marker,
+					"marker_type": marker_type,
+					"event_index": event_index,
+					"event": (event as Dictionary).duplicate(true),
+					"text": search_text
+				}
+	return {}
+
+
+func _build_runtime_event_search_text(event: Dictionary) -> String:
+	var parts: Array[String] = [str(event.get("kind", ""))]
+	_append_runtime_log_text(event.get("payload", {}), parts)
+	return "\n".join(parts)
+
+
+func _append_runtime_log_text(value, parts: Array[String]) -> void:
+	if value is Dictionary:
+		for key in (value as Dictionary).keys():
+			parts.append(str(key))
+			_append_runtime_log_text((value as Dictionary).get(key), parts)
+	elif value is Array:
+		for item in value:
+			_append_runtime_log_text(item, parts)
+	else:
+		parts.append(str(value))
+
+
+func _stop_project_after_marker_validation(scene_label: String, validation_status: String) -> Dictionary:
+	MCPDebugBuffer.record("info", "system", "project_run marker validation auto-stop: scene=%s status=%s" % [scene_label, validation_status])
+	return bridge.call_atomic("scene_run", {"action": "stop"})
+
+
+func _project_run_foreground_options_requested(args: Dictionary) -> bool:
+	return bool(args.get("background", false)) or bool(args.get("minimized", false)) or bool(args.get("no_focus", false))
+
+
+func _build_project_run_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
+	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
+	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
+	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var runtime_summary := _get_runtime_summary()
+	var runtime_control_status := _build_runtime_control_state_section()
+	return {
+		"error_code": "requires_foreground_window",
+		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
+		"requested_options": {
+			"background": bool(args.get("background", false)),
+			"minimized": bool(args.get("minimized", false)),
+			"no_focus": bool(args.get("no_focus", false))
+		},
+		"can_run_without_focus": false,
+		"foreground_window_policy": "requires_foreground_window",
+		"degradation_paths": ["headless_logic_test", "editor_screenshot"],
+		"recovery_suggestions": [
+			"Run without background/minimized/no_focus when foreground runtime interaction is acceptable.",
+			"Use headless logic tests for non-visual acceptance flows.",
+			"Use editor screenshots when visual QA can be performed without starting a runtime window."
+		],
+		"runtime_control_status": runtime_control_status,
+		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	}
+
+
 func _build_project_run_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
 	var project_info: Dictionary = bridge.extract_data(project_info_result)
@@ -1206,7 +1501,9 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 	var main_scene := str(project_info.get("main_scene", ""))
 	var requested_scene := custom_scene if not custom_scene.is_empty() else main_scene
 	var scene_exists := not requested_scene.is_empty() and FileAccess.file_exists(requested_scene)
-	return {
+	var editor_context := _build_editor_runtime_context()
+	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
+	var context := {
 		"error_code": "project_run_failed",
 		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
 		"resolved_scene": requested_scene,
@@ -1214,10 +1511,67 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 		"main_scene": main_scene,
 		"main_scene_exists": not main_scene.is_empty() and FileAccess.file_exists(main_scene),
 		"compile_error_count": int(dotnet_build_data.get("error_count", 0)),
-		"editor_context": _build_editor_runtime_context(),
+		"editor_context": editor_context,
 		"runtime_control_status": runtime_control_status,
-		"runtime_capabilities": _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status),
+		"runtime_capabilities": runtime_capabilities,
 		"run_result": run_result.duplicate(true)
+	}
+	if _is_editor_interface_unavailable_inconsistent(run_result, editor_context, runtime_capabilities):
+		context["error_code"] = "editor_run_interface_unavailable_despite_state_available"
+		context["state_probe_vs_run_invoker"] = _build_project_run_state_probe_comparison(editor_context, runtime_capabilities, run_result)
+		context["recovery_suggestions"] = _build_project_run_editor_interface_recovery_suggestions()
+		var cli_fallback := _build_project_run_cli_fallback(editor_context, requested_scene, scene_exists)
+		if not cli_fallback.is_empty():
+			context["cli_fallback"] = cli_fallback
+	return context
+
+
+func _is_editor_interface_unavailable_inconsistent(run_result: Dictionary, editor_context: Dictionary, runtime_capabilities: Dictionary) -> bool:
+	var run_error := "%s %s" % [str(run_result.get("error", "")), str(run_result.get("message", ""))]
+	if not run_error.contains("Editor interface not available"):
+		return false
+	return bool(runtime_capabilities.get("can_start_project", false)) or bool(editor_context.get("editor_interface_available", false))
+
+
+func _build_project_run_state_probe_comparison(editor_context: Dictionary, runtime_capabilities: Dictionary, run_result: Dictionary) -> Dictionary:
+	return {
+		"state_probe": {
+			"editor_interface_available": bool(editor_context.get("editor_interface_available", false)),
+			"can_start_project": bool(runtime_capabilities.get("can_start_project", false)),
+			"blocking_reasons": runtime_capabilities.get("blocking_reasons", []),
+			"godot_executable_path": str(editor_context.get("godot_executable_path", "")),
+			"project_root_path": str(editor_context.get("project_root_path", ""))
+		},
+		"run_invoker": {
+			"success": bool(run_result.get("success", false)),
+			"error": str(run_result.get("error", "")),
+			"message": str(run_result.get("message", ""))
+		},
+		"interpretation": "State probing reported the editor run path as available, but the scene run invoker could not access EditorInterface."
+	}
+
+
+func _build_project_run_editor_interface_recovery_suggestions() -> Array[String]:
+	return [
+		"Retry system_project_state or system_editor_state to confirm the current MCP connection is attached to the intended Godot editor session.",
+		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_run.",
+		"If multiple Godot editors are open, close stale sessions or reconnect to the editor that owns this project.",
+		"If editor launching remains unavailable, use the cli_fallback command from this response to run the scene outside the editor."
+	]
+
+
+func _build_project_run_cli_fallback(editor_context: Dictionary, requested_scene: String, scene_exists: bool) -> Dictionary:
+	var godot_executable_path := str(editor_context.get("godot_executable_path", ""))
+	var project_root_path := str(editor_context.get("project_root_path", ""))
+	if godot_executable_path.is_empty() or project_root_path.is_empty() or requested_scene.is_empty() or not scene_exists:
+		return {}
+	var scene_path := requested_scene
+	if scene_path.begins_with("res://"):
+		scene_path = ProjectSettings.globalize_path(scene_path)
+	return {
+		"description": "Safe CLI fallback for manual verification when the editor run invoker cannot access EditorInterface.",
+		"command": [godot_executable_path, "--path", project_root_path, scene_path],
+		"working_directory": project_root_path
 	}
 
 

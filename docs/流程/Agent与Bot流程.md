@@ -24,7 +24,20 @@
 
 ---
 
-## 3. 合并边界
+## 3. 完成定义与返修闭环
+
+公开工具行为、UI 结构、生命周期语义、CI/workflow 行为或发布内容发生变化时，开发完成定义必须同时覆盖实现、契约测试、文档和变更记录。代码能运行不代表闭环完成；如果相关测试或文档仍描述旧路径、旧字段或旧语义，该 PR 仍处于返修状态。
+
+Agent 在提交或更新 PR 前必须完成以下检查：
+
+- 受影响的 contract tests 已同步表达当前真实契约；旧测试因旧路径或旧语义失败时，应优先修正测试契约，而不是在最终说明中标注为无关失败。
+- `docs/`、`README*`、工具说明、协议事实源和 `CHANGELOG*` 中与本次公开行为相关的内容已同步；无需更新时，PR 回报必须说明原因。
+- Review、Cubic、Codex 或人工复核发现的测试/文档缺口视为阻塞返修项，必须在同一 PR 中处理到 resolved、outdated 或明确由维护者裁决。
+- 验证记录应列出实际运行的目标测试、构建或 harness case；只读检查通过不能替代受影响契约测试。
+
+---
+
+## 4. 合并边界
 
 - Agent 不直接推送 `dev`。
 - Agent 不本地合并后推送 `dev`。
@@ -33,7 +46,7 @@
 
 ---
 
-## 4. GitHub Actions Bot Relay
+## 5. GitHub Actions Bot Relay
 
 `actions-bot-relay` 是不引入额外 machine user 时的中转方案：维护者或 Agent 先生成基于最新 `dev` 的 unified patch，再手动触发 workflow，由 `github-actions[bot]` 应用 patch、提交、推送 `actions-bot/*` 分支并创建或更新指向 `dev` 的 PR。
 
@@ -57,7 +70,7 @@
 
 ---
 
-## 5. 自动化边界
+## 6. 自动化边界
 
 - 自动生成、自动刷新或定时维护类变更只能通过短分支 PR 落地，不直接写入 `dev`。
 - 自动化 workflow 可以生成或更新 `next` draft release 作为下一版说明草稿，但不得创建正式发布、上传 zip / sha256 / 本地构建产物，或替代维护者发布判断。
@@ -66,7 +79,7 @@
 
 ---
 
-## 6. PR 回报要求
+## 7. PR 回报要求
 
 Agent 创建或更新 PR 时，应说明：
 

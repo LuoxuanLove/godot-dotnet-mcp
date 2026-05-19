@@ -270,10 +270,14 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 
 当前返回内容包括：
 
-- suite success
+- suite success 与是否解析到成功标记
 - stage root
 - 每个 case 的结果
+- Godot 进程 exit code
+- 退出清理诊断，包括 `exitCleanupWarningsDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass`
 - stderr 摘要
+
+普通 headless suite 中若出现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit`，harness 仍会失败并保留 `reason=godot_exit_leaks_detected`。报告会同时保留 `suiteSuccess`，用于区分“case 逻辑已经通过”与“Godot 退出清理存在风险”。`plugin_entrypoint_contracts` 的 editor probe 模式仍按既有策略忽略编辑器退出噪音，并通过 `exitCleanupWarningPolicy=ignored_editor_probe` 标明。
 
 ## 结论
 
