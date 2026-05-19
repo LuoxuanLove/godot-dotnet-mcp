@@ -8,12 +8,6 @@ on:
   push:
     branches:
       - dev
-      - "feature/**"
-      - "fix/**"
-      - "docs/**"
-      - "chore/**"
-      - "hotfix/**"
-      - "release/**"
     paths:
       - ".github/workflows/**"
 

@@ -65,6 +65,7 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 - workflow 只接受 patch，不执行任意用户脚本。
 - workflow 会主动触发 `dotnet-build.yml` 和 `validate-plugin.yml`；如果 patch 修改 `.github/workflows/**`，还会触发 `lint-workflows.yml`。
+- 普通短分支 push 不作为 PR 自动验证入口；relay 继续通过 `workflow_dispatch` 显式验证 bot 分支。
 - 因为 `GITHUB_TOKEN` 触发的 push/PR 事件不会像普通用户 push 一样自动触发所有 workflow，relay 必须显式触发验证 workflow。
 - 维护者仍需在 GitHub PR 页面审查、批准并合并。
 

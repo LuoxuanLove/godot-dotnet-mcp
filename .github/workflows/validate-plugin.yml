@@ -9,13 +9,6 @@ on:
   push:
     branches:
       - dev
-      - "feature/**"
-      - "fix/**"
-      - "docs/**"
-      - "chore/**"
-      - "hotfix/**"
-      - "release/**"
-      - "actions-bot/**"
 
 permissions:
   contents: read
