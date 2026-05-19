@@ -16,6 +16,7 @@
 - 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
 - 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
 - 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
+- 将 CI 的 push 触发收敛到 `dev`，同时保留 PR、merge queue 与手动验证入口，减少同仓库 PR 短分支重复运行且不改变 check 名称。
 - 补充 Agent 完成定义：公开行为变化必须同时收口实现、契约测试、文档、变更记录和 Review 反馈缺口后，PR 才可视为就绪。
 - 明确区分插件 headless harness 的 suite 成功标记与 Godot 退出清理警告，同时保持现有泄漏告警门禁不变。
 - 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。

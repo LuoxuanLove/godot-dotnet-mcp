@@ -16,6 +16,7 @@ Target version: `1.0.0-pre3`.
 - Added lightweight PR standards checks for objective PR title, verification, changelog/docs, and process-risk fields.
 - Preserved and uploaded plugin harness failure diagnostics from CI while keeping successful harness runs cleaned up.
 - Added NuGet package caching to CI build workflows and cached the Godot 4.6 mono extraction used by the plugin harness while preserving existing check names.
+- Limited CI push triggers to `dev` while keeping pull request, merge queue, and manual validation paths, reducing duplicate runs for same-repo PR branches without changing check names.
 - Documented the Agent completion definition so public behavior changes must close implementation, contract test, documentation, changelog, and review-feedback gaps before PRs are considered ready.
 - Clarified plugin headless harness reports so suite success markers are separated from Godot exit cleanup warnings without weakening the existing leak-warning gate.
 - Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
