@@ -12,6 +12,7 @@ Target version: `1.0.0-pre3`.
 
 ### Changed
 
+- Documented the Agent completion definition so public behavior changes must close implementation, contract test, documentation, changelog, and review-feedback gaps before PRs are considered ready.
 - Clarified plugin headless harness reports so suite success markers are separated from Godot exit cleanup warnings without weakening the existing leak-warning gate.
 - Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
 - Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify in CI.
