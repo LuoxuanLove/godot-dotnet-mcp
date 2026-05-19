@@ -3,8 +3,10 @@ extends RefCounted
 # {"name": "system_project_executor_contracts"}
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
+const DebugToolsScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPRuntimeDebugStoreShared = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 
@@ -12,6 +14,8 @@ const TEMP_ROOT := "res://tests_tmp/system_project_executor_contracts"
 class FakeBridge extends RefCounted:
 	var _tool_loader
 	var scene_run_actions: Array[String] = []
+	var runtime_events: Array = []
+	var runtime_events_after_start: Array = []
 	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
@@ -61,8 +65,15 @@ class FakeBridge extends RefCounted:
 						return success({"bridge_status": "ready", "session_count": 1, "sessions": {"a": {"state": "running"}}, "error_count": 1, "warning_count": 0})
 					"get_errors_context":
 						return success({"errors": [{"message": "Boom", "script": "res://Player.gd", "line": 5, "stacktrace": []}]})
+					"get_recent":
+						var recent_events := _tail_runtime_events(int(args.get("limit", 50)))
+						return success({"bridge_status": "ready", "count": recent_events.size(), "events": recent_events})
+					"get_since_event_id":
+						var cursor_events := _runtime_events_after_event_id(int(args.get("after_event_id", -1)), int(args.get("limit", 50)))
+						return success({"bridge_status": "ready", "count": cursor_events.size(), "events": cursor_events})
 					"get_recent_filtered":
-						return success({"events": []})
+						var filtered_events := _tail_runtime_events(int(args.get("tail", args.get("limit", 50))))
+						return success({"bridge_status": "ready", "count": filtered_events.size(), "events": filtered_events})
 					"get_scene_snapshot":
 						return success({"current_scene": "res://tests/project_contract_fixture/Main.tscn"})
 					_:
@@ -80,8 +91,12 @@ class FakeBridge extends RefCounted:
 			"script_inspect":
 				return success({"language": "csharp", "class_name": "WrongResourceName", "base_type": "Node"})
 			"scene_run":
-				scene_run_actions.append(str(args.get("action", "")))
-				return success({"action": str(args.get("action", "")), "path": str(args.get("path", ""))}, "ok")
+				var scene_action := str(args.get("action", ""))
+				scene_run_actions.append(scene_action)
+				if scene_action in ["play_main", "play_custom"] and not runtime_events_after_start.is_empty():
+					runtime_events.append_array(runtime_events_after_start)
+					runtime_events_after_start.clear()
+				return success({"action": scene_action, "path": str(args.get("path", ""))}, "ok")
 			"project_settings":
 				return success({"applied": true})
 			"project_autoload":
@@ -129,6 +144,29 @@ class FakeBridge extends RefCounted:
 				return ["res://mat/test.tres"]
 			_:
 				return []
+
+	func _tail_runtime_events(limit: int) -> Array:
+		var resolved_limit: int = max(limit, 0)
+		if resolved_limit == 0:
+			return []
+		if runtime_events.size() <= resolved_limit:
+			return runtime_events.duplicate(true)
+		return runtime_events.slice(runtime_events.size() - resolved_limit)
+
+	func _runtime_events_after_event_id(after_event_id: int, limit: int) -> Array:
+		var resolved_limit: int = max(limit, 0)
+		var events: Array = []
+		if resolved_limit == 0:
+			return events
+		for event in runtime_events:
+			if not (event is Dictionary):
+				continue
+			if int((event as Dictionary).get("event_id", -1)) <= after_event_id:
+				continue
+			events.append((event as Dictionary).duplicate(true))
+			if events.size() >= resolved_limit:
+				break
+		return events
 
 	func extract_data(result: Dictionary) -> Dictionary:
 		var data = result.get("data", {})
@@ -287,6 +325,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities.editor_context should expose the current editor session identity.")
 	if bool(context_identity.get("safe_to_terminate", true)) or bool(context_identity.get("external_validation_process", true)):
 		return _failure("runtime_capabilities.editor_context should mark the current editor process as non-terminable and non-external.")
+	if not bool((runtime_capabilities as Dictionary).get("headless_logic_ok", false)):
+		return _failure("runtime_capabilities should declare that headless logic validation is a supported fallback.")
+	if not bool((runtime_capabilities as Dictionary).get("visible_capture_required", false)):
+		return _failure("runtime_capabilities should declare that visual QA requires visible capture.")
+	if bool((runtime_capabilities as Dictionary).get("can_run_without_focus", true)) or bool((runtime_capabilities as Dictionary).get("no_focus_launch_supported", true)):
+		return _failure("runtime_capabilities should explicitly report that no-focus runtime launch is unsupported.")
+	if str((runtime_capabilities as Dictionary).get("foreground_window_policy", "")) != "requires_foreground_window":
+		return _failure("runtime_capabilities should expose the foreground-window policy.")
 
 	var empty_executor = SystemProjectExecutorScript.new()
 	empty_executor.bridge = FakeEmptyCollectBridge.new(FakeToolLoader.new())
@@ -370,6 +416,244 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
+	var run_action_count_before_no_focus := int(executor.bridge.scene_run_actions.size())
+	var no_focus_run: Dictionary = executor.execute("project_run", {"no_focus": true})
+	if bool(no_focus_run.get("success", false)):
+		return _failure("project_run should reject unsupported no_focus launches instead of starting the project.")
+	if executor.bridge.scene_run_actions.size() != run_action_count_before_no_focus:
+		return _failure("project_run should not call scene_run when no_focus launch is unsupported.")
+	var no_focus_data = no_focus_run.get("data", {})
+	if not (no_focus_data is Dictionary):
+		return _failure("project_run no_focus rejection should include structured data.")
+	if str((no_focus_data as Dictionary).get("error_code", "")) != "requires_foreground_window":
+		return _failure("project_run no_focus rejection should expose requires_foreground_window.")
+	if bool((no_focus_data as Dictionary).get("can_run_without_focus", true)):
+		return _failure("project_run no_focus rejection should report can_run_without_focus=false.")
+
+	var marker_success_executor = SystemProjectExecutorScript.new()
+	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_success_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY", "level": "info"}}]
+	marker_success_executor.bridge = marker_success_bridge
+	marker_success_executor.configure_runtime({})
+	var marker_success: Dictionary = await marker_success_executor.execute_async("project_run", {
+		"success_markers": ["BOOT READY"],
+		"failure_markers": ["BOOT FAIL"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if not bool(marker_success.get("success", false)):
+		return _failure("project_run marker validation should pass when a success marker appears in runtime bridge events.")
+	var marker_success_data: Dictionary = marker_success.get("data", {})
+	var marker_success_validation: Dictionary = marker_success_data.get("validation", {})
+	if str(marker_success_validation.get("status", "")) != "passed" or str(marker_success_validation.get("matched_marker", "")) != "BOOT READY":
+		return _failure("project_run marker validation should report passed status and matched success marker details.")
+	if marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
+		return _failure("project_run marker validation should auto-stop through scene_run stop by default.")
+
+	var repeated_marker_executor = SystemProjectExecutorScript.new()
+	var repeated_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	repeated_marker_bridge.runtime_events = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "REPEAT READY", "level": "info"}}]
+	repeated_marker_bridge.runtime_events_after_start = [{"event_id": 2, "kind": "runtime_log", "payload": {"message": "REPEAT READY", "level": "info"}}]
+	repeated_marker_executor.bridge = repeated_marker_bridge
+	repeated_marker_executor.configure_runtime({})
+	var repeated_marker: Dictionary = await repeated_marker_executor.execute_async("project_run", {
+		"success_markers": ["REPEAT READY"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if not bool(repeated_marker.get("success", false)):
+		return _failure("project_run marker validation should not filter out a new event that has the same text as a pre-run baseline event.")
+	var repeated_marker_validation: Dictionary = repeated_marker.get("data", {}).get("validation", {})
+	var repeated_matched_event: Dictionary = repeated_marker_validation.get("matched_event", {})
+	if int(repeated_matched_event.get("event_id", 0)) != 2:
+		return _failure("project_run marker validation should match the post-start event_id instead of the pre-run baseline event.")
+
+	var high_volume_marker_executor = SystemProjectExecutorScript.new()
+	var high_volume_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	high_volume_marker_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "HIGH VOLUME READY", "level": "info"}}]
+	for event_id in range(2, 40):
+		high_volume_marker_bridge.runtime_events_after_start.append({"event_id": event_id, "kind": "runtime_log", "payload": {"message": "noise %d" % event_id, "level": "info"}})
+	high_volume_marker_executor.bridge = high_volume_marker_bridge
+	high_volume_marker_executor.configure_runtime({})
+	var high_volume_marker: Dictionary = await high_volume_marker_executor.execute_async("project_run", {
+		"success_markers": ["HIGH VOLUME READY"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 1
+	})
+	if not bool(high_volume_marker.get("success", false)):
+		return _failure("project_run marker validation should not miss a marker that is followed by more events than log_tail.")
+
+	MCPRuntimeDebugStoreShared.clear()
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 100,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}]))
+	var debug_tools = DebugToolsScript.new()
+	var baseline_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	if not bool(baseline_shared_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should read fallback runtime events before cursor checks.")
+	var baseline_shared_events: Array = baseline_shared_result.get("data", {}).get("events", [])
+	if baseline_shared_events.is_empty():
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose seeded fallback runtime events.")
+	var baseline_shared_cursor := int((baseline_shared_events[baseline_shared_events.size() - 1] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 100,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}, {
+		"event_id": 1,
+		"timestamp_unix": 26,
+		"timestamp_text": "2026-01-01T00:00:26",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "NEW FALLBACK", "level": "info"}
+	}]))
+	var fallback_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": baseline_shared_cursor, "limit": 5})
+	if not bool(fallback_cursor_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read fallback events after a normalized cursor.")
+	var fallback_cursor_events: Array = fallback_cursor_result.get("data", {}).get("events", [])
+	if fallback_cursor_events.is_empty() or str((fallback_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "NEW FALLBACK":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should handle newer fallback events with lower raw event_id values.")
+	MCPRuntimeDebugStoreShared.clear()
+	var ordered_event_a := _runtime_log_event(10, "ORDER A")
+	var ordered_event_b := _runtime_log_event(20, "ORDER B")
+	var ordered_event_c := _runtime_log_event(30, "ORDER C")
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([ordered_event_a, ordered_event_c]))
+	var ordered_baseline_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	if not bool(ordered_baseline_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should seed ordered fallback cursor pagination.")
+	var ordered_baseline_events: Array = ordered_baseline_result.get("data", {}).get("events", [])
+	if ordered_baseline_events.size() != 2:
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose the seeded ordered fallback events.")
+	var ordered_a_cursor := int((ordered_baseline_events[0] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([ordered_event_a, ordered_event_b, ordered_event_c]))
+	var ordered_first_page_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": ordered_a_cursor, "limit": 1})
+	if not bool(ordered_first_page_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should page ordered fallback events after insertion.")
+	var ordered_first_page_events: Array = ordered_first_page_result.get("data", {}).get("events", [])
+	if ordered_first_page_events.is_empty() or str((ordered_first_page_events[0] as Dictionary).get("payload", {}).get("message", "")) != "ORDER B":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should return the inserted middle event on the first limited page.")
+	var ordered_b_cursor := int((ordered_first_page_events[0] as Dictionary).get("event_id", -1))
+	var ordered_second_page_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": ordered_b_cursor, "limit": 1})
+	if not bool(ordered_second_page_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should continue ordered fallback pagination.")
+	var ordered_second_page_events: Array = ordered_second_page_result.get("data", {}).get("events", [])
+	if ordered_second_page_events.is_empty() or str((ordered_second_page_events[0] as Dictionary).get("payload", {}).get("message", "")) != "ORDER C":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not skip an already-seen later event after an inserted middle event.")
+	MCPRuntimeDebugStoreShared.clear()
+	var full_fallback_events: Array = []
+	for event_id in range(1, 302):
+		full_fallback_events.append(_runtime_log_event(event_id, "BUFFER %d" % event_id))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify(full_fallback_events.slice(0, 300)))
+	var full_buffer_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 300})
+	if not bool(full_buffer_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_recent should read a full runtime event buffer.")
+	var full_buffer_events: Array = full_buffer_result.get("data", {}).get("events", [])
+	if full_buffer_events.size() != 300:
+		return _shared_store_failure("debug_runtime_bridge get_recent should expose the full seeded runtime event buffer.")
+	var full_buffer_cursor := int((full_buffer_events[full_buffer_events.size() - 1] as Dictionary).get("event_id", -1))
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify(full_fallback_events))
+	var trimmed_buffer_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": full_buffer_cursor, "limit": 5})
+	if not bool(trimmed_buffer_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read after a full buffer cursor.")
+	var trimmed_buffer_events: Array = trimmed_buffer_result.get("data", {}).get("events", [])
+	if trimmed_buffer_events.is_empty() or str((trimmed_buffer_events[0] as Dictionary).get("payload", {}).get("message", "")) != "BUFFER 301":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not skip a new event after the merged buffer reaches its max size.")
+	MCPRuntimeDebugStoreShared.clear()
+	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
+		"event_id": 25,
+		"timestamp_unix": 25,
+		"timestamp_text": "2026-01-01T00:00:25",
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": "OLD SHARED", "level": "info"}
+	}]))
+	var shared_recorded_event := MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
+	if int(shared_recorded_event.get("event_id", 0)) <= 25:
+		return _shared_store_failure("shared runtime debug store should assign live event_id values after persisted fallback events.")
+	var shared_cursor_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_since_event_id", "after_event_id": 1, "limit": 5})
+	if not bool(shared_cursor_result.get("success", false)):
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should read shared runtime events after a fallback cursor.")
+	var shared_cursor_events: Array = shared_cursor_result.get("data", {}).get("events", [])
+	if shared_cursor_events.is_empty() or str((shared_cursor_events[0] as Dictionary).get("payload", {}).get("message", "")) != "LIVE SHARED READY":
+		return _shared_store_failure("debug_runtime_bridge get_since_event_id should not treat a live event as older than persisted fallback history.")
+	MCPRuntimeDebugStoreShared.clear()
+	MCPRuntimeDebugStoreShared.record_runtime_event("runtime_log", {"message": "LIVE SHARED READY", "level": "info"}, 7)
+	var live_shared_result: Dictionary = debug_tools.execute("runtime_bridge", {"action": "get_recent", "limit": 5})
+	var live_shared_events: Array = live_shared_result.get("data", {}).get("events", [])
+	var live_shared_message := ""
+	if not live_shared_events.is_empty() and live_shared_events[0] is Dictionary:
+		live_shared_message = str((live_shared_events[0] as Dictionary).get("payload", {}).get("message", ""))
+	MCPRuntimeDebugStoreShared.clear()
+	if not bool(live_shared_result.get("success", false)):
+		return _failure("debug_runtime_bridge get_recent should read the shared runtime debug store.")
+	if live_shared_events.is_empty() or live_shared_message != "LIVE SHARED READY":
+		return _failure("debug_runtime_bridge get_recent should expose live events recorded in the shared runtime debug store.")
+
+	var marker_failure_executor = SystemProjectExecutorScript.new()
+	var marker_failure_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_failure_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY then BOOT FAIL", "level": "error"}}]
+	marker_failure_executor.bridge = marker_failure_bridge
+	marker_failure_executor.configure_runtime({})
+	var marker_failure: Dictionary = await marker_failure_executor.execute_async("project_run", {
+		"success_markers": ["BOOT READY"],
+		"failure_markers": ["BOOT FAIL"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if bool(marker_failure.get("success", false)):
+		return _failure("project_run marker validation should fail when a failure marker appears, even if success text also appears.")
+	var marker_failure_data: Dictionary = marker_failure.get("data", {})
+	if str(marker_failure_data.get("error_code", "")) != "run_log_failure_marker_matched":
+		return _failure("project_run marker validation failure should include run_log_failure_marker_matched error_code.")
+	var marker_failure_validation: Dictionary = marker_failure_data.get("validation", {})
+	if str(marker_failure_validation.get("status", "")) != "failed" or str(marker_failure_validation.get("matched_marker", "")) != "BOOT FAIL":
+		return _failure("project_run marker validation should report failed status and matched failure marker details.")
+
+	var marker_timeout_executor = SystemProjectExecutorScript.new()
+	var marker_timeout_bridge = FakeBridge.new(FakeToolLoader.new())
+	marker_timeout_executor.bridge = marker_timeout_bridge
+	marker_timeout_executor.configure_runtime({})
+	var marker_timeout: Dictionary = await marker_timeout_executor.execute_async("project_run", {
+		"success_markers": ["NEVER READY"],
+		"timeout_ms": 5,
+		"poll_interval_ms": 1,
+		"log_tail": 10,
+		"auto_stop": false
+	})
+	if bool(marker_timeout.get("success", false)):
+		return _failure("project_run marker validation should fail when no marker appears before timeout.")
+	var marker_timeout_data: Dictionary = marker_timeout.get("data", {})
+	if str(marker_timeout_data.get("error_code", "")) != "run_log_marker_timeout":
+		return _failure("project_run marker validation timeout should include run_log_marker_timeout error_code.")
+	if marker_timeout_bridge.scene_run_actions != ["play_main"]:
+		return _failure("project_run marker validation should respect auto_stop=false and avoid scene_run stop.")
+
+	var invalid_marker_executor = SystemProjectExecutorScript.new()
+	var invalid_marker_bridge = FakeBridge.new(FakeToolLoader.new())
+	invalid_marker_executor.bridge = invalid_marker_bridge
+	invalid_marker_executor.configure_runtime({})
+	var invalid_marker: Dictionary = await invalid_marker_executor.execute_async("project_run", {
+		"success_markers": ["x".repeat(300)]
+	})
+	if bool(invalid_marker.get("success", false)):
+		return _failure("project_run marker validation should reject oversized markers.")
+	var invalid_marker_data: Dictionary = invalid_marker.get("data", {})
+	if str(invalid_marker_data.get("error_code", "")) != "invalid_argument":
+		return _failure("project_run marker validation should report invalid_argument for oversized markers.")
+	if not invalid_marker_bridge.scene_run_actions.is_empty():
+		return _failure("project_run marker validation should reject invalid marker arguments before starting the project.")
 
 	var failing_run_executor = SystemProjectExecutorScript.new()
 	failing_run_executor.bridge = FakeFailingRunBridge.new(FakeToolLoader.new())
@@ -380,8 +664,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failing_run_data = failing_run.get("data", {})
 	if not (failing_run_data is Dictionary):
 		return _failure("project_run failure should return structured data.")
-	if str((failing_run_data as Dictionary).get("error_code", "")) != "project_run_failed":
-		return _failure("project_run failure should include project_run_failed error_code.")
+	if str((failing_run_data as Dictionary).get("error_code", "")) != "editor_run_interface_unavailable_despite_state_available":
+		return _failure("project_run failure should identify inconsistent EditorInterface availability.")
+	if not ((failing_run_data as Dictionary).get("state_probe_vs_run_invoker", {}) is Dictionary):
+		return _failure("project_run inconsistent EditorInterface failure should include state/run comparison.")
+	if ((failing_run_data as Dictionary).get("recovery_suggestions", []) as Array).is_empty():
+		return _failure("project_run inconsistent EditorInterface failure should include recovery suggestions.")
 	if not ((failing_run_data as Dictionary).get("runtime_capabilities", {}) is Dictionary):
 		return _failure("project_run failure should include runtime capability context.")
 	if not ((failing_run_data as Dictionary).get("runtime_control_status", {}) is Dictionary):
@@ -477,6 +765,23 @@ func _create_user_file(path: String, content: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(content)
+		file.close()
+
+
+func _runtime_log_event(event_id: int, message: String) -> Dictionary:
+	return {
+		"event_id": event_id,
+		"timestamp_unix": event_id,
+		"timestamp_text": "2026-01-01T00:%02d:%02d" % [int(event_id / 60), event_id % 60],
+		"kind": "runtime_log",
+		"session_id": 7,
+		"payload": {"message": message, "level": "info"}
+	}
+
+
+func _shared_store_failure(message: String) -> Dictionary:
+	MCPRuntimeDebugStoreShared.clear()
+	return _failure(message)
 
 
 func _failure(message: String) -> Dictionary:
