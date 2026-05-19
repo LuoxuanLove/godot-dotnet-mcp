@@ -41,7 +41,7 @@ jobs:
           body = pull_request.get("body") or ""
           errors = []
 
-          title_pattern = re.compile(r"^(feat|fix|docs|ci|chore|perf|refactor|test|build|hotfix)(\([a-z0-9._/-]+\))?: .+", re.IGNORECASE)
+          title_pattern = re.compile(r"^(feat|fix|docs|ci|chore|perf|refactor|test|build|hotfix)(\([a-z0-9._/-]+\))?!?: .+", re.IGNORECASE)
           if not title_pattern.match(title):
               errors.append("PR title must use Conventional Commits format, for example 'fix(scope): concise summary'.")
 
@@ -72,7 +72,7 @@ jobs:
               text = re.sub(r"<!--.*?-->", "", section_text(section_name), flags=re.DOTALL)
               for raw_line in text.splitlines():
                   line = raw_line.strip()
-                  if not line or line in {"-", "```", "```powershell", "```text"}:
+                  if not line or line == "-" or re.fullmatch(r"```.*", line):
                       continue
                   if re.fullmatch(r"- \[[ xX]\].*", line):
                       continue
