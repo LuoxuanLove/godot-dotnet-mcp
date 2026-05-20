@@ -14,6 +14,7 @@
 
 - 调整 CI workflow，改用托管 Windows runner 预装的 .NET 8 SDK，并通过 `global.json` 约束 SDK 选择，不再通过 `setup-dotnet` 安装浮动 SDK。
 - 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
+- 优化 PR 模板与 Agent 流程文档，使 PR 记录在交接前覆盖本地验证、远端 CI、review conversation 和最新自动 review 状态。
 - 新增轻量 PR standards 检查，覆盖客观的 PR 标题、验证、变更记录 / 文档和流程风险字段。
 - 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
 - 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
