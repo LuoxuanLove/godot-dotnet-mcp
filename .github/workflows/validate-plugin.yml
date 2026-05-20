@@ -19,17 +19,23 @@ concurrency:
 
 jobs:
   validate-plugin-harness:
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 8.0.x
+      - name: Verify hosted .NET 8 SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet --info
+          dotnet --list-sdks
+          $sdkVersion = dotnet --version
+          if ($sdkVersion -notmatch '^8\.') {
+            throw "Expected global.json to select a .NET 8 SDK, got $sdkVersion."
+          }
 
       - name: Cache NuGet packages
         uses: actions/cache@v4

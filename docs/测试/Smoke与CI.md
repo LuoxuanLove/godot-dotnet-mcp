@@ -76,7 +76,7 @@ tests/
 
 Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
 
-`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
+`dotnet-build.yml`、`validate-plugin.yml` 与 `publish-plugin.yml` 使用 `windows-2025` 托管 runner，并通过 `global.json` 将 .NET SDK 选择限制在 .NET 8 feature band；workflow 会先输出 `dotnet --info` 与 `dotnet --list-sdks`，如果未选中 .NET 8 SDK 则直接失败。`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、`global.json`、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
 
 `validate-plugin-harness` 失败时会保留 `.tmp/godot_plugin_harness` 并上传 7 天 artifact，供维护者下载 stage root、process registry 等失败现场；成功运行仍会清理该目录。
 
