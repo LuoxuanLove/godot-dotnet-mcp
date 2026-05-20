@@ -1,24 +1,28 @@
 ## Summary
 
-- 
+<!-- 1-3 bullets describing what this PR changes and why. -->
+
+-
 
 ## Scope
 
 - Repository: `godot-dotnet-mcp`
 - Target branch: `dev`
-- Change type: <!-- fix / feature / docs / ci / chore / hotfix -->
+- Change type: <!-- fix / feature / docs / ci / chore / hotfix / release -->
 
 ## Root Cause / Why
 
-<!-- For fixes, explain the root cause. For docs/process changes, explain why the workflow needs to change. -->
+<!-- Explain the plugin-side reason for this change. For fixes, describe the root cause. -->
 
 ## Changes
 
-- 
+<!-- List concrete implementation, documentation, or workflow changes. -->
+
+-
 
 ## Verification
 
-<!-- List exact commands or MCP/Godot checks run. -->
+<!-- List exact local commands, remote CI checks, review/Cubic status, or editor/plugin validations. -->
 
 ```powershell
 # Example:
@@ -37,10 +41,12 @@
 
 ## Checklist
 
-- [ ] PR only contains the target branch scope; unrelated fixes are split out
+- [ ] PR targets `dev`
+- [ ] PR only contains the intended short-branch scope
+- [ ] Required local validation, equivalent CI checks, and review/Cubic status are listed when available
 - [ ] `CHANGELOG.md` and `CHANGELOG.zh-CN.md` are updated, or this PR explains why no changelog is needed
-- [ ] Public docs avoid local workspace paths, unrelated project context, zip packages, and local release artifacts
-- [ ] Agent-created changes were pushed to a short branch, not directly to `dev`
+- [ ] Public docs and release text only describe this plugin repository
+- [ ] Agent-created changes are on a short branch, not directly on `dev`
 - [ ] Agent will not merge this PR or push `dev`; the owner merges from the GitHub PR page
 
 ## Related Issues

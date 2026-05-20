@@ -82,7 +82,36 @@ Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：�
 
 ---
 
-## 5. 当前门禁边界
+## 5. 本地与远端验证分层
+
+PR 验证分为本地预检、远端 CI 和 review 门禁三层。三层职责不同，不能互相替代：
+
+1. 本地预检用于尽早发现确定性问题。能取得 Godot 编辑器路径时，优先运行受影响的 harness 或脚本；修改 workflow 时，应先检查 YAML 和脚本语法。
+2. 远端 CI 是合并前的客观门禁。`dotnet-build`、`validate-plugin-harness`、`pr-policy` 和按需运行的 `lint-workflows` 必须以最新 head 的结果为准。
+3. Review 门禁覆盖 CI 不易发现的问题。human、Cubic、Codex 或其它 review 工具提出的问题必须回复并 resolve；Cubic 结果必须覆盖最新 head commit。
+
+推荐记录方式：
+
+```text
+Local:
+- <command or editor/plugin validation> -> <result>
+
+Remote:
+- pr-policy -> <result>
+- dotnet-build -> <result>
+- validate-plugin-harness -> <result>
+- lint-workflows -> <result or not applicable>
+
+Review:
+- conversations -> <resolved / pending>
+- Cubic latest head -> <covered / pending / issues found>
+```
+
+如果本地缺少 Godot 编辑器或其它必要环境，应在 PR 正文说明未运行的具体检查，并等待等价远端 CI 结果；不能用“未运行”替代验证结论。
+
+---
+
+## 6. 当前门禁边界
 
 ### 已经是硬门禁的部分
 
@@ -105,7 +134,7 @@ Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：�
 
 ---
 
-## 6. 推荐运行方式
+## 7. 推荐运行方式
 
 ### 本地 plugin harness
 
@@ -121,6 +150,6 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 
 ---
 
-## 7. 结论
+## 8. 结论
 
-当前 harness 与 CI 已经形成分层闭环：`pr-policy` 提前拦截错误目标分支，`dotnet-build` 提供快速 .NET build 和 guardrail 反馈，`validate-plugin-harness` 保持稳定 required check 名称并运行重型 Godot harness，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。
+当前 harness、CI 与 review 门禁已经形成分层闭环：`pr-policy` 提前拦截错误目标分支，`dotnet-build` 提供快速 .NET build 和 guardrail 反馈，`validate-plugin-harness` 保持稳定 required check 名称并运行重型 Godot harness，`next` draft release 用于维护下一版说明草稿，`actions-bot-relay` 用于在不新增账号的前提下让 `github-actions[bot]` 成为 PR 创建和推送 actor。

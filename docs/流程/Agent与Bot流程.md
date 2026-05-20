@@ -24,7 +24,24 @@
 
 ---
 
-## 3. 完成定义与返修闭环
+## 3. PR 正文要求
+
+PR 正文应简洁说明本插件仓库内的变更，不展开开发过程流水账。模板字段用于让维护者快速判断范围、原因、验证和剩余风险：
+
+- `Summary`：用 1-3 条说明本 PR 的结果和目的。
+- `Scope`：列出仓库、目标分支和变更类型。
+- `Root Cause / Why`：说明插件侧原因；缺陷修复应写清根因。
+- `Changes`：列出可审查的实际修改。
+- `Verification`：列出实际运行的本地命令、CI check、review/Cubic 状态或编辑器/插件验证。
+- `Changelog / Docs`：说明中英文 changelog 与文档是否更新；无需更新时写明插件侧原因。
+- `Risk / Process Impact`：workflow、发布、分支、bot 或流程变化必须说明影响和缓解措施；普通局部改动可说明无额外影响。
+- `Checklist`：确认目标分支、短分支范围、验证、changelog / docs、插件仓库文本边界和维护者手动合并要求。
+
+PR 标题使用 Conventional Commits 格式，例如 `fix(scope): 简短描述`。PR 正文不得只保留模板占位符；`pr-policy` 会检查目标分支、标题和客观字段完整性。
+
+---
+
+## 4. 完成定义与返修闭环
 
 公开工具行为、UI 结构、生命周期语义、CI/workflow 行为或发布内容发生变化时，开发完成定义必须同时覆盖实现、契约测试、文档和变更记录。代码能运行不代表闭环完成；如果相关测试或文档仍描述旧路径、旧字段或旧语义，该 PR 仍处于返修状态。
 
@@ -37,7 +54,40 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 ---
 
-## 4. 合并边界
+## 5. PR 完成门禁
+
+PR 只有同时满足以下条件，才可回报为可交由维护者合并：
+
+1. PR 指向 `dev`，且基于当前可验证的 `dev` 重新确认。
+2. `pr-policy` 通过，PR 标题和正文客观字段完整。
+3. `dotnet-build` 通过。
+4. `validate-plugin-harness` 通过。
+5. 修改 `.github/workflows/**` 时，`lint-workflows` 通过。
+6. 所有 human、Cubic、Codex 或其它 review conversation 均已回复并 resolved；无效问题应说明理由，有效问题应修复。
+7. Cubic 已覆盖最新 head commit，且最新结果没有阻塞问题。
+8. `CHANGELOG*`、公开文档、验证记录和实际变更范围一致；无需更新的项目已在 PR 正文说明插件侧原因。
+
+任一门禁未满足时，PR 只能回报为待返修或待验证，不能回报为完成。
+
+---
+
+## 6. 返修迭代纪律
+
+每次 PR 返修应只处理当前失败门禁或 reviewer 指出的具体问题，避免在验证循环中夹带新范围。
+
+推荐顺序：
+
+1. 读取失败 check、review thread 或 Cubic 最新结果。
+2. 判断问题是否有效；有效则局部修复，无效则回复说明。
+3. 更新直接相关的测试、文档或 changelog。
+4. 提交并推送短分支。
+5. 从 CI 与 review 门禁重新验证最新 head。
+
+代码变更后的旧 CI、旧 review 或旧 Cubic 结果不能作为完成依据。
+
+---
+
+## 7. 合并边界
 
 - Agent 不直接推送 `dev`。
 - Agent 不本地合并后推送 `dev`。
@@ -46,7 +96,7 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 ---
 
-## 5. GitHub Actions Bot Relay
+## 8. GitHub Actions Bot Relay
 
 `actions-bot-relay` 是不引入额外 machine user 时的中转方案：维护者或 Agent 先生成基于最新 `dev` 的 unified patch，再手动触发 workflow，由 `github-actions[bot]` 应用 patch、提交、推送 `actions-bot/*` 分支并创建或更新指向 `dev` 的 PR。
 
@@ -56,7 +106,7 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 - `patch_base64`: base64 编码后的 unified git patch；受 `workflow_dispatch` 输入大小限制，只适合小到中等规模的改动。
 - `pr_title`: PR 标题。
-- `pr_body`: PR 正文，必须说明修改范围和验证计划。
+- `pr_body`: PR 正文，必须满足 PR 模板和 `pr-policy` 的客观字段要求，说明修改范围、验证计划、changelog / docs 状态和流程风险。
 - `commit_message`: 提交信息。
 - `branch_name`: 可选，必须为空或使用 `actions-bot/*` 前缀。
 - `base_branch`: 固定为 `dev`。
@@ -71,7 +121,7 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 ---
 
-## 6. 自动化边界
+## 9. 自动化边界
 
 - 自动生成、自动刷新或定时维护类变更只能通过短分支 PR 落地，不直接写入 `dev`。
 - 自动化 workflow 可以生成或更新 `next` draft release 作为下一版说明草稿，但不得创建正式发布、上传 zip / sha256 / 本地构建产物，或替代维护者发布判断。
@@ -80,12 +130,12 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 
 ---
 
-## 7. PR 回报要求
+## 10. PR 回报要求
 
 Agent 创建或更新 PR 时，应说明：
 
 - 修改范围和目标分支。
 - 是否包含 changelog / 文档更新。
 - 已执行的验证命令和结果。
-- 是否需要同步到 Mechoes。
+- 当前 CI、review conversation 与 Cubic 状态。
 - 剩余的维护者手动动作。
