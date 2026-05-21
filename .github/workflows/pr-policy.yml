@@ -47,13 +47,8 @@ jobs:
 
           required_sections = [
               "Summary",
-              "Scope",
-              "Root Cause / Why",
               "Changes",
-              "Verification",
-              "Changelog / Docs",
-              "Risk / Process Impact",
-              "Checklist",
+              "Testing",
           ]
 
           def section_match(section_name: str):
@@ -74,11 +69,7 @@ jobs:
                   line = raw_line.strip()
                   if not line or line == "-" or re.fullmatch(r"```.*", line):
                       continue
-                  if re.fullmatch(r"- \[[ xX]\].*", line):
-                      continue
                   if line.startswith("# Example:") or "<Godot Editor Path>" in line:
-                      continue
-                  if re.fullmatch(r"- (CHANGELOG\.md|CHANGELOG\.zh-CN\.md|Docs):", line, re.IGNORECASE):
                       continue
                   return True
               return False
@@ -87,14 +78,9 @@ jobs:
               if section_match(section) is None:
                   errors.append(f"PR body must include '## {section}'.")
 
-          for section in ["Summary", "Verification", "Changelog / Docs", "Risk / Process Impact"]:
+          for section in ["Summary", "Testing"]:
               if section_match(section) is not None and not has_substantive_content(section):
                   errors.append(f"PR body section '## {section}' must include a concrete statement, not only template placeholders.")
-
-          changelog_docs = section_text("Changelog / Docs")
-          if section_match("Changelog / Docs") is not None:
-              if "CHANGELOG.md" not in changelog_docs or "CHANGELOG.zh-CN.md" not in changelog_docs:
-                  errors.append("'## Changelog / Docs' must mention both CHANGELOG.md and CHANGELOG.zh-CN.md, or explain why each is not required.")
 
           if errors:
               for error in errors:
