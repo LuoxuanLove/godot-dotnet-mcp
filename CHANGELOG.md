@@ -16,6 +16,7 @@ Target version: `1.0.0-pre3`.
 
 ### Fixed
 
+- Fixed plugin self-diagnostics slow-operation reports so they identify the slowest startup/reload phase and include phase timing details in copied diagnostics.
 - Fixed Config-page client cards so the visible capability summary distinguishes full one-click config support from CLI auto-add, launch/path-only, and manual-guidance clients.
 - Fixed fast .NET build and plugin harness build failures so Godot `.godot/mono/temp` `CS2012` file-lock errors are classified as `transient_file_lock` with actionable recovery guidance.
 - Fixed MCP server listen self-diagnostics so occupied ports, access-denied binds, and Windows reserved/excluded TCP ports report distinct reasons and remediation hints.

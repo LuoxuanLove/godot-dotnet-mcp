@@ -38,23 +38,34 @@ func _process(delta: float) -> void:
 	_ensure_service_bundle()
 	_service_bundle.get_http_transport_service().process_frame(_tcp_server, _running, delta)
 
-func initialize(port: int, host: String, debug: bool) -> void:
+func initialize(port: int, host: String, debug: bool, diagnostic_operation_id: String = "") -> void:
 	_port = port
 	_host = host
 	_debug_mode = debug
-	_ensure_initialized()
+	_ensure_initialized(diagnostic_operation_id)
 
-func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = [], reason: String = "manual") -> Dictionary:
-	_ensure_initialized()
+func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = [], reason: String = "manual", diagnostic_operation_id: String = "") -> Dictionary:
+	var phase_started = PluginSelfDiagnosticStore.begin_phase()
+	_ensure_initialized(diagnostic_operation_id)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.ensure_initialized", phase_started)
 	if _running:
+		phase_started = PluginSelfDiagnosticStore.begin_phase()
 		stop()
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.stop_running", phase_started)
 	_port = port
 	_host = host
 	_debug_mode = debug
+	phase_started = PluginSelfDiagnosticStore.begin_phase()
 	set_disabled_tools(disabled_tools)
-	_ensure_service_bundle()
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "tool_loader.set_disabled_tools", phase_started, {"disabled_tool_count": disabled_tools.size()})
+	phase_started = PluginSelfDiagnosticStore.begin_phase()
+	_ensure_service_bundle(diagnostic_operation_id)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.ensure", phase_started)
 	var force_reload_tools = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "plugin_lifecycle_reload" or reason == "auto_start"
-	_service_bundle.get_tool_loader_supervisor().register_tools(reason, force_reload_tools)
+	phase_started = PluginSelfDiagnosticStore.begin_phase()
+	var registration_summary = _service_bundle.get_tool_loader_supervisor().register_tools(reason, force_reload_tools)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "tool_loader.register_tools", phase_started, registration_summary)
+	_record_tool_loader_performance_phases(diagnostic_operation_id, registration_summary)
 	MCPDebugBuffer.record("info", "server", "Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
 	if _debug_mode:
 		print("[MCP] Reinitialized via %s on http://%s:%d/mcp" % [reason, _host, _port])
@@ -71,11 +82,15 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 		"tool_loader_status": loader_status
 	}
 
-func start() -> bool:
-	_ensure_initialized()
+func start(diagnostic_operation_id: String = "") -> bool:
+	var phase_started = PluginSelfDiagnosticStore.begin_phase()
+	_ensure_initialized(diagnostic_operation_id)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.ensure_initialized", phase_started)
 	if _running:
 		return true
+	phase_started = PluginSelfDiagnosticStore.begin_phase()
 	var error = _tcp_server.listen(_port, _host)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.tcp_listen", phase_started, {"host": _host, "port": _port, "error": error})
 	if error != OK:
 		var failure_context := _build_listen_failure_context(error)
 		push_error("[MCP] Failed to start server on port %d: %s" % [_port, error_string(error)])
@@ -203,19 +218,45 @@ func get_tool_access_provider():
 		_default_tool_access_provider.configure({"show_user_tools": true})
 	return _default_tool_access_provider
 
-func _ensure_initialized() -> void:
+func _ensure_initialized(diagnostic_operation_id: String = "") -> void:
 	if _tcp_server == null:
+		var tcp_server_started = PluginSelfDiagnosticStore.begin_phase()
 		_tcp_server = TCPServer.new()
-	_ensure_service_bundle()
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.create_tcp_server", tcp_server_started)
+	_ensure_service_bundle(diagnostic_operation_id)
 	var supervisor = _service_bundle.get_tool_loader_supervisor()
 	if not bool(supervisor.get_status().get("initialized", false)):
-		supervisor.register_tools()
+		var register_started = PluginSelfDiagnosticStore.begin_phase()
+		var registration_summary = supervisor.register_tools()
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "tool_loader.register_tools", register_started, registration_summary)
+		_record_tool_loader_performance_phases(diagnostic_operation_id, registration_summary)
 
-func _ensure_service_bundle() -> void:
+func _ensure_service_bundle(diagnostic_operation_id: String = "") -> void:
 	if _service_bundle == null:
+		var create_started = PluginSelfDiagnosticStore.begin_phase()
 		_service_bundle = MCPHttpServiceBundleScript.new()
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.create", create_started)
+	var configure_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.configure(self, _connection_state)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.configure", configure_started)
+	var ensure_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.ensure_initialized()
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.initialize", ensure_started)
+
+func _record_tool_loader_performance_phases(diagnostic_operation_id: String, summary: Dictionary) -> void:
+	var performance = summary.get("performance", {})
+	if not (performance is Dictionary):
+		return
+	var performance_dict := performance as Dictionary
+	for metric_name in ["definition_scan_ms", "preload_ms", "startup_ms"]:
+		var duration_ms = float(performance_dict.get(metric_name, 0.0))
+		if duration_ms > 0.0:
+			PluginSelfDiagnosticStore.record_operation_phase_duration(
+				diagnostic_operation_id,
+				"tool_loader.%s" % metric_name.replace("_ms", ""),
+				duration_ms
+			)
+
 
 func _get_runtime_control_service(ensure_initialized: bool = true):
 	if ensure_initialized:

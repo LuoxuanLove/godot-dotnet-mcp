@@ -50,7 +50,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_tool_domain_load_failed": "脡chec du chargement du domaine d'outil",
 	"self_diag_code_tool_reload_failed": "脡chec du rechargement de l'outil",
 	"self_diag_code_instance_cleanup_incomplete": "Nettoyage de l'instance incomplet",
-	"self_diag_code_reload_duration_slow": "Dur茅e de rechargement lente",
+	"self_diag_code_operation_duration_slow": "Durée d'opération lente",
 	"server_status": "脡tat du serveur",
 	"server_state_label": "脡tat :",
 	"endpoint": "Point de terminaison :",
