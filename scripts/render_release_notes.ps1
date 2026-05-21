@@ -143,7 +143,8 @@ if (-not (Test-Path -LiteralPath $ManualNotesPath)) {
 }
 
 $manualNotes = (Read-Utf8Text -Path $ManualNotesPath).Trim()
-if ($manualNotes -notmatch [regex]::Escape($Version)) {
+$manualVersionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($Version))(?![0-9A-Za-z.-])"
+if ($manualNotes -notmatch $manualVersionPattern) {
   throw "Manual release notes $ManualNotesPath must mention version $Version"
 }
 
