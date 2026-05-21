@@ -14,7 +14,8 @@ Target version: `1.0.0-pre3`.
 
 - Updated CI workflows to use the hosted Windows runner's preinstalled .NET 8 SDK with `global.json` SDK selection instead of invoking `setup-dotnet` for floating SDK installation.
 - Added actions-bot relay PR metadata with base/head SHAs, changed paths, diffstat, actor, run URL, and validation workflow links.
-- Added lightweight PR standards checks for objective PR title, verification, changelog/docs, and process-risk fields.
+- Simplified the PR template to a concise Summary / Changes / Screenshots / Testing / Related Issues structure while keeping detailed readiness rules in workflow documentation.
+- Added lightweight PR standards checks for objective PR title, summary, and testing fields.
 - Preserved and uploaded plugin harness failure diagnostics from CI while keeping successful harness runs cleaned up.
 - Added NuGet package caching to CI build workflows and cached the Godot 4.6 mono extraction used by the plugin harness while preserving existing check names.
 - Limited CI push triggers to `dev` while keeping pull request, merge queue, and manual validation paths, reducing duplicate runs for same-repo PR branches without changing check names.
