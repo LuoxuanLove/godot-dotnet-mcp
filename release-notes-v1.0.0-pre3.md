@@ -1,27 +1,43 @@
-# Godot .NET MCP v1.0.0-pre3
+## 🧭 Runtime Diagnostics + Release Pipeline Hardening
 
-## 运行时诊断 + 发布流程加固
+Godot .NET MCP `v1.0.0-pre3` focuses on making editor automation failures explain themselves. Runtime marker checks, foreground-window limits, listener failures, headless captures, empty project scans, tool context overrides, and startup diagnostics now preserve enough evidence for clients to decide whether to retry, fall back, or fix the project state.
 
-`v1.0.0-pre3` 聚焦让编辑器与运行时自动化失败“说清楚原因”。运行日志 marker、前台窗口限制、服务监听失败、headless 截图限制、空项目扫描、工具上下文覆盖和启动自诊断现在都会给出更明确的证据，不再轻易退化成泛化的插件错误。
+### 🧪 Runtime Execution Evidence
 
-### 运行时执行证据
+`system_project_run` can now wait for runtime bridge marker text before declaring success or failure. Success and failure markers share the same live event stream, marker mode can auto-stop the running scene, and event-id cursors keep high-volume logs or repeated pre-run marker text from hiding the real match.
 
-`system_project_run` 新增可选 runtime bridge marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式自动停止，并用 fake runtime events 覆盖契约测试。marker 读取改用 shared runtime bridge events 与 event-id 游标，高日志量或运行前重复 marker 文本不再遮蔽真正的匹配结果。
+Foreground-only runtime launches are also explicit now. Unsupported `background`, `minimized`, and `no_focus` requests return `requires_foreground_window` with the relevant capability context instead of looking like a generic launch failure.
 
-### 编辑器与工具稳定性
+### 🛠️ Editor and Tool Stability
 
-项目启动期间的 runtime bridge 消息不再触发 Godot `Invalid message received` 输出；editor-interface 覆盖辅助函数避免 GDScript VM 内部错误；TileMap 工具脚本可在注册期间正常实例化；运行时截图在 headless 或 dummy 渲染后端下会返回结构化 skipped 结果。
+Runtime bridge traffic sent during project startup no longer produces Godot `Invalid message received` noise. Editor-interface overrides avoid the GDScript VM internal error path, TileMap tool scripts instantiate during MCP registration, and headless or dummy rendering backends return structured skipped capture results instead of attempting unavailable viewport screenshots.
 
-### 可执行的失败诊断
+The Tools page also has contract coverage for popup coordinate semantics, including the real right-click path and the local / canvas / viewport / screen boundaries used by dock popups.
 
-自诊断现在会指出启动或重载中最慢的阶段；MCP server 监听失败会区分端口占用、绑定被拒绝和 Windows 保留 / 排除 TCP 端口；项目文件枚举会把可疑空扫描报告为诊断，而不是误判为资源审计 clean。
+### 🚨 Actionable Failure Diagnostics
 
-### 发布与 CI 纪律
+Self-diagnostics now point at the slowest startup or reload phase. MCP server listener failures distinguish occupied ports, access-denied binds, and Windows reserved or excluded TCP port ranges. Empty project scans are reported as suspect diagnostics instead of being mistaken for clean resource audits.
 
-预发布线现在具备更强的发布说明自动化、`next` 草稿预览、tag / version / changelog preflight、workflow lint、PR policy 反馈、托管 .NET SDK 选择、harness 耗时汇总、缓存覆盖和 CI 失败证据保留。
+When `system_project_run` hits inconsistent `Editor interface not available` state, the report separates state-probe evidence from run-invoker evidence and includes recovery suggestions, with a CLI fallback when enough paths are known.
 
-### 兼容性说明
+### 🚀 Release and CI Discipline
 
-- 最低目标仍为 Godot 4.6 + .NET 支持。
-- 安装方式仍为 Godot Asset Library 安装，或直接复制 `addons/godot_dotnet_mcp/` 源文件。
-- 这是预发布版本，适合希望提前使用最新运行时诊断、编辑器自动化稳定性与发布流程加固的用户。
+The prerelease line now has a single source for GitHub Release text: a hand-written user-facing summary plus a generated commit summary. The same renderer refreshes the `next` draft release and formal tag releases, while preflight checks keep tag, plugin version, changelog, and manual release notes aligned.
+
+CI now leans on the hosted .NET 8 SDK, keeps the plugin harness check name stable, records harness timing summaries, preserves failure diagnostics, caches NuGet and Godot harness inputs, and keeps workflow lint plus PR policy checks close to the release path. Formal plugin releases still create GitHub Releases without zip package assets.
+
+### 🧩 Misc
+
+- Config cards now describe client capabilities more precisely, separating full one-click setup from CLI auto-add, launch/path-only, and manual-guidance clients.
+- PR, issue, release, and agent-process documentation now line up with the short-branch contribution flow.
+- Unreleased changelog entries were cleaned up so the pre3 section reflects current development history without stale records.
+
+---
+
+## Minor Compatibility and Stability Release
+
+This prerelease keeps the minimum target at Godot 4.6 with .NET support and does not change the supported installation paths.
+
+- Install from the Godot Asset Library, or copy the source `addons/godot_dotnet_mcp/` directory directly.
+- Expect better diagnostics around runtime automation, editor tool execution, CI verification, and release sequencing.
+- Treat this as a prerelease for users who want the newest runtime diagnostics and release-pipeline hardening before the next stable line.

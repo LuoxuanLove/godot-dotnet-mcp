@@ -31,6 +31,7 @@ Target version: `1.0.0-pre3`.
 ### Documentation
 
 - Added the `v1.0.0-pre3` manual release notes source used by the two-layer GitHub Release body.
+- Removed the obsolete `v1.0.0-pre2` manual release notes source so the release branch only carries the active pre3 source.
 - Documented Tools-page popup coordinate boundaries, editor-control responsibilities, runtime foreground limitations, no-focus capability fields, and run-log marker validation.
 - Documented the release notes source file, draft preview, and formal release rendering flow.
 - Updated CI and testing docs for harness timing summaries, failure diagnostic artifacts, cache behavior, hosted .NET SDK selection, PR validation triggers, and relay-created PR policy behavior.
@@ -50,7 +51,7 @@ Target version: `1.0.0-pre3`.
 - Added actions-bot relay PR metadata with base/head SHAs, changed paths, diffstat, actor, run URL, and validation workflow links.
 - Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests.
 - Split PR target policy and fast .NET build checks from the heavy Godot harness while preserving the `validate-plugin-harness` check name.
-- Added a release notes renderer so `next` draft releases and formal tag releases use the same manual-summary plus generated-detail body.
+- Added a release notes renderer so `next` draft releases and formal tag releases use the same manual-summary plus generated commit-summary body while validating the matching changelog section.
 - Updated release automation to run validation and create GitHub releases without producing zip package assets.
 
 ## 1.0.0-pre2 - 2026-05-06
