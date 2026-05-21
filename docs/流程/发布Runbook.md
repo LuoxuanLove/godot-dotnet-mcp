@@ -17,7 +17,7 @@
 ## 2. 发布前检查
 
 1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`CHANGELOG.md`、`CHANGELOG.zh-CN.md` 和公开文档一致。
-2. 确认对应版本的 `release-notes-v*.md` 存在，且顶部为面向用户的手写摘要，下方由 workflow 追加详细变更和 commit summary。
+2. 确认对应版本的 `release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
 3. 确认 `next` draft release 已按正式发布格式刷新，并可作为正式 GitHub Release 正文预览。
 4. 确认 PR 只包含当前发布目标范围，未夹带其它修复或历史未合并提交。
 5. 确认公开文档不包含本地路径、跨仓库工作区上下文、同步脚本流程或本地构建产物安装说明。
@@ -37,7 +37,7 @@
 正式 GitHub Release 正文由 `scripts/render_release_notes.ps1` 生成，保持两层结构：
 
 1. 手写摘要层：来自 `release-notes-v<version>.md`，用于说明版本主题、关键亮点、兼容性提示和升级判断。
-2. 自动明细层：由 workflow 追加 `CHANGELOG.zh-CN.md` 中的目标版本或 `Unreleased` 段落，以及最近 commit summary。
+2. 自动摘要层：workflow 先校验 `CHANGELOG.zh-CN.md` 中的目标版本或 `Unreleased` 段落，再追加最近 commit summary。
 
 编写手写摘要时应遵循：
 

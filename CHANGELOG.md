@@ -50,7 +50,7 @@ Target version: `1.0.0-pre3`.
 - Added actions-bot relay PR metadata with base/head SHAs, changed paths, diffstat, actor, run URL, and validation workflow links.
 - Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests.
 - Split PR target policy and fast .NET build checks from the heavy Godot harness while preserving the `validate-plugin-harness` check name.
-- Added a release notes renderer so `next` draft releases and formal tag releases use the same manual-summary plus generated-detail body.
+- Added a release notes renderer so `next` draft releases and formal tag releases use the same manual-summary plus generated commit-summary body while validating the matching changelog section.
 - Updated release automation to run validation and create GitHub releases without producing zip package assets.
 
 ## 1.0.0-pre2 - 2026-05-06

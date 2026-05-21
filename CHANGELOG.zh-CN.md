@@ -50,7 +50,7 @@
 - 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
 - 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可提交基于 patch 的短分支 PR。
 - 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
-- 新增发布说明渲染脚本，使 `next` 草稿发布和正式 tag 发布使用同一套“手写摘要 + 自动明细”正文。
+- 新增发布说明渲染脚本，使 `next` 草稿发布和正式 tag 发布使用同一套“手写摘要 + 自动 commit summary”正文，同时校验匹配的 changelog 段落。
 - 更新发布自动化：执行验证并创建 GitHub Release，不再产出 zip 包资产。
 
 ## 1.0.0-pre2 - 2026-05-06
