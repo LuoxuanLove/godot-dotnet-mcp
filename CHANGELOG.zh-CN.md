@@ -1,33 +1,18 @@
 # 变更日志
 
+本项目的所有重要变更都会记录在此文件中。
+
+本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
+
 ## Unreleased
 
 目标版本：`1.0.0-pre3`。
 
 ### Added
 
-- 为 `system_project_run` 新增可选 runtime bridge 日志 marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式默认自动停止，并通过 fake runtime events 补充契约覆盖。
-- 新增运行时前台窗口能力位，并在不支持 background / minimized / no_focus 项目运行时返回 `requires_foreground_window` 结构化降级信息。
-- 新增 Tools 页弹窗坐标语义的契约覆盖与 UI 文档，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
-
-### Changed
-
-- 调整 CI workflow，改用托管 Windows runner 预装的 .NET 8 SDK，并通过 `global.json` 约束 SDK 选择，不再通过 `setup-dotnet` 安装浮动 SDK。
-- 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
-- 将 PR 模板简化为 Summary / Changes / Screenshots / Testing / Related Issues 结构，同时把详细就绪规则保留在流程文档中。
-- 新增轻量 PR standards 检查，覆盖客观的 PR 标题、摘要和测试说明字段。
-- 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
-- 为 CI 构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
-- 将 CI 的 push 触发收敛到 `dev`，同时保留 PR、merge queue 与手动验证入口，减少同仓库 PR 短分支重复运行且不改变 check 名称。
-- 补充 Agent 完成定义：公开行为变化必须同时收口实现、契约测试、文档、变更记录和 Review 反馈缺口后，PR 才可视为就绪。
-- 明确区分插件 headless harness 的 suite 成功标记与 Godot 退出清理警告，同时保持现有泄漏告警门禁不变。
-- 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为和 check 名称不变。
-- 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于在 CI 中定位较慢 case 或阶段。
-- 新增 GitHub PR / Issue 模板、workflow lint 和发布 / Agent runbook，以约束更严格的短分支流程。
-- 更新插件发布工作流：只执行验证并创建 GitHub Release，不再产出 zip 包资产。
-- 新增非 `dev` 目标 PR 的 CI 反馈、发布 preflight 检查、`next` 草稿发布说明自动化，并强化 issue 诊断表单。
-- 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可在不引入额外 machine user 的前提下提交基于 patch 的短分支 PR。
-- 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
+- 为 `system_project_run` 新增可选 runtime bridge 日志 marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式自动停止，并通过 fake runtime events 补充契约覆盖。
+- 新增运行时前台窗口能力报告，并在不支持 background / minimized / no_focus 项目运行时返回 `requires_foreground_window` 结构化拒绝信息。
+- 新增 Tools 页弹窗坐标语义的契约覆盖，覆盖真实右键路径，并明确 Dock 浮层定位所使用的 local / canvas / viewport / screen 坐标边界。
 
 ### Fixed
 
@@ -41,6 +26,28 @@
 - 修复 `system_project_run` 失败诊断：当项目启动出现不一致的 `Editor interface not available` 时，现在会报告 state probe 与 run invoker 对比、恢复建议，并在路径信息足够时提供 CLI fallback。
 - 修复 `system_project_state` 与 `system_resource_reference_audit` 的项目文件枚举：空扫描现在会返回可疑诊断，不再被误判为资源审计 clean。
 - 修复 TileMap 工具脚本解析问题，使 TileMap 工具域可在 MCP 工具注册期间正常实例化。
+
+### Documentation
+
+- 补充 Tools 页弹窗坐标边界、编辑器控制职责、运行时前台限制、无焦点能力字段和运行日志 marker 校验说明。
+- 更新 CI 与测试文档，覆盖 harness 耗时汇总、失败诊断 artifact、缓存行为、托管 .NET SDK 选择、PR 验证触发和 relay 创建 PR 的 policy 路径。
+- 新增并完善 PR、Issue、发布和 Agent 流程文档，使其匹配短分支贡献流程。
+- 将 PR 模板简化为 Summary / Changes / Screenshots / Testing / Related Issues，同时把详细就绪规则保留在流程文档中。
+- 清理未发布变更记录，使 pre3 段落反映当前开发历史，并移除陈旧或错位条目。
+
+### Internal
+
+- 调整 CI workflow，改用托管 Windows runner 预装的 .NET 8 SDK，并通过 `global.json` 约束 SDK 选择。
+- 将 CI 的 push 触发收敛到 `dev`，同时保留 PR、merge queue 与手动验证入口，减少同分支 PR 重复运行且不改变 required check 名称。
+- 为快速 .NET build 和重型插件 harness workflow 新增仅限 PR 的并发取消与 job timeout，同时保持非 PR 运行行为不变。
+- 为重型插件 harness 脚本新增 timing 输出和可选 GitHub Step Summary 汇总，便于定位较慢 case 或阶段。
+- 在 CI 中保留并上传插件 harness 失败诊断，同时保持成功运行后的清理行为。
+- 为构建 workflow 增加 NuGet 包缓存，并缓存插件 harness 使用的 Godot 4.6 mono 解压目录，同时保持现有 check 名称不变。
+- 新增轻量 PR policy 检查，覆盖客观的 PR 标题、摘要、变更和测试说明字段。
+- 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
+- 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可提交基于 patch 的短分支 PR。
+- 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
+- 更新发布自动化：执行验证并创建 GitHub Release，不再产出 zip 包资产。
 
 ## 1.0.0-pre2 - 2026-05-06
 

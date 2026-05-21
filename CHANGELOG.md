@@ -1,33 +1,18 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## Unreleased
 
 Target version: `1.0.0-pre3`.
 
 ### Added
 
-- Added optional `system_project_run` runtime bridge log marker validation with success/failure marker matching, timeout handling, default marker-mode auto-stop, and contract coverage using fake runtime events.
-- Added explicit runtime foreground-window capability bits and `requires_foreground_window` rejection data for unsupported background, minimized, or no-focus project runs.
-- Added contract coverage and UI documentation for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
-
-### Changed
-
-- Updated CI workflows to use the hosted Windows runner's preinstalled .NET 8 SDK with `global.json` SDK selection instead of invoking `setup-dotnet` for floating SDK installation.
-- Added actions-bot relay PR metadata with base/head SHAs, changed paths, diffstat, actor, run URL, and validation workflow links.
-- Simplified the PR template to a concise Summary / Changes / Screenshots / Testing / Related Issues structure while keeping detailed readiness rules in workflow documentation.
-- Added lightweight PR standards checks for objective PR title, summary, and testing fields.
-- Preserved and uploaded plugin harness failure diagnostics from CI while keeping successful harness runs cleaned up.
-- Added NuGet package caching to CI build workflows and cached the Godot 4.6 mono extraction used by the plugin harness while preserving existing check names.
-- Limited CI push triggers to `dev` while keeping pull request, merge queue, and manual validation paths, reducing duplicate runs for same-repo PR branches without changing check names.
-- Documented the Agent completion definition so public behavior changes must close implementation, contract test, documentation, changelog, and review-feedback gaps before PRs are considered ready.
-- Clarified plugin headless harness reports so suite success markers are separated from Godot exit cleanup warnings without weakening the existing leak-warning gate.
-- Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows without changing non-PR run behavior or check names.
-- Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify in CI.
-- Added GitHub PR and issue templates, workflow linting, and release/agent runbooks for a stricter short-branch workflow.
-- Updated the plugin release workflow to verify and create GitHub releases without producing zip package assets.
-- Added CI feedback for PRs that target branches other than `dev`, release preflight checks, `next` draft release notes automation, and stronger issue diagnostics forms.
-- Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests without a separate machine user.
-- Split PR target policy and fast .NET build checks from the heavy Godot harness while preserving the `validate-plugin-harness` check name.
+- Added optional `system_project_run` runtime bridge log marker validation with success/failure marker matching, timeout handling, marker-mode auto-stop, and fake-event contract coverage.
+- Added runtime foreground-window capability reporting with `requires_foreground_window` rejection details for unsupported background, minimized, or no-focus project runs.
+- Added contract coverage for Tools-page popup coordinate semantics, including the real right-click path and the local/canvas/viewport/screen boundary used by Dock popup placement.
 
 ### Fixed
 
@@ -41,6 +26,28 @@ Target version: `1.0.0-pre3`.
 - Fixed `system_project_run` failure diagnostics so inconsistent `Editor interface not available` launch failures report state-probe versus run-invoker details, recovery suggestions, and a CLI fallback when enough paths are known.
 - Fixed project file enumeration for `system_project_state` and `system_resource_reference_audit` so empty scans are reported as suspect diagnostics instead of being mistaken for a clean resource audit.
 - Fixed TileMap tool script parsing so the TileMap tool domain can instantiate during MCP tool registration.
+
+### Documentation
+
+- Documented Tools-page popup coordinate boundaries, editor-control responsibilities, runtime foreground limitations, no-focus capability fields, and run-log marker validation.
+- Updated CI and testing docs for harness timing summaries, failure diagnostic artifacts, cache behavior, hosted .NET SDK selection, PR validation triggers, and relay-created PR policy behavior.
+- Added and refined PR, issue, release, and agent-process documentation for the short-branch contribution flow.
+- Simplified the PR template to Summary / Changes / Screenshots / Testing / Related Issues while keeping detailed readiness rules in process documentation.
+- Cleaned up unreleased changelog entries so the pre3 section reflects current development history without stale or misplaced records.
+
+### Internal
+
+- Updated CI workflows to use the hosted Windows runner's preinstalled .NET 8 SDK through `global.json` SDK selection.
+- Limited CI push triggers to `dev` while preserving pull request, merge queue, and manual validation paths to reduce duplicate same-branch PR runs without changing required check names.
+- Added PR-only concurrency cancellation and job timeouts to the fast .NET build and heavy plugin harness workflows while preserving non-PR behavior.
+- Added timing output and optional GitHub Step Summary reporting to the heavy plugin harness script so slow cases and phases are easier to identify.
+- Preserved and uploaded plugin harness failure diagnostics from CI while keeping successful harness runs cleaned up.
+- Added NuGet package caching to build workflows and cached the Godot 4.6 mono extraction used by the plugin harness while preserving existing check names.
+- Added lightweight PR policy checks for objective PR titles, summaries, changes, and testing fields.
+- Added actions-bot relay PR metadata with base/head SHAs, changed paths, diffstat, actor, run URL, and validation workflow links.
+- Added an `actions-bot-relay` workflow so `github-actions[bot]` can submit patch-based short-branch pull requests.
+- Split PR target policy and fast .NET build checks from the heavy Godot harness while preserving the `validate-plugin-harness` check name.
+- Updated release automation to run validation and create GitHub releases without producing zip package assets.
 
 ## 1.0.0-pre2 - 2026-05-06
 
