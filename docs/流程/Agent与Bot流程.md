@@ -26,19 +26,15 @@
 
 ## 3. PR 正文要求
 
-PR 正文应简洁说明本插件仓库内的变更，不展开开发过程流水账。模板字段用于让维护者快速判断范围、原因、验证和剩余风险：
+PR 正文使用简洁模板，只保留便于维护者快速阅读的公开信息：
 
 - `Summary`：用 1-3 条说明本 PR 的结果和目的。
-- `Scope`：列出仓库、目标分支和变更类型。
-- `Root Cause / Why`：说明插件侧原因；缺陷修复应写清根因。
 - `Changes`：列出可审查的实际修改。
-- `Verification`：列出实际运行的本地命令、CI check、review/Cubic 状态或编辑器/插件验证。
-- `Changelog / Docs`：说明中英文 changelog 与文档是否更新；无需更新时写明插件侧原因。
-- `Risk / Process Impact`：workflow、发布、分支、bot 或流程变化必须说明影响和缓解措施；普通局部改动可说明无额外影响。
-- `Checklist`：确认目标分支、短分支范围、验证、changelog / docs、插件仓库文本边界和维护者手动合并要求。
+- `Screenshots`：仅在界面或视觉变化适用时保留。
+- `Testing`：列出实际运行的本地命令、CI check 或编辑器 / 插件验证。
+- `Related Issues`：关联 issue；没有关联项时可留空。
 
-PR 标题使用 Conventional Commits 格式，例如 `fix(scope): 简短描述`。PR 正文不得只保留模板占位符；`pr-policy` 会检查目标分支、标题和客观字段完整性。
-
+更严格的分支、changelog、review、Cubic 和合并要求由本流程文档与 CI 门禁承载，不写入 PR 模板正文。PR 标题使用 Conventional Commits 格式，例如 `fix(scope): 简短描述`。
 ---
 
 ## 4. 完成定义与返修闭环
@@ -106,7 +102,7 @@ PR 只有同时满足以下条件，才可回报为可交由维护者合并：
 
 - `patch_base64`: base64 编码后的 unified git patch；受 `workflow_dispatch` 输入大小限制，只适合小到中等规模的改动。
 - `pr_title`: PR 标题。
-- `pr_body`: PR 正文，必须满足 PR 模板和 `pr-policy` 的客观字段要求，说明修改范围、验证计划、changelog / docs 状态和流程风险。
+- `pr_body`: PR 正文必须使用简洁模板，并满足 `pr-policy` 对标题、摘要和测试说明的客观字段要求。
 - `commit_message`: 提交信息。
 - `branch_name`: 可选，必须为空或使用 `actions-bot/*` 前缀。
 - `base_branch`: 固定为 `dev`。

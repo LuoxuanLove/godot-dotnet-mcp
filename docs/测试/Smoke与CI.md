@@ -59,7 +59,7 @@ tests/
 当前包含：
 
 1. `actions-bot-relay`: 手动接收 base64 patch，由 `github-actions[bot]` 创建 `actions-bot/*` 分支和指向 `dev` 的 PR，并在 PR 正文追加 base/head SHA、changed paths、diffstat、触发者、run URL 与验证 workflow 链接
-2. `pr-policy`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`，并校验标题、验证、变更记录 / 文档和流程风险等客观 PR 字段
+2. `pr-policy`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`，并校验标题、摘要和测试说明等客观 PR 字段
 3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
 5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
@@ -116,7 +116,7 @@ Review:
 ### 已经是硬门禁的部分
 
 - workflow YAML syntax lint（仅 workflow 文件变更时）
-- PR 目标分支和轻量 PR standards 检查，错误目标分支会失败并提示改投 `dev`，缺少客观 PR 字段时会提示补充
+- PR 目标分支和轻量 PR standards 检查，错误目标分支会失败并提示改投 `dev`，缺少必要 PR 字段时会提示补充
 - dotnet bridge library、harness runner 与 fixture build
 - refactor guardrails
 - plugin headless harness required subset
