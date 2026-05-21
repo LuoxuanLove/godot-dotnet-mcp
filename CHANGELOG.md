@@ -32,6 +32,7 @@ Target version: `1.0.0-pre3`.
 
 - Added the `v1.0.0-pre3` manual release notes source used by the two-layer GitHub Release body.
 - Removed the obsolete `v1.0.0-pre2` manual release notes source so the release branch only carries the active pre3 source.
+- Updated README pre-release badges to resolve the latest `*-pre*` GitHub release dynamically and link to the prerelease-filtered releases view.
 - Documented Tools-page popup coordinate boundaries, editor-control responsibilities, runtime foreground limitations, no-focus capability fields, and run-log marker validation.
 - Documented the release notes source file, draft preview, and formal release rendering flow.
 - Updated CI and testing docs for harness timing summaries, failure diagnostic artifacts, cache behavior, hosted .NET SDK selection, PR validation triggers, and relay-created PR policy behavior.

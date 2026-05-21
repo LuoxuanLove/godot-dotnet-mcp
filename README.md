@@ -1,6 +1,6 @@
 # Godot .NET MCP
 
-[![Latest Stable](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=stable&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Latest Pre-release](https://img.shields.io/badge/pre--release-v1.0.0--pre2-orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases) [![中文 README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
+[![Latest Stable](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=stable&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![Latest Pre-release](https://img.shields.io/github/v/release/LuoxuanLove/godot-dotnet-mcp?include_prereleases&filter=*-pre*&label=pre--release&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases?q=prerelease%3Atrue) [![中文 README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-1677ff)](README.zh-CN.md)
 
 > A Godot 4.6+ editor plugin that exposes the live Godot editor through MCP: project state, scene editing, script analysis, runtime control, screenshots, logs, and client setup from inside the editor itself.
 
@@ -126,4 +126,4 @@ Each `.gd` file should expose `handles()`, `get_tools()`, and `execute()`. Tool 
 
 ## Current status
 
-The source tree currently tracks `v1.0.0-pre3` development work, focused on runtime debugger bridge message stability and tool context helper fixes. The latest published pre-release remains `v1.0.0-pre2`. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.
+The latest published pre-release is `v1.0.0-pre3`, focused on runtime diagnostics, editor automation stability, and release pipeline hardening. See [CHANGELOG.md](CHANGELOG.md) for version-by-version details.
