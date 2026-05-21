@@ -55,7 +55,7 @@ Agent 在提交或更新 PR 前必须完成以下检查：
 PR 只有同时满足以下条件，才可回报为可交由维护者合并：
 
 1. PR 指向 `dev`，且基于当前可验证的 `dev` 重新确认。
-2. `pr-policy` 通过，PR 标题和正文客观字段完整。
+2. 常规 PR 的 `pr-policy` 通过，PR 标题和正文客观字段完整；`actions-bot-relay` 生成且无法自然触发该检查的 PR，应由 relay 元数据、已显式触发的验证 workflow 和维护者审查共同覆盖这部分确认。
 3. `dotnet-build` 通过。
 4. `validate-plugin-harness` 通过。
 5. 修改 `.github/workflows/**` 时，`lint-workflows` 通过。

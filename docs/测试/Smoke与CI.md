@@ -97,7 +97,7 @@ Local:
 - <command or editor/plugin validation> -> <result>
 
 Remote:
-- pr-policy -> <result>
+- pr-policy -> <result or relay metadata / maintainer review path>
 - dotnet-build -> <result>
 - validate-plugin-harness -> <result>
 - lint-workflows -> <result or not applicable>
