@@ -57,6 +57,7 @@ tests/godot_plugin_harness_fixture/
    ├─ navigation_tool_executor_contract_test.gd
     ├─ plugin_dock_coordinator_contract_test.gd
     ├─ plugin_runtime_coordinator_contract_test.gd
+    ├─ plugin_self_diagnostic_store_contract_test.gd
    ├─ client_config_serializer_contract_test.gd
    ├─ client_config_inspection_service_contract_test.gd
    ├─ client_config_file_transaction_contract_test.gd
@@ -127,6 +128,7 @@ tests/godot_plugin_harness_fixture/
 | `navigation_tool_executor_contracts` | 验证 `navigation` 域拆分后的 catalog、稳定 executor 入口与代表性 `map / region / agent` 路径，并断言旧根文件已删除 |
 | `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的高阶 dock create/remove/recreate、dock signal wiring、dock instance 计数、`FileDialog` 创建与 dialog 清理语义 |
 | `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
+| `plugin_self_diagnostic_store_contracts` | 验证 `plugin_self_diagnostic_store.gd` 的 slow-operation code、`phase_timings`、`slowest_phase` 与复制诊断文本中的最慢阶段输出 |
 | `config_feature_config_workflow_contracts` | 验证 `config_feature_config_workflow.gd` 的写入/移除确认流、成功提示、noop 移除和运行后 follow-up 提示 |
 | `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
 | `client_config_inspection_service_contracts` | 验证 `client_config_inspection_service.gd` 的 `inspect/preflight` 状态归类 |

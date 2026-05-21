@@ -52,11 +52,48 @@ static func begin_operation(kind: String, phase: String = "", context: Dictionar
 		"duration_ms": 0.0,
 		"success": false,
 		"anomaly_codes": [],
+		"phase_timings": [],
+		"slowest_phase": {},
 		"context": context.duplicate(true)
 	}
 	_operations.append(operation)
 	_trim_operations()
 	return operation.duplicate(true)
+
+
+static func begin_phase() -> int:
+	return Time.get_ticks_usec()
+
+
+static func record_operation_phase(operation_id: String, phase_name: String, started_ticks_usec: int, context: Dictionary = {}) -> Dictionary:
+	var ended_ticks_usec = Time.get_ticks_usec()
+	var duration_ms = maxf(float(ended_ticks_usec - started_ticks_usec) / 1000.0, 0.0)
+	return record_operation_phase_duration(operation_id, phase_name, duration_ms, context)
+
+
+static func record_operation_phase_duration(operation_id: String, phase_name: String, duration_ms: float, context: Dictionary = {}) -> Dictionary:
+	var normalized_phase = phase_name.strip_edges()
+	if operation_id.is_empty() or normalized_phase.is_empty():
+		return {}
+	var timing := {
+		"phase": normalized_phase,
+		"duration_ms": maxf(duration_ms, 0.0),
+		"context": context.duplicate(true)
+	}
+	for index in range(_operations.size() - 1, -1, -1):
+		var operation := _operations[index]
+		if str(operation.get("operation_id", "")) != operation_id:
+			continue
+		var phase_timings: Array = []
+		var existing_timings = operation.get("phase_timings", [])
+		if existing_timings is Array:
+			phase_timings = (existing_timings as Array).duplicate(true)
+		phase_timings.append(timing)
+		operation["phase_timings"] = phase_timings
+		operation["slowest_phase"] = _resolve_slowest_phase(operation)
+		_operations[index] = operation
+		return timing.duplicate(true)
+	return {}
 
 
 static func end_operation(operation_id: String, success: bool, anomaly_codes: Array = [], context: Dictionary = {}) -> Dictionary:
@@ -67,7 +104,7 @@ static func end_operation(operation_id: String, success: bool, anomaly_codes: Ar
 
 		var ended_unix = int(Time.get_unix_time_from_system())
 		var ended_ticks_usec = Time.get_ticks_usec()
-		var duration_ms := maxi(float(ended_ticks_usec - int(operation.get("started_at_ticks_usec", ended_ticks_usec))) / 1000.0, 0.0)
+		var duration_ms := maxf(float(ended_ticks_usec - int(operation.get("started_at_ticks_usec", ended_ticks_usec))) / 1000.0, 0.0)
 
 		operation["ended_at_ticks_usec"] = ended_ticks_usec
 		operation["ended_at_unix"] = ended_unix
@@ -83,6 +120,7 @@ static func end_operation(operation_id: String, success: bool, anomaly_codes: Ar
 		for key in context.keys():
 			merged_context[key] = context[key]
 		operation["context"] = merged_context
+		operation["slowest_phase"] = _resolve_slowest_phase(operation)
 
 		_operations[index] = operation
 		return operation.duplicate(true)
@@ -172,7 +210,6 @@ static func record_incident(
 
 static func record_slow_operation(operation: Dictionary, component: String, phase: String = "", threshold_ms: float = SLOW_OPERATION_THRESHOLD_MS) -> Dictionary:
 	var duration_ms = float(operation.get("duration_ms", 0.0))
-	# Resolve operation-kind-specific thresholds
 	var resolved_threshold_ms := threshold_ms
 	var resolved_warning_threshold_ms := SLOW_OPERATION_WARNING_THRESHOLD_MS
 	var operation_kind := str(operation.get("kind", ""))
@@ -182,24 +219,34 @@ static func record_slow_operation(operation: Dictionary, component: String, phas
 		resolved_warning_threshold_ms = float(thresholds[1])
 	if duration_ms <= resolved_threshold_ms:
 		return {}
+
+	var slowest_phase = _resolve_slowest_phase(operation)
+	var phase_timings = _resolve_phase_timings(operation)
+	var message = "Operation exceeded the slow-operation threshold (%.1fms > %.1fms)" % [duration_ms, resolved_threshold_ms]
+	var slowest_phase_summary = _format_phase_summary(slowest_phase)
+	if not slowest_phase_summary.is_empty():
+		message = "%s; slowest phase: %s" % [message, slowest_phase_summary]
+
 	var severity := "warning" if duration_ms > resolved_warning_threshold_ms else "info"
 	return record_incident(
 		severity,
 		"performance_warning",
-		"reload_duration_slow",
-		"Operation exceeded the slow-operation threshold (%.1fms > %.1fms)" % [duration_ms, resolved_threshold_ms],
+		"operation_duration_slow",
+		message,
 		component,
 		phase if not phase.is_empty() else str(operation.get("phase", "")),
 		"",
 		"",
 		str(operation.get("operation_id", "")),
 		true,
-		"Inspect the latest reload timeline and the related component state.",
+		"Inspect the slowest phase and the latest operation timeline.",
 		{
 			"kind": operation_kind,
 			"duration_ms": duration_ms,
 			"threshold_ms": resolved_threshold_ms,
-			"warning_threshold_ms": resolved_warning_threshold_ms
+			"warning_threshold_ms": resolved_warning_threshold_ms,
+			"phase_timings": phase_timings,
+			"slowest_phase": slowest_phase
 		}
 	)
 
@@ -307,17 +354,29 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 
 	var last_operation = snapshot.get("last_operation", {})
 	if last_operation is Dictionary and not (last_operation as Dictionary).is_empty():
+		var last_operation_dict := last_operation as Dictionary
 		lines.append("Last operation: %s (%sms)" % [
-			str((last_operation as Dictionary).get("kind", "")),
-			str((last_operation as Dictionary).get("duration_ms", 0.0))
+			str(last_operation_dict.get("kind", "")),
+			str(last_operation_dict.get("duration_ms", 0.0))
 		])
+		var last_operation_phase = _format_phase_summary(last_operation_dict.get("slowest_phase", {}))
+		if not last_operation_phase.is_empty():
+			lines.append("Slowest operation phase: %s" % last_operation_phase)
+		_append_phase_timing_lines(lines, "Operation phase timings", _resolve_phase_timings(last_operation_dict))
 	var latest_incident = snapshot.get("latest_incident", {})
 	if latest_incident is Dictionary and not (latest_incident as Dictionary).is_empty():
+		var latest_incident_dict := latest_incident as Dictionary
 		lines.append("Latest incident: [%s] %s: %s" % [
-			str((latest_incident as Dictionary).get("severity", "info")),
-			str((latest_incident as Dictionary).get("code", "")),
-			str((latest_incident as Dictionary).get("message", ""))
+			str(latest_incident_dict.get("severity", "info")),
+			str(latest_incident_dict.get("code", "")),
+			str(latest_incident_dict.get("message", ""))
 		])
+		var latest_context = latest_incident_dict.get("context", {})
+		if latest_context is Dictionary:
+			var latest_phase = _format_phase_summary((latest_context as Dictionary).get("slowest_phase", {}))
+			if not latest_phase.is_empty():
+				lines.append("Slowest incident phase: %s" % latest_phase)
+			_append_phase_timing_lines(lines, "Incident phase timings", _resolve_phase_timings(latest_context as Dictionary))
 
 	for incident in snapshot.get("recent_incidents", []):
 		if not (incident is Dictionary):
@@ -328,6 +387,48 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 			str(incident.get("message", ""))
 		])
 	return "\n".join(lines)
+
+
+static func _append_phase_timing_lines(lines: Array[String], title: String, phase_timings: Array) -> void:
+	if phase_timings.is_empty():
+		return
+	lines.append("%s:" % title)
+	for timing in phase_timings:
+		var summary = _format_phase_summary(timing)
+		if not summary.is_empty():
+			lines.append("- %s" % summary)
+
+
+static func _resolve_phase_timings(operation: Dictionary) -> Array:
+	var phase_timings: Array = []
+	var raw_timings = operation.get("phase_timings", [])
+	if raw_timings is Array:
+		for raw_timing in raw_timings:
+			if raw_timing is Dictionary:
+				phase_timings.append((raw_timing as Dictionary).duplicate(true))
+	return phase_timings
+
+
+static func _resolve_slowest_phase(operation: Dictionary) -> Dictionary:
+	var phase_timings = _resolve_phase_timings(operation)
+	if phase_timings.is_empty():
+		return {}
+	var slowest := {}
+	for timing in phase_timings:
+		var timing_dict := timing as Dictionary
+		if slowest.is_empty() or float(timing_dict.get("duration_ms", 0.0)) > float(slowest.get("duration_ms", 0.0)):
+			slowest = timing_dict.duplicate(true)
+	return slowest
+
+
+static func _format_phase_summary(phase) -> String:
+	if not (phase is Dictionary) or (phase as Dictionary).is_empty():
+		return ""
+	var phase_dict := phase as Dictionary
+	return "%s (%.1fms)" % [
+		str(phase_dict.get("phase", "")),
+		float(phase_dict.get("duration_ms", 0.0))
+	]
 
 
 static func _strip_internal_fields(incident: Dictionary) -> Dictionary:

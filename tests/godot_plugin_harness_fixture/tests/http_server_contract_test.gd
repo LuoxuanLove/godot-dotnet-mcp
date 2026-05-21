@@ -2,12 +2,17 @@ extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const RESTART_CONTRACT_PORT := 39993
 
 var _server
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var ready_timing_result := await _verify_ready_initialize_phase_timing(_tree)
+	if not bool(ready_timing_result.get("success", false)):
+		return ready_timing_result
+
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
 
@@ -175,6 +180,37 @@ func _has_tool(tools, tool_name: String) -> bool:
 		return false
 	for tool_def in tools:
 		if tool_def is Dictionary and str((tool_def as Dictionary).get("name", "")) == tool_name:
+			return true
+	return false
+
+
+func _verify_ready_initialize_phase_timing(tree: SceneTree) -> Dictionary:
+	PluginSelfDiagnosticStore.clear()
+	var ready_server = HttpServerScript.new()
+	tree.root.add_child(ready_server)
+	await tree.process_frame
+
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_start", "contract_ready_initialize")
+	var operation_id := str(operation.get("operation_id", ""))
+	ready_server.initialize(0, "127.0.0.1", false, operation_id)
+	var finished = PluginSelfDiagnosticStore.end_operation(operation_id, true)
+
+	ready_server.dispose()
+	ready_server.queue_free()
+	await tree.process_frame
+	PluginSelfDiagnosticStore.clear()
+
+	var phase_timings = finished.get("phase_timings", [])
+	if not (phase_timings is Array):
+		return _failure("Ready/initialize diagnostic operation did not expose phase timings.")
+	if not _has_phase(phase_timings as Array, "tool_loader.register_tools"):
+		return _failure("Ready/initialize diagnostic operation should retain first tool loader registration timing.")
+	return {"success": true, "error": ""}
+
+
+func _has_phase(phase_timings: Array, phase_name: String) -> bool:
+	for timing in phase_timings:
+		if timing is Dictionary and str((timing as Dictionary).get("phase", "")) == phase_name:
 			return true
 	return false
 

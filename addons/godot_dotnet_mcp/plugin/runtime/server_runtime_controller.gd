@@ -48,17 +48,27 @@ func detach() -> void:
 
 
 func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
-	return _reinitialize_runtime_settings(_settings_projection.project(settings), reason, true)
+	var operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
+	var operation_id := str(operation.get("operation_id", ""))
+	var phase_started = PluginSelfDiagnosticStore.begin_phase()
+	var runtime_settings := _settings_projection.project(settings)
+	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
+	return _reinitialize_runtime_settings(runtime_settings, reason, true, operation)
 
 
 func start(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_start", reason, {"reason": reason})
+	var operation_id := str(operation.get("operation_id", ""))
+	var phase_started = PluginSelfDiagnosticStore.begin_phase()
 	var runtime_settings := _settings_projection.project(settings)
-	if not _reinitialize_runtime_settings(runtime_settings, reason, false):
+	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
+	if not _reinitialize_runtime_settings(runtime_settings, reason, false, operation):
 		_finish_operation(operation, false, "server_runtime_controller", reason)
 		return false
 	if _has_server_method("start"):
-		var started = _server.start()
+		phase_started = PluginSelfDiagnosticStore.begin_phase()
+		var started = _server.start(operation_id)
+		PluginSelfDiagnosticStore.record_operation_phase(operation_id, "http_server.start", phase_started, {"started": started})
 		if not started:
 			PluginSelfDiagnosticStore.record_incident(
 				"error",
@@ -69,29 +79,36 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 				reason,
 				SERVER_SCRIPT_PATH,
 				"",
-				str(operation.get("operation_id", "")),
+				operation_id,
 				true,
 				"Inspect the server listen error and port configuration.",
 				{"port": int(runtime_settings.get("port", ServerRuntimeSettingsProjectionService.DEFAULT_PORT))}
 			)
 		var transport_mode := str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
 		if transport_mode in ["stdio", "both"]:
-			_stdio_server = _node_lifecycle.ensure_stdio_server_node(_plugin, _stdio_server, _server, runtime_settings)
+			phase_started = PluginSelfDiagnosticStore.begin_phase()
+			_stdio_server = _node_lifecycle.ensure_stdio_server_node(_plugin, _stdio_server, _server, runtime_settings, operation_id)
+			PluginSelfDiagnosticStore.record_operation_phase(operation_id, "stdio_server.ensure", phase_started, {"transport_mode": transport_mode})
 		_finish_operation(operation, started, "server_runtime_controller", reason)
 		return started
 	_finish_operation(operation, false, "server_runtime_controller", reason)
 	return false
 
 
-func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String, track_operation: bool) -> bool:
-	var operation := PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason}) if track_operation else {}
+func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String, track_operation: bool, operation: Dictionary = {}) -> bool:
+	if track_operation and operation.is_empty():
+		operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
+	var operation_id := str(operation.get("operation_id", ""))
 	var effective_reason := "plugin_lifecycle_reload" if reason == "auto_start" else reason
 	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "auto_start"
 	if force_reload_server:
+		var dispose_started = PluginSelfDiagnosticStore.begin_phase()
 		stop()
 		_node_lifecycle.dispose_server_node(_server)
 		_server = null
+		PluginSelfDiagnosticStore.record_operation_phase(operation_id, "server_node.dispose_existing", dispose_started, {"reason": reason})
 
+	var ensure_started = PluginSelfDiagnosticStore.begin_phase()
 	_server = _node_lifecycle.ensure_server_node(
 		_plugin,
 		_server,
@@ -99,8 +116,10 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 		force_reload_server,
 		Callable(self, "_on_server_started"),
 		Callable(self, "_on_server_stopped"),
-		Callable(self, "_on_request_received")
+		Callable(self, "_on_request_received"),
+		operation_id
 	)
+	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "server_node.ensure", ensure_started, {"force_reload": force_reload_server})
 	if _server == null:
 		PluginSelfDiagnosticStore.record_incident(
 			"error",
@@ -121,25 +140,31 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 
 	if _has_server_method("reinitialize"):
 		var disabled_tools: Array = runtime_settings.get("disabled_tools", [])
+		var reinitialize_started = PluginSelfDiagnosticStore.begin_phase()
 		_server.reinitialize(
 			int(runtime_settings.get("port", ServerRuntimeSettingsProjectionService.DEFAULT_PORT)),
 			str(runtime_settings.get("host", ServerRuntimeSettingsProjectionService.DEFAULT_HOST)),
 			bool(runtime_settings.get("debug_mode", true)),
 			disabled_tools,
-			effective_reason
+			effective_reason,
+			operation_id
 		)
+		PluginSelfDiagnosticStore.record_operation_phase(operation_id, "http_server.reinitialize", reinitialize_started, {"reason": effective_reason})
 	else:
+		var legacy_started = PluginSelfDiagnosticStore.begin_phase()
 		if _has_server_method("stop"):
 			_server.stop()
 		if _has_server_method("initialize"):
 			_server.initialize(
 				int(runtime_settings.get("port", ServerRuntimeSettingsProjectionService.DEFAULT_PORT)),
 				str(runtime_settings.get("host", ServerRuntimeSettingsProjectionService.DEFAULT_HOST)),
-				bool(runtime_settings.get("debug_mode", true))
+				bool(runtime_settings.get("debug_mode", true)),
+				operation_id
 			)
 		if _has_server_method("set_disabled_tools"):
 			var disabled_tools: Array = runtime_settings.get("disabled_tools", [])
 			_server.set_disabled_tools(disabled_tools)
+		PluginSelfDiagnosticStore.record_operation_phase(operation_id, "http_server.legacy_initialize", legacy_started, {"reason": effective_reason})
 
 	if track_operation:
 		_finish_operation(operation, true, "server_runtime_controller", effective_reason)

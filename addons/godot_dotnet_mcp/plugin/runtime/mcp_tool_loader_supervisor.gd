@@ -129,6 +129,8 @@ func dispose() -> void:
 func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Dictionary:
 	_replace_tool_loader()
 	var summary = _tool_loader.initialize(get_disabled_tools(), force_reload_scripts)
+	if _tool_loader != null and _tool_loader.has_method("get_performance_summary"):
+		summary["performance"] = _tool_loader.get_performance_summary()
 	var category_count = int(summary.get("category_count", 0))
 	var tool_count = int(summary.get("tool_count", 0))
 	_log_message("Tool loader summary after %s: %d tools / %d categories" % [reason, tool_count, category_count], "debug")

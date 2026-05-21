@@ -52,7 +52,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_tool_domain_load_failed": "工具域加载失败",
 	"self_diag_code_tool_reload_failed": "工具域重载失败",
 	"self_diag_code_instance_cleanup_incomplete": "实例清理不完整",
-	"self_diag_code_reload_duration_slow": "重载耗时过长",
+	"self_diag_code_operation_duration_slow": "操作耗时过长",
 
 	# Server tab
 	"plugin_overview_title": "插件总览",

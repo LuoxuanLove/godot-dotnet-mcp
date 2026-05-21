@@ -56,7 +56,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_tool_domain_load_failed": "Не удалось загрузить домен инструмента",
 	"self_diag_code_tool_reload_failed": "Перезагрузка инструмента не удалась",
 	"self_diag_code_instance_cleanup_incomplete": "Очистка экземпляра не завершена",
-	"self_diag_code_reload_duration_slow": "Перезагрузка занимает слишком много времени",
+	"self_diag_code_operation_duration_slow": "Операция выполняется слишком долго",
 	"server_status": "Статус сервера",
 	"server_state_label": "Состояние:",
 	"endpoint": "Конечная точка:",

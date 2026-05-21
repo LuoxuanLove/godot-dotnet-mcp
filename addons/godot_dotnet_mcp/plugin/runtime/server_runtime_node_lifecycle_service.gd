@@ -14,10 +14,13 @@ func ensure_server_node(
 	force_reload: bool,
 	on_server_started: Callable,
 	on_server_stopped: Callable,
-	on_request_received: Callable
+	on_request_received: Callable,
+	diagnostic_operation_id: String = ""
 ) -> Node:
 	if not force_reload and existing_server != null and is_instance_valid(existing_server):
+		var reconnect_started = PluginSelfDiagnosticStore.begin_phase()
 		_connect_server_signals(existing_server, on_server_started, on_server_stopped, on_request_received)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.reconnect_signals", reconnect_started)
 		return existing_server
 
 	if plugin_root == null:
@@ -29,11 +32,15 @@ func ensure_server_node(
 		)
 		return null
 
+	var load_started = PluginSelfDiagnosticStore.begin_phase()
 	var script = _load_server_script(force_reload)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.load_script", load_started, {"force_reload": force_reload})
 	if script == null:
 		return null
 
+	var instantiate_started = PluginSelfDiagnosticStore.begin_phase()
 	var server = script.new()
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.instantiate", instantiate_started)
 	if server == null:
 		_record_server_incident(
 			"server_error",
@@ -44,19 +51,28 @@ func ensure_server_node(
 		return null
 
 	server.name = "MCPHttpServer"
+	var add_child_started = PluginSelfDiagnosticStore.begin_phase()
 	plugin_root.add_child(server)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.add_child", add_child_started)
 
 	if server.has_method("initialize"):
+		var initialize_started = PluginSelfDiagnosticStore.begin_phase()
 		server.initialize(
 			int(settings.get("port", 3000)),
 			str(settings.get("host", "127.0.0.1")),
-			_as_bool(settings.get("debug_mode", true))
+			_as_bool(settings.get("debug_mode", true)),
+			diagnostic_operation_id
 		)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.initialize", initialize_started)
 
 	if server.has_method("set_disabled_tools"):
+		var disabled_tools_started = PluginSelfDiagnosticStore.begin_phase()
 		server.set_disabled_tools(settings.get("disabled_tools", []))
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.set_disabled_tools", disabled_tools_started)
 
+	var signals_started = PluginSelfDiagnosticStore.begin_phase()
 	_connect_server_signals(server, on_server_started, on_server_stopped, on_request_received)
+	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.connect_signals", signals_started)
 	return server
 
 
@@ -64,30 +80,42 @@ func dispose_server_node(server: Node) -> void:
 	_dispose_node(server)
 
 
-func ensure_stdio_server_node(plugin_root: EditorPlugin, existing_stdio_server: Node, server: Node, settings: Dictionary) -> Node:
+func ensure_stdio_server_node(plugin_root: EditorPlugin, existing_stdio_server: Node, server: Node, settings: Dictionary, diagnostic_operation_id: String = "") -> Node:
 	if plugin_root == null:
 		return existing_stdio_server
 
 	var stdio_server = existing_stdio_server
 	if stdio_server == null or not is_instance_valid(stdio_server):
+		var stdio_load_started = PluginSelfDiagnosticStore.begin_phase()
 		var script = ResourceLoader.load(STDIO_SERVER_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.load_script", stdio_load_started)
 		if script == null or not (script is Script):
 			return null
 		if not (script as Script).can_instantiate():
 			return null
+		var stdio_instantiate_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server = (script as Script).new()
+		_record_phase(diagnostic_operation_id, "stdio_server.instantiate", stdio_instantiate_started, {"success": stdio_server != null})
 		if stdio_server == null:
 			return null
 		stdio_server.name = "MCPStdioServer"
+		var stdio_add_child_started = PluginSelfDiagnosticStore.begin_phase()
 		plugin_root.add_child(stdio_server)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.add_child", stdio_add_child_started)
 
 	if server != null and is_instance_valid(server) and server.has_method("get_tool_loader"):
+		var stdio_initialize_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server.initialize(server.get_tool_loader(), _as_bool(settings.get("debug_mode", false)))
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.initialize", stdio_initialize_started)
 
 	if stdio_server.has_method("set_disabled_tools"):
+		var stdio_disabled_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server.set_disabled_tools(settings.get("disabled_tools", []))
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.set_disabled_tools", stdio_disabled_started)
 	if stdio_server.has_method("start"):
+		var stdio_start_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server.start()
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.start", stdio_start_started)
 	return stdio_server
 
 
@@ -144,6 +172,10 @@ func _load_server_script(force_reload: bool) -> Script:
 		)
 		return null
 	return script as Script
+
+
+func _record_phase(operation_id: String, phase_name: String, started_ticks_usec: int, context: Dictionary = {}) -> void:
+	PluginSelfDiagnosticStore.record_operation_phase(operation_id, phase_name, started_ticks_usec, context)
 
 
 func _record_server_incident(incident_type: String, incident_code: String, summary: String, guidance: String) -> void:

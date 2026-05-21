@@ -50,7 +50,7 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_tool_domain_load_failed": "ツールドメインのロードに失敗しました",
 	"self_diag_code_tool_reload_failed": "ツールのリロードに失敗しました",
 	"self_diag_code_instance_cleanup_incomplete": "インスタンスのクリーンアップが不完全です",
-	"self_diag_code_reload_duration_slow": "リロード時間が遅い",
+	"self_diag_code_operation_duration_slow": "操作時間が長すぎます",
 	"plugin_overview_title": "プラグイン サービス概要",
 	"plugin_overview_health_label": "状態:",
 	"plugin_overview_service_label": "サービス:",
