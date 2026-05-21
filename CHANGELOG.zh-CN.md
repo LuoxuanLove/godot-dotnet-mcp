@@ -30,7 +30,9 @@
 
 ### Documentation
 
+- 新增 `v1.0.0-pre3` 手写发布说明源文件，用于生成两层结构的 GitHub Release 正文。
 - 补充 Tools 页弹窗坐标边界、编辑器控制职责、运行时前台限制、无焦点能力字段和运行日志 marker 校验说明。
+- 补充发布说明源文件、草稿预览和正式发布渲染流程文档。
 - 更新 CI 与测试文档，覆盖 harness 耗时汇总、失败诊断 artifact、缓存行为、托管 .NET SDK 选择、PR 验证触发和 relay 创建 PR 的 policy 路径。
 - 新增并完善 PR、Issue、发布和 Agent 流程文档，使其匹配短分支贡献流程。
 - 将 PR 模板简化为 Summary / Changes / Screenshots / Testing / Related Issues，同时把详细就绪规则保留在流程文档中。
@@ -48,6 +50,7 @@
 - 为 actions-bot relay 生成的 PR 正文新增 base/head SHA、changed paths、diffstat、触发者、run URL 和验证 workflow 链接元数据。
 - 新增 `actions-bot-relay` workflow，使 `github-actions[bot]` 可提交基于 patch 的短分支 PR。
 - 将 PR 目标分支策略和快速 .NET build 检查从重型 Godot harness 中拆出，同时保留 `validate-plugin-harness` check 名称。
+- 新增发布说明渲染脚本，使 `next` 草稿发布和正式 tag 发布使用同一套“手写摘要 + 自动明细”正文。
 - 更新发布自动化：执行验证并创建 GitHub Release，不再产出 zip 包资产。
 
 ## 1.0.0-pre2 - 2026-05-06

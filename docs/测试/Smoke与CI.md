@@ -63,8 +63,8 @@ tests/
 3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
 5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
-6. `publish-plugin`: tag 发布前执行版本一致性 preflight，并创建不含包资产的 GitHub Release
-7. `draft-release-notes`: `dev` 更新后创建或刷新 `next` draft release，作为下一版说明草稿
+6. `publish-plugin`: tag 发布前执行版本一致性和发布说明源文件 preflight，并用两层发布说明正文创建 GitHub Release
+7. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
 
 `validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查和轻量 PR standards，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。普通同仓库短分支 PR 依赖 `pull_request` 入口验证；`push` 只保留 `dev`，避免同一提交同时触发短分支 `push` 与 `pull_request.synchronize` 重复运行。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml` 和 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
 
@@ -121,6 +121,7 @@ Review:
 - refactor guardrails
 - plugin headless harness required subset
 - tag 发布前的 `plugin.cfg`、tag 和中英文 changelog 版本一致性检查
+- tag 发布前的 `release-notes-v*.md` 存在性和版本一致性检查
 - 远程 `dev` 合并前应要求 PR、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证；当前 ruleset 不要求 approving review
 
 ### 仍是软门禁或环境依赖的部分
@@ -128,7 +129,7 @@ Review:
 - `tests/godot_plugin_harness` 支持 `--allow-skip-missing-godot`，但 CI 入口 `scripts/test_plugin_side_roslyn.ps1` 要求真实 Godot 可执行文件；其余可发现 case 不自动进入 CI 硬门禁
 - `actions-bot-relay` 依赖仓库 Settings 允许 GitHub Actions 创建 pull request；如果禁用该权限，workflow 会在创建 PR 时失败
 - `actions-bot-relay` 只应用维护者提供的 patch，不负责生成或理解需求；patch 内容仍需由维护者审查。relay 追加的元数据只用于辅助审查，不替代验证结果或人工判断
-- `next` draft release 只辅助维护发布说明，不代表正式发布，也不上传包资产
+- `next` draft release 只辅助维护发布说明，不代表正式发布；它应预览手写摘要、changelog 明细和 commit summary 的最终正文结构
 - Agent 可创建、提交和按授权推送短分支，但合并远程 `dev` 只能由作者在 GitHub PR 页面手动确认并执行；Agent 不得本地合并后推送 `dev` 或绕过 required checks
 - 每个 PR 应只包含对应短分支目标范围内的修改；若夹带其他修复或历史未合并提交，应拆成独立 PR 或从最新 `origin/dev` 重建干净分支
 
