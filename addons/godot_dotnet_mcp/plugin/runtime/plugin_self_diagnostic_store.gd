@@ -362,6 +362,7 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 		var last_operation_phase = _format_phase_summary(last_operation_dict.get("slowest_phase", {}))
 		if not last_operation_phase.is_empty():
 			lines.append("Slowest operation phase: %s" % last_operation_phase)
+		_append_phase_timing_lines(lines, "Operation phase timings", _resolve_phase_timings(last_operation_dict))
 	var latest_incident = snapshot.get("latest_incident", {})
 	if latest_incident is Dictionary and not (latest_incident as Dictionary).is_empty():
 		var latest_incident_dict := latest_incident as Dictionary
@@ -375,6 +376,7 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 			var latest_phase = _format_phase_summary((latest_context as Dictionary).get("slowest_phase", {}))
 			if not latest_phase.is_empty():
 				lines.append("Slowest incident phase: %s" % latest_phase)
+			_append_phase_timing_lines(lines, "Incident phase timings", _resolve_phase_timings(latest_context as Dictionary))
 
 	for incident in snapshot.get("recent_incidents", []):
 		if not (incident is Dictionary):
@@ -385,6 +387,16 @@ static func build_copy_text(snapshot: Dictionary) -> String:
 			str(incident.get("message", ""))
 		])
 	return "\n".join(lines)
+
+
+static func _append_phase_timing_lines(lines: Array[String], title: String, phase_timings: Array) -> void:
+	if phase_timings.is_empty():
+		return
+	lines.append("%s:" % title)
+	for timing in phase_timings:
+		var summary = _format_phase_summary(timing)
+		if not summary.is_empty():
+			lines.append("- %s" % summary)
 
 
 static func _resolve_phase_timings(operation: Dictionary) -> Array:

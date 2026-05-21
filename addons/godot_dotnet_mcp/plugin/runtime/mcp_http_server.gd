@@ -26,7 +26,6 @@ var _default_tool_access_provider = MCPDefaultToolAccessProviderScript.new()
 
 func _ready() -> void:
 	set_process(true)
-	_ensure_initialized()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:

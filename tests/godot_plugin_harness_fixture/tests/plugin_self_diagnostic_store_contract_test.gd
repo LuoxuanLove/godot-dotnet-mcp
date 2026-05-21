@@ -43,6 +43,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Self diagnostics copy text should include the slowest operation phase.")
 	if copy_text.find("Slowest incident phase: tool_loader.preload") == -1:
 		return _failure("Self diagnostics copy text should include the slowest incident phase.")
+	if copy_text.find("Operation phase timings:") == -1 or copy_text.find("- settings_projection (12.5ms)") == -1:
+		return _failure("Self diagnostics copy text should include operation phase timing details.")
+	if copy_text.find("Incident phase timings:") == -1 or copy_text.find("- http_server.tcp_listen (3.0ms)") == -1:
+		return _failure("Self diagnostics copy text should include incident phase timing details.")
 
 	PluginSelfDiagnosticStore.clear()
 	return {
