@@ -125,9 +125,9 @@ function Get-CommitSummary {
   }
 
   if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
-    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %s (%h)' "$previousTag..HEAD" 2>$null)
+    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' "$previousTag..HEAD" 2>$null)
   } else {
-    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %s (%h)' -n $CommitLimit 2>$null)
+    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' -n $CommitLimit 2>$null)
   }
 
   $commits = @($commits | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -148,17 +148,11 @@ if ($manualNotes -notmatch $manualVersionPattern) {
   throw "Manual release notes $ManualNotesPath must mention version $Version"
 }
 
-$changelogSection = Get-ChangelogSection -Path $ChangelogPath -Version $Version -PreferUnreleased:$PreferUnreleased
+$null = Get-ChangelogSection -Path $ChangelogPath -Version $Version -PreferUnreleased:$PreferUnreleased
 $commitSummary = Get-CommitSummary -TagName $TagName -CommitLimit $CommitLimit
 
 $bodyParts = @(
   $manualNotes,
-  "",
-  "---",
-  "",
-  "## 详细变更",
-  "",
-  $changelogSection,
   "",
   "## Commit Summary",
   "",
