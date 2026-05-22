@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
-Target version: `1.0.0-pre3`.
+## 1.0.0 - 2026-05-23
 
 ### Added
 
@@ -31,15 +31,15 @@ Target version: `1.0.0-pre3`.
 ### Documentation
 
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
-- Added the `v1.0.0-pre3` manual release notes source used by the two-layer GitHub Release body.
-- Removed the obsolete `v1.0.0-pre2` manual release notes source so the release branch only carries the active pre3 source.
-- Updated README pre-release badges to resolve the latest `*-pre*` GitHub release dynamically and link to the prerelease-filtered releases view.
+- Added the `v1.0.0` manual release notes source used by the two-layer GitHub Release body.
+- Replaced the prerelease manual release notes source so the release branch carries the active `v1.0.0` source.
+- Updated README release badges so stable and prerelease entry points are clearer from the product pages.
 - Documented Tools-page popup coordinate boundaries, editor-control responsibilities, runtime foreground limitations, no-focus capability fields, and run-log marker validation.
 - Documented the release notes source file, draft preview, and formal release rendering flow.
 - Updated CI and testing docs for harness timing summaries, failure diagnostic artifacts, cache behavior, hosted .NET SDK selection, PR validation triggers, and relay-created PR policy behavior.
 - Added and refined PR, issue, release, and agent-process documentation for the short-branch contribution flow.
 - Simplified the PR template to Summary / Changes / Screenshots / Testing / Related Issues while keeping detailed readiness rules in process documentation.
-- Cleaned up unreleased changelog entries so the pre3 section reflects current development history without stale or misplaced records.
+- Cleaned up release changelog entries so the `v1.0.0` section reflects current development history without stale or misplaced records.
 
 ### Internal
 
