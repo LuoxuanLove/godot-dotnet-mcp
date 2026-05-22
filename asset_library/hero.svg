@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">GODOT .NET MCP</title>
+  <desc id="desc">Editor-native MCP bridge for Godot .NET</desc>
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#021418"/>
+      <stop offset="0.5" stop-color="#052a2f"/>
+      <stop offset="1" stop-color="#01090c"/>
+    </linearGradient>
+    <linearGradient id="beamGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2df0c8" stop-opacity="0"/>
+      <stop offset="0.2" stop-color="#2df0c8" stop-opacity="0.22"/>
+      <stop offset="0.54" stop-color="#7ff7ff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#041923" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="narrowBeamGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ff7ff" stop-opacity="0"/>
+      <stop offset="0.36" stop-color="#7ff7ff" stop-opacity="0.18"/>
+      <stop offset="0.72" stop-color="#2df0c8" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#01090c" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="centerGlow" cx="50%" cy="49%" r="52%">
+      <stop offset="0" stop-color="#2df0c8" stop-opacity="0.2"/>
+      <stop offset="0.46" stop-color="#0b6470" stop-opacity="0.11"/>
+      <stop offset="1" stop-color="#01090c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="topGlow" cx="50%" cy="0%" r="72%">
+      <stop offset="0" stop-color="#7ff7ff" stop-opacity="0.16"/>
+      <stop offset="0.52" stop-color="#0b4852" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#01090c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="titleShadow" x="-16%" y="-22%" width="132%" height="144%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#00080a" flood-opacity="0.72"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#b8fbff" flood-opacity="0.22"/>
+    </filter>
+    <filter id="softBlur" x="-12%" y="-12%" width="124%" height="124%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bgGradient)"/>
+  <rect width="1280" height="640" fill="url(#topGlow)"/>
+  <rect width="1280" height="640" fill="url(#centerGlow)"/>
+
+  <g opacity="0.76">
+    <rect x="0" y="0" width="1280" height="640" fill="#01090c" opacity="0.18"/>
+    <rect x="120" y="0" width="132" height="640" fill="url(#beamGradient)" opacity="0.6"/>
+    <rect x="318" y="0" width="62" height="640" fill="url(#narrowBeamGradient)" opacity="0.46"/>
+    <rect x="474" y="0" width="98" height="640" fill="url(#beamGradient)" opacity="0.34"/>
+    <rect x="706" y="0" width="74" height="640" fill="url(#narrowBeamGradient)" opacity="0.5"/>
+    <rect x="922" y="0" width="128" height="640" fill="url(#beamGradient)" opacity="0.52"/>
+    <rect x="1118" y="0" width="46" height="640" fill="url(#narrowBeamGradient)" opacity="0.34"/>
+  </g>
+
+  <g filter="url(#softBlur)" opacity="0.52">
+    <rect x="440" y="118" width="400" height="360" fill="#2df0c8" opacity="0.08"/>
+    <rect x="548" y="0" width="184" height="640" fill="#7ff7ff" opacity="0.05"/>
+  </g>
+
+  <rect x="0" y="0" width="1280" height="640" fill="#00080a" opacity="0.22"/>
+  <rect x="0" y="0" width="1280" height="110" fill="#00080a" opacity="0.26"/>
+  <rect x="0" y="530" width="1280" height="110" fill="#00080a" opacity="0.34"/>
+
+  <g text-anchor="middle" filter="url(#titleShadow)">
+    <text x="640" y="324" fill="#f2ffff" font-family="Bahnschrift Condensed, Bahnschrift, 'Aptos Display', 'Segoe UI', sans-serif" font-size="92" font-weight="800" letter-spacing="5">GODOT .NET MCP</text>
+  </g>
+
+  <text x="640" y="410" text-anchor="middle" fill="#62e7df" font-family="Bahnschrift, 'Aptos Display', 'Segoe UI', sans-serif" font-size="32" font-weight="500" letter-spacing="1.2">Editor-native MCP bridge for Godot .NET</text>
+</svg>

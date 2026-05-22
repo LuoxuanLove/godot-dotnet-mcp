@@ -30,6 +30,7 @@
 
 ### Documentation
 
+- 更新根 README 产品页呈现，加入新的本地宣传图，同步中英文文案，并精简发布徽章。
 - 新增 `v1.0.0-pre3` 手写发布说明源文件，用于生成两层结构的 GitHub Release 正文。
 - 移除过时的 `v1.0.0-pre2` 手写发布说明源文件，使发布分支只保留当前 pre3 源文件。
 - 更新 README 预发布徽章，改为动态解析最新 `*-pre*` GitHub Release，并链接到预发布过滤后的 Releases 页面。
