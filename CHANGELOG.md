@@ -30,6 +30,7 @@ Target version: `1.0.0-pre3`.
 
 ### Documentation
 
+- Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
 - Added the `v1.0.0-pre3` manual release notes source used by the two-layer GitHub Release body.
 - Removed the obsolete `v1.0.0-pre2` manual release notes source so the release branch only carries the active pre3 source.
 - Updated README pre-release badges to resolve the latest `*-pre*` GitHub release dynamically and link to the prerelease-filtered releases view.
