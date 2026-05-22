@@ -50,7 +50,7 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 
 ### From Source
 
-Download the plugin source from GitHub Releases, then copy the following directory into your Godot project:
+Copy the plugin source directory into your Godot project:
 
 ```text
 addons/godot_dotnet_mcp
