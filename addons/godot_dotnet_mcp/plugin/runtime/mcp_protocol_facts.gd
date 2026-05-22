@@ -91,7 +91,7 @@ static func _default_facts() -> Dictionary:
 		"protocol_version": "2025-06-18",
 		"tool_schema_version": "2026-05-03.9",
 		"server_name": "godot-dotnet-mcp",
-		"server_version": "1.0.0-pre3",
+		"server_version": "1.0.0",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch"
 		}

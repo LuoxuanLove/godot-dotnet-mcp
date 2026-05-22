@@ -50,7 +50,7 @@ Godot 项目不只是一堆 `.tscn`、`.tres` 和脚本文件。
 
 ### 从源码复制
 
-在 GitHub Releases 页面下载插件源码，并将以下目录复制到 Godot 项目中：
+将插件源码目录复制到 Godot 项目中：
 
 ```text
 addons/godot_dotnet_mcp
