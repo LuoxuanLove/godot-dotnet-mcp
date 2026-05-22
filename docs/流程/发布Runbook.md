@@ -52,7 +52,7 @@
 
 ## 4. 远程发布流程
 
-1. 从最新 `origin/dev` 创建发布短分支，例如 `release/v1.0.0-pre3`。
+1. 从最新 `origin/dev` 创建发布短分支，例如 `release/v1.0.0`。
 2. 完成版本、变更记录、`release-notes-v*.md` 和公开文档收口。
 3. 推送短分支并创建指向 `dev` 的 PR。
 4. 等待 `validate-plugin-harness` 和相关 workflow 检查通过。
