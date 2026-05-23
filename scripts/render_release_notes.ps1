@@ -105,34 +105,133 @@ function Get-ChangelogSection {
   return $selectedText
 }
 
+function ConvertTo-SemVerInfo {
+  param([Parameter(Mandatory = $true)][string]$TagOrVersion)
+
+  $semverPattern = '^(?:plugin-)?v?(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<pre>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$'
+  if ($TagOrVersion -notmatch $semverPattern) {
+    return $null
+  }
+
+  return [pscustomobject]@{
+    Source = $TagOrVersion
+    Major = [int]$Matches['major']
+    Minor = [int]$Matches['minor']
+    Patch = [int]$Matches['patch']
+    Prerelease = $Matches['pre']
+  }
+}
+
+function Compare-Prerelease {
+  param(
+    [AllowNull()][string]$Left,
+    [AllowNull()][string]$Right
+  )
+
+  $leftEmpty = [string]::IsNullOrWhiteSpace($Left)
+  $rightEmpty = [string]::IsNullOrWhiteSpace($Right)
+  if ($leftEmpty -and $rightEmpty) { return 0 }
+  if ($leftEmpty) { return 1 }
+  if ($rightEmpty) { return -1 }
+
+  $leftParts = @($Left -split '\.')
+  $rightParts = @($Right -split '\.')
+  $count = [Math]::Max($leftParts.Count, $rightParts.Count)
+  for ($i = 0; $i -lt $count; $i++) {
+    if ($i -ge $leftParts.Count) { return -1 }
+    if ($i -ge $rightParts.Count) { return 1 }
+
+    $leftPart = $leftParts[$i]
+    $rightPart = $rightParts[$i]
+    $leftIsNumber = $leftPart -match '^(0|[1-9]\d*)$'
+    $rightIsNumber = $rightPart -match '^(0|[1-9]\d*)$'
+
+    if ($leftIsNumber -and $rightIsNumber) {
+      $leftNumber = [int]$leftPart
+      $rightNumber = [int]$rightPart
+      if ($leftNumber -lt $rightNumber) { return -1 }
+      if ($leftNumber -gt $rightNumber) { return 1 }
+      continue
+    }
+
+    if ($leftIsNumber -and -not $rightIsNumber) { return -1 }
+    if (-not $leftIsNumber -and $rightIsNumber) { return 1 }
+
+    $textCompare = [string]::CompareOrdinal($leftPart, $rightPart)
+    if ($textCompare -lt 0) { return -1 }
+    if ($textCompare -gt 0) { return 1 }
+  }
+
+  return 0
+}
+
+function Compare-SemVerInfo {
+  param(
+    [Parameter(Mandatory = $true)]$Left,
+    [Parameter(Mandatory = $true)]$Right
+  )
+
+  foreach ($field in @('Major', 'Minor', 'Patch')) {
+    if ($Left.$field -lt $Right.$field) { return -1 }
+    if ($Left.$field -gt $Right.$field) { return 1 }
+  }
+
+  return Compare-Prerelease -Left $Left.Prerelease -Right $Right.Prerelease
+}
+
+function Get-PreviousReleaseTag {
+  param([Parameter(Mandatory = $true)][string]$Version)
+
+  $target = ConvertTo-SemVerInfo -TagOrVersion $Version
+  if ($null -eq $target) {
+    throw "Cannot parse release version: $Version"
+  }
+
+  $tags = @(git tag --list 2>$null | Where-Object { $_ -and $_ -ne 'next' })
+  if ($tags.Count -eq 0) {
+    throw 'Cannot build commit summary because no local release tags are available. Fetch tags before rendering release notes.'
+  }
+
+  $previous = $null
+  foreach ($tag in $tags) {
+    $versionInfo = ConvertTo-SemVerInfo -TagOrVersion $tag
+    if ($null -eq $versionInfo) {
+      continue
+    }
+    if ((Compare-SemVerInfo -Left $versionInfo -Right $target) -ge 0) {
+      continue
+    }
+    if ($null -eq $previous -or (Compare-SemVerInfo -Left $versionInfo -Right $previous) -gt 0) {
+      $previous = $versionInfo
+    }
+  }
+
+  if ($null -eq $previous) {
+    throw "Cannot build commit summary because no previous release tag was found before $Version."
+  }
+
+  return $previous.Source
+}
+
 function Get-CommitSummary {
   param(
     [string]$TagName,
+    [string]$Version,
     [int]$CommitLimit
   )
 
   $gitCommand = Get-Command git -ErrorAction SilentlyContinue
   if (-not $gitCommand) {
-    return @("_Commit summary unavailable: git is not installed._")
+    return @('_Commit summary unavailable: git is not installed._')
   }
 
-  $previousTag = ""
-  if (-not [string]::IsNullOrWhiteSpace($TagName)) {
-    $tags = @(git tag --sort=-creatordate 2>$null | Where-Object { $_ -and $_ -ne $TagName -and $_ -ne "next" })
-    if ($tags.Count -gt 0) {
-      $previousTag = $tags[0]
-    }
-  }
+  $previousTag = Get-PreviousReleaseTag -Version $Version
+  Write-Host "Using commit summary range $previousTag..HEAD"
 
-  if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
-    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' "$previousTag..HEAD" 2>$null)
-  } else {
-    $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' -n $CommitLimit 2>$null)
-  }
-
+  $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' "$previousTag..HEAD" 2>$null)
   $commits = @($commits | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
   if ($commits.Count -eq 0) {
-    return @("_No notable commits found._")
+    return @('_No notable commits found._')
   }
 
   return $commits
@@ -149,7 +248,7 @@ if ($manualNotes -notmatch $manualVersionPattern) {
 }
 
 $null = Get-ChangelogSection -Path $ChangelogPath -Version $Version -PreferUnreleased:$PreferUnreleased
-$commitSummary = Get-CommitSummary -TagName $TagName -CommitLimit $CommitLimit
+$commitSummary = Get-CommitSummary -TagName $TagName -Version $Version -CommitLimit $CommitLimit
 
 $bodyParts = @(
   $manualNotes,
