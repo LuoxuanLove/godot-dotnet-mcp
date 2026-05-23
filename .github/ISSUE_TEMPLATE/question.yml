@@ -10,7 +10,7 @@ body:
       options:
         - label: I checked the README and docs before asking
           required: true
-        - label: This question is about Godot .NET MCP, not Mechoes or OrbitPilot
+        - label: This question is about Godot .NET MCP and its plugin workflows
           required: true
         - label: I removed secrets, tokens, private paths, and unrelated project data from logs
           required: true
