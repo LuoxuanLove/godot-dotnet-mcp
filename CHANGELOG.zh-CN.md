@@ -4,12 +4,11 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## Unreleased
-
-## 1.0.0 - 2026-05-23
+## [unreleased] v1.0.0
 
 ### Fixed
 
+- 修复配置页客户端操作按钮在首次渲染时会因布局宽度尚未就绪而变成单列整行、直到切换客户端后才恢复的问题。
 - 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
 - 修复编辑器 Dock 页签与标题文案：页签显示为 `MCP`，Dock 标题与弹窗标题显示为 `Godot .NET MCP`。
 

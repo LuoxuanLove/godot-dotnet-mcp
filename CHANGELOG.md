@@ -4,12 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
-## 1.0.0 - 2026-05-23
+## [unreleased] v1.0.0
 
 ### Fixed
 
+- Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
 - Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
 - Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 
