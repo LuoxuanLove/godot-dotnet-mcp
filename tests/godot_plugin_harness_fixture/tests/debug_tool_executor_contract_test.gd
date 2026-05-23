@@ -1,6 +1,12 @@
 extends RefCounted
 
 const DebugExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/debug/executor.gd")
+const TEMP_ROOT := "res://tests_tmp/godot_dotnet_mcp_debug_contracts"
+const TEMP_USER_DOTNET_BRIDGE_CSPROJ := "res://tests_tmp/godot_dotnet_mcp_debug_contracts/UserDotnetBridge/DotnetBridge.csproj"
+const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/dotnet_bridge"
+const PLUGIN_BRIDGE_CSPROJ := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+
+var _created_plugin_bridge_fixture := false
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -8,6 +14,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("debug_tools.gd should be removed once the split executor becomes the only stable entry.")
 
 	var executor = DebugExecutorScript.new()
+	_prepare_temp_root()
+	var user_bridge_write_result := _write_sample_csproj(TEMP_USER_DOTNET_BRIDGE_CSPROJ, "UserDotnetBridge")
+	if not bool(user_bridge_write_result.get("success", false)):
+		return user_bridge_write_result
+	var plugin_bridge_result := _ensure_plugin_bridge_fixture()
+	if not bool(plugin_bridge_result.get("success", false)):
+		return plugin_bridge_result
+
+	if not bool(executor.call("_is_plugin_bridge_csproj", PLUGIN_BRIDGE_CSPROJ)):
+		return _failure("Debug dotnet project discovery should identify the plugin-owned DotnetBridge.csproj.")
+	if bool(executor.call("_is_plugin_bridge_csproj", TEMP_USER_DOTNET_BRIDGE_CSPROJ)):
+		return _failure("Debug dotnet project discovery should not reject user projects named DotnetBridge.csproj.")
+	var plugin_bridge_projects: Array = executor.call("_find_csproj_files", PLUGIN_BRIDGE_DIR)
+	if not plugin_bridge_projects.is_empty():
+		return _failure("Debug dotnet automatic project discovery should skip plugin-owned DotnetBridge.csproj.")
+	if str(executor.call("_resolve_csproj_path", PLUGIN_BRIDGE_CSPROJ)) != PLUGIN_BRIDGE_CSPROJ:
+		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
+
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 8:
 		return _failure("Debug executor should expose 8 tool definitions after the split.")
@@ -76,6 +100,72 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"fps": fps_result.get("data", {}).get("fps", 0)
 		}
 	}
+
+
+func cleanup_case(_tree: SceneTree) -> void:
+	_remove_tree(TEMP_ROOT)
+	if _created_plugin_bridge_fixture:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PLUGIN_BRIDGE_CSPROJ))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PLUGIN_BRIDGE_DIR))
+		_created_plugin_bridge_fixture = false
+
+
+func _prepare_temp_root() -> void:
+	_remove_tree(TEMP_ROOT)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))
+
+
+func _ensure_plugin_bridge_fixture() -> Dictionary:
+	if FileAccess.file_exists(PLUGIN_BRIDGE_CSPROJ):
+		return {"success": true}
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(PLUGIN_BRIDGE_DIR))
+	var write_result := _write_sample_csproj(PLUGIN_BRIDGE_CSPROJ, "DotnetBridge")
+	if bool(write_result.get("success", false)):
+		_created_plugin_bridge_fixture = true
+	return write_result
+
+
+func _write_sample_csproj(path: String, assembly_name: String) -> Dictionary:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return _failure("Failed to create temporary .csproj file for debug contract test.")
+	file.store_string("""<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>%s</AssemblyName>
+  </PropertyGroup>
+</Project>
+""" % assembly_name)
+	file.close()
+	return {"success": true}
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	_remove_tree_absolute(absolute_path)
+
+
+func _remove_tree_absolute(absolute_path: String) -> void:
+	var dir = DirAccess.open(absolute_path)
+	if dir == null:
+		DirAccess.remove_absolute(absolute_path)
+		return
+
+	dir.list_dir_begin()
+	var entry = dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var child_path := absolute_path.path_join(entry)
+			if dir.current_is_dir():
+				_remove_tree_absolute(child_path)
+			else:
+				DirAccess.remove_absolute(child_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
 
 
 func _failure(message: String) -> Dictionary:

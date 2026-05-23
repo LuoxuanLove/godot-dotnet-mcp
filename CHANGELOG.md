@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## 1.0.0 - 2026-05-23
 
+### Fixed
+
+- Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
+- Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
+
+### Documentation
+
+- Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
+- Updated README release badges so stable and prerelease entry points are clearer from the product pages.
+- Added the `v1.0.0` manual release notes source and synchronized the release workflow documentation with the stable release flow.
+- Cleaned up release changelog entries so the `v1.0.0` section reflects post-`v1.0.0-pre3` development without mixing prerelease records.
+
+### Internal
+
+- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
+
+## 1.0.0-pre3 - 2026-05-21
+
 ### Added
 
 - Added optional `system_project_run` runtime bridge log marker validation with success/failure marker matching, timeout handling, marker-mode auto-stop, and fake-event contract coverage.
@@ -16,7 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 - Fixed plugin self-diagnostics slow-operation reports so they identify the slowest startup/reload phase and include phase timing details in copied diagnostics.
 - Fixed Config-page client cards so the visible capability summary distinguishes full one-click config support from CLI auto-add, launch/path-only, and manual-guidance clients.
 - Fixed fast .NET build and plugin harness build failures so Godot `.godot/mono/temp` `CS2012` file-lock errors are classified as `transient_file_lock` with actionable recovery guidance.
@@ -31,16 +48,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
-- Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
-- Added the `v1.0.0` manual release notes source used by the two-layer GitHub Release body.
-- Replaced the prerelease manual release notes source so the release branch carries the active `v1.0.0` source.
-- Updated README release badges so stable and prerelease entry points are clearer from the product pages.
+- Added the `v1.0.0-pre3` manual release notes source used by the two-layer GitHub Release body.
+- Removed the obsolete `v1.0.0-pre2` manual release notes source so the release branch only carries the active pre3 source.
 - Documented Tools-page popup coordinate boundaries, editor-control responsibilities, runtime foreground limitations, no-focus capability fields, and run-log marker validation.
 - Documented the release notes source file, draft preview, and formal release rendering flow.
 - Updated CI and testing docs for harness timing summaries, failure diagnostic artifacts, cache behavior, hosted .NET SDK selection, PR validation triggers, and relay-created PR policy behavior.
 - Added and refined PR, issue, release, and agent-process documentation for the short-branch contribution flow.
 - Simplified the PR template to Summary / Changes / Screenshots / Testing / Related Issues while keeping detailed readiness rules in process documentation.
-- Cleaned up release changelog entries so the `v1.0.0` section reflects current development history without stale or misplaced records.
+- Cleaned up unreleased changelog entries so the pre3 section reflects current development history without stale or misplaced records.
 
 ### Internal
 

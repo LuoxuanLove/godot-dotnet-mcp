@@ -8,6 +8,24 @@
 
 ## 1.0.0 - 2026-05-23
 
+### Fixed
+
+- 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
+- 修复编辑器 Dock 页签与标题文案：页签显示为 `MCP`，Dock 标题与弹窗标题显示为 `Godot .NET MCP`。
+
+### Documentation
+
+- 更新根 README 产品页呈现，加入新的本地宣传图，同步中英文文案，并精简发布徽章。
+- 更新 README 发布徽章，使正式版和预发布入口在产品页中更清晰。
+- 新增 `v1.0.0` 手写发布说明源文件，并同步正式版发布流程文档。
+- 清理发布变更记录，使 `v1.0.0` 段落只反映 `v1.0.0-pre3` 之后的开发内容，不混入已发布的预发布记录。
+
+### Internal
+
+- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.0` 正式版本。
+
+## 1.0.0-pre3 - 2026-05-21
+
 ### Added
 
 - 为 `system_project_run` 新增可选 runtime bridge 日志 marker 校验，支持 success / failure marker 匹配、超时处理、marker 模式自动停止，并通过 fake runtime events 补充契约覆盖。
@@ -16,7 +34,6 @@
 
 ### Fixed
 
-- 修复编辑器 Dock 页签与标题文案：页签显示为 `MCP`，Dock 标题与弹窗标题显示为 `Godot .NET MCP`。
 - 修复插件自诊断慢操作报告：现在会标出启动 / 重载中最慢的阶段，并在复制诊断文本中包含阶段耗时明细。
 - 修复 Config 页客户端卡片能力说明：现在会明确区分完整一键配置、CLI 一键添加、仅打开 / 路径管理以及手动接入引导类客户端。
 - 修复快速 .NET build 与插件 harness 构建失败诊断：当 Godot `.godot/mono/temp` 产物触发 `CS2012` 文件锁错误时，会分类为 `transient_file_lock` 并输出可执行的恢复建议。
@@ -31,16 +48,14 @@
 
 ### Documentation
 
-- 更新根 README 产品页呈现，加入新的本地宣传图，同步中英文文案，并精简发布徽章。
-- 新增 `v1.0.0` 手写发布说明源文件，用于生成两层结构的 GitHub Release 正文。
-- 替换预发布手写发布说明源文件，使发布分支保留当前 `v1.0.0` 源文件。
-- 更新 README 发布徽章，使正式版和预发布入口在产品页中更清晰。
+- 新增 `v1.0.0-pre3` 手写发布说明源文件，用于生成两层结构的 GitHub Release 正文。
+- 移除过时的 `v1.0.0-pre2` 手写发布说明源文件，使发布分支只保留当前 pre3 源文件。
 - 补充 Tools 页弹窗坐标边界、编辑器控制职责、运行时前台限制、无焦点能力字段和运行日志 marker 校验说明。
 - 补充发布说明源文件、草稿预览和正式发布渲染流程文档。
 - 更新 CI 与测试文档，覆盖 harness 耗时汇总、失败诊断 artifact、缓存行为、托管 .NET SDK 选择、PR 验证触发和 relay 创建 PR 的 policy 路径。
 - 新增并完善 PR、Issue、发布和 Agent 流程文档，使其匹配短分支贡献流程。
 - 将 PR 模板简化为 Summary / Changes / Screenshots / Testing / Related Issues，同时把详细就绪规则保留在流程文档中。
-- 清理发布变更记录，使 `v1.0.0` 段落反映当前开发历史，并移除陈旧或错位条目。
+- 清理未发布变更记录，使 pre3 段落反映当前开发历史，并移除陈旧或错位条目。
 
 ### Internal
 
