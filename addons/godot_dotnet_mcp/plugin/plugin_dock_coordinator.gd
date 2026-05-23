@@ -5,6 +5,8 @@ class_name PluginDockCoordinator
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 const DEFAULT_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
+const DOCK_VISIBLE_NAME := "MCP"
+const DOCK_LEGACY_NAME := "MCPDock"
 
 
 func wire_dock_signals(dock: Control, bindings: Array[Dictionary], operation_id: String, incident_sink: Callable, dock_script_path: String) -> bool:
@@ -100,13 +102,11 @@ func create_plugin_dock(plugin, current_dock, incident_sink: Callable, dock_slot
 		_record_incident(incident_sink, "error", "resource_missing", "dock_scene_load_failed", "Dock scene instantiation returned null", "create_plugin_dock", dock_script_path, scene_path, {"dock_slot": dock_slot})
 		return {"success": false, "error": "Dock scene instantiation returned null", "dock": null}
 
+	dock.name = DOCK_VISIBLE_NAME
 	if plugin != null and plugin.has_method("add_control_to_dock"):
 		plugin.add_control_to_dock(dock_slot, dock)
 	else:
 		base_control.add_child(dock)
-
-	if dock.name.is_empty():
-		dock.name = "MCPDock"
 
 	return {"success": true, "dock": dock}
 
@@ -143,7 +143,7 @@ func remove_stale_plugin_docks(plugin, current_dock, incident_sink: Callable, do
 		var script = child.get_script()
 		if script != null:
 			script_path = str(script.resource_path)
-		if child.name != "MCPDock" and script_path != dock_script_path:
+		if not _is_plugin_dock_name(str(child.name)) and script_path != dock_script_path:
 			continue
 		if child.get_parent() != null:
 			if plugin != null and plugin.has_method("remove_control_from_docks"):
@@ -169,9 +169,13 @@ func count_plugin_dock_instances(plugin, dock_script_path: String) -> int:
 		var script = child.get_script()
 		if script != null:
 			script_path = str(script.resource_path)
-		if child.name == "MCPDock" or script_path == dock_script_path:
+		if _is_plugin_dock_name(str(child.name)) or script_path == dock_script_path:
 			count += 1
 	return count
+
+
+func _is_plugin_dock_name(dock_name: String) -> bool:
+	return dock_name == DOCK_VISIBLE_NAME or dock_name == DOCK_LEGACY_NAME
 
 
 func _get_base_control(plugin):
