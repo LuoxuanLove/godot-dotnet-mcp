@@ -41,12 +41,14 @@ function Get-ChangelogSection {
   $versionStart = -1
   $unreleasedStart = -1
   $escapedVersion = [regex]::Escape($Version)
-  $versionHeadingPattern = "^##\s+(?:\[$escapedVersion\]|$escapedVersion)(?:\s+-.*)?\s*$"
+  $versionTokenPattern = "(?:[vV])?$escapedVersion"
+  # Support linked Keep a Changelog headings such as "## [Unreleased] ([1.0.0])".
+  $versionHeadingPattern = "^##\s+(?:(?:\[unreleased\]\s*(?:\(\s*)?(?:\[$versionTokenPattern\]|$versionTokenPattern)(?:\s*\))?)|(?:\[$versionTokenPattern\]|$versionTokenPattern))(?:\s+-.*)?\s*$"
+  $unreleasedHeadingPattern = "^##\s+(?:\[unreleased\]|unreleased)(?:\s+.*)?\s*$"
   $targetVersionPattern = "^(?:Target version|目标版本)[：:]\s*[\x60]?$escapedVersion[\x60]?[。.]?\s*$"
-
   for ($i = 0; $i -lt $lines.Count; $i++) {
     $trimmed = $lines[$i].Trim()
-    if ($unreleasedStart -lt 0 -and $trimmed -eq "## Unreleased") {
+    if ($unreleasedStart -lt 0 -and $trimmed -match $unreleasedHeadingPattern) {
       $unreleasedStart = $i
     }
     if ($versionStart -lt 0 -and $trimmed -match $versionHeadingPattern) {

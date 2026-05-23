@@ -4,7 +4,7 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [unreleased] v1.0.0
+## [Unreleased] ([1.0.0])
 
 ### Fixed
 
@@ -27,7 +27,7 @@
 - 将公开文档、issue 模板与 harness fixture 中的仓库本地项目名称替换为插件范围表述和中性示例路径。
 - 强制 release notes commit summary 解析上一发布 tag 边界，不再退回到任意最近提交列表。
 
-## 1.0.0-pre3 - 2026-05-21
+## [1.0.0-pre3] - 2026-05-21
 
 ### Added
 
@@ -75,7 +75,7 @@
 - 新增发布说明渲染脚本，使 `next` 草稿发布和正式 tag 发布使用同一套“手写摘要 + 自动 commit summary”正文，同时校验匹配的 changelog 段落。
 - 更新发布自动化：执行验证并创建 GitHub Release，不再产出 zip 包资产。
 
-## 1.0.0-pre2 - 2026-05-06
+## [1.0.0-pre2] - 2026-05-06
 
 ### Added
 
@@ -100,7 +100,7 @@
 - 修复本地 HTTP 服务的 CORS 处理：默认不再向任意来源开放跨源访问，同时已配置的浏览器客户端仍可通过来源校验。
 - 修复资源引用审计：当 UID 目标和 fallback path 都缺失时会正确报告错误，并避免把普通 `.tscn` C# 节点脚本误判为 custom Resource 脚本。
 
-## 1.0.0-pre1 - 2026-04-28
+## [1.0.0-pre1] - 2026-04-28
 
 ### Added
 
@@ -156,7 +156,7 @@
 - 修复工具元数据、分类、清单和展示信息不一致的问题，让工具页与 MCP 工具列表保持对齐。
 - 修复多处 headless 验证和契约测试覆盖缺口，让 CI 能覆盖更多插件运行时、界面展示和工具执行器行为。
 
-## 0.5.0 - 2026-03-19
+## [0.5.0] - 2026-03-19
 
 ### Added
 
@@ -182,7 +182,7 @@
 - 修复 `soft_reload_plugin` 偶发出现的“HTTP 服务仍在线但工具注册表为空”问题；现在会一起重建 server/controller 与 tool loader，保持 `/health`、`/api/tools` 与 `tools/call` 一致。
 - 修复 Tools 树在递归展开/折叠后的状态回填错乱；根节点与 `atomic` 层现在会按统一状态模型正确恢复，不再反复回弹。
 
-## 0.4.0 - 2026-03-17
+## [0.4.0] - 2026-03-17
 
 ### Added
 
@@ -213,7 +213,7 @@
 - 修复多项 MCP 工具在 `array` 类型参数缺少 `items` 定义时触发的 `Invalid schema` 错误，涉及 `node_call`、`undo_redo`、`group`、`signal`、`collision_shape` 等工具。
 - 修复 `editor_status` 与 `node_transform` 对非法参数类型过于宽松的问题，增强输入校验鲁棒性。
 
-## 0.3.0 - 2026-03-12
+## [0.3.0] - 2026-03-12
 
 ### Added
 
@@ -237,7 +237,7 @@
 - 修复继承脚本热重载不完整导致的工具域加载缺失，恢复 `script` 域及其扩展工具的稳定发现。
 - 修复插件启停与运行时重载期间 HTTP 传输中断的问题，将软重载改为延迟调度。
 
-## 0.2.0 - 2026-03-11
+## [0.2.0] - 2026-03-11
 
 ### Added
 
@@ -262,7 +262,7 @@
 - 当前运行时回读更适合读取结构化状态与生命周期信息，而不是完整镜像 Godot 原生 Output / Debugger 面板。
 - 如果项目中已存在同名 `MCPRuntimeBridge` Autoload，插件不会强制覆盖该设置，相关运行时回读会显示为未安装。
 
-## 0.1.0 - 2026-03-11
+## [0.1.0] - 2026-03-11
 
 ### Added
 
@@ -280,3 +280,14 @@
 ### Known Limitations
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
+
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
+[1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
+[1.0.0-pre1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.5.0...v1.0.0-pre1
+[0.5.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/tag/v0.1.0
