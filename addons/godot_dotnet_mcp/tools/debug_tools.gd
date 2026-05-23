@@ -590,9 +590,16 @@ func _resolve_csproj_path(requested_path: String) -> String:
 		return normalized_path
 
 	var project_paths = _find_csproj_files("res://")
-	if project_paths.is_empty():
-		return ""
-	return project_paths[0]
+	# Filter out DotnetBridge (MCP plugin's own bridge project)
+	var filtered: Array[String] = []
+	for path in project_paths:
+		if not path.contains("DotnetBridge"):
+			filtered.append(path)
+	if filtered.is_empty():
+		if project_paths.is_empty():
+			return ""
+		return project_paths[0]
+	return filtered[0]
 
 
 func _find_csproj_files(dir_path: String) -> Array[String]:
