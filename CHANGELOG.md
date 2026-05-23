@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased] v1.0.0
+## [Unreleased] ([1.0.0])
 
 ### Fixed
 
@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
 - Enforced release note commit summaries to resolve a previous release tag boundary instead of falling back to arbitrary recent commits.
 
-## 1.0.0-pre3 - 2026-05-21
+## [1.0.0-pre3] - 2026-05-21
 
 ### Added
 
@@ -75,7 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added a release notes renderer so `next` draft releases and formal tag releases use the same manual-summary plus generated commit-summary body while validating the matching changelog section.
 - Updated release automation to run validation and create GitHub releases without producing zip package assets.
 
-## 1.0.0-pre2 - 2026-05-06
+## [1.0.0-pre2] - 2026-05-06
 
 ### Added
 
@@ -100,7 +100,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed local HTTP CORS handling so browser-based clients no longer receive wildcard cross-origin access by default, while configured browser clients can still pass origin validation.
 - Fixed resource reference auditing so it reports missing UID targets with missing fallback paths and avoids treating ordinary `.tscn` C# node scripts as custom Resource scripts.
 
-## 1.0.0-pre1 - 2026-04-28
+## [1.0.0-pre1] - 2026-04-28
 
 ### Added
 
@@ -156,7 +156,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed tool metadata, category, manifest, and presentation mismatches so the Tools page and MCP tool list stay aligned.
 - Fixed several headless validation and contract-test gaps so CI covers more of the plugin runtime, UI presentation, and tool executor behavior.
 
-## 0.5.0 - 2026-03-19
+## [0.5.0] - 2026-03-19
 
 ### Added
 
@@ -182,7 +182,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed the intermittent issue where `soft_reload_plugin` left the HTTP server running while the tool registry was empty. The server/controller and tool loader are now rebuilt together, keeping `/health`, `/api/tools`, and `tools/call` consistent.
 - Fixed the persistent state mismatch in the Tools tree when recursively expanding/collapsing. The root node and `atomic` layer now restore correctly under the unified state model and no longer bounce back or require repeated Shift clicks.
 
-## 0.4.0 - 2026-03-17
+## [0.4.0] - 2026-03-17
 
 ### Added
 
@@ -213,7 +213,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed `Invalid schema` errors caused by missing `items` definitions on array-type MCP tools, affecting tools such as `node_call`, `undo_redo`, `group`, `signal`, and `collision_shape`.
 - Fixed permissive acceptance of invalid parameter types in `editor_status` and `node_transform` tools to improve validation robustness.
 
-## 0.3.0 - 2026-03-12
+## [0.3.0] - 2026-03-12
 
 ### Added
 
@@ -237,7 +237,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed incomplete tool-domain loading caused by inherited-script hot reload issues, restoring stable discovery for the `script` domain and related extension tools.
 - Fixed the HTTP transport interruption during plugin enable/disable and runtime reload, changing soft reload into deferred scheduling.
 
-## 0.2.0 - 2026-03-11
+## [0.2.0] - 2026-03-11
 
 ### Added
 
@@ -262,7 +262,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The current runtime readback is better suited to structured state and lifecycle information than a full mirror of the native Godot Output / Debugger panels.
 - If a same-named `MCPRuntimeBridge` Autoload already exists in the project, the plugin will not forcibly overwrite that setting; runtime readback will appear as not installed.
 
-## 0.1.0 - 2026-03-11
+## [0.1.0] - 2026-03-11
 
 ### Added
 
@@ -280,3 +280,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Known Limitations
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
+
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
+[1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
+[1.0.0-pre1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.5.0...v1.0.0-pre1
+[0.5.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/tag/v0.1.0
