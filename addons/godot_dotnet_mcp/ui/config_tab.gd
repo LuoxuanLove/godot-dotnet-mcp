@@ -727,7 +727,7 @@ func _get_action_column_count(button_count: int, width_override := -1.0) -> int:
 func _on_resized() -> void:
 	_current_layout_width = -1.0
 	_apply_responsive_layout()
-	_queue_refresh_action_grid_columns()
+	_refresh_action_grid_columns()
 
 
 func _apply_visual_style(scale: float) -> void:
