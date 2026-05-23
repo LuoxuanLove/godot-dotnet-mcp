@@ -10,8 +10,8 @@ const TRANSLATIONS: Dictionary = {
 	"tab_config": "Config",
 
 	# Header
-	"title": "Godot MCP",
-	"dialog_title": "Godot MCP",
+	"title": "Godot .NET MCP",
+	"dialog_title": "Godot .NET MCP",
 	"plugin_overview_title": "Plugin Overview",
 	"plugin_overview_health_label": "Health:",
 	"plugin_overview_service_label": "Service:",
