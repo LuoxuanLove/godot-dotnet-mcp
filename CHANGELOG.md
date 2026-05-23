@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
+
 ## 1.0.0 - 2026-05-23
 
 ### Added

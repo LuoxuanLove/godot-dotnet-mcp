@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
+
 ## 1.0.0 - 2026-05-23
 
 ### Added
