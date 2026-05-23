@@ -708,7 +708,7 @@ func _refresh_action_grid_columns() -> void:
 		var grid = grid_variant as GridContainer
 		if grid == null or not bool(grid.get_meta("is_client_action_grid", false)):
 			continue
-		grid.columns = _get_action_column_count(grid.get_child_count(), grid.size.x)
+		grid.columns = _get_action_column_count(grid.get_child_count())
 
 
 func _get_action_column_count(button_count: int, width_override := -1.0) -> int:

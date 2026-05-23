@@ -223,12 +223,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var layout_action_grid := _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.get_child_count() != 6:
 		return _failure("Config tab should render the six supported client actions in a tracked action grid.")
-	layout_action_grid.size = Vector2(520.0, layout_action_grid.size.y)
+	_instance.size = Vector2(520.0, 900.0)
+	_instance.call("_on_resized")
+	await tree.process_frame
 	await tree.process_frame
 	if layout_action_grid.columns != 2:
 		return _failure("Config tab should refresh a six-action grid to two columns after width is known.")
-	layout_action_grid.size = Vector2(320.0, layout_action_grid.size.y)
+	_instance.size = Vector2(320.0, 900.0)
 	_instance.call("_on_resized")
+	await tree.process_frame
 	await tree.process_frame
 	if layout_action_grid.columns != 1:
 		return _failure("Config tab should refresh client action grids to one column after a narrow resize without changing selection.")
