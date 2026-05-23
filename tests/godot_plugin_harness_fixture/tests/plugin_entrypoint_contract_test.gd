@@ -46,7 +46,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		if not _probe_plugin.has_method(method_name):
 			return _return_failure(tree, "plugin.gd should expose %s as a stable runtime reload entrypoint." % method_name)
 	if _probe_plugin.dock_add_calls.size() != 1:
-		return _return_failure(tree, "plugin.gd should create and dock MCPDock during _enter_tree().")
+		return _return_failure(tree, "plugin.gd should create and dock MCP during _enter_tree().")
 	if _probe_plugin.base_control == null or _probe_plugin.base_control.get_child_count() != 1:
 		return _return_failure(tree, "plugin.gd should add exactly one dock child to the editor base control.")
 
@@ -55,9 +55,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _return_failure(tree, "plugin.gd should create a valid dock instance.")
 	var dock_script = dock.get_script()
 	if dock_script == null or str(dock_script.resource_path) != "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd":
-		return _return_failure(tree, "plugin.gd should instantiate the production MCPDock scene.")
+		return _return_failure(tree, "plugin.gd should instantiate the production MCP scene.")
 	if dock.get_parent() != _probe_base_control:
-		return _return_failure(tree, "plugin.gd should parent MCPDock under the editor base control.")
+		return _return_failure(tree, "plugin.gd should parent MCP under the editor base control.")
 
 	var bridge_status: Dictionary = MCPRuntimeDebugStore.get_bridge_status()
 	if not bool(bridge_status.get("installed", false)):
