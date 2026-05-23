@@ -227,6 +227,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		}
 	]
 	_instance.apply_model(layout_model)
+	await tree.process_frame
+	await tree.process_frame
 	var layout_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
 	var layout_action_grid := _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.get_child_count() != 6:
