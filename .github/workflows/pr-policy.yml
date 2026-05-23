@@ -3,9 +3,16 @@ name: pr-policy
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: "Pull request number to validate"
+        required: true
+        type: number
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   pr-target-dev:
@@ -14,9 +21,18 @@ jobs:
     steps:
       - name: Require dev target branch
         env:
-          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pull_number }}
         run: |
-          if [[ "$BASE_REF" != "dev" ]]; then
+          set -euo pipefail
+
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "::error::Unable to determine pull request number."
+            exit 1
+          fi
+
+          base_ref=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
+          if [[ "$base_ref" != "dev" ]]; then
             echo "::error::All pull requests must target dev. Change the PR base branch to dev before merging."
             exit 1
           fi
@@ -26,17 +42,29 @@ jobs:
 
     steps:
       - name: Validate objective PR fields
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pull_number }}
         run: |
-          python - <<'PY'
+          set -euo pipefail
+
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "::error::Unable to determine pull request number."
+            exit 1
+          fi
+
+          pr_fields_file="$RUNNER_TEMP/pr-policy-fields.json"
+          gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title,body > "$pr_fields_file"
+
+          PR_FIELDS_PATH="$pr_fields_file" python - <<'PY'
           import json
           import os
           import re
           import sys
 
-          with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as event_file:
-              event = json.load(event_file)
+          with open(os.environ["PR_FIELDS_PATH"], "r", encoding="utf-8") as fields_file:
+              pull_request = json.load(fields_file)
 
-          pull_request = event.get("pull_request") or {}
           title = (pull_request.get("title") or "").strip()
           body = pull_request.get("body") or ""
           errors = []
