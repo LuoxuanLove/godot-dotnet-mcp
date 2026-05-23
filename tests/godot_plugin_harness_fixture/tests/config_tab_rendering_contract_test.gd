@@ -25,6 +25,11 @@ class FakeLocalization extends RefCounted:
 		"config_client_path_source_label": "Path Source",
 		"config_file_path": "Config File",
 		"config_client_action_apply": "Apply",
+		"config_client_action_open_project": "Open Project",
+		"config_client_action_choose_program_path": "Choose Program",
+		"config_client_action_clear_custom_path": "Clear Path",
+		"config_client_action_open_config_dir": "Open Config Dir",
+		"config_client_action_open_config_file": "Open Config File",
 		"btn_write_config": "Write Config",
 		"btn_remove_plugin_config": "Remove Config",
 		"btn_copy": "Copy"
@@ -97,6 +102,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		],
 		"cli_clients": []
 	}
+	_instance.size = Vector2(0.0, 900.0)
 	_instance.apply_model(base_model)
 	await tree.process_frame
 
@@ -113,6 +119,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Config tab should visibly render the concrete 'Installed to <path>' status for installed clients.")
 	if _find_label_containing(labels, "Capability: Full one-click") == null:
 		return _failure("Config tab should render presenter-provided capability guidance through the generic guidance text slot.")
+	var action_grid = desktop_card.find_child("ClientActionGrid", true, false) as GridContainer
+	if action_grid == null:
+		return _failure("Config tab client card should expose the generated action button grid for responsive layout updates.")
+	_instance.size = Vector2(720.0, 900.0)
+	_instance.call("_on_resized")
+	await tree.process_frame
+	await tree.process_frame
+	if action_grid.columns != 2:
+		return _failure("Config tab action grid should refresh to two columns after initial zero-width layout resolves.")
+
 	var buttons = desktop_card.find_children("*", "Button", true, false)
 	if buttons.size() < 4:
 		return _failure("Config tab client card should render action buttons for apply/write/remove/copy.")
@@ -180,6 +196,43 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not rebuilt_copy_button.visible:
 		return _failure("Config tab content copy button should preserve hover visibility across a rendered model rebuild.")
 
+	var layout_model: Dictionary = base_model.duplicate(true)
+	layout_model["desktop_clients"] = [
+		{
+			"id": "cursor",
+			"name_key": "config_client_cursor",
+			"summary_text": "Desktop layout summary",
+			"primary_action_label_key": "config_client_action_apply",
+			"primary_action_enabled": true,
+			"launch_supported": true,
+			"launch_action_label_key": "config_client_action_open_project",
+			"launch_enabled": true,
+			"path_pick_supported": true,
+			"path_pick_action_label_key": "config_client_action_choose_program_path",
+			"path_pick_enabled": true,
+			"path_clear_supported": true,
+			"path_clear_enabled": true,
+			"open_config_dir_supported": true,
+			"open_config_dir_enabled": true,
+			"open_config_file_supported": true,
+			"open_config_file_enabled": true
+		}
+	]
+	_instance.apply_model(layout_model)
+	var layout_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var layout_action_grid := _find_action_grid(layout_desktop_clients.get_child(0))
+	if layout_action_grid == null or layout_action_grid.get_child_count() != 6:
+		return _failure("Config tab should render the six supported client actions in a tracked action grid.")
+	layout_action_grid.size = Vector2(520.0, layout_action_grid.size.y)
+	await tree.process_frame
+	if layout_action_grid.columns != 2:
+		return _failure("Config tab should refresh a six-action grid to two columns after width is known.")
+	layout_action_grid.size = Vector2(320.0, layout_action_grid.size.y)
+	_instance.call("_on_resized")
+	await tree.process_frame
+	if layout_action_grid.columns != 1:
+		return _failure("Config tab should refresh client action grids to one column after a narrow resize without changing selection.")
+
 	return {
 		"name": "config_tab_rendering_contracts",
 		"success": true,
@@ -222,6 +275,14 @@ func _find_label_containing(labels: Array, text: String) -> Label:
 		var label = label_variant as Label
 		if label != null and label.text.find(text) != -1:
 			return label
+	return null
+
+
+func _find_action_grid(root: Node) -> GridContainer:
+	for grid_variant in root.find_children("ClientActionGrid", "GridContainer", true, false):
+		var grid = grid_variant as GridContainer
+		if grid != null and bool(grid.get_meta("is_client_action_grid", false)):
+			return grid
 	return null
 
 

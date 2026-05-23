@@ -43,6 +43,7 @@ var _current_scale := -1.0
 var _is_rebuilding_platforms := false
 var _current_model: Dictionary = {}
 var _current_layout_width := -1.0
+var _action_grid_columns_refresh_queued := false
 
 
 func _ready() -> void:
@@ -97,11 +98,13 @@ func apply_model(model: Dictionary) -> void:
 		false,
 		localization
 	)
+	_queue_refresh_action_grid_columns()
 
 
 func _rebuild_client_cards(container: VBoxContainer, clients: Array, supports_write: bool, localization) -> void:
 	var signature := _make_client_cards_signature(clients, supports_write, localization)
 	if str(container.get_meta("client_cards_signature", "")) == signature:
+		_queue_refresh_action_grid_columns()
 		return
 	var hovered_client_ids := _collect_hovered_content_client_ids(container)
 	for child in container.get_children():
@@ -112,6 +115,7 @@ func _rebuild_client_cards(container: VBoxContainer, clients: Array, supports_wr
 	var viewport := get_viewport()
 	if viewport != null:
 		viewport.call_deferred("update_mouse_cursor_state")
+	_queue_refresh_action_grid_columns()
 
 
 func _create_client_card(client: Dictionary, supports_write: bool, localization, hovered_client_ids: Array) -> Control:
@@ -370,6 +374,8 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization,
 		action_buttons.append(remove_button)
 
 	var actions_grid = GridContainer.new()
+	actions_grid.name = "ClientActionGrid"
+	actions_grid.set_meta("is_client_action_grid", true)
 	actions_grid.columns = _get_action_column_count(action_buttons.size())
 	actions_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions_grid.add_theme_constant_override("h_separation", int(round(8 * _current_scale)))
@@ -689,20 +695,39 @@ func _apply_responsive_layout() -> void:
 		label.custom_minimum_size.x = 0.0
 
 
-func _get_action_column_count(button_count: int) -> int:
+func _queue_refresh_action_grid_columns() -> void:
+	if _action_grid_columns_refresh_queued:
+		return
+	_action_grid_columns_refresh_queued = true
+	_refresh_action_grid_columns.call_deferred()
+
+
+func _refresh_action_grid_columns() -> void:
+	_action_grid_columns_refresh_queued = false
+	for grid_variant in find_children("ClientActionGrid", "GridContainer", true, false):
+		var grid = grid_variant as GridContainer
+		if grid == null or not bool(grid.get_meta("is_client_action_grid", false)):
+			continue
+		grid.columns = _get_action_column_count(grid.get_child_count(), grid.size.x)
+
+
+func _get_action_column_count(button_count: int, width_override := -1.0) -> int:
 	if button_count <= 1:
 		return 1
 	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
-	var available_width: float = size.x
-	var content = _get_content_node()
-	if content != null and content.size.x > 0.0:
-		available_width = content.size.x
+	var available_width: float = width_override
+	if available_width <= 0.0:
+		var content = _get_content_node()
+		if content != null and content.size.x > 0.0:
+			available_width = content.size.x
+		else:
+			available_width = size.x
 	return 1 if available_width < 420.0 * scale else 2
-
 
 func _on_resized() -> void:
 	_current_layout_width = -1.0
 	_apply_responsive_layout()
+	_queue_refresh_action_grid_columns()
 
 
 func _apply_visual_style(scale: float) -> void:
