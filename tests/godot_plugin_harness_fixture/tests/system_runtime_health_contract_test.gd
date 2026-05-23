@@ -19,7 +19,7 @@ class FakeBridge extends RefCounted:
 		match tool_name:
 			"editor_status":
 				if str(args.get("action", "")) == "get_godot_path":
-					return success({"godot_executable_path": "C:/Godot/Godot.exe", "project_root_path": "E:/Project/LuoxuanLove/Mechoes"})
+					return success({"godot_executable_path": "C:/Godot/Godot.exe", "project_root_path": "C:/GodotProjects/ContractProject"})
 				return error("Unsupported editor_status action")
 			"project_info":
 				if str(args.get("action", "")) == "get_info":

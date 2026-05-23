@@ -30,7 +30,7 @@ class FakeBridge extends RefCounted:
 				if str(args.get("action", "")) == "get_godot_path":
 					return success({
 						"godot_executable_path": "C:/Godot/Godot.exe",
-						"project_root_path": "E:/Project/LuoxuanLove/Mechoes",
+						"project_root_path": "C:/GodotProjects/ContractProject",
 						"editor_session_identity": {
 							"session_id": "project-contract-session",
 							"identity_scope": "current_editor_process",
@@ -38,7 +38,7 @@ class FakeBridge extends RefCounted:
 							"external_validation_process": false,
 							"safe_to_terminate": false,
 							"pid": 5252,
-							"cmdline_args": ["--path", "E:/Project/LuoxuanLove/Mechoes"],
+							"cmdline_args": ["--path", "C:/GodotProjects/ContractProject"],
 							"headless": false
 						}
 					})
