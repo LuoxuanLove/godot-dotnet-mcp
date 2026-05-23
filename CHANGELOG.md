@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
 - Updated README release badges so stable and prerelease entry points are clearer from the product pages.
 - Added the `v1.0.0` manual release notes source and synchronized the release workflow documentation with the stable release flow.
+- Expanded the `v1.0.0` manual release notes into a fuller first-stable-release overview that follows the pre3 narrative style.
 - Cleaned up release changelog entries so the `v1.0.0` section reflects post-`v1.0.0-pre3` development without mixing prerelease records.
 
 ### Internal
@@ -25,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
+- Enforced release note commit summaries to resolve a previous release tag boundary instead of falling back to arbitrary recent commits.
 
 ## 1.0.0-pre3 - 2026-05-21
 
