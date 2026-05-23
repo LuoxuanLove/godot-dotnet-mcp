@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Internal
 
+- Updated PR policy validation to read live pull request metadata and added a manual dispatch fallback so edited PR bodies can be revalidated without relying on stale rerun payloads.
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
