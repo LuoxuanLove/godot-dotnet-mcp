@@ -8,6 +8,7 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 
 const DOTNET_DEFAULT_TIMEOUT_SEC := 30
+const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
 
 
 func get_tools() -> Array[Dictionary]:
@@ -612,11 +613,17 @@ func _find_csproj_files(dir_path: String) -> Array[String]:
 		if dir.current_is_dir():
 			results.append_array(_find_csproj_files(child_path))
 		elif entry.ends_with(".csproj"):
-			results.append(_normalize_res_path(child_path))
+			var normalized_child_path = _normalize_res_path(child_path)
+			if not _is_plugin_bridge_csproj(normalized_child_path):
+				results.append(normalized_child_path)
 	dir.list_dir_end()
 
 	results.sort()
 	return results
+
+
+func _is_plugin_bridge_csproj(path: String) -> bool:
+	return _normalize_res_path(path) == DOTNET_BRIDGE_CSPROJ_PATH
 
 
 func _run_dotnet_command(action: String, project_path: String, timeout_sec: int) -> Dictionary:
