@@ -26,7 +26,7 @@ class FakeBridge extends RefCounted:
 					"list_dock_tabs":
 						return success({
 							"count": 1,
-							"tabs": [{"title": "MCPDock", "path": "/root/Editor/Docks/MCPDock"}]
+							"tabs": [{"title": "MCP", "path": "/root/Editor/Docks/MCP"}]
 						})
 					"activate_dock_tab":
 						return success({"title": str(args.get("title", ""))})
@@ -148,7 +148,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var activate_dock_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_dock_tab",
-		"title": "MCPDock"
+		"title": "MCP"
 	})
 	if not bool(activate_dock_result.get("success", false)):
 		return _failure("system editor_control should delegate activate_dock_tab.")
@@ -165,7 +165,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var activate_ui_tab_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_ui",
-		"target_path": "/root/Editor/MCPDock/TabContainer",
+		"target_path": "/root/Editor/MCP/TabContainer",
 		"tab_title": "ConfigTab",
 		"tab_index": 2
 	})

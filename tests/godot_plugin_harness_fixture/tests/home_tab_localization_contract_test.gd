@@ -22,18 +22,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var ja := LocaleJa.get_translations()
 	var pt := LocalePt.get_translations()
 	var ru := LocaleRu.get_translations()
+	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, pt, ru]
 	if str(en.get("tab_server", "")) != "Home":
 		return _failure("English localization should expose the first Dock tab as Home after the service-page-to-homepage migration.")
 	if str(zh_cn.get("tab_server", "")) != "主页":
 		return _failure("简体中文本地化应将第一个 Dock 页签显示为“主页”。")
 	if str(zh_tw.get("tab_server", "")) != "首頁":
 		return _failure("繁體中文本地化應將第一個 Dock 頁籤顯示為“首頁”。")
-	if str(en.get("title", "")).find("Server") != -1:
-		return _failure("English title should no longer present the Dock as a dedicated server page.")
-	if str(zh_cn.get("title", "")).find("服务") != -1:
-		return _failure("简体中文标题不应再将 Dock 表述为单独的服务页。")
-	if str(zh_tw.get("title", "")).find("服務") != -1:
-		return _failure("繁體中文標題不應再將 Dock 表述為單獨的服務頁。")
+	for locale in supported_locales:
+		if str(locale.get("title", "")) != "Godot .NET MCP":
+			return _failure("All supported locales should expose the Dock header title as Godot .NET MCP.")
+		if str(locale.get("dialog_title", "")) != "Godot .NET MCP":
+			return _failure("All supported locales should expose dialog titles as Godot .NET MCP.")
 	for locale in [en, zh_cn, zh_tw]:
 		if locale.has("advanced_settings"):
 			return _failure("Localization dictionaries should not keep the removed Advanced Settings label.")
@@ -60,7 +60,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]:
 		if not en.has(key) or not zh_cn.has(key) or not zh_tw.has(key):
 			return _failure("All supported locales should define visible Tools-page key: %s" % key)
-	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, pt, ru]
 	for key in [
 		"tool_action_step_name",
 		"tool_action_capture_name",

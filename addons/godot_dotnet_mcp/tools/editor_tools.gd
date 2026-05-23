@@ -353,15 +353,15 @@ ACTIONS:
 EXAMPLES:
 - List controls: {"action": "list_visible", "class_name": "LineEdit"}
 - List dock tabs: {"action": "list_dock_tabs", "include_hidden": true}
-- Activate dock tab: {"action": "activate_dock_tab", "title": "MCPDock"}
+- Activate dock tab: {"action": "activate_dock_tab", "title": "MCP"}
 - Activate MCPDock config: {"action": "activate_ui", "semantic_path": "MCPDock/config", "path": "user://godot_dotnet_mcp/captures/editor_controls/mcpdock_config.png"}
-- Activate TabContainer tab: {"action": "activate_ui", "target_path": "/root/Editor/MCPDock/TabContainer", "tab_title": "ConfigTab"}
+- Activate TabContainer tab: {"action": "activate_ui", "target_path": "/root/Editor/MCP/TabContainer", "tab_title": "ConfigTab"}
 - Activate bottom panel: {"action": "activate_ui", "bottom_panel_title": "Output"}
 - Inspect one control: {"action": "get_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
-- Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCPDock/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
 			"inputSchema": {
 				"type": "object",

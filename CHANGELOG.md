@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 - Fixed plugin self-diagnostics slow-operation reports so they identify the slowest startup/reload phase and include phase timing details in copied diagnostics.
 - Fixed Config-page client cards so the visible capability summary distinguishes full one-click config support from CLI auto-add, launch/path-only, and manual-guidance clients.
 - Fixed fast .NET build and plugin harness build failures so Godot `.godot/mono/temp` `CS2012` file-lock errors are classified as `transient_file_lock` with actionable recovery guidance.

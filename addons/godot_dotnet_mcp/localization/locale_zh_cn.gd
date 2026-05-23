@@ -10,8 +10,8 @@ const TRANSLATIONS: Dictionary = {
 	"tab_config": "配置",
 
 	# Header
-	"title": "Godot MCP",
-	"dialog_title": "Godot MCP",
+	"title": "Godot .NET MCP",
+	"dialog_title": "Godot .NET MCP",
 	"status_running": "运行中",
 	"status_stopped": "已停止",
 	"status_enabled": "已启用",

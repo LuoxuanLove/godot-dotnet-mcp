@@ -485,7 +485,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
-	var mcp_dock := FakeUiControl.new("MCPDock", "VBoxContainer", Rect2(220, 16, 200, 160))
+	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
 	var tools_tab := FakeUiControl.new("ToolsTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -724,6 +724,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_ui semantic path should switch to the requested MCPDock tab.")
 	if str(activate_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/tools":
 		return _failure("Editor ui_control activate_ui should return the semantic path it activated.")
+	var activate_short_semantic_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCP/config"
+	})
+	if not bool(activate_short_semantic_result.get("success", false)):
+		return _failure("Editor ui_control activate_ui should support MCP/config semantic path.")
+	if mcp_tabs.current_tab != 2 or not config_tab.visible or tools_tab.visible:
+		return _failure("Editor ui_control activate_ui MCP semantic path should switch to the requested tab.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",

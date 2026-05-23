@@ -149,7 +149,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_plugin = FakePlugin.new(_base_control)
 	_packed_scene = PackedScene.new()
 	var dock_template := FakeDock.new()
-	dock_template.name = "MCPDock"
+	dock_template.name = "MCP"
 	var pack_error := _packed_scene.pack(dock_template)
 	dock_template.free()
 	if pack_error != OK:
@@ -169,6 +169,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var created_dock = create_result.get("dock", null)
 	if created_dock == null or created_dock.get_parent() != _base_control:
 		return _failure("Created plugin dock should be parented under the editor base control.")
+	if created_dock.name != "MCP":
+		return _failure("Created plugin dock should use the visible MCP dock tab label.")
 	if coordinator.count_plugin_dock_instances(_plugin, PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH) != 1:
 		return _failure("Dock coordinator should count the newly created plugin dock.")
 

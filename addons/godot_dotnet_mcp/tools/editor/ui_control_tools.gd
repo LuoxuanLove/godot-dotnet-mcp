@@ -7,6 +7,9 @@ const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 
 const DEFAULT_LIST_LIMIT := 200
 const DEFAULT_MAX_DEPTH := 6
+const SEMANTIC_DOCK_ROOTS := ["mcpdock", "mcp"]
+const DOCK_VISIBLE_NAME := "MCP"
+const DOCK_LEGACY_NAME := "MCPDock"
 
 
 func execute(ei, args: Dictionary) -> Dictionary:
@@ -357,21 +360,21 @@ func _resolve_tab_index(parent, direct_child, target_control, title: String) -> 
 func _activate_semantic_ui_path(ei, semantic_path: String, args: Dictionary) -> Dictionary:
 	var normalized := semantic_path.strip_edges().replace("\\", "/").trim_prefix("/").trim_suffix("/").to_lower()
 	var parts := normalized.split("/", false)
-	if parts.size() < 2 or str(parts[0]) != "mcpdock":
+	if parts.size() < 2 or not SEMANTIC_DOCK_ROOTS.has(str(parts[0])):
 		return _error("Unsupported semantic_path: %s" % semantic_path)
 
 	var root = _get_editor_root(ei)
 	if root == null:
 		return _error("Editor base control not available")
-	var mcp_dock = _find_named_control_recursive(root, "MCPDock")
+	var mcp_dock = _find_mcp_dock_control(root)
 	if mcp_dock == null:
 		return _error("Semantic UI root not found: MCPDock")
-	var dock = _find_dock_tab_by_title_recursive(root, "MCPDock")
+	var dock = _find_mcp_dock_tab(root)
 	if dock != null:
 		if dock.has_method("make_visible"):
 			dock.make_visible()
 		else:
-			_select_owner_tab_for_control(dock, "MCPDock")
+			_select_owner_tab_for_control(dock, _get_dock_activation_title(dock))
 
 	var tab_container = _find_named_control_recursive(mcp_dock, "TabContainer")
 	if tab_container == null:
@@ -389,6 +392,28 @@ func _activate_semantic_ui_path(ei, semantic_path: String, args: Dictionary) -> 
 		_:
 			return _error("Unsupported MCPDock semantic tab: %s" % tab_key)
 	return _activate_tab_container_by_child(ei, tab_container, tab_name, args, semantic_path)
+
+
+func _find_mcp_dock_control(root):
+	var dock = _find_named_control_recursive(root, DOCK_VISIBLE_NAME)
+	if dock != null:
+		return dock
+	return _find_named_control_recursive(root, DOCK_LEGACY_NAME)
+
+
+func _find_mcp_dock_tab(root):
+	var dock = _find_dock_tab_by_title_recursive(root, DOCK_VISIBLE_NAME)
+	if dock != null:
+		return dock
+	return _find_dock_tab_by_title_recursive(root, DOCK_LEGACY_NAME)
+
+
+func _get_dock_activation_title(dock) -> String:
+	if dock != null and _has_property(dock, "title"):
+		var title := _read_control_title(dock)
+		if not title.is_empty():
+			return title
+	return DOCK_VISIBLE_NAME
 
 
 func _activate_bottom_panel(ei, bottom_panel_path: String, bottom_panel_title: String, args: Dictionary) -> Dictionary:
