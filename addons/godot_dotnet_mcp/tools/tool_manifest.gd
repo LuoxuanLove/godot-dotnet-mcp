@@ -36,7 +36,6 @@ const TOOL_DOMAIN_DEFS: Array[Dictionary] = [
 		"key": "plugin",
 		"label": "domain_plugin",
 		"categories": [
-			"plugin",
 			"plugin_runtime",
 			"plugin_evolution",
 			"plugin_developer"
@@ -73,7 +72,6 @@ const ALL_TOOL_CATEGORIES: Array[String] = [
 	"navigation",
 	"audio",
 	"ui",
-	"plugin",
 	"plugin_runtime",
 	"plugin_evolution",
 	"plugin_developer",
