@@ -42,6 +42,7 @@ function Get-ChangelogSection {
   $unreleasedStart = -1
   $escapedVersion = [regex]::Escape($Version)
   $versionTokenPattern = "(?:[vV])?$escapedVersion"
+  # Support linked Keep a Changelog headings such as "## [Unreleased] ([1.0.0])".
   $versionHeadingPattern = "^##\s+(?:(?:\[unreleased\]\s*(?:\(\s*)?(?:\[$versionTokenPattern\]|$versionTokenPattern)(?:\s*\))?)|(?:\[$versionTokenPattern\]|$versionTokenPattern))(?:\s+-.*)?\s*$"
   $unreleasedHeadingPattern = "^##\s+(?:\[unreleased\]|unreleased)(?:\s+.*)?\s*$"
   $targetVersionPattern = "^(?:Target version|目标版本)[：:]\s*[\x60]?$escapedVersion[\x60]?[。.]?\s*$"
