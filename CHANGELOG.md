@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
-### Fixed
-
-- Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
-
 ## 1.0.0 - 2026-05-23
 
 ### Added
@@ -20,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
 - Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 - Fixed plugin self-diagnostics slow-operation reports so they identify the slowest startup/reload phase and include phase timing details in copied diagnostics.
 - Fixed Config-page client cards so the visible capability summary distinguishes full one-click config support from CLI auto-add, launch/path-only, and manual-guidance clients.
