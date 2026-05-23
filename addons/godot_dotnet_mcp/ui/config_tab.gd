@@ -702,13 +702,13 @@ func _queue_refresh_action_grid_columns() -> void:
 	_refresh_action_grid_columns.call_deferred()
 
 
-func _refresh_action_grid_columns() -> void:
+func _refresh_action_grid_columns(width_override := -1.0) -> void:
 	_action_grid_columns_refresh_queued = false
 	for grid_variant in find_children("ClientActionGrid", "GridContainer", true, false):
 		var grid = grid_variant as GridContainer
 		if grid == null or not bool(grid.get_meta("is_client_action_grid", false)):
 			continue
-		grid.columns = _get_action_column_count(grid.get_child_count())
+		grid.columns = _get_action_column_count(grid.get_child_count(), width_override)
 
 
 func _get_action_column_count(button_count: int, width_override := -1.0) -> int:

@@ -122,15 +122,20 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var action_grid = desktop_card.find_child("ClientActionGrid", true, false) as GridContainer
 	if action_grid == null:
 		return _failure("Config tab client card should expose the generated action button grid for responsive layout updates.")
-	var content = _instance.get_node("Scroll/Margin/Content") as VBoxContainer
-	if content == null:
-		return _failure("Config tab should expose the content container for responsive layout updates.")
-	content.size = Vector2(720.0, content.size.y)
-	_instance.call("_on_resized")
-	await tree.process_frame
-	await tree.process_frame
+	if action_grid.columns != 1:
+		return _failure("Config tab action grid should start with one column while the initial layout width is zero.")
+	_instance.call("_refresh_action_grid_columns", 720.0)
+	action_grid = _find_action_grid(desktop_card)
+	if action_grid == null:
+		return _failure("Config tab client card should keep an action grid after refreshing responsive action columns.")
 	if action_grid.columns != 2:
 		return _failure("Config tab action grid should refresh to two columns after initial zero-width layout resolves.")
+	_instance.call("_refresh_action_grid_columns", 320.0)
+	action_grid = _find_action_grid(desktop_card)
+	if action_grid == null or action_grid.columns != 1:
+		return _failure("Config tab action grid should refresh back to one column when the resolved layout is narrow.")
+	_instance.call("_refresh_action_grid_columns", 720.0)
+	action_grid = _find_action_grid(desktop_card)
 
 	var buttons = desktop_card.find_children("*", "Button", true, false)
 	if buttons.size() < 4:
@@ -226,17 +231,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var layout_action_grid := _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.get_child_count() != 6:
 		return _failure("Config tab should render the six supported client actions in a tracked action grid.")
-	content.size = Vector2(520.0, content.size.y)
-	_instance.call("_on_resized")
-	await tree.process_frame
-	await tree.process_frame
-	if layout_action_grid.columns != 2:
+	_instance.call("_refresh_action_grid_columns", 520.0)
+	layout_action_grid = _find_action_grid(layout_desktop_clients.get_child(0))
+	if layout_action_grid == null or layout_action_grid.columns != 2:
 		return _failure("Config tab should refresh a six-action grid to two columns after width is known.")
-	content.size = Vector2(320.0, content.size.y)
-	_instance.call("_on_resized")
-	await tree.process_frame
-	await tree.process_frame
-	if layout_action_grid.columns != 1:
+	_instance.call("_refresh_action_grid_columns", 320.0)
+	layout_action_grid = _find_action_grid(layout_desktop_clients.get_child(0))
+	if layout_action_grid == null or layout_action_grid.columns != 1:
 		return _failure("Config tab should refresh client action grids to one column after a narrow resize without changing selection.")
 
 	return {
