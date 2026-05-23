@@ -717,11 +717,11 @@ func _get_action_column_count(button_count: int, width_override := -1.0) -> int:
 	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
 	var available_width: float = width_override
 	if available_width <= 0.0:
-		available_width = size.x
-	if available_width <= 0.0:
 		var content = _get_content_node()
 		if content != null and content.size.x > 0.0:
 			available_width = content.size.x
+	if available_width <= 0.0:
+		available_width = size.x
 	return 1 if available_width < 420.0 * scale else 2
 
 func _on_resized() -> void:

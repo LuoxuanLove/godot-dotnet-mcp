@@ -122,7 +122,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var action_grid = desktop_card.find_child("ClientActionGrid", true, false) as GridContainer
 	if action_grid == null:
 		return _failure("Config tab client card should expose the generated action button grid for responsive layout updates.")
-	_instance.size = Vector2(720.0, 900.0)
+	var content = _instance.get_node("Scroll/Margin/Content") as VBoxContainer
+	if content == null:
+		return _failure("Config tab should expose the content container for responsive layout updates.")
+	content.size = Vector2(720.0, content.size.y)
 	_instance.call("_on_resized")
 	await tree.process_frame
 	await tree.process_frame
@@ -223,13 +226,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var layout_action_grid := _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.get_child_count() != 6:
 		return _failure("Config tab should render the six supported client actions in a tracked action grid.")
-	_instance.size = Vector2(520.0, 900.0)
+	content.size = Vector2(520.0, content.size.y)
 	_instance.call("_on_resized")
 	await tree.process_frame
 	await tree.process_frame
 	if layout_action_grid.columns != 2:
 		return _failure("Config tab should refresh a six-action grid to two columns after width is known.")
-	_instance.size = Vector2(320.0, 900.0)
+	content.size = Vector2(320.0, content.size.y)
 	_instance.call("_on_resized")
 	await tree.process_frame
 	await tree.process_frame
