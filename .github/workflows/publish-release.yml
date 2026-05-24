@@ -122,7 +122,7 @@ jobs:
           }
 
           $tagName = "plugin-v$version"
-          $existingTag = (git ls-remote --tags origin "refs/tags/$tagName").Trim()
+          $existingTag = (@(git ls-remote --tags origin "refs/tags/$tagName") -join "`n").Trim()
           if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
             throw "Release tag $tagName already exists. Choose a new version."
           }
