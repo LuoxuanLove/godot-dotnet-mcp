@@ -22,6 +22,8 @@ var _user_tool_watch_service
 var _tool_access_feature
 var _self_diagnostic_feature
 var _get_editor_scale := Callable()
+var _plugin_version_cache := ""
+var _plugin_version_loaded := false
 
 
 func configure(
@@ -100,6 +102,8 @@ func dispose() -> void:
 	_tool_access_feature = null
 	_self_diagnostic_feature = null
 	_get_editor_scale = Callable()
+	_plugin_version_cache = ""
+	_plugin_version_loaded = false
 
 
 func build_model() -> Dictionary:
@@ -275,10 +279,15 @@ func _get_plugin_freshness_snapshot() -> Dictionary:
 
 
 func _read_plugin_version() -> String:
+	if _plugin_version_loaded:
+		return _plugin_version_cache
+	_plugin_version_loaded = true
 	var config := ConfigFile.new()
 	if config.load("res://addons/godot_dotnet_mcp/plugin.cfg") != OK:
-		return ""
-	return str(config.get_value("plugin", "version", ""))
+		_plugin_version_cache = ""
+		return _plugin_version_cache
+	_plugin_version_cache = str(config.get_value("plugin", "version", ""))
+	return _plugin_version_cache
 
 
 func _duplicate_string_array(values) -> Array[String]:
