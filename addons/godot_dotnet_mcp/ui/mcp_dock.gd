@@ -156,9 +156,6 @@ func _normalize_settings_update_buttons() -> void:
 		prepare_button.text = ""
 		prepare_button.visible = false
 		prepare_button.disabled = true
-	var apply_button := _settings_tab.find_child("ApplyButton", true, false) as Button
-	if apply_button != null and (apply_button.text.is_empty() or apply_button.text == "应用"):
-		apply_button.text = "同步"
 
 
 func show_message(title: String, message: String) -> void:
