@@ -11,6 +11,20 @@ class FakeState extends RefCounted:
 	var current_cli_scope := ""
 	var current_config_platform := ""
 	var custom_tool_profiles: Dictionary = {}
+	var update_refs_state := "success"
+	var update_refs_status := "Discovered refs."
+	var update_refs_error := ""
+	var update_ref_branches: Array[String] = ["dev"]
+	var update_ref_releases: Array[String] = ["v1.0.0"]
+	var update_ref_latest_stable_release := "v1.0.0"
+	var update_ref_latest_release := "v1.1.0-beta"
+	var update_refs_release_source := "releases"
+	var update_ref_commits := {"dev": "abcdef123456"}
+	var update_sync_state := "idle"
+	var update_sync_status := ""
+	var update_sync_error := ""
+	var update_sync_target_ref := ""
+	var update_sync_target_kind := ""
 
 
 class FakeServerController extends RefCounted:
@@ -119,6 +133,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should include the unified tool presentation model.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
+	if not model.has("plugin_freshness") or not (model.get("plugin_freshness", {}) is Dictionary):
+		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
+	if not model.has("plugin_version"):
+		return _failure("Dock model should include plugin version data for the Settings tab update summary.")
+	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_ref_branches", []) as Array).has("dev") or not (model.get("update_ref_releases", []) as Array).has("v1.0.0") or str((model.get("update_ref_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str(model.get("update_ref_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_ref_latest_release", "")) != "v1.1.0-beta":
+		return _failure("Dock model should project transient update ref discovery state for the Settings tab.")
 
 	return {
 		"name": "dock_model_service_contracts",

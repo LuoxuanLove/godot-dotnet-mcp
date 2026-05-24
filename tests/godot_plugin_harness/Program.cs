@@ -25,7 +25,8 @@ internal static class Program
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
-        var editorProbeMode = string.Equals(onlyCase, "plugin_entrypoint_contracts", StringComparison.Ordinal);
+        var editorProbeMode = string.Equals(onlyCase, "plugin_entrypoint_contracts", StringComparison.Ordinal)
+            || string.Equals(onlyCase, "plugin_update_settings_persistence_contracts", StringComparison.Ordinal);
 
         if (cleanupStaleProcesses)
         {
@@ -339,7 +340,7 @@ internal static class Program
             {
                 StartInfo = new ProcessStartInfo("dotnet")
                 {
-                    WorkingDirectory = stageRoot,
+                    WorkingDirectory = Path.GetTempPath(),
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -347,7 +348,7 @@ internal static class Program
                 }
             };
             process.StartInfo.ArgumentList.Add("build");
-            process.StartInfo.ArgumentList.Add("GodotDotnetMcpPluginHarness.csproj");
+            process.StartInfo.ArgumentList.Add(Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"));
             process.StartInfo.ArgumentList.Add("-c");
             process.StartInfo.ArgumentList.Add("Debug");
             process.StartInfo.ArgumentList.Add("--nologo");

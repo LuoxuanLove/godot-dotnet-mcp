@@ -2,14 +2,16 @@
 extends EditorPlugin
 
 const OnlyCaseEnvVar := "GODOT_PLUGIN_HARNESS_ONLY_CASE"
-const TargetCaseName := "plugin_entrypoint_contracts"
-const EntryPointContractTest = preload("res://tests/plugin_entrypoint_contract_test.gd")
+const EditorProbeCases := {
+	"plugin_entrypoint_contracts": "res://tests/plugin_entrypoint_contract_test.gd",
+	"plugin_update_settings_persistence_contracts": "res://tests/plugin_update_settings_persistence_contract_test.gd"
+}
 
 var _started := false
 
 
 func _enter_tree() -> void:
-	if OS.get_environment(OnlyCaseEnvVar).strip_edges() != TargetCaseName:
+	if not EditorProbeCases.has(OS.get_environment(OnlyCaseEnvVar).strip_edges()):
 		return
 	call_deferred("_run_probe")
 
@@ -20,7 +22,13 @@ func _run_probe() -> void:
 	_started = true
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var case_instance = EntryPointContractTest.new()
+	var case_name := OS.get_environment(OnlyCaseEnvVar).strip_edges()
+	var case_script = load(str(EditorProbeCases.get(case_name, "")))
+	if case_script == null or not case_script.has_method("new"):
+		print(JSON.stringify({"name": case_name, "success": false, "error": "Editor probe case script should load."}))
+		get_tree().quit(1)
+		return
+	var case_instance = case_script.new()
 	var result: Dictionary = await case_instance.run_case(get_tree())
 	if case_instance.has_method("cleanup_case"):
 		await case_instance.cleanup_case(get_tree())
