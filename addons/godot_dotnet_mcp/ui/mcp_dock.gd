@@ -22,7 +22,6 @@ signal log_level_changed(level: String)
 signal language_changed(language_code: String)
 signal update_source_changed(source: String)
 signal update_custom_branch_changed(branch: String)
-signal update_release_tag_changed(tag: String)
 signal update_check_requested
 signal update_apply_requested
 signal start_requested

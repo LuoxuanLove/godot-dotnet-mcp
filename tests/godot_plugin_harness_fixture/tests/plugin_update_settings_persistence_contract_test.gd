@@ -48,12 +48,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	_plugin._on_update_source_changed("custom_branch")
 	_plugin._on_update_custom_branch_changed("feature/persisted-settings")
-	_plugin._on_update_release_tag_changed("v9.9.9")
-	if str(_plugin._state.settings.get("update_source", "")) != "custom_branch" or str(_plugin._state.settings.get("update_custom_branch", "")) != "feature/persisted-settings" or str(_plugin._state.settings.get("update_release_tag", "")) != "v9.9.9":
+	if str(_plugin._state.settings.get("update_source", "")) != "custom_branch" or str(_plugin._state.settings.get("update_custom_branch", "")) != "feature/persisted-settings":
 		return _failure("plugin.gd should store update setting changes in runtime settings.")
 
 	var saved_settings := _load_saved_settings()
-	if str(saved_settings.get("update_source", "")) != "custom_branch" or str(saved_settings.get("update_custom_branch", "")) != "feature/persisted-settings" or str(saved_settings.get("update_release_tag", "")) != "v9.9.9":
+	if str(saved_settings.get("update_source", "")) != "custom_branch" or str(saved_settings.get("update_custom_branch", "")) != "feature/persisted-settings":
 		return _failure("plugin.gd should persist normalized update setting changes through _save_settings().")
 	if saved_settings.has("update_ref_branches") or saved_settings.has("update_ref_releases") or saved_settings.has("update_refs_state"):
 		return _failure("plugin.gd should not persist transient discovered update refs in settings.")

@@ -681,11 +681,6 @@ func _on_update_custom_branch_changed(branch: String) -> void:
 	_refresh_dock()
 
 
-func _on_update_release_tag_changed(tag: String) -> void:
-	_state.settings["update_release_tag"] = tag
-	_save_settings()
-	_refresh_dock()
-
 
 func _on_update_check_requested() -> void:
 	_update_refs_request_serial += 1

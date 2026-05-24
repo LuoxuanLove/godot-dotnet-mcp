@@ -14,7 +14,6 @@ class FakeDock extends Control:
 	signal current_tab_changed(index: int)
 	signal update_source_changed(source: String)
 	signal update_custom_branch_changed(branch: String)
-	signal update_release_tag_changed(tag: String)
 	signal update_check_requested
 	signal update_apply_requested
 	signal full_reload_requested
@@ -33,7 +32,6 @@ class FakePlugin extends RefCounted:
 	var current_tab_changes: Array[int] = []
 	var update_source_changes: Array[String] = []
 	var update_custom_branch_changes: Array[String] = []
-	var update_release_tag_changes: Array[String] = []
 	var update_check_count := 0
 	var update_apply_count := 0
 	var full_reload_count := 0
@@ -51,9 +49,6 @@ class FakePlugin extends RefCounted:
 
 	func _on_update_custom_branch_changed(branch: String) -> void:
 		update_custom_branch_changes.append(branch)
-
-	func _on_update_release_tag_changed(tag: String) -> void:
-		update_release_tag_changes.append(tag)
 
 	func _on_update_check_requested() -> void:
 		update_check_count += 1
@@ -121,10 +116,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_router.configure(_plugin, "RuntimeBridge", "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
 
 	var bindings = _coordinator.build_dock_signal_bindings(_router)
-	if bindings.size() != 30:
+	if bindings.size() != 29:
 		return _failure("PluginActionRouter should expose the full dock binding set.")
 	var binding_map := _map_bindings_by_signal(bindings)
-	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_release_tag_changed", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "config_write_requested"]:
+	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "config_write_requested"]:
 		var binding: Dictionary = binding_map.get(signal_name, {})
 		var callable: Callable = binding.get("callable", Callable())
 		if not callable.is_valid():
@@ -135,7 +130,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		binding_map["current_tab_changed"],
 		binding_map["update_source_changed"],
 		binding_map["update_custom_branch_changed"],
-		binding_map["update_release_tag_changed"],
 		binding_map["update_check_requested"],
 		binding_map["update_apply_requested"],
 		binding_map["full_reload_requested"],
@@ -163,7 +157,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_dock.emit_signal("current_tab_changed", 7)
 	_dock.emit_signal("update_source_changed", "custom_branch")
 	_dock.emit_signal("update_custom_branch_changed", "feature/router")
-	_dock.emit_signal("update_release_tag_changed", "v2.1.0")
 	_dock.emit_signal("update_check_requested")
 	_dock.emit_signal("update_apply_requested")
 	_dock.emit_signal("full_reload_requested")
@@ -171,7 +164,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	if _plugin.current_tab_changes != [7]:
 		return _failure("PluginActionRouter should route current_tab_changed through the dock binding.")
-	if _plugin.update_source_changes != ["custom_branch"] or _plugin.update_custom_branch_changes != ["feature/router"] or _plugin.update_release_tag_changes != ["v2.1.0"]:
+	if _plugin.update_source_changes != ["custom_branch"] or _plugin.update_custom_branch_changes != ["feature/router"]:
 		return _failure("PluginActionRouter should route update Settings changes to plugin handlers.")
 	if _plugin.update_check_count != 1 or _plugin.update_apply_count != 1:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
