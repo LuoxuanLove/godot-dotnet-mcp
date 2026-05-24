@@ -70,6 +70,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"settings_current_commit",
 		"settings_update_unavailable",
 		"settings_update_source_label",
+		"settings_update_source_latest_dev",
+		"settings_update_source_custom_branch",
 		"settings_update_source_branch",
 		"settings_update_source_latest_stable",
 		"settings_update_source_latest_release",
