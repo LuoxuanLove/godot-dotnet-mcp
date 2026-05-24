@@ -53,12 +53,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"current_log_level": "warning",
 		"current_language": "en",
 		"log_levels": ["debug", "info", "warning", "error"],
-		"update_ref_branches": ["dev", "feature/settings", "main"],
-		"update_ref_releases": ["v1.0.0", "v0.9.0"],
+		"update_refs_branches": ["dev", "feature/settings", "main"],
+		"update_refs_releases": ["v1.0.0", "v0.9.0"],
 		"update_refs_state": "success",
 		"update_refs_status": "Discovered refs.",
-		"update_ref_latest_stable_release": "v1.0.0",
-		"update_ref_latest_release": "v1.1.0-beta.1",
+		"update_refs_latest_stable_release": "v1.0.0",
+		"update_refs_latest_release": "v1.1.0-beta.1",
 		"plugin_version": "1.2.3",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
@@ -101,7 +101,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_release_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_release"},
-		"update_ref_latest_release": "v1.1.0-beta",
+		"update_refs_latest_release": "v1.1.0-beta",
 		"plugin_freshness": {}
 	})
 	if not bool((latest_release_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.1.0-beta"):
@@ -111,9 +111,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tag_only_latest_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_release", "update_release_tag": "01"},
-		"update_ref_releases": ["01"],
-		"update_ref_latest_release": "",
-		"update_ref_latest_stable_release": "",
+		"update_refs_releases": ["01"],
+		"update_refs_latest_release": "",
+		"update_refs_latest_stable_release": "",
 		"plugin_freshness": {}
 	})
 	if bool((tag_only_latest_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)) or str((tag_only_latest_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01"):
@@ -121,8 +121,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var explicit_tag_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "release_tag", "update_release_tag": "01"},
-		"update_ref_releases": ["01"],
-		"update_ref_latest_release": "v1.1.0-beta.1",
+		"update_refs_releases": ["01"],
+		"update_refs_latest_release": "v1.1.0-beta.1",
 		"plugin_freshness": {}
 	})
 	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01"):
@@ -130,7 +130,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_latest_dev_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_dev", "update_custom_branch": ""},
-		"update_ref_latest_stable_release": "v1.0.0",
+		"update_refs_latest_stable_release": "v1.0.0",
 		"plugin_freshness": {}
 	})
 	if str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("source", "")) != "custom_branch" or not bool((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("show_branch_row", false)) or _selected_option_value((removed_latest_dev_projection.get("options", {}) as Dictionary).get("update_sources", [])) != "custom_branch" or _selected_option_value((removed_latest_dev_projection.get("options", {}) as Dictionary).get("update_branches", [])) != "dev":
@@ -146,7 +146,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_stable_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_stable"},
-		"update_ref_latest_stable_release": "v1.0.0",
+		"update_refs_latest_stable_release": "v1.0.0",
 		"plugin_freshness": {}
 	})
 	if not bool((latest_stable_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
@@ -166,16 +166,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_stable: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_stable"},
-		"update_ref_latest_stable_release": "v2.0.0",
-		"update_ref_latest_release": "v2.1.0-beta.1"
+		"update_refs_latest_stable_release": "v2.0.0",
+		"update_refs_latest_release": "v2.1.0-beta.1"
 	})
 	if not bool((latest_stable.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.0.0"):
 		return _failure("Settings projection should sync the latest stable release when discovered.")
 	var latest_release: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_release"},
-		"update_ref_latest_stable_release": "v2.0.0",
-		"update_ref_latest_release": "v2.1.0-beta.1"
+		"update_refs_latest_stable_release": "v2.0.0",
+		"update_refs_latest_release": "v2.1.0-beta.1"
 	})
 	if not bool((latest_release.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.1.0-beta.1"):
 		return _failure("Settings projection should sync the latest release, including prereleases, when discovered.")

@@ -157,8 +157,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
 	if not model.has("plugin_version"):
 		return _failure("Dock model should include plugin version data for the Settings tab update summary.")
-	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_ref_branches", []) as Array).has("dev") or not (model.get("update_ref_releases", []) as Array).has("v1.0.0") or str((model.get("update_ref_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str(model.get("update_ref_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_ref_latest_release", "")) != "v1.1.0-beta":
+	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_refs_branches", []) as Array).has("dev") or not (model.get("update_refs_releases", []) as Array).has("v1.0.0") or str((model.get("update_refs_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str(model.get("update_refs_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_refs_latest_release", "")) != "v1.1.0-beta":
 		return _failure("Dock model should project transient update ref discovery state for the Settings tab.")
+	if model.has("update_ref_branches") or model.has("update_ref_releases") or model.has("update_ref_latest_stable_release") or model.has("update_ref_latest_release") or model.has("update_ref_commits"):
+		return _failure("Dock model should expose transient update discovery refs with plural model keys only.")
 
 	return {
 		"name": "dock_model_service_contracts",

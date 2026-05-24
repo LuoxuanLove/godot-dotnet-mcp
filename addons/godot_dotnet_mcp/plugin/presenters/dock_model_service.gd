@@ -158,12 +158,12 @@ func build_model() -> Dictionary:
 		"update_refs_state": str(_get_state_value("update_refs_state", "idle")),
 		"update_refs_status": str(_get_state_value("update_refs_status", "")),
 		"update_refs_error": str(_get_state_value("update_refs_error", "")),
-		"update_ref_branches": _duplicate_string_array(_get_state_value("update_ref_branches", [])),
-		"update_ref_releases": _duplicate_string_array(_get_state_value("update_ref_releases", [])),
-		"update_ref_latest_stable_release": str(_get_state_value("update_ref_latest_stable_release", "")),
-		"update_ref_latest_release": str(_get_state_value("update_ref_latest_release", "")),
+		"update_refs_branches": _duplicate_string_array(_get_state_value("update_ref_branches", [])),
+		"update_refs_releases": _duplicate_string_array(_get_state_value("update_ref_releases", [])),
+		"update_refs_latest_stable_release": str(_get_state_value("update_ref_latest_stable_release", "")),
+		"update_refs_latest_release": str(_get_state_value("update_ref_latest_release", "")),
 		"update_refs_release_source": str(_get_state_value("update_refs_release_source", "")),
-		"update_ref_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
+		"update_refs_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
 		"update_sync_status": str(_get_state_value("update_sync_status", "")),
 		"update_sync_error": str(_get_state_value("update_sync_error", "")),
@@ -173,12 +173,12 @@ func build_model() -> Dictionary:
 	model["update_refs_state"] = str(_get_state_value("update_refs_state", "idle"))
 	model["update_refs_status"] = str(_get_state_value("update_refs_status", ""))
 	model["update_refs_error"] = str(_get_state_value("update_refs_error", ""))
-	model["update_ref_branches"] = _duplicate_string_array(_get_state_value("update_ref_branches", []))
-	model["update_ref_releases"] = _duplicate_string_array(_get_state_value("update_ref_releases", []))
-	model["update_ref_latest_stable_release"] = str(_get_state_value("update_ref_latest_stable_release", ""))
-	model["update_ref_latest_release"] = str(_get_state_value("update_ref_latest_release", ""))
+	model["update_refs_branches"] = _duplicate_string_array(_get_state_value("update_ref_branches", []))
+	model["update_refs_releases"] = _duplicate_string_array(_get_state_value("update_ref_releases", []))
+	model["update_refs_latest_stable_release"] = str(_get_state_value("update_ref_latest_stable_release", ""))
+	model["update_refs_latest_release"] = str(_get_state_value("update_ref_latest_release", ""))
 	model["update_refs_release_source"] = str(_get_state_value("update_refs_release_source", ""))
-	model["update_ref_commits"] = _duplicate_string_dictionary(_get_state_value("update_ref_commits", {}))
+	model["update_refs_commits"] = _duplicate_string_dictionary(_get_state_value("update_ref_commits", {}))
 	model["update_sync_state"] = str(_get_state_value("update_sync_state", "idle"))
 	model["update_sync_status"] = str(_get_state_value("update_sync_status", ""))
 	model["update_sync_error"] = str(_get_state_value("update_sync_error", ""))

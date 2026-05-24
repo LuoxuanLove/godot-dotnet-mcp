@@ -99,7 +99,7 @@ func _build_branch_values(model: Dictionary, update_settings: Dictionary) -> Arr
 	var values: Array[String] = []
 	_append_unique_string(values, str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)))
 	_append_unique_string(values, DEFAULT_UPDATE_BRANCH)
-	for branch in _normalize_string_array(model.get("update_ref_branches", [])):
+	for branch in _normalize_string_array(model.get("update_refs_branches", [])):
 		_append_unique_string(values, branch)
 	return values
 
@@ -107,7 +107,7 @@ func _build_branch_values(model: Dictionary, update_settings: Dictionary) -> Arr
 func _build_release_values(model: Dictionary, update_settings: Dictionary) -> Array[String]:
 	var values: Array[String] = []
 	_append_unique_string(values, str(update_settings.get("release_tag", "")))
-	for release_tag in _normalize_string_array(model.get("update_ref_releases", [])):
+	for release_tag in _normalize_string_array(model.get("update_refs_releases", [])):
 		_append_unique_string(values, release_tag)
 	if values.is_empty():
 		values.append("")
@@ -186,9 +186,9 @@ func _is_update_sync_enabled(model: Dictionary, update_settings: Dictionary) -> 
 		"custom_branch":
 			return not str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges().is_empty()
 		"latest_stable":
-			return not str(model.get("update_ref_latest_stable_release", "")).strip_edges().is_empty()
+			return not str(model.get("update_refs_latest_stable_release", "")).strip_edges().is_empty()
 		"latest_release":
-			return not str(model.get("update_ref_latest_release", "")).strip_edges().is_empty()
+			return not str(model.get("update_refs_latest_release", "")).strip_edges().is_empty()
 		_:
 			return false
 
@@ -200,11 +200,11 @@ func _build_selected_update_target(model: Dictionary, update_settings: Dictionar
 		"custom_branch":
 			target = str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH))
 		"latest_stable":
-			target = str(model.get("update_ref_latest_stable_release", ""))
+			target = str(model.get("update_refs_latest_stable_release", ""))
 		"latest_release":
-			target = str(model.get("update_ref_latest_release", ""))
+			target = str(model.get("update_refs_latest_release", ""))
 		_:
-			target = str(model.get("update_ref_latest_stable_release", ""))
+			target = str(model.get("update_refs_latest_stable_release", ""))
 	if target.strip_edges().is_empty():
 		var empty_key := "settings_update_branch_unavailable" if source == "custom_branch" else "settings_update_release_unavailable"
 		target = _get_localized_text(localization, empty_key, "No discovered refs yet")

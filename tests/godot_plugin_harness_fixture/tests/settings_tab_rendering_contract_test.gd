@@ -113,9 +113,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"current_log_level": "error",
 		"current_language": "zh_CN",
 		"log_levels": ["debug", "info", "warning", "error"],
-		"update_ref_branches": ["dev", "feature/settings"],
-		"update_ref_releases": ["v1.0.0", "v1.2.3"],
-		"update_ref_latest_release": "v1.2.3",
+		"update_refs_branches": ["dev", "feature/settings"],
+		"update_refs_releases": ["v1.0.0", "v1.2.3"],
+		"update_refs_latest_release": "v1.2.3",
 		"plugin_version": "1.0.0",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
