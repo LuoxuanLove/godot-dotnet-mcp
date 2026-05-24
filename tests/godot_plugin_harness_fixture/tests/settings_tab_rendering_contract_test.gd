@@ -60,7 +60,6 @@ class Recorder extends RefCounted:
 	var language := ""
 	var update_source := ""
 	var update_custom_branch := ""
-	var update_release_tag := ""
 	var update_check_count := 0
 	var update_apply_count := 0
 
@@ -78,9 +77,6 @@ class Recorder extends RefCounted:
 
 	func on_update_custom_branch_changed(value: String) -> void:
 		update_custom_branch = value
-
-	func on_update_release_tag_changed(value: String) -> void:
-		update_release_tag = value
 
 	func on_update_check_requested() -> void:
 		update_check_count += 1
@@ -102,7 +98,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.language_changed.connect(Callable(recorder, "on_language_changed"))
 	_instance.update_source_changed.connect(Callable(recorder, "on_update_source_changed"))
 	_instance.update_custom_branch_changed.connect(Callable(recorder, "on_update_custom_branch_changed"))
-	_instance.update_release_tag_changed.connect(Callable(recorder, "on_update_release_tag_changed"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
 
@@ -135,10 +130,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var source_option := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow/SourceOption") as OptionButton
 	var custom_branch_row := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow") as HBoxContainer
 	var custom_branch := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow/CustomBranchValue") as OptionButton
-	var release_tag_row := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/ReleaseTagRow") as HBoxContainer
-	var release_tag := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/ReleaseTagRow/ReleaseTagValue") as OptionButton
-	if _instance.find_child("CustomBranchValue", true, false) is LineEdit or _instance.find_child("ReleaseTagValue", true, false) is LineEdit:
-		return _failure("Settings tab should not render manual LineEdit controls for update refs.")
+	if _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
+		return _failure("Settings tab should not render removed release/tag controls or manual LineEdit controls for update refs.")
 	if port_spin == null or int(port_spin.value) != 4102:
 		return _failure("Settings tab should render the persisted port value.")
 	if log_option == null or log_option.get_item_count() != 4 or str(log_option.get_item_metadata(log_option.selected)) != "error":
@@ -149,11 +142,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render latest stable, latest release, then custom branch sources without adding Config-tab UI.")
 	if custom_branch == null or custom_branch.get_item_count() < 1 or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options.")
-	if release_tag == null or release_tag.get_item_count() != 2 or str(release_tag.get_item_metadata(release_tag.selected)) != "v1.0.0":
-		return _failure("Settings tab should render discovered release/tag options.")
-	if custom_branch_row.visible or release_tag_row.visible:
+	if custom_branch_row.visible:
 		return _failure("Settings tab should hide manual target selectors for latest release source.")
-	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_release_tag != "" or recorder.update_check_count != 0:
+	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_check_count != 0:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
 	var labels := _instance.find_children("*", "Label", true, false)
@@ -186,16 +177,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should emit the existing persistence signals for port, log level, and language.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
-	if custom_branch_row.visible or release_tag_row.visible:
+	if custom_branch_row.visible:
 		return _failure("Settings tab should hide editable target rows after changing update source to latest stable.")
 	source_option.select(2)
 	source_option.emit_signal("item_selected", 2)
-	if not custom_branch_row.visible or release_tag_row.visible:
+	if not custom_branch_row.visible:
 		return _failure("Settings tab should immediately show the branch selector after changing update source to custom branch.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_release_tag != "" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab should emit update setting and Sync signals from selectors/buttons without a user-visible Check action.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}

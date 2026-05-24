@@ -6,7 +6,6 @@ signal log_level_changed(level: String)
 signal language_changed(language_code: String)
 signal update_source_changed(source: String)
 signal update_custom_branch_changed(branch: String)
-signal update_release_tag_changed(tag: String)
 signal update_check_requested
 signal update_apply_requested
 
@@ -45,9 +44,6 @@ const UPDATE_DESCRIPTION_AUTO_EN := "Choose an update mode; branches, releases, 
 @onready var _custom_branch_row: HBoxContainer = %CustomBranchRow
 @onready var _custom_branch_label: Label = %CustomBranchLabel
 @onready var _custom_branch_value: OptionButton = %CustomBranchValue
-@onready var _release_tag_row: HBoxContainer = %ReleaseTagRow
-@onready var _release_tag_label: Label = %ReleaseTagLabel
-@onready var _release_tag_value: OptionButton = %ReleaseTagValue
 @onready var _updates_status: Label = %UpdatesStatus
 @onready var _check_button: Button = %CheckButton
 @onready var _prepare_button: Button = %PrepareButton
@@ -57,7 +53,6 @@ var _language_syncing := false
 var _log_level_syncing := false
 var _source_syncing := false
 var _custom_branch_syncing := false
-var _release_tag_syncing := false
 var _current_scale := -1.0
 var _current_layout_key := -1
 var _layout_update_queued := false
@@ -72,7 +67,6 @@ func _ready() -> void:
 	_language_option.item_selected.connect(_on_language_option_selected)
 	_source_option.item_selected.connect(_on_source_option_selected)
 	_custom_branch_value.item_selected.connect(_on_custom_branch_option_selected)
-	_release_tag_value.item_selected.connect(_on_release_tag_option_selected)
 	_check_button.pressed.connect(_on_check_button_pressed)
 	_apply_button.pressed.connect(_on_apply_button_pressed)
 	_check_button.text = ""
@@ -111,7 +105,6 @@ func apply_model(model: Dictionary) -> void:
 	_updates_description.text = _get_update_description_text(localization)
 	_source_option_label.text = localization.get_text("settings_update_source_label")
 	_custom_branch_label.text = localization.get_text("settings_update_custom_branch")
-	_release_tag_label.text = localization.get_text("settings_update_release_tag")
 	_check_button.text = ""
 	_check_button.visible = false
 	_prepare_button.text = ""
@@ -130,9 +123,6 @@ func apply_model(model: Dictionary) -> void:
 	_custom_branch_syncing = true
 	_apply_projected_options(_custom_branch_value, options.get("update_branches", []))
 	_custom_branch_syncing = false
-	_release_tag_syncing = true
-	_apply_projected_options(_release_tag_value, options.get("update_releases", []))
-	_release_tag_syncing = false
 
 	_version_label.text = str(updates.get("version_text", ""))
 	_source_label.text = str(updates.get("source_text", ""))
@@ -169,9 +159,6 @@ func _has_required_controls() -> bool:
 		_custom_branch_row,
 		_custom_branch_label,
 		_custom_branch_value,
-		_release_tag_row,
-		_release_tag_label,
-		_release_tag_value,
 		_updates_status,
 		_check_button,
 		_prepare_button,
@@ -192,7 +179,6 @@ func _apply_fill_width_flags() -> void:
 		_language_option,
 		_source_option,
 		_custom_branch_value,
-		_release_tag_value,
 		_check_button,
 		_prepare_button,
 		_apply_button,
@@ -222,8 +208,6 @@ func _get_update_description_text(localization) -> String:
 func _apply_update_source_rows(source: String) -> void:
 	if _custom_branch_row != null:
 		_custom_branch_row.visible = source == "custom_branch"
-	if _release_tag_row != null:
-		_release_tag_row.visible = false
 
 
 func _apply_projected_options(option_button: OptionButton, projected_items: Array) -> void:
@@ -275,14 +259,6 @@ func _on_custom_branch_option_selected(index: int) -> void:
 	update_custom_branch_changed.emit(branch)
 
 
-func _on_release_tag_option_selected(index: int) -> void:
-	if _release_tag_syncing:
-		return
-	var tag := str(_release_tag_value.get_item_metadata(index))
-	if tag.is_empty():
-		return
-	update_release_tag_changed.emit(tag)
-
 
 func _on_check_button_pressed() -> void:
 	update_check_requested.emit()
@@ -331,10 +307,10 @@ func _apply_responsive_layout() -> void:
 		card_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
 	for row in _get_setting_rows():
 		row.add_theme_constant_override("separation", int(round(row_spacing)))
-	for label in [_port_label, _log_level_label, _language_label, _source_option_label, _custom_branch_label, _release_tag_label]:
+	for label in [_port_label, _log_level_label, _language_label, _source_option_label, _custom_branch_label]:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		label.custom_minimum_size.x = label_width
-	for field in [_port_spin, _log_level_option, _language_option, _source_option, _custom_branch_value, _release_tag_value]:
+	for field in [_port_spin, _log_level_option, _language_option, _source_option, _custom_branch_value]:
 		field.custom_minimum_size.x = field_width
 		field.custom_minimum_size.y = 0.0
 	for button in [_check_button, _prepare_button, _apply_button]:
@@ -351,7 +327,7 @@ func _apply_visual_style(scale: float) -> void:
 	for title in [_general_title, _updates_title]:
 		title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 		title.remove_theme_font_size_override("font_size")
-	for label in [_port_label, _log_level_label, _language_label, _source_option_label, _custom_branch_label, _release_tag_label]:
+	for label in [_port_label, _log_level_label, _language_label, _source_option_label, _custom_branch_label]:
 		label.add_theme_color_override("font_color", _get_muted_text_color())
 	for label in [_updates_description, _version_label, _source_label, _commit_label, _updates_status]:
 		label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
@@ -374,7 +350,6 @@ func _get_setting_rows() -> Array[HBoxContainer]:
 		%LanguageRow,
 		%UpdateSourceRow,
 		%CustomBranchRow,
-		%ReleaseTagRow,
 		%UpdateButtonsRow,
 	]
 
