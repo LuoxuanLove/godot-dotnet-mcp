@@ -6,11 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.0.0])
 
+### Changed
+
+- Changed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
+
 ### Fixed
 
 - Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
 - Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
-- Fixed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 
 ### Documentation
 
