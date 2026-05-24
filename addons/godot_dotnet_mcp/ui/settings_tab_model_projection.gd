@@ -34,7 +34,6 @@ func project(model: Dictionary) -> Dictionary:
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
 			"release_tag": str(update_settings.get("release_tag", "")),
 			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch",
-			"show_release_tag_row": false,
 			"status_text": _build_update_status_text(model, update_settings, localization),
 			"check_enabled": _is_update_check_enabled(model),
 			"prepare_enabled": false,
@@ -59,7 +58,7 @@ func _project_update_settings(settings: Dictionary) -> Dictionary:
 func _normalize_update_source(source: String) -> String:
 	var normalized := source.strip_edges()
 	match normalized:
-		"branch":
+		"latest_dev", "branch":
 			return "custom_branch"
 		"release_tag":
 			return "latest_release"

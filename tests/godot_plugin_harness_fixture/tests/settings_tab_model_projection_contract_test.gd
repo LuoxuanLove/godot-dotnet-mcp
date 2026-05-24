@@ -93,7 +93,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Settings projection should display the sync commit when available.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
 		return _failure("Settings update Sync should be enabled while Prepare remains disabled.")
-	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)) or bool(updates.get("show_release_tag_row", true)):
+	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	if not str(updates.get("status_text", "")).contains("Selected target:"):
 		return _failure("Settings projection should include the selected update target in status text.")
@@ -106,7 +106,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool((latest_release_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.1.0-beta"):
 		return _failure("Settings projection should resolve latest release targets, including prereleases, from discovered release state.")
-	if bool((latest_release_projection.get("updates", {}) as Dictionary).get("show_branch_row", true)) or bool((latest_release_projection.get("updates", {}) as Dictionary).get("show_release_tag_row", true)):
+	if bool((latest_release_projection.get("updates", {}) as Dictionary).get("show_branch_row", true)):
 		return _failure("Settings projection should not expose editable target rows for automatic latest release sources.")
 	var tag_only_latest_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -125,7 +125,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_ref_latest_release": "v1.1.0-beta.1",
 		"plugin_freshness": {}
 	})
-	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01") or bool((explicit_tag_projection.get("updates", {}) as Dictionary).get("show_release_tag_row", true)):
+	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01"):
 		return _failure("Settings projection should normalize old explicit release/tag settings to latest release and ignore saved downgrade tags.")
 	var removed_latest_dev_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -133,8 +133,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_ref_latest_stable_release": "v1.0.0",
 		"plugin_freshness": {}
 	})
-	if str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_stable" or not str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
-		return _failure("Settings projection should normalize removed latest_dev settings to latest stable.")
+	if str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("source", "")) != "custom_branch" or not bool((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("show_branch_row", false)) or _selected_option_value((removed_latest_dev_projection.get("options", {}) as Dictionary).get("update_sources", [])) != "custom_branch" or _selected_option_value((removed_latest_dev_projection.get("options", {}) as Dictionary).get("update_branches", [])) != "dev":
+		return _failure("Settings projection should preserve legacy latest_dev settings as custom_branch with dev fallback.")
 	var legacy_branch_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "branch", "update_custom_branch": "feature/legacy"},
