@@ -1105,7 +1105,8 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 
 
 func _build_update_refs_success_status() -> String:
-	return "Discovered %d branches, %d releases, and %d tags." % [_state.update_ref_branches.size(), _to_string_array(_update_refs_pending.get("releases", [])).size(), _to_string_array(_update_refs_pending.get("tags", [])).size()]
+	var template := _localization.get_text("settings_update_refs_success_details") if _localization != null else "Discovered %d branches, %d releases, and %d tags."
+	return template % [_state.update_ref_branches.size(), _to_string_array(_update_refs_pending.get("releases", [])).size(), _to_string_array(_update_refs_pending.get("tags", [])).size()]
 
 
 func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
