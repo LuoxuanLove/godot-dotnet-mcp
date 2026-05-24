@@ -19,7 +19,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed",
-		"settings_update_source_branch": "Branch",
+		"settings_update_source_latest_dev": "Latest dev",
+		"settings_update_source_custom_branch": "Custom branch",
 		"settings_update_source_latest_stable": "Latest stable release",
 		"settings_update_source_latest_release": "Latest release",
 		"settings_update_source_release_tag": "Release tag",
@@ -119,6 +120,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"log_levels": ["debug", "info", "warning", "error"],
 		"update_ref_branches": ["dev", "feature/settings"],
 		"update_ref_releases": ["v1.0.0", "v1.2.3"],
+		"update_ref_latest_release": "v1.2.3",
 		"plugin_version": "1.0.0",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
@@ -143,14 +145,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render and select the current log level.")
 	if language_option == null or language_option.get_item_count() != 2 or str(language_option.get_item_metadata(language_option.selected)) != "zh_CN":
 		return _failure("Settings tab should render and select the current language.")
-	if source_option == null or source_option.get_item_count() != 4 or str(source_option.get_item_metadata(source_option.selected)) != "release_tag" or _has_option_value(source_option, "latest_dev") or _has_option_value(source_option, "custom_branch"):
-		return _failure("Settings tab should render one merged branch source and select the update source without adding Config-tab UI.")
+	if source_option == null or source_option.get_item_count() != 3 or str(source_option.get_item_metadata(source_option.selected)) != "latest_release" or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
+		return _failure("Settings tab should render latest stable, latest release, then custom branch sources without adding Config-tab UI.")
 	if custom_branch == null or custom_branch.get_item_count() < 1 or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options.")
 	if release_tag == null or release_tag.get_item_count() != 2 or str(release_tag.get_item_metadata(release_tag.selected)) != "v1.0.0":
 		return _failure("Settings tab should render discovered release/tag options.")
-	if custom_branch_row.visible or not release_tag_row.visible:
-		return _failure("Settings tab should hide the branch selector and show the release/tag selector for selected release/tag source.")
+	if custom_branch_row.visible or release_tag_row.visible:
+		return _failure("Settings tab should hide manual target selectors for latest release source.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_release_tag != "" or recorder.update_check_count != 0:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
@@ -173,7 +175,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if prepare_button == null or prepare_button.visible or not prepare_button.disabled:
 		return _failure("Settings update Prepare should remain hidden and disabled.")
 	if apply_button == null or apply_button.disabled or apply_button.text != "同步":
-		return _failure("Settings update Sync button should be enabled for selected branch/tag targets.")
+		return _failure("Settings update Sync button should be enabled for the resolved latest release target.")
 
 	port_spin.value = 4200
 	log_option.select(0)
@@ -184,14 +186,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should emit the existing persistence signals for port, log level, and language.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
+	if custom_branch_row.visible or release_tag_row.visible:
+		return _failure("Settings tab should hide editable target rows after changing update source to latest stable.")
+	source_option.select(2)
+	source_option.emit_signal("item_selected", 2)
 	if not custom_branch_row.visible or release_tag_row.visible:
-		return _failure("Settings tab should immediately show the branch selector after changing update source to branch.")
+		return _failure("Settings tab should immediately show the branch selector after changing update source to custom branch.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
-	release_tag.select(1)
-	release_tag.emit_signal("item_selected", 1)
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_release_tag != "v1.2.3" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_release_tag != "" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab should emit update setting and Sync signals from selectors/buttons without a user-visible Check action.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
@@ -209,14 +213,6 @@ func _find_label_containing(labels: Array, text: String) -> Label:
 		if label is Label and (label as Label).text.contains(text):
 			return label as Label
 	return null
-
-
-func _has_option_value(option_button: OptionButton, value: String) -> bool:
-	for item_index in range(option_button.get_item_count()):
-		if str(option_button.get_item_metadata(item_index)) == value:
-			return true
-	return false
-
 
 func _failure(message: String) -> Dictionary:
 	return {"name": "settings_tab_rendering_contracts", "success": false, "error": message}

@@ -26,7 +26,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed",
-		"settings_update_source_branch": "Branch",
+		"settings_update_source_latest_dev": "Latest dev",
+		"settings_update_source_custom_branch": "Custom branch",
 		"settings_update_source_latest_stable": "Latest stable release",
 		"settings_update_source_latest_release": "Latest release",
 		"settings_update_source_release_tag": "Release tag",
@@ -113,7 +114,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"editor_scale": 1.0,
 		"current_tab": 3,
 		"is_running": false,
-		"settings": {"port": 3100, "update_source": "branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
+		"settings": {"port": 3100, "update_source": "custom_branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
 		"current_log_level": "info",
 		"current_language": "en",
 		"log_levels": ["debug", "info"],
@@ -144,10 +145,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var apply_button := tab_container.get_tab_control(3).find_child("ApplyButton", true, false) as Button
 	if source_option == null or custom_branch_value == null or release_tag_value == null or check_button == null or prepare_button == null or apply_button == null:
 		return _failure("Settings tab update source controls should exist in the Settings tab.")
-	if source_option.get_item_count() != 4 or _has_option_value(source_option, "latest_dev") or _has_option_value(source_option, "custom_branch"):
-		return _failure("Settings tab should expose one merged branch source option instead of separate dev/custom branch choices.")
+	if source_option.get_item_count() != 3 or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
+		return _failure("Settings tab should expose latest stable, latest release, and custom branch source choices in order.")
+	if _has_option_value(source_option, "release_tag") or _has_option_value(source_option, "latest_dev"):
+		return _failure("Settings tab should not expose selectable release/tag or latest dev sources.")
 	if custom_branch_row == null or release_tag_row == null or not custom_branch_row.visible or release_tag_row.visible:
-		return _failure("Settings tab should show only the branch target row for branch update sources.")
+		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
 	if tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) is LineEdit or tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
 	if check_button.visible or not check_button.disabled or not check_button.text.is_empty():
@@ -173,7 +176,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"editor_scale": 1.0,
 		"current_tab": 3,
 		"is_running": false,
-		"settings": {"port": 3100, "update_source": "branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
+		"settings": {"port": 3100, "update_source": "custom_branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
 		"current_log_level": "info",
 		"current_language": "en",
 		"log_levels": ["debug", "info"],
@@ -185,20 +188,22 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if check_button.visible or not check_button.disabled or not check_button.text.is_empty() or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "Sync":
 		return _failure("MCP Dock should normalize stale Settings tab update button cache after model projection.")
-	source_option.select(3)
-	source_option.emit_signal("item_selected", 3)
-	if custom_branch_row.visible or not release_tag_row.visible:
-		return _failure("Settings tab should update branch/release row visibility immediately when the source selector changes.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
+	if custom_branch_row.visible or release_tag_row.visible:
+		return _failure("Settings tab should hide editable target rows immediately when latest stable mode is selected.")
+	source_option.select(1)
+	source_option.emit_signal("item_selected", 1)
+	if custom_branch_row.visible or release_tag_row.visible:
+		return _failure("Settings tab should hide editable target rows immediately when latest release mode is selected.")
+	source_option.select(2)
+	source_option.emit_signal("item_selected", 2)
 	if not custom_branch_row.visible or release_tag_row.visible:
-		return _failure("Settings tab should restore branch row visibility immediately when branch mode is selected.")
+		return _failure("Settings tab should restore branch row visibility immediately when custom branch mode is selected.")
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
-	release_tag_value.select(1)
-	release_tag_value.emit_signal("item_selected", 1)
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_release_tag != "v2.0.0" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_release_tag != "" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab update setting and Sync changes should route through MCP Dock signals without a user-visible Check action.")
 
 	return {"name": "mcp_dock_settings_tab_contracts", "success": true, "error": ""}

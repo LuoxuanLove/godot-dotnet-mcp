@@ -138,7 +138,7 @@ func apply_model(model: Dictionary) -> void:
 	_source_label.text = str(updates.get("source_text", ""))
 	_commit_label.text = str(updates.get("commit_text", ""))
 	_updates_status.text = str(updates.get("status_text", ""))
-	var update_source := str(updates.get("source", "branch"))
+	var update_source := str(updates.get("source", "latest_stable"))
 	_apply_update_source_rows(update_source)
 	_check_button.disabled = true
 	_prepare_button.disabled = true
@@ -221,9 +221,9 @@ func _get_update_description_text(localization) -> String:
 
 func _apply_update_source_rows(source: String) -> void:
 	if _custom_branch_row != null:
-		_custom_branch_row.visible = source == "branch"
+		_custom_branch_row.visible = source == "custom_branch"
 	if _release_tag_row != null:
-		_release_tag_row.visible = source == "release_tag"
+		_release_tag_row.visible = false
 
 
 func _apply_projected_options(option_button: OptionButton, projected_items: Array) -> void:
