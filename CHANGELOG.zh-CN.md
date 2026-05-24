@@ -22,6 +22,7 @@
 
 ### Internal
 
+- 新增默认先 dry-run 的一键发布 workflow：创建新的 `plugin-v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness。
 - 更新 PR policy 校验：改为读取实时 PR 元数据，并新增手动 dispatch 兜底，使 PR 正文编辑后可重新校验而不依赖过期的 rerun payload。
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.0` 正式版本。
 - 移除未注册的旧插件聚合工具执行器与陈旧文档引用，并加强拆分后的插件工具分类契约覆盖。
