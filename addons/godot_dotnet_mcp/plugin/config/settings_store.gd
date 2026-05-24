@@ -31,7 +31,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 
 	if str(settings.get("tool_profile_id", "")).is_empty():
 		settings["tool_profile_id"] = "default"
-	settings["update_source"] = _normalize_update_source(str(settings.get("update_source", "branch")))
+	settings["update_source"] = _normalize_update_source(str(settings.get("update_source", "latest_stable")))
 
 	TreeCollapseState.normalize_settings(
 		settings,
@@ -48,12 +48,14 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 
 func _normalize_update_source(source: String) -> String:
 	match source.strip_edges():
-		"latest_dev", "custom_branch", "branch":
-			return "branch"
-		"latest_stable", "latest_release", "release_tag":
+		"branch":
+			return "custom_branch"
+		"release_tag":
+			return "latest_release"
+		"custom_branch", "latest_stable", "latest_release":
 			return source.strip_edges()
 		_:
-			return "branch"
+			return "latest_stable"
 
 
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:

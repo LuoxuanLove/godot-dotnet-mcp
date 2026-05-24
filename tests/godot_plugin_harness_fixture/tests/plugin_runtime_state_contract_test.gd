@@ -72,8 +72,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should keep auto_start enabled in default settings.")
 	if not bool(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("debug_mode", false)):
 		return _failure("PluginRuntimeState should expose debug_mode in default settings.")
-	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_source", "")) != "branch":
-		return _failure("PluginRuntimeState should default update scaffolding to the branch source.")
+	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_source", "")) != "latest_stable":
+		return _failure("PluginRuntimeState should default update scaffolding to the latest stable release source.")
 	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_custom_branch", "")) != "dev":
 		return _failure("PluginRuntimeState should default the custom update branch to dev without changing port/log/language defaults.")
 	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_release_tag", "not-empty")) != "":

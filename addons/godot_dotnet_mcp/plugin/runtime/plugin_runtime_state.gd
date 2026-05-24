@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"port": 3000,
 	"show_user_tools": true,
 	"tool_profile_id": "default",
-	"update_source": "branch",
+	"update_source": "latest_stable",
 	"update_custom_branch": "dev",
 	"update_release_tag": ""
 }
