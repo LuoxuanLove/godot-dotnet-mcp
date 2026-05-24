@@ -70,6 +70,7 @@ var _dock_recreate_attempted := false
 var _update_refs_request_serial := 0
 var _update_refs_pending := {}
 var _update_refs_discovery_loaded := false
+var _update_refs_discovery_retry_pending := false
 var _update_sync_request_serial := 0
 
 
@@ -107,6 +108,7 @@ func _enter_tree() -> void:
 		_refresh_dock()
 
 	_restore_pending_focus_snapshot_if_needed()
+	call_deferred("_ensure_saved_update_source_discovery_requested")
 	_finish_self_operation(operation, true, "plugin", "_enter_tree")
 
 	MCPDebugBuffer.record("info", "plugin", "Plugin initialized")
@@ -160,6 +162,8 @@ func _disable_plugin() -> void:
 func _process(delta: float) -> void:
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.tick()
+	if _update_refs_discovery_retry_pending and _ensure_update_refs_discovery_requested():
+		return
 	_status_poll_accumulator += delta
 	if _status_poll_accumulator >= 0.5:
 		_status_poll_accumulator = 0.0
@@ -516,6 +520,13 @@ func _refresh_dock() -> void:
 		_dock_recreate_attempted = true
 		call_deferred("_recreate_dock")
 		return
+	if _update_refs_discovery_retry_pending and _ensure_update_refs_discovery_requested():
+		return
+	_sync_current_tab_from_dock()
+	if _ensure_saved_update_source_discovery_requested():
+		return
+	if _state != null and _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+		return
 	if _dock_model_service == null:
 		_dock_model_service = DockModelService.new()
 	_dock_model_service.configure(
@@ -601,7 +612,7 @@ func _on_language_changed(language_code: String) -> void:
 
 func _on_update_source_changed(source: String) -> void:
 	_state.settings["update_source"] = _normalize_update_source(source)
-	if str(_state.settings.get("update_custom_branch", "")).strip_edges().is_empty():
+	if _state.settings["update_source"] == "custom_branch" and str(_state.settings.get("update_custom_branch", "")).strip_edges().is_empty():
 		_state.settings["update_custom_branch"] = "dev"
 	_save_settings()
 	if _ensure_update_refs_discovery_requested():
@@ -612,25 +623,56 @@ func _on_update_source_changed(source: String) -> void:
 func _normalize_update_source(source: String) -> String:
 	var normalized := source.strip_edges()
 	match normalized:
-		"latest_dev", "custom_branch", "branch":
-			return "branch"
-		"latest_stable", "latest_release", "release_tag":
+		"branch":
+			return "custom_branch"
+		"release_tag":
+			return "latest_release"
+		"custom_branch", "latest_stable", "latest_release":
 			return normalized
 		_:
-			return "branch"
+			return "latest_stable"
 
 
 func _ensure_update_refs_discovery_requested() -> bool:
 	if _state == null:
 		return false
-	if not is_inside_tree():
+	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
+		return false
+	if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
+		_update_refs_discovery_retry_pending = false
+		return false
+	if _get_update_request_parent() == null:
+		_update_refs_discovery_retry_pending = true
+		return false
+	_update_refs_discovery_retry_pending = false
+	_on_update_check_requested()
+	return true
+
+
+func _ensure_saved_update_source_discovery_requested() -> bool:
+	if _state == null:
+		return false
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
+	if not ["custom_branch", "latest_stable", "latest_release"].has(source):
+		_update_refs_discovery_retry_pending = false
 		return false
 	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
 		return false
 	if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
+		_update_refs_discovery_retry_pending = false
 		return false
-	_on_update_check_requested()
-	return true
+	if _get_update_request_parent() == null:
+		_update_refs_discovery_retry_pending = true
+		return false
+	return _ensure_update_refs_discovery_requested()
+
+
+func _get_update_request_parent() -> Node:
+	if _dock != null and is_instance_valid(_dock) and _dock.is_inside_tree():
+		return _dock
+	if is_inside_tree():
+		return self
+	return null
 
 
 func _on_update_custom_branch_changed(branch: String) -> void:
@@ -702,11 +744,11 @@ func _on_update_sync_requested() -> void:
 
 
 func _resolve_update_sync_target() -> Dictionary:
-	var source := _normalize_update_source(str(_state.settings.get("update_source", "branch")))
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
 	var target_ref := ""
 	var target_kind := "branch"
 	match source:
-		"branch":
+		"custom_branch":
 			target_ref = str(_state.settings.get("update_custom_branch", "dev")).strip_edges()
 		"latest_stable":
 			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
@@ -714,11 +756,9 @@ func _resolve_update_sync_target() -> Dictionary:
 		"latest_release":
 			target_ref = str(_state.update_ref_latest_release).strip_edges()
 			target_kind = "tag"
-		"release_tag":
-			target_ref = str(_state.settings.get("update_release_tag", "")).strip_edges()
-			target_kind = "tag"
 		_:
-			target_ref = str(_state.settings.get("update_custom_branch", "dev")).strip_edges()
+			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
+			target_kind = "tag"
 	return {
 		"kind": target_kind,
 		"ref": target_ref,
@@ -736,11 +776,15 @@ func _resolve_update_ref_commit(target_ref: String) -> String:
 func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 	if _state == null or serial != _update_refs_request_serial:
 		return
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_refs_request_failed(kind, "No active update refs request host.", serial)
+		return
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateRefs%sRequest" % kind.capitalize()
 	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
 	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
-	add_child(request_node)
+	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_refs_request_completed").bind(kind, serial, request_node), CONNECT_ONE_SHOT)
 	var error := request_node.request(url, _get_update_refs_headers())
 	if error != OK:
@@ -749,6 +793,10 @@ func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 
 
 func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_sync_failed("No active update sync request host.", serial)
+		return
 	var sync_dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://godot_dotnet_mcp"))
 	if sync_dir_error != OK:
 		_mark_update_sync_failed("Failed to create update cache: %s" % sync_dir_error, serial)
@@ -761,7 +809,7 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 	request_node.timeout = UPDATE_SYNC_HTTP_TIMEOUT
 	request_node.body_size_limit = UPDATE_SYNC_BODY_SIZE_LIMIT
 	request_node.download_file = UPDATE_SYNC_ARCHIVE_PATH
-	add_child(request_node)
+	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
 	var error := request_node.request("%s%s" % [archive_prefix, target_ref], _get_update_archive_headers())
 	if error != OK:
@@ -1702,12 +1750,26 @@ func _capture_dock_focus_snapshot() -> Dictionary:
 func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 	if _dock == null or not is_instance_valid(_dock):
 		return
+	if _state != null:
+		_state.current_tab = int(snapshot.get("tab_index", _state.current_tab))
 	if _dock.has_method("activate_editor_dock_tab"):
 		_dock.activate_editor_dock_tab()
 	if _dock.has_method("restore_focus_snapshot"):
 		_dock.restore_focus_snapshot(snapshot)
 	if _dock.has_method("focus_active_panel"):
 		_dock.call_deferred("focus_active_panel")
+	if _state != null and _state.current_tab == 3:
+		_ensure_update_refs_discovery_requested()
+
+
+func _sync_current_tab_from_dock() -> void:
+	if _state == null or _dock == null or not is_instance_valid(_dock):
+		return
+	if not _dock.has_method("get_current_tab"):
+		return
+	var current_tab := int(_dock.call("get_current_tab"))
+	if current_tab >= 0:
+		_state.current_tab = current_tab
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
@@ -2160,6 +2222,7 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 	var snapshot = _state.settings.get(PENDING_FOCUS_SNAPSHOT_KEY, {})
 	if not (snapshot is Dictionary):
 		return
+	_state.current_tab = int((snapshot as Dictionary).get("tab_index", _state.current_tab))
 	if _dock and is_instance_valid(_dock):
 		if _dock.has_method("activate_editor_dock_tab"):
 			_dock.activate_editor_dock_tab()
@@ -2169,7 +2232,8 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
-
+	if _state.current_tab == 3:
+		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
 	var editor_interface = get_editor_interface()
