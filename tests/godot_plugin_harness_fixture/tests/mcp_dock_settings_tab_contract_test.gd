@@ -63,7 +63,6 @@ class Recorder extends RefCounted:
 	var port := 0
 	var update_source := ""
 	var update_custom_branch := ""
-	var update_release_tag := ""
 	var update_check_count := 0
 	var update_apply_count := 0
 
@@ -75,9 +74,6 @@ class Recorder extends RefCounted:
 
 	func on_update_custom_branch_changed(value: String) -> void:
 		update_custom_branch = value
-
-	func on_update_release_tag_changed(value: String) -> void:
-		update_release_tag = value
 
 	func on_update_check_requested() -> void:
 		update_check_count += 1
@@ -106,7 +102,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.port_changed.connect(Callable(recorder, "on_port_changed"))
 	_instance.update_source_changed.connect(Callable(recorder, "on_update_source_changed"))
 	_instance.update_custom_branch_changed.connect(Callable(recorder, "on_update_custom_branch_changed"))
-	_instance.update_release_tag_changed.connect(Callable(recorder, "on_update_release_tag_changed"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
 	_instance.apply_model({
@@ -138,20 +133,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var source_option := tab_container.get_tab_control(3).find_child("SourceOption", true, false) as OptionButton
 	var custom_branch_row := tab_container.get_tab_control(3).find_child("CustomBranchRow", true, false) as HBoxContainer
 	var custom_branch_value := tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) as OptionButton
-	var release_tag_row := tab_container.get_tab_control(3).find_child("ReleaseTagRow", true, false) as HBoxContainer
-	var release_tag_value := tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) as OptionButton
 	var check_button := tab_container.get_tab_control(3).find_child("CheckButton", true, false) as Button
 	var prepare_button := tab_container.get_tab_control(3).find_child("PrepareButton", true, false) as Button
 	var apply_button := tab_container.get_tab_control(3).find_child("ApplyButton", true, false) as Button
-	if source_option == null or custom_branch_value == null or release_tag_value == null or check_button == null or prepare_button == null or apply_button == null:
+	if source_option == null or custom_branch_value == null or check_button == null or prepare_button == null or apply_button == null:
 		return _failure("Settings tab update source controls should exist in the Settings tab.")
 	if source_option.get_item_count() != 3 or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
 		return _failure("Settings tab should expose latest stable, latest release, and custom branch source choices in order.")
 	if _has_option_value(source_option, "release_tag") or _has_option_value(source_option, "latest_dev"):
 		return _failure("Settings tab should not expose selectable release/tag or latest dev sources.")
-	if custom_branch_row == null or release_tag_row == null or not custom_branch_row.visible or release_tag_row.visible:
+	if custom_branch_row == null or not custom_branch_row.visible or tab_container.get_tab_control(3).find_child("ReleaseTagRow", true, false) != null:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
-	if tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) is LineEdit or tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) is LineEdit:
+	if tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
 	if check_button.visible or not check_button.disabled or not check_button.text.is_empty():
 		return _failure("Settings tab Check should remain hidden, disabled, and label-free because refs are discovered from source selection.")
@@ -190,20 +183,20 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("MCP Dock should normalize stale Settings tab update button cache after model projection.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
-	if custom_branch_row.visible or release_tag_row.visible:
+	if custom_branch_row.visible:
 		return _failure("Settings tab should hide editable target rows immediately when latest stable mode is selected.")
 	source_option.select(1)
 	source_option.emit_signal("item_selected", 1)
-	if custom_branch_row.visible or release_tag_row.visible:
+	if custom_branch_row.visible:
 		return _failure("Settings tab should hide editable target rows immediately when latest release mode is selected.")
 	source_option.select(2)
 	source_option.emit_signal("item_selected", 2)
-	if not custom_branch_row.visible or release_tag_row.visible:
+	if not custom_branch_row.visible:
 		return _failure("Settings tab should restore branch row visibility immediately when custom branch mode is selected.")
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_release_tag != "" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab update setting and Sync changes should route through MCP Dock signals without a user-visible Check action.")
 
 	return {"name": "mcp_dock_settings_tab_contracts", "success": true, "error": ""}

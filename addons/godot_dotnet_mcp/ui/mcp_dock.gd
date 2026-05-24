@@ -102,7 +102,6 @@ func _ready() -> void:
 		_settings_tab.language_changed.connect(_on_settings_tab_language_changed)
 		_settings_tab.update_source_changed.connect(_on_settings_tab_update_source_changed)
 		_settings_tab.update_custom_branch_changed.connect(_on_settings_tab_update_custom_branch_changed)
-		_settings_tab.update_release_tag_changed.connect(_on_settings_tab_update_release_tag_changed)
 		_settings_tab.update_check_requested.connect(_on_settings_tab_update_check_requested)
 		_settings_tab.update_apply_requested.connect(_on_settings_tab_update_apply_requested)
 
@@ -373,10 +372,6 @@ func _on_settings_tab_update_source_changed(source: String) -> void:
 
 func _on_settings_tab_update_custom_branch_changed(branch: String) -> void:
 	update_custom_branch_changed.emit(branch)
-
-
-func _on_settings_tab_update_release_tag_changed(tag: String) -> void:
-	update_release_tag_changed.emit(tag)
 
 
 func _on_settings_tab_update_check_requested() -> void:
