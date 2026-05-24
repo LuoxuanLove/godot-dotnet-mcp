@@ -52,7 +52,7 @@ func _project_update_settings(settings: Dictionary) -> Dictionary:
 	return {
 		"source": source,
 		"custom_branch": custom_branch,
-		"release_tag": str(settings.get("update_release_tag", ""))
+		"release_tag": str(settings.get("update_release_tag", "")).strip_edges()
 	}
 
 
