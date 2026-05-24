@@ -1,0 +1,250 @@
+name: publish-release
+run-name: publish-release ${{ inputs.version || 'plugin.cfg' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 1.0.0. Empty reads plugin.cfg."
+        required: false
+        type: string
+      target_ref:
+        description: "Release source ref. One-click releases must target dev."
+        required: false
+        default: dev
+        type: string
+      dry_run:
+        description: "Run every validation step without creating a tag or release."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release-${{ inputs.version || inputs.target_ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-release:
+    runs-on: windows-2025
+
+    steps:
+      - name: Validate release source input
+        env:
+          TARGET_REF: ${{ inputs.target_ref }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:TARGET_REF -ne "dev") {
+            throw "One-click releases must target dev. Actual target_ref: $env:TARGET_REF"
+          }
+
+      - name: Checkout release source
+        uses: actions/checkout@v5
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Fetch release refs
+        shell: pwsh
+        run: git fetch --force --tags origin +refs/heads/dev:refs/remotes/origin/dev
+
+      - name: Verify hosted .NET 8 SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet --info
+          dotnet --list-sdks
+          $sdkVersion = dotnet --version
+          if ($sdkVersion -notmatch '^8\.') {
+            throw "Expected global.json to select a .NET 8 SDK, got $sdkVersion."
+          }
+
+      - name: Build plugin Roslyn library
+        shell: pwsh
+        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+
+      - name: Setup Godot 4.6
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $godotZip = "$env:TEMP\Godot_v4.6-stable_mono_win64.exe.zip"
+          if (-not (Test-Path $godotZip)) {
+            curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
+          }
+          $extractDir = "$env:TEMP\godot_extracted"
+          Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
+          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run plugin harness verification
+        shell: pwsh
+        run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
+
+      - name: Run one-click release preflight
+        id: preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          TARGET_REF: ${{ inputs.target_ref }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $headSha = (git rev-parse HEAD).Trim()
+          $devSha = (git rev-parse origin/dev).Trim()
+          if ($headSha -ne $devSha) {
+            throw "Checked out release source $headSha does not match origin/dev $devSha."
+          }
+
+          $pluginCfg = Get-Content -LiteralPath "addons/godot_dotnet_mcp/plugin.cfg" -Raw -Encoding UTF8
+          if ($pluginCfg -notmatch 'version="([^"]+)"') {
+            throw "Cannot find version in addons/godot_dotnet_mcp/plugin.cfg"
+          }
+
+          $pluginVersion = $Matches[1]
+          $version = ([string]$env:INPUT_VERSION).Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = $pluginVersion
+          }
+          if ($version -ne $pluginVersion) {
+            throw "Input version $version does not match plugin.cfg version $pluginVersion."
+          }
+
+          $semverPattern = '0|[1-9]\d*'
+          $prereleaseIdentifierPattern = '(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+          $versionPattern = "^(($semverPattern)\.($semverPattern)\.($semverPattern)(?:-$prereleaseIdentifierPattern(?:\.$prereleaseIdentifierPattern)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$"
+          if ($version -notmatch $versionPattern) {
+            throw "Release version must be SemVer. Actual version: $version"
+          }
+
+          $tagName = "plugin-v$version"
+          $existingTag = (git ls-remote --tags origin "refs/tags/$tagName").Trim()
+          if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
+            throw "Release tag $tagName already exists. Choose a new version."
+          }
+
+          gh release view $tagName *> $null
+          $releaseLookupExit = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+          if ($releaseLookupExit -eq 0) {
+            throw "GitHub Release $tagName already exists. Choose a new version."
+          }
+          if ($releaseLookupExit -ne 1) {
+            throw "Unable to check whether GitHub Release $tagName exists. gh exited with $releaseLookupExit."
+          }
+
+          $versionMentionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($version))(?![0-9A-Za-z.-])"
+          foreach ($path in @("CHANGELOG.md", "CHANGELOG.zh-CN.md")) {
+            $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+            if ($content -notmatch $versionMentionPattern) {
+              throw "$path does not mention release version $version"
+            }
+          }
+
+          $releaseNotesPath = "release-notes-v$version.md"
+          if (-not (Test-Path -LiteralPath $releaseNotesPath)) {
+            throw "Manual release notes file $releaseNotesPath is required for a formal release."
+          }
+
+          $releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw -Encoding UTF8
+          if ($releaseNotes -notmatch $versionMentionPattern) {
+            throw "$releaseNotesPath does not mention release version $version"
+          }
+
+          $isPrerelease = (($version -match '^\d+\.\d+\.\d+-').ToString().ToLowerInvariant())
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag_name=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "target_sha=$headSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "## Release Preflight"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Version: ``$version``"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Tag: ``$tagName``"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Target SHA: ``$headSha``"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Dry run: ``$env:DRY_RUN``"
+
+      - name: Render release notes
+        id: release_notes
+        env:
+          VERSION: ${{ steps.preflight.outputs.version }}
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $notesFile = Join-Path $env:RUNNER_TEMP "release-notes-$env:VERSION.md"
+
+          .\scripts\render_release_notes.ps1 `
+            -Version $env:VERSION `
+            -OutputPath $notesFile `
+            -ManualNotesPath "release-notes-v$env:VERSION.md" `
+            -ChangelogPath "CHANGELOG.zh-CN.md" `
+            -TagName $env:TAG_NAME `
+            -CommitLimit 30
+
+          "notes_file=$notesFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Report dry run result
+        if: ${{ inputs.dry_run }}
+        env:
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Dry run completed. No tag or GitHub Release was created."
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Rerun with ``dry_run=false`` to create ``$env:TAG_NAME`` at ``$env:TARGET_SHA``."
+
+      - name: Create release tag
+        if: ${{ inputs.dry_run == false }}
+        env:
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          VERSION: ${{ steps.preflight.outputs.version }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$env:TAG_NAME" "$env:TARGET_SHA" -m "Godot .NET MCP v$env:VERSION"
+          git push origin "refs/tags/$env:TAG_NAME"
+
+      - name: Create GitHub release
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          VERSION: ${{ steps.preflight.outputs.version }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+          NOTES_FILE: ${{ steps.release_notes.outputs.notes_file }}
+          IS_PRERELEASE: ${{ steps.preflight.outputs.prerelease }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $args = @(
+            "release", "create", $env:TAG_NAME,
+            "--target", $env:TARGET_SHA,
+            "--title", "Godot .NET MCP v$env:VERSION",
+            "--notes-file", $env:NOTES_FILE
+          )
+          if ($env:IS_PRERELEASE -eq "true") {
+            $args += "--prerelease"
+          }
+          gh @args
+
+      - name: Delete consumed next draft
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $isDraft = gh release view next --json isDraft --jq '.isDraft' 2>$null
+          $lookupExit = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+          if ($lookupExit -eq 0 -and $isDraft -eq "true") {
+            gh release delete next --yes
+          }

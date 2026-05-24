@@ -58,8 +58,12 @@
 4. 等待 `validate-plugin-harness` 和相关 workflow 检查通过。
 5. 由维护者在 GitHub PR 页面手动确认并合并。
 6. 手动运行或等待 `draft-release-notes` 刷新 `next` draft release，并检查正文是否符合正式发布格式。
-7. 在合并后的 `dev` 上创建并推送 `plugin-v*` tag，或手动触发 `publish-plugin` workflow 进行验证。
-8. `publish-plugin` 会在 tag 发布前检查版本一致性、发布说明源文件和已存在 release；检查通过后创建 GitHub Release，不上传本地包资产。
+7. 优先手动触发 `publish-release` workflow，先保持 `dry_run=true` 验证版本、tag、发布说明和构建检查。
+8. dry run 通过并确认发布内容后，重新运行 `publish-release`，将 `dry_run` 设为 `false`；workflow 会在 `dev` 当前提交上创建新的 `plugin-v*` tag，生成正式 GitHub Release，并删除已消费的 `next` draft release。
+9. 如需沿用旧入口，也可以在合并后的 `dev` 上创建并推送 `plugin-v*` tag，或手动触发 `publish-plugin` workflow 进行验证。
+10. `publish-release` 和 `publish-plugin` 都会在发布前检查版本一致性、发布说明源文件和已存在 release；检查通过后创建 GitHub Release，不上传本地包资产。
+
+`publish-release` 只执行发布收尾：不会提交版本号变更、不会合并 PR、不会推送 `dev`、不会覆盖或删除正式 tag，也不会制作或上传 zip / package 资产。若 tag 或 GitHub Release 已存在，workflow 会失败并要求选择新版本或人工处理。
 
 ---
 
