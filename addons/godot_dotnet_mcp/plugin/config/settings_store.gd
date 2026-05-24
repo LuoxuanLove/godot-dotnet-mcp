@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 class_name SettingsStore
 
@@ -31,6 +31,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 
 	if str(settings.get("tool_profile_id", "")).is_empty():
 		settings["tool_profile_id"] = "default"
+	settings["update_source"] = _normalize_update_source(str(settings.get("update_source", "branch")))
 
 	TreeCollapseState.normalize_settings(
 		settings,
@@ -45,7 +46,19 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 	}
 
 
+func _normalize_update_source(source: String) -> String:
+	match source.strip_edges():
+		"latest_dev", "custom_branch", "branch":
+			return "branch"
+		"latest_stable", "latest_release", "release_tag":
+			return source.strip_edges()
+		_:
+			return "branch"
+
+
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
+	var settings_dir := settings_path.get_base_dir()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))
 	var file = FileAccess.open(settings_path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(settings, "\t"))

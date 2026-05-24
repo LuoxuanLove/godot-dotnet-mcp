@@ -5,6 +5,7 @@ class_name DockModelService
 const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
@@ -118,9 +119,14 @@ func build_model() -> Dictionary:
 	)
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var client_install_statuses := {}
+	var plugin_freshness := {}
+	var plugin_version := ""
 
 	if int(_state.current_tab) == 2:
 		client_install_statuses = _get_client_install_statuses(settings)
+	if int(_state.current_tab) == 3:
+		plugin_freshness = _get_plugin_freshness_snapshot()
+		plugin_version = _read_plugin_version()
 
 	var model = _dock_presenter.build_model({
 		"state": _state,
@@ -142,7 +148,23 @@ func build_model() -> Dictionary:
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
 		"tool_presentation": tool_presentation,
-		"client_install_statuses": client_install_statuses
+		"client_install_statuses": client_install_statuses,
+		"plugin_freshness": plugin_freshness,
+		"plugin_version": plugin_version,
+		"update_refs_state": str(_get_state_value("update_refs_state", "idle")),
+		"update_refs_status": str(_get_state_value("update_refs_status", "")),
+		"update_refs_error": str(_get_state_value("update_refs_error", "")),
+		"update_ref_branches": _duplicate_string_array(_get_state_value("update_ref_branches", [])),
+		"update_ref_releases": _duplicate_string_array(_get_state_value("update_ref_releases", [])),
+		"update_ref_latest_stable_release": str(_get_state_value("update_ref_latest_stable_release", "")),
+		"update_ref_latest_release": str(_get_state_value("update_ref_latest_release", "")),
+		"update_refs_release_source": str(_get_state_value("update_refs_release_source", "")),
+		"update_ref_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
+		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
+		"update_sync_status": str(_get_state_value("update_sync_status", "")),
+		"update_sync_error": str(_get_state_value("update_sync_error", "")),
+		"update_sync_target_ref": str(_get_state_value("update_sync_target_ref", "")),
+		"update_sync_target_kind": str(_get_state_value("update_sync_target_kind", ""))
 	})
 	model["all_tools_by_category"] = all_tools_by_category
 	return model
@@ -166,6 +188,13 @@ func _get_settings() -> Dictionary:
 	if _state == null or not (_state.settings is Dictionary):
 		return {}
 	return _state.settings
+
+
+func _get_state_value(property_name: String, default_value = null):
+	if _state == null:
+		return default_value
+	var value = _state.get(property_name)
+	return default_value if value == null else value
 
 
 func _normalize_log_level(level: String) -> String:
@@ -225,3 +254,35 @@ func _get_client_install_statuses(settings: Dictionary) -> Dictionary:
 		return {}
 	_client_install_detection_service.configure(settings)
 	return _client_install_detection_service.detect_all()
+
+
+func _get_plugin_freshness_snapshot() -> Dictionary:
+	return PluginInstanceFreshness.get_freshness_snapshot()
+
+
+func _read_plugin_version() -> String:
+	var config := ConfigFile.new()
+	if config.load("res://addons/godot_dotnet_mcp/plugin.cfg") != OK:
+		return ""
+	return str(config.get_value("plugin", "version", ""))
+
+
+func _duplicate_string_array(values) -> Array[String]:
+	var result: Array[String] = []
+	if not (values is Array):
+		return result
+	for value in values:
+		result.append(str(value))
+	return result
+
+
+func _duplicate_string_dictionary(values) -> Dictionary:
+	var result := {}
+	if not (values is Dictionary):
+		return result
+	for key in (values as Dictionary).keys():
+		var normalized_key := str(key).strip_edges()
+		var normalized_value := str((values as Dictionary).get(key, "")).strip_edges()
+		if not normalized_key.is_empty() and not normalized_value.is_empty():
+			result[normalized_key] = normalized_value
+	return result

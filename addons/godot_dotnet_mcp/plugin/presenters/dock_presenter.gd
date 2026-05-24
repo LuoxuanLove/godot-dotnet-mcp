@@ -107,7 +107,9 @@ func build_model(context: Dictionary) -> Dictionary:
 		"desktop_clients": desktop_clients,
 		"cli_clients": cli_clients,
 		"config_platforms": config_platforms,
-		"config_connection_mode": config_connection_mode
+		"config_connection_mode": config_connection_mode,
+		"plugin_freshness": context.get("plugin_freshness", {}),
+		"plugin_version": str(context.get("plugin_version", ""))
 	}
 
 

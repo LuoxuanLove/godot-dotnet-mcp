@@ -28,6 +28,21 @@ const PLUGIN_ID := "godot_dotnet_mcp"
 const PENDING_FOCUS_SNAPSHOT_KEY := "_pending_focus_snapshot"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
+const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches?per_page=100&page=1"
+const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
+const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
+const UPDATE_REFS_HTTP_TIMEOUT := 10.0
+const UPDATE_REFS_BODY_SIZE_LIMIT := 16777216
+const UPDATE_REFS_MAX_PAGES := 20
+const UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/heads/"
+const UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/tags/"
+const UPDATE_SYNC_ARCHIVE_PATH := "user://godot_dotnet_mcp/update_branch.zip"
+const UPDATE_SYNC_MARKER_PATH := "res://addons/godot_dotnet_mcp/.mcp_sync.json"
+const UPDATE_SYNC_REPO_URL := "https://github.com/LuoxuanLove/godot-dotnet-mcp"
+const UPDATE_SYNC_HTTP_TIMEOUT := 60.0
+const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
+const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
+const UPDATE_SYNC_ADDON_PREFIX := "addons/godot_dotnet_mcp/"
 
 var _state := PluginRuntimeState.new()
 var _settings_store := SettingsStore.new()
@@ -52,6 +67,10 @@ var _pending_runtime_reload_action := ""
 var _plugin_reenable_pending := false
 var _dock_recreate_pending := false
 var _dock_recreate_attempted := false
+var _update_refs_request_serial := 0
+var _update_refs_pending := {}
+var _update_refs_discovery_loaded := false
+var _update_sync_request_serial := 0
 
 
 func _enter_tree() -> void:
@@ -557,6 +576,8 @@ func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
 	if _state.current_tab == 2:
 		_invalidate_client_install_status_cache()
+	if _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+		return
 	_refresh_dock()
 
 
@@ -576,6 +597,514 @@ func _on_language_changed(language_code: String) -> void:
 	_refresh_dock()
 	if _dock and is_instance_valid(_dock) and _dock.has_method("restore_focus_snapshot"):
 		_dock.restore_focus_snapshot(focus_snapshot)
+
+
+func _on_update_source_changed(source: String) -> void:
+	_state.settings["update_source"] = _normalize_update_source(source)
+	if str(_state.settings.get("update_custom_branch", "")).strip_edges().is_empty():
+		_state.settings["update_custom_branch"] = "dev"
+	_save_settings()
+	if _ensure_update_refs_discovery_requested():
+		return
+	_refresh_dock()
+
+
+func _normalize_update_source(source: String) -> String:
+	var normalized := source.strip_edges()
+	match normalized:
+		"latest_dev", "custom_branch", "branch":
+			return "branch"
+		"latest_stable", "latest_release", "release_tag":
+			return normalized
+		_:
+			return "branch"
+
+
+func _ensure_update_refs_discovery_requested() -> bool:
+	if _state == null:
+		return false
+	if not is_inside_tree():
+		return false
+	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
+		return false
+	if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
+		return false
+	_on_update_check_requested()
+	return true
+
+
+func _on_update_custom_branch_changed(branch: String) -> void:
+	_state.settings["update_custom_branch"] = branch
+	_save_settings()
+	_refresh_dock()
+
+
+func _on_update_release_tag_changed(tag: String) -> void:
+	_state.settings["update_release_tag"] = tag
+	_save_settings()
+	_refresh_dock()
+
+
+func _on_update_check_requested() -> void:
+	_update_refs_request_serial += 1
+	_update_refs_discovery_loaded = false
+	var serial := _update_refs_request_serial
+	_update_refs_pending = {
+		"serial": serial,
+		"branch_done": false,
+		"release_done": false,
+		"tag_done": false,
+		"errors": [],
+		"branches": [],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {},
+		"branches_pages": 1,
+		"releases_pages": 1,
+		"tags_pages": 1
+	}
+	_state.update_refs_state = "loading"
+	_state.update_refs_status = _localization.get_text("settings_update_refs_loading") if _localization != null else "Loading update refs."
+	_state.update_refs_error = ""
+	var empty_branches: Array[String] = []
+	var empty_releases: Array[String] = []
+	_state.update_ref_branches = empty_branches
+	_state.update_ref_releases = empty_releases
+	_state.update_ref_latest_stable_release = ""
+	_state.update_ref_latest_release = ""
+	_state.update_refs_release_source = ""
+	_state.update_ref_commits = {}
+	_refresh_dock()
+	_start_update_refs_request("branches", UPDATE_REFS_BRANCHES_URL, serial)
+	_start_update_refs_request("releases", UPDATE_REFS_RELEASES_URL, serial)
+	_start_update_refs_request("tags", UPDATE_REFS_TAGS_URL, serial)
+
+
+func _on_update_sync_requested() -> void:
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_state.update_sync_state = "error"
+		_state.update_sync_error = _localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
+		_state.update_sync_status = ""
+		_refresh_dock()
+		return
+	_update_sync_request_serial += 1
+	var serial := _update_sync_request_serial
+	_state.update_sync_state = "loading"
+	_state.update_sync_target_ref = target_ref
+	_state.update_sync_target_kind = str(target.get("kind", "branch"))
+	_state.update_sync_error = ""
+	_state.update_sync_status = (_localization.get_text("settings_update_sync_loading") % target_ref) if _localization != null else "Syncing %s..." % target_ref
+	_refresh_dock()
+	_start_update_archive_sync_request(target, serial)
+
+
+func _resolve_update_sync_target() -> Dictionary:
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "branch")))
+	var target_ref := ""
+	var target_kind := "branch"
+	match source:
+		"branch":
+			target_ref = str(_state.settings.get("update_custom_branch", "dev")).strip_edges()
+		"latest_stable":
+			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
+			target_kind = "tag"
+		"latest_release":
+			target_ref = str(_state.update_ref_latest_release).strip_edges()
+			target_kind = "tag"
+		"release_tag":
+			target_ref = str(_state.settings.get("update_release_tag", "")).strip_edges()
+			target_kind = "tag"
+		_:
+			target_ref = str(_state.settings.get("update_custom_branch", "dev")).strip_edges()
+	return {
+		"kind": target_kind,
+		"ref": target_ref,
+		"commit": _resolve_update_ref_commit(target_ref)
+	}
+
+
+func _resolve_update_ref_commit(target_ref: String) -> String:
+	if _state == null:
+		return ""
+	var commits: Dictionary = _state.update_ref_commits
+	return str(commits.get(target_ref, "")).strip_edges()
+
+
+func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
+	if _state == null or serial != _update_refs_request_serial:
+		return
+	var request_node := HTTPRequest.new()
+	request_node.name = "UpdateRefs%sRequest" % kind.capitalize()
+	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
+	add_child(request_node)
+	request_node.request_completed.connect(Callable(self, "_on_update_refs_request_completed").bind(kind, serial, request_node), CONNECT_ONE_SHOT)
+	var error := request_node.request(url, _get_update_refs_headers())
+	if error != OK:
+		request_node.queue_free()
+		_mark_update_refs_request_failed(kind, "Failed to start %s request: %s" % [kind, error], serial)
+
+
+func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
+	var sync_dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://godot_dotnet_mcp"))
+	if sync_dir_error != OK:
+		_mark_update_sync_failed("Failed to create update cache: %s" % sync_dir_error, serial)
+		return
+	var target_kind := str(target.get("kind", "branch"))
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var archive_prefix := UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX if target_kind == "tag" else UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX
+	var request_node := HTTPRequest.new()
+	request_node.name = "UpdateArchiveSyncRequest"
+	request_node.timeout = UPDATE_SYNC_HTTP_TIMEOUT
+	request_node.body_size_limit = UPDATE_SYNC_BODY_SIZE_LIMIT
+	request_node.download_file = UPDATE_SYNC_ARCHIVE_PATH
+	add_child(request_node)
+	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
+	var error := request_node.request("%s%s" % [archive_prefix, target_ref], _get_update_archive_headers())
+	if error != OK:
+		request_node.queue_free()
+		_mark_update_sync_failed("Failed to start update sync request: %s" % error, serial)
+
+
+func _get_update_archive_headers() -> PackedStringArray:
+	return PackedStringArray([
+		"Accept: application/zip",
+		"User-Agent: Godot-Dotnet-MCP-Settings-Update-Sync"
+	])
+
+
+func _get_update_refs_headers() -> PackedStringArray:
+	return PackedStringArray([
+		"Accept: application/vnd.github+json",
+		"User-Agent: Godot-Dotnet-MCP-Settings-Update-Checker"
+	])
+
+
+func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int, request_node: HTTPRequest) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_refs_request_serial:
+		return
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		_handle_update_refs_http_failure(kind, result, response_code, serial)
+		return
+	var parse_result := _parse_update_refs_json_array(body)
+	if not bool(parse_result.get("success", false)):
+		_handle_update_refs_parse_failure(kind, str(parse_result.get("error", "Invalid JSON response")), serial)
+		return
+	var items: Array = parse_result.get("items", [])
+	match kind:
+		"branches":
+			_append_update_refs_pending_names("branches", _extract_update_ref_names(items, "name"))
+			_append_update_refs_pending_commits(items, "name")
+			if _request_next_update_refs_page_if_available(kind, headers, serial):
+				return
+			_state.update_ref_branches = _to_string_array(_update_refs_pending.get("branches", []))
+			_state.update_ref_commits = _duplicate_update_ref_commits(_update_refs_pending.get("commits", {}))
+			_update_refs_pending["branch_done"] = true
+		"releases":
+			_append_update_refs_pending_names("releases", _extract_update_ref_names(items, "tag_name"))
+			_append_update_refs_pending_names("stable_releases", _extract_update_stable_release_names(items))
+			_append_update_refs_pending_commits(items, "tag_name")
+			if _request_next_update_refs_page_if_available(kind, headers, serial):
+				return
+			_update_refs_pending["release_done"] = true
+		"tags":
+			_append_update_refs_pending_names("tags", _extract_update_ref_names(items, "name"))
+			_append_update_refs_pending_commits(items, "name")
+			if _request_next_update_refs_page_if_available(kind, headers, serial):
+				return
+			_update_refs_pending["tag_done"] = true
+	_finalize_update_refs_discovery_if_ready(serial)
+
+
+func _request_next_update_refs_page_if_available(kind: String, headers: PackedStringArray, serial: int) -> bool:
+	var next_url := _extract_update_refs_next_url(headers)
+	if next_url.is_empty():
+		return false
+	var page_key := "%s_pages" % kind
+	var page_count := int(_update_refs_pending.get(page_key, 1))
+	if page_count >= UPDATE_REFS_MAX_PAGES:
+		return false
+	_update_refs_pending[page_key] = page_count + 1
+	_start_update_refs_request(kind, next_url, serial)
+	return true
+
+
+func _extract_update_refs_next_url(headers: PackedStringArray) -> String:
+	for header in headers:
+		var header_text := str(header)
+		if not header_text.to_lower().begins_with("link:"):
+			continue
+		var link_value := header_text.substr(header_text.find(":") + 1).strip_edges()
+		for segment in link_value.split(","):
+			if segment.find('rel="next"') == -1:
+				continue
+			var start := segment.find("<")
+			var end := segment.find(">")
+			if start >= 0 and end > start:
+				return segment.substr(start + 1, end - start - 1)
+	return ""
+
+
+func _append_update_refs_pending_names(key: String, names: Array[String]) -> void:
+	var values: Array[String] = _to_string_array(_update_refs_pending.get(key, []))
+	for name in names:
+		_append_unique_update_ref(values, name)
+	_update_refs_pending[key] = values
+
+
+func _append_update_refs_pending_commits(items: Array, name_key: String) -> void:
+	var commits: Dictionary = _update_refs_pending.get("commits", {})
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var item_dict := item as Dictionary
+		var name := str(item_dict.get(name_key, "")).strip_edges()
+		var commit := _extract_update_ref_commit(item_dict)
+		if not name.is_empty() and not commit.is_empty():
+			commits[name] = commit
+	_update_refs_pending["commits"] = commits
+
+
+func _extract_update_ref_commit(item: Dictionary) -> String:
+	var commit_value = item.get("commit", "")
+	if commit_value is Dictionary:
+		return str((commit_value as Dictionary).get("sha", "")).strip_edges()
+	return str(item.get("target_commitish", "")).strip_edges()
+
+
+func _to_string_array(values) -> Array[String]:
+	var result: Array[String] = []
+	if not (values is Array):
+		return result
+	for value in values:
+		_append_unique_update_ref(result, str(value))
+	return result
+
+
+func _handle_update_refs_http_failure(kind: String, result: int, response_code: int, serial: int) -> void:
+	_mark_update_refs_request_failed(kind, "%s request failed with result %s and HTTP %s" % [kind.capitalize(), result, response_code], serial)
+
+
+func _handle_update_refs_parse_failure(kind: String, error: String, serial: int) -> void:
+	_mark_update_refs_request_failed(kind, "%s response parse failed: %s" % [kind.capitalize(), error], serial)
+
+
+func _mark_update_refs_request_failed(kind: String, message: String, serial: int) -> void:
+	if _state == null or serial != _update_refs_request_serial:
+		return
+	var errors: Array = _update_refs_pending.get("errors", [])
+	errors.append(message)
+	_update_refs_pending["errors"] = errors
+	if kind == "branches":
+		_update_refs_pending["branch_done"] = true
+	elif kind == "tags":
+		_update_refs_pending["tag_done"] = true
+	else:
+		_update_refs_pending["release_done"] = true
+	_finalize_update_refs_discovery_if_ready(serial)
+
+
+func _mark_update_sync_failed(message: String, serial: int) -> void:
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	_state.update_sync_state = "error"
+	_state.update_sync_error = message
+	_state.update_sync_status = ""
+	_refresh_dock()
+
+
+func _on_update_archive_sync_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	var target_ref := str(target.get("ref", ""))
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		_mark_update_sync_failed("Update archive request failed with result %s and HTTP %s" % [result, response_code], serial)
+		return
+	var sync_result := _sync_update_archive_to_addon(UPDATE_SYNC_ARCHIVE_PATH)
+	if not bool(sync_result.get("success", false)):
+		_mark_update_sync_failed(str(sync_result.get("error", "Update sync failed.")), serial)
+		return
+	var marker_error := _write_update_sync_marker(target, int(sync_result.get("written", 0)))
+	if marker_error != OK:
+		_mark_update_sync_failed("Update files were written, but sync marker write failed: %s" % marker_error, serial)
+		return
+	_state.update_sync_state = "success"
+	_state.update_sync_error = ""
+	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
+	_refresh_dock()
+
+
+func _write_update_sync_marker(target: Dictionary, written: int) -> int:
+	var marker := {
+		"last_sync_at_unix": int(Time.get_unix_time_from_system()),
+		"source_repo_path": "https://github.com/LuoxuanLove/godot-dotnet-mcp",
+		"target_addon_path": UPDATE_SYNC_ADDON_ROOT,
+		"source_git_commit": str(target.get("commit", "")),
+		"source_ref_kind": str(target.get("kind", "")),
+		"source_ref": str(target.get("ref", "")),
+		"written_files": written
+	}
+	var file := FileAccess.open(UPDATE_SYNC_MARKER_PATH, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_string(JSON.stringify(marker, "	"))
+	file.close()
+	return OK
+
+
+func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
+	var reader := ZIPReader.new()
+	var open_error := reader.open(archive_path)
+	if open_error != OK:
+		return {"success": false, "error": "Failed to open branch archive: %s" % open_error}
+	var files := reader.get_files()
+	var archive_prefix := _find_update_archive_addon_prefix(files)
+	if archive_prefix.is_empty():
+		reader.close()
+		return {"success": false, "error": "Branch archive does not contain addons/godot_dotnet_mcp."}
+	var written := 0
+	for file_path in files:
+		if file_path.ends_with("/") or not file_path.begins_with(archive_prefix):
+			continue
+		var relative_path := file_path.substr(archive_prefix.length()).replace("\\", "/")
+		if _should_skip_update_sync_path(relative_path):
+			continue
+		var target_path := UPDATE_SYNC_ADDON_ROOT.path_join(relative_path).simplify_path()
+		var addon_root := "%s/" % UPDATE_SYNC_ADDON_ROOT
+		if target_path != UPDATE_SYNC_ADDON_ROOT and not target_path.begins_with(addon_root):
+			reader.close()
+			return {"success": false, "error": "Update archive entry escapes the plugin directory: %s" % relative_path}
+		var target_dir := target_path.get_base_dir()
+		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target_dir))
+		if dir_error != OK:
+			reader.close()
+			return {"success": false, "error": "Failed to create directory %s: %s" % [target_dir, dir_error]}
+		var output := FileAccess.open(target_path, FileAccess.WRITE)
+		if output == null:
+			reader.close()
+			return {"success": false, "error": "Failed to write %s: %s" % [target_path, FileAccess.get_open_error()]}
+		output.store_buffer(reader.read_file(file_path))
+		output.close()
+		written += 1
+	reader.close()
+	if written == 0:
+		return {"success": false, "error": "Branch archive contained no plugin files to sync."}
+	return {"success": true, "written": written}
+
+
+func _find_update_archive_addon_prefix(files: PackedStringArray) -> String:
+	for file_path in files:
+		var normalized := str(file_path).replace("\\", "/")
+		var prefix_index := normalized.find(UPDATE_SYNC_ADDON_PREFIX)
+		if prefix_index >= 0:
+			return normalized.substr(0, prefix_index + UPDATE_SYNC_ADDON_PREFIX.length())
+	return ""
+
+
+func _should_skip_update_sync_path(relative_path: String) -> bool:
+	var normalized := relative_path.strip_edges().replace("\\", "/")
+	if normalized.is_empty() or normalized.begins_with("/") or normalized.begins_with("../") or normalized.ends_with("/..") or normalized.find("/../") != -1 or normalized.find(":") != -1:
+		return true
+	if normalized == ".git" or normalized.begins_with(".git/"):
+		return true
+	if normalized == "custom_tools" or normalized.begins_with("custom_tools/"):
+		return true
+	if normalized == "dotnet_bridge/bin" or normalized.begins_with("dotnet_bridge/bin/"):
+		return true
+	if normalized == "dotnet_bridge/obj" or normalized.begins_with("dotnet_bridge/obj/"):
+		return true
+	if normalized.ends_with(".import"):
+		return true
+	return false
+
+
+func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
+	if _state == null or serial != _update_refs_request_serial:
+		return
+	if not bool(_update_refs_pending.get("branch_done", false)) or not bool(_update_refs_pending.get("release_done", false)) or not bool(_update_refs_pending.get("tag_done", false)):
+		_refresh_dock()
+		return
+	var errors: Array = _update_refs_pending.get("errors", [])
+	_state.update_ref_commits = _duplicate_update_ref_commits(_update_refs_pending.get("commits", {}))
+	var releases := _to_string_array(_update_refs_pending.get("releases", []))
+	var stable_releases := _to_string_array(_update_refs_pending.get("stable_releases", []))
+	var release_or_tag_values: Array[String] = []
+	for release in releases:
+		_append_unique_update_ref(release_or_tag_values, release)
+	for tag in _to_string_array(_update_refs_pending.get("tags", [])):
+		_append_unique_update_ref(release_or_tag_values, tag)
+	_state.update_ref_releases = release_or_tag_values
+	_state.update_ref_latest_release = releases[0] if not releases.is_empty() else ""
+	_state.update_ref_latest_stable_release = stable_releases[0] if not stable_releases.is_empty() else ""
+	_state.update_refs_release_source = "releases_and_tags"
+	if errors.is_empty() or not _state.update_ref_branches.is_empty() or not release_or_tag_values.is_empty():
+		_state.update_refs_state = "success"
+		_state.update_refs_error = ""
+		_state.update_refs_status = _build_update_refs_success_status()
+		_update_refs_discovery_loaded = true
+	else:
+		_state.update_refs_state = "error"
+		_state.update_refs_error = "; ".join(errors)
+		_state.update_refs_status = ""
+	_refresh_dock()
+
+
+func _build_update_refs_success_status() -> String:
+	return "Discovered %d branches, %d releases, and %d tags." % [_state.update_ref_branches.size(), _to_string_array(_update_refs_pending.get("releases", [])).size(), _to_string_array(_update_refs_pending.get("tags", [])).size()]
+
+
+func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
+	var json := JSON.new()
+	var parse_error := json.parse(body.get_string_from_utf8())
+	if parse_error != OK:
+		return {"success": false, "error": json.get_error_message()}
+	if not (json.data is Array):
+		return {"success": false, "error": "Expected a JSON array"}
+	return {"success": true, "items": json.data}
+
+
+func _extract_update_ref_names(items: Array, key: String) -> Array[String]:
+	var names: Array[String] = []
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		_append_unique_update_ref(names, str((item as Dictionary).get(key, "")))
+	return names
+
+
+func _extract_update_stable_release_names(items: Array) -> Array[String]:
+	var names: Array[String] = []
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var item_dict := item as Dictionary
+		if bool(item_dict.get("prerelease", false)):
+			continue
+		_append_unique_update_ref(names, str(item_dict.get("tag_name", "")))
+	return names
+
+
+func _duplicate_update_ref_commits(raw_commits) -> Dictionary:
+	var commits: Dictionary = {}
+	if not (raw_commits is Dictionary):
+		return commits
+	for key in (raw_commits as Dictionary).keys():
+		commits[str(key)] = str((raw_commits as Dictionary).get(key, ""))
+	return commits
+
+
+func _append_unique_update_ref(values: Array[String], value: String) -> void:
+	var normalized := value.strip_edges()
+	if normalized.is_empty() or values.has(normalized):
+		return
+	values.append(normalized)
 
 
 func _on_start_requested() -> void:
@@ -1599,8 +2128,15 @@ func _record_runtime_bridge_stale_instance(phase: String, operation_id: String) 
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE)
+	_reload_script(MCP_DOCK_SCRIPT_PATH)
+	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
 	return scene as PackedScene
+
+
+func _reload_script(path: String) -> void:
+	var script = ResourceLoader.load(path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
+	if script is Script:
+		(script as Script).reload(false)
 
 
 func _recreate_dock() -> void:
