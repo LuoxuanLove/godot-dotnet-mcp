@@ -161,7 +161,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginActionRouter should call the server controller exactly once for reload_all_tool_domains.")
 
 	_dock.emit_signal("current_tab_changed", 7)
-	_dock.emit_signal("update_source_changed", "branch")
+	_dock.emit_signal("update_source_changed", "custom_branch")
 	_dock.emit_signal("update_custom_branch_changed", "feature/router")
 	_dock.emit_signal("update_release_tag_changed", "v2.1.0")
 	_dock.emit_signal("update_check_requested")
@@ -171,7 +171,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	if _plugin.current_tab_changes != [7]:
 		return _failure("PluginActionRouter should route current_tab_changed through the dock binding.")
-	if _plugin.update_source_changes != ["branch"] or _plugin.update_custom_branch_changes != ["feature/router"] or _plugin.update_release_tag_changes != ["v2.1.0"]:
+	if _plugin.update_source_changes != ["custom_branch"] or _plugin.update_custom_branch_changes != ["feature/router"] or _plugin.update_release_tag_changes != ["v2.1.0"]:
 		return _failure("PluginActionRouter should route update Settings changes to plugin handlers.")
 	if _plugin.update_check_count != 1 or _plugin.update_apply_count != 1:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
