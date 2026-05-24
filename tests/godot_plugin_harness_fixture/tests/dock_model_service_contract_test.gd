@@ -61,9 +61,29 @@ class FakeServerController extends RefCounted:
 		return []
 
 
-class FakeDockPresenter extends RefCounted:
-	func build_model(context: Dictionary) -> Dictionary:
-		return context
+class FakeLocalization extends RefCounted:
+	func get_language() -> String:
+		return "en"
+
+	func get_available_languages() -> Array:
+		return []
+
+	func get_text(_key: String) -> String:
+		return ""
+
+
+class FakeToolCatalog extends RefCounted:
+	func build_tool_name_index(_all_tools_by_category: Dictionary) -> Array:
+		return []
+
+	func has_tool_profile(profile_id: String, _builtin_profiles: Array, _custom_profiles: Dictionary) -> bool:
+		return profile_id == "default"
+
+	func find_matching_profile_id(_disabled_tools: Array, _builtin_profiles: Array, _custom_profiles: Dictionary, _tool_names: Array) -> String:
+		return "default"
+
+	func profile_matches_state(_profile_id: String, _disabled_tools: Array, _builtin_profiles: Array, _custom_profiles: Dictionary, _tool_names: Array) -> bool:
+		return true
 
 
 class FakeToolAccessFeature extends RefCounted:
@@ -101,11 +121,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var server_controller = FakeServerController.new()
 	var context = FakeContext.new()
 	context.state = state
-	context.localization = RefCounted.new()
+	context.localization = FakeLocalization.new()
 	context.server_controller = server_controller
-	context.tool_catalog = RefCounted.new()
+	context.tool_catalog = FakeToolCatalog.new()
 	context.config_service = RefCounted.new()
-	context.dock_presenter = FakeDockPresenter.new()
+	context.dock_presenter = null
 	context.user_tool_service = RefCounted.new()
 	context.client_install_detection_service = null
 	context.central_server_attach_service = null

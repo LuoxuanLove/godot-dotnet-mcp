@@ -109,7 +109,21 @@ func build_model(context: Dictionary) -> Dictionary:
 		"config_platforms": config_platforms,
 		"config_connection_mode": config_connection_mode,
 		"plugin_freshness": context.get("plugin_freshness", {}),
-		"plugin_version": str(context.get("plugin_version", ""))
+		"plugin_version": str(context.get("plugin_version", "")),
+		"update_refs_state": str(context.get("update_refs_state", "idle")),
+		"update_refs_status": str(context.get("update_refs_status", "")),
+		"update_refs_error": str(context.get("update_refs_error", "")),
+		"update_ref_branches": context.get("update_ref_branches", []),
+		"update_ref_releases": context.get("update_ref_releases", []),
+		"update_ref_latest_stable_release": str(context.get("update_ref_latest_stable_release", "")),
+		"update_ref_latest_release": str(context.get("update_ref_latest_release", "")),
+		"update_refs_release_source": str(context.get("update_refs_release_source", "")),
+		"update_ref_commits": context.get("update_ref_commits", {}),
+		"update_sync_state": str(context.get("update_sync_state", "idle")),
+		"update_sync_status": str(context.get("update_sync_status", "")),
+		"update_sync_error": str(context.get("update_sync_error", "")),
+		"update_sync_target_ref": str(context.get("update_sync_target_ref", "")),
+		"update_sync_target_kind": str(context.get("update_sync_target_kind", ""))
 	}
 
 
