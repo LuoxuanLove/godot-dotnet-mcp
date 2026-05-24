@@ -2,6 +2,7 @@ extends RefCounted
 
 const PluginScript = preload("res://addons/godot_dotnet_mcp/plugin.gd")
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 
 var _plugin = null
 
@@ -38,6 +39,9 @@ class CurrentTabProbeDock extends Control:
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	_remove_saved_settings()
+	var settings_store = SettingsStoreScript.new()
+	if settings_store._normalize_update_source("latest_dev") != "custom_branch" or settings_store._normalize_update_source("branch") != "custom_branch":
+		return _failure("settings_store.gd should preserve legacy dev-tracking update sources as custom_branch.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
@@ -71,7 +75,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"source": "latest_stable", "kind": "tag", "ref": "v1.0.0", "commit": "stable-commit"},
 		{"source": "latest_release", "kind": "tag", "ref": "v1.1.0-beta.1", "commit": "release-commit"},
 		{"source": "release_tag", "kind": "tag", "ref": "v1.1.0-beta.1", "commit": "release-commit"},
-		{"source": "branch", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"}
+		{"source": "branch", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"},
+		{"source": "latest_dev", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"}
 	]
 	for sync_case in sync_cases:
 		target_probe._state.settings["update_source"] = str(sync_case.get("source", ""))
@@ -79,6 +84,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if str(target.get("kind", "")) != str(sync_case.get("kind", "")) or str(target.get("ref", "")) != str(sync_case.get("ref", "")) or str(target.get("commit", "")) != str(sync_case.get("commit", "")):
 			target_probe.free()
 			return _failure("plugin.gd should resolve update sync target for source %s." % str(sync_case.get("source", "")))
+	target_probe._state.settings["update_source"] = "custom_branch"
+	target_probe._state.settings["update_custom_branch"] = ""
+	var empty_branch_target: Dictionary = target_probe._resolve_update_sync_target()
+	if str(empty_branch_target.get("kind", "")) != "branch" or str(empty_branch_target.get("ref", "")) != "dev" or str(empty_branch_target.get("commit", "")) != "dev-commit":
+		target_probe.free()
+		return _failure("plugin.gd should fallback empty custom branch sync targets to dev.")
 	target_probe._state.settings["update_source"] = "latest_release"
 	target_probe._state.settings["update_release_tag"] = "01"
 	target_probe._state.update_ref_latest_release = ""

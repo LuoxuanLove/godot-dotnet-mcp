@@ -623,7 +623,7 @@ func _on_update_source_changed(source: String) -> void:
 func _normalize_update_source(source: String) -> String:
 	var normalized := source.strip_edges()
 	match normalized:
-		"branch":
+		"latest_dev", "branch":
 			return "custom_branch"
 		"release_tag":
 			return "latest_release"
@@ -668,10 +668,10 @@ func _ensure_saved_update_source_discovery_requested() -> bool:
 
 
 func _get_update_request_parent() -> Node:
-	if _dock != null and is_instance_valid(_dock) and _dock.is_inside_tree():
-		return _dock
 	if is_inside_tree():
 		return self
+	if _dock != null and is_instance_valid(_dock) and _dock.is_inside_tree():
+		return _dock
 	return null
 
 
@@ -749,7 +749,8 @@ func _resolve_update_sync_target() -> Dictionary:
 	var target_kind := "branch"
 	match source:
 		"custom_branch":
-			target_ref = str(_state.settings.get("update_custom_branch", "dev")).strip_edges()
+			var branch_ref := str(_state.settings.get("update_custom_branch", "")).strip_edges()
+			target_ref = branch_ref if not branch_ref.is_empty() else "dev"
 		"latest_stable":
 			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
 			target_kind = "tag"

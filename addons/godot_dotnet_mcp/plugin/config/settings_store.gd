@@ -48,7 +48,7 @@ func load_plugin_settings(default_settings: Dictionary, settings_path: String, a
 
 func _normalize_update_source(source: String) -> String:
 	match source.strip_edges():
-		"branch":
+		"latest_dev", "branch":
 			return "custom_branch"
 		"release_tag":
 			return "latest_release"
