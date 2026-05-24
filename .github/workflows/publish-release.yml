@@ -31,10 +31,20 @@ jobs:
     runs-on: windows-2025
 
     steps:
+      - name: Validate release source input
+        env:
+          TARGET_REF: ${{ inputs.target_ref }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:TARGET_REF -ne "dev") {
+            throw "One-click releases must target dev. Actual target_ref: $env:TARGET_REF"
+          }
+
       - name: Checkout release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.target_ref }}
+          ref: dev
           fetch-depth: 0
 
       - name: Fetch release refs
@@ -83,10 +93,6 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-
-          if ($env:TARGET_REF -ne "dev") {
-            throw "One-click releases must target dev. Actual target_ref: $env:TARGET_REF"
-          }
 
           $headSha = (git rev-parse HEAD).Trim()
           $devSha = (git rev-parse origin/dev).Trim()
