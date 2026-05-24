@@ -5,7 +5,7 @@ class_name SettingsTabModelProjectionService
 const DEFAULT_PORT := 3000
 const DEFAULT_LOG_LEVEL := "info"
 const DEFAULT_LANGUAGE := "en"
-const DEFAULT_UPDATE_SOURCE := "branch"
+const DEFAULT_UPDATE_SOURCE := "latest_stable"
 const DEFAULT_UPDATE_BRANCH := "dev"
 
 
@@ -22,7 +22,7 @@ func project(model: Dictionary) -> Dictionary:
 		"options": {
 			"log_levels": _project_enum_options(model.get("log_levels", []), _normalize_log_level(str(model.get("current_log_level", DEFAULT_LOG_LEVEL))), localization, "log_level"),
 			"languages": _project_language_options(model, localization),
-			"update_sources": _project_enum_options(["branch", "latest_stable", "latest_release", "release_tag"], str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)), localization, "settings_update_source"),
+			"update_sources": _project_enum_options(["latest_stable", "latest_release", "custom_branch"], str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)), localization, "settings_update_source"),
 			"update_branches": _project_ref_options(_build_branch_values(model, update_settings), str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)), localization, "settings_update_branch_unavailable"),
 			"update_releases": _project_ref_options(_build_release_values(model, update_settings), str(update_settings.get("release_tag", "")), localization, "settings_update_release_unavailable")
 		},
@@ -33,8 +33,8 @@ func project(model: Dictionary) -> Dictionary:
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
 			"release_tag": str(update_settings.get("release_tag", "")),
-			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "branch",
-			"show_release_tag_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "release_tag",
+			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch",
+			"show_release_tag_row": false,
 			"status_text": _build_update_status_text(model, update_settings, localization),
 			"check_enabled": _is_update_check_enabled(model),
 			"prepare_enabled": false,
@@ -59,9 +59,11 @@ func _project_update_settings(settings: Dictionary) -> Dictionary:
 func _normalize_update_source(source: String) -> String:
 	var normalized := source.strip_edges()
 	match normalized:
-		"latest_dev", "custom_branch", "branch":
-			return "branch"
-		"latest_stable", "latest_release", "release_tag":
+		"branch":
+			return "custom_branch"
+		"release_tag":
+			return "latest_release"
+		"custom_branch", "latest_stable", "latest_release":
 			return normalized
 		_:
 			return DEFAULT_UPDATE_SOURCE
@@ -182,14 +184,12 @@ func _is_update_sync_enabled(model: Dictionary, update_settings: Dictionary) -> 
 		return false
 	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
 	match source:
-		"branch":
+		"custom_branch":
 			return not str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges().is_empty()
 		"latest_stable":
 			return not str(model.get("update_ref_latest_stable_release", "")).strip_edges().is_empty()
 		"latest_release":
 			return not str(model.get("update_ref_latest_release", "")).strip_edges().is_empty()
-		"release_tag":
-			return not str(update_settings.get("release_tag", "")).strip_edges().is_empty()
 		_:
 			return false
 
@@ -198,18 +198,16 @@ func _build_selected_update_target(model: Dictionary, update_settings: Dictionar
 	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
 	var target := DEFAULT_UPDATE_BRANCH
 	match source:
-		"branch":
+		"custom_branch":
 			target = str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH))
 		"latest_stable":
 			target = str(model.get("update_ref_latest_stable_release", ""))
 		"latest_release":
 			target = str(model.get("update_ref_latest_release", ""))
-		"release_tag":
-			target = str(update_settings.get("release_tag", ""))
 		_:
-			target = DEFAULT_UPDATE_BRANCH
+			target = str(model.get("update_ref_latest_stable_release", ""))
 	if target.strip_edges().is_empty():
-		var empty_key := "settings_update_branch_unavailable" if source == "branch" else "settings_update_release_unavailable"
+		var empty_key := "settings_update_branch_unavailable" if source == "custom_branch" else "settings_update_release_unavailable"
 		target = _get_localized_text(localization, empty_key, "No discovered refs yet")
 	return "%s %s" % [_get_localized_text(localization, "settings_update_selected_target", "Selected target:"), target]
 

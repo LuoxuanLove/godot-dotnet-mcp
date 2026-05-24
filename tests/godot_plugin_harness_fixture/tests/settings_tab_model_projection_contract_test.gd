@@ -9,7 +9,8 @@ class FakeLocalization extends RefCounted:
 		"log_level_info": "Info",
 		"log_level_warning": "Warning",
 		"log_level_error": "Error",
-		"settings_update_source_branch": "Branch",
+		"settings_update_source_latest_dev": "Latest dev",
+		"settings_update_source_custom_branch": "Custom branch",
 		"settings_update_source_latest_stable": "Latest stable release",
 		"settings_update_source_latest_release": "Latest release",
 		"settings_update_source_release_tag": "Release tag",
@@ -45,7 +46,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"localization": FakeLocalization.new(),
 		"settings": {
 			"port": 4101,
-			"update_source": "branch",
+			"update_source": "custom_branch",
 			"update_custom_branch": "feature/settings",
 			"update_release_tag": "v1.0.0"
 		},
@@ -75,8 +76,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if languages.size() != 2 or not bool((languages[1] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should mark the current language.")
 	var update_sources: Array = options.get("update_sources", [])
-	if update_sources.size() != 4 or not bool((update_sources[0] as Dictionary).get("selected", false)) or _has_option_value(update_sources, "latest_dev") or _has_option_value(update_sources, "custom_branch"):
-		return _failure("Settings projection should merge dev/custom branch into one branch source option.")
+	if JSON.stringify(_option_values(update_sources)) != JSON.stringify(["latest_stable", "latest_release", "custom_branch"]) or not bool((update_sources[2] as Dictionary).get("selected", false)):
+		return _failure("Settings projection should expose latest stable, latest release, then custom branch and select custom branch mode.")
 	var update_branches: Array = options.get("update_branches", [])
 	if update_branches.size() != 3 or _selected_option_value(update_branches) != "feature/settings":
 		return _failure("Settings projection should offer discovered branch selector options and preserve the current branch.")
@@ -92,8 +93,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Settings projection should display the sync commit when available.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
 		return _failure("Settings update Sync should be enabled while Prepare remains disabled.")
-	if str(updates.get("source", "")) != "branch" or not bool(updates.get("show_branch_row", false)) or bool(updates.get("show_release_tag_row", true)):
-		return _failure("Settings projection should expose only the branch target row for branch sources.")
+	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)) or bool(updates.get("show_release_tag_row", true)):
+		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	if not str(updates.get("status_text", "")).contains("Selected target:"):
 		return _failure("Settings projection should include the selected update target in status text.")
 
@@ -121,17 +122,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "release_tag", "update_release_tag": "01"},
 		"update_ref_releases": ["01"],
+		"update_ref_latest_release": "v1.1.0-beta.1",
 		"plugin_freshness": {}
 	})
-	if not bool((explicit_tag_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01") or not bool((explicit_tag_projection.get("updates", {}) as Dictionary).get("show_release_tag_row", false)):
-		return _failure("Settings projection should allow an explicitly selected release/tag target without making it latest release.")
-	var legacy_dev_projection: Dictionary = service.project({
+	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01") or bool((explicit_tag_projection.get("updates", {}) as Dictionary).get("show_release_tag_row", true)):
+		return _failure("Settings projection should normalize old explicit release/tag settings to latest release and ignore saved downgrade tags.")
+	var removed_latest_dev_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_dev", "update_custom_branch": ""},
+		"update_ref_latest_stable_release": "v1.0.0",
 		"plugin_freshness": {}
 	})
-	if str((legacy_dev_projection.get("updates", {}) as Dictionary).get("source", "")) != "branch" or _selected_option_value((legacy_dev_projection.get("options", {}) as Dictionary).get("update_branches", [])) != "dev":
-		return _failure("Settings projection should normalize legacy latest_dev settings to branch=dev.")
+	if str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_stable" or not str((removed_latest_dev_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
+		return _failure("Settings projection should normalize removed latest_dev settings to latest stable.")
+	var legacy_branch_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "branch", "update_custom_branch": "feature/legacy"},
+		"plugin_freshness": {}
+	})
+	if str((legacy_branch_projection.get("updates", {}) as Dictionary).get("source", "")) != "custom_branch" or not bool((legacy_branch_projection.get("updates", {}) as Dictionary).get("show_branch_row", false)) or _selected_option_value((legacy_branch_projection.get("options", {}) as Dictionary).get("update_sources", [])) != "custom_branch":
+		return _failure("Settings projection should normalize legacy branch settings to custom_branch.")
 
 	var latest_stable_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -186,9 +196,9 @@ func _selected_option_value(options: Array) -> String:
 			return str((option as Dictionary).get("value", ""))
 	return ""
 
-
-func _has_option_value(options: Array, value: String) -> bool:
+func _option_values(options: Array) -> Array[String]:
+	var values: Array[String] = []
 	for option in options:
-		if option is Dictionary and str((option as Dictionary).get("value", "")) == value:
-			return true
-	return false
+		if option is Dictionary:
+			values.append(str((option as Dictionary).get("value", "")))
+	return values
