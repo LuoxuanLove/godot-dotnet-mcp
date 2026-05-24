@@ -92,6 +92,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"settings_update_refs_idle",
 		"settings_update_refs_loading",
 		"settings_update_refs_success",
+		"settings_update_refs_success_details",
 		"settings_update_refs_error",
 		"settings_update_selected_target",
 		"tool_action_step_name",

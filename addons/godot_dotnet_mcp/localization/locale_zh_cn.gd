@@ -443,6 +443,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_refs_idle": "选择更新方式后会自动发现更新分支、发布版和标签。",
 	"settings_update_refs_loading": "正在加载更新分支、发布版和标签...",
 	"settings_update_refs_success": "更新引用已加载。",
+	"settings_update_refs_success_details": "已发现 %d 个分支、%d 个发布版和 %d 个标签。",
 	"settings_update_refs_error": "更新引用发现失败。",
 	"settings_update_selected_target": "选择目标：",
 	"settings_update_check": "发现",
