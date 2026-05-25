@@ -76,6 +76,7 @@ var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
 var _update_compare_request_serial := 0
 var _update_ref_version_request_serial := 0
+var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
 
 
@@ -720,6 +721,7 @@ func _on_update_check_requested() -> void:
 	_state.update_refs_release_source = ""
 	_state.update_ref_commits = {}
 	_state.update_ref_versions = {}
+	_update_ref_version_requests_in_flight.clear()
 	_reset_update_compare_state()
 	_refresh_dock()
 	_start_update_refs_request("branches", UPDATE_REFS_BRANCHES_URL, serial)
@@ -842,11 +844,14 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 	var normalized_ref := target_ref.strip_edges()
 	if normalized_ref.is_empty():
 		return
+	if (_state.update_ref_versions as Dictionary).has(normalized_ref) or _update_ref_version_requests_in_flight.has(normalized_ref):
+		return
 	_update_ref_version_request_serial += 1
 	var serial := _update_ref_version_request_serial
 	var request_parent := _get_update_request_parent()
 	if request_parent == null:
 		return
+	_update_ref_version_requests_in_flight[normalized_ref] = true
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateRefVersionRequest"
 	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
@@ -857,12 +862,14 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 	var url := url_template % normalized_ref.uri_encode().replace("%2F", "/")
 	var error := request_node.request(url, _get_update_refs_headers())
 	if error != OK:
+		_update_ref_version_requests_in_flight.erase(normalized_ref)
 		request_node.queue_free()
 
 
 func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int, request_node: HTTPRequest) -> void:
 	if request_node != null and is_instance_valid(request_node):
 		request_node.queue_free()
+	_update_ref_version_requests_in_flight.erase(target_ref)
 	if _state == null or serial != _update_ref_version_request_serial:
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
