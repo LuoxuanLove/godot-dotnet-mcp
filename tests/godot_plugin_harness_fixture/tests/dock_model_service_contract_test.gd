@@ -20,6 +20,7 @@ class FakeState extends RefCounted:
 	var update_ref_latest_release := "v1.1.0-beta"
 	var update_refs_release_source := "releases"
 	var update_ref_commits := {"dev": "abcdef123456"}
+	var update_ref_versions := {"dev": "1.2.3"}
 	var update_compare_state := "success"
 	var update_compare_error := ""
 	var update_compare_base_commit := "base123456"
@@ -164,11 +165,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
 	if not model.has("plugin_version"):
 		return _failure("Dock model should include plugin version data for the Settings tab update summary.")
-	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_refs_branches", []) as Array).has("dev") or not (model.get("update_refs_releases", []) as Array).has("v1.0.0") or str((model.get("update_refs_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str(model.get("update_refs_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_refs_latest_release", "")) != "v1.1.0-beta":
+	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_refs_branches", []) as Array).has("dev") or not (model.get("update_refs_releases", []) as Array).has("v1.0.0") or str((model.get("update_refs_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str((model.get("update_refs_versions", {}) as Dictionary).get("dev", "")) != "1.2.3" or str(model.get("update_refs_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_refs_latest_release", "")) != "v1.1.0-beta":
 		return _failure("Dock model should project transient update ref discovery state for the Settings tab.")
 	if str(model.get("update_compare_state", "")) != "success" or str(model.get("update_compare_target_ref", "")) != "dev" or int(model.get("update_compare_ahead_by", -1)) != 3 or int(model.get("update_compare_behind_by", -1)) != 1:
 		return _failure("Dock model should project transient update compare state for the Settings tab.")
-	if model.has("update_ref_branches") or model.has("update_ref_releases") or model.has("update_ref_latest_stable_release") or model.has("update_ref_latest_release") or model.has("update_ref_commits"):
+	if model.has("update_ref_branches") or model.has("update_ref_releases") or model.has("update_ref_latest_stable_release") or model.has("update_ref_latest_release") or model.has("update_ref_commits") or model.has("update_ref_versions"):
 		return _failure("Dock model should expose transient update discovery refs with plural model keys only.")
 
 	return {

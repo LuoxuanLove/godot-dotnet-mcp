@@ -18,6 +18,7 @@ class FakeLocalization extends RefCounted:
 		"settings_current_source": "Source:",
 		"settings_current_commit": "Commit:",
 		"settings_update_unavailable": "Unavailable",
+		"settings_update_commit_unrecorded": "unrecorded",
 		"settings_update_branch_unavailable": "No branches",
 		"settings_update_release_unavailable": "No releases",
 		"settings_update_refs_idle": "Idle refs",
@@ -63,6 +64,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_refs_latest_stable_release": "v1.0.0",
 		"update_refs_latest_release": "v1.1.0-beta.1",
 		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_refs_versions": {"feature/settings": "2.0.0"},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 4,
 		"update_compare_behind_by": 1,
@@ -103,8 +105,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	var status_text := str(updates.get("status_text", ""))
-	if status_text.contains("Discovered") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version feature/settings [1234567]") or not status_text.contains("ahead 4 / behind 1"):
+	if status_text.contains("Discovered") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version 2.0.0 [1234567]") or status_text.contains("target version feature/settings") or not status_text.contains("ahead 4 / behind 1"):
 		return _failure("Settings projection should display current version/hash, target version/hash, and ahead/behind commit difference.")
+	var missing_commit_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},
+		"update_refs_state": "success",
+		"update_refs_commits": {},
+		"update_refs_versions": {},
+		"update_compare_state": "unavailable",
+		"plugin_freshness": {}
+	})
+	var missing_commit_status := str((missing_commit_projection.get("updates", {}) as Dictionary).get("status_text", ""))
+	if not missing_commit_status.contains("Current version Unavailable [unrecorded]") or not missing_commit_status.contains("target version Unavailable [Unavailable]") or missing_commit_status.contains("target version dev"):
+		return _failure("Settings projection should use unrecorded for missing hashes and not fall back to raw refs as target versions.")
 
 	var latest_release_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),

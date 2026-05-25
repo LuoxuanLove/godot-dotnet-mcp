@@ -28,6 +28,7 @@ class FakeLocalization extends RefCounted:
 		"settings_current_source": "Source:",
 		"settings_current_commit": "Commit:",
 		"settings_update_unavailable": "Unavailable",
+		"settings_update_commit_unrecorded": "unrecorded",
 		"settings_update_branch_unavailable": "No branches",
 		"settings_update_release_unavailable": "No releases",
 		"settings_update_refs_idle": "Click Check",
@@ -121,6 +122,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_refs_state": "success",
 		"update_refs_latest_release": "v1.2.3",
 		"update_refs_commits": {"v1.2.3": "fedcba987654"},
+		"update_refs_versions": {"v1.2.3": "1.2.3"},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 2,
 		"update_compare_behind_by": 0,
@@ -164,7 +166,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should display the current update sync description copy.")
 	if _find_label_containing(labels, "Current version: 1.0.0") == null:
 		return _failure("Settings tab should display the current version summary.")
-	if _find_label_containing(labels, "target version v1.2.3 [fedcba9]") == null or _find_label_containing(labels, "ahead 2 / behind 0") == null:
+	if _find_label_containing(labels, "target version 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "ahead 2 / behind 0") == null:
 		return _failure("Settings tab should display current/target update hashes and ahead/behind status copy.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
 	if check_button == null or check_button.visible or not check_button.disabled or not check_button.text.is_empty():

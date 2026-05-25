@@ -36,6 +36,7 @@ class FakeLocalization extends RefCounted:
 		"settings_current_source": "Source:",
 		"settings_current_commit": "Commit:",
 		"settings_update_unavailable": "Unavailable",
+		"settings_update_commit_unrecorded": "unrecorded",
 		"settings_update_branch_unavailable": "No branches",
 		"settings_update_release_unavailable": "No releases",
 		"settings_update_refs_idle": "Click Check",
@@ -121,6 +122,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_refs_releases": ["v1.0.0", "v2.0.0"],
 		"update_refs_state": "success",
 		"update_refs_commits": {"dev": "1234567890abcdef"},
+		"update_refs_versions": {"dev": "1.2.0"},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 1,
 		"update_compare_behind_by": 0,
@@ -166,7 +168,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
-	if _find_label_containing(labels, "target version dev [1234567]") == null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
+	if _find_label_containing(labels, "target version 1.2.0 [1234567]") == null or _find_label_containing(labels, "target version dev") != null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
 		return _failure("Settings tab should display current/target update hashes and ahead/behind status copy.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
