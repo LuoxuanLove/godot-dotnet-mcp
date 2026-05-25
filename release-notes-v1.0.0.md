@@ -26,7 +26,7 @@ The Tools Dock presents those capabilities in a localizable, inspectable tree. S
 
 Godot .NET MCP can start and stop scenes, monitor runtime state, collect runtime logs, send input, and capture game runtime views. Runtime marker checks can wait for success or failure text before declaring a run complete, and marker-mode auto-stop helps keep automation runs contained.
 
-Compared with the prerelease line, `v1.0.0` also includes stability fixes around runtime bridge messages, foreground-window capability reporting, headless or dummy rendering captures, repeated marker text, high-volume logs, and failure diagnostics. When runtime automation cannot proceed, the plugin now tries harder to explain whether the client should retry, change launch mode, inspect project state, or use a fallback.
+Compared with the prerelease line, `v1.0.0` hardens runtime automation around runtime bridge messages, foreground-window capability reporting, headless or dummy rendering captures, repeated marker text, high-volume logs, and failure diagnostics. When runtime automation cannot proceed, the plugin now tries harder to explain whether the client should retry, change launch mode, inspect project state, or use a fallback.
 
 ### 🖼️ Screenshots and Visual Editor Awareness
 
@@ -56,7 +56,7 @@ This keeps the stable core focused while still leaving room for specialized auto
 
 The stable release includes the diagnostic work from the prerelease cycle: startup and reload phase timing, clearer listener failures, occupied or restricted port explanations, structured skipped capture results, suspect empty-scan reports, and more actionable `system_project_run` failure evidence.
 
-`v1.0.0` also fixes issues discovered after the prereleases, including default C# project discovery for debug `dotnet` operations and Dock naming consistency. The release notes, changelog, and generated commit summary now stay aligned to the post-`v1.0.0-pre3` boundary so the stable release does not repeat commits that were already published in a prerelease.
+The release notes, changelog, and generated commit summary stay aligned to the post-`v1.0.0-pre3` boundary so the stable release describes the final user-visible result without repeating commits that were already published in a prerelease.
 
 ### 🚀 Installation
 
