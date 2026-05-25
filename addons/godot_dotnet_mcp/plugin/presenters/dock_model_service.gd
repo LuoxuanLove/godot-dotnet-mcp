@@ -164,6 +164,13 @@ func build_model() -> Dictionary:
 		"update_refs_latest_release": str(_get_state_value("update_ref_latest_release", "")),
 		"update_refs_release_source": str(_get_state_value("update_refs_release_source", "")),
 		"update_refs_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
+		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
+		"update_compare_error": str(_get_state_value("update_compare_error", "")),
+		"update_compare_base_commit": str(_get_state_value("update_compare_base_commit", "")),
+		"update_compare_target_ref": str(_get_state_value("update_compare_target_ref", "")),
+		"update_compare_target_commit": str(_get_state_value("update_compare_target_commit", "")),
+		"update_compare_ahead_by": int(_get_state_value("update_compare_ahead_by", -1)),
+		"update_compare_behind_by": int(_get_state_value("update_compare_behind_by", -1)),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
 		"update_sync_status": str(_get_state_value("update_sync_status", "")),
 		"update_sync_error": str(_get_state_value("update_sync_error", "")),
@@ -179,6 +186,13 @@ func build_model() -> Dictionary:
 	model["update_refs_latest_release"] = str(_get_state_value("update_ref_latest_release", ""))
 	model["update_refs_release_source"] = str(_get_state_value("update_refs_release_source", ""))
 	model["update_refs_commits"] = _duplicate_string_dictionary(_get_state_value("update_ref_commits", {}))
+	model["update_compare_state"] = str(_get_state_value("update_compare_state", "idle"))
+	model["update_compare_error"] = str(_get_state_value("update_compare_error", ""))
+	model["update_compare_base_commit"] = str(_get_state_value("update_compare_base_commit", ""))
+	model["update_compare_target_ref"] = str(_get_state_value("update_compare_target_ref", ""))
+	model["update_compare_target_commit"] = str(_get_state_value("update_compare_target_commit", ""))
+	model["update_compare_ahead_by"] = int(_get_state_value("update_compare_ahead_by", -1))
+	model["update_compare_behind_by"] = int(_get_state_value("update_compare_behind_by", -1))
 	model["update_sync_state"] = str(_get_state_value("update_sync_state", "idle"))
 	model["update_sync_status"] = str(_get_state_value("update_sync_status", ""))
 	model["update_sync_error"] = str(_get_state_value("update_sync_error", ""))
