@@ -14,6 +14,7 @@ class FakeLocalization extends RefCounted:
 		"tab_tools": "Tools",
 		"tab_config": "Config",
 		"tab_settings": "Settings",
+		"tools_enabled": "Tools: %d/%d enabled",
 		"settings_general_title": "General",
 		"settings_updates_title": "Updates",
 		"settings_updates_description": "Discover safe update refs",
@@ -42,6 +43,9 @@ class FakeLocalization extends RefCounted:
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
 		"settings_update_selected_target": "Selected target:",
+		"settings_update_compare_summary": "Current version %s [%s], target version %s [%s], commit difference: %s.",
+		"settings_update_compare_difference": "ahead %d / behind %d",
+		"settings_update_compare_loading": "checking...",
 		"port": "Port:",
 		"log_level": "Log Level:",
 		"language": "Language:",
@@ -115,8 +119,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"log_levels": ["debug", "info"],
 		"update_refs_branches": ["dev", "feature/dock"],
 		"update_refs_releases": ["v1.0.0", "v2.0.0"],
+		"update_refs_state": "success",
+		"update_refs_commits": {"dev": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_ahead_by": 1,
+		"update_compare_behind_by": 0,
 		"plugin_version": "1.0.0",
-		"plugin_freshness": {}
+		"plugin_freshness": {"sync": {"source_git_commit": "abcdef123456"}}
 	})
 	await tree.process_frame
 	if tab_container.get_tab_title(0) != "Home" or tab_container.get_tab_title(2) != "Config" or tab_container.get_tab_title(3) != "Settings":
@@ -157,6 +166,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
+	if _find_label_containing(labels, "target version dev [1234567]") == null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
+		return _failure("Settings tab should display current/target update hashes and ahead/behind status copy.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
 	prepare_button.disabled = false
