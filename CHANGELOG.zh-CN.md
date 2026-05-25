@@ -8,10 +8,14 @@
 
 ### Changed
 
+- 将 Dock 持久设置控件拆分到新的 Settings 页，使主页聚焦诊断、服务状态和快捷服务操作。
+- 新增 Settings 更新方式：分支选择（默认 `dev`）、最新稳定版、最新发布版（含预发布）和指定发布版 / 标签，并通过 GitHub 引用发现下拉选择。
+- 新增插件内安全更新同步：从 GitHub archive 仅提取 `addons/godot_dotnet_mcp/`，保留 `custom_tools/`，写入同步元数据，在选择更新方式后自动发现引用，最新发布目标只取 GitHub Releases，并通过“同步”操作处理选中目标。
 - 调整编辑器 Dock 页签与标题文案：页签显示为 `MCP`，Dock 标题与弹窗标题显示为 `Godot .NET MCP`。
 
 ### Fixed
 
+- 修复插件更新后 Settings 更新文案仍可能复用旧脚本资源缓存的问题。
 - 修复配置页客户端操作按钮在首次渲染时会因布局宽度尚未就绪而变成单列整行、直到切换客户端后才恢复的问题。
 - 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
 

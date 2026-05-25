@@ -107,7 +107,31 @@ func build_model(context: Dictionary) -> Dictionary:
 		"desktop_clients": desktop_clients,
 		"cli_clients": cli_clients,
 		"config_platforms": config_platforms,
-		"config_connection_mode": config_connection_mode
+		"config_connection_mode": config_connection_mode,
+		"plugin_freshness": context.get("plugin_freshness", {}),
+		"plugin_version": str(context.get("plugin_version", "")),
+		"update_refs_state": str(context.get("update_refs_state", "idle")),
+		"update_refs_status": str(context.get("update_refs_status", "")),
+		"update_refs_error": str(context.get("update_refs_error", "")),
+		"update_refs_branches": context.get("update_refs_branches", []),
+		"update_refs_releases": context.get("update_refs_releases", []),
+		"update_refs_latest_stable_release": str(context.get("update_refs_latest_stable_release", "")),
+		"update_refs_latest_release": str(context.get("update_refs_latest_release", "")),
+		"update_refs_release_source": str(context.get("update_refs_release_source", "")),
+		"update_refs_commits": context.get("update_refs_commits", {}),
+		"update_refs_versions": context.get("update_refs_versions", {}),
+		"update_compare_state": str(context.get("update_compare_state", "idle")),
+		"update_compare_error": str(context.get("update_compare_error", "")),
+		"update_compare_base_commit": str(context.get("update_compare_base_commit", "")),
+		"update_compare_target_ref": str(context.get("update_compare_target_ref", "")),
+		"update_compare_target_commit": str(context.get("update_compare_target_commit", "")),
+		"update_compare_ahead_by": int(context.get("update_compare_ahead_by", -1)),
+		"update_compare_behind_by": int(context.get("update_compare_behind_by", -1)),
+		"update_sync_state": str(context.get("update_sync_state", "idle")),
+		"update_sync_status": str(context.get("update_sync_status", "")),
+		"update_sync_error": str(context.get("update_sync_error", "")),
+		"update_sync_target_ref": str(context.get("update_sync_target_ref", "")),
+		"update_sync_target_kind": str(context.get("update_sync_target_kind", ""))
 	}
 
 

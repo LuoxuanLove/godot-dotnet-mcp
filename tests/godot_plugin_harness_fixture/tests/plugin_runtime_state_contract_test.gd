@@ -72,6 +72,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should keep auto_start enabled in default settings.")
 	if not bool(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("debug_mode", false)):
 		return _failure("PluginRuntimeState should expose debug_mode in default settings.")
+	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_source", "")) != "latest_stable":
+		return _failure("PluginRuntimeState should default update scaffolding to the latest stable release source.")
+	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_custom_branch", "")) != "dev":
+		return _failure("PluginRuntimeState should default the custom update branch to dev without changing port/log/language defaults.")
+	if str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("update_release_tag", "not-empty")) != "":
+		return _failure("PluginRuntimeState should keep the release/tag update target empty by default.")
+	if int(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("port", 0)) != 3000 or str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("log_level", "")) != "info" or str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("language", "")) != "en":
+		return _failure("PluginRuntimeState should not change existing port, log level, or language defaults.")
+	if PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_branches") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_releases") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_versions") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_refs_state") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_sync_state") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_compare_state"):
+		return _failure("PluginRuntimeState should keep discovered update refs transient instead of persisting them in default settings.")
+	if not state.update_ref_branches.is_empty() or not state.update_ref_releases.is_empty() or not state.update_ref_commits.is_empty() or not state.update_ref_versions.is_empty() or not state.update_ref_latest_stable_release.is_empty() or not state.update_ref_latest_release.is_empty() or state.update_refs_state != "idle" or state.update_sync_state != "idle" or state.update_compare_state != "idle" or state.update_compare_ahead_by != -1 or state.update_compare_behind_by != -1:
+		return _failure("PluginRuntimeState should expose an empty transient update ref discovery state.")
 
 	return {
 		"name": "plugin_runtime_state_contracts",

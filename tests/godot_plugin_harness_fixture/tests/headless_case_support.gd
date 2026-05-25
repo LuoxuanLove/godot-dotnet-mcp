@@ -111,7 +111,7 @@ static func _derive_case_name(script_path: String) -> String:
 
 
 static func _derive_case_mode(script_path: String) -> String:
-	if script_path.get_file() == "plugin_entrypoint_contract_test.gd":
+	if script_path.get_file() in ["plugin_entrypoint_contract_test.gd", "plugin_update_settings_persistence_contract_test.gd"]:
 		return "editor_probe"
 	return "headless"
 
