@@ -732,6 +732,9 @@ func _on_update_check_requested() -> void:
 
 
 func _on_update_sync_requested() -> void:
+	if str(_state.update_sync_state) == "loading":
+		_refresh_dock()
+		return
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
@@ -763,7 +766,8 @@ func _resolve_update_sync_target() -> Dictionary:
 			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
 			target_kind = "tag"
 		"latest_release":
-			target_ref = str(_state.update_ref_latest_release).strip_edges()
+			var selected_release_tag := str(_state.settings.get("update_release_tag", "")).strip_edges()
+			target_ref = selected_release_tag if not selected_release_tag.is_empty() else str(_state.update_ref_latest_release).strip_edges()
 			target_kind = "tag"
 		_:
 			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
@@ -1375,6 +1379,231 @@ func _on_full_reload_requested() -> void:
 
 func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 	return _request_plugin_lifecycle_reload("tool")
+
+
+func get_plugin_update_current_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": _build_plugin_update_current_snapshot(),
+		"message": "Plugin update current fetched"
+	}
+
+
+func get_plugin_update_status_from_tools() -> Dictionary:
+	return {
+		"success": true,
+		"data": _build_plugin_update_status_snapshot(),
+		"message": "Plugin update status fetched"
+	}
+
+
+func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
+	var normalized := _normalize_update_source(source)
+	_on_update_source_changed(normalized)
+	if normalized == "custom_branch" and not custom_branch.strip_edges().is_empty():
+		_on_update_custom_branch_changed(custom_branch)
+	if normalized == "latest_release":
+		_state.settings["update_release_tag"] = release_tag.strip_edges()
+		_save_settings()
+		_refresh_update_compare_for_current_target()
+		_refresh_dock()
+	var data := _build_plugin_update_status_snapshot()
+	data["accepted"] = false
+	data["action_status"] = "selected"
+	return {
+		"success": true,
+		"accepted": false,
+		"loading": str(_state.update_refs_state) == "loading",
+		"status": "selected",
+		"data": data,
+		"message": "Plugin update source selected"
+	}
+
+
+func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dictionary:
+	var accepted := _ensure_update_refs_discovery_requested(force_refresh)
+	var action_status := _resolve_plugin_update_request_status("refs", accepted)
+	var data := _build_plugin_update_status_snapshot()
+	data["accepted"] = accepted
+	data["action_status"] = action_status
+	return {
+		"success": true,
+		"accepted": accepted,
+		"loading": str(_state.update_refs_state) == "loading",
+		"status": action_status,
+		"data": data,
+		"message": "Plugin update ref discovery requested"
+	}
+
+
+func start_plugin_update_sync_from_tools() -> Dictionary:
+	if str(_state.update_sync_state) == "loading":
+		var loading_data := _build_plugin_update_status_snapshot()
+		loading_data["accepted"] = false
+		loading_data["action_status"] = "loading"
+		return {
+			"success": true,
+			"accepted": false,
+			"loading": true,
+			"status": "loading",
+			"data": loading_data,
+			"message": "Plugin update sync is already running"
+		}
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_on_update_sync_requested()
+		var missing_target_data := _build_plugin_update_status_snapshot()
+		missing_target_data["accepted"] = false
+		missing_target_data["action_status"] = str(_state.update_sync_state)
+		return {
+			"success": true,
+			"accepted": false,
+			"loading": false,
+			"status": str(_state.update_sync_state),
+			"data": missing_target_data,
+			"message": "Plugin update sync target is unavailable"
+		}
+	if _get_update_request_parent() == null:
+		var unavailable_data := _build_plugin_update_status_snapshot()
+		unavailable_data["accepted"] = false
+		unavailable_data["action_status"] = "unavailable"
+		return {
+			"success": true,
+			"accepted": false,
+			"loading": false,
+			"status": "unavailable",
+			"data": unavailable_data,
+			"message": "Plugin update sync request host is unavailable"
+		}
+	_on_update_sync_requested()
+	var data := _build_plugin_update_status_snapshot()
+	data["accepted"] = str(_state.update_sync_state) == "loading"
+	data["action_status"] = _resolve_plugin_update_request_status("sync", bool(data.get("accepted", false)))
+	return {
+		"success": true,
+		"accepted": bool(data.get("accepted", false)),
+		"loading": str(_state.update_sync_state) == "loading",
+		"status": str(data.get("action_status", "")),
+		"data": data,
+		"message": "Plugin update sync requested"
+	}
+
+
+func _build_plugin_update_current_snapshot() -> Dictionary:
+	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
+	var running_instance: Dictionary = freshness.get("running_instance", {})
+	var disk_source: Dictionary = freshness.get("disk_source", {})
+	var sync_snapshot: Dictionary = freshness.get("sync", {})
+	var source_snapshot := disk_source if not disk_source.is_empty() else running_instance
+	var source_fingerprint := str(source_snapshot.get("source_fingerprint", running_instance.get("source_fingerprint", "")))
+	var short_fingerprint := _shorten_plugin_update_fingerprint(source_fingerprint)
+	return {
+		"status": str(freshness.get("status", "unknown")),
+		"needs_lifecycle_reload": bool(freshness.get("needs_lifecycle_reload", false)),
+		"source_version": str(source_snapshot.get("source_version", running_instance.get("source_version", ""))),
+		"server_version": str(source_snapshot.get("server_version", running_instance.get("server_version", ""))),
+		"protocol_version": str(source_snapshot.get("protocol_version", running_instance.get("protocol_version", ""))),
+		"tool_schema_version": str(source_snapshot.get("tool_schema_version", running_instance.get("tool_schema_version", ""))),
+		"source_fingerprint": source_fingerprint,
+		"source_fingerprint_short": short_fingerprint,
+		"short_source_fingerprint": short_fingerprint,
+		"source_git_commit": str(sync_snapshot.get("source_git_commit", "")),
+		"source_ref_kind": str(sync_snapshot.get("source_ref_kind", "")),
+		"source_ref": str(sync_snapshot.get("source_ref", "")),
+		"written_files": int(sync_snapshot.get("written_files", 0)),
+		"running_instance": running_instance,
+		"disk_source": disk_source,
+		"sync": sync_snapshot,
+		"lifecycle_reload": freshness.get("lifecycle_reload", {}),
+		"comparison": freshness.get("comparison", {})
+	}
+
+
+func _build_plugin_update_status_snapshot() -> Dictionary:
+	var target := _resolve_update_sync_target()
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
+	return {
+		"status": _resolve_plugin_update_overall_status(),
+		"current": _build_plugin_update_current_snapshot(),
+		"source": source,
+		"custom_branch": str(_state.settings.get("update_custom_branch", "")),
+		"release_tag": str(_state.settings.get("update_release_tag", "")),
+		"target": target,
+		"current_commit": _resolve_current_update_commit(),
+		"request_host_available": _get_update_request_parent() != null,
+		"discovery_retry_pending": _update_refs_discovery_retry_pending,
+		"refs": _build_plugin_update_refs_status(),
+		"compare": _build_plugin_update_compare_status(),
+		"sync": _build_plugin_update_sync_status(),
+		"lifecycle_reload": PluginInstanceFreshness.get_freshness_snapshot().get("lifecycle_reload", {})
+	}
+
+
+func _build_plugin_update_refs_status() -> Dictionary:
+	return {
+		"state": str(_state.update_refs_state),
+		"status": str(_state.update_refs_status),
+		"error": str(_state.update_refs_error),
+		"branches": _state.update_ref_branches.duplicate(),
+		"releases": _state.update_ref_releases.duplicate(),
+		"latest_stable_release": str(_state.update_ref_latest_stable_release),
+		"latest_release": str(_state.update_ref_latest_release),
+		"release_source": str(_state.update_refs_release_source),
+		"commits": _state.update_ref_commits.duplicate(true),
+		"versions": _state.update_ref_versions.duplicate(true)
+	}
+
+
+func _build_plugin_update_compare_status() -> Dictionary:
+	return {
+		"state": str(_state.update_compare_state),
+		"error": str(_state.update_compare_error),
+		"base_commit": str(_state.update_compare_base_commit),
+		"target_ref": str(_state.update_compare_target_ref),
+		"target_commit": str(_state.update_compare_target_commit),
+		"ahead_by": int(_state.update_compare_ahead_by),
+		"behind_by": int(_state.update_compare_behind_by)
+	}
+
+
+func _build_plugin_update_sync_status() -> Dictionary:
+	return {
+		"state": str(_state.update_sync_state),
+		"status": str(_state.update_sync_status),
+		"error": str(_state.update_sync_error),
+		"target_ref": str(_state.update_sync_target_ref),
+		"target_kind": str(_state.update_sync_target_kind)
+	}
+
+
+func _resolve_plugin_update_overall_status() -> String:
+	if str(_state.update_sync_state) == "loading":
+		return "syncing"
+	if str(_state.update_refs_state) == "loading" or str(_state.update_compare_state) == "loading":
+		return "loading"
+	if str(_state.update_sync_state) == "error" or str(_state.update_refs_state) == "error" or str(_state.update_compare_state) == "error":
+		return "error"
+	if _update_refs_discovery_retry_pending:
+		return "pending"
+	return "ready"
+
+
+func _resolve_plugin_update_request_status(kind: String, accepted: bool) -> String:
+	if accepted:
+		return "accepted"
+	if _get_update_request_parent() == null and (kind == "refs" or kind == "sync"):
+		return "pending" if _update_refs_discovery_retry_pending else "unavailable"
+	if kind == "sync":
+		return str(_state.update_sync_state)
+	return str(_state.update_refs_state)
+
+
+func _shorten_plugin_update_fingerprint(source_fingerprint: String) -> String:
+	var normalized := source_fingerprint.strip_edges()
+	if normalized.length() <= 16:
+		return normalized
+	return normalized.substr(0, 16)
 
 
 func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
