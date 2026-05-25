@@ -180,6 +180,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(tool_facade_probe._state.settings.get("update_source", "")) != "latest_release" or str(tool_facade_probe._state.settings.get("update_release_tag", "")) != "v1.0.0":
 		tool_facade_probe.free()
 		return _failure("plugin.gd update tool facade should persist latest_release source selection and selected release tag.")
+	var cleared_release_result: Dictionary = tool_facade_probe.set_plugin_update_source_from_tools("latest_release")
+	if not bool(cleared_release_result.get("success", false)) or str(tool_facade_probe._state.settings.get("update_release_tag", "not-empty")) != "":
+		tool_facade_probe.free()
+		return _failure("plugin.gd update tool facade should clear a previously selected release tag when set_source omits release_tag.")
 	var discover_result: Dictionary = tool_facade_probe.discover_plugin_update_refs_from_tools(true)
 	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "pending":
 		tool_facade_probe.free()

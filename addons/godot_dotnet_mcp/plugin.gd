@@ -1402,9 +1402,10 @@ func set_plugin_update_source_from_tools(source: String, custom_branch: String =
 	_on_update_source_changed(normalized)
 	if normalized == "custom_branch" and not custom_branch.strip_edges().is_empty():
 		_on_update_custom_branch_changed(custom_branch)
-	if normalized == "latest_release" and not release_tag.strip_edges().is_empty():
+	if normalized == "latest_release":
 		_state.settings["update_release_tag"] = release_tag.strip_edges()
 		_save_settings()
+		_refresh_update_compare_for_current_target()
 		_refresh_dock()
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = false
