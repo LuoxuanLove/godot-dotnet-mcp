@@ -204,7 +204,7 @@ func _build_compare_difference_text(model: Dictionary, localization) -> String:
 	var behind_by := int(model.get("update_compare_behind_by", -1))
 	if state == "success" and ahead_by >= 0 and behind_by >= 0:
 		var template := _get_localized_text(localization, "settings_update_compare_difference", "current ahead %d / target ahead %d")
-		return template % [ahead_by, behind_by]
+		return template % [behind_by, ahead_by]
 	return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
 
 

@@ -103,7 +103,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	var status_text := str(updates.get("status_text", ""))
-	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current plugin 1.2.3 [abcdef1] -> selected target 2.0.0 [1234567]") or status_text.contains("selected target feature/settings") or not status_text.contains("current ahead 4 / target ahead 1"):
+	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current plugin 1.2.3 [abcdef1] -> selected target 2.0.0 [1234567]") or status_text.contains("selected target feature/settings") or not status_text.contains("current ahead 1 / target ahead 4"):
 		return _failure("Settings projection should keep sync success text together with explicit current-to-target hashes and commit difference direction.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
