@@ -85,7 +85,7 @@ func _build_source_text(freshness: Dictionary, localization) -> String:
 func _build_commit_text(freshness: Dictionary, localization) -> String:
 	var commit := _read_freshness_value(freshness, ["sync", "source_git_commit"])
 	if commit.is_empty():
-		commit = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+		commit = _get_localized_text(localization, "settings_update_commit_unrecorded", "unrecorded")
 	return "%s %s" % [_get_localized_text(localization, "settings_current_commit", "Commit:"), commit]
 
 
@@ -167,14 +167,13 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 
 func _build_update_compare_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
 	var current_version := _resolve_current_version(model, model.get("plugin_freshness", {}), localization)
-	var current_commit := _short_commit(_read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_git_commit"]), localization)
+	var current_commit := _short_commit(_read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_git_commit"]), localization, "settings_update_commit_unrecorded", "unrecorded")
 	var target_ref := _resolve_selected_update_target_value(model, update_settings)
-	if target_ref.is_empty():
-		target_ref = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	var target_version := _resolve_target_update_version(model, target_ref, localization)
 	var target_commit := _short_commit(_resolve_target_update_commit(model, target_ref), localization)
 	var compare_text := _build_compare_difference_text(model, localization)
 	var template := _get_localized_text(localization, "settings_update_compare_summary", "Current version %s [%s], target version %s [%s], commit difference: %s.")
-	return template % [current_version, current_commit, target_ref, target_commit, compare_text]
+	return template % [current_version, current_commit, target_version, target_commit, compare_text]
 
 
 func _resolve_current_version(model: Dictionary, freshness: Dictionary, localization) -> String:
@@ -206,10 +205,18 @@ func _resolve_target_update_commit(model: Dictionary, target_ref: String) -> Str
 	return str(commits.get(target_ref, model.get("update_compare_target_commit", ""))).strip_edges()
 
 
-func _short_commit(commit: String, localization) -> String:
+func _resolve_target_update_version(model: Dictionary, target_ref: String, localization) -> String:
+	var versions: Dictionary = model.get("update_refs_versions", {})
+	var version := str(versions.get(target_ref, "")).strip_edges()
+	if version.is_empty():
+		return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	return version
+
+
+func _short_commit(commit: String, localization, missing_key: String = "settings_update_unavailable", missing_fallback: String = "Unavailable") -> String:
 	var normalized := commit.strip_edges()
 	if normalized.is_empty():
-		return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+		return _get_localized_text(localization, missing_key, missing_fallback)
 	return normalized.substr(0, mini(7, normalized.length()))
 
 

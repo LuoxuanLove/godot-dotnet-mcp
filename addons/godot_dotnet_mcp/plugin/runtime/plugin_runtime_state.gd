@@ -72,6 +72,7 @@ var update_ref_latest_stable_release := ""
 var update_ref_latest_release := ""
 var update_refs_release_source := ""
 var update_ref_commits: Dictionary = {}
+var update_ref_versions: Dictionary = {}
 var update_compare_state := "idle"
 var update_compare_error := ""
 var update_compare_base_commit := ""

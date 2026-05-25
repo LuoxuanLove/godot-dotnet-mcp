@@ -322,6 +322,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_current_version": "Version actuelle :",
 	"settings_current_source": "Source :",
 	"settings_current_commit": "Commit :",
+	"settings_update_commit_unrecorded": "Non enregistré",
 	"settings_update_unavailable": "Indisponible",
 	"settings_update_source_label": "Mode de mise à jour :",
 	"settings_update_source_latest_dev": "Dernière branche dev",

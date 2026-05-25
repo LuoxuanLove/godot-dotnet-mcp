@@ -32,6 +32,8 @@ const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godo
 const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
 const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
 const UPDATE_COMPARE_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/compare/%s...%s"
+const UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/heads/%s/addons/godot_dotnet_mcp/plugin.cfg"
+const UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/tags/%s/addons/godot_dotnet_mcp/plugin.cfg"
 const UPDATE_REFS_HTTP_TIMEOUT := 10.0
 const UPDATE_REFS_BODY_SIZE_LIMIT := 16777216
 const UPDATE_REFS_MAX_PAGES := 20
@@ -73,6 +75,7 @@ var _update_refs_pending := {}
 var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
 var _update_compare_request_serial := 0
+var _update_ref_version_request_serial := 0
 var _update_sync_request_serial := 0
 
 
@@ -716,6 +719,7 @@ func _on_update_check_requested() -> void:
 	_state.update_ref_latest_release = ""
 	_state.update_refs_release_source = ""
 	_state.update_ref_commits = {}
+	_state.update_ref_versions = {}
 	_reset_update_compare_state()
 	_refresh_dock()
 	_start_update_refs_request("branches", UPDATE_REFS_BRANCHES_URL, serial)
@@ -830,6 +834,59 @@ func _get_update_refs_headers() -> PackedStringArray:
 		"Accept: application/vnd.github+json",
 		"User-Agent: Godot-Dotnet-MCP-Settings-Update-Checker"
 	])
+
+
+func _start_update_ref_version_request(target_ref: String, target_kind: String = "branch") -> void:
+	if _state == null:
+		return
+	var normalized_ref := target_ref.strip_edges()
+	if normalized_ref.is_empty():
+		return
+	_update_ref_version_request_serial += 1
+	var serial := _update_ref_version_request_serial
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		return
+	var request_node := HTTPRequest.new()
+	request_node.name = "UpdateRefVersionRequest"
+	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.body_size_limit = 65536
+	request_parent.add_child(request_node)
+	request_node.request_completed.connect(Callable(self, "_on_update_ref_version_request_completed").bind(normalized_ref, serial, request_node), CONNECT_ONE_SHOT)
+	var url_template := UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE if target_kind == "tag" else UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE
+	var url := url_template % normalized_ref.uri_encode().replace("%2F", "/")
+	var error := request_node.request(url, _get_update_refs_headers())
+	if error != OK:
+		request_node.queue_free()
+
+
+func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int, request_node: HTTPRequest) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_ref_version_request_serial:
+		return
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		return
+	var version := _parse_update_target_plugin_cfg_version(body.get_string_from_utf8())
+	if version.is_empty():
+		return
+	_state.update_ref_versions[target_ref] = version
+	_refresh_dock()
+
+
+func _parse_update_target_plugin_cfg_version(content: String) -> String:
+	for line in content.split("\n"):
+		var normalized := str(line).strip_edges()
+		if not normalized.begins_with("version"):
+			continue
+		var separator := normalized.find("=")
+		if separator == -1:
+			continue
+		var value := normalized.substr(separator + 1).strip_edges()
+		if value.length() >= 2 and ((value.begins_with("\"") and value.ends_with("\"")) or (value.begins_with("'") and value.ends_with("'"))):
+			value = value.substr(1, value.length() - 2)
+		return value.strip_edges()
+	return ""
 
 
 func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int, request_node: HTTPRequest) -> void:
@@ -1120,6 +1177,8 @@ func _refresh_update_compare_for_current_target() -> void:
 	_state.update_compare_ahead_by = -1
 	_state.update_compare_behind_by = -1
 	_state.update_compare_error = ""
+	if not (_state.update_ref_versions as Dictionary).has(target_ref):
+		_start_update_ref_version_request(target_ref, str(target.get("kind", "branch")))
 	if base_commit.is_empty() or target_commit.is_empty():
 		_state.update_compare_state = "unavailable"
 		return

@@ -164,6 +164,7 @@ func build_model() -> Dictionary:
 		"update_refs_latest_release": str(_get_state_value("update_ref_latest_release", "")),
 		"update_refs_release_source": str(_get_state_value("update_refs_release_source", "")),
 		"update_refs_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
+		"update_refs_versions": _duplicate_string_dictionary(_get_state_value("update_ref_versions", {})),
 		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
 		"update_compare_error": str(_get_state_value("update_compare_error", "")),
 		"update_compare_base_commit": str(_get_state_value("update_compare_base_commit", "")),
@@ -186,6 +187,7 @@ func build_model() -> Dictionary:
 	model["update_refs_latest_release"] = str(_get_state_value("update_ref_latest_release", ""))
 	model["update_refs_release_source"] = str(_get_state_value("update_refs_release_source", ""))
 	model["update_refs_commits"] = _duplicate_string_dictionary(_get_state_value("update_ref_commits", {}))
+	model["update_refs_versions"] = _duplicate_string_dictionary(_get_state_value("update_ref_versions", {}))
 	model["update_compare_state"] = str(_get_state_value("update_compare_state", "idle"))
 	model["update_compare_error"] = str(_get_state_value("update_compare_error", ""))
 	model["update_compare_base_commit"] = str(_get_state_value("update_compare_base_commit", ""))

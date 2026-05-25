@@ -406,6 +406,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_current_version": "目前版本：",
 	"settings_current_source": "來源：",
 	"settings_current_commit": "提交：",
+	"settings_update_commit_unrecorded": "未記錄",
 	"settings_update_unavailable": "不可用",
 	"settings_update_source_label": "更新方式：",
 	"settings_update_source_latest_dev": "最新 dev 分支",

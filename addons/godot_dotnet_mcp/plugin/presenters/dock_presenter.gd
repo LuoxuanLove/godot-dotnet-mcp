@@ -119,6 +119,7 @@ func build_model(context: Dictionary) -> Dictionary:
 		"update_refs_latest_release": str(context.get("update_refs_latest_release", "")),
 		"update_refs_release_source": str(context.get("update_refs_release_source", "")),
 		"update_refs_commits": context.get("update_refs_commits", {}),
+		"update_refs_versions": context.get("update_refs_versions", {}),
 		"update_compare_state": str(context.get("update_compare_state", "idle")),
 		"update_compare_error": str(context.get("update_compare_error", "")),
 		"update_compare_base_commit": str(context.get("update_compare_base_commit", "")),
