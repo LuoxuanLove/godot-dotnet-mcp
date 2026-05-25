@@ -106,6 +106,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var saved_settings := _load_saved_settings()
 	if str(saved_settings.get("update_source", "")) != "custom_branch" or str(saved_settings.get("update_custom_branch", "")) != "feature/persisted-settings":
 		return _failure("plugin.gd should persist normalized update setting changes through _save_settings().")
+	var switch_probe := PluginScript.new()
+	switch_probe._state.settings["update_source"] = "latest_stable"
+	switch_probe._state.settings["update_custom_branch"] = "fix/old"
+	switch_probe._on_update_source_changed("custom_branch")
+	if str(switch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(switch_probe._state.settings.get("update_custom_branch", "")) != "dev":
+		switch_probe.free()
+		return _failure("plugin.gd should reset the selected custom branch to dev whenever custom branch mode is selected.")
+	switch_probe.free()
 	if saved_settings.has("update_ref_branches") or saved_settings.has("update_ref_releases") or saved_settings.has("update_refs_state"):
 		return _failure("plugin.gd should not persist transient discovered update refs in settings.")
 

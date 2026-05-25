@@ -152,8 +152,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render and select the current language.")
 	if source_option == null or source_option.get_item_count() != 3 or str(source_option.get_item_metadata(source_option.selected)) != "latest_release" or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
 		return _failure("Settings tab should render latest stable, latest release, then custom branch sources without adding Config-tab UI.")
-	if custom_branch == null or custom_branch.get_item_count() < 1 or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
-		return _failure("Settings tab should render discovered custom branch options.")
+	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
+		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
 	if custom_branch_row.visible:
 		return _failure("Settings tab should hide manual target selectors for latest release source.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_check_count != 0:

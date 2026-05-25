@@ -618,7 +618,7 @@ func _on_language_changed(language_code: String) -> void:
 
 func _on_update_source_changed(source: String) -> void:
 	_state.settings["update_source"] = _normalize_update_source(source)
-	if _state.settings["update_source"] == "custom_branch" and str(_state.settings.get("update_custom_branch", "")).strip_edges().is_empty():
+	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
 	_save_settings()
 	if _ensure_update_refs_discovery_requested(true):
