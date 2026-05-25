@@ -65,6 +65,8 @@ Godot .NET MCP supports two installation paths:
 - Install from the Godot Asset Library.
 - Copy the `addons/godot_dotnet_mcp/` source directory into a Godot project.
 
+After copying from source, users can stay on the latest GitHub code by updating the copied addon through their usual editor or GUI file workflow, or by using MCP project-file tools when appropriate.
+
 The plugin targets Godot 4.6+ with .NET support.
 
 ### 🏁 Why This Release Matters

@@ -30,6 +30,7 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 | :---: | :--- | :--- |
 | 🎛️ | **In-editor local MCP plugin** | The MCP service is provided directly by the Godot plugin, with no extra background process required. |
 | 🚀 | **Simple installation** | Install it from the Godot Asset Library, or copy the `addons/godot_dotnet_mcp/` source files into your project. |
+| 🔄 | **Latest GitHub code** | Keep a copied addon current through normal editor or GUI file updates, or through MCP project-file tools when appropriate. |
 | 🎮 | **Live Godot editor context** | Provides your agent with the current scene, selected nodes, Dock state, logs, run information, and editor screenshots. |
 | 🌳 | **Scene and resource workflows** | Helps inspect scene trees, resource references, dependencies, and scene structure issues. |
 | ▶️ | **Game runtime support** | Starts and stops scenes, inspects runtime diagnostics, performs input, and captures game runtime views. |

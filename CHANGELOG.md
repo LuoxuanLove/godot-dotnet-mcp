@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
 - Updated README release badges so stable and prerelease entry points are clearer from the product pages.
+- Added README and release-note guidance for keeping copied source installs current with the latest GitHub code through GUI file updates or MCP project-file tools.
 - Added the `v1.0.0` manual release notes source and synchronized the release workflow documentation with the stable release flow.
 - Expanded the `v1.0.0` manual release notes into a fuller first-stable-release overview that follows the pre3 narrative style.
 - Cleaned up release changelog entries so the `v1.0.0` section reflects post-`v1.0.0-pre3` development without mixing prerelease records.
