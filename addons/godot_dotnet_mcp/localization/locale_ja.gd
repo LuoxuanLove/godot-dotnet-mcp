@@ -320,7 +320,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_updates_title": "更新",
 	"settings_updates_description": "更新モードを選択すると、ブランチ、リリース、タグが自動的に検出されます。",
 	"settings_current_version": "現在のバージョン:",
-	"settings_current_source": "ソース:",
+	"settings_current_source": "プラグインパス:",
 	"settings_current_commit": "コミット:",
 	"settings_update_commit_unrecorded": "未記録",
 	"settings_update_unavailable": "利用不可",

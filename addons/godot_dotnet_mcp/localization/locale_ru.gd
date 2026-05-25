@@ -320,7 +320,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_updates_title": "Обновления",
 	"settings_updates_description": "Выберите режим обновления; ветки, релизы и теги обнаруживаются автоматически.",
 	"settings_current_version": "Текущая версия:",
-	"settings_current_source": "Источник:",
+	"settings_current_source": "Путь плагина:",
 	"settings_current_commit": "Коммит:",
 	"settings_update_commit_unrecorded": "Не записано",
 	"settings_update_unavailable": "Недоступно",
