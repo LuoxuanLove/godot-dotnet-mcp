@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- 修复 Settings 自定义分支选择：切换到自定义分支时默认选择 `dev`，并将 `dev` 固定在分支下拉选项最上方。
 - 修复 Settings 更新引用发现：重新选择更新方式或分支时会先刷新远端引用，再重建比较结果。
 - 修复 Settings 更新比较显示：明确标出当前插件与选中目标两侧，并在 GitHub compare 请求中使用发布 / 标签引用而不是 annotated tag object commit。
 - 修复 Settings 更新同步成功状态：同步完成后仍会显示当前 / 目标提交比较与领先 / 落后数量。
