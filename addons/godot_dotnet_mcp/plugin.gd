@@ -621,7 +621,7 @@ func _on_update_source_changed(source: String) -> void:
 	if _state.settings["update_source"] == "custom_branch" and str(_state.settings.get("update_custom_branch", "")).strip_edges().is_empty():
 		_state.settings["update_custom_branch"] = "dev"
 	_save_settings()
-	if _ensure_update_refs_discovery_requested():
+	if _ensure_update_refs_discovery_requested(true):
 		return
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
@@ -640,12 +640,12 @@ func _normalize_update_source(source: String) -> String:
 			return "latest_stable"
 
 
-func _ensure_update_refs_discovery_requested() -> bool:
+func _ensure_update_refs_discovery_requested(force_refresh: bool = false) -> bool:
 	if _state == null:
 		return false
 	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
 		return false
-	if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
+	if not force_refresh and str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
 		_update_refs_discovery_retry_pending = false
 		return false
 	if _get_update_request_parent() == null:
@@ -685,6 +685,8 @@ func _get_update_request_parent() -> Node:
 func _on_update_custom_branch_changed(branch: String) -> void:
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
+	if _ensure_update_refs_discovery_requested(true):
+		return
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 
@@ -1179,6 +1181,7 @@ func _refresh_update_compare_for_current_target() -> void:
 	var base_commit := _resolve_current_update_commit()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	var target_commit := str(target.get("commit", "")).strip_edges()
+	var compare_head := _resolve_update_compare_head(target)
 	_state.update_compare_base_commit = base_commit
 	_state.update_compare_target_ref = target_ref
 	_state.update_compare_target_commit = target_commit
@@ -1187,15 +1190,25 @@ func _refresh_update_compare_for_current_target() -> void:
 	_state.update_compare_error = ""
 	if not (_state.update_ref_versions as Dictionary).has(target_ref):
 		_start_update_ref_version_request(target_ref, str(target.get("kind", "branch")))
-	if base_commit.is_empty() or target_commit.is_empty():
+	if base_commit.is_empty() or compare_head.is_empty():
 		_state.update_compare_state = "unavailable"
 		return
-	if base_commit == target_commit:
+	if not target_commit.is_empty() and base_commit == target_commit:
 		_state.update_compare_state = "success"
 		_state.update_compare_ahead_by = 0
 		_state.update_compare_behind_by = 0
 		return
-	_start_update_compare_request(base_commit, target_commit)
+	_start_update_compare_request(base_commit, compare_head, target_commit)
+
+
+func _resolve_update_compare_head(target: Dictionary) -> String:
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	if str(target.get("kind", "branch")) == "tag" and not target_ref.is_empty():
+		return target_ref
+	if not target_commit.is_empty():
+		return target_commit
+	return target_ref
 
 
 func _resolve_current_update_commit() -> String:
@@ -1220,7 +1233,7 @@ func _reset_update_compare_state() -> void:
 	_state.update_compare_behind_by = -1
 
 
-func _start_update_compare_request(base_commit: String, target_commit: String) -> void:
+func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "") -> void:
 	_update_compare_request_serial += 1
 	var serial := _update_compare_request_serial
 	_state.update_compare_state = "loading"
@@ -1234,7 +1247,7 @@ func _start_update_compare_request(base_commit: String, target_commit: String) -
 	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial, request_node), CONNECT_ONE_SHOT)
-	var compare_url := UPDATE_COMPARE_URL_TEMPLATE % [base_commit.uri_encode(), target_commit.uri_encode()]
+	var compare_url := UPDATE_COMPARE_URL_TEMPLATE % [base_commit.uri_encode(), compare_head.uri_encode()]
 	var error := request_node.request(compare_url, _get_update_refs_headers())
 	if error != OK:
 		request_node.queue_free()
