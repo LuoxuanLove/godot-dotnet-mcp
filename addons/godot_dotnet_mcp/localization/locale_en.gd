@@ -425,7 +425,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_updates_title": "Updates",
 	"settings_updates_description": "Choose an update mode; branches, releases, and tags are discovered automatically.",
 	"settings_current_version": "Current version:",
-	"settings_current_source": "Source:",
+	"settings_current_source": "Plugin Path:",
 	"settings_current_commit": "Commit:",
 	"settings_update_commit_unrecorded": "unrecorded",
 	"settings_update_unavailable": "Unavailable",

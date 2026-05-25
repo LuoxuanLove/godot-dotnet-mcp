@@ -33,7 +33,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_source_latest_release": "Latest release",
 		"settings_update_source_release_tag": "Release tag",
 		"settings_current_version": "Current version:",
-		"settings_current_source": "Source:",
+		"settings_current_source": "Plugin Path:",
 		"settings_current_commit": "Commit:",
 		"settings_update_unavailable": "Unavailable",
 		"settings_update_commit_unrecorded": "unrecorded",
@@ -126,6 +126,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 1,
 		"update_compare_behind_by": 0,
+		"update_sync_state": "success",
+		"update_sync_status": "Synced dev.",
 		"plugin_version": "1.0.0",
 		"plugin_freshness": {"sync": {"source_git_commit": "abcdef123456"}}
 	})
@@ -168,8 +170,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
-	if _find_label_containing(labels, "target version 1.2.0 [1234567]") == null or _find_label_containing(labels, "target version dev") != null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
-		return _failure("Settings tab should display current/target update hashes and ahead/behind status copy.")
+	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "target version 1.2.0 [1234567]") == null or _find_label_containing(labels, "target version dev") != null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
+		return _failure("Settings tab should display sync success together with current/target update hashes and ahead/behind status copy.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
 	prepare_button.disabled = false

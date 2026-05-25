@@ -404,7 +404,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_updates_title": "更新",
 	"settings_updates_description": "選擇更新方式後會自動探索 GitHub 分支、發布版與標籤，然後可同步選中目標。",
 	"settings_current_version": "目前版本：",
-	"settings_current_source": "來源：",
+	"settings_current_source": "外掛路徑：",
 	"settings_current_commit": "提交：",
 	"settings_update_commit_unrecorded": "未記錄",
 	"settings_update_unavailable": "不可用",

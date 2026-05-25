@@ -320,7 +320,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_updates_title": "Atualizações",
 	"settings_updates_description": "Escolha um modo de atualização; branches, versões e tags são descobertos automaticamente.",
 	"settings_current_version": "Versão atual:",
-	"settings_current_source": "Origem:",
+	"settings_current_source": "Caminho do plugin:",
 	"settings_current_commit": "Commit:",
 	"settings_update_commit_unrecorded": "Não registrado",
 	"settings_update_unavailable": "Indisponível",

@@ -1051,6 +1051,7 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
 	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
+	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 
 

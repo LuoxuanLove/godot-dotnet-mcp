@@ -79,7 +79,7 @@ func _build_source_text(freshness: Dictionary, localization) -> String:
 		source_root = _read_freshness_value(freshness, ["disk_source", "source_root"])
 	if source_root.is_empty():
 		source_root = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
-	return "%s %s" % [_get_localized_text(localization, "settings_current_source", "Source:"), source_root]
+	return "%s %s" % [_get_localized_text(localization, "settings_current_source", "Plugin Path:"), source_root]
 
 
 func _build_commit_text(freshness: Dictionary, localization) -> String:
@@ -155,7 +155,8 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 			var status := str(model.get("update_sync_status", "")).strip_edges()
 			if status.is_empty():
 				status = _get_localized_text(localization, "settings_update_sync_success", "Update sync completed.")
-			return "%s %s" % [status, target]
+			var compare_status := _build_update_compare_status_text(model, update_settings, localization)
+			return "%s %s" % [status, compare_status]
 		"error":
 			var error := str(model.get("update_sync_error", "")).strip_edges()
 			if error.is_empty():
