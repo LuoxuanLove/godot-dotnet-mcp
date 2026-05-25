@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-## System implementation: project_state, editor_state, plugin_reload,
+## System implementation: project_state, editor_state, plugin_reload, plugin_update,
 ## project_configure, userdata_maintenance, project_files, project_run,
 ## project_stop, runtime_diagnose
 
@@ -36,7 +36,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "resource_reference_audit"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
 ]
 
 
@@ -93,6 +93,21 @@ func get_tools() -> Array[Dictionary]:
 				"type": "object",
 				"properties": {
 					"action": {"type": "string", "enum": ["get_freshness", "full_reload_plugin"], "description": "Plugin reload action"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "plugin_update",
+			"description": "PLUGIN UPDATE: Inspect the local plugin version/fingerprint and coordinate the built-in async update sync flow. Actions: get_current reads local version/hash-like metadata and lifecycle reload state; get_status reports selected source, discovered refs, compare, sync and reload progress; set_source selects latest_stable, latest_release or custom_branch; discover_refs starts async ref discovery; start_sync starts async archive sync and lifecycle reload scheduling. Network/archive work is asynchronous and returns accepted/loading/status immediately.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["get_current", "get_status", "set_source", "discover_refs", "start_sync"], "description": "Plugin update action"},
+					"source": {"type": "string", "enum": ["latest_stable", "latest_release", "custom_branch", "latest_dev", "branch", "release_tag"], "description": "Update source for set_source"},
+					"custom_branch": {"type": "string", "description": "Branch name used when source is custom_branch"},
+					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"},
+					"force_refresh": {"type": "boolean", "description": "Force ref discovery refresh for discover_refs (default: true)"}
 				},
 				"required": ["action"]
 			}
@@ -207,6 +222,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"project_state":     return _execute_project_state(args)
 		"editor_state":      return _execute_editor_state(args)
 		"plugin_reload":     return _execute_plugin_reload(args)
+		"plugin_update":     return _execute_plugin_update(args)
 		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
@@ -583,6 +599,55 @@ func _execute_plugin_reload(args: Dictionary) -> Dictionary:
 			return bridge.error("Plugin lifecycle reload returned an invalid response", {"freshness": PluginInstanceFreshness.get_freshness_snapshot()})
 		_:
 			return bridge.error("Unknown plugin_reload action: %s" % action)
+
+
+func _execute_plugin_update(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	var plugin = _get_plugin_from_runtime_context()
+	match action:
+		"get_current":
+			if plugin != null and plugin.has_method("get_plugin_update_current_from_tools"):
+				return _normalize_plugin_update_result(plugin.get_plugin_update_current_from_tools(), "Plugin update current fetched")
+			return _plugin_update_unavailable_response(action)
+		"get_status":
+			if plugin != null and plugin.has_method("get_plugin_update_status_from_tools"):
+				return _normalize_plugin_update_result(plugin.get_plugin_update_status_from_tools(), "Plugin update status fetched")
+			return _plugin_update_unavailable_response(action)
+		"set_source":
+			if plugin == null or not plugin.has_method("set_plugin_update_source_from_tools"):
+				return _plugin_update_unavailable_response(action)
+			var source := str(args.get("source", args.get("update_source", ""))).strip_edges()
+			var custom_branch := str(args.get("custom_branch", args.get("branch", ""))).strip_edges()
+			var release_tag := str(args.get("release_tag", args.get("tag", ""))).strip_edges()
+			return _normalize_plugin_update_result(plugin.set_plugin_update_source_from_tools(source, custom_branch, release_tag), "Plugin update source selected")
+		"discover_refs":
+			if plugin == null or not plugin.has_method("discover_plugin_update_refs_from_tools"):
+				return _plugin_update_unavailable_response(action)
+			var force_refresh := bool(args.get("force_refresh", true))
+			return _normalize_plugin_update_result(plugin.discover_plugin_update_refs_from_tools(force_refresh), "Plugin update ref discovery requested")
+		"start_sync":
+			if plugin == null or not plugin.has_method("start_plugin_update_sync_from_tools"):
+				return _plugin_update_unavailable_response(action)
+			return _normalize_plugin_update_result(plugin.start_plugin_update_sync_from_tools(), "Plugin update sync requested")
+		_:
+			return bridge.error("Unknown plugin_update action: %s" % action)
+
+
+func _normalize_plugin_update_result(result, fallback_message: String) -> Dictionary:
+	if result is Dictionary:
+		return result
+	return bridge.error("Plugin update bridge returned an invalid response", {"freshness": PluginInstanceFreshness.get_freshness_snapshot(), "fallback_message": fallback_message})
+
+
+func _plugin_update_unavailable_response(action: String) -> Dictionary:
+	return bridge.success({
+		"action": action,
+		"status": "unavailable",
+		"accepted": false,
+		"loading": false,
+		"reason": "Plugin update bridge is unavailable",
+		"freshness": PluginInstanceFreshness.get_freshness_snapshot()
+	}, "Plugin update bridge is unavailable")
 
 
 func _get_plugin_from_runtime_context():
