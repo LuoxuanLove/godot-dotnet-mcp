@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends RefCounted
 class_name LocalizationService
 
@@ -87,9 +87,11 @@ func _init_translations() -> void:
 
 
 func _load_language_translations(file_path: String):
-	var lang_script = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REPLACE)
+	var lang_script = ResourceLoader.load(file_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
 	if lang_script == null:
 		return {}
+	if lang_script is Script:
+		(lang_script as Script).reload(false)
 
 	var translations = lang_script.get("TRANSLATIONS")
 	if translations is Dictionary:

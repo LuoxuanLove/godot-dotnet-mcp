@@ -19,6 +19,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "debug_dotnet",         "actions": ["build"]}
 	],
 	"system_plugin_reload": [],
+	"system_plugin_update": [],
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["set_main_screen"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},

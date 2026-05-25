@@ -1,0 +1,166 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/settings_tab.gd" id="1"]
+
+[node name="SettingsTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="Scroll/Margin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="GeneralCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="GeneralCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/GeneralCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="GeneralCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="GeneralTitle" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="PortRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/PortRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/PortRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+min_value = 1024.0
+max_value = 65535.0
+
+[node name="LogLevelRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="LogLevelLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="LogLevelOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="LanguageRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="UpdatesCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="UpdatesCardMargin" type="MarginContainer" parent="Scroll/Margin/Content/UpdatesCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="UpdatesCardBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 10
+
+[node name="UpdatesTitle" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+horizontal_alignment = 0
+
+[node name="UpdatesDescription" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="UpdateSourceRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="SourceOptionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="SourceOption" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="CustomBranchRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="CustomBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="CustomBranchValue" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="UpdatesStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="UpdateButtonsRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+visible = false
+disabled = true
+text = ""
+
+[node name="PrepareButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+visible = false
+disabled = true
+text = ""
+
+[node name="ApplyButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+disabled = true
+text = ""

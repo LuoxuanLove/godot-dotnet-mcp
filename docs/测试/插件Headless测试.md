@@ -145,6 +145,7 @@ tests/godot_plugin_harness_fixture/
 | `system_editor_control_contracts` | 验证 `impl_editor.gd` 的高层编辑器界面路由，把 `set_main_screen / activate_ui / capture_editor / list_controls / capture_control / popup` 动作稳定委托到对应原子工具 |
 | `system_script_executor_contracts` | 验证 `impl_script.gd` 作为当前脚本级 system 聚合入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
 | `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
+| `system_plugin_update_contracts` | 验证 `impl_project.gd` 中 `system_plugin_update` 的当前版本 / 状态读取、更新来源选择、ref discovery 与 sync 路由契约 |
 | `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
 | `tool_loader_contracts` | 验证默认工具访问 provider 下的 loader 初始化和 disabled tool 收缩 |
 | `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、运行时状态投影和日志/语言选项模型 |

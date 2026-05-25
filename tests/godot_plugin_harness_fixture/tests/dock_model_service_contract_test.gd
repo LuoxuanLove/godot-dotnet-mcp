@@ -11,6 +11,28 @@ class FakeState extends RefCounted:
 	var current_cli_scope := ""
 	var current_config_platform := ""
 	var custom_tool_profiles: Dictionary = {}
+	var update_refs_state := "success"
+	var update_refs_status := "Discovered refs."
+	var update_refs_error := ""
+	var update_ref_branches: Array[String] = ["dev"]
+	var update_ref_releases: Array[String] = ["v1.0.0"]
+	var update_ref_latest_stable_release := "v1.0.0"
+	var update_ref_latest_release := "v1.1.0-beta"
+	var update_refs_release_source := "releases"
+	var update_ref_commits := {"dev": "abcdef123456"}
+	var update_ref_versions := {"dev": "1.2.3"}
+	var update_compare_state := "success"
+	var update_compare_error := ""
+	var update_compare_base_commit := "base123456"
+	var update_compare_target_ref := "dev"
+	var update_compare_target_commit := "abcdef123456"
+	var update_compare_ahead_by := 3
+	var update_compare_behind_by := 1
+	var update_sync_state := "idle"
+	var update_sync_status := ""
+	var update_sync_error := ""
+	var update_sync_target_ref := ""
+	var update_sync_target_kind := ""
 
 
 class FakeServerController extends RefCounted:
@@ -47,9 +69,29 @@ class FakeServerController extends RefCounted:
 		return []
 
 
-class FakeDockPresenter extends RefCounted:
-	func build_model(context: Dictionary) -> Dictionary:
-		return context
+class FakeLocalization extends RefCounted:
+	func get_language() -> String:
+		return "en"
+
+	func get_available_languages() -> Array:
+		return []
+
+	func get_text(_key: String) -> String:
+		return ""
+
+
+class FakeToolCatalog extends RefCounted:
+	func build_tool_name_index(_all_tools_by_category: Dictionary) -> Array:
+		return []
+
+	func has_tool_profile(profile_id: String, _builtin_profiles: Array, _custom_profiles: Dictionary) -> bool:
+		return profile_id == "default"
+
+	func find_matching_profile_id(_disabled_tools: Array, _builtin_profiles: Array, _custom_profiles: Dictionary, _tool_names: Array) -> String:
+		return "default"
+
+	func profile_matches_state(_profile_id: String, _disabled_tools: Array, _builtin_profiles: Array, _custom_profiles: Dictionary, _tool_names: Array) -> bool:
+		return true
 
 
 class FakeToolAccessFeature extends RefCounted:
@@ -87,11 +129,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var server_controller = FakeServerController.new()
 	var context = FakeContext.new()
 	context.state = state
-	context.localization = RefCounted.new()
+	context.localization = FakeLocalization.new()
 	context.server_controller = server_controller
-	context.tool_catalog = RefCounted.new()
+	context.tool_catalog = FakeToolCatalog.new()
 	context.config_service = RefCounted.new()
-	context.dock_presenter = FakeDockPresenter.new()
+	context.dock_presenter = null
 	context.user_tool_service = RefCounted.new()
 	context.client_install_detection_service = null
 	context.central_server_attach_service = null
@@ -119,6 +161,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should include the unified tool presentation model.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
+	if not model.has("plugin_freshness") or not (model.get("plugin_freshness", {}) is Dictionary):
+		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
+	if not model.has("plugin_version"):
+		return _failure("Dock model should include plugin version data for the Settings tab update summary.")
+	if str(model.get("update_refs_state", "")) != "success" or not (model.get("update_refs_branches", []) as Array).has("dev") or not (model.get("update_refs_releases", []) as Array).has("v1.0.0") or str((model.get("update_refs_commits", {}) as Dictionary).get("dev", "")) != "abcdef123456" or str((model.get("update_refs_versions", {}) as Dictionary).get("dev", "")) != "1.2.3" or str(model.get("update_refs_latest_stable_release", "")) != "v1.0.0" or str(model.get("update_refs_latest_release", "")) != "v1.1.0-beta":
+		return _failure("Dock model should project transient update ref discovery state for the Settings tab.")
+	if str(model.get("update_compare_state", "")) != "success" or str(model.get("update_compare_target_ref", "")) != "dev" or int(model.get("update_compare_ahead_by", -1)) != 3 or int(model.get("update_compare_behind_by", -1)) != 1:
+		return _failure("Dock model should project transient update compare state for the Settings tab.")
+	if model.has("update_ref_branches") or model.has("update_ref_releases") or model.has("update_ref_latest_stable_release") or model.has("update_ref_latest_release") or model.has("update_ref_commits") or model.has("update_ref_versions"):
+		return _failure("Dock model should expose transient update discovery refs with plural model keys only.")
 
 	return {
 		"name": "dock_model_service_contracts",

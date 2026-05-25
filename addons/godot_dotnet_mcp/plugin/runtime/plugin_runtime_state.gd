@@ -20,7 +20,10 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"log_level": "info",
 	"port": 3000,
 	"show_user_tools": true,
-	"tool_profile_id": "default"
+	"tool_profile_id": "default",
+	"update_source": "latest_stable",
+	"update_custom_branch": "dev",
+	"update_release_tag": ""
 }
 
 const ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.ALL_TOOL_CATEGORIES
@@ -34,6 +37,7 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_editor_state",
 	"system_help",
 	"system_plugin_reload",
+	"system_plugin_update",
 	"system_project_configure",
 	"system_project_files",
 	"system_project_index_build",
@@ -60,6 +64,28 @@ var current_config_platform := "claude_desktop"
 var current_tab := 0
 var restore_focus := false
 var needs_initial_tool_profile_apply := false
+var update_refs_state := "idle"
+var update_refs_status := ""
+var update_refs_error := ""
+var update_ref_branches: Array[String] = []
+var update_ref_releases: Array[String] = []
+var update_ref_latest_stable_release := ""
+var update_ref_latest_release := ""
+var update_refs_release_source := ""
+var update_ref_commits: Dictionary = {}
+var update_ref_versions: Dictionary = {}
+var update_compare_state := "idle"
+var update_compare_error := ""
+var update_compare_base_commit := ""
+var update_compare_target_ref := ""
+var update_compare_target_commit := ""
+var update_compare_ahead_by := -1
+var update_compare_behind_by := -1
+var update_sync_state := "idle"
+var update_sync_status := ""
+var update_sync_error := ""
+var update_sync_target_ref := ""
+var update_sync_target_kind := ""
 
 
 func resolve_active_language(localization) -> String:

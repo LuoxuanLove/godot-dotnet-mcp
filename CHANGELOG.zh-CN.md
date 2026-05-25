@@ -8,10 +8,21 @@
 
 ### Changed
 
+- 将 Dock 持久设置控件拆分到新的 Settings 页，使主页聚焦诊断、服务状态和快捷服务操作。
+- 新增 Settings 更新方式：分支选择（默认 `dev`）、最新稳定版、最新发布版（含预发布）和指定发布版 / 标签，并通过 GitHub 引用发现下拉选择。
+- 新增插件内安全更新同步：从 GitHub archive 仅提取 `addons/godot_dotnet_mcp/`，保留 `custom_tools/`，写入同步元数据，在选择更新方式后自动发现引用，最新发布目标只取 GitHub Releases，并通过“同步”操作处理选中目标。
+- 新增 `system_plugin_update`，MCP 客户端可读取已安装插件版本与指纹，选择更新来源，启动异步引用发现或同步，并轮询同步 / 重载进度。
+- Settings 更新同步成功后现在会调度延迟插件生命周期重载，使更新后的插件文件立即生效。
+- 移除 Settings 更新页中冗余的当前版本、插件路径与提交摘要行。
 - 调整编辑器 Dock 页签与标题文案：页签显示为 `MCP`，Dock 标题与弹窗标题显示为 `Godot .NET MCP`。
 
 ### Fixed
 
+- 修复 Settings 自定义分支选择：切换到自定义分支时默认选择 `dev`，并将 `dev` 固定在分支下拉选项最上方。
+- 修复 Settings 更新引用发现：重新选择更新方式或分支时会先刷新远端引用，再重建比较结果。
+- 修复 Settings 更新比较显示：明确标出当前插件与选中目标两侧，并在 GitHub compare 请求中使用发布 / 标签引用而不是 annotated tag object commit。
+- 修复 Settings 更新同步成功状态：同步完成后仍会显示当前 / 目标提交比较与领先 / 落后数量。
+- 修复插件更新后 Settings 更新文案仍可能复用旧脚本资源缓存的问题。
 - 修复配置页客户端操作按钮在首次渲染时会因布局宽度尚未就绪而变成单列整行、直到切换客户端后才恢复的问题。
 - 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
 
@@ -27,6 +38,7 @@
 ### Internal
 
 - 新增默认先 dry-run 的一键发布 workflow：创建新的 `plugin-v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness。
+- 修复一键发布 preflight：缺少发布 tag 时现在会按空查询结果处理，不再触发 PowerShell 空值方法调用错误。
 - 更新 PR policy 校验：改为读取实时 PR 元数据，并新增手动 dispatch 兜底，使 PR 正文编辑后可重新校验而不依赖过期的 rerun payload。
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.0` 正式版本。
 - 移除未注册的旧插件聚合工具执行器与陈旧文档引用，并加强拆分后的插件工具分类契约覆盖。

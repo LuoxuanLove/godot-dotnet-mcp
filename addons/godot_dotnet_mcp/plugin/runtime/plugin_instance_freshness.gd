@@ -179,6 +179,9 @@ static func _build_sync_snapshot() -> Dictionary:
 		"source_repo_path": "",
 		"target_addon_path": ADDON_ROOT,
 		"source_git_commit": "",
+		"source_ref_kind": "",
+		"source_ref": "",
+		"written_files": 0,
 		"fallback_used": true,
 		"error": ""
 	}
@@ -205,6 +208,9 @@ static func _build_sync_snapshot() -> Dictionary:
 	snapshot["source_repo_path"] = str(marker.get("source_repo_path", ""))
 	snapshot["target_addon_path"] = str(marker.get("target_addon_path", ADDON_ROOT))
 	snapshot["source_git_commit"] = str(marker.get("source_git_commit", ""))
+	snapshot["source_ref_kind"] = str(marker.get("source_ref_kind", ""))
+	snapshot["source_ref"] = str(marker.get("source_ref", ""))
+	snapshot["written_files"] = int(marker.get("written_files", 0))
 	snapshot["fallback_used"] = false
 	return snapshot
 
