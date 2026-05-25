@@ -15,7 +15,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_source_latest_release": "Latest release",
 		"settings_update_source_release_tag": "Release tag",
 		"settings_current_version": "Current version:",
-		"settings_current_source": "Source:",
+		"settings_current_source": "Plugin Path:",
 		"settings_current_commit": "Commit:",
 		"settings_update_unavailable": "Unavailable",
 		"settings_update_commit_unrecorded": "unrecorded",
@@ -68,6 +68,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 4,
 		"update_compare_behind_by": 1,
+		"update_sync_state": "success",
+		"update_sync_status": "Synced feature/settings.",
 		"plugin_version": "1.2.3",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
@@ -96,8 +98,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var updates: Dictionary = projected.get("updates", {})
 	if str(updates.get("version_text", "")) != "Current version: 1.2.3":
 		return _failure("Settings projection should display the current plugin version.")
-	if not str(updates.get("source_text", "")).contains("res://addons/godot_dotnet_mcp"):
-		return _failure("Settings projection should display the current source root when available.")
+	if str(updates.get("source_text", "")) != "Plugin Path: res://addons/godot_dotnet_mcp":
+		return _failure("Settings projection should display the current plugin path when available.")
 	if not str(updates.get("commit_text", "")).contains("abcdef123456"):
 		return _failure("Settings projection should display the sync commit when available.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
@@ -105,8 +107,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	var status_text := str(updates.get("status_text", ""))
-	if status_text.contains("Discovered") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version 2.0.0 [1234567]") or status_text.contains("target version feature/settings") or not status_text.contains("ahead 4 / behind 1"):
-		return _failure("Settings projection should display current version/hash, target version/hash, and ahead/behind commit difference.")
+	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version 2.0.0 [1234567]") or status_text.contains("target version feature/settings") or not status_text.contains("ahead 4 / behind 1"):
+		return _failure("Settings projection should keep sync success text together with current/target hashes and ahead/behind commit difference.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},
