@@ -68,6 +68,16 @@ class SyncReloadProbePlugin extends PluginScript:
 		return {"success": true, "deferred": true, "data": {"source": source}}
 
 
+class SyncStartProbePlugin extends PluginScript:
+	var archive_requests: Array[Dictionary] = []
+
+	func _get_update_request_parent() -> Node:
+		return self
+
+	func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
+		archive_requests.append({"target": target.duplicate(true), "serial": serial})
+
+
 class CurrentTabProbeDock extends Control:
 	var current_tab := 3
 	var apply_model_count := 0
@@ -114,8 +124,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var sync_cases := [
 		{"source": "custom_branch", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"},
 		{"source": "latest_stable", "kind": "tag", "ref": "v1.0.0", "commit": "stable-commit"},
-		{"source": "latest_release", "kind": "tag", "ref": "v1.1.0-beta.1", "commit": "release-commit"},
-		{"source": "release_tag", "kind": "tag", "ref": "v1.1.0-beta.1", "commit": "release-commit"},
+		{"source": "latest_release", "kind": "tag", "ref": "01", "commit": "tag-commit"},
+		{"source": "release_tag", "kind": "tag", "ref": "01", "commit": "tag-commit"},
 		{"source": "branch", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"},
 		{"source": "latest_dev", "kind": "branch", "ref": "feature/target", "commit": "branch-commit"}
 	]
@@ -132,12 +142,62 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		target_probe.free()
 		return _failure("plugin.gd should fallback empty custom branch sync targets to dev.")
 	target_probe._state.settings["update_source"] = "latest_release"
-	target_probe._state.settings["update_release_tag"] = "01"
+	target_probe._state.settings["update_release_tag"] = ""
 	target_probe._state.update_ref_latest_release = ""
 	if not str(target_probe._resolve_update_sync_target().get("ref", "")).is_empty():
 		target_probe.free()
-		return _failure("plugin.gd should not treat a saved explicit release/tag value as the latest release target.")
+		return _failure("plugin.gd should keep latest release sync target unavailable until discovery provides a target.")
+	target_probe._state.settings["update_release_tag"] = "01"
+	var explicit_release_target: Dictionary = target_probe._resolve_update_sync_target()
+	if str(explicit_release_target.get("kind", "")) != "tag" or str(explicit_release_target.get("ref", "")) != "01" or str(explicit_release_target.get("commit", "")) != "tag-commit":
+		target_probe.free()
+		return _failure("plugin.gd should resolve an explicit release/tag selection as the sync target.")
 	target_probe.free()
+
+	var tool_facade_probe := PluginScript.new()
+	var current_result: Dictionary = tool_facade_probe.get_plugin_update_current_from_tools()
+	if not bool(current_result.get("success", false)) or not (current_result.get("data", {}) is Dictionary):
+		tool_facade_probe.free()
+		return _failure("plugin.gd should expose current plugin update metadata through the tool facade.")
+	var current_data: Dictionary = current_result.get("data", {})
+	for required_current_field in ["source_version", "server_version", "protocol_version", "tool_schema_version", "source_fingerprint", "source_fingerprint_short", "lifecycle_reload"]:
+		if not current_data.has(required_current_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade should include %s in current metadata." % required_current_field)
+	var status_result: Dictionary = tool_facade_probe.get_plugin_update_status_from_tools()
+	if not bool(status_result.get("success", false)) or not (status_result.get("data", {}) is Dictionary):
+		tool_facade_probe.free()
+		return _failure("plugin.gd should expose update status through the tool facade.")
+	var status_data: Dictionary = status_result.get("data", {})
+	for required_status_field in ["current", "source", "target", "refs", "compare", "sync", "lifecycle_reload"]:
+		if not status_data.has(required_status_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade should include %s in status." % required_status_field)
+	var selected_result: Dictionary = tool_facade_probe.set_plugin_update_source_from_tools("latest_release", "", "v1.0.0")
+	if not bool(selected_result.get("success", false)):
+		tool_facade_probe.free()
+		return _failure("plugin.gd update tool facade should accept update source selection.")
+	if str(tool_facade_probe._state.settings.get("update_source", "")) != "latest_release" or str(tool_facade_probe._state.settings.get("update_release_tag", "")) != "v1.0.0":
+		tool_facade_probe.free()
+		return _failure("plugin.gd update tool facade should persist latest_release source selection and selected release tag.")
+	var discover_result: Dictionary = tool_facade_probe.discover_plugin_update_refs_from_tools(true)
+	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "pending":
+		tool_facade_probe.free()
+		return _failure("plugin.gd update tool facade should report pending discovery when no request host is available.")
+	tool_facade_probe.free()
+
+	var sync_start_probe := SyncStartProbePlugin.new()
+	sync_start_probe._state.settings["update_source"] = "custom_branch"
+	sync_start_probe._state.settings["update_custom_branch"] = "dev"
+	var first_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
+	var second_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
+	if sync_start_probe.archive_requests.size() != 1:
+		sync_start_probe.free()
+		return _failure("plugin.gd update tool facade should not start a second archive sync while one is already loading.")
+	if not bool(first_sync_start.get("accepted", false)) or not bool(first_sync_start.get("loading", false)) or bool(second_sync_start.get("accepted", true)) or not bool(second_sync_start.get("loading", false)) or str(second_sync_start.get("status", "")) != "loading":
+		sync_start_probe.free()
+		return _failure("plugin.gd update tool facade should return idempotent loading status for duplicate sync starts.")
+	sync_start_probe.free()
 
 	var refresh_probe := RefreshProbePlugin.new()
 	_tree.root.add_child(refresh_probe.request_parent)
