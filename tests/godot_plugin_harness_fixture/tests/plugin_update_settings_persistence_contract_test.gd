@@ -11,12 +11,30 @@ class FocusRestoreProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var request_parent := Node.new()
 
-	func _ensure_update_refs_discovery_requested() -> bool:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false) -> bool:
 		discovery_request_count += 1
 		return true
 
 	func _get_update_request_parent() -> Node:
 		return request_parent
+
+
+class RefreshProbePlugin extends PluginScript:
+	var discovery_request_count := 0
+	var compare_requests: Array = []
+	var request_parent := Node.new()
+
+	func _get_update_request_parent() -> Node:
+		return request_parent
+
+	func _on_update_check_requested() -> void:
+		discovery_request_count += 1
+
+	func _resolve_current_update_commit() -> String:
+		return "current-sync-sha"
+
+	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "") -> void:
+		compare_requests.append({"base": base_commit, "head": compare_head, "target_commit": target_commit})
 
 
 class RequestParentProbePlugin extends PluginScript:
@@ -96,6 +114,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		target_probe.free()
 		return _failure("plugin.gd should not treat a saved explicit release/tag value as the latest release target.")
 	target_probe.free()
+
+	var refresh_probe := RefreshProbePlugin.new()
+	_tree.root.add_child(refresh_probe.request_parent)
+	refresh_probe._state.update_refs_state = "success"
+	refresh_probe._update_refs_discovery_loaded = true
+	refresh_probe._on_update_source_changed("custom_branch")
+	if refresh_probe.discovery_request_count != 1:
+		refresh_probe.request_parent.queue_free()
+		refresh_probe.free()
+		return _failure("plugin.gd should force-refresh update refs when the update source is selected again.")
+	refresh_probe._state.update_refs_state = "success"
+	refresh_probe._update_refs_discovery_loaded = true
+	refresh_probe._on_update_custom_branch_changed("dev")
+	if refresh_probe.discovery_request_count != 2:
+		refresh_probe.request_parent.queue_free()
+		refresh_probe.free()
+		return _failure("plugin.gd should force-refresh update refs when the selected branch is selected again.")
+	refresh_probe._state.update_ref_commits = {"v1.0.0-pre3": "annotated-tag-object-sha"}
+	refresh_probe._state.update_ref_versions = {"v1.0.0-pre3": "1.0.0-pre3"}
+	refresh_probe._state.update_ref_latest_release = "v1.0.0-pre3"
+	refresh_probe._state.settings["update_source"] = "latest_release"
+	refresh_probe._state.update_refs_state = "success"
+	refresh_probe._update_refs_discovery_loaded = true
+	refresh_probe._refresh_update_compare_for_current_target()
+	if refresh_probe.compare_requests.is_empty() or str((refresh_probe.compare_requests[0] as Dictionary).get("head", "")) != "v1.0.0-pre3" or str((refresh_probe.compare_requests[0] as Dictionary).get("target_commit", "")) != "annotated-tag-object-sha":
+		refresh_probe.request_parent.queue_free()
+		refresh_probe.free()
+		return _failure("plugin.gd should compare release tags by ref name while preserving the displayed target commit hash.")
+	refresh_probe.request_parent.queue_free()
+	refresh_probe.free()
 
 	var focus_restore_probe := FocusRestoreProbePlugin.new()
 	focus_restore_probe._state.current_tab = 0
