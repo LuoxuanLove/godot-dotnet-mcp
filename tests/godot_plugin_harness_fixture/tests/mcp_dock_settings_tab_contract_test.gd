@@ -170,6 +170,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
+	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
+		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
 	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "target version 1.2.0 [1234567]") == null or _find_label_containing(labels, "target version dev") != null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
 		return _failure("Settings tab should display sync success together with current/target update hashes and ahead/behind status copy.")
 	prepare_button.text = "准备"

@@ -166,10 +166,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should normalize stale manual Check status copy from cached localization.")
 	if _find_label_containing(labels, "选择更新方式") == null:
 		return _failure("Settings tab should display the current update sync description copy.")
-	if _find_label_containing(labels, "Current version: 1.0.0") == null:
-		return _failure("Settings tab should display the current version summary.")
-	if _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") == null:
-		return _failure("Settings tab should display the current plugin path summary.")
+	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
+		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows.")
 	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "target version 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "ahead 2 / behind 0") == null:
 		return _failure("Settings tab should display sync success together with current/target update hashes and ahead/behind status copy.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button

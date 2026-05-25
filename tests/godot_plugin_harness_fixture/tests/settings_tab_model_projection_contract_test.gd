@@ -96,12 +96,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if update_releases.size() != 2 or not bool((update_releases[0] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should offer discovered release/tag selector options and preserve the current tag.")
 	var updates: Dictionary = projected.get("updates", {})
-	if str(updates.get("version_text", "")) != "Current version: 1.2.3":
-		return _failure("Settings projection should display the current plugin version.")
-	if str(updates.get("source_text", "")) != "Plugin Path: res://addons/godot_dotnet_mcp":
-		return _failure("Settings projection should display the current plugin path when available.")
-	if not str(updates.get("commit_text", "")).contains("abcdef123456"):
-		return _failure("Settings projection should display the sync commit when available.")
+	if updates.has("version_text") or updates.has("source_text") or updates.has("commit_text"):
+		return _failure("Settings projection should not expose removed current version, plugin path, or commit summary rows.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
 		return _failure("Settings update Sync should be enabled while Prepare remains disabled.")
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
@@ -185,8 +181,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"languages": {"en": true, "zh_CN": true},
 		"plugin_freshness": {}
 	})
-	if not str((fallback.get("updates", {}) as Dictionary).get("version_text", "")).contains("Unavailable"):
-		return _failure("Settings projection should use unavailable copy when version data is missing.")
+	if (fallback.get("updates", {}) as Dictionary).has("version_text"):
+		return _failure("Settings projection should not expose a current version summary row when version data is missing.")
 	var latest_stable: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_stable"},
