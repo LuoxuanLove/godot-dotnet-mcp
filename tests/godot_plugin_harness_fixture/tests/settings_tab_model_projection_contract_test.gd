@@ -25,6 +25,9 @@ class FakeLocalization extends RefCounted:
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
 		"settings_update_selected_target": "Selected target:",
+		"settings_update_compare_summary": "Current version %s [%s], target version %s [%s], commit difference: %s.",
+		"settings_update_compare_difference": "ahead %d / behind %d",
+		"settings_update_compare_loading": "checking...",
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed"
@@ -59,6 +62,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_refs_status": "Discovered refs.",
 		"update_refs_latest_stable_release": "v1.0.0",
 		"update_refs_latest_release": "v1.1.0-beta.1",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_ahead_by": 4,
+		"update_compare_behind_by": 1,
 		"plugin_version": "1.2.3",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
@@ -95,8 +102,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Settings update Sync should be enabled while Prepare remains disabled.")
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
-	if not str(updates.get("status_text", "")).contains("Selected target:"):
-		return _failure("Settings projection should include the selected update target in status text.")
+	var status_text := str(updates.get("status_text", ""))
+	if status_text.contains("Discovered") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version feature/settings [1234567]") or not status_text.contains("ahead 4 / behind 1"):
+		return _failure("Settings projection should display current version/hash, target version/hash, and ahead/behind commit difference.")
 
 	var latest_release_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),

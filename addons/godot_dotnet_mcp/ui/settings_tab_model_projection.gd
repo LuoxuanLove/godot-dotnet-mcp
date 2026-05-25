@@ -138,10 +138,7 @@ func _build_update_refs_status_text(model: Dictionary, update_settings: Dictiona
 		"loading":
 			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_loading", "Loading update refs."), target]
 		"success":
-			var status := str(model.get("update_refs_status", "")).strip_edges()
-			if status.is_empty():
-				status = _get_localized_text(localization, "settings_update_refs_success", "Update refs loaded.")
-			return "%s %s" % [status, target]
+			return _build_update_compare_status_text(model, update_settings, localization)
 		"error":
 			var error := str(model.get("update_refs_error", "")).strip_edges()
 			if error.is_empty():
@@ -172,6 +169,66 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 			return "%s %s" % [error, target]
 		_:
 			return _build_update_refs_status_text(model, update_settings, localization)
+
+
+func _build_update_compare_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
+	var current_version := _resolve_current_version(model, model.get("plugin_freshness", {}), localization)
+	var current_commit := _short_commit(_read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_git_commit"]), localization)
+	var target_ref := _resolve_selected_update_target_value(model, update_settings)
+	if target_ref.is_empty():
+		target_ref = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	var target_commit := _short_commit(_resolve_target_update_commit(model, target_ref), localization)
+	var compare_text := _build_compare_difference_text(model, localization)
+	var template := _get_localized_text(localization, "settings_update_compare_summary", "Current version %s [%s], target version %s [%s], commit difference: %s.")
+	return template % [current_version, current_commit, target_ref, target_commit, compare_text]
+
+
+func _resolve_current_version(model: Dictionary, freshness: Dictionary, localization) -> String:
+	var version := str(model.get("plugin_version", "")).strip_edges()
+	if version.is_empty():
+		version = _read_freshness_value(freshness, ["running_instance", "source_version"])
+	if version.is_empty():
+		version = _read_freshness_value(freshness, ["disk_source", "source_version"])
+	if version.is_empty():
+		version = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	return version
+
+
+func _resolve_selected_update_target_value(model: Dictionary, update_settings: Dictionary) -> String:
+	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
+	match source:
+		"custom_branch":
+			return str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges()
+		"latest_stable":
+			return str(model.get("update_refs_latest_stable_release", "")).strip_edges()
+		"latest_release":
+			return str(model.get("update_refs_latest_release", "")).strip_edges()
+		_:
+			return str(model.get("update_refs_latest_stable_release", "")).strip_edges()
+
+
+func _resolve_target_update_commit(model: Dictionary, target_ref: String) -> String:
+	var commits: Dictionary = model.get("update_refs_commits", {})
+	return str(commits.get(target_ref, model.get("update_compare_target_commit", ""))).strip_edges()
+
+
+func _short_commit(commit: String, localization) -> String:
+	var normalized := commit.strip_edges()
+	if normalized.is_empty():
+		return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	return normalized.substr(0, mini(7, normalized.length()))
+
+
+func _build_compare_difference_text(model: Dictionary, localization) -> String:
+	var state := str(model.get("update_compare_state", "idle"))
+	if state == "loading":
+		return _get_localized_text(localization, "settings_update_compare_loading", "checking...")
+	var ahead_by := int(model.get("update_compare_ahead_by", -1))
+	var behind_by := int(model.get("update_compare_behind_by", -1))
+	if state == "success" and ahead_by >= 0 and behind_by >= 0:
+		var template := _get_localized_text(localization, "settings_update_compare_difference", "ahead %d / behind %d")
+		return template % [ahead_by, behind_by]
+	return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
 
 
 func _is_update_check_enabled(model: Dictionary) -> bool:
