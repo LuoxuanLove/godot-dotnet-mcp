@@ -31,6 +31,7 @@ const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runt
 const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches?per_page=100&page=1"
 const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
 const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
+const UPDATE_COMPARE_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/compare/%s...%s"
 const UPDATE_REFS_HTTP_TIMEOUT := 10.0
 const UPDATE_REFS_BODY_SIZE_LIMIT := 16777216
 const UPDATE_REFS_MAX_PAGES := 20
@@ -71,6 +72,7 @@ var _update_refs_request_serial := 0
 var _update_refs_pending := {}
 var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
+var _update_compare_request_serial := 0
 var _update_sync_request_serial := 0
 
 
@@ -617,6 +619,7 @@ func _on_update_source_changed(source: String) -> void:
 	_save_settings()
 	if _ensure_update_refs_discovery_requested():
 		return
+	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 
 
@@ -678,6 +681,7 @@ func _get_update_request_parent() -> Node:
 func _on_update_custom_branch_changed(branch: String) -> void:
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
+	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 
 
@@ -712,6 +716,7 @@ func _on_update_check_requested() -> void:
 	_state.update_ref_latest_release = ""
 	_state.update_refs_release_source = ""
 	_state.update_ref_commits = {}
+	_reset_update_compare_state()
 	_refresh_dock()
 	_start_update_refs_request("branches", UPDATE_REFS_BRANCHES_URL, serial)
 	_start_update_refs_request("releases", UPDATE_REFS_RELEASES_URL, serial)
@@ -1091,18 +1096,128 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 	if errors.is_empty() or not _state.update_ref_branches.is_empty() or not release_or_tag_values.is_empty():
 		_state.update_refs_state = "success"
 		_state.update_refs_error = ""
-		_state.update_refs_status = _build_update_refs_success_status()
+		_state.update_refs_status = _localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
 		_update_refs_discovery_loaded = true
+		_refresh_update_compare_for_current_target()
 	else:
 		_state.update_refs_state = "error"
 		_state.update_refs_error = "; ".join(errors)
 		_state.update_refs_status = ""
+		_reset_update_compare_state()
 	_refresh_dock()
 
 
-func _build_update_refs_success_status() -> String:
-	var template := _localization.get_text("settings_update_refs_success_details") if _localization != null else "Discovered %d branches, %d releases, and %d tags."
-	return template % [_state.update_ref_branches.size(), _to_string_array(_update_refs_pending.get("releases", [])).size(), _to_string_array(_update_refs_pending.get("tags", [])).size()]
+func _refresh_update_compare_for_current_target() -> void:
+	if _state == null or str(_state.update_refs_state) != "success":
+		return
+	var target := _resolve_update_sync_target()
+	var base_commit := _resolve_current_update_commit()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	_state.update_compare_base_commit = base_commit
+	_state.update_compare_target_ref = target_ref
+	_state.update_compare_target_commit = target_commit
+	_state.update_compare_ahead_by = -1
+	_state.update_compare_behind_by = -1
+	_state.update_compare_error = ""
+	if base_commit.is_empty() or target_commit.is_empty():
+		_state.update_compare_state = "unavailable"
+		return
+	if base_commit == target_commit:
+		_state.update_compare_state = "success"
+		_state.update_compare_ahead_by = 0
+		_state.update_compare_behind_by = 0
+		return
+	_start_update_compare_request(base_commit, target_commit)
+
+
+func _resolve_current_update_commit() -> String:
+	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
+	if freshness is Dictionary:
+		var sync_snapshot = (freshness as Dictionary).get("sync", {})
+		if sync_snapshot is Dictionary:
+			return str((sync_snapshot as Dictionary).get("source_git_commit", "")).strip_edges()
+	return ""
+
+
+func _reset_update_compare_state() -> void:
+	if _state == null:
+		return
+	_update_compare_request_serial += 1
+	_state.update_compare_state = "idle"
+	_state.update_compare_error = ""
+	_state.update_compare_base_commit = ""
+	_state.update_compare_target_ref = ""
+	_state.update_compare_target_commit = ""
+	_state.update_compare_ahead_by = -1
+	_state.update_compare_behind_by = -1
+
+
+func _start_update_compare_request(base_commit: String, target_commit: String) -> void:
+	_update_compare_request_serial += 1
+	var serial := _update_compare_request_serial
+	_state.update_compare_state = "loading"
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_compare_failed("No active update compare request host.", serial)
+		return
+	var request_node := HTTPRequest.new()
+	request_node.name = "UpdateCompareRequest"
+	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
+	request_parent.add_child(request_node)
+	request_node.request_completed.connect(Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial, request_node), CONNECT_ONE_SHOT)
+	var compare_url := UPDATE_COMPARE_URL_TEMPLATE % [base_commit.uri_encode(), target_commit.uri_encode()]
+	var error := request_node.request(compare_url, _get_update_refs_headers())
+	if error != OK:
+		request_node.queue_free()
+		_mark_update_compare_failed("Failed to start update compare request: %s" % error, serial)
+
+
+func _on_update_compare_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, base_commit: String, target_commit: String, serial: int, request_node: HTTPRequest) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_compare_request_serial:
+		return
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		_mark_update_compare_failed("Update compare request failed with result %s and HTTP %s" % [result, response_code], serial)
+		return
+	var parse_result := _parse_update_compare_json(body)
+	if not bool(parse_result.get("success", false)):
+		_mark_update_compare_failed(str(parse_result.get("error", "Invalid JSON response")), serial)
+		return
+	_state.update_compare_state = "success"
+	_state.update_compare_error = ""
+	_state.update_compare_base_commit = base_commit
+	_state.update_compare_target_commit = target_commit
+	_state.update_compare_ahead_by = int(parse_result.get("ahead_by", -1))
+	_state.update_compare_behind_by = int(parse_result.get("behind_by", -1))
+	_refresh_dock()
+
+
+func _mark_update_compare_failed(message: String, serial: int) -> void:
+	if _state == null or serial != _update_compare_request_serial:
+		return
+	_state.update_compare_state = "error"
+	_state.update_compare_error = message
+	_state.update_compare_ahead_by = -1
+	_state.update_compare_behind_by = -1
+	_refresh_dock()
+
+
+func _parse_update_compare_json(body: PackedByteArray) -> Dictionary:
+	var json := JSON.new()
+	var parse_error := json.parse(body.get_string_from_utf8())
+	if parse_error != OK:
+		return {"success": false, "error": json.get_error_message()}
+	if not (json.data is Dictionary):
+		return {"success": false, "error": "Expected a JSON object"}
+	var data := json.data as Dictionary
+	return {
+		"success": true,
+		"ahead_by": int(data.get("ahead_by", -1)),
+		"behind_by": int(data.get("behind_by", -1))
+	}
 
 
 func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
