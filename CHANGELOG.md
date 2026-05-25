@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added Settings update modes for a selected branch (defaulting to `dev`), the latest stable release, the latest release including prereleases, and a selected release/tag through discovered selectors.
 - Added safe in-plugin update sync from GitHub archives that extracts only `addons/godot_dotnet_mcp/`, preserves `custom_tools/`, records sync metadata, automatically discovers refs after source selection, keeps latest release targets tied to GitHub Releases, and exposes the selected target through the Sync action.
-- Clarified the Settings Updates summary label for the current plugin path so it is not confused with the update mode.
+- Removed the redundant current version, plugin path, and commit summary rows from Settings Updates.
 - Split persistent Dock controls into a new Settings tab, keeping Home focused on diagnostics, service status, and quick service actions.
 - Changed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 

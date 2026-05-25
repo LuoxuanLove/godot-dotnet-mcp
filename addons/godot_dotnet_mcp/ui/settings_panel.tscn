@@ -110,18 +110,6 @@ horizontal_alignment = 0
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="VersionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="SourceLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="CommitLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
 [node name="UpdateSourceRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3

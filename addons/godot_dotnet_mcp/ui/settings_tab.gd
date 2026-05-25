@@ -36,9 +36,6 @@ const UPDATE_DESCRIPTION_AUTO_EN := "Choose an update mode; branches, releases, 
 @onready var _updates_card_body: VBoxContainer = %UpdatesCardBody
 @onready var _updates_title: Label = %UpdatesTitle
 @onready var _updates_description: Label = %UpdatesDescription
-@onready var _version_label: Label = %VersionLabel
-@onready var _source_label: Label = %SourceLabel
-@onready var _commit_label: Label = %CommitLabel
 @onready var _source_option_label: Label = %SourceOptionLabel
 @onready var _source_option: OptionButton = %SourceOption
 @onready var _custom_branch_row: HBoxContainer = %CustomBranchRow
@@ -124,9 +121,6 @@ func apply_model(model: Dictionary) -> void:
 	_apply_projected_options(_custom_branch_value, options.get("update_branches", []))
 	_custom_branch_syncing = false
 
-	_version_label.text = str(updates.get("version_text", ""))
-	_source_label.text = str(updates.get("source_text", ""))
-	_commit_label.text = str(updates.get("commit_text", ""))
 	_updates_status.text = str(updates.get("status_text", ""))
 	var update_source := str(updates.get("source", "latest_stable"))
 	_apply_update_source_rows(update_source)
@@ -151,9 +145,6 @@ func _has_required_controls() -> bool:
 		_updates_card,
 		_updates_title,
 		_updates_description,
-		_version_label,
-		_source_label,
-		_commit_label,
 		_source_option_label,
 		_source_option,
 		_custom_branch_row,
@@ -329,7 +320,7 @@ func _apply_visual_style(scale: float) -> void:
 		title.remove_theme_font_size_override("font_size")
 	for label in [_port_label, _log_level_label, _language_label, _source_option_label, _custom_branch_label]:
 		label.add_theme_color_override("font_color", _get_muted_text_color())
-	for label in [_updates_description, _version_label, _source_label, _commit_label, _updates_status]:
+	for label in [_updates_description, _updates_status]:
 		label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 	end_bulk_theme_override()
 
