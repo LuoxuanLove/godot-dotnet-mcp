@@ -17,7 +17,7 @@ tools/system/
 ├─ impl_scene.gd       # 场景级工具实现（4 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 ├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
-├─ impl_project.gd     # 项目级、编辑器态与插件 freshness / 生命周期重载聚合工具实现（9 个公开工具）
+├─ impl_project.gd     # 项目级、编辑器态与插件 freshness / 生命周期重载 / 更新聚合工具实现（10 个公开工具）
 └─ impl_script.gd      # 脚本与绑定审计工具实现（3 个公开工具）
 ```
 
@@ -40,6 +40,7 @@ tools/system/
 - `system_project_run(background|minimized|no_focus=true)` 当前不会尝试抢占或控制 OS 窗口；这类请求会返回 `requires_foreground_window`，并给出 headless 逻辑测试或编辑器截图等降级路径。
 - `system_project_stop`：停止当前运行中的项目。
 - `system_plugin_reload`：读取运行中插件实例与磁盘 / 同步状态的 freshness；或调度一次不依赖前台 UI 的插件 disable/enable 生命周期重载。该调用只表示已接受调度，重载期间 MCP transport 可能断开，完成后应重新连接并重新拉取工具清单。
+- `system_plugin_update`：读取当前安装的插件版本、schema 版本、同步来源、提交与指纹信息；选择 `latest_stable`、`latest_release` 或 `custom_branch` 更新来源；启动异步引用发现和 archive 同步，并通过 `get_status` 轮询同步状态与后续 lifecycle reload 进度。网络下载、文件同步和重载均保持异步，`discover_refs` / `start_sync` 只返回是否已接受或当前不可用。
 
 这些工具当前由 `tools/system/impl_project.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `project_*`、`editor_*` 与 `debug_*` 原子工具。
 
