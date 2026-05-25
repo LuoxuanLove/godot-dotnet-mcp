@@ -69,13 +69,7 @@ func _normalize_update_source(source: String) -> String:
 
 
 func _build_version_text(model: Dictionary, freshness: Dictionary, localization) -> String:
-	var version := str(model.get("plugin_version", "")).strip_edges()
-	if version.is_empty():
-		version = _read_freshness_value(freshness, ["running_instance", "source_version"])
-	if version.is_empty():
-		version = _read_freshness_value(freshness, ["disk_source", "source_version"])
-	if version.is_empty():
-		version = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
+	var version := _resolve_current_version(model, freshness, localization)
 	return "%s %s" % [_get_localized_text(localization, "settings_current_version", "Current version:"), version]
 
 
