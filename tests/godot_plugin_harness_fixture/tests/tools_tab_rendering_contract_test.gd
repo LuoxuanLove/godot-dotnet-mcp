@@ -291,6 +291,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["set_main_screen", "capture_editor", "list_controls", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_control_text", "list_popups", "press_popup_button", "set_popup_text", "close_popup"]
 		"system_project_configure":
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"]
+		"system_plugin_update":
+			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 	return []
 
 
