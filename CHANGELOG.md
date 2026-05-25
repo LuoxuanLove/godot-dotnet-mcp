@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Fixed Settings Updates ref discovery so reselecting the update source or branch refreshes remote refs before rebuilding the comparison.
+- Fixed Settings Updates comparison display so it names the current plugin and selected target sides explicitly, and uses release/tag refs for GitHub compare requests instead of annotated tag object commits.
 - Fixed Settings Updates sync success status so it continues to show the current/target commit comparison and ahead/behind counts after a sync completes.
 - Fixed localization reloads so Settings update labels do not reuse stale script-resource cache after plugin updates.
 - Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
