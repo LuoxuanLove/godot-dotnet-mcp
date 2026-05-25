@@ -36,8 +36,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
 		"settings_update_selected_target": "Selected target:",
-		"settings_update_compare_summary": "Current version %s [%s], target version %s [%s], commit difference: %s.",
-		"settings_update_compare_difference": "ahead %d / behind %d",
+		"settings_update_compare_summary": "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.",
+		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
 		"port": "Port:",
 		"log_level": "Log Level:",
@@ -168,8 +168,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should display the current update sync description copy.")
 	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows.")
-	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "target version 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "ahead 2 / behind 0") == null:
-		return _failure("Settings tab should display sync success together with current/target update hashes and ahead/behind status copy.")
+	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "Current plugin 1.0.0 [abcdef1] -> selected target 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "current ahead 2 / target ahead 0") == null:
+		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
 	if check_button == null or check_button.visible or not check_button.disabled or not check_button.text.is_empty():
 		return _failure("Settings update Check should remain hidden, disabled, and label-free because refs are discovered from source selection.")

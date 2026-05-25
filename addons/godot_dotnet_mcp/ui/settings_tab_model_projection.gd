@@ -148,7 +148,7 @@ func _build_update_compare_status_text(model: Dictionary, update_settings: Dicti
 	var target_version := _resolve_target_update_version(model, target_ref, localization)
 	var target_commit := _short_commit(_resolve_target_update_commit(model, target_ref), localization)
 	var compare_text := _build_compare_difference_text(model, localization)
-	var template := _get_localized_text(localization, "settings_update_compare_summary", "Current version %s [%s], target version %s [%s], commit difference: %s.")
+	var template := _get_localized_text(localization, "settings_update_compare_summary", "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.")
 	return template % [current_version, current_commit, target_version, target_commit, compare_text]
 
 
@@ -203,7 +203,7 @@ func _build_compare_difference_text(model: Dictionary, localization) -> String:
 	var ahead_by := int(model.get("update_compare_ahead_by", -1))
 	var behind_by := int(model.get("update_compare_behind_by", -1))
 	if state == "success" and ahead_by >= 0 and behind_by >= 0:
-		var template := _get_localized_text(localization, "settings_update_compare_difference", "ahead %d / behind %d")
+		var template := _get_localized_text(localization, "settings_update_compare_difference", "current ahead %d / target ahead %d")
 		return template % [ahead_by, behind_by]
 	return _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
 

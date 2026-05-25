@@ -44,8 +44,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
 		"settings_update_selected_target": "Selected target:",
-		"settings_update_compare_summary": "Current version %s [%s], target version %s [%s], commit difference: %s.",
-		"settings_update_compare_difference": "ahead %d / behind %d",
+		"settings_update_compare_summary": "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.",
+		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
 		"port": "Port:",
 		"log_level": "Log Level:",
@@ -172,8 +172,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
 	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
-	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "target version 1.2.0 [1234567]") == null or _find_label_containing(labels, "target version dev") != null or _find_label_containing(labels, "ahead 1 / behind 0") == null:
-		return _failure("Settings tab should display sync success together with current/target update hashes and ahead/behind status copy.")
+	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.0 [abcdef1] -> selected target 1.2.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 1 / target ahead 0") == null:
+		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
 	prepare_button.disabled = false

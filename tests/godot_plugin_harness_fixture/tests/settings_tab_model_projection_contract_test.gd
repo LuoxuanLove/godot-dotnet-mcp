@@ -26,8 +26,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
 		"settings_update_selected_target": "Selected target:",
-		"settings_update_compare_summary": "Current version %s [%s], target version %s [%s], commit difference: %s.",
-		"settings_update_compare_difference": "ahead %d / behind %d",
+		"settings_update_compare_summary": "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.",
+		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_success": "Synced",
@@ -103,8 +103,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	var status_text := str(updates.get("status_text", ""))
-	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current version 1.2.3 [abcdef1]") or not status_text.contains("target version 2.0.0 [1234567]") or status_text.contains("target version feature/settings") or not status_text.contains("ahead 4 / behind 1"):
-		return _failure("Settings projection should keep sync success text together with current/target hashes and ahead/behind commit difference.")
+	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current plugin 1.2.3 [abcdef1] -> selected target 2.0.0 [1234567]") or status_text.contains("selected target feature/settings") or not status_text.contains("current ahead 4 / target ahead 1"):
+		return _failure("Settings projection should keep sync success text together with explicit current-to-target hashes and commit difference direction.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},
@@ -115,7 +115,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	var missing_commit_status := str((missing_commit_projection.get("updates", {}) as Dictionary).get("status_text", ""))
-	if not missing_commit_status.contains("Current version Unavailable [unrecorded]") or not missing_commit_status.contains("target version Unavailable [Unavailable]") or missing_commit_status.contains("target version dev"):
+	if not missing_commit_status.contains("Current plugin Unavailable [unrecorded]") or not missing_commit_status.contains("selected target Unavailable [Unavailable]") or missing_commit_status.contains("selected target dev"):
 		return _failure("Settings projection should use unrecorded for missing hashes and not fall back to raw refs as target versions.")
 
 	var latest_release_projection: Dictionary = service.project({
