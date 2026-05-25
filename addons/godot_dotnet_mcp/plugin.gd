@@ -1055,6 +1055,13 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
+	_request_update_sync_lifecycle_reload()
+
+
+func _request_update_sync_lifecycle_reload() -> void:
+	if _plugin_reenable_pending:
+		return
+	_request_plugin_lifecycle_reload("settings_sync")
 
 
 func _write_update_sync_marker(target: Dictionary, written: int) -> int:

@@ -228,6 +228,7 @@ $RequiredCases = @(
     "tool_manifest_contracts"
     "plugin_action_router_contracts"
     "plugin_entrypoint_contracts"
+    "plugin_update_settings_persistence_contracts"
     "plugin_reload_coordinator_contracts"
     "plugin_instance_freshness_contracts"
     "plugin_runtime_reload_executor_contracts"
