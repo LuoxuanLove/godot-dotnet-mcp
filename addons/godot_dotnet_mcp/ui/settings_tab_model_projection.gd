@@ -27,9 +27,6 @@ func project(model: Dictionary) -> Dictionary:
 			"update_releases": _project_ref_options(_build_release_values(model, update_settings), str(update_settings.get("release_tag", "")), localization, "settings_update_release_unavailable")
 		},
 		"updates": {
-			"version_text": _build_version_text(model, freshness, localization),
-			"source_text": _build_source_text(freshness, localization),
-			"commit_text": _build_commit_text(freshness, localization),
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
 			"release_tag": str(update_settings.get("release_tag", "")),
@@ -66,28 +63,6 @@ func _normalize_update_source(source: String) -> String:
 			return normalized
 		_:
 			return DEFAULT_UPDATE_SOURCE
-
-
-func _build_version_text(model: Dictionary, freshness: Dictionary, localization) -> String:
-	var version := _resolve_current_version(model, freshness, localization)
-	return "%s %s" % [_get_localized_text(localization, "settings_current_version", "Current version:"), version]
-
-
-func _build_source_text(freshness: Dictionary, localization) -> String:
-	var source_root := _read_freshness_value(freshness, ["running_instance", "source_root"])
-	if source_root.is_empty():
-		source_root = _read_freshness_value(freshness, ["disk_source", "source_root"])
-	if source_root.is_empty():
-		source_root = _get_localized_text(localization, "settings_update_unavailable", "Unavailable")
-	return "%s %s" % [_get_localized_text(localization, "settings_current_source", "Plugin Path:"), source_root]
-
-
-func _build_commit_text(freshness: Dictionary, localization) -> String:
-	var commit := _read_freshness_value(freshness, ["sync", "source_git_commit"])
-	if commit.is_empty():
-		commit = _get_localized_text(localization, "settings_update_commit_unrecorded", "unrecorded")
-	return "%s %s" % [_get_localized_text(localization, "settings_current_commit", "Commit:"), commit]
-
 
 func _build_branch_values(model: Dictionary, update_settings: Dictionary) -> Array[String]:
 	var values: Array[String] = []
