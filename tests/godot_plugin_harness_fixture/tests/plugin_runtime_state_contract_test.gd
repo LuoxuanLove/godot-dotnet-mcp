@@ -80,9 +80,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should keep the release/tag update target empty by default.")
 	if int(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("port", 0)) != 3000 or str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("log_level", "")) != "info" or str(PluginRuntimeStateScript.DEFAULT_SETTINGS.get("language", "")) != "en":
 		return _failure("PluginRuntimeState should not change existing port, log level, or language defaults.")
-	if PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_branches") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_releases") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_refs_state") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_sync_state"):
+	if PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_branches") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_ref_releases") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_refs_state") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_sync_state") or PluginRuntimeStateScript.DEFAULT_SETTINGS.has("update_compare_state"):
 		return _failure("PluginRuntimeState should keep discovered update refs transient instead of persisting them in default settings.")
-	if not state.update_ref_branches.is_empty() or not state.update_ref_releases.is_empty() or not state.update_ref_commits.is_empty() or not state.update_ref_latest_stable_release.is_empty() or not state.update_ref_latest_release.is_empty() or state.update_refs_state != "idle" or state.update_sync_state != "idle":
+	if not state.update_ref_branches.is_empty() or not state.update_ref_releases.is_empty() or not state.update_ref_commits.is_empty() or not state.update_ref_latest_stable_release.is_empty() or not state.update_ref_latest_release.is_empty() or state.update_refs_state != "idle" or state.update_sync_state != "idle" or state.update_compare_state != "idle" or state.update_compare_ahead_by != -1 or state.update_compare_behind_by != -1:
 		return _failure("PluginRuntimeState should expose an empty transient update ref discovery state.")
 
 	return {
