@@ -155,6 +155,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should expose latest stable, latest release, and custom branch source choices in order.")
 	if _has_option_value(source_option, "release_tag") or _has_option_value(source_option, "latest_dev"):
 		return _failure("Settings tab should not expose selectable release/tag or latest dev sources.")
+	if custom_branch_value.get_item_count() < 2 or str(custom_branch_value.get_item_metadata(0)) != "dev" or str(custom_branch_value.get_item_metadata(custom_branch_value.selected)) != "dev":
+		return _failure("Settings tab should keep dev first in the custom branch selector after Dock projection.")
 	if custom_branch_row == null or not custom_branch_row.visible or tab_container.get_tab_control(3).find_child("ReleaseTagRow", true, false) != null:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
 	if tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) is LineEdit:

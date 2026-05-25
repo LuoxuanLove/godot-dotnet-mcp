@@ -66,8 +66,8 @@ func _normalize_update_source(source: String) -> String:
 
 func _build_branch_values(model: Dictionary, update_settings: Dictionary) -> Array[String]:
 	var values: Array[String] = []
-	_append_unique_string(values, str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)))
 	_append_unique_string(values, DEFAULT_UPDATE_BRANCH)
+	_append_unique_string(values, str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)))
 	for branch in _normalize_string_array(model.get("update_refs_branches", [])):
 		_append_unique_string(values, branch)
 	return values

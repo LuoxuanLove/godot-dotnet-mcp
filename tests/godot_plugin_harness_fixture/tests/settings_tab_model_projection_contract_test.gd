@@ -90,8 +90,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if JSON.stringify(_option_values(update_sources)) != JSON.stringify(["latest_stable", "latest_release", "custom_branch"]) or not bool((update_sources[2] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should expose latest stable, latest release, then custom branch and select custom branch mode.")
 	var update_branches: Array = options.get("update_branches", [])
-	if update_branches.size() != 3 or _selected_option_value(update_branches) != "feature/settings":
-		return _failure("Settings projection should offer discovered branch selector options and preserve the current branch.")
+	if JSON.stringify(_option_values(update_branches)) != JSON.stringify(["dev", "feature/settings", "main"]) or _selected_option_value(update_branches) != "feature/settings":
+		return _failure("Settings projection should keep dev first while preserving the current branch.")
 	var update_releases: Array = options.get("update_releases", [])
 	if update_releases.size() != 2 or not bool((update_releases[0] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should offer discovered release/tag selector options and preserve the current tag.")
