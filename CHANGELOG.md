@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Split persistent Dock controls into a new Settings tab, keeping Home focused on diagnostics, service status, and quick service actions.
 - Changed the editor Dock tab and header labels so the tab shows `MCP` while the Dock header and dialogs show `Godot .NET MCP`.
 
+### Fixed
+
+- Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
+- Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
+
 ### Documentation
 
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
