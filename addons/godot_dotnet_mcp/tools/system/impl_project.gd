@@ -338,6 +338,7 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 		return {"file": path, "issue_count": 1, "issues": [read_issue], "ext_resource_count": 0, "csharp_resource_script_count": 0}
 
 	var header := _extract_resource_header(read_text)
+	var ext_resources_by_id := {}
 	var script_resources := {}
 	var used_script_ids := {}
 	var lines := read_text.split("\n")
@@ -350,8 +351,10 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 			var ref_issues := _build_ext_resource_issues(path, ref_data, include_warnings)
 			for ref_issue in ref_issues:
 				bridge.append_unique_issue(issues, ref_issue)
+			var resource_id := str(ref_data.get("id", ""))
+			if not resource_id.is_empty():
+				ext_resources_by_id[resource_id] = ref_data
 			if str(ref_data.get("type", "")) == "Script":
-				var resource_id := str(ref_data.get("id", ""))
 				if not resource_id.is_empty():
 					script_resources[resource_id] = ref_data
 		var script_marker := "script = ExtResource(\""
@@ -364,9 +367,14 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 
 	if path.ends_with(".tres"):
 		for resource_id in used_script_ids.keys():
-			if not script_resources.has(resource_id):
+			if not ext_resources_by_id.has(resource_id):
 				var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
 				bridge.append_unique_issue(issues, unresolved_issue)
+				continue
+			if not script_resources.has(resource_id):
+				var non_script_ref: Dictionary = ext_resources_by_id[resource_id]
+				var non_script_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_not_script", "Resource script ExtResource id does not declare a Script resource: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "declared_type": str(non_script_ref.get("type", "")), "build_status": "dotnet_build_may_pass"})
+				bridge.append_unique_issue(issues, non_script_issue)
 				continue
 			var script_ref: Dictionary = script_resources[resource_id]
 			var script_path := str(script_ref.get("normalized_path", ""))
@@ -461,22 +469,62 @@ func _audit_csharp_resource_script_reference(file_path: String, line_no: int, sc
 		return issues
 
 	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
-	var script_class_name := str(inspect_data.get("class_name", ""))
-	var base_type := str(inspect_data.get("base_type", ""))
 	var header_script_class := str(header.get("script_class", ""))
 	var file_class_name := script_path.get_file().get_basename()
+	var resolved_type := _resolve_csharp_resource_type(inspect_data, header_script_class, file_class_name)
+	var script_class_name := str(resolved_type.get("class_name", ""))
+	var base_type := str(resolved_type.get("base_type", ""))
 	if script_class_name.is_empty():
-		issues.append(bridge.build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "build_status": "dotnet_build_may_pass"}))
+		issues.append(bridge.build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "script_file_exists": true, "roslyn_class_found": false, "build_status": "dotnet_build_may_pass"}))
 		return issues
 	if not header_script_class.is_empty() and header_script_class != script_class_name:
-		issues.append(bridge.build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "build_status": "dotnet_build_may_pass"}))
+		issues.append(bridge.build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "build_status": "dotnet_build_may_pass"}))
 	if include_warnings and file_class_name != script_class_name:
-		issues.append(bridge.build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
+		issues.append(bridge.build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
 	if include_warnings and not _is_resource_base_type(base_type):
-		issues.append(bridge.build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
+		issues.append(bridge.build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "resolution_source": str(resolved_type.get("resolution_source", "")), "roslyn_class_found": bool(resolved_type.get("roslyn_class_found", false)), "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
 	if include_warnings and not _csharp_script_has_global_class_attribute(script_path):
-		issues.append(bridge.build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
+		issues.append(bridge.build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "global_class_attribute_found": false, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
 	return issues
+
+
+func _resolve_csharp_resource_type(inspect_data: Dictionary, header_script_class: String, file_class_name: String) -> Dictionary:
+	var direct_class_name := str(inspect_data.get("class_name", ""))
+	var types: Array = inspect_data.get("types", []) if inspect_data.get("types", []) is Array else []
+	var fallback_type: Dictionary = {}
+	for raw_type in types:
+		if not (raw_type is Dictionary):
+			continue
+		var type_data: Dictionary = raw_type
+		var type_name := str(type_data.get("name", ""))
+		if type_name.is_empty():
+			continue
+		if not header_script_class.is_empty() and type_name == header_script_class:
+			return _build_resolved_csharp_type(type_data, "roslyn_types_script_class")
+		if type_name == file_class_name:
+			fallback_type = type_data
+	if not fallback_type.is_empty():
+		return _build_resolved_csharp_type(fallback_type, "roslyn_types_file_name")
+	for raw_type in types:
+		if raw_type is Dictionary and _is_resource_base_type(str((raw_type as Dictionary).get("base_type", ""))):
+			return _build_resolved_csharp_type(raw_type as Dictionary, "roslyn_types_resource_base")
+	if not direct_class_name.is_empty():
+		return {
+			"class_name": direct_class_name,
+			"base_type": str(inspect_data.get("base_type", "")),
+			"resolution_source": "script_inspect_top_level",
+			"roslyn_class_found": true
+		}
+	return {"class_name": "", "base_type": "", "resolution_source": "unresolved", "roslyn_class_found": false}
+
+
+func _build_resolved_csharp_type(type_data: Dictionary, resolution_source: String) -> Dictionary:
+	return {
+		"class_name": str(type_data.get("name", "")),
+		"base_type": str(type_data.get("base_type", "")),
+		"resolution_source": resolution_source,
+		"roslyn_class_found": true
+	}
 
 
 func _extract_resource_header(content: String) -> Dictionary:
@@ -492,15 +540,45 @@ func _extract_resource_header(content: String) -> Dictionary:
 
 
 func _extract_resource_attribute(line: String, attribute_name: String) -> String:
-	var marker := "%s=\"" % attribute_name
-	var start := line.find(marker)
+	var marker := "%s=" % attribute_name
+	var start := _find_resource_attribute_start(line, marker)
 	if start == -1:
 		return ""
 	start += marker.length()
-	var finish := line.find("\"", start)
-	if finish == -1:
+	if start >= line.length():
 		return ""
+	if line.substr(start, 1) == "\"":
+		start += 1
+		var quoted_finish := line.find("\"", start)
+		if quoted_finish == -1:
+			return ""
+		return line.substr(start, quoted_finish - start).strip_edges()
+	var finish := start
+	while finish < line.length():
+		var current := line.substr(finish, 1)
+		if current == " " or current == "]" or current == "\t":
+			break
+		finish += 1
 	return line.substr(start, finish - start).strip_edges()
+
+
+func _find_resource_attribute_start(line: String, marker: String) -> int:
+	var in_quote := false
+	var index := 0
+	while index <= line.length() - marker.length():
+		var current := line.substr(index, 1)
+		if current == "\"" and (index == 0 or line.substr(index - 1, 1) != "\\"):
+			in_quote = not in_quote
+			index += 1
+			continue
+		if not in_quote and line.substr(index, marker.length()) == marker:
+			if index == 0:
+				return index
+			var previous := line.substr(index - 1, 1)
+			if previous == " " or previous == "\t" or previous == "[":
+				return index
+		index += 1
+	return -1
 
 
 func _is_resource_base_type(base_type: String) -> bool:

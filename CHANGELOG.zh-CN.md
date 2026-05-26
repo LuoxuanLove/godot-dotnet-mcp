@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- 修复 `system_resource_reference_audit`：现在会通过 Roslyn `types[]` 元数据解析有效的 C# `[GlobalClass] Resource` 脚本，不再误报 class unresolved，并且会在发出缺失 id 诊断前识别未加引号的 `ExtResource id=` 声明，同时解析资源 id 时会忽略带引号属性值内部的 `id=` 文本。
 - 修复 Tools 页预览面板，使选中项说明填满下方分割区域，不再留下底部空白。
 - 修复配置页客户端操作按钮在首次渲染时会因布局宽度尚未就绪而变成单列整行、直到切换客户端后才恢复的问题。
 - 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
