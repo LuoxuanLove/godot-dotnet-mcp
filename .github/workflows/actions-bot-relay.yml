@@ -216,6 +216,7 @@ jobs:
           gh workflow run dotnet-build.yml --ref "$branch"
           gh workflow run validate-plugin.yml --ref "$branch"
           gh workflow run pr-policy.yml --ref dev -f pull_number="$relay_pr_number"
+          gh workflow run version-policy.yml --ref dev -f pull_number="$relay_pr_number"
 
           if git diff --name-only "origin/dev...HEAD" | grep -q '^\.github/workflows/'; then
             gh workflow run lint-workflows.yml --ref "$branch"
