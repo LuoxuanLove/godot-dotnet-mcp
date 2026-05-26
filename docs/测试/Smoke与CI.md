@@ -65,7 +65,7 @@ tests/
 3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
 5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
-6. `publish-release`: 手动一键发布入口，默认先 dry-run 校验 `dev` 来源、版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
+6. `publish-release`: 手动一键发布入口，只使用 GitHub Actions 的 `Use workflow from` 选择 `dev` 来源，默认先 dry-run 校验版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
 7. `publish-plugin`: `v*` tag 发布前先校验 tag 版本、`dev` 可达性和发布说明源文件，再运行构建 / harness，并用两层发布说明正文创建 GitHub Release
 8. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
 
