@@ -563,17 +563,21 @@ func _extract_resource_attribute(line: String, attribute_name: String) -> String
 
 
 func _find_resource_attribute_start(line: String, marker: String) -> int:
-	var search_from := 0
-	while search_from < line.length():
-		var start := line.find(marker, search_from)
-		if start == -1:
-			return -1
-		if start == 0:
-			return start
-		var previous := line.substr(start - 1, 1)
-		if previous == " " or previous == "\t" or previous == "[":
-			return start
-		search_from = start + marker.length()
+	var in_quote := false
+	var index := 0
+	while index <= line.length() - marker.length():
+		var current := line.substr(index, 1)
+		if current == "\"" and (index == 0 or line.substr(index - 1, 1) != "\\"):
+			in_quote = not in_quote
+			index += 1
+			continue
+		if not in_quote and line.substr(index, marker.length()) == marker:
+			if index == 0:
+				return index
+			var previous := line.substr(index - 1, 1)
+			if previous == " " or previous == "\t" or previous == "[":
+				return index
+		index += 1
 	return -1
 
 
