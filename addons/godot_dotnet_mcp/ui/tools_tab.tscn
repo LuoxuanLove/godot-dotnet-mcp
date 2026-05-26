@@ -113,7 +113,7 @@ layout_mode = 2
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 0
+size_flags_vertical = 3
 
 [node name="PreviewOuterMargin" type="MarginContainer" parent="ContentSplit/BottomPane" unique_id=550482415]
 layout_mode = 2

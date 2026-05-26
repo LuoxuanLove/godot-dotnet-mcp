@@ -164,6 +164,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if preview_text.text.contains("RUNTIME STEP ATOMIC"):
 		return _failure("Tools tab should not fall back to the runtime atomic English description.")
 
+	var bottom_pane = _instance.get_node("ContentSplit/BottomPane") as VBoxContainer
+	if bottom_pane == null or bottom_pane.size_flags_vertical != Control.SIZE_EXPAND_FILL:
+		return _failure("Tools tab bottom preview pane should expand and fill the available vertical split space.")
+
 	var atomic_tool = _find_child_by_metadata(system_tool, "atomic", "project_info")
 	if atomic_tool == null:
 		return _failure("Tools tab should keep the atomic child chain for system tools after tree rendering refactor.")
