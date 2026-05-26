@@ -23,6 +23,7 @@
 - 简化一键发布 workflow 的手动触发界面：发布来源只使用 GitHub Actions 内置的 `Use workflow from` 分支选择器。
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.1` 稳定维护版本。
 - 调整插件 harness CI：headless 验证改用 Godot console 可执行文件，不再使用 GUI 可执行文件。
+- 缩短插件 harness required subset 运行耗时：普通 headless case 合并到一次 stage 与 Godot 运行中执行，editor probe case 保持隔离，并在控制台和 GitHub Step Summary 输出阶段与逐 case 耗时。
 
 ## [1.0.0] - 2026-05-26
 
