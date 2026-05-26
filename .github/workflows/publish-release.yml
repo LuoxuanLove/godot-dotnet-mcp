@@ -14,7 +14,7 @@ on:
         default: dev
         type: string
       dry_run:
-        description: "Run every validation step without creating a tag or release."
+        description: "Run validation without creating a tag or release, and record a reusable dry-run result."
         required: false
         default: true
         type: boolean
@@ -50,38 +50,6 @@ jobs:
       - name: Fetch release refs
         shell: pwsh
         run: git fetch --force --tags origin +refs/heads/dev:refs/remotes/origin/dev
-
-      - name: Verify hosted .NET 8 SDK
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          dotnet --info
-          dotnet --list-sdks
-          $sdkVersion = dotnet --version
-          if ($sdkVersion -notmatch '^8\.') {
-            throw "Expected global.json to select a .NET 8 SDK, got $sdkVersion."
-          }
-
-      - name: Build plugin Roslyn library
-        shell: pwsh
-        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
-
-      - name: Setup Godot 4.6
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $godotZip = "$env:TEMP\Godot_v4.6-stable_mono_win64.exe.zip"
-          if (-not (Test-Path $godotZip)) {
-            curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
-          }
-          $extractDir = "$env:TEMP\godot_extracted"
-          Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
-          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
-          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Run plugin harness verification
-        shell: pwsh
-        run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
 
       - name: Run one-click release preflight
         id: preflight
@@ -121,7 +89,7 @@ jobs:
             throw "Release version must be SemVer. Actual version: $version"
           }
 
-          $tagName = "plugin-v$version"
+          $tagName = "v$version"
           $existingTag = (@(git ls-remote --tags origin "refs/tags/$tagName") -join "`n").Trim()
           if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
             throw "Release tag $tagName already exists. Choose a new version."
@@ -160,12 +128,105 @@ jobs:
           "tag_name=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "target_sha=$headSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "dry_run_cache_prefix=publish-release-dry-run-$tagName-$headSha-" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "## Release Preflight"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Version: ``$version``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Tag: ``$tagName``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Target SHA: ``$headSha``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Dry run: ``$env:DRY_RUN``"
+
+      - name: Restore matching dry-run record
+        id: dry_run_record
+        uses: actions/cache/restore@v4
+        with:
+          path: .release-dry-run-cache
+          key: ${{ steps.preflight.outputs.dry_run_cache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.preflight.outputs.dry_run_cache_prefix }}
+
+      - name: Evaluate reusable dry-run record
+        id: reuse_dry_run
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          VERSION: ${{ steps.preflight.outputs.version }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $skipRepeatedTests = "false"
+          $recordPath = ".release-dry-run-cache\publish-release.json"
+
+          if ($env:DRY_RUN -eq "false" -and (Test-Path -LiteralPath $recordPath)) {
+            try {
+              $record = Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
+              $recordedAt = [DateTimeOffset]::Parse([string]$record.dry_run_completed_at)
+              $recordAge = [DateTimeOffset]::UtcNow - $recordedAt
+              if (
+                $record.tag_name -eq $env:TAG_NAME -and
+                $record.version -eq $env:VERSION -and
+                $record.target_sha -eq $env:TARGET_SHA -and
+                $record.build_checked -eq $true -and
+                $record.harness_checked -eq $true -and
+                $record.release_notes_rendered -eq $true -and
+                $recordAge.TotalHours -le 24
+              ) {
+                $skipRepeatedTests = "true"
+              }
+            } catch {
+              $skipRepeatedTests = "false"
+            }
+          }
+
+          "skip_repeated_tests=$skipRepeatedTests" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Report reused dry-run validation
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests == 'true' }}
+        env:
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Reusing successful dry-run validation for ``$env:TAG_NAME`` at ``$env:TARGET_SHA``."
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Build and harness verification were skipped because the target commit is unchanged."
+
+      - name: Verify hosted .NET 8 SDK
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet --info
+          dotnet --list-sdks
+          $sdkVersion = dotnet --version
+          if ($sdkVersion -notmatch '^8\.') {
+            throw "Expected global.json to select a .NET 8 SDK, got $sdkVersion."
+          }
+
+      - name: Build plugin Roslyn library
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+
+      - name: Setup Godot 4.6
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $godotZip = "$env:TEMP\Godot_v4.6-stable_mono_win64.exe.zip"
+          if (-not (Test-Path $godotZip)) {
+            curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
+          }
+          $extractDir = "$env:TEMP\godot_extracted"
+          Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
+          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run plugin harness verification
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: .\scripts\test_plugin_side_roslyn.ps1 -GodotPath "$env:GODOT_BIN"
 
       - name: Render release notes
         id: release_notes
@@ -198,6 +259,36 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Dry run completed. No tag or GitHub Release was created."
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Rerun with ``dry_run=false`` to create ``$env:TAG_NAME`` at ``$env:TARGET_SHA``."
 
+      - name: Write dry-run record
+        if: ${{ inputs.dry_run }}
+        env:
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
+          VERSION: ${{ steps.preflight.outputs.version }}
+          TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path ".release-dry-run-cache" -Force | Out-Null
+          [pscustomobject]@{
+            tag_name = $env:TAG_NAME
+            version = $env:VERSION
+            target_sha = $env:TARGET_SHA
+            dry_run_completed_at = (Get-Date).ToUniversalTime().ToString("o")
+            run_id = "${{ github.run_id }}"
+            run_attempt = "${{ github.run_attempt }}"
+            build_checked = $true
+            harness_checked = $true
+            release_notes_rendered = $true
+          } | ConvertTo-Json | Set-Content -LiteralPath ".release-dry-run-cache\publish-release.json" -Encoding UTF8
+
+      - name: Save dry-run record
+        if: ${{ inputs.dry_run }}
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: .release-dry-run-cache
+          key: ${{ steps.preflight.outputs.dry_run_cache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Create release tag
         if: ${{ inputs.dry_run == false }}
         env:
@@ -209,7 +300,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$env:TAG_NAME" "$env:TARGET_SHA" -m "Godot .NET MCP v$env:VERSION"
+          git tag -a "$env:TAG_NAME" "$env:TARGET_SHA" -m "$env:TAG_NAME"
           git push origin "refs/tags/$env:TAG_NAME"
 
       - name: Create GitHub release
@@ -227,7 +318,7 @@ jobs:
           $args = @(
             "release", "create", $env:TAG_NAME,
             "--target", $env:TARGET_SHA,
-            "--title", "Godot .NET MCP v$env:VERSION",
+            "--title", $env:TAG_NAME,
             "--notes-file", $env:NOTES_FILE
           )
           if ($env:IS_PRERELEASE -eq "true") {

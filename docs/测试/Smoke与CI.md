@@ -28,6 +28,7 @@ tests/
 ├─ draft-release-notes.yml
 ├─ lint-workflows.yml
 ├─ pr-policy.yml
+├─ publish-release.yml
 ├─ publish-plugin.yml
 └─ validate-plugin.yml
 ```
@@ -53,6 +54,7 @@ tests/
 - `.github/workflows/draft-release-notes.yml`
 - `.github/workflows/lint-workflows.yml`
 - `.github/workflows/pr-policy.yml`
+- `.github/workflows/publish-release.yml`
 - `.github/workflows/publish-plugin.yml`
 - `.github/workflows/validate-plugin.yml`
 
@@ -63,8 +65,9 @@ tests/
 3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
 5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
-6. `publish-plugin`: tag 发布前执行版本一致性和发布说明源文件 preflight，并用两层发布说明正文创建 GitHub Release
-7. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
+6. `publish-release`: 手动一键发布入口，默认先 dry-run 校验 `dev` 来源、版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
+7. `publish-plugin`: `v*` tag 发布前先校验 tag 版本、`dev` 可达性和发布说明源文件，再运行构建 / harness，并用两层发布说明正文创建 GitHub Release
+8. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
 
 `validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查和轻量 PR standards，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。普通同仓库短分支 PR 依赖 `pull_request` 入口验证；`push` 只保留 `dev`，避免同一提交同时触发短分支 `push` 与 `pull_request.synchronize` 重复运行。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml` 和 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
 
@@ -76,7 +79,7 @@ tests/
 
 Harness JSON 报告会区分 suite 成功标记与 Godot 退出清理警告：普通 headless suite 发现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit` 时仍作为失败处理，但会输出 `suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass=exit_cleanup_warning`，便于判断失败来自退出清理而不是 case 逻辑。
 
-`dotnet-build.yml`、`validate-plugin.yml` 与 `publish-plugin.yml` 使用 `windows-2025` 托管 runner，并通过 `global.json` 将 .NET SDK 选择限制在 .NET 8 feature band；workflow 会先输出 `dotnet --info` 与 `dotnet --list-sdks`，如果未选中 .NET 8 SDK 则直接失败。`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、`global.json`、集中包管理文件和 lock file。`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录；缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
+`dotnet-build.yml`、`validate-plugin.yml`、`publish-release.yml` 与 `publish-plugin.yml` 使用 `windows-2025` 托管 runner，并通过 `global.json` 将 .NET SDK 选择限制在 .NET 8 feature band；workflow 会先输出 `dotnet --info` 与 `dotnet --list-sdks`，如果未选中 .NET 8 SDK 则直接失败。`dotnet-build.yml` 与 `validate-plugin.yml` 都缓存 NuGet 全局包目录，缓存键覆盖 `Directory.Build.props`、项目文件、props/targets、`global.json`、集中包管理文件和 lock file。`publish-release.yml` 额外保存同版本同提交的 dry-run 验证记录，用于正式发布时跳过重复 build 与 harness；`validate-plugin.yml` 还缓存 Godot 4.6 mono Windows 解压目录，缓存命中后仍会查找非 console Godot 可执行文件，缺失时重新下载并解压，避免坏缓存静默通过。
 
 `validate-plugin-harness` 失败时会保留 `.tmp/godot_plugin_harness` 并上传 7 天 artifact，供维护者下载 stage root、process registry 等失败现场；成功运行仍会清理该目录。
 

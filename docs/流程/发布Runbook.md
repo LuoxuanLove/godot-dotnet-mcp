@@ -7,7 +7,7 @@
 ## 1. 发布原则
 
 - `dev` 是稳定集成分支；发布前所有变更必须先通过短分支 PR 合入 `dev`。
-- 发布由维护者手动触发或推送 `plugin-v*` tag 触发，Agent 不直接合并或推送 `dev`。
+- 发布由维护者手动触发或推送 `v*` tag 触发，Agent 不直接合并或推送 `dev`。
 - 发布安装方式只保留 Godot Asset Library 安装和直接复制 `addons/godot_dotnet_mcp/` 源文件两种路径。
 - 不制作、上传或记录 zip 包、发布包、本地打包产物及其安装流程。
 - `next` draft release 仅作为下一版发布说明草稿，不是正式发布，也不附带包资产。
@@ -28,7 +28,7 @@
 ```
 
 7. 如修改了 `.github/workflows/**`，确认 `lint-workflows` 通过。
-8. 如推送正式发布 tag，确认 tag 使用 `plugin-v*`，且 tag 版本与 `plugin.cfg`、中英文 changelog 和对应 `release-notes-v*.md` 一致。
+8. 如推送正式发布 tag，确认 tag 使用 `v*`，tag 指向可从 `dev` 到达的提交，且 tag 版本与 `plugin.cfg`、中英文 changelog 和对应 `release-notes-v*.md` 一致。
 
 ---
 
@@ -46,7 +46,7 @@
 - 只描述插件自身能力、安装、验证和发布信息。
 - 不记录本地构建产物、临时包、校验和或额外安装路径。
 
-`draft-release-notes` 会在 `dev` 更新后用同一脚本刷新 `next` draft release；正式 `plugin-v*` tag 发布时，`publish-plugin` 会用同一脚本生成最终正文。
+`draft-release-notes` 会在 `dev` 更新后用同一脚本刷新 `next` draft release；正式 `v*` tag 发布时，`publish-plugin` 会用同一脚本生成最终正文。
 
 ---
 
@@ -59,8 +59,8 @@
 5. 由维护者在 GitHub PR 页面手动确认并合并。
 6. 手动运行或等待 `draft-release-notes` 刷新 `next` draft release，并检查正文是否符合正式发布格式。
 7. 优先手动触发 `publish-release` workflow，先保持 `dry_run=true` 验证版本、tag、发布说明和构建检查。
-8. dry run 通过并确认发布内容后，重新运行 `publish-release`，将 `dry_run` 设为 `false`；workflow 会在 `dev` 当前提交上创建新的 `plugin-v*` tag，生成正式 GitHub Release，并删除已消费的 `next` draft release。
-9. 如需沿用旧入口，也可以在合并后的 `dev` 上创建并推送 `plugin-v*` tag，或手动触发 `publish-plugin` workflow 进行验证。
+8. dry run 通过并确认发布内容后，重新运行 `publish-release`，将 `dry_run` 设为 `false`；如果版本与目标提交未变，workflow 会复用成功 dry-run 记录并跳过重复 build 与 harness 检查，然后在 `dev` 当前提交上创建新的 `v*` tag，生成正式 GitHub Release，并删除已消费的 `next` draft release。
+9. 如需沿用旧入口，也可以在合并后的 `dev` 上创建并推送 `v*` tag，或手动触发 `publish-plugin` workflow 进行验证；tag 入口会先确认 tag 版本、发布说明源文件和 `dev` 可达性，再运行构建与 harness。
 10. `publish-release` 和 `publish-plugin` 都会在发布前检查版本一致性、发布说明源文件和已存在 release；检查通过后创建 GitHub Release，不上传本地包资产。
 
 `publish-release` 只执行发布收尾：不会提交版本号变更、不会合并 PR、不会推送 `dev`、不会覆盖或删除正式 tag，也不会制作或上传 zip / package 资产。若 tag 或 GitHub Release 已存在，workflow 会失败并要求选择新版本或人工处理。
