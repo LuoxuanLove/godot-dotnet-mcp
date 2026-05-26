@@ -40,6 +40,7 @@
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.1` 稳定维护版本。
 - 移除未注册的旧插件聚合工具执行器与陈旧文档引用，并加强拆分后的插件工具分类契约覆盖。
 - 将公开文档、issue 模板与 harness fixture 中的仓库本地项目名称替换为插件范围表述和中性示例路径。
+- 调整插件 harness CI：headless 验证改用 Godot console 可执行文件，不再使用 GUI 可执行文件。
 - 强制 release notes commit summary 解析上一发布 tag 边界，不再退回到任意最近提交列表。
 
 ## [1.0.0-pre3] - 2026-05-21

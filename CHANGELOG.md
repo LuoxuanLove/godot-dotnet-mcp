@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
+- Changed plugin harness CI to run the Godot console executable for headless validation instead of the GUI executable.
 - Enforced release note commit summaries to resolve a previous release tag boundary instead of falling back to arbitrary recent commits.
 
 ## [1.0.0-pre3] - 2026-05-21

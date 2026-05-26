@@ -58,7 +58,7 @@ jobs:
           $godotExe = $null
           if (Test-Path -LiteralPath $extractDir) {
             $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File |
-              Where-Object { $_.Name -notmatch "console" } |
+              Where-Object { $_.Name -match "console" } |
               Select-Object -First 1 -ExpandProperty FullName
           }
 
@@ -69,7 +69,7 @@ jobs:
             curl.exe -L --fail --output $godotZip "https://downloads.godotengine.org/?version=4.6&flavor=stable&slug=mono_win64.zip&platform=windows.64"
             Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
             $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File |
-              Where-Object { $_.Name -notmatch "console" } |
+              Where-Object { $_.Name -match "console" } |
               Select-Object -First 1 -ExpandProperty FullName
           }
 
