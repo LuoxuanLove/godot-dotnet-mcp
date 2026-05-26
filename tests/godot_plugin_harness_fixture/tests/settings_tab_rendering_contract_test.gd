@@ -128,7 +128,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_compare_behind_by": 0,
 		"update_sync_state": "success",
 		"update_sync_status": "Synced v1.2.3.",
-		"plugin_version": "1.0.0",
+		"plugin_version": "1.0.1",
 		"plugin_freshness": {
 			"running_instance": {"source_root": "res://addons/godot_dotnet_mcp"},
 			"sync": {"source_git_commit": "abcdef123456"}
@@ -166,9 +166,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should normalize stale manual Check status copy from cached localization.")
 	if _find_label_containing(labels, "选择更新方式") == null:
 		return _failure("Settings tab should display the current update sync description copy.")
-	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
+	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows.")
-	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "Current plugin 1.0.0 [abcdef1] -> selected target 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "current ahead 0 / target ahead 2") == null:
+	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "current ahead 0 / target ahead 2") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
 	if check_button == null or check_button.visible or not check_button.disabled or not check_button.text.is_empty():
