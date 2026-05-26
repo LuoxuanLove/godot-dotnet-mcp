@@ -72,7 +72,7 @@ tools/system/
 这些工具当前由 `tools/system/impl_script.gd` 统一承载，并通过 `atomic_bridge.gd` 聚合底层 `script_*`、`scene_*` 与 `filesystem_*` 原子工具。
 
 ### 项目资源审计级
-- `system_resource_reference_audit`：扫描项目内 `.tscn` / `.tres` 文本资源，检查 `ExtResource` 的 UID 与 fallback path 是否能被当前资源数据库解析，并检查 `.tres` 中 C# custom `Resource` 脚本路径、`script_class`、文件名 / 类名和直接基类风险。该工具会把问题标记为 `dotnet_build_may_pass`，用于区分“C# 构建通过但场景 / 资源引用仍不一致”的加载风险。项目级扫描若没有枚举到任何 `.tscn` / `.tres`，会返回 `scan_status=invalid_scan_scope`、`valid_scan_scope=false`、`scan_warning_count` 与 `enumeration_diagnostics`，表示结果不可证明资源引用 clean；显式传入单个 `.tscn` / `.tres` 路径时则返回 `scan_status=explicit_path`。
+- `system_resource_reference_audit`：扫描项目内 `.tscn` / `.tres` 文本资源，检查 `ExtResource` 的 UID 与 fallback path 是否能被当前资源数据库解析，并检查 `.tres` 中 C# custom `Resource` 脚本路径、`script_class`、文件名 / 类名和直接基类风险。该工具会把问题标记为 `dotnet_build_may_pass`，用于区分“C# 构建通过但场景 / 资源引用仍不一致”的加载风险。C# 资源脚本会优先读取 Roslyn `types[]`，依次按 `.tres` 的 `script_class`、脚本文件名和 `Resource` 基类证据解析类名；只有缺少可用 `types[]` 证据时，才退回到 `script_inspect` 的顶层类信息，避免把有效的 `[GlobalClass] Resource` 脚本误报为 unresolved。`script = ExtResource("...")` 的引用会先与所有已声明的 `ExtResource id` 匹配，再区分 `resource_script_ext_resource_missing`（id 未声明）和 `resource_script_ext_resource_not_script`（id 已声明但不是 Script 类型）。项目级扫描若没有枚举到任何 `.tscn` / `.tres`，会返回 `scan_status=invalid_scan_scope`、`valid_scan_scope=false`、`scan_warning_count` 与 `enumeration_diagnostics`，表示结果不可证明资源引用 clean；显式传入单个 `.tscn` / `.tres` 路径时则返回 `scan_status=explicit_path`。
 
 ### 索引级
 - `system_project_symbol_search`：基于内部项目索引搜索类、脚本和场景符号；首次调用会懒构建索引，长会话中文件变化时会自动重建，必要时仍可 `refresh_index=true` 强制刷新。

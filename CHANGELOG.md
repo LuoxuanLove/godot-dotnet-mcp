@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Fixed `system_resource_reference_audit` so valid C# `[GlobalClass] Resource` scripts resolved through Roslyn `types[]` metadata are not reported as unresolved, and unquoted `ExtResource id=` declarations are recognized before missing-id diagnostics are emitted.
 - Fixed the Tools tab preview pane so the selected item description fills the lower split area instead of leaving unused bottom space.
 - Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
 - Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
