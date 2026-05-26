@@ -198,7 +198,7 @@ tests/godot_plugin_harness_fixture/
 - 逐 case `cleanup_case()` 钩子
 - suite 级 `_suite_final_cleanup()` 收尾
 
-这对排查卡死、性能问题和资源清理问题很有帮助；CI required subset 中普通 headless case 会合并到一次 stage / Godot 运行，只有需要真实 editor probe 的 case 保持隔离运行。
+这对排查卡死、性能问题和资源清理问题很有帮助；CI required subset 中普通 headless case 会合并到一次 stage / Godot 运行；少量对共享 headless 进程状态敏感的 case 会以独立 headless 运行保留覆盖，需要真实 editor probe 的 case 也保持隔离运行。
 
 ### 3. headless 路径具备默认工具访问 provider
 
