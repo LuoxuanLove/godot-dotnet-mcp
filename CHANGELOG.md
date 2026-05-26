@@ -33,7 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Internal
 
-- Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `plugin-v*` GitHub Release.
+- Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `v*` GitHub Release, records successful dry runs so matching non-dry-run releases can skip repeated build and harness checks, and keeps tag-triggered releases read-only until the tag is verified against `dev`.
 - Updated PR policy validation to read live pull request metadata and added a manual dispatch fallback so edited PR bodies can be revalidated without relying on stale rerun payloads.
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
