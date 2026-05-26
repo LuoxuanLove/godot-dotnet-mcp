@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Simplified the one-click release workflow dispatch UI so the built-in `Use workflow from` branch selector is the only release source selector.
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
 - Changed plugin harness CI to run the Godot console executable for headless validation instead of the GUI executable.
+- Added a trusted PR version-policy workflow so non-release branches cannot change plugin public version metadata before release finalization.
 
 ## [1.0.0] - 2026-05-26
 
