@@ -1,0 +1,80 @@
+name: version-policy
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: "Pull request number to validate"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  version-policy:
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout trusted policy scripts
+        uses: actions/checkout@v5
+        with:
+          ref: dev
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve pull request refs
+        id: pr
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PULL_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PULL_NUMBER: ${{ github.event.inputs.pull_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $pullNumber = $env:EVENT_PULL_NUMBER
+          if ([string]::IsNullOrWhiteSpace($pullNumber)) {
+            $pullNumber = $env:INPUT_PULL_NUMBER
+          }
+          if ([string]::IsNullOrWhiteSpace($pullNumber)) {
+            throw "Unable to determine pull request number."
+          }
+
+          $pr = gh pr view $pullNumber --repo $env:REPOSITORY --json baseRefName,headRefName,headRepositoryOwner | ConvertFrom-Json
+          "pull_number=$pullNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "base_branch=$($pr.baseRefName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "head_branch=$($pr.headRefName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "head_owner=$($pr.headRepositoryOwner.login)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Fetch pull request head
+        shell: pwsh
+        env:
+          PULL_NUMBER: ${{ steps.pr.outputs.pull_number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
+        run: git fetch --no-tags --depth=1 origin "+refs/pull/$env:PULL_NUMBER/head:refs/remotes/pull/$env:PULL_NUMBER/head"
+
+      - name: Validate public version metadata policy
+        shell: pwsh
+        env:
+          BASE_BRANCH: ${{ steps.pr.outputs.base_branch }}
+          HEAD_BRANCH: ${{ steps.pr.outputs.head_branch }}
+          PULL_NUMBER: ${{ steps.pr.outputs.pull_number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
+        run: |
+          .\scripts\validate_pr_version_policy.ps1 `
+            -BaseBranch $env:BASE_BRANCH `
+            -HeadBranch $env:HEAD_BRANCH `
+            -BaseRef "HEAD" `
+            -HeadRef "refs/remotes/pull/$env:PULL_NUMBER/head" `
+            -RepositoryOwner $env:REPOSITORY_OWNER `
+            -HeadRepositoryOwner $env:HEAD_OWNER `
+            -RequireTrustedReleaseBranch `
+            -SkipFetch

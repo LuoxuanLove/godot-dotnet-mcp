@@ -30,7 +30,8 @@ tests/
 ├─ pr-policy.yml
 ├─ publish-release.yml
 ├─ publish-plugin.yml
-└─ validate-plugin.yml
+├─ validate-plugin.yml
+└─ version-policy.yml
 ```
 
 ---
@@ -40,7 +41,7 @@ tests/
 - Plugin headless harness 已接入 CI 的 required subset
 - 多个合约测试 case 仍可被 harness 发现，但不等于当前硬门禁
 - `plugin_entrypoint_contracts` 通过 editor probe 运行，退出时的 editor shutdown warning 在 harness 中按非致命噪音处理
-- PR 目标分支、快速 .NET build、发布 tag 版本一致性和下一版 draft release 已进入 workflow 管理
+- PR 目标分支、公开版本元数据策略、快速 .NET build、发布 tag 版本一致性和下一版 draft release 已进入 workflow 管理
 - `actions-bot-relay` 可用 `github-actions[bot]` 从维护者提供的 patch 创建短分支和 PR
 
 ---
@@ -57,19 +58,21 @@ tests/
 - `.github/workflows/publish-release.yml`
 - `.github/workflows/publish-plugin.yml`
 - `.github/workflows/validate-plugin.yml`
+- `.github/workflows/version-policy.yml`
 
 当前包含：
 
 1. `actions-bot-relay`: 手动接收 base64 patch，由 `github-actions[bot]` 创建 `actions-bot/*` 分支和指向 `dev` 的 PR，并在 PR 正文追加 base/head SHA、changed paths、diffstat、触发者、run URL 与验证 workflow 链接
 2. `pr-policy`: 阻止错误目标分支 PR，只允许 PR 指向 `dev`，并校验标题、摘要和测试说明等客观 PR 字段
-3. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
-4. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
-5. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）；普通 headless case 批量运行，editor probe case 单独隔离运行
-6. `publish-release`: 手动一键发布入口，只使用 GitHub Actions 的 `Use workflow from` 选择 `dev` 来源，默认先 dry-run 校验版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
-7. `publish-plugin`: `v*` tag 发布前先校验 tag 版本、`dev` 可达性和发布说明源文件，再运行构建 / harness，并用两层发布说明正文创建 GitHub Release
-8. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
+3. `version-policy`: 以受信任的 `dev` 侧 workflow 和脚本校验 PR 公开版本元数据，阻止非 `release/*` 分支提前修改插件版本
+4. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
+5. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
+6. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）；普通 headless case 批量运行，editor probe case 单独隔离运行
+7. `publish-release`: 手动一键发布入口，只使用 GitHub Actions 的 `Use workflow from` 选择 `dev` 来源，默认先 dry-run 校验版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
+8. `publish-plugin`: `v*` tag 发布前先校验 tag 版本、`dev` 可达性和发布说明源文件，再运行构建 / harness，并用两层发布说明正文创建 GitHub Release
+9. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
 
-`validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查和轻量 PR standards，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。普通同仓库短分支 PR 依赖 `pull_request` 入口验证；`push` 只保留 `dev`，避免同一提交同时触发短分支 `push` 与 `pull_request.synchronize` 重复运行。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml` 和 `validate-plugin.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
+`validate-plugin.yml` 只保留重型 Godot harness，并继续暴露稳定的 `validate-plugin-harness` check 名称。`pr-policy.yml` 负责 PR 目标分支检查和轻量 PR standards，`dotnet-build.yml` 负责快速 .NET build 和 guardrails。普通同仓库短分支 PR 依赖 `pull_request` 入口验证；`push` 只保留 `dev`，避免同一提交同时触发短分支 `push` 与 `pull_request.synchronize` 重复运行。`actions-bot-relay` 创建 PR 后会显式触发 `dotnet-build.yml`、`validate-plugin.yml` 和 `version-policy.yml`，并在 workflow 文件变化时显式触发 `lint-workflows.yml`。远程 `dev` 分支应配置 GitHub branch ruleset，并把 `validate-plugin-harness` 设为 required check；需要更严格时可把 `dotnet-build` 也加入 required checks；`pr-policy` 主要提供早期反馈，不建议替代 `validate-plugin-harness`。`validate-plugin.yml` 与 `dotnet-build.yml` 均包含 `merge_group` 触发，便于未来接入 merge queue。
 
 `dotnet-build.yml` 和 `validate-plugin.yml` 只会对同一 PR 的新运行启用 concurrency cancellation，避免同一 PR 的旧 build 或 harness 继续占用 runner。`dev` push、`workflow_dispatch`、`merge_group`、tag、release 等非 PR 运行会使用唯一的 run id 作为 concurrency group，因此不会互相取消。`dotnet-build` job 的 timeout 为 30 分钟，`validate-plugin-harness` job 的 timeout 为 90 分钟，check 名称保持不变。
 

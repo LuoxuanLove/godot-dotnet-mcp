@@ -59,4 +59,11 @@ jobs:
 
       - name: Validate refactor guardrails
         shell: pwsh
-        run: .\scripts\validate_refactor_guardrails.ps1
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          $guardrailArgs = @()
+          if ($env:EVENT_NAME -eq "pull_request") {
+            $guardrailArgs += "-SkipVersionPolicy"
+          }
+          .\scripts\validate_refactor_guardrails.ps1 @guardrailArgs

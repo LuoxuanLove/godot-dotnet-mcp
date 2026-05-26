@@ -1,3 +1,7 @@
+﻿param(
+    [switch]$SkipVersionPolicy
+)
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -127,9 +131,19 @@ foreach ($pattern in $bannedSourcePatterns) {
     }
 }
 
+if ($SkipVersionPolicy) {
+    Write-Host "Version policy validation skipped: caller opted out."
+} else {
+    try {
+        & (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
+    } catch {
+        $errors.Add("Version policy validation failed: $($_.Exception.Message)")
+    }
+}
+
 if ($errors.Count -gt 0) {
     foreach ($message in $errors) {
-        Write-Error $message
+        Write-Error $message -ErrorAction Continue
     }
 
     throw "Refactor guardrail validation failed."
