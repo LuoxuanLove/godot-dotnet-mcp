@@ -108,7 +108,7 @@ class FakeBridge extends RefCounted:
 					return success({
 						"name": "ContractProject",
 						"description": "Editor state contracts",
-						"version": "1.0.0",
+						"version": "1.0.1",
 						"project_path": "res://",
 						"godot_version": "4.6",
 						"godot_version_string": "4.6.stable",

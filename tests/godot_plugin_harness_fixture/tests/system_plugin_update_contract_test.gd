@@ -22,8 +22,8 @@ class FakePlugin extends Node:
 		return {
 			"success": true,
 			"data": {
-				"source_version": "1.0.0",
-				"server_version": "1.0.0",
+				"source_version": "1.0.1",
+				"server_version": "1.0.1",
 				"protocol_version": "2025-06-18",
 				"tool_schema_version": "1",
 				"source_fingerprint": "abcdef0123456789abcdef",
@@ -43,7 +43,7 @@ class FakePlugin extends Node:
 				"status": "ready",
 				"source": "custom_branch",
 				"target": {"kind": "branch", "ref": "dev", "commit": "target-sha"},
-				"current": {"source_version": "1.0.0", "source_git_commit": "commit-sha"},
+				"current": {"source_version": "1.0.1", "source_git_commit": "commit-sha"},
 				"refs": {"state": "success"},
 				"sync": {"state": "idle"},
 				"lifecycle_reload": {"state": "idle"}

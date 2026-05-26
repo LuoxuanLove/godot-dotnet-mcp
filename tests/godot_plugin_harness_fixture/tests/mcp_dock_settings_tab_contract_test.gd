@@ -128,7 +128,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_compare_behind_by": 0,
 		"update_sync_state": "success",
 		"update_sync_status": "Synced dev.",
-		"plugin_version": "1.0.0",
+		"plugin_version": "1.0.1",
 		"plugin_freshness": {"sync": {"source_git_commit": "abcdef123456"}}
 	})
 	await tree.process_frame
@@ -172,9 +172,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
-	if _find_label_containing(labels, "Current version: 1.0.0") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
+	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
-	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.0 [abcdef1] -> selected target 1.2.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
+	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.2.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
@@ -194,7 +194,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"log_levels": ["debug", "info"],
 		"update_refs_branches": ["dev", "feature/dock"],
 		"update_refs_releases": ["v1.0.0", "v2.0.0"],
-		"plugin_version": "1.0.0",
+		"plugin_version": "1.0.1",
 		"plugin_freshness": {}
 	})
 	await tree.process_frame

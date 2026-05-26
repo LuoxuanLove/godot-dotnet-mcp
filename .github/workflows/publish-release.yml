@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 1.0.0. Empty reads plugin.cfg."
+        description: "Release version, for example 1.0.1. Empty reads plugin.cfg."
         required: false
         type: string
       dry_run:

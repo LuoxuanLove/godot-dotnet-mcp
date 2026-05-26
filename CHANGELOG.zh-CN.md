@@ -4,7 +4,27 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.0.0])
+## [Unreleased] ([1.0.1])
+
+### Fixed
+
+- 修复 `system_resource_reference_audit`：现在会通过 Roslyn `types[]` 元数据解析有效的 C# `[GlobalClass] Resource` 脚本，不再误报 class unresolved，并且会在发出缺失 id 诊断前识别未加引号的 `ExtResource id=` 声明，同时解析资源 id 时会忽略带引号属性值内部的 `id=` 文本。
+- 修复 Tools 页预览面板，使选中项说明填满下方分割区域，不再留下底部空白。
+
+### Documentation
+
+- 新增 `v1.0.1` 手写发布说明源文件，用于本次稳定线维护更新；插件元数据已切换到 `1.0.1`，因此移除过时的 `v1.0.0` 源说明。
+- 补充 release note 写作风格与模板约束，使手写说明保持面向用户、沿用 `v1.0.0-pre3` 的叙事结构，并排除仅维护流程可见的发布机械变化。
+- 清理发布变更记录，使 `v1.0.1` 段落只反映 `v1.0.0` 之后的变更。
+
+### Internal
+
+- 新增默认先 dry-run 的一键发布 workflow：创建新的 `v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness，并记录成功 dry-run，使同提交的正式发布可跳过重复 build 与 harness 检查；tag 触发发布在确认 tag 可从 `dev` 到达前保持只读权限。
+- 简化一键发布 workflow 的手动触发界面：发布来源只使用 GitHub Actions 内置的 `Use workflow from` 分支选择器。
+- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.1` 稳定维护版本。
+- 调整插件 harness CI：headless 验证改用 Godot console 可执行文件，不再使用 GUI 可执行文件。
+
+## [1.0.0] - 2026-05-26
 
 ### Changed
 
@@ -18,8 +38,6 @@
 
 ### Fixed
 
-- 修复 `system_resource_reference_audit`：现在会通过 Roslyn `types[]` 元数据解析有效的 C# `[GlobalClass] Resource` 脚本，不再误报 class unresolved，并且会在发出缺失 id 诊断前识别未加引号的 `ExtResource id=` 声明，同时解析资源 id 时会忽略带引号属性值内部的 `id=` 文本。
-- 修复 Tools 页预览面板，使选中项说明填满下方分割区域，不再留下底部空白。
 - 修复配置页客户端操作按钮在首次渲染时会因布局宽度尚未就绪而变成单列整行、直到切换客户端后才恢复的问题。
 - 修复 debug `dotnet` 默认 C# 项目发现：自动 build / restore 选择时会跳过插件 bridge 项目，不再把它当作用户项目。
 
@@ -34,8 +52,7 @@
 
 ### Internal
 
-- 新增默认先 dry-run 的一键发布 workflow：创建新的 `v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness，并记录成功 dry-run，使同提交的正式发布可跳过重复 build 与 harness 检查；tag 触发发布在确认 tag 可从 `dev` 到达前保持只读权限。
-- 简化一键发布 workflow 的手动触发界面：发布来源只使用 GitHub Actions 内置的 `Use workflow from` 分支选择器。
+- 新增默认先 dry-run 的一键发布 workflow：创建新的 `plugin-v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness。
 - 更新 PR policy 校验：改为读取实时 PR 元数据，并新增手动 dispatch 兜底，使 PR 正文编辑后可重新校验而不依赖过期的 rerun payload。
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.0` 正式版本。
 - 移除未注册的旧插件聚合工具执行器与陈旧文档引用，并加强拆分后的插件工具分类契约覆盖。
@@ -296,8 +313,9 @@
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
-[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...v1.0.0
 [1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
 [1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
 [1.0.0-pre1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.5.0...v1.0.0-pre1
