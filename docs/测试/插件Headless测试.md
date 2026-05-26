@@ -83,7 +83,7 @@ tests/godot_plugin_harness_fixture/
 
 | 文件 | 作用 |
 |---|---|
-| `Program.cs` | 复制 fixture 与 addon 到临时 stage root，启动 headless Godot，收集 stdout/stderr，解析 suite JSON |
+| `Program.cs` | 复制 fixture 与 addon 到临时 stage root，启动 Godot，收集 stdout/stderr，解析 suite JSON，并记录 stage copy、stage build、Godot runtime 阶段耗时 |
 | `project.godot` | 最小测试工程 |
 | `headless_suite_runner.gd` | suite 入口，逐 case 执行并汇总结果 |
 | 各 `*_contract_test.gd` | 单 case 文件，按模块拆分验证 |
@@ -187,16 +187,18 @@ tests/godot_plugin_harness_fixture/
 - 失败时可通过 `--keep-stage-root` 保留现场排查
 - 进程清理只针对 registry 中登记的 harness-owned 临时进程；不会按 `godot` / `dotnet` 进程名泛杀，也不会把当前承载 MCP 的编辑器会话视为可清理对象
 
-### 2. suite 已支持单 case 运行
+### 2. suite 已支持单 case 与批量选择运行
 
 `headless_suite_runner.gd` 当前支持：
 
 - case 级开始/结束日志
-- 通过环境变量筛选单 case
+- 通过 `GODOT_PLUGIN_HARNESS_ONLY_CASE` 筛选单 case
+- 通过 `--cases` / `GODOT_PLUGIN_HARNESS_SELECTED_CASES` 一次选择多个 case
+- suite 与逐 case `duration_ms` 耗时输出
 - 逐 case `cleanup_case()` 钩子
 - suite 级 `_suite_final_cleanup()` 收尾
 
-这对排查卡死、性能问题和资源清理问题很有帮助。
+这对排查卡死、性能问题和资源清理问题很有帮助；CI required subset 中普通 headless case 会合并到一次 stage / Godot 运行，只有需要真实 editor probe 的 case 保持隔离运行。
 
 ### 3. headless 路径具备默认工具访问 provider
 
@@ -264,18 +266,20 @@ bare `MCPHttpServer.new()` 在无插件父节点的 headless 路径下，会创�
 dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
 ```
 
-`plugin_entrypoint_contracts` 通过 editor probe 运行时，需要指向 Godot 编辑器可执行文件，而不是 console 版。
+`plugin_entrypoint_contracts` 与 `plugin_update_settings_persistence_contracts` 通过 editor probe 运行；harness 会自动追加 `--editor`，CI 可继续使用 Godot console 可执行文件。
 
 常用附加选项：
 
 - `--keep-stage-root`
+- `--cases case_a,case_b`：一次运行指定多个 case；不能与 `GODOT_PLUGIN_HARNESS_ONLY_CASE` 同时使用
 - `--cleanup-stale-processes`：只清理 owner harness 进程已退出且 PID / 启动时间匹配的登记子进程，并输出清理摘要。`scripts/test_plugin_side_roslyn.ps1` 的 `finally` 会先调用该清理入口；成功时删除 `.tmp/godot_plugin_harness`，失败时保留该目录供 CI artifact 上传。
 
 当前返回内容包括：
 
 - suite success 与是否解析到成功标记
 - stage root
-- 每个 case 的结果
+- 每个 case 的结果与 `duration_ms`
+- suite 总耗时与 `phaseTimings`（`copy_stage_inputs`、`build_stage_project`、`run_godot_process`）
 - Godot 进程 exit code
 - 退出清理诊断，包括 `exitCleanupWarningsDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass`
 - stderr 摘要

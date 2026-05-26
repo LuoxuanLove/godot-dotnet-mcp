@@ -24,6 +24,7 @@
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.1` 稳定维护版本。
 - 调整插件 harness CI：headless 验证改用 Godot console 可执行文件，不再使用 GUI 可执行文件。
 - 新增受信任的 PR 版本策略 workflow，阻止非发布分支在发布收口前修改插件公开版本元数据。
+- 缩短插件 harness required subset 运行耗时：普通 headless case 合并到一次 stage 与 Godot 运行中执行，editor probe case 保持隔离，并在控制台和 GitHub Step Summary 输出阶段与逐 case 耗时。
 
 ## [1.0.0] - 2026-05-26
 

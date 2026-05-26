@@ -67,7 +67,7 @@ tests/
 3. `version-policy`: 以受信任的 `dev` 侧 workflow 和脚本校验 PR 公开版本元数据，阻止非 `release/*` 分支提前修改插件版本
 4. `dotnet-build`: 快速构建插件 Roslyn library、harness runner 和 fixture，并运行 refactor guardrails
 5. `lint-workflows`: 对 `.github/workflows/**` 运行 `actionlint`
-6. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin headless harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）
+6. `validate-plugin-harness`: 下载 Godot 4.6 并运行 plugin harness required subset（以 `scripts/test_plugin_side_roslyn.ps1` 中的 `$RequiredCases` 为准）；普通 headless case 批量运行，editor probe case 单独隔离运行
 7. `publish-release`: 手动一键发布入口，只使用 GitHub Actions 的 `Use workflow from` 选择 `dev` 来源，默认先 dry-run 校验版本、发布说明、构建与 harness；同版本同提交的近期成功 dry-run 记录可在正式运行时跳过重复 build 与 harness 检查
 8. `publish-plugin`: `v*` tag 发布前先校验 tag 版本、`dev` 可达性和发布说明源文件，再运行构建 / harness，并用两层发布说明正文创建 GitHub Release
 9. `draft-release-notes`: `dev` 更新后用同一渲染脚本创建或刷新 `next` draft release，作为下一版正式正文预览
@@ -76,7 +76,7 @@ tests/
 
 `dotnet-build.yml` 和 `validate-plugin.yml` 只会对同一 PR 的新运行启用 concurrency cancellation，避免同一 PR 的旧 build 或 harness 继续占用 runner。`dev` push、`workflow_dispatch`、`merge_group`、tag、release 等非 PR 运行会使用唯一的 run id 作为 concurrency group，因此不会互相取消。`dotnet-build` job 的 timeout 为 30 分钟，`validate-plugin-harness` job 的 timeout 为 90 分钟，check 名称保持不变。
 
-重型 harness 入口会输出总耗时以及 build、case list、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
+重型 harness 入口会输出总耗时以及 build、case list、批量 headless、隔离 editor probe、逐 case 和 guardrails 阶段的 timing summary；在 GitHub Actions 中还会追加到 Step Summary，便于定位慢 case 或慢阶段。
 `dotnet-build.yml` 和 `scripts/test_plugin_side_roslyn.ps1` 的 .NET build 阶段会识别符合 `CS2012`、Godot `.godot/mono/temp` 路径以及文件占用 / 安全软件扫描信号的失败，并输出 `transient_file_lock` 诊断。该诊断表示临时构建产物可能被短暂锁定，不代表源码编译错误；脚本只给出重跑与安全软件排除项建议，不会自动重试、删除 `.godot` 或终止进程。
 
 
@@ -146,13 +146,13 @@ Review:
 ### 本地 plugin harness
 
 ```powershell
-dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Path>"
 ```
 
-`plugin_entrypoint_contracts` 通过 editor probe 运行时，需要显式提供 Godot 编辑器可执行文件，而不是 console 版：
+需要复现 CI required subset 时，直接运行脚本入口；脚本会把普通 headless case 合并为一次 batch，并把 editor probe case 单独运行：
 
 ```powershell
-dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
+.\scripts\test_plugin_side_roslyn.ps1 -GodotPath "<Godot Path>"
 ```
 
 ---

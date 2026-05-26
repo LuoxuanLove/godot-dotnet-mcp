@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
 - Changed plugin harness CI to run the Godot console executable for headless validation instead of the GUI executable.
 - Added a trusted PR version-policy workflow so non-release branches cannot change plugin public version metadata before release finalization.
+- Reduced plugin harness required subset runtime by batching regular headless cases into one stage and Godot run while keeping editor probe cases isolated, with phase and per-case timings reported in the console and GitHub Step Summary.
 
 ## [1.0.0] - 2026-05-26
 
