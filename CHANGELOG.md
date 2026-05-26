@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.0.0])
+## [Unreleased] ([1.0.1])
 
 ### Changed
 
@@ -28,16 +28,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
 - Updated README release badges so stable and prerelease entry points are clearer from the product pages.
 - Added README and release-note guidance for keeping copied source installs current with the latest GitHub code through GUI file updates or MCP project-file tools.
-- Added the `v1.0.0` manual release notes source and synchronized the release workflow documentation with the stable release flow.
-- Expanded the `v1.0.0` manual release notes into a fuller first-stable-release overview that follows the pre3 narrative style.
-- Cleaned up release changelog entries so the `v1.0.0` section reflects post-`v1.0.0-pre3` development without mixing prerelease records.
+- Added the `v1.0.1` manual release notes source for the focused stable-line maintenance update and removed the obsolete `v1.0.0` source note now that plugin metadata targets `1.0.1`.
+- Documented the release-note writing style and template so manual notes stay user-facing, follow the `v1.0.0-pre3` narrative structure, and exclude maintenance-only workflow mechanics.
+- Cleaned up release changelog entries so the `v1.0.1` section reflects post-`v1.0.0` development without mixing already released records.
 
 ### Internal
 
 - Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `v*` GitHub Release, records successful dry runs so matching non-dry-run releases can skip repeated build and harness checks, and keeps tag-triggered releases read-only until the tag is verified against `dev`.
 - Simplified the one-click release workflow dispatch UI so the built-in `Use workflow from` branch selector is the only release source selector.
 - Updated PR policy validation to read live pull request metadata and added a manual dispatch fallback so edited PR bodies can be revalidated without relying on stale rerun payloads.
-- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
+- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
 - Enforced release note commit summaries to resolve a previous release tag boundary instead of falling back to arbitrary recent commits.
@@ -296,8 +296,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
-[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...v1.0.0
 [1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
 [1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
 [1.0.0-pre1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.5.0...v1.0.0-pre1

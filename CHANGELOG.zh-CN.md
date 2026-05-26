@@ -4,7 +4,7 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.0.0])
+## [Unreleased] ([1.0.1])
 
 ### Changed
 
@@ -28,16 +28,16 @@
 - 更新根 README 产品页呈现，加入新的本地宣传图，同步中英文文案，并精简发布徽章。
 - 更新 README 发布徽章，使正式版和预发布入口在产品页中更清晰。
 - 为 README 与发布说明补充说明：通过图形界面文件更新或 MCP 项目文件工具，让复制源码安装的插件保持最新 GitHub 代码。
-- 新增 `v1.0.0` 手写发布说明源文件，并同步正式版发布流程文档。
-- 将 `v1.0.0` 手写发布说明扩写为更完整的首次稳定版总览，并沿用 pre3 的发布叙事风格。
-- 清理发布变更记录，使 `v1.0.0` 段落只反映 `v1.0.0-pre3` 之后的开发内容，不混入已发布的预发布记录。
+- 新增 `v1.0.1` 手写发布说明源文件，用于本次稳定线维护更新；插件元数据已切换到 `1.0.1`，因此移除过时的 `v1.0.0` 源说明。
+- 补充 release note 写作风格与模板约束，使手写说明保持面向用户、沿用 `v1.0.0-pre3` 的叙事结构，并排除仅维护流程可见的发布机械变化。
+- 清理发布变更记录，使 `v1.0.1` 段落只反映 `v1.0.0` 之后的开发内容，不混入已发布记录。
 
 ### Internal
 
 - 新增默认先 dry-run 的一键发布 workflow：创建新的 `v*` GitHub Release 前，会校验 `dev` 来源、版本元数据、手写发布说明、重复 tag / release、构建输出与插件 harness，并记录成功 dry-run，使同提交的正式发布可跳过重复 build 与 harness 检查；tag 触发发布在确认 tag 可从 `dev` 到达前保持只读权限。
 - 简化一键发布 workflow 的手动触发界面：发布来源只使用 GitHub Actions 内置的 `Use workflow from` 分支选择器。
 - 更新 PR policy 校验：改为读取实时 PR 元数据，并新增手动 dispatch 兜底，使 PR 正文编辑后可重新校验而不依赖过期的 rerun payload。
-- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.0` 正式版本。
+- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.0.1` 稳定维护版本。
 - 移除未注册的旧插件聚合工具执行器与陈旧文档引用，并加强拆分后的插件工具分类契约覆盖。
 - 将公开文档、issue 模板与 harness fixture 中的仓库本地项目名称替换为插件范围表述和中性示例路径。
 - 强制 release notes commit summary 解析上一发布 tag 边界，不再退回到任意最近提交列表。
@@ -296,8 +296,9 @@
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
-[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...v1.0.0
 [1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
 [1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
 [1.0.0-pre1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v0.5.0...v1.0.0-pre1
