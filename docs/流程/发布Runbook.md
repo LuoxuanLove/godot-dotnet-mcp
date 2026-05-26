@@ -7,6 +7,7 @@
 ## 1. 发布原则
 
 - `dev` 是稳定集成分支；发布前所有变更必须先通过短分支 PR 合入 `dev`。
+- 普通 `feature/*`、`fix/*`、`docs/*`、`chore/*`、`hotfix/*` PR 必须保持插件公开版本元数据与 `dev` 一致；只有指向 `dev` 的 `release/*` PR 可以修改该版本。
 - 发布由维护者手动触发或推送 `v*` tag 触发，Agent 不直接合并或推送 `dev`。
 - 发布安装方式只保留 Godot Asset Library 安装和直接复制 `addons/godot_dotnet_mcp/` 源文件两种路径。
 - 不制作、上传或记录 zip 包、发布包、本地打包产物及其安装流程。
@@ -20,7 +21,7 @@
 2. 确认对应版本的 `release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
 3. 确认 `next` draft release 已按正式发布格式刷新，并可作为正式 GitHub Release 正文预览。
 4. 确认 PR 只包含当前发布目标范围，未夹带其它修复或历史未合并提交。
-5. 确认公开文档不包含本地路径、跨仓库工作区上下文、同步脚本流程或本地构建产物安装说明。
+5. 确认公开文档只描述插件自身的安装、使用、发布与兼容性信息。
 6. 运行或确认 CI 已通过：
 
 ```powershell
