@@ -127,11 +127,15 @@ foreach ($pattern in $bannedSourcePatterns) {
     }
 }
 
-& (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
+try {
+    & (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
+} catch {
+    $errors.Add("Version policy validation failed: $($_.Exception.Message)")
+}
 
 if ($errors.Count -gt 0) {
     foreach ($message in $errors) {
-        Write-Error $message
+        Write-Error $message -ErrorAction Continue
     }
 
     throw "Refactor guardrail validation failed."

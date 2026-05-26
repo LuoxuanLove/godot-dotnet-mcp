@@ -107,6 +107,7 @@ function Invoke-PolicyScenario {
         [bool]$ShouldPass,
         [string]$RepositoryOwner = "LuoxuanLove",
         [string]$HeadRepositoryOwner = "LuoxuanLove",
+        [string]$ExpectedErrorContains = "",
         [switch]$RequireTrustedReleaseBranch
     )
 
@@ -114,15 +115,27 @@ function Invoke-PolicyScenario {
     try {
         $headCommit = (git -C $repo rev-parse HEAD).Trim()
         $passed = $true
+        $failureMessage = ""
         try {
             & $validatorPath -RepositoryRoot $repo -BaseBranch "dev" -HeadBranch $HeadBranch -BaseRef "dev" -HeadRef $headCommit -RepositoryOwner $RepositoryOwner -HeadRepositoryOwner $HeadRepositoryOwner -RequireTrustedReleaseBranch:$RequireTrustedReleaseBranch -SkipFetch | Out-Host
         } catch {
             $passed = $false
-            Write-Host "Scenario '$Name' failed as expected candidate: $($_.Exception.Message)"
+            $failureMessage = $_.Exception.Message
+            Write-Host "Scenario '$Name' failed as expected candidate: $failureMessage"
         }
 
         if ($passed -ne $ShouldPass) {
             throw "Scenario '$Name' expected pass=$ShouldPass but got pass=$passed."
+        }
+
+        if (-not $ShouldPass) {
+            if ([string]::IsNullOrWhiteSpace($ExpectedErrorContains)) {
+                throw "Scenario '$Name' must declare an expected failure message."
+            }
+
+            if ($failureMessage -notlike "*$ExpectedErrorContains*") {
+                throw "Scenario '$Name' failed with unexpected message: $failureMessage"
+            }
         }
 
         Write-Host "Scenario '$Name' passed."
@@ -132,11 +145,11 @@ function Invoke-PolicyScenario {
 }
 
 Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "feature/tooling" -HeadVersion "1.0.0" -ShouldPass $true
-Invoke-PolicyScenario -Name "non-release changed metadata" -HeadBranch "fix/version-text" -HeadVersion "1.1.0" -ShouldPass $false
+Invoke-PolicyScenario -Name "non-release changed metadata" -HeadBranch "fix/version-text" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'fix/version-text' changes public version metadata"
 Invoke-PolicyScenario -Name "release changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $true
-Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false
+Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must come from a release/* branch in the base repository"
 Invoke-PolicyScenario -Name "non-release plugin cfg text change without version change" -HeadBranch "docs/plugin-metadata" -HeadVersion "1.0.0" -MutateHead { param($repo) Write-MetadataFixture -RepositoryRoot $repo -Version "1.0.0" -PluginDescription "Updated metadata" } -ShouldPass $true
-Invoke-PolicyScenario -Name "non-release protocol version only" -HeadBranch "feature/protocol-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_version": "1.0.0"', '"server_version": "1.1.0"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false
-Invoke-PolicyScenario -Name "missing head version" -HeadBranch "feature/missing-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin.cfg"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content -replace 'version="[^"]+"\r?\n', ''; Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false
+Invoke-PolicyScenario -Name "non-release protocol version only" -HeadBranch "feature/protocol-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_version": "1.0.0"', '"server_version": "1.1.0"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "protocol facts server_version"
+Invoke-PolicyScenario -Name "missing head version" -HeadBranch "feature/missing-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin.cfg"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content -replace 'version="[^"]+"\r?\n', ''; Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Cannot find plugin.cfg version"
 
 Write-Host "Version policy scenarios validated successfully."
