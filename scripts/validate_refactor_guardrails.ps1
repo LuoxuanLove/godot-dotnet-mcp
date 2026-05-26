@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
@@ -126,6 +126,8 @@ foreach ($pattern in $bannedSourcePatterns) {
         }
     }
 }
+
+& (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
 
 if ($errors.Count -gt 0) {
     foreach ($message in $errors) {
