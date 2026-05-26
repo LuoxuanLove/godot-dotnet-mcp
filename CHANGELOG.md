@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.0.1])
 
+### Fixed
+
+- Fixed `system_resource_reference_audit` so valid C# `[GlobalClass] Resource` scripts resolved through Roslyn `types[]` metadata are not reported as unresolved, unquoted `ExtResource id=` declarations are recognized before missing-id diagnostics are emitted, and `id=` text inside quoted attribute values is ignored while parsing resource IDs.
+- Fixed the Tools tab preview pane so the selected item description fills the lower split area instead of leaving unused bottom space.
+
+### Documentation
+
+- Added the `v1.0.1` manual release notes source for the focused stable-line maintenance update and removed the obsolete `v1.0.0` source note now that plugin metadata targets `1.0.1`.
+- Documented the release-note writing style and template so manual notes stay user-facing, follow the `v1.0.0-pre3` narrative structure, and exclude maintenance-only workflow mechanics.
+- Cleaned up release changelog entries so the `v1.0.1` section reflects only post-`v1.0.0` changes.
+
+### Internal
+
+- Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `v*` GitHub Release, records successful dry runs so matching non-dry-run releases can skip repeated build and harness checks, and keeps tag-triggered releases read-only until the tag is verified against `dev`.
+- Simplified the one-click release workflow dispatch UI so the built-in `Use workflow from` branch selector is the only release source selector.
+- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
+- Changed plugin harness CI to run the Godot console executable for headless validation instead of the GUI executable.
+
+## [1.0.0] - 2026-05-26
+
 ### Changed
 
 - Added Settings update modes for a selected branch (defaulting to `dev`), the latest stable release, the latest release including prereleases, and a selected release/tag through discovered selectors.
@@ -18,8 +38,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Fixed `system_resource_reference_audit` so valid C# `[GlobalClass] Resource` scripts resolved through Roslyn `types[]` metadata are not reported as unresolved, unquoted `ExtResource id=` declarations are recognized before missing-id diagnostics are emitted, and `id=` text inside quoted attribute values is ignored while parsing resource IDs.
-- Fixed the Tools tab preview pane so the selected item description fills the lower split area instead of leaving unused bottom space.
 - Fixed Config-page client action buttons so the initial render refreshes the action grid columns after layout width is available, preventing full-width one-button rows until client selection changes.
 - Fixed debug `dotnet` default C# project discovery so automatic build/restore selection skips the plugin bridge project instead of treating it as the user project.
 
@@ -28,19 +46,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refreshed the root README product presentation with a new local hero image, synchronized Chinese/English copy, and simplified release badges.
 - Updated README release badges so stable and prerelease entry points are clearer from the product pages.
 - Added README and release-note guidance for keeping copied source installs current with the latest GitHub code through GUI file updates or MCP project-file tools.
-- Added the `v1.0.1` manual release notes source for the focused stable-line maintenance update and removed the obsolete `v1.0.0` source note now that plugin metadata targets `1.0.1`.
-- Documented the release-note writing style and template so manual notes stay user-facing, follow the `v1.0.0-pre3` narrative structure, and exclude maintenance-only workflow mechanics.
-- Cleaned up release changelog entries so the `v1.0.1` section reflects post-`v1.0.0` development without mixing already released records.
+- Added the `v1.0.0` manual release notes source and synchronized the release workflow documentation with the stable release flow.
+- Expanded the `v1.0.0` manual release notes into a fuller first-stable-release overview that follows the pre3 narrative style.
+- Cleaned up release changelog entries so the `v1.0.0` section reflects post-`v1.0.0-pre3` development without mixing prerelease records.
 
 ### Internal
 
-- Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `v*` GitHub Release, records successful dry runs so matching non-dry-run releases can skip repeated build and harness checks, and keeps tag-triggered releases read-only until the tag is verified against `dev`.
-- Simplified the one-click release workflow dispatch UI so the built-in `Use workflow from` branch selector is the only release source selector.
+- Added a dry-run-first one-click release workflow that validates the `dev` source, version metadata, manual release notes, duplicate tags/releases, build output, and plugin harness before creating a new `plugin-v*` GitHub Release.
 - Updated PR policy validation to read live pull request metadata and added a manual dispatch fallback so edited PR bodies can be revalidated without relying on stale rerun payloads.
-- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.1` stable maintenance version.
+- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.0.0` stable version.
 - Removed the unregistered legacy plugin aggregate tool executor and stale documentation references, then tightened contract coverage around the split plugin tool categories.
 - Replaced repository-local project names in public docs, issue templates, and harness fixtures with plugin-scoped wording and neutral sample paths.
-- Changed plugin harness CI to run the Godot console executable for headless validation instead of the GUI executable.
 - Enforced release note commit summaries to resolve a previous release tag boundary instead of falling back to arbitrary recent commits.
 
 ## [1.0.0-pre3] - 2026-05-21
