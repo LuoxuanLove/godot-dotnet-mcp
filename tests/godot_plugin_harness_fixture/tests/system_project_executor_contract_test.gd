@@ -208,6 +208,33 @@ class FakeEmptyCollectBridge extends FakeBridge:
 		return []
 
 
+class FakeRoslynResourceBridge extends FakeBridge:
+	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
+		match tool_name:
+			"resource_query":
+				return success({"dependencies": []})
+			"script_inspect":
+				return success({
+					"language": "csharp",
+					"class_name": "WrongTopLevelResource",
+					"base_type": "Node",
+					"types": [{
+						"name": "NoteData",
+						"kind": "class",
+						"namespace": "",
+						"partial": true,
+						"base_type": "Resource",
+						"modifiers": ["public"],
+						"line": 3,
+						"column": 21
+					}],
+					"parse_errors": [],
+					"degraded": false
+				})
+			_:
+				return super.call_atomic(tool_name, args)
+
+
 class FakeToolLoader extends RefCounted:
 	func get_gdscript_lsp_diagnostics_service():
 		return null
@@ -238,12 +265,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(atomic_collect_bridge.last_args.get("path", "")) != "res://":
 		return _failure("AtomicBridge.collect_files should pass res:// as the filesystem_directory root path.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
+	var valid_resource_path := TEMP_ROOT.path_join("ValidNoteData.tres")
+	var missing_script_resource_path := TEMP_ROOT.path_join("MissingScriptId.tres")
+	var non_script_resource_path := TEMP_ROOT.path_join("NonScriptId.tres")
 	var script_path := TEMP_ROOT.path_join("ConfigResource.cs")
+	var valid_script_path := TEMP_ROOT.path_join("NoteData.cs")
 	var scene_path := TEMP_ROOT.path_join("NodeScriptScene.tscn")
 	var node_script_path := TEMP_ROOT.path_join("NodeController.cs")
 	_write_text(script_path, "using Godot;\n[GlobalClass]\npublic partial class ConfigResource : Resource {}\n")
+	_write_text(valid_script_path, "using Godot;\n[GlobalClass]\npublic partial class NoteData : Resource {}\n")
 	_write_text(node_script_path, "using Godot;\npublic partial class NodeController : Node {}\n")
 	_write_text(resource_path, "[gd_resource type=\"Resource\" script_class=\"ConfigResource\" format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[resource]\nscript = ExtResource(\"1_script\")\n" % script_path)
+	_write_text(valid_resource_path, "[gd_resource type=\"Resource\" script_class=\"NoteData\" format=3]\n[ext_resource type=\"Script\" uid=\"uid://valid_note_data\" path=\"%s\" id=4_ssj7b]\n[resource]\nscript = ExtResource(\"4_ssj7b\")\n" % valid_script_path)
+	_write_text(missing_script_resource_path, "[gd_resource type=\"Resource\" format=3]\n[resource]\nscript = ExtResource(\"missing_script\")\n")
+	_write_text(non_script_resource_path, "[gd_resource type=\"Resource\" format=3]\n[ext_resource type=\"Resource\" path=\"%s\" id=4_not_script]\n[resource]\nscript = ExtResource(\"4_not_script\")\n" % valid_resource_path)
 	_write_text(scene_path, "[gd_scene load_steps=2 format=3]\n[ext_resource type=\"Script\" path=\"%s\" id=\"1_script\"]\n[node name=\"Root\" type=\"Node\"]\nscript = ExtResource(\"1_script\")\n" % node_script_path)
 
 	PluginSelfDiagnosticStore.clear()
@@ -281,6 +316,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resource_reference_audit should report UID/path or C# Resource script issues.")
 	if str(reference_data.get("build_status", "")) != "dotnet_build_may_pass":
 		return _failure("resource_reference_audit should distinguish resource inconsistency from dotnet build status.")
+	var valid_resource_executor = SystemProjectExecutorScript.new()
+	valid_resource_executor.bridge = FakeRoslynResourceBridge.new(FakeToolLoader.new())
+	valid_resource_executor.configure_runtime({})
+	var valid_reference_audit: Dictionary = valid_resource_executor.execute("resource_reference_audit", {"path": valid_resource_path, "include_warnings": false})
+	if not bool(valid_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should run on a valid C# Resource .tres fixture.")
+	var valid_reference_data: Dictionary = valid_reference_audit.get("data", {})
+	var valid_reference_issues: Array = valid_reference_data.get("issues", [])
+	if int(valid_reference_data.get("issue_count", -1)) != 0:
+		return _failure("resource_reference_audit should not report false positives for declared C# [GlobalClass] Resource scripts: %s" % JSON.stringify(valid_reference_issues))
+	var valid_file_results: Array = valid_reference_data.get("files", [])
+	if valid_file_results.is_empty() or int((valid_file_results[0] as Dictionary).get("csharp_resource_script_count", 0)) != 1:
+		return _failure("resource_reference_audit should count declared C# Resource script references after resolving Roslyn types metadata.")
+	var missing_id_audit: Dictionary = valid_resource_executor.execute("resource_reference_audit", {"path": missing_script_resource_path, "include_warnings": false})
+	if not _has_issue_type(missing_id_audit.get("data", {}).get("issues", []), "resource_script_ext_resource_missing"):
+		return _failure("resource_reference_audit should report resource_script_ext_resource_missing when script ExtResource id is not declared.")
+	var non_script_id_audit: Dictionary = valid_resource_executor.execute("resource_reference_audit", {"path": non_script_resource_path, "include_warnings": false})
+	if not _has_issue_type(non_script_id_audit.get("data", {}).get("issues", []), "resource_script_ext_resource_not_script"):
+		return _failure("resource_reference_audit should report resource_script_ext_resource_not_script when script ExtResource id declares a non-Script resource.")
 	var scene_reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": scene_path})
 	if not bool(scene_reference_audit.get("success", false)):
 		return _failure("resource_reference_audit should run on a .tscn fixture.")
