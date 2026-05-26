@@ -21,16 +21,20 @@ func _run_suite() -> void:
 
 	var discovered_cases: Array[Dictionary] = HeadlessCaseSupport.discover_test_cases("res://tests/")
 	var selected_cases: Array[Dictionary] = []
+	var discovered_selected_case_names := {}
 	for case_info in discovered_cases:
 		var case_name := str(case_info.get("name", ""))
 		if only_case != "" and case_name != only_case:
 			continue
 		if only_case == "" and not selected_case_names.is_empty() and not selected_case_names.has(case_name):
 			continue
+		if not selected_case_names.is_empty():
+			discovered_selected_case_names[case_name] = true
 		selected_cases.append(case_info)
 
 	var validation_manifest: Array[Dictionary] = []
 	var validation_by_path := {}
+
 	for case_info in selected_cases:
 		var case_name := str(case_info.get("name", "unknown_case"))
 		var case_path := str(case_info.get("path", ""))
@@ -61,6 +65,17 @@ func _run_suite() -> void:
 		get_tree().quit(0)
 		return
 
+	if only_case == "" and not selected_case_names.is_empty():
+		for selected_case_name in selected_case_names.keys():
+			if discovered_selected_case_names.has(selected_case_name):
+				continue
+			results.append({
+				"name": selected_case_name,
+				"success": false,
+				"error": "Selected harness case was not discovered."
+			})
+			success = false
+
 	for case_info in selected_cases:
 		var case_name := str(case_info.get("name", "unknown_case"))
 		var case_script_path := str(case_info.get("path", ""))
@@ -84,6 +99,13 @@ func _run_suite() -> void:
 
 		var mode := str(case_info.get("mode", "headless"))
 		if mode != "headless" and only_case != case_name:
+			if not selected_case_names.is_empty():
+				results.append({
+					"name": case_name,
+					"success": false,
+					"error": "Selected harness case requires editor probe mode: %s" % mode
+				})
+				success = false
 			continue
 
 		var case_script = load(case_script_path)

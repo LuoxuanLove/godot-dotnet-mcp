@@ -106,6 +106,12 @@ function Assert-HarnessResults {
         }
     }
 
+    foreach ($resultName in $resultNames) {
+        if ($ExpectedCases -notcontains $resultName) {
+            throw "$Description reported unexpected harness case: $resultName"
+        }
+    }
+
     foreach ($result in $results) {
         if (-not [bool]$result.success) {
             throw "$Description reported failed harness case: $($result.name). $($result.error)"
