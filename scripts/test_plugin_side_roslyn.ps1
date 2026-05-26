@@ -19,12 +19,97 @@ function Format-Duration {
 function New-TimingRecord {
     param(
         [string]$Name,
-        [TimeSpan]$Duration
+        [TimeSpan]$Duration,
+        [object[]]$CaseTimings = @()
     )
 
     return [pscustomobject]@{
         Name = $Name
         Duration = $Duration
+        CaseTimings = @($CaseTimings)
+    }
+}
+
+function Format-CaseList {
+    param(
+        [string[]]$Cases
+    )
+
+    return ($Cases -join ",")
+}
+
+function Get-SuiteResults {
+    param(
+        [object]$HarnessJson
+    )
+
+    if ($HarnessJson -eq $null -or -not ($HarnessJson.PSObject.Properties.Name -contains "suite")) {
+        return @()
+    }
+
+    $suite = $HarnessJson.suite
+    if ($suite -eq $null) {
+        return @()
+    }
+
+    if ($suite.PSObject.Properties.Name -contains "results") {
+        return @($suite.results)
+    }
+
+    if ($suite.PSObject.Properties.Name -contains "name") {
+        return @($suite)
+    }
+
+    return @()
+}
+
+function Get-CaseTimingRecords {
+    param(
+        [object]$HarnessJson
+    )
+
+    $records = New-Object System.Collections.Generic.List[object]
+    foreach ($result in (Get-SuiteResults -HarnessJson $HarnessJson)) {
+        $caseName = [string]$result.name
+        if ([string]::IsNullOrWhiteSpace($caseName)) {
+            continue
+        }
+
+        $durationMs = 0
+        if ($result.PSObject.Properties.Name -contains "duration_ms") {
+            $durationMs = [int64]$result.duration_ms
+        }
+
+        $records.Add([pscustomobject]@{
+            Name = $caseName
+            Duration = [TimeSpan]::FromMilliseconds($durationMs)
+            Success = [bool]$result.success
+        })
+    }
+
+    return $records.ToArray()
+}
+
+function Assert-HarnessResults {
+    param(
+        [object]$HarnessJson,
+        [string[]]$ExpectedCases,
+        [string]$Description
+    )
+
+    $results = Get-SuiteResults -HarnessJson $HarnessJson
+    $resultNames = @($results | ForEach-Object { [string]$_.name })
+
+    foreach ($caseName in $ExpectedCases) {
+        if ($resultNames -notcontains $caseName) {
+            throw "$Description did not report required harness case: $caseName"
+        }
+    }
+
+    foreach ($result in $results) {
+        if (-not [bool]$result.success) {
+            throw "$Description reported failed harness case: $($result.name). $($result.error)"
+        }
     }
 }
 
@@ -39,6 +124,9 @@ function Write-HarnessTimingSummary {
     Write-Host "  Total: $(Format-Duration -Duration $TotalDuration)"
     foreach ($timing in $Timings) {
         Write-Host "  - $($timing.Name): $(Format-Duration -Duration $timing.Duration)"
+        foreach ($caseTiming in @($timing.CaseTimings)) {
+            Write-Host "    - $($caseTiming.Name): $(Format-Duration -Duration $caseTiming.Duration)"
+        }
     }
 
     if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
@@ -57,6 +145,17 @@ function Write-HarnessTimingSummary {
 
         foreach ($timing in $Timings) {
             $summaryLines += "| $($timing.Name) | $(Format-Duration -Duration $timing.Duration) |"
+        }
+
+        $caseTimingRows = @($Timings | ForEach-Object { $_.CaseTimings } | Where-Object { $_ -ne $null })
+        if ($caseTimingRows.Count -gt 0) {
+            $summaryLines += ""
+            $summaryLines += "| Case | Duration | Result |"
+            $summaryLines += "| --- | ---: | --- |"
+            foreach ($caseTiming in ($caseTimingRows | Sort-Object Duration -Descending)) {
+                $result = if ($caseTiming.Success) { "passed" } else { "failed" }
+                $summaryLines += "| $($caseTiming.Name) | $(Format-Duration -Duration $caseTiming.Duration) | $result |"
+            }
         }
 
         Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $summaryLines -Encoding UTF8
@@ -254,6 +353,10 @@ $RequiredCases = @(
     "dock_model_service_contracts"
     "tools_tab_rendering_contracts"
 )
+$EditorProbeCases = @(
+    "plugin_entrypoint_contracts"
+    "plugin_update_settings_persistence_contracts"
+)
 
 $TimingRecords = New-Object System.Collections.Generic.List[object]
 $OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -285,10 +388,19 @@ try {
         }
     }
 
-    foreach ($caseName in $RequiredCases) {
+    $requiredHeadlessCases = @($RequiredCases | Where-Object { $EditorProbeCases -notcontains $_ })
+    if ($requiredHeadlessCases.Count -gt 0) {
+        Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
+        $headlessResult = Invoke-Harness -Description "Run required headless harness cases" -ExtraArgs @("--keep-stage-root", "--cases", (Format-CaseList -Cases $requiredHeadlessCases))
+        Assert-HarnessResults -HarnessJson $headlessResult.Json -ExpectedCases $requiredHeadlessCases -Description "Required headless harness batch"
+        $TimingRecords.Add((New-TimingRecord -Name "Run required headless harness cases" -Duration $headlessResult.Duration -CaseTimings (Get-CaseTimingRecords -HarnessJson $headlessResult.Json)))
+    }
+
+    foreach ($caseName in $EditorProbeCases) {
         $env:GODOT_PLUGIN_HARNESS_ONLY_CASE = $caseName
         $caseResult = Invoke-Harness -Description "Run harness case: $caseName" -ExtraArgs @("--keep-stage-root")
-        $TimingRecords.Add((New-TimingRecord -Name "Run harness case: $caseName" -Duration $caseResult.Duration))
+        Assert-HarnessResults -HarnessJson $caseResult.Json -ExpectedCases @($caseName) -Description "Isolated editor probe harness case"
+        $TimingRecords.Add((New-TimingRecord -Name "Run harness case: $caseName" -Duration $caseResult.Duration -CaseTimings (Get-CaseTimingRecords -HarnessJson $caseResult.Json)))
     }
 
     Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
