@@ -359,6 +359,9 @@ $RequiredCases = @(
     "dock_model_service_contracts"
     "tools_tab_rendering_contracts"
 )
+$IsolatedHeadlessCases = @(
+    "tools_tab_rendering_contracts"
+)
 $EditorProbeCases = @(
     "plugin_entrypoint_contracts"
     "plugin_update_settings_persistence_contracts"
@@ -394,12 +397,19 @@ try {
         }
     }
 
-    $requiredHeadlessCases = @($RequiredCases | Where-Object { $EditorProbeCases -notcontains $_ })
+    $requiredHeadlessCases = @($RequiredCases | Where-Object { $EditorProbeCases -notcontains $_ -and $IsolatedHeadlessCases -notcontains $_ })
     if ($requiredHeadlessCases.Count -gt 0) {
         Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
         $headlessResult = Invoke-Harness -Description "Run required headless harness cases" -ExtraArgs @("--keep-stage-root", "--cases", (Format-CaseList -Cases $requiredHeadlessCases))
         Assert-HarnessResults -HarnessJson $headlessResult.Json -ExpectedCases $requiredHeadlessCases -Description "Required headless harness batch"
         $TimingRecords.Add((New-TimingRecord -Name "Run required headless harness cases" -Duration $headlessResult.Duration -CaseTimings (Get-CaseTimingRecords -HarnessJson $headlessResult.Json)))
+    }
+
+    foreach ($caseName in $IsolatedHeadlessCases) {
+        Remove-Item Env:\GODOT_PLUGIN_HARNESS_ONLY_CASE -ErrorAction SilentlyContinue
+        $caseResult = Invoke-Harness -Description "Run isolated headless harness case: $caseName" -ExtraArgs @("--keep-stage-root", "--cases", $caseName)
+        Assert-HarnessResults -HarnessJson $caseResult.Json -ExpectedCases @($caseName) -Description "Isolated headless harness case"
+        $TimingRecords.Add((New-TimingRecord -Name "Run isolated headless harness case: $caseName" -Duration $caseResult.Duration -CaseTimings (Get-CaseTimingRecords -HarnessJson $caseResult.Json)))
     }
 
     foreach ($caseName in $EditorProbeCases) {
