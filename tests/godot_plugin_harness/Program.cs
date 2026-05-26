@@ -6,6 +6,7 @@ using System.Text.Json;
 internal static class Program
 {
     private const int HarnessTimeoutMs = 120_000;
+    private const string SelectedCasesEnvVar = "GODOT_PLUGIN_HARNESS_SELECTED_CASES";
     private static readonly string[] LeakWarningMarkers =
     [
         "ObjectDB instances leaked at exit",
@@ -22,6 +23,19 @@ internal static class Program
         var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
         var cleanupStaleProcesses = args.Any(arg => string.Equals(arg, "--cleanup-stale-processes", StringComparison.OrdinalIgnoreCase));
         var onlyCase = Environment.GetEnvironmentVariable("GODOT_PLUGIN_HARNESS_ONLY_CASE");
+        var selectedCases = ParseSelectedCases(GetOptionValue(args, "--cases")
+            ?? Environment.GetEnvironmentVariable(SelectedCasesEnvVar));
+        if (!string.IsNullOrWhiteSpace(onlyCase) && selectedCases.Length > 0)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                success = false,
+                skipped = false,
+                reason = "only_case_and_selected_cases_conflict",
+            }, new JsonSerializerOptions { WriteIndented = true }));
+            return 1;
+        }
+
         var explicitGodotPath = GetOptionValue(args, "--godot-path")
             ?? Environment.GetEnvironmentVariable("GODOT_BIN")
             ?? Environment.GetEnvironmentVariable("GODOT4_BIN");
@@ -52,7 +66,9 @@ internal static class Program
 
         var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stageRoot);
-        using var processRegistry = HarnessProcessRegistry.Create(repoRoot, stageRoot, onlyCase ?? (listCases ? "list-cases" : "all-cases"));
+        var caseLabel = onlyCase ?? (selectedCases.Length > 0 ? $"selected-cases:{selectedCases.Length}" : (listCases ? "list-cases" : "all-cases"));
+        using var processRegistry = HarnessProcessRegistry.Create(repoRoot, stageRoot, caseLabel);
+        var phaseTimings = new List<PhaseTiming>();
         Process? process = null;
         Task<string>? stdoutTask = null;
         Task<string>? stderrTask = null;
@@ -60,8 +76,11 @@ internal static class Program
 
         try
         {
+            var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            copyStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
             if (editorProbeMode)
             {
                 DisableProductionPluginForEditorProbe(stageRoot);
@@ -73,7 +92,10 @@ internal static class Program
             Directory.CreateDirectory(appDataRoot);
             Directory.CreateDirectory(localAppDataRoot);
 
+            var stageBuildStopwatch = Stopwatch.StartNew();
             var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
+            stageBuildStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("build_stage_project", stageBuildStopwatch.ElapsedMilliseconds));
             if (!stageBuild.Succeeded)
             {
                 preserveStageRoot = keepStageRoot;
@@ -88,6 +110,7 @@ internal static class Program
                     stageKept = preserveStageRoot,
                     stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
                     stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                    phaseTimings,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(buildSummary, new JsonSerializerOptions { WriteIndented = true }));
                 return 1;
@@ -107,6 +130,7 @@ internal static class Program
             process.StartInfo.Environment["APPDATA"] = appDataRoot;
             process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
             process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = listCases ? "1" : "0";
+            process.StartInfo.Environment[SelectedCasesEnvVar] = string.Join(",", selectedCases);
             // Pre-set runtime environment variables for server_runtime_settings_projection test.
             // In Godot 4.3 headless mode, OS.has_environment() returns false for env vars
             // created via OS.set_environment() at runtime, even though OS.get_environment() works.
@@ -122,6 +146,7 @@ internal static class Program
             process.StartInfo.ArgumentList.Add("--path");
             process.StartInfo.ArgumentList.Add(stageRoot);
 
+            var godotStopwatch = Stopwatch.StartNew();
             process.Start();
             processRegistry.Register(process, "godot-headless", explicitGodotPath, stageRoot, process.StartInfo.ArgumentList);
             stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -129,6 +154,8 @@ internal static class Program
 
             using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
             await process.WaitForExitAsync(timeoutCts.Token);
+            godotStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("run_godot_process", godotStopwatch.ElapsedMilliseconds));
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
@@ -174,6 +201,7 @@ internal static class Program
                 stageRoot,
                 stageKept = preserveStageRoot,
                 suite,
+                phaseTimings,
                 stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
 
@@ -197,6 +225,7 @@ internal static class Program
                 stageKept = preserveStageRoot,
                 processRegistryPath = processRegistry.EntryPath,
                 suite = TryParseLastJsonLine(stdout),
+                phaseTimings,
                 stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
             };
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
@@ -215,6 +244,20 @@ internal static class Program
             {
             }
         }
+    }
+
+    private static string[] ParseSelectedCases(string? rawCases)
+    {
+        if (string.IsNullOrWhiteSpace(rawCases))
+        {
+            return [];
+        }
+
+        return rawCases
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static string? GetOptionValue(string[] args, string optionName)
@@ -490,6 +533,8 @@ internal static class Program
 
         return property.GetBoolean();
     }
+
+    private sealed record PhaseTiming(string Name, long DurationMs);
 
     private sealed class HarnessProcessRegistry : IDisposable
     {
