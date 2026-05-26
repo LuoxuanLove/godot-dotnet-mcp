@@ -1,4 +1,8 @@
-﻿$ErrorActionPreference = "Stop"
+﻿param(
+    [switch]$SkipVersionPolicy
+)
+
+$ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
@@ -127,10 +131,14 @@ foreach ($pattern in $bannedSourcePatterns) {
     }
 }
 
-try {
-    & (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
-} catch {
-    $errors.Add("Version policy validation failed: $($_.Exception.Message)")
+if ($SkipVersionPolicy) {
+    Write-Host "Version policy validation skipped: caller opted out."
+} else {
+    try {
+        & (Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1") -RepositoryRoot $repoRoot
+    } catch {
+        $errors.Add("Version policy validation failed: $($_.Exception.Message)")
+    }
 }
 
 if ($errors.Count -gt 0) {
