@@ -41,10 +41,25 @@
 
 编写手写摘要时应遵循：
 
-- 以用户可理解的主题组织内容，不复述 commit 列表。
-- 明确说明运行时、编辑器、诊断、CI 或发布流程变化对使用者的影响。
-- 只描述插件自身能力、安装、验证和发布信息。
-- 不记录本地构建产物、临时包、校验和或额外安装路径。
+- 学习已发布 `v1.0.0-pre3` 的叙事结构：带版本和用户主题的二级标题、一段用户可理解的版本主题说明、按用户影响划分的三级章节，以及最后的兼容性 / 安装 / 升级提示。
+- 只描述用户可感知的插件能力、编辑器体验、诊断质量、安装 / 升级影响与兼容性变化，不复述 commit 列表、内部任务列表或 PR 内容。
+- 不把维护流程、开发流程或发布机械变化写入手写摘要，例如 GitHub Actions 触发界面、dry-run 缓存、PR / branch policy、CI 内部拆分、tag 校验实现等；除非这些变化本身直接改变最终用户安装或使用插件的方式。
+- 当前 `plugin.cfg` 版本对应的 `release-notes-v<plugin.cfg version>.md` 必须存在并提到该版本，只有在插件元数据切换到新版本并新增对应 note 后，才清理旧版本源文件。
+- 推荐模板：
+
+```markdown
+## <emoji> Godot .NET MCP vX.Y.Z: <用户可感知主题>
+
+Godot .NET MCP `vX.Y.Z` is a <release type> for <target users>. It improves <user-facing outcome> while keeping <compatibility / installation / tool-surface expectation>.
+
+### <用户影响领域>
+
+Explain what changed, why it matters to plugin users, and what behavior they can expect.
+
+### Compatibility and Upgrade Notes
+
+Explain Godot/.NET compatibility, supported installation paths, upgrade judgment, and any user-visible caveats.
+```
 
 `draft-release-notes` 会在 `dev` 更新后用同一脚本刷新 `next` draft release；正式 `v*` tag 发布时，`publish-plugin` 会用同一脚本生成最终正文。
 
@@ -52,7 +67,7 @@
 
 ## 4. 远程发布流程
 
-1. 从最新 `origin/dev` 创建发布短分支，例如 `release/v1.0.0`。
+1. 从最新 `origin/dev` 创建发布短分支，例如 `release/v1.0.1`。
 2. 完成版本、变更记录、`release-notes-v*.md` 和公开文档收口。
 3. 推送短分支并创建指向 `dev` 的 PR。
 4. 等待 `validate-plugin-harness` 和相关 workflow 检查通过。
