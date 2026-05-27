@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPResourcesService
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -164,7 +165,7 @@ func _read_template_resource(uri: String) -> Dictionary:
 		allowed_extensions = [".tres", ".res"]
 	else:
 		return {"success": false, "error": "Unknown resource URI: %s" % uri}
-	var res_path_result := _normalize_resource_path(relative_path, allowed_extensions)
+	var res_path_result: Dictionary = MCPPathArgumentNormalizerScript.normalize_project_path(relative_path, allowed_extensions, "resource path")
 	if not bool(res_path_result.get("success", false)):
 		return {"success": false, "error": str(res_path_result.get("error", "Invalid resource path"))}
 	var res_path := str(res_path_result.get("path", ""))
@@ -172,32 +173,6 @@ func _read_template_resource(uri: String) -> Dictionary:
 		return {"success": false, "error": "Resource file not found: %s" % res_path}
 	var text := FileAccess.get_file_as_string(res_path)
 	return _build_text_resource(uri, text, _mime_type_for_path(res_path))
-
-
-func _normalize_resource_path(path_value: String, allowed_extensions: Array[String]) -> Dictionary:
-	var path := path_value.strip_edges().uri_decode().replace("\\", "/")
-	if path.is_empty() or path.begins_with("/"):
-		return {"success": false, "error": "Invalid resource path: %s" % path_value}
-	if path.find("://") != -1 and not path.begins_with("res://"):
-		return {"success": false, "error": "Resource path must use res://: %s" % path_value}
-	if path.find(":") != -1 and not path.begins_with("res://"):
-		return {"success": false, "error": "Resource path must be project-relative: %s" % path_value}
-	if path.begins_with("res://"):
-		path = path.substr("res://".length())
-	var parts := path.split("/", false)
-	if parts.is_empty():
-		return {"success": false, "error": "Invalid resource path: %s" % path_value}
-	for part in parts:
-		if part.is_empty() or part == "." or part == "..":
-			return {"success": false, "error": "Resource path traversal is not allowed: %s" % path_value}
-	var normalized := "res://%s" % "/".join(parts)
-	var lower_path := normalized.to_lower()
-	for extension in allowed_extensions:
-		if lower_path.ends_with(extension):
-			return {"success": true, "path": normalized}
-	return {"success": false, "error": "Resource path has an unsupported extension: %s" % normalized}
-
-
 func _mime_type_for_path(path: String) -> String:
 	var lower_path := path.to_lower()
 	if lower_path.ends_with(".gd"):

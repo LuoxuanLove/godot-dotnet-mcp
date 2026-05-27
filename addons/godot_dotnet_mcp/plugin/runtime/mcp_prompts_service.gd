@@ -5,6 +5,7 @@ class_name MCPPromptsService
 const SCENE_BOOTSTRAP_PROMPT := "godot.scene_bootstrap"
 const DEBUG_TRIAGE_PROMPT := "godot.debug_triage"
 const BINDING_FIX_PROMPT := "godot.binding_fix"
+const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 
 var _get_tool_loader_status := Callable()
 
@@ -91,7 +92,7 @@ func _build_debug_triage_prompt(arguments: Dictionary) -> Dictionary:
 
 
 func _build_binding_fix_prompt(arguments: Dictionary) -> Dictionary:
-	var script_path_result := _optional_res_path(arguments, "script_path", [".cs"])
+	var script_path_result := _optional_res_path(arguments, "script_path", [".cs", ".gd"])
 	if not bool(script_path_result.get("success", false)):
 		return script_path_result
 	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
@@ -127,27 +128,7 @@ func _optional_res_path(arguments: Dictionary, key: String, allowed_extensions: 
 	var raw_value = arguments.get(key, "")
 	if not (raw_value is String):
 		return {"success": false, "error": "Path argument '%s' must be a string." % key}
-	var value := str(raw_value).strip_edges().uri_decode().replace("\\", "/")
-	if value.is_empty():
-		return {"success": true, "path": ""}
-	if value.begins_with("/"):
-		return {"success": false, "error": "Invalid path argument '%s': %s" % [key, value]}
-	if value.find("://") != -1 and not value.begins_with("res://"):
-		return {"success": false, "error": "Path argument '%s' must use res://." % key}
-	if value.find(":") != -1 and not value.begins_with("res://"):
-		return {"success": false, "error": "Path argument '%s' must be project-relative." % key}
-	if value.begins_with("res://"):
-		value = value.substr("res://".length())
-	var parts := value.split("/", false)
-	for part in parts:
-		if part.is_empty() or part == "." or part == "..":
-			return {"success": false, "error": "Invalid path argument '%s': %s" % [key, raw_value]}
-	var normalized := "res://%s" % "/".join(parts)
-	var lower_path := normalized.to_lower()
-	for extension in allowed_extensions:
-		if lower_path.ends_with(extension):
-			return {"success": true, "path": normalized}
-	return {"success": false, "error": "Path argument '%s' has an unsupported extension." % key}
+	return MCPPathArgumentNormalizerScript.normalize_project_path(str(raw_value), allowed_extensions, "path argument '%s'" % key, true)
 
 
 func _get_loader_status_safe() -> Dictionary:

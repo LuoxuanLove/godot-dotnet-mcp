@@ -7,6 +7,7 @@ const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtim
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
+const TOOL_CATALOG_URI := "godot-dotnet-mcp://tools/catalog"
 const SCENE_READ_URI := "godot-dotnet-mcp://scene/tests/headless_suite_entry.tscn"
 const SCRIPT_READ_URI := "godot-dotnet-mcp://script/tests/headless_case_support.gd"
 const RESOURCE_READ_URI := "godot-dotnet-mcp://resource/tests/_fixtures/mcp_resources_prompts_sample.tres"
@@ -49,6 +50,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resources/list should expose the project info resource.")
 	if not _has_resource(resources, DIAGNOSTICS_SUMMARY_URI):
 		return _failure("resources/list should expose the diagnostics summary resource.")
+	if not _has_resource(resources, TOOL_CATALOG_URI):
+		return _failure("resources/list should expose the tool catalog resource.")
 
 	var templates_response: Dictionary = await _json_rpc("resources/templates/list", {}, 3)
 	var templates_result = templates_response.get("result", {})
@@ -78,6 +81,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("diagnostics summary resource should include selfDiagnostics.")
 	if not (diagnostics_payload.get("recentLogs", []) is Array):
 		return _failure("diagnostics summary resource should include recentLogs.")
+
+	var tool_catalog := await _read_json_resource(TOOL_CATALOG_URI, 15)
+	if not bool(tool_catalog.get("ok", false)):
+		return _failure(str(tool_catalog.get("error", "tool catalog resource failed")))
+	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
+	if not (tool_catalog_payload.get("tools", []) is Array):
+		return _failure("tool catalog resource should include the MCP tools array.")
 
 	var scene_read := await _read_text_resource(SCENE_READ_URI, 6)
 	if not bool(scene_read.get("ok", false)):
@@ -127,6 +137,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(binding_prompt.get("error", "binding prompt failed")))
 	if str(binding_prompt.get("text", "")).find("bindings_audit") == -1 or str(binding_prompt.get("text", "")).find("res://Main.tscn") == -1:
 		return _failure("binding fix prompt should mention bindings_audit and normalize scene_path.")
+	var gd_binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.gd"}, 16)
+	if not bool(gd_binding_prompt.get("ok", false)):
+		return _failure("binding fix prompt should accept GDScript paths.")
 
 	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": BINDING_FIX_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 14)
 	if not (invalid_prompt_response.get("error", {}) is Dictionary):
