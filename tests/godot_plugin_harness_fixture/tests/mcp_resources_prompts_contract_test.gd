@@ -22,8 +22,6 @@ var _server = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	MCPDebugBufferScript.clear()
-	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value", "", {"password": "hunter2", "safe": "visible"})
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
 
@@ -77,6 +75,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(project_payload.get("projectPath", "")).is_empty():
 		return _failure("project info resource should include the project path.")
 
+	MCPDebugBufferScript.clear()
+	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value", "", {"password": "hunter2", "safe": "visible"})
 	var diagnostics := await _read_json_resource(DIAGNOSTICS_SUMMARY_URI, 5)
 	if not bool(diagnostics.get("ok", false)):
 		return _failure(str(diagnostics.get("error", "diagnostics resource failed")))
