@@ -6,6 +6,10 @@
 
 ## [Unreleased] ([1.1.0])
 
+### Added
+
+- 新增一等 MCP Resources 与 Prompts 支持：客户端可发现项目信息与诊断摘要 resources，通过严格 `res://` 模板读取 scene/script/resource 文件，并获取 `godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 引导 prompts。
+
 ### Documentation
 
 - 新增 `v1.1.0` 手写发布说明源文件，用于下一次稳定版发布；插件元数据已切换到 `1.1.0`，因此移除过时的 `v1.0.1` 源说明。
@@ -15,10 +19,6 @@
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.1.0` 稳定版本。
 
 ## [1.0.1] - 2026-05-26
-
-### Added
-
-- 新增一等 MCP Resources 与 Prompts 支持：客户端可发现项目信息与诊断摘要 resources，通过严格 `res://` 模板读取 scene/script/resource 文件，并获取 `godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 引导 prompts。
 
 ### Fixed
 

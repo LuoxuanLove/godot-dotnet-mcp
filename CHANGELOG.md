@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.1.0])
 
+### Added
+
+- Added first-class MCP Resources and Prompts support: clients can discover project info and diagnostics summary resources, read scene/script/resource files through strict `res://` templates, and retrieve guided `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompts.
+
 ### Documentation
 
 - Added the `v1.1.0` manual release notes source for the next stable release and removed the obsolete `v1.0.1` source note now that plugin metadata targets `1.1.0`.
@@ -15,10 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.1.0` stable version.
 
 ## [1.0.1] - 2026-05-26
-
-### Added
-
-- Added first-class MCP Resources and Prompts support: clients can discover project info and diagnostics summary resources, read scene/script/resource files through strict `res://` templates, and retrieve guided `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompts.
 
 ### Fixed
 
