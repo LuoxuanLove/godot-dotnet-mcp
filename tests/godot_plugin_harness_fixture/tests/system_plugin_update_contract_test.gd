@@ -4,6 +4,8 @@ extends RefCounted
 
 const ImplProjectScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 
+const CURRENT_PLUGIN_VERSION := "1.1.0"
+
 
 class FakeBridge extends RefCounted:
 	func success(data = {}, message: String = "") -> Dictionary:
@@ -22,8 +24,8 @@ class FakePlugin extends Node:
 		return {
 			"success": true,
 			"data": {
-				"source_version": "1.0.1",
-				"server_version": "1.0.1",
+				"source_version": CURRENT_PLUGIN_VERSION,
+				"server_version": CURRENT_PLUGIN_VERSION,
 				"protocol_version": "2025-06-18",
 				"tool_schema_version": "1",
 				"source_fingerprint": "abcdef0123456789abcdef",
@@ -43,7 +45,7 @@ class FakePlugin extends Node:
 				"status": "ready",
 				"source": "custom_branch",
 				"target": {"kind": "branch", "ref": "dev", "commit": "target-sha"},
-				"current": {"source_version": "1.0.1", "source_git_commit": "commit-sha"},
+				"current": {"source_version": CURRENT_PLUGIN_VERSION, "source_git_commit": "commit-sha"},
 				"refs": {"state": "success"},
 				"sync": {"state": "idle"},
 				"lifecycle_reload": {"state": "idle"}
@@ -81,6 +83,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	for required_field in ["source_version", "server_version", "protocol_version", "tool_schema_version", "source_fingerprint", "source_fingerprint_short", "source_git_commit", "lifecycle_reload"]:
 		if not current.has(required_field):
 			return await _cleanup_failure(tree, plugin, "system_plugin_update get_current should expose %s." % required_field)
+	if str(current.get("source_version", "")) != CURRENT_PLUGIN_VERSION or str(current.get("server_version", "")) != CURRENT_PLUGIN_VERSION:
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current should expose current plugin and server versions.")
 
 	var status_result: Dictionary = executor.execute("plugin_update", {"action": "get_status"})
 	if not bool(status_result.get("success", false)):
@@ -89,6 +93,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	for required_status_field in ["source", "target", "current", "refs", "sync", "lifecycle_reload"]:
 		if not status.has(required_status_field):
 			return await _cleanup_failure(tree, plugin, "system_plugin_update get_status should expose %s." % required_status_field)
+	if str((status.get("current", {}) as Dictionary).get("source_version", "")) != CURRENT_PLUGIN_VERSION:
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_status should expose the current plugin version.")
 
 	var set_source_result: Dictionary = executor.execute("plugin_update", {"action": "set_source", "source": "custom_branch", "custom_branch": "feature/update-tool", "release_tag": "v1.0.0"})
 	if not bool(set_source_result.get("success", false)) or plugin.selected_sources.size() != 1:
