@@ -274,7 +274,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("DAP set_breakpoint should propagate failed DAP responses.")
 	if str(failed_set_result.get("data", {}).get("error_type", "")) != "dap_response_failed":
 		return _failure("DAP set_breakpoint failures should include data.error_type=dap_response_failed.")
-	if ProtocolFactsScript.get_error_code("dap_response_failed") != "dap_response_failed":
+	if not ProtocolFactsScript.get_error_codes().has("dap_response_failed"):
 		return _failure("Protocol facts should include the dap_response_failed error code.")
 	request_server.drain_messages()
 	list_result = dap_executor.execute("debugger", {"action": "list_breakpoints"})
@@ -417,7 +417,7 @@ func _expect_unavailable(result: Dictionary, action: String) -> Dictionary:
 		return _failure("DAP %s unavailable result should include structured data: %s" % [action, JSON.stringify(result)])
 	if str((data as Dictionary).get("error_type", "")) != "dap_unavailable":
 		return _failure("DAP %s unavailable result should set data.error_type=dap_unavailable: %s" % [action, JSON.stringify(result)])
-	if ProtocolFactsScript.get_error_code("dap_unavailable") != "dap_unavailable":
+	if not ProtocolFactsScript.get_error_codes().has("dap_unavailable"):
 		return _failure("Protocol facts should include the dap_unavailable error code.")
 	if str((data as Dictionary).get("endpoint", "")).find("127.0.0.1") == -1:
 		return _failure("DAP %s unavailable result should include the endpoint." % action)
