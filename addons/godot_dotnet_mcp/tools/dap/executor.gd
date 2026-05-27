@@ -12,7 +12,7 @@ static var _breakpoints_by_source := {}
 func get_tools() -> Array[Dictionary]:
 	return [{
 		"name": "debugger",
-		"description": "GODOT DAP DEBUGGER: Send Debug Adapter Protocol requests to Godot's built-in DAP endpoint. The built-in endpoint is intended for GDScript debugging; managed C# breakpoints require a .NET debugger.",
+		"description": "GODOT DAP DEBUGGER: Send Debug Adapter Protocol breakpoint, stepping, stack-trace, and output-event requests to Godot's built-in DAP endpoint. The built-in endpoint is intended for GDScript debugging; managed C# breakpoints require a .NET debugger.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -159,20 +159,22 @@ func _connect(args: Dictionary) -> Dictionary:
 	var port := int(args.get("port", DEFAULT_PORT))
 	var peer := StreamPeerTCP.new()
 	if host.is_empty() or port <= 0 or port > 65535:
-		return _error("Invalid DAP endpoint", {"error_type": "dap_unavailable", "endpoint": "%s:%d" % [host, port]})
+		return _error("Invalid DAP endpoint", _dap_unavailable_data(args, "invalid_endpoint"))
 	var err := peer.connect_to_host(host, port)
 	if err != OK:
-		return _error("DAP endpoint unavailable", {"error_type": "dap_unavailable", "endpoint": "%s:%d" % [host, port], "code": err})
+		var connect_data := _dap_unavailable_data(args, "connect_failed")
+		connect_data["code"] = err
+		return _error("DAP endpoint unavailable", connect_data)
 	var started := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - started <= _timeout_ms(args):
 		peer.poll()
 		if peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 			return {"success": true, "peer": peer}
 		if peer.get_status() == StreamPeerTCP.STATUS_ERROR or peer.get_status() == StreamPeerTCP.STATUS_NONE:
-			return _error("DAP endpoint unavailable", {"error_type": "dap_unavailable", "endpoint": "%s:%d" % [host, port]})
+			return _error("DAP endpoint unavailable", _dap_unavailable_data(args, _peer_status_name(peer.get_status())))
 		await _wait_frame()
 	peer.disconnect_from_host()
-	return _error("DAP endpoint unavailable", {"error_type": "dap_unavailable", "endpoint": "%s:%d" % [host, port], "timeout_ms": _timeout_ms(args)})
+	return _error("DAP endpoint unavailable", _dap_unavailable_data(args, "timeout"))
 
 
 func _read_messages(peer: StreamPeerTCP, buffer: PackedByteArray, messages: Array[Dictionary], timeout_ms: int, request_seq: int = -1) -> void:
@@ -186,7 +188,7 @@ func _read_messages(peer: StreamPeerTCP, buffer: PackedByteArray, messages: Arra
 			var packet := peer.get_data(available)
 			if int(packet[0]) == OK and packet[1] is PackedByteArray:
 				buffer.append_array(packet[1] as PackedByteArray)
-				_drain_frames(buffer, messages)
+				buffer = _drain_frames(buffer, messages)
 				if request_seq >= 0 and not _find_response(messages, request_seq).is_empty():
 					return
 				if request_seq < 0 and not messages.is_empty():
@@ -194,22 +196,23 @@ func _read_messages(peer: StreamPeerTCP, buffer: PackedByteArray, messages: Arra
 		await _wait_frame()
 
 
-func _drain_frames(buffer: PackedByteArray, messages: Array[Dictionary]) -> void:
+func _drain_frames(buffer: PackedByteArray, messages: Array[Dictionary]) -> PackedByteArray:
 	while true:
 		var header_end := _find_header_end(buffer)
 		if header_end < 0:
-			return
+			return buffer
 		var content_length := _content_length(buffer.slice(0, header_end).get_string_from_utf8())
 		if content_length < 0:
 			buffer.clear()
-			return
+			return buffer
 		var body_start := header_end + 4
 		if buffer.size() < body_start + content_length:
-			return
+			return buffer
 		var parsed = JSON.parse_string(buffer.slice(body_start, body_start + content_length).get_string_from_utf8())
 		if parsed is Dictionary:
 			messages.append(parsed as Dictionary)
 		buffer = buffer.slice(body_start + content_length)
+	return buffer
 
 
 func _find_header_end(buffer: PackedByteArray) -> int:
@@ -251,6 +254,34 @@ func _status_data() -> Dictionary:
 		"default_port": DEFAULT_PORT,
 		"breakpoint_count": int(_breakpoint_list_data().get("count", 0))
 	}
+
+
+func _dap_unavailable_data(args: Dictionary, transport_status: String) -> Dictionary:
+	var host := str(args.get("host", DEFAULT_HOST)).strip_edges()
+	var port := int(args.get("port", DEFAULT_PORT))
+	return {
+		"error_type": "dap_unavailable",
+		"endpoint": "%s:%d" % [host, port],
+		"host": host,
+		"port": port,
+		"timeout_ms": _timeout_ms(args),
+		"transport_status": transport_status,
+		"protocol": "Debug Adapter Protocol"
+	}
+
+
+func _peer_status_name(status: int) -> String:
+	match status:
+		StreamPeerTCP.STATUS_NONE:
+			return "none"
+		StreamPeerTCP.STATUS_CONNECTING:
+			return "connecting"
+		StreamPeerTCP.STATUS_CONNECTED:
+			return "connected"
+		StreamPeerTCP.STATUS_ERROR:
+			return "error"
+		_:
+			return "unknown"
 
 
 func _source_path(args: Dictionary) -> String:
