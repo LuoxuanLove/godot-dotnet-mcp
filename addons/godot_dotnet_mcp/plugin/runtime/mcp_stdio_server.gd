@@ -66,7 +66,7 @@ func _process(_delta: float) -> void:
 			if chunk.is_empty():
 				break
 			_buffer.append_array(chunk)
-			if _try_parse_frame():
+			if await _try_parse_frame():
 				break
 
 	if _tool_loader != null and _tool_loader.has_method("tick"):
@@ -96,7 +96,7 @@ func _try_parse_frame() -> bool:
 		var body_bytes: PackedByteArray = _buffer.slice(body_start, body_start + content_length)
 		var body: String = body_bytes.get_string_from_utf8()
 		_buffer = _buffer.slice(body_start + content_length)
-		_handle_request(body)
+		await _handle_request(body)
 		return true
 
 	return false
@@ -141,7 +141,7 @@ func _handle_request(body: String) -> void:
 		"tools/list":
 			response = _handle_tools_list(id)
 		"tools/call":
-			response = _handle_tools_call(params, id)
+			response = await _handle_tools_call_async(params, id)
 		"ping":
 			response = _create_json_rpc_response({}, id)
 		_:
@@ -172,6 +172,10 @@ func _handle_tools_list(id) -> Dictionary:
 
 
 func _handle_tools_call(params: Dictionary, id) -> Dictionary:
+	return await _handle_tools_call_async(params, id)
+
+
+func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
 	var tool_name := str(params.get("name", ""))
@@ -188,7 +192,7 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 	if not bool(resolved.get("success", false)):
 		return _create_tool_response({"success": false, "error": "Invalid tool name: %s" % tool_name}, id)
 
-	var result: Dictionary = _tool_loader.execute_tool(str(resolved["category"]), str(resolved["tool"]), arguments)
+	var result: Dictionary = await _tool_loader.execute_tool_async(str(resolved["category"]), str(resolved["tool"]), arguments)
 	return _create_tool_response(result, id)
 
 

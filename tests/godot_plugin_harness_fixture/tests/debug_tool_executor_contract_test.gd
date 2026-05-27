@@ -10,8 +10,8 @@ var _created_plugin_bridge_fixture := false
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/debug_tools.gd"):
-		return _failure("debug_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if not ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/debug_tools.gd"):
+		return _failure("debug_tools.gd compatibility entry should remain loadable for existing references.")
 
 	var executor = DebugExecutorScript.new()
 	_prepare_temp_root()
@@ -33,8 +33,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 8:
-		return _failure("Debug executor should expose 8 tool definitions after the split.")
+	if tool_defs.size() != 9:
+		return _failure("Debug executor should expose 9 tool definitions after the split.")
 
 	var expected_names := ["log_write", "log_buffer", "runtime_bridge", "dotnet", "performance", "profiler", "editor_log", "class_db"]
 	var actual_names: Array[String] = []

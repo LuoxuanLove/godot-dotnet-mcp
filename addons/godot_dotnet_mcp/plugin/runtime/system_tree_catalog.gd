@@ -1,6 +1,5 @@
 @tool
 extends RefCounted
-class_name SystemTreeCatalog
 
 const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_help": [],
@@ -39,6 +38,9 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "runtime_step", "actions": ["step", "capture", "input"]},
 		{"tool": "runtime_capture", "actions": []},
 		{"tool": "runtime_input", "actions": []}
+	],
+	"system_dap_debugger": [
+		{"tool": "dap_debugger", "actions": ["status", "set_breakpoint", "remove_breakpoint", "list_breakpoints", "pause", "continue", "step_over", "stack_trace", "output"]}
 	],
 	"system_project_configure": [
 		{"tool": "project_info",     "actions": ["get_settings"]},

@@ -53,13 +53,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if stdio_service != _tool_loader.get_gdscript_lsp_diagnostics_service():
 		return _failure("Stdio server should expose the exact diagnostics service instance owned by the injected loader.")
 
+	var unavailable_port := _pick_free_port(26706)
+	if unavailable_port < 0:
+		return _failure("Could not reserve an unavailable DAP port for stdio dispatch testing.")
+	var dap_response: Dictionary = await _stdio_server.call("_handle_tools_call", {
+		"name": "system_dap_debugger",
+		"arguments": {
+			"action": "pause",
+			"host": "127.0.0.1",
+			"port": unavailable_port,
+			"thread_id": 1,
+			"timeout_ms": 180
+		}
+	}, 99)
+	var dap_check := _expect_stdio_dap_unavailable(dap_response)
+	if not bool(dap_check.get("success", false)):
+		return dap_check
+
 	return {
 		"name": "lsp_service_access_contracts",
 		"success": true,
 		"error": "",
 		"details": {
 			"http_loader_has_service": http_service != null,
-			"stdio_loader_has_service": stdio_service != null
+			"stdio_loader_has_service": stdio_service != null,
+			"stdio_dap_port": unavailable_port
 		}
 	}
 
@@ -89,3 +107,36 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _expect_stdio_dap_unavailable(response: Dictionary) -> Dictionary:
+	var result = response.get("result", {})
+	if not (result is Dictionary):
+		return _failure("Stdio DAP response should include a JSON-RPC result.")
+	var content = (result as Dictionary).get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return _failure("Stdio DAP response should include text content.")
+	var payload_text := str(((content as Array)[0] as Dictionary).get("text", ""))
+	var parsed = JSON.parse_string(payload_text)
+	if not (parsed is Dictionary):
+		return _failure("Stdio DAP response text should contain a JSON object.")
+	var parsed_dict: Dictionary = parsed
+	if bool(parsed_dict.get("success", true)):
+		return _failure("Stdio DAP pause should return a structured unavailable result without a listening endpoint.")
+	var data = parsed_dict.get("data", {})
+	if not (data is Dictionary):
+		return _failure("Stdio DAP unavailable result should include structured data.")
+	if str((data as Dictionary).get("error_type", "")) == "dap_async_required":
+		return _failure("Stdio DAP tools/call should use async tool execution, not return dap_async_required.")
+	if str((data as Dictionary).get("error_type", "")) != "dap_unavailable":
+		return _failure("Stdio DAP unavailable result should set data.error_type=dap_unavailable: %s" % payload_text)
+	return {"success": true}
+
+
+func _pick_free_port(start_port: int) -> int:
+	for port in range(start_port, start_port + 40):
+		var probe := TCPServer.new()
+		if probe.listen(port, "127.0.0.1") == OK:
+			probe.stop()
+			return port
+	return -1

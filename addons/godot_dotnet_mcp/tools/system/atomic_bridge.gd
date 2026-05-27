@@ -24,6 +24,7 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"editor": "res://addons/godot_dotnet_mcp/tools/editor/executor.gd",
 	"resource": "res://addons/godot_dotnet_mcp/tools/resource/executor.gd",
 	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
+	"dap": "res://addons/godot_dotnet_mcp/tools/dap/executor.gd",
 	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd",
 	"runtime": "res://addons/godot_dotnet_mcp/tools/runtime/executor.gd"
 }
