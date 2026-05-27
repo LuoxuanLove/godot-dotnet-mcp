@@ -76,7 +76,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project info resource should include the project path.")
 
 	MCPDebugBufferScript.clear()
-	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value", "", {"password": "hunter2", "safe": "visible"})
+	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value Authorization: Bearer top-secret-bearer", "", {"password": "hunter2", "safe": "visible"})
 	var diagnostics := await _read_json_resource(DIAGNOSTICS_SUMMARY_URI, 5)
 	if not bool(diagnostics.get("ok", false)):
 		return _failure(str(diagnostics.get("error", "diagnostics resource failed")))
@@ -86,7 +86,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (diagnostics_payload.get("recentLogs", []) is Array):
 		return _failure("diagnostics summary resource should include recentLogs.")
 	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
-	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2"):
+	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2") or diagnostics_text.contains("top-secret-bearer"):
 		return _failure("diagnostics summary resource should redact sensitive log content.")
 	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("[redacted]"):
 		return _failure("diagnostics summary resource should preserve safe log metadata while redacting sensitive fields.")

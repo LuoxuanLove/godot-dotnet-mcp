@@ -234,10 +234,15 @@ func _redact_after_marker(text: String, marker: String) -> String:
 		if marker_index == -1:
 			return result
 		var value_start := marker_index + marker.length()
+		while value_start < result.length():
+			var start_ch := result.substr(value_start, 1)
+			if start_ch != " " and start_ch != "\t":
+				break
+			value_start += 1
 		var value_end := value_start
 		while value_end < result.length():
 			var ch := result.substr(value_end, 1)
-			if ch == " " or ch == "\t" or ch == "\n" or ch == "\r" or ch == ";" or ch == ",":
+			if ch == "\n" or ch == "\r" or ch == ";" or ch == ",":
 				break
 			value_end += 1
 		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
