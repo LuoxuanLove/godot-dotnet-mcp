@@ -329,6 +329,7 @@ $RequiredCases = @(
     "system_runtime_impl_contracts"
     "http_server_listen_diagnostics_contracts"
     "runtime_command_service_contracts"
+    "dap_debugger_contracts"
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
     "tool_manifest_contracts"
