@@ -93,6 +93,8 @@ static func _default_facts() -> Dictionary:
 		"server_name": "godot-dotnet-mcp",
 		"server_version": "1.1.0",
 		"error_codes": {
-			"bridge_version_mismatch": "bridge_version_mismatch"
+			"bridge_version_mismatch": "bridge_version_mismatch",
+			"dap_unavailable": "dap_unavailable",
+			"dap_response_failed": "dap_response_failed"
 		}
 	}
