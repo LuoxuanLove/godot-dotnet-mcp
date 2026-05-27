@@ -42,10 +42,11 @@
 
 编写手写摘要时应遵循：
 
-- 学习已发布 `v1.0.0-pre3` 的叙事结构：带版本和用户主题的二级标题、一段用户可理解的版本主题说明、按用户影响划分的三级章节，以及最后的兼容性 / 安装 / 升级提示。
+- 学习已发布 `v1.0.1` 的 emoji 叙事结构：带 emoji、版本和用户主题的二级标题，一段用户可理解的版本主题说明，按用户影响划分且每项都带 emoji 的三级章节，以及最后带 emoji 的兼容性 / 安装 / 升级提示。
 - 只描述用户可感知的插件能力、编辑器体验、诊断质量、安装 / 升级影响与兼容性变化，不复述 commit 列表、内部任务列表或 PR 内容。
 - 不把维护流程、开发流程或发布机械变化写入手写摘要，例如 GitHub Actions 触发界面、dry-run 缓存、PR / branch policy、CI 内部拆分、tag 校验实现等；除非这些变化本身直接改变最终用户安装或使用插件的方式。
 - 当前 `plugin.cfg` 版本对应的 `release-notes-v<plugin.cfg version>.md` 必须存在并提到该版本，只有在插件元数据切换到新版本并新增对应 note 后，才清理旧版本源文件。
+- 版本刚切换但尚无实际开发内容时，先创建可后续填充的初始空模板；模板只能说明版本线已初始化，正式发布前将按相对上一版本的实际用户可见变更补全，不得提前编造功能、修复或维护流程。
 - 推荐模板：
 
 ```markdown
@@ -53,13 +54,33 @@
 
 Godot .NET MCP `vX.Y.Z` is a <release type> for <target users>. It improves <user-facing outcome> while keeping <compatibility / installation / tool-surface expectation>.
 
-### <用户影响领域>
+### <emoji> <用户影响领域>
 
 Explain what changed, why it matters to plugin users, and what behavior they can expect.
 
-### Compatibility and Upgrade Notes
+### ✅ Compatibility and Upgrade Notes
 
 Explain Godot/.NET compatibility, supported installation paths, upgrade judgment, and any user-visible caveats.
+```
+
+版本刚切换后的初始空模板：
+
+```markdown
+## 🧩 Godot .NET MCP vX.Y.Z: Release Theme Pending
+
+Godot .NET MCP `vX.Y.Z` has been initialized as the next release line. Before the final release, replace this placeholder with the actual user-visible changes shipped since the previous release.
+
+### ✨ Highlights To Be Filled
+
+Add user-facing capabilities here once they exist.
+
+### 🔧 Fixes To Be Filled
+
+Add user-facing fixes here once they exist.
+
+### ✅ Compatibility and Upgrade Notes
+
+Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment, and any user-visible caveats before release.
 ```
 
 `draft-release-notes` 会在 `dev` 更新后用同一脚本刷新 `next` draft release；正式 `v*` tag 发布时，`publish-plugin` 会用同一脚本生成最终正文。
