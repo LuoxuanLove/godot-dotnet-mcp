@@ -4,6 +4,8 @@ extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -20,6 +22,8 @@ var _server = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	MCPDebugBufferScript.clear()
+	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value", "", {"password": "hunter2", "safe": "visible"})
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
 
@@ -81,6 +85,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("diagnostics summary resource should include selfDiagnostics.")
 	if not (diagnostics_payload.get("recentLogs", []) is Array):
 		return _failure("diagnostics summary resource should include recentLogs.")
+	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
+	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2"):
+		return _failure("diagnostics summary resource should redact sensitive log content.")
+	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("[redacted]"):
+		return _failure("diagnostics summary resource should preserve safe log metadata while redacting sensitive fields.")
 
 	var tool_catalog := await _read_json_resource(TOOL_CATALOG_URI, 15)
 	if not bool(tool_catalog.get("ok", false)):
@@ -108,7 +117,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resource template resource should read resource text.")
 
 	var traversal_response: Dictionary = await _json_rpc("resources/read", {"uri": TRAVERSAL_URI}, 9)
-	if not (traversal_response.get("error", {}) is Dictionary):
+	if not (traversal_response.get("error", null) is Dictionary):
 		return _failure("resources/read should reject traversal attempts with a JSON-RPC error.")
 
 	var prompts_response: Dictionary = await _json_rpc("prompts/list", {}, 10)
@@ -142,8 +151,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("binding fix prompt should accept GDScript paths.")
 
 	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": BINDING_FIX_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 14)
-	if not (invalid_prompt_response.get("error", {}) is Dictionary):
+	if not (invalid_prompt_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject invalid binding_fix path arguments.")
+	var stdio_server = StdioServerScript.new()
+	var invalid_stdio_params_response: Dictionary = stdio_server._handle_resources_read([], 17)
+	stdio_server.free()
+	if int((invalid_stdio_params_response.get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio resources/read should reject non-object params with -32602.")
 
 	return {
 		"name": "mcp_resources_prompts_contracts",

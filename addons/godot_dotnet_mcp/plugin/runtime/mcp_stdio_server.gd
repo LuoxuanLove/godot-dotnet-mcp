@@ -124,11 +124,12 @@ func _handle_request(body: String) -> void:
 	var request_dict: Dictionary = request
 	var method: String = str(request_dict.get("method", ""))
 	var params: Variant = request_dict.get("params", {})
+	var signal_params: Dictionary = params if params is Dictionary else {}
 	var has_id: bool = request_dict.has("id")
 	var id: Variant = request_dict.get("id")
 
 	_log("Method: %s" % method, "debug")
-	request_received.emit(method, params)
+	request_received.emit(method, signal_params)
 
 	# Notifications (no id) get no response
 	if not has_id:
@@ -214,29 +215,39 @@ func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 	return _create_tool_response(result, id)
 
 
-func _handle_resources_list(params: Dictionary, id) -> Dictionary:
+func _handle_resources_list(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	_ensure_resources_prompts_services()
 	return _create_json_rpc_response(_resources_service.build_resources_list_result(params), id)
 
 
-func _handle_resources_templates_list(params: Dictionary, id) -> Dictionary:
+func _handle_resources_templates_list(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	_ensure_resources_prompts_services()
 	return _create_json_rpc_response(_resources_service.build_resource_templates_list_result(params), id)
 
 
-func _handle_resources_read(params: Dictionary, id) -> Dictionary:
+func _handle_resources_read(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	_ensure_resources_prompts_services()
 	var result: Dictionary = _resources_service.build_resources_read_result(params)
 	if not bool(result.get("success", true)):
 		return _create_json_rpc_error(-32602, str(result.get("error", "Resource not found")), id)
 	return _create_json_rpc_response(result, id)
 
-func _handle_prompts_list(params: Dictionary, id) -> Dictionary:
+func _handle_prompts_list(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	_ensure_resources_prompts_services()
 	return _create_json_rpc_response(_prompts_service.build_prompts_list_result(params), id)
 
 
-func _handle_prompts_get(params: Dictionary, id) -> Dictionary:
+func _handle_prompts_get(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	_ensure_resources_prompts_services()
 	var result: Dictionary = _prompts_service.build_prompts_get_result(params)
 	if not bool(result.get("success", true)):

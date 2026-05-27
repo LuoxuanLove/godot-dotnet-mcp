@@ -14,6 +14,8 @@ const TOOL_CATALOG_URI := "godot-dotnet-mcp://tools/catalog"
 const SCENE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
 const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
+const REDACTED_VALUE := "[redacted]"
+const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -123,7 +125,7 @@ func _build_project_info_payload() -> Dictionary:
 func _build_diagnostics_summary_payload() -> Dictionary:
 	return {
 		"selfDiagnostics": PluginSelfDiagnosticStoreScript.get_health_snapshot({}, 3),
-		"recentLogs": MCPDebugBufferScript.get_recent(20),
+		"recentLogs": _redact_sensitive_value(MCPDebugBufferScript.get_recent(20)),
 		"toolLoaderStatus": _get_loader_status_safe()
 	}
 
@@ -185,6 +187,62 @@ func _mime_type_for_path(path: String) -> String:
 		return "text/x-godot-resource"
 	return "text/plain"
 
+
+func _redact_sensitive_value(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var redacted := {}
+			for key in value:
+				var key_text := str(key)
+				if _is_sensitive_key(key_text):
+					redacted[key_text] = REDACTED_VALUE
+				else:
+					redacted[key_text] = _redact_sensitive_value(value[key])
+			return redacted
+		TYPE_ARRAY:
+			var redacted := []
+			for item in value:
+				redacted.append(_redact_sensitive_value(item))
+			return redacted
+		TYPE_STRING, TYPE_STRING_NAME:
+			return _redact_sensitive_text(str(value))
+		_:
+			return value
+
+
+func _is_sensitive_key(key: String) -> bool:
+	var normalized := key.to_lower()
+	for marker in SENSITIVE_KEY_PARTS:
+		if normalized.find(str(marker)) != -1:
+			return true
+	return false
+
+
+func _redact_sensitive_text(text: String) -> String:
+	var redacted := text
+	for marker in ["token=", "password=", "secret=", "api_key=", "apikey=", "authorization:", "authorization="]:
+		redacted = _redact_after_marker(redacted, marker)
+	return redacted
+
+
+func _redact_after_marker(text: String, marker: String) -> String:
+	var search_from := 0
+	var result := text
+	while true:
+		var lower_result := result.to_lower()
+		var marker_index := lower_result.find(marker, search_from)
+		if marker_index == -1:
+			return result
+		var value_start := marker_index + marker.length()
+		var value_end := value_start
+		while value_end < result.length():
+			var ch := result.substr(value_end, 1)
+			if ch == " " or ch == "\t" or ch == "\n" or ch == "\r" or ch == ";" or ch == ",":
+				break
+			value_end += 1
+		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
+		search_from = value_start + REDACTED_VALUE.length()
+	return result
 
 func _get_loader():
 	if _get_tool_loader.is_valid():
