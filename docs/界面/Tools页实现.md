@@ -85,9 +85,9 @@ root
   │   │   │   ├─ runtime_step
   │   │   │   ├─ runtime_capture
   │   │   │   └─ runtime_input
-	│   │   ├─ system_dap_debugger
-	│   │   │   ├─ status / set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output
-	│   │   │   └─ dap_debugger
+  │   │   ├─ system_dap_debugger
+  │   │   │   ├─ status / set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output
+  │   │   │   └─ dap_debugger
   │   │   └─ ...
   │   └─ ... internal atomic categories
   └─ user
