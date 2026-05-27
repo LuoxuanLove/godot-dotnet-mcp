@@ -750,6 +750,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_control_desc": "Inspect or arm the running project's debugger session control.",
 	"tool_system_runtime_step_name": "Runtime Step",
 	"tool_system_runtime_step_desc": "Unified runtime automation entry: run step loops, capture frames, or send scripted input through action=step|capture|input.",
+	"tool_system_dap_debugger_name": "DAP Debugger",
+	"tool_system_dap_debugger_desc": "Connect to Godot's built-in Debug Adapter Protocol endpoint and send launch, attach, breakpoint, and custom DAP requests.",
 	"tool_runtime_control_name": "Control",
 	"tool_runtime_control_desc": "Internal runtime control: inspect or arm the running project's debugger session. Supports status, enable and disable.",
 	"tool_runtime_capture_name": "Capture",
@@ -917,6 +919,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_performance_name": "Performance",
 	"tool_debug_profiler_name": "Profiler",
 	"tool_debug_editor_log_name": "Editor Log Atomic",
+	"tool_debug_dap_debugger_name": "DAP Debugger",
 	"tool_debug_class_db_name": "Class DB",
 	"tool_debug_log_desc": "Print debug messages and errors",
 	"tool_debug_log_write_desc": "Print info, warning, error and rich-text messages",
@@ -926,7 +929,10 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_performance_desc": "Monitor performance metrics",
 	"tool_debug_profiler_desc": "Profile code execution",
 	"tool_debug_editor_log_desc": "Read, filter, or clear the editor Output panel.",
+	"tool_debug_dap_debugger_desc": "Connect to Godot's built-in DAP endpoint and exchange framed Debug Adapter Protocol requests.",
 	"tool_debug_class_db_desc": "Query Godot's class database",
+	"tool_dap_debugger_name": "Debugger",
+	"tool_dap_debugger_desc": "Send Godot Debug Adapter Protocol breakpoint, stepping, stack-trace, and output-event requests.",
 
 	# Filesystem tools
 	"tool_filesystem_directory_name": "Directory",
