@@ -52,7 +52,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. For large projects, pass summary=true for a compact payload or sections=[summary, project, files, runtime, capabilities, health] to read only selected sections. Default behavior returns the full flat payload. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -63,6 +63,15 @@ func get_tools() -> Array[Dictionary]:
 					"include_runtime_health": {
 						"type": "boolean",
 						"description": "Include lightweight plugin runtime health summary, including self_diagnostics, lsp_diagnostics, and tool_loader health (default: false)"
+					},
+					"summary": {
+						"type": "boolean",
+						"description": "Return a compact project state summary with key counts, statuses, runtime capabilities, and available section keys instead of the full payload (default: false)"
+					},
+					"sections": {
+						"type": "array",
+						"items": {"type": "string", "enum": ["summary", "project", "files", "runtime", "capabilities", "health"]},
+						"description": "Optional section keys to return instead of the full payload. Use summary first, then request project/files/runtime/capabilities/health as needed. The health section is included when requested even if include_runtime_health is false."
 					}
 				}
 			}
@@ -1167,6 +1176,22 @@ func _is_runtime_running(summary: Dictionary) -> bool:
 # --- tool implementations ---
 
 func _execute_project_state(args: Dictionary) -> Dictionary:
+	var sections_result := _normalize_project_state_sections(args)
+	if not bool(sections_result.get("success", true)):
+		return bridge.error(str(sections_result.get("error", "Invalid project_state sections")))
+	var full_result := _execute_project_state_full(args)
+	if not bool(full_result.get("success", false)):
+		return full_result
+	var full_data: Dictionary = bridge.extract_data(full_result)
+	var selected_sections: Array = sections_result.get("sections", [])
+	if not selected_sections.is_empty():
+		return bridge.success(_build_project_state_sections_payload(full_data, selected_sections))
+	if bool(args.get("summary", false)):
+		return bridge.success(_build_project_state_compact_summary(full_data))
+	return full_result
+
+
+func _execute_project_state_full(args: Dictionary) -> Dictionary:
 	var error_limit: int = max(int(args.get("error_limit", 10)), 0)
 	var include_runtime_health := bool(args.get("include_runtime_health", false))
 	MCPDebugBuffer.record("debug", "system", "project_state: collecting stats (error_limit=%d)" % error_limit)
@@ -1244,6 +1269,142 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 			"capabilities": runtime_capabilities
 		}
 	return bridge.success(result_data)
+
+
+func _get_project_state_available_sections() -> Array[String]:
+	return ["summary", "project", "files", "runtime", "capabilities", "health"]
+
+
+func _normalize_project_state_sections(args: Dictionary) -> Dictionary:
+	var requested = args.get("sections", [])
+	if requested == null:
+		return {"success": true, "sections": []}
+	if not (requested is Array):
+		return {"success": false, "error": "project_state sections must be an array. Valid sections: %s" % ", ".join(_get_project_state_available_sections())}
+	var available := _get_project_state_available_sections()
+	var sections: Array[String] = []
+	for section in requested:
+		var section_key := str(section).strip_edges()
+		if section_key.is_empty():
+			continue
+		if not available.has(section_key):
+			return {"success": false, "error": "Unknown project_state section: %s. Valid sections: %s" % [section_key, ", ".join(available)]}
+		if not sections.has(section_key):
+			sections.append(section_key)
+	return {"success": true, "sections": sections}
+
+
+func _build_project_state_compact_summary(full_data: Dictionary) -> Dictionary:
+	return {
+		"summary": true,
+		"available_sections": _get_project_state_available_sections(),
+		"project_name": str(full_data.get("project_name", "")),
+		"project_path": str(full_data.get("project_path", "")),
+		"godot_version_string": str(full_data.get("godot_version_string", "")),
+		"main_scene": str(full_data.get("main_scene", "")),
+		"main_scene_exists": bool(full_data.get("main_scene_exists", false)),
+		"current_scene": str(full_data.get("current_scene", "")),
+		"scripts": int(full_data.get("scripts", 0)),
+		"gd_scripts": int(full_data.get("gd_scripts", 0)),
+		"cs_scripts": int(full_data.get("cs_scripts", 0)),
+		"scenes": int(full_data.get("scenes", 0)),
+		"resources": int(full_data.get("resources", 0)),
+		"file_enumeration_status": str(full_data.get("file_enumeration_status", "ok")),
+		"valid_file_enumeration": bool(full_data.get("valid_file_enumeration", true)),
+		"has_dotnet": bool(full_data.get("has_dotnet", false)),
+		"dotnet_project_count": int(full_data.get("dotnet_project_count", 0)),
+		"compile_error_count": int(full_data.get("compile_error_count", 0)),
+		"running": bool(full_data.get("running", false)),
+		"runtime_bridge_status": str(full_data.get("runtime_bridge_status", "unknown")),
+		"session_count": int(full_data.get("session_count", 0)),
+		"error_count": int(full_data.get("error_count", 0)),
+		"warning_count": int(full_data.get("warning_count", 0)),
+		"runtime_capabilities": full_data.get("runtime_capabilities", {})
+	}
+
+
+func _build_project_state_sections_payload(full_data: Dictionary, selected_sections: Array) -> Dictionary:
+	var sections := {}
+	for section in selected_sections:
+		var section_key := str(section)
+		match section_key:
+			"summary":
+				sections[section_key] = _build_project_state_compact_summary(full_data)
+			"project":
+				sections[section_key] = _build_project_state_project_section(full_data)
+			"files":
+				sections[section_key] = _build_project_state_files_section(full_data)
+			"runtime":
+				sections[section_key] = _build_project_state_runtime_section(full_data)
+			"capabilities":
+				sections[section_key] = full_data.get("runtime_capabilities", {})
+			"health":
+				sections[section_key] = _build_project_state_health_section(full_data)
+	return {
+		"available_sections": _get_project_state_available_sections(),
+		"requested_sections": selected_sections.duplicate(),
+		"sections": sections
+	}
+
+
+func _build_project_state_project_section(full_data: Dictionary) -> Dictionary:
+	return {
+		"project_name": str(full_data.get("project_name", "")),
+		"project_description": str(full_data.get("project_description", "")),
+		"project_version": str(full_data.get("project_version", "")),
+		"project_path": str(full_data.get("project_path", "")),
+		"godot_version": str(full_data.get("godot_version", "")),
+		"godot_version_string": str(full_data.get("godot_version_string", "")),
+		"main_scene": str(full_data.get("main_scene", "")),
+		"main_scene_exists": bool(full_data.get("main_scene_exists", false)),
+		"current_scene": str(full_data.get("current_scene", "")),
+		"has_dotnet": bool(full_data.get("has_dotnet", false)),
+		"dotnet_project_count": int(full_data.get("dotnet_project_count", 0)),
+		"dotnet_projects": full_data.get("dotnet_projects", [])
+	}
+
+
+func _build_project_state_files_section(full_data: Dictionary) -> Dictionary:
+	return {
+		"scripts": int(full_data.get("scripts", 0)),
+		"gd_scripts": int(full_data.get("gd_scripts", 0)),
+		"cs_scripts": int(full_data.get("cs_scripts", 0)),
+		"scenes": int(full_data.get("scenes", 0)),
+		"resources": int(full_data.get("resources", 0)),
+		"scene_paths": full_data.get("scene_paths", []),
+		"script_paths": full_data.get("script_paths", []),
+		"resource_paths": full_data.get("resource_paths", []),
+		"file_enumeration_status": str(full_data.get("file_enumeration_status", "ok")),
+		"valid_file_enumeration": bool(full_data.get("valid_file_enumeration", true)),
+		"file_enumeration": full_data.get("file_enumeration", {}),
+		"enumeration_diagnostics": full_data.get("enumeration_diagnostics", [])
+	}
+
+
+func _build_project_state_runtime_section(full_data: Dictionary) -> Dictionary:
+	return {
+		"running": bool(full_data.get("running", false)),
+		"runtime_bridge_status": str(full_data.get("runtime_bridge_status", "unknown")),
+		"session_count": int(full_data.get("session_count", 0)),
+		"compile_error_count": int(full_data.get("compile_error_count", 0)),
+		"recent_errors": full_data.get("recent_errors", []),
+		"recent_warnings": full_data.get("recent_warnings", []),
+		"error_count": int(full_data.get("error_count", 0)),
+		"warning_count": int(full_data.get("warning_count", 0))
+	}
+
+
+func _build_project_state_health_section(full_data: Dictionary) -> Dictionary:
+	var health = full_data.get("runtime_health", {})
+	if health is Dictionary and not (health as Dictionary).is_empty():
+		return (health as Dictionary).duplicate(true)
+	return {
+		"self_diagnostics": _get_self_diagnostics_health_summary(),
+		"lsp_diagnostics": _get_lsp_runtime_health_summary(),
+		"tool_loader": _get_tool_loader_health_summary(),
+		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
+		"capabilities": full_data.get("runtime_capabilities", {})
+	}
 
 
 func _execute_editor_state(_args: Dictionary) -> Dictionary:
