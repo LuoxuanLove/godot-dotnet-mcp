@@ -274,7 +274,7 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 
 
 func _split_full_name(full_name: String) -> Dictionary:
-	var categories := ["plugin_developer", "plugin_evolution", "plugin_runtime", "filesystem", "animation", "navigation", "material", "resource", "particle", "geometry", "lighting", "tilemap", "project", "editor", "runtime", "system", "script", "signal", "shader", "debug", "scene", "group", "audio", "node", "user", "ui"]
+	var categories := ["plugin_developer", "plugin_evolution", "plugin_runtime", "filesystem", "animation", "navigation", "material", "resource", "particle", "geometry", "lighting", "tilemap", "project", "editor", "runtime", "system", "script", "signal", "shader", "debug", "scene", "group", "audio", "node", "user", "dap", "ui"]
 	for category in categories:
 		if full_name.begins_with("%s_" % category):
 			return {"category": category, "tool": full_name.trim_prefix("%s_" % category)}
