@@ -400,6 +400,56 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_capabilities should explicitly report that no-focus runtime launch is unsupported.")
 	if str((runtime_capabilities as Dictionary).get("foreground_window_policy", "")) != "requires_foreground_window":
 		return _failure("runtime_capabilities should expose the foreground-window policy.")
+	if not ((project_state_data as Dictionary).get("scene_paths", []) is Array):
+		return _failure("project_state default payload should preserve scene_paths for backward compatibility.")
+
+	var project_state_summary: Dictionary = executor.execute("project_state", {"summary": true, "include_runtime_health": true})
+	if not bool(project_state_summary.get("success", false)):
+		return _failure("project_state summary mode should succeed.")
+	var summary_data: Dictionary = project_state_summary.get("data", {})
+	if not bool(summary_data.get("summary", false)):
+		return _failure("project_state summary mode should mark the payload as a summary.")
+	if summary_data.has("scene_paths") or summary_data.has("script_paths") or summary_data.has("resource_paths"):
+		return _failure("project_state summary mode should omit large path arrays.")
+	if not (summary_data.get("available_sections", []) is Array) or not (summary_data.get("available_sections", []) as Array).has("files"):
+		return _failure("project_state summary mode should advertise available sections.")
+	if int(summary_data.get("compile_error_count", -1)) != 1 or int(summary_data.get("scripts", 0)) < 2:
+		return _failure("project_state summary mode should preserve key project counts.")
+
+	var project_state_sections: Dictionary = executor.execute("project_state", {"sections": ["summary", "files", "health"]})
+	if not bool(project_state_sections.get("success", false)):
+		return _failure("project_state sections mode should succeed.")
+	var sections_data: Dictionary = project_state_sections.get("data", {})
+	var sections = sections_data.get("sections", {})
+	if not (sections is Dictionary):
+		return _failure("project_state sections mode should return a sections dictionary.")
+	var section_dict: Dictionary = sections
+	if section_dict.keys().size() != 3 or not section_dict.has("summary") or not section_dict.has("files") or not section_dict.has("health"):
+		return _failure("project_state sections mode should return only requested sections.")
+	if not ((section_dict.get("files", {}) as Dictionary).get("scene_paths", []) is Array):
+		return _failure("project_state files section should expose path arrays on demand.")
+	if not ((section_dict.get("health", {}) as Dictionary).get("self_diagnostics", {}) is Dictionary):
+		return _failure("project_state health section should include runtime health even without include_runtime_health.")
+
+	var invalid_project_state_section: Dictionary = executor.execute("project_state", {"sections": ["summary", "unknown"]})
+	if bool(invalid_project_state_section.get("success", false)):
+		return _failure("project_state sections mode should reject unknown sections.")
+	if str(invalid_project_state_section.get("message", invalid_project_state_section.get("error", ""))).find("unknown") == -1:
+		return _failure("project_state invalid section response should name the unknown section.")
+	var invalid_project_state_sections_shape: Dictionary = executor.execute("project_state", {"sections": "summary"})
+	if bool(invalid_project_state_sections_shape.get("success", false)):
+		return _failure("project_state sections mode should reject non-array sections arguments.")
+	var empty_project_state_sections: Dictionary = executor.execute("project_state", {"sections": []})
+	if not bool(empty_project_state_sections.get("success", false)):
+		return _failure("project_state empty sections should preserve default full payload behavior.")
+	if not ((empty_project_state_sections.get("data", {}) as Dictionary).get("scene_paths", []) is Array):
+		return _failure("project_state empty sections should return the default full payload.")
+	var summary_with_sections: Dictionary = executor.execute("project_state", {"summary": true, "sections": ["files"]})
+	if not bool(summary_with_sections.get("success", false)):
+		return _failure("project_state summary plus sections should still return requested sections.")
+	var summary_sections_data: Dictionary = summary_with_sections.get("data", {})
+	if summary_sections_data.has("summary") or not ((summary_sections_data.get("sections", {}) as Dictionary).has("files")):
+		return _failure("project_state sections should take precedence over summary=true when both are provided.")
 
 	var empty_executor = SystemProjectExecutorScript.new()
 	empty_executor.bridge = FakeEmptyCollectBridge.new(FakeToolLoader.new())

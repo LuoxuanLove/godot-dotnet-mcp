@@ -146,6 +146,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_project_state should include runtime_health when requested.")
 	if not ((runtime_health as Dictionary).get("self_diagnostics", {}) is Dictionary):
 		return _failure("Tool loader system_project_state runtime_health should include self_diagnostics.")
+	var project_state_summary_result: Dictionary = await _loader.execute_tool_async("system", "project_state", {"summary": true})
+	if not bool(project_state_summary_result.get("success", false)):
+		return _failure("Tool loader should route system_project_state(summary=true) successfully.")
+	var project_state_summary_data = project_state_summary_result.get("data", {})
+	if not (project_state_summary_data is Dictionary) or not bool((project_state_summary_data as Dictionary).get("summary", false)):
+		return _failure("Tool loader system_project_state(summary=true) should return a compact summary payload.")
+	if (project_state_summary_data as Dictionary).has("scene_paths") or (project_state_summary_data as Dictionary).has("script_paths"):
+		return _failure("Tool loader system_project_state(summary=true) should omit large path arrays.")
+	var project_state_sections_result: Dictionary = await _loader.execute_tool_async("system", "project_state", {"sections": ["summary"]})
+	if not bool(project_state_sections_result.get("success", false)):
+		return _failure("Tool loader should route system_project_state sections successfully.")
+	var project_state_sections_data = project_state_sections_result.get("data", {})
+	if not (project_state_sections_data is Dictionary) or not (((project_state_sections_data as Dictionary).get("sections", {}) as Dictionary).has("summary")):
+		return _failure("Tool loader system_project_state sections should return the requested summary section.")
 
 	var help_result: Dictionary = await _loader.execute_tool_async("system", "help", {"include_tools": true})
 	if not bool(help_result.get("success", false)):
