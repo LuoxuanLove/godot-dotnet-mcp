@@ -1,6 +1,6 @@
 {
   "protocol_version": "2025-06-18",
-  "tool_schema_version": "2026-05-03.10",
+  "tool_schema_version": "2026-05-03.11",
   "server_name": "godot-dotnet-mcp",
   "server_version": "1.0.1",
   "error_codes": {
