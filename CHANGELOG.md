@@ -8,18 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and structured `dap_unavailable` responses when no DAP endpoint is reachable.
+- Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and published `dap_unavailable` / `dap_response_failed` error identifiers.
 - Added first-class MCP Resources and Prompts support: clients can discover project info and diagnostics summary resources, read scene/script/resource files through strict `res://` templates, and retrieve guided `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompts.
 - Added compact `system_project_state(summary=true)` and section-based `system_project_state(sections=[...])` reads so large projects can inspect key health, file, runtime, capability, and plugin-health sections without returning the full state payload every time.
 
+### Fixed
+
+- Fixed plugin startup and settings persistence paths so runtime state, settings storage, and core services are initialized before load/save or update callbacks access them.
+- Fixed plugin harness validation so Godot stdout/stderr runtime and parser error markers such as `SCRIPT ERROR:`, `Invalid call.`, and `Parse Error:` fail the run instead of being hidden behind a successful process exit.
+
 ### Documentation
 
-- Added the `v1.1.0` manual release notes source for the next stable release and removed the obsolete `v1.0.1` source note now that plugin metadata targets `1.1.0`.
+- Added the `v1.1.0` manual release notes source for the debugging, resources, project-state, and startup-validation release, and removed the obsolete `v1.0.1` source note after the release line moved forward.
+- Updated README, architecture, runtime-service, tool-system, Tools page, testing, and CI documentation for MCP Resources and Prompts, DAP debugger tools, `system_project_state` compact reads, tool catalog resources, and harness validation behavior.
+- Completed and corrected localized DAP and system tool descriptions across English, Chinese, German, Spanish, French, Japanese, Portuguese, and Russian locale resources, and documented the emoji release-note template plus Documentation/Internal changelog maintenance rules in the release runbook.
 
 ### Internal
 
-- Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.1.0` stable version.
-- Added the DAP `dap_unavailable` and `dap_response_failed` identifiers to protocol facts so structured debugger failures are reflected in the published error-code catalog.
+- Expanded plugin harness and contract coverage for DAP debugger workflows, MCP Resources and Prompts routing, `system_project_state` compact reads, JSON-RPC resource/prompt methods, tool-loader catalog classification, debug executor compatibility, update fixtures, and plugin entrypoint initialization.
+- Added runtime/parser error marker detection to the Godot harness so stdout/stderr diagnostics fail validation even when the Godot process exits successfully.
+- Isolated the Tools tab rendering harness case and updated the plugin-side Roslyn harness path so required validation remains stable while the new protocol and tool-surface coverage grows.
 
 ## [1.0.1] - 2026-05-26
 

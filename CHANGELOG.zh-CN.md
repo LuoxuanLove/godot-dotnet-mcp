@@ -8,18 +8,26 @@
 
 ### Added
 
-- 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并在无法连接 DAP 端点时返回结构化 `dap_unavailable`。
+- 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并公开 `dap_unavailable` / `dap_response_failed` 错误标识。
 - 新增一等 MCP Resources 与 Prompts 支持：客户端可发现项目信息与诊断摘要 resources，通过严格 `res://` 模板读取 scene/script/resource 文件，并获取 `godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 引导 prompts。
 - 新增 `system_project_state(summary=true)` 紧凑摘要和 `system_project_state(sections=[...])` 分段读取，使大型项目可按需读取关键健康、文件、运行时、能力位和插件健康段落，不必每次返回完整状态载荷。
 
+### Fixed
+
+- 修复插件启动与设置持久化路径：运行时状态、设置存储和核心服务会先完成初始化，再被 load/save 或更新回调访问。
+- 修复插件 harness 验证：Godot stdout/stderr 中出现 `SCRIPT ERROR:`、`Invalid call.`、`Parse Error:` 等运行时或解析错误标记时会直接失败，不再被成功的进程退出码掩盖。
+
 ### Documentation
 
-- 新增 `v1.1.0` 手写发布说明源文件，用于下一次稳定版发布；插件元数据已切换到 `1.1.0`，因此移除过时的 `v1.0.1` 源说明。
+- 新增 `v1.1.0` 手写发布说明源文件，用于本次调试、resources、project state 与启动验证版本，并在版本线推进后移除过时的 `v1.0.1` 源说明。
+- 更新 README、架构、运行时服务、工具系统、Tools 页、测试与 CI 文档，覆盖 MCP Resources 与 Prompts、DAP 调试器工具、`system_project_state` 紧凑读取、tool catalog resources 和 harness 验证行为。
+- 补齐并修正英文、中文、德文、西班牙文、法文、日文、葡萄牙文与俄文 locale resources 中的 DAP 与 system 工具说明，并在发布 Runbook 中记录 emoji 发布说明模板和 Documentation/Internal changelog 维护规则。
 
 ### Internal
 
-- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.1.0` 稳定版本。
-- 将 DAP `dap_unavailable` 与 `dap_response_failed` 标识加入协议事实文件，使结构化调试器失败会同步体现在公开错误码目录中。
+- 扩展插件 harness 与契约测试覆盖，涵盖 DAP 调试器流程、MCP Resources 与 Prompts 路由、`system_project_state` 紧凑读取、JSON-RPC resource/prompt 方法、tool-loader catalog 分类、debug executor 兼容性、更新 fixture 和插件入口初始化。
+- 为 Godot harness 增加运行时 / 解析错误标记检测，使 stdout/stderr 诊断即使在 Godot 进程成功退出时也会让验证失败。
+- 隔离 Tools 页渲染 harness 用例，并更新插件侧 Roslyn harness 路径，使新增协议与工具面覆盖扩展后 required validation 仍保持稳定。
 
 ## [1.0.1] - 2026-05-26
 

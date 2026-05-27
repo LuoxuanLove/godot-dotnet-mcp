@@ -18,6 +18,8 @@
 ## 2. 发布前检查
 
 1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`CHANGELOG.md`、`CHANGELOG.zh-CN.md` 和公开文档一致。
+   - Changelog 必须记录目标版本相对上一已发布版本的完整重要变化，不只记录用户可见的 `Added` / `Changed` / `Fixed`。重要的 `Documentation` 与 `Internal` 变化也必须维护到 `CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`，例如 release note 源文件、README / docs / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化。
+   - 纯版本元数据切换本身不写入 changelog，除非它同时改变用户可见兼容性、安装方式或发布验证行为；开发过程中引入后又在同一版本线内修复的内部问题也不作为独立 changelog 条目。
 2. 确认对应版本的 `release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
 3. 确认 `next` draft release 已按正式发布格式刷新，并可作为正式 GitHub Release 正文预览。
 4. 确认 PR 只包含当前发布目标范围，未夹带其它修复或历史未合并提交。
@@ -42,10 +44,11 @@
 
 编写手写摘要时应遵循：
 
-- 学习已发布 `v1.0.0-pre3` 的叙事结构：带版本和用户主题的二级标题、一段用户可理解的版本主题说明、按用户影响划分的三级章节，以及最后的兼容性 / 安装 / 升级提示。
+- 学习已发布 `v1.0.1` 的 emoji 叙事结构：带 emoji、版本和用户主题的二级标题，一段用户可理解的版本主题说明，按用户影响划分且每项都带 emoji 的三级章节，以及最后带 emoji 的兼容性 / 安装 / 升级提示。
 - 只描述用户可感知的插件能力、编辑器体验、诊断质量、安装 / 升级影响与兼容性变化，不复述 commit 列表、内部任务列表或 PR 内容。
 - 不把维护流程、开发流程或发布机械变化写入手写摘要，例如 GitHub Actions 触发界面、dry-run 缓存、PR / branch policy、CI 内部拆分、tag 校验实现等；除非这些变化本身直接改变最终用户安装或使用插件的方式。
 - 当前 `plugin.cfg` 版本对应的 `release-notes-v<plugin.cfg version>.md` 必须存在并提到该版本，只有在插件元数据切换到新版本并新增对应 note 后，才清理旧版本源文件。
+- 版本刚切换但尚无实际开发内容时，先创建可后续填充的初始空模板；模板只能说明版本线已初始化，正式发布前将按相对上一版本的实际用户可见变更补全，不得提前编造功能、修复或维护流程。
 - 推荐模板：
 
 ```markdown
@@ -53,13 +56,33 @@
 
 Godot .NET MCP `vX.Y.Z` is a <release type> for <target users>. It improves <user-facing outcome> while keeping <compatibility / installation / tool-surface expectation>.
 
-### <用户影响领域>
+### <emoji> <用户影响领域>
 
 Explain what changed, why it matters to plugin users, and what behavior they can expect.
 
-### Compatibility and Upgrade Notes
+### ✅ Compatibility and Upgrade Notes
 
 Explain Godot/.NET compatibility, supported installation paths, upgrade judgment, and any user-visible caveats.
+```
+
+版本刚切换后的初始空模板：
+
+```markdown
+## 🧩 Godot .NET MCP vX.Y.Z: Release Theme Pending
+
+Godot .NET MCP `vX.Y.Z` has been initialized as the next release line. Before the final release, replace this placeholder with the actual user-visible changes shipped since the previous release.
+
+### ✨ Highlights To Be Filled
+
+Add user-facing capabilities here once they exist.
+
+### 🔧 Fixes To Be Filled
+
+Add user-facing fixes here once they exist.
+
+### ✅ Compatibility and Upgrade Notes
+
+Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment, and any user-visible caveats before release.
 ```
 
 `draft-release-notes` 会在 `dev` 更新后用同一脚本刷新 `next` draft release；正式 `v*` tag 发布时，`publish-plugin` 会用同一脚本生成最终正文。

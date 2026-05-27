@@ -44,7 +44,7 @@ PR 正文使用简洁模板，只保留便于维护者快速阅读的公开信�
 Agent 在提交或更新 PR 前必须完成以下检查：
 
 - 受影响的 contract tests 已同步表达当前真实契约；旧测试因旧路径或旧语义失败时，应优先修正测试契约，而不是在最终说明中标注为无关失败。
-- `docs/`、`README*`、工具说明、协议事实源和 `CHANGELOG*` 中与本次公开行为相关的内容已同步；无需更新时，PR 回报必须说明原因。
+- `docs/`、`README*`、工具说明、协议事实源和 `CHANGELOG*` 中与本次公开行为相关的内容已同步；`CHANGELOG*` 必须覆盖重要的 `Documentation` 与 `Internal` 变化，例如 release note 源文件、文档 / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化；纯版本元数据切换本身不作为独立条目。无需更新时，PR 回报必须说明原因。
 - Review、Cubic、Codex 或人工复核发现的测试/文档缺口视为阻塞返修项，必须在同一 PR 中处理到 resolved、outdated 或明确由维护者裁决。
 - 验证记录应列出实际运行的目标测试、构建或 harness case；只读检查通过不能替代受影响契约测试。
 
@@ -61,7 +61,7 @@ PR 只有同时满足以下条件，才可回报为可交由维护者合并：
 5. 修改 `.github/workflows/**` 时，`lint-workflows` 通过。
 6. 所有 human、Cubic、Codex 或其它 review conversation 均已回复并 resolved；无效问题应说明理由，有效问题应修复。
 7. Cubic 已覆盖最新 head commit，且最新结果没有阻塞问题。
-8. `CHANGELOG*`、公开文档、验证记录和实际变更范围一致；无需更新的项目已在 PR 正文说明插件侧原因。
+8. `CHANGELOG*`、公开文档、验证记录和实际变更范围一致，且重要的 Documentation / Internal 变化已进入 changelog；无需更新的项目已在 PR 正文说明插件侧原因。
 
 任一门禁未满足时，PR 只能回报为待返修或待验证，不能回报为完成。
 
