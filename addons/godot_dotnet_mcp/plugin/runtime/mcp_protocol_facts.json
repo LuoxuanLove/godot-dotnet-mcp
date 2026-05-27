@@ -27,6 +27,8 @@
     "write_error": "write_error",
     "dir_error": "dir_error",
     "resource_not_found": "resource_not_found",
-    "prompt_not_found": "prompt_not_found"
+    "prompt_not_found": "prompt_not_found",
+    "dap_unavailable": "dap_unavailable",
+    "dap_response_failed": "dap_response_failed"
   }
 }
