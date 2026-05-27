@@ -37,6 +37,7 @@ Godot 项目不只是一堆 `.tscn`、`.tres` 和脚本文件。
 | 🔎 | **基于 Roslyn 的 C# 支持** | 通过插件内部的 Roslyn 语法检查读取 C# 脚本，聚焦结构识别与诊断边界。 |
 | ⚙️ | **客户端配置** | 在插件配置页为常见 MCP 客户端生成或复制连接配置，并一键打开当前项目。 |
 | 🧰 | **用户扩展** | 可选地从 `custom_tools/` 热加载 `user_*` GDScript 工具。 |
+| 📚 | **MCP Resources 与 Prompts** | 暴露 project info、diagnostics、scene/script/resource 读取入口，并提供工作流引导 prompt。 |
 
 ## 安装
 

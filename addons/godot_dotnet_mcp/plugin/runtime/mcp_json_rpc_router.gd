@@ -5,6 +5,11 @@ class_name MCPJsonRpcRouter
 var _handle_initialize := Callable()
 var _handle_tools_list := Callable()
 var _handle_tools_call_async := Callable()
+var _handle_resources_list := Callable()
+var _handle_resources_templates_list := Callable()
+var _handle_resources_read := Callable()
+var _handle_prompts_list := Callable()
+var _handle_prompts_get := Callable()
 var _handle_notification := Callable()
 var _build_json_rpc_response := Callable()
 var _build_json_rpc_error := Callable()
@@ -18,6 +23,11 @@ func configure(context = null) -> void:
 	_handle_initialize = context.handle_initialize
 	_handle_tools_list = context.handle_tools_list
 	_handle_tools_call_async = context.handle_tools_call_async
+	_handle_resources_list = context.handle_resources_list
+	_handle_resources_templates_list = context.handle_resources_templates_list
+	_handle_resources_read = context.handle_resources_read
+	_handle_prompts_list = context.handle_prompts_list
+	_handle_prompts_get = context.handle_prompts_get
 	_handle_notification = context.handle_notification
 	_build_json_rpc_response = context.build_json_rpc_response
 	_build_json_rpc_error = context.build_json_rpc_error
@@ -28,6 +38,11 @@ func dispose() -> void:
 	_handle_initialize = Callable()
 	_handle_tools_list = Callable()
 	_handle_tools_call_async = Callable()
+	_handle_resources_list = Callable()
+	_handle_resources_templates_list = Callable()
+	_handle_resources_read = Callable()
+	_handle_prompts_list = Callable()
+	_handle_prompts_get = Callable()
 	_handle_notification = Callable()
 	_build_json_rpc_response = Callable()
 	_build_json_rpc_error = Callable()
@@ -49,6 +64,16 @@ func route_request_async(method: String, params: Dictionary, id, has_id: bool) -
 			response = _call_dict(_handle_tools_list, [params, id], _method_unavailable("tools/list", id))
 		"tools/call":
 			response = await _call_async(_handle_tools_call_async, [params, id], _method_unavailable("tools/call", id))
+		"resources/list":
+			response = _call_dict(_handle_resources_list, [params, id], _method_unavailable("resources/list", id))
+		"resources/templates/list":
+			response = _call_dict(_handle_resources_templates_list, [params, id], _method_unavailable("resources/templates/list", id))
+		"resources/read":
+			response = _call_dict(_handle_resources_read, [params, id], _method_unavailable("resources/read", id))
+		"prompts/list":
+			response = _call_dict(_handle_prompts_list, [params, id], _method_unavailable("prompts/list", id))
+		"prompts/get":
+			response = _call_dict(_handle_prompts_get, [params, id], _method_unavailable("prompts/get", id))
 		"ping":
 			response = _build_empty_response(id)
 		_:

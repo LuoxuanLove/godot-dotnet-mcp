@@ -44,6 +44,52 @@ class FakeCallbacks:
 			"id": id
 		}
 
+	func handle_resources_list(_params: Dictionary, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"result": {
+				"resources": [{"uri": "godot-dotnet-mcp://server/capabilities", "name": "Server capabilities"}]
+			},
+			"id": id
+		}
+
+	func handle_resources_templates_list(_params: Dictionary, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"result": {
+				"resourceTemplates": [{"uriTemplate": "godot-dotnet-mcp://scene/{path}", "name": "Scene read"}]
+			},
+			"id": id
+		}
+
+	func handle_resources_read(params: Dictionary, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"result": {
+				"contents": [{"uri": str(params.get("uri", "")), "mimeType": "text/plain", "text": "resource"}]
+			},
+			"id": id
+		}
+
+	func handle_prompts_list(_params: Dictionary, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"result": {
+				"prompts": [{"name": "godot_project_orientation", "description": "Orient an agent"}]
+			},
+			"id": id
+		}
+
+	func handle_prompts_get(params: Dictionary, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"result": {
+				"description": str(params.get("name", "")),
+				"messages": [{"role": "user", "content": {"type": "text", "text": "prompt"}}]
+			},
+			"id": id
+		}
+
 	func handle_notification(method: String, _params: Dictionary) -> void:
 		notifications.append(method)
 
@@ -75,6 +121,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.handle_initialize = Callable(callbacks, "handle_initialize")
 	context.handle_tools_list = Callable(callbacks, "handle_tools_list")
 	context.handle_tools_call_async = Callable(callbacks, "handle_tools_call_async")
+	context.handle_resources_list = Callable(callbacks, "handle_resources_list")
+	context.handle_resources_templates_list = Callable(callbacks, "handle_resources_templates_list")
+	context.handle_resources_read = Callable(callbacks, "handle_resources_read")
+	context.handle_prompts_list = Callable(callbacks, "handle_prompts_list")
+	context.handle_prompts_get = Callable(callbacks, "handle_prompts_get")
 	context.handle_notification = Callable(callbacks, "handle_notification")
 	context.build_json_rpc_response = Callable(callbacks, "build_json_rpc_response")
 	context.build_json_rpc_error = Callable(callbacks, "build_json_rpc_error")
@@ -101,7 +152,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if callbacks.notifications.is_empty() or callbacks.notifications[0] != "notifications/initialized":
 		return _failure("JSON-RPC router did not forward notifications to the notification handler.")
 
-	var missing_response: Dictionary = await router.route_request_async("missing/method", {}, 3, true)
+	var resources_list_response: Dictionary = await router.route_request_async("resources/list", {}, 3, true)
+	var resources_list_result = resources_list_response.get("result", {})
+	if not (resources_list_result is Dictionary) or not ((resources_list_result as Dictionary).get("resources", []) is Array):
+		return _failure("JSON-RPC router did not dispatch resources/list requests.")
+
+	var resources_templates_response: Dictionary = await router.route_request_async("resources/templates/list", {}, 4, true)
+	var resources_templates_result = resources_templates_response.get("result", {})
+	if not (resources_templates_result is Dictionary) or not ((resources_templates_result as Dictionary).get("resourceTemplates", []) is Array):
+		return _failure("JSON-RPC router did not dispatch resources/templates/list requests.")
+
+	var resources_read_response: Dictionary = await router.route_request_async("resources/read", {"uri": "godot-dotnet-mcp://server/capabilities"}, 4, true)
+	var resources_read_result = resources_read_response.get("result", {})
+	if not (resources_read_result is Dictionary) or not ((resources_read_result as Dictionary).get("contents", []) is Array):
+		return _failure("JSON-RPC router did not dispatch resources/read requests.")
+
+	var prompts_list_response: Dictionary = await router.route_request_async("prompts/list", {}, 5, true)
+	var prompts_list_result = prompts_list_response.get("result", {})
+	if not (prompts_list_result is Dictionary) or not ((prompts_list_result as Dictionary).get("prompts", []) is Array):
+		return _failure("JSON-RPC router did not dispatch prompts/list requests.")
+
+	var prompts_get_response: Dictionary = await router.route_request_async("prompts/get", {"name": "godot_project_orientation"}, 6, true)
+	var prompts_get_result = prompts_get_response.get("result", {})
+	if not (prompts_get_result is Dictionary) or not ((prompts_get_result as Dictionary).get("messages", []) is Array):
+		return _failure("JSON-RPC router did not dispatch prompts/get requests.")
+
+	var missing_response: Dictionary = await router.route_request_async("missing/method", {}, 7, true)
 	var missing_error = missing_response.get("error", {})
 	if not (missing_error is Dictionary) or int((missing_error as Dictionary).get("code", 0)) != -32601:
 		return _failure("JSON-RPC router did not preserve the method-not-found error contract.")
@@ -113,6 +189,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"notification_count": callbacks.notifications.size(),
 			"initialize_id": int(initialize_response.get("id", -1)),
+			"resource_count": ((resources_list_result as Dictionary).get("resources", []) as Array).size(),
+			"prompt_count": ((prompts_list_result as Dictionary).get("prompts", []) as Array).size(),
 			"missing_method_code": int((missing_error as Dictionary).get("code", 0))
 		}
 	}

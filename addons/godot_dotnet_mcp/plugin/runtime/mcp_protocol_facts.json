@@ -25,6 +25,8 @@
     "precheck_read_error": "precheck_read_error",
     "backup_error": "backup_error",
     "write_error": "write_error",
-    "dir_error": "dir_error"
+    "dir_error": "dir_error",
+    "resource_not_found": "resource_not_found",
+    "prompt_not_found": "prompt_not_found"
   }
 }
