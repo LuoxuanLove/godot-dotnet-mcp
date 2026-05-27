@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.0.1])
 
+### Added
+
+- Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and structured `dap_unavailable` responses when no DAP endpoint is reachable.
+
 ### Fixed
 
 - Fixed `system_resource_reference_audit` so valid C# `[GlobalClass] Resource` scripts resolved through Roslyn `types[]` metadata are not reported as unresolved, unquoted `ExtResource id=` declarations are recognized before missing-id diagnostics are emitted, and `id=` text inside quoted attribute values is ignored while parsing resource IDs.

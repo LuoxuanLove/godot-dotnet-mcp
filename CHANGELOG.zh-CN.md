@@ -6,6 +6,10 @@
 
 ## [Unreleased] ([1.0.1])
 
+### Added
+
+- 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并在无法连接 DAP 端点时返回结构化 `dap_unavailable`。
+
 ### Fixed
 
 - 修复 `system_resource_reference_audit`：现在会通过 Roslyn `types[]` 元数据解析有效的 C# `[GlobalClass] Resource` 脚本，不再误报 class unresolved，并且会在发出缺失 id 诊断前识别未加引号的 `ExtResource id=` 声明，同时解析资源 id 时会忽略带引号属性值内部的 `id=` 文本。
