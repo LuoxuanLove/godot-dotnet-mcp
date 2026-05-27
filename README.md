@@ -37,6 +37,7 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 | 🔎 | **Roslyn-based C# support** | Uses the plugin's internal Roslyn syntax checks to read C# scripts, focusing on structure recognition and diagnostic boundaries. |
 | ⚙️ | **Client configuration** | Generates or copies connection settings for common MCP clients from the plugin config page, and opens the current project with one click. |
 | 🧰 | **User extensions** | Optionally hot-loads `user_*` GDScript tools from `custom_tools/`. |
+| 📚 | **MCP resources and prompts** | Exposes project info, diagnostics, scene/script/resource reads, and guided workflow prompts. |
 
 ## Installation
 
