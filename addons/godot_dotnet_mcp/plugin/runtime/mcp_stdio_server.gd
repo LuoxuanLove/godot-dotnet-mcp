@@ -10,6 +10,10 @@ class_name MCPStdioServer
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
+const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
+const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
+const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
@@ -19,6 +23,8 @@ var _buffer: PackedByteArray = PackedByteArray()
 var _tool_loader        # injected by server_runtime_controller, shared with HTTP server
 var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
+var _resources_service = MCPResourcesServiceScript.new()
+var _prompts_service = MCPPromptsServiceScript.new()
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 
 
@@ -29,6 +35,7 @@ func _ready() -> void:
 func initialize(tool_loader, debug_mode: bool = false) -> void:
 	_tool_loader = tool_loader
 	_debug_mode = debug_mode
+	_configure_resources_prompts_services()
 
 
 func start() -> void:
@@ -130,10 +137,11 @@ func _handle_request(body: String) -> void:
 	var response: Dictionary
 	match method:
 		"initialize":
+			_ensure_resources_prompts_services()
 			response = _create_json_rpc_response({
 				"protocolVersion": MCPProtocolFacts.get_protocol_version(),
 				"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
-				"capabilities": {"tools": {"listChanged": false}},
+				"capabilities": _resources_service.build_server_capabilities(),
 				"serverInfo": MCPProtocolFacts.build_server_info()
 			}, id)
 		"initialized", "notifications/initialized":
@@ -142,6 +150,18 @@ func _handle_request(body: String) -> void:
 			response = _handle_tools_list(id)
 		"tools/call":
 			response = _handle_tools_call(params, id)
+		"resources/list":
+			response = _handle_resources_list(params, id)
+		"resources/templates/list":
+			response = _handle_resources_templates_list(params, id)
+		"resources/read":
+			response = _handle_resources_read(params, id)
+		"resources/templates/list":
+			response = _handle_resource_templates_list(params, id)
+		"prompts/list":
+			response = _handle_prompts_list(params, id)
+		"prompts/get":
+			response = _handle_prompts_get(params, id)
 		"ping":
 			response = _create_json_rpc_response({}, id)
 		_:
@@ -190,6 +210,74 @@ func _handle_tools_call(params: Dictionary, id) -> Dictionary:
 
 	var result: Dictionary = _tool_loader.execute_tool(str(resolved["category"]), str(resolved["tool"]), arguments)
 	return _create_tool_response(result, id)
+
+
+func _handle_resources_list(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	return _create_json_rpc_response(_resources_service.build_resources_list_result(params), id)
+
+
+func _handle_resources_templates_list(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	return _create_json_rpc_response(_resources_service.build_resource_templates_list_result(params), id)
+
+
+func _handle_resources_read(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	var result: Dictionary = _resources_service.build_resources_read_result(params)
+	if not bool(result.get("success", true)):
+		return _create_json_rpc_error(-32602, str(result.get("error", "Resource not found")), id)
+	return _create_json_rpc_response(result, id)
+
+
+
+func _handle_resource_templates_list(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	return _create_json_rpc_response(_resources_service.build_resource_templates_list_result(params), id)
+
+
+func _handle_prompts_list(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	return _create_json_rpc_response(_prompts_service.build_prompts_list_result(params), id)
+
+
+func _handle_prompts_get(params: Dictionary, id) -> Dictionary:
+	_ensure_resources_prompts_services()
+	var result: Dictionary = _prompts_service.build_prompts_get_result(params)
+	if not bool(result.get("success", true)):
+		return _create_json_rpc_error(-32602, str(result.get("error", "Prompt not found")), id)
+	return _create_json_rpc_response(result, id)
+
+
+func _configure_resources_prompts_services() -> void:
+	var resources_context = MCPResourcesServiceContextScript.new()
+	resources_context.get_tool_loader = func(): return _tool_loader
+	resources_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
+	resources_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
+	_resources_service.configure(resources_context)
+	var prompts_context = MCPPromptsServiceContextScript.new()
+	prompts_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
+	_prompts_service.configure(prompts_context)
+
+
+func _ensure_resources_prompts_services() -> void:
+	if _resources_service == null:
+		_resources_service = MCPResourcesServiceScript.new()
+	if _prompts_service == null:
+		_prompts_service = MCPPromptsServiceScript.new()
+	_configure_resources_prompts_services()
+
+
+func _get_stdio_tool_loader_status() -> Dictionary:
+	if _tool_loader == null:
+		return {"initialized": false, "healthy": false, "status": "unavailable", "tool_count": 0, "exposed_tool_count": 0}
+	var tool_count := 0
+	if _tool_loader.has_method("get_tool_definitions"):
+		tool_count = _tool_loader.get_tool_definitions().size()
+	var exposed_tool_count := 0
+	if _tool_loader.has_method("get_exposed_tool_definitions"):
+		exposed_tool_count = _tool_loader.get_exposed_tool_definitions().size()
+	return {"initialized": true, "healthy": true, "status": "ready", "tool_count": tool_count, "exposed_tool_count": exposed_tool_count}
 
 
 func _resolve_tool_call_name(tool_name: String) -> Dictionary:

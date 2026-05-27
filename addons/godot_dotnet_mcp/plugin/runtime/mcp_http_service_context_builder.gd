@@ -10,6 +10,8 @@ const MCPEditorLifecycleStateBuilderContextScript = preload("res://addons/godot_
 const MCPHttpRequestRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router_context.gd")
 const MCPJsonRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router_context.gd")
 const MCPJsonRpcMethodContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_context.gd")
+const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
+const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
 const MCPJsonRpcRequestContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_context.gd")
 const MCPToolsApiServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service_context.gd")
 const MCPHttpResponseContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_context.gd")
@@ -98,6 +100,12 @@ func build_json_rpc_router_context(server, json_rpc_method_service, http_respons
 	context.handle_initialize = Callable(json_rpc_method_service, "handle_initialize")
 	context.handle_tools_list = Callable(json_rpc_method_service, "handle_tools_list")
 	context.handle_tools_call_async = Callable(json_rpc_method_service, "handle_tools_call_async")
+	context.handle_resources_list = Callable(json_rpc_method_service, "handle_resources_list")
+	context.handle_resources_templates_list = Callable(json_rpc_method_service, "handle_resources_templates_list")
+	context.handle_resources_read = Callable(json_rpc_method_service, "handle_resources_read")
+	context.handle_resource_templates_list = Callable(json_rpc_method_service, "handle_resource_templates_list")
+	context.handle_prompts_list = Callable(json_rpc_method_service, "handle_prompts_list")
+	context.handle_prompts_get = Callable(json_rpc_method_service, "handle_prompts_get")
 	context.handle_notification = Callable(json_rpc_method_service, "handle_notification")
 	context.build_json_rpc_response = Callable(http_response_service, "build_json_rpc_response")
 	context.build_json_rpc_error = Callable(http_response_service, "build_json_rpc_error")
@@ -185,9 +193,11 @@ func build_editor_lifecycle_endpoint_context(editor_lifecycle_state_builder, edi
 	context.build_error = Callable(editor_lifecycle_response_builder, "build_error")
 	return context
 
-func build_json_rpc_method_context(server, tool_rpc_router, http_response_service):
+func build_json_rpc_method_context(server, tool_rpc_router, resources_service, prompts_service, http_response_service):
 	var context = MCPJsonRpcMethodContextScript.new()
 	context.tool_rpc_router = tool_rpc_router
+	context.resources_service = resources_service
+	context.prompts_service = prompts_service
 	context.response_service = http_response_service
 	context.log = func(message: String, level: String = "debug") -> void:
 		MCPDebugBuffer.record(level, "server", message)
@@ -205,4 +215,17 @@ func build_json_rpc_request_context(server, json_rpc_router, http_response_servi
 		MCPDebugBuffer.record(level, "server", message)
 		if bool(server.get("_debug_mode")):
 			print("[MCP] " + message)
+	return context
+
+
+func build_resources_service_context(tool_loader_supervisor, http_response_service):
+	var context = MCPResourcesServiceContextScript.new()
+	context.get_tool_loader = Callable(tool_loader_supervisor, "get_tool_loader")
+	context.get_tool_loader_status = Callable(tool_loader_supervisor, "get_status")
+	context.sanitize_for_json = Callable(http_response_service, "sanitize_for_json")
+	return context
+
+func build_prompts_service_context(tool_loader_supervisor):
+	var context = MCPPromptsServiceContextScript.new()
+	context.get_tool_loader_status = Callable(tool_loader_supervisor, "get_status")
 	return context
