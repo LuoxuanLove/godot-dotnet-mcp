@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.1.0])
 
-### Fixed
-
-- Fixed plugin harness isolation for Tools tab rendering cases so validation can run without cross-case UI state leaking between cases.
-
 ### Documentation
 
 - Added the `v1.1.0` manual release notes source for the next stable release and removed the obsolete `v1.0.1` source note now that plugin metadata targets `1.1.0`.
