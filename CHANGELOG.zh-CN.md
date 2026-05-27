@@ -6,6 +6,10 @@
 
 ## [Unreleased] ([1.0.1])
 
+### Added
+
+- 新增一等 MCP Resources 与 Prompts 支持：客户端可发现项目信息与诊断摘要 resources，通过严格 `res://` 模板读取 scene/script/resource 文件，并获取 `godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 引导 prompts。
+
 ### Fixed
 
 - 修复 `system_resource_reference_audit`：现在会通过 Roslyn `types[]` 元数据解析有效的 C# `[GlobalClass] Resource` 脚本，不再误报 class unresolved，并且会在发出缺失 id 诊断前识别未加引号的 `ExtResource id=` 声明，同时解析资源 id 时会忽略带引号属性值内部的 `id=` 文本。

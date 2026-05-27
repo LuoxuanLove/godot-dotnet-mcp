@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.0.1])
 
+### Added
+
+- Added first-class MCP Resources and Prompts support: clients can discover project info and diagnostics summary resources, read scene/script/resource files through strict `res://` templates, and retrieve guided `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompts.
+
 ### Fixed
 
 - Fixed `system_resource_reference_audit` so valid C# `[GlobalClass] Resource` scripts resolved through Roslyn `types[]` metadata are not reported as unresolved, unquoted `ExtResource id=` declarations are recognized before missing-id diagnostics are emitted, and `id=` text inside quoted attribute values is ignored while parsing resource IDs.
