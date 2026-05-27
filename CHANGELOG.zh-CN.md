@@ -10,6 +10,7 @@
 
 - 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并在无法连接 DAP 端点时返回结构化 `dap_unavailable`。
 - 新增一等 MCP Resources 与 Prompts 支持：客户端可发现项目信息与诊断摘要 resources，通过严格 `res://` 模板读取 scene/script/resource 文件，并获取 `godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 引导 prompts。
+- 新增 `system_project_state(summary=true)` 紧凑摘要和 `system_project_state(sections=[...])` 分段读取，使大型项目可按需读取关键健康、文件、运行时、能力位和插件健康段落，不必每次返回完整状态载荷。
 
 ### Documentation
 

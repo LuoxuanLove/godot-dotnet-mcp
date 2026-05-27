@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and structured `dap_unavailable` responses when no DAP endpoint is reachable.
 - Added first-class MCP Resources and Prompts support: clients can discover project info and diagnostics summary resources, read scene/script/resource files through strict `res://` templates, and retrieve guided `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompts.
+- Added compact `system_project_state(summary=true)` and section-based `system_project_state(sections=[...])` reads so large projects can inspect key health, file, runtime, capability, and plugin-health sections without returning the full state payload every time.
 
 ### Documentation
 
