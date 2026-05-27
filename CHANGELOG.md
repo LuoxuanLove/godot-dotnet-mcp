@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Internal
 
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.1.0` stable version.
+- Added the DAP `dap_unavailable` and `dap_response_failed` identifiers to protocol facts so structured debugger failures are reflected in the published error-code catalog.
 
 ## [1.0.1] - 2026-05-26
 

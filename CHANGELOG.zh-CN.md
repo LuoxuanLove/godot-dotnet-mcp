@@ -19,6 +19,7 @@
 ### Internal
 
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.1.0` 稳定版本。
+- 将 DAP `dap_unavailable` 与 `dap_response_failed` 标识加入协议事实文件，使结构化调试器失败会同步体现在公开错误码目录中。
 
 ## [1.0.1] - 2026-05-26
 
