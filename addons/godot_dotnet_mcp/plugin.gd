@@ -2,21 +2,21 @@
 extends EditorPlugin
 
 const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
-const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
-const SettingsStore = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
-const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
-const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
+const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
+const ServerRuntimeControllerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
+const ToolCatalogServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
-const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
 const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
-const ClientConfigService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
-const ConfigTabActionService = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
-const ClientInstallDetectionService = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
-const UserToolService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
-const UserToolWatchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
+const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
+const ConfigTabActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
+const ClientInstallDetectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
+const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const UserToolWatchServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -47,17 +47,17 @@ const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
 const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
 const UPDATE_SYNC_ADDON_PREFIX := "addons/godot_dotnet_mcp/"
 
-var _state := PluginRuntimeState.new()
-var _settings_store := SettingsStore.new()
-var _server_controller := ServerRuntimeController.new()
-var _tool_catalog := ToolCatalogService.new()
-var _config_service := ClientConfigService.new()
-var _config_tab_action_service := ConfigTabActionService.new()
-var _dock_model_service: DockModelService = DockModelService.new()
+var _state = null
+var _settings_store = null
+var _server_controller = null
+var _tool_catalog = null
+var _config_service = null
+var _config_tab_action_service = null
+var _dock_model_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
-var _client_install_detection_service := ClientInstallDetectionService.new()
-var _user_tool_service := UserToolService.new()
-var _user_tool_watch_service := UserToolWatchService.new()
+var _client_install_detection_service = null
+var _user_tool_service = null
+var _user_tool_watch_service = null
 var _action_router := PluginActionRouterScript.new()
 var _dock_coordinator := PluginDockCoordinatorScript.new()
 var _localization: LocalizationService
@@ -78,6 +78,10 @@ var _update_compare_request_serial := 0
 var _update_ref_version_request_serial := 0
 var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
+
+
+func _init() -> void:
+	_ensure_runtime_state()
 
 
 func _enter_tree() -> void:
@@ -228,7 +232,7 @@ func _disconnect_server_controller_signals() -> void:
 
 
 func _create_server_controller() -> ServerRuntimeController:
-	return ServerRuntimeController.new()
+	return ServerRuntimeControllerScript.new()
 
 
 func _create_editor_debugger_bridge():
@@ -260,11 +264,14 @@ func _recreate_server_controller() -> void:
 
 
 func _load_state() -> void:
+	_ensure_runtime_state()
+	if _settings_store == null:
+		_settings_store = SettingsStoreScript.new()
 	var load_result = _settings_store.load_plugin_settings(
-		PluginRuntimeState.DEFAULT_SETTINGS,
-		PluginRuntimeState.SETTINGS_PATH,
-		PluginRuntimeState.ALL_TOOL_CATEGORIES,
-		PluginRuntimeState.DEFAULT_COLLAPSED_DOMAINS
+		PluginRuntimeStateScript.DEFAULT_SETTINGS,
+		PluginRuntimeStateScript.SETTINGS_PATH,
+		PluginRuntimeStateScript.ALL_TOOL_CATEGORIES,
+		PluginRuntimeStateScript.DEFAULT_COLLAPSED_DOMAINS
 	)
 	_state.settings = load_result["settings"]
 	if not (_state.settings.get("client_manual_paths", {}) is Dictionary):
@@ -272,12 +279,16 @@ func _load_state() -> void:
 	_state.current_cli_scope = str(_state.settings.get("current_cli_scope", _state.current_cli_scope))
 	_state.current_config_platform = str(_state.settings.get("current_config_platform", _state.current_config_platform))
 	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
 	_configure_client_install_detection_service()
 
 
 func _save_settings() -> void:
-	_settings_store.save_plugin_settings(PluginRuntimeState.SETTINGS_PATH, _state.settings)
+	if _state == null:
+		return
+	if _settings_store == null:
+		_settings_store = SettingsStoreScript.new()
+	_settings_store.save_plugin_settings(PluginRuntimeStateScript.SETTINGS_PATH, _state.settings)
 
 
 func _ensure_runtime_bridge_autoload() -> void:
@@ -534,7 +545,7 @@ func _refresh_dock() -> void:
 	if _state != null and _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
 		return
 	if _dock_model_service == null:
-		_dock_model_service = DockModelService.new()
+		_dock_model_service = DockModelServiceScript.new()
 	_dock_model_service.configure(
 		_state,
 		_localization,
@@ -560,7 +571,7 @@ func _apply_initial_tool_profile_if_needed() -> void:
 
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 		str(_state.settings.get("tool_profile_id", "default")),
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+		PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 		_state.custom_tool_profiles,
 		tool_names,
 		_state.settings.get("disabled_tools", [])
@@ -572,7 +583,7 @@ func _apply_initial_tool_profile_if_needed() -> void:
 
 func _get_client_install_statuses() -> Dictionary:
 	if _client_install_detection_service == null:
-		_client_install_detection_service = ClientInstallDetectionService.new()
+		_client_install_detection_service = ClientInstallDetectionServiceScript.new()
 	_configure_client_install_detection_service()
 	return _client_install_detection_service.detect_all()
 
@@ -617,6 +628,7 @@ func _on_language_changed(language_code: String) -> void:
 
 
 func _on_update_source_changed(source: String) -> void:
+	_ensure_runtime_state()
 	_state.settings["update_source"] = _normalize_update_source(source)
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
@@ -683,6 +695,7 @@ func _get_update_request_parent() -> Node:
 
 
 func _on_update_custom_branch_changed(branch: String) -> void:
+	_ensure_runtime_state()
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
 	if _ensure_update_refs_discovery_requested(true):
@@ -1661,7 +1674,7 @@ func _apply_tool_profile(profile_id: String) -> void:
 	_state.settings["tool_profile_id"] = profile_id
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 		profile_id,
-		PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+		PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 		_state.custom_tool_profiles,
 		tool_names,
 		_state.settings.get("disabled_tools", [])
@@ -1679,7 +1692,7 @@ func _save_custom_profile(profile_name: String) -> Dictionary:
 		}
 
 	var result = _settings_store.save_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
+		PluginRuntimeStateScript.TOOL_PROFILE_DIR,
 		profile_name,
 		_state.settings.get("disabled_tools", [])
 	)
@@ -1689,7 +1702,7 @@ func _save_custom_profile(profile_name: String) -> Dictionary:
 			"error": _localization.get_text("tool_profile_save_failed")
 		}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
 	_state.settings["tool_profile_id"] = "custom:%s" % str(result.get("slug", ""))
 	_save_settings()
 	return {
@@ -1704,14 +1717,14 @@ func _rename_custom_profile(profile_id: String, profile_name: String) -> Diction
 		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
 
 	var result = _settings_store.rename_custom_profile(
-		PluginRuntimeState.TOOL_PROFILE_DIR,
+		PluginRuntimeStateScript.TOOL_PROFILE_DIR,
 		profile_id,
 		profile_name
 	)
 	if not bool(result.get("success", false)):
 		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "rename_failed")))}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
 	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
 		_state.settings["tool_profile_id"] = str(result.get("profile_id", profile_id))
 	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
@@ -1727,17 +1740,17 @@ func _delete_custom_profile(profile_id: String) -> Dictionary:
 	if _is_builtin_profile_id(profile_id):
 		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
 
-	var result = _settings_store.delete_custom_profile(PluginRuntimeState.TOOL_PROFILE_DIR, profile_id)
+	var result = _settings_store.delete_custom_profile(PluginRuntimeStateScript.TOOL_PROFILE_DIR, profile_id)
 	if not bool(result.get("success", false)):
 		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "delete_failed")))}
 
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeState.TOOL_PROFILE_DIR)
+	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
 	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
 		var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
 		_state.settings["tool_profile_id"] = "default"
 		_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
 			"default",
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 			_state.custom_tool_profiles,
 			tool_names,
 			_state.settings.get("disabled_tools", [])
@@ -1810,7 +1823,7 @@ func _on_category_toggled(category: String, enabled: bool) -> void:
 
 func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 	var target_categories: Array = []
-	for domain_def in PluginRuntimeState.TOOL_DOMAIN_DEFS:
+	for domain_def in PluginRuntimeStateScript.TOOL_DOMAIN_DEFS:
 		if str(domain_def.get("key", "")) != domain_key:
 			continue
 		target_categories = domain_def.get("categories", []).duplicate()
@@ -1818,7 +1831,7 @@ func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 	if target_categories.is_empty():
 		for category in _server_controller.get_all_tools_by_category().keys():
-			var known_domain = _tool_catalog.find_domain_key_for_category(PluginRuntimeState.TOOL_DOMAIN_DEFS, str(category))
+			var known_domain = _tool_catalog.find_domain_key_for_category(PluginRuntimeStateScript.TOOL_DOMAIN_DEFS, str(category))
 			if known_domain.is_empty():
 				target_categories.append(str(category))
 
@@ -2079,7 +2092,7 @@ func runtime_full_reload() -> Dictionary:
 			"error": "Runtime reload already scheduled: %s" % _pending_runtime_reload_action
 		}
 
-	var was_running := _server_controller != null and _server_controller.is_running()
+	var was_running: bool = _server_controller != null and _server_controller.is_running()
 	var focus_snapshot := _capture_dock_focus_snapshot()
 	_pending_runtime_reload_action = "runtime_full_reload"
 	_schedule_runtime_reload("_complete_runtime_full_reload", [str(operation.get("operation_id", "")), was_running, focus_snapshot])
@@ -2304,7 +2317,7 @@ func list_profiles_from_tools() -> Dictionary:
 	return {
 		"success": true,
 		"data": {
-			"builtin_profiles": PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			"builtin_profiles": PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 			"custom_profiles": _state.custom_tool_profiles
 		}
 	}
@@ -2313,7 +2326,7 @@ func list_profiles_from_tools() -> Dictionary:
 func apply_profile_from_tools(profile_id: String) -> Dictionary:
 	if profile_id.is_empty():
 		return {"success": false, "error": "Profile id is required"}
-	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+	if not _tool_catalog.has_tool_profile(profile_id, PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
 		return {"success": false, "error": "Unknown profile id: %s" % profile_id}
 	_apply_tool_profile(profile_id)
 	return {
@@ -2389,10 +2402,10 @@ func import_config_from_tools(file_path: String) -> Dictionary:
 
 	var requested_profile_id = str(imported_data.get("profile_id", "default"))
 	var resolved_profile_id = requested_profile_id
-	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeState.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
+	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
 		resolved_profile_id = _tool_catalog.find_matching_profile_id(
 			imported_disabled,
-			PluginRuntimeState.BUILTIN_TOOL_PROFILES,
+			PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 			_state.custom_tool_profiles,
 			tool_names
 		)
@@ -2708,7 +2721,7 @@ func _create_reload_coordinator():
 
 func _configure_user_tool_watch_service() -> void:
 	if _user_tool_watch_service == null:
-		_user_tool_watch_service = UserToolWatchService.new()
+		_user_tool_watch_service = UserToolWatchServiceScript.new()
 	_user_tool_watch_service.stop()
 	_user_tool_watch_service.configure(self, _create_reload_coordinator(), _user_tool_service)
 	_user_tool_watch_service.start()
@@ -2716,7 +2729,7 @@ func _configure_user_tool_watch_service() -> void:
 
 func _configure_config_tab_action_service() -> void:
 	if _config_tab_action_service == null:
-		_config_tab_action_service = ConfigTabActionService.new()
+		_config_tab_action_service = ConfigTabActionServiceScript.new()
 	_config_tab_action_service.configure({
 		"state": _state,
 		"localization": _localization,
@@ -2754,9 +2767,19 @@ func _cleanup_disabled_tools() -> void:
 
 
 func _refresh_service_instances() -> void:
-	_settings_store = SettingsStore.new()
-	_tool_catalog = ToolCatalogService.new()
-	_config_service = ClientConfigService.new()
-	_client_install_detection_service = ClientInstallDetectionService.new()
-	_user_tool_service = UserToolService.new()
-	_user_tool_watch_service = UserToolWatchService.new()
+	_ensure_runtime_state()
+	_settings_store = SettingsStoreScript.new()
+	if _server_controller == null:
+		_server_controller = ServerRuntimeControllerScript.new()
+	_tool_catalog = ToolCatalogServiceScript.new()
+	_config_service = ClientConfigServiceScript.new()
+	if _dock_model_service == null:
+		_dock_model_service = DockModelServiceScript.new()
+	_client_install_detection_service = ClientInstallDetectionServiceScript.new()
+	_user_tool_service = UserToolServiceScript.new()
+	_user_tool_watch_service = UserToolWatchServiceScript.new()
+
+
+func _ensure_runtime_state() -> void:
+	if _state == null:
+		_state = PluginRuntimeStateScript.new()
