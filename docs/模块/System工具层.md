@@ -14,6 +14,7 @@ tools/system/
 ├─ impl_help.gd        # 连接后能力说明与 Agent 推荐工作流（1 个公开工具）
 ├─ impl_editor.gd      # 编辑器 UI 控制与 Output 日志聚合入口（2 个公开工具）
 ├─ impl_runtime.gd     # 运行时控制 / 统一运行时 I/O（2 个公开工具）
+├─ impl_dap.gd         # Godot Debug Adapter Protocol 高层入口（1 个公开工具）
 ├─ impl_scene.gd       # 场景级工具实现（4 个）
 ├─ impl_index.gd       # 索引与搜索实现（2 个公开工具 + 内部索引缓存）
 ├─ lsp_client.gd       # Godot LSP 客户端，供 system/script 与脚本编辑服务调用
@@ -55,6 +56,9 @@ tools/system/
 ### 运行时自动化级
 - `system_runtime_control`：查询、启用或关闭当前编辑器调试会话的 runtime control 安全闸。
 - `system_runtime_step`：统一运行时 I/O 入口；`action=step` 标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环，`action=capture` 提供单帧 / 低频多帧截图，`action=input` 注入 `InputMap action` 或原始键盘输入。
+
+### DAP 调试级
+- `system_dap_debugger`：连接 Godot Debug Adapter Protocol 端点（默认 `127.0.0.1:6006`），支持 `status`、`set_breakpoint`、`remove_breakpoint`、`list_breakpoints`、`pause`、`continue`、`step_over`、`stack_trace` 与 `output`。所有需要 DAP 端点的动作都会先按 `Content-Length` JSON 帧格式建立 TCP 请求；端点不可达时返回 `data.error_type=dap_unavailable`、`endpoint`、`timeout_ms` 和传输状态，而不是抛出脚本错误。
 
 默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理缓存；需要查看或整理当前截图缓存时，由 Agent 显式调用 `system_userdata_maintenance(action=list_capture_cache)` 或 `system_userdata_maintenance(action=cleanup_capture_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。当前截图缓存清理会跳过 symlink、Windows junction 与 reparse point。需要整理历史遗留根级文件时，调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 
@@ -129,7 +133,7 @@ system_editor_state
 
 ## 与原子工具的关系
 
-系统工具不会直接实现所有底层操作，而是通过 `atomic_bridge.gd` 组合调用场景、脚本、项目、文件系统、调试等原子 executor。
+系统工具不会直接实现所有底层操作，而是通过 `atomic_bridge.gd` 组合调用场景、脚本、项目、文件系统、调试与 DAP 等原子 executor。
 
 好处是：
 - 上层工作流更稳定，便于 Agent 先理解问题再采取行动。
