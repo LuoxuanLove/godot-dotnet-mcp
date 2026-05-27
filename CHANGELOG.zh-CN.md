@@ -4,7 +4,21 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.0.1])
+## [Unreleased] ([1.1.0])
+
+### Fixed
+
+- 修复 Tools tab 渲染用例的插件 harness 隔离问题，避免验证过程中跨用例 UI 状态泄漏。
+
+### Documentation
+
+- 新增 `v1.1.0` 手写发布说明源文件，用于下一次稳定版发布；插件元数据已切换到 `1.1.0`，因此移除过时的 `v1.0.1` 源说明。
+
+### Internal
+
+- 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.1.0` 稳定版本。
+
+## [1.0.1] - 2026-05-26
 
 ### Fixed
 
@@ -315,8 +329,9 @@
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
-[1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...v1.0.0
 [1.0.0-pre3]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre2...v1.0.0-pre3
 [1.0.0-pre2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre1...v1.0.0-pre2
