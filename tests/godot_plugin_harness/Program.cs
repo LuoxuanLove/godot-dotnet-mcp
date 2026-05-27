@@ -12,6 +12,15 @@ internal static class Program
         "ObjectDB instances leaked at exit",
         "resources still in use at exit",
     ];
+    private static readonly string[] RuntimeErrorMarkers =
+    [
+        "Invalid call.",
+        "SCRIPT ERROR:",
+        "Parse Error:",
+        "Parser Error:",
+        "Nonexistent function",
+        "Attempt to call function",
+    ];
 
     private static async Task<int> Main(string[] args)
     {
@@ -182,8 +191,16 @@ internal static class Program
             var exitCleanupWarningMarkers = CollectLeakWarningMarkers(stderr);
             var exitCleanupWarningsDetected = exitCleanupWarningMarkers.Length > 0;
             var leakWarningsDetected = !editorProbeMode && exitCleanupWarningsDetected;
-            var succeeded = process.ExitCode == 0 && !leakWarningsDetected;
+            var runtimeErrorMarkers = CollectRuntimeErrorMarkers(stdout, stderr);
+            var runtimeErrorMarkersDetected = runtimeErrorMarkers.Length > 0;
+            var succeeded = process.ExitCode == 0 && !leakWarningsDetected && !runtimeErrorMarkersDetected;
             preserveStageRoot = keepStageRoot && !succeeded;
+            var failureClass = runtimeErrorMarkersDetected
+                ? "godot_runtime_error"
+                : (leakWarningsDetected ? "exit_cleanup_warning" : string.Empty);
+            var reason = runtimeErrorMarkersDetected
+                ? "godot_runtime_error_detected"
+                : (leakWarningsDetected ? "godot_exit_leaks_detected" : string.Empty);
             var summary = new
             {
                 success = succeeded,
@@ -195,8 +212,10 @@ internal static class Program
                 exitCleanupWarningsDetected,
                 exitCleanupWarningMarkers,
                 exitCleanupWarningPolicy = exitCleanupWarningsDetected ? (editorProbeMode ? "ignored_editor_probe" : "fail_harness") : "none",
-                failureClass = leakWarningsDetected ? "exit_cleanup_warning" : string.Empty,
-                reason = leakWarningsDetected ? "godot_exit_leaks_detected" : string.Empty,
+                runtimeErrorMarkersDetected,
+                runtimeErrorMarkers,
+                failureClass,
+                reason,
                 godotPath = explicitGodotPath,
                 stageRoot,
                 stageKept = preserveStageRoot,
@@ -516,6 +535,19 @@ internal static class Program
 
         return LeakWarningMarkers
             .Where(marker => stderr.Contains(marker, StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    private static string[] CollectRuntimeErrorMarkers(string stdout, string stderr)
+    {
+        var combinedOutput = string.Concat(stdout ?? string.Empty, "\n", stderr ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(combinedOutput))
+        {
+            return [];
+        }
+
+        return RuntimeErrorMarkers
+            .Where(marker => combinedOutput.Contains(marker, StringComparison.Ordinal))
             .ToArray();
     }
 
