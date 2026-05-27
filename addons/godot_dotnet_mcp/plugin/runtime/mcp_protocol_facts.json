@@ -1,6 +1,6 @@
 {
   "protocol_version": "2025-06-18",
-  "tool_schema_version": "2026-05-03.10",
+  "tool_schema_version": "2026-05-03.11",
   "server_name": "godot-dotnet-mcp",
   "server_version": "1.0.1",
   "error_codes": {
@@ -25,6 +25,8 @@
     "precheck_read_error": "precheck_read_error",
     "backup_error": "backup_error",
     "write_error": "write_error",
-    "dir_error": "dir_error"
+    "dir_error": "dir_error",
+    "resource_not_found": "resource_not_found",
+    "prompt_not_found": "prompt_not_found"
   }
 }
