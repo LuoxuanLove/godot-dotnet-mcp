@@ -778,7 +778,8 @@ func _parse_msbuild_diagnostics(output_text: String) -> Dictionary:
 			"source_file": source_file,
 			"source_path": res_path,
 			"source_line": source_line,
-			"source_column": source_column
+			"source_column": source_column,
+			"open_command": null
 		}
 		if not res_path.is_empty():
 			diagnostic["open_command"] = {
