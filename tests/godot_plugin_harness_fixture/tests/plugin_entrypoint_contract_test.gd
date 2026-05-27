@@ -33,6 +33,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_probe_plugin = probe_script.new(_probe_base_control)
 	_probe_plugin._enter_tree()
 	_probe_entered = true
+	for service_name in ["_state", "_settings_store", "_server_controller", "_tool_catalog", "_config_service", "_config_tab_action_service", "_dock_model_service", "_client_install_detection_service", "_user_tool_service", "_user_tool_watch_service"]:
+		if _probe_plugin.get(service_name) == null:
+			return _return_failure(tree, "plugin.gd should initialize required service %s during _enter_tree()." % service_name)
+	_probe_plugin._save_settings()
 
 	if _probe_plugin.autoload_install_calls.size() != 1:
 		return _return_failure(tree, "plugin.gd should install the runtime bridge autoload during _enter_tree().")
