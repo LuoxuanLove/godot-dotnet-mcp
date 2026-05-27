@@ -17,6 +17,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed plugin startup and settings persistence paths so runtime state, settings storage, and core services are initialized before load/save or update callbacks access them.
 - Fixed plugin harness validation so Godot stdout/stderr runtime and parser error markers such as `SCRIPT ERROR:`, `Invalid call.`, and `Parse Error:` fail the run instead of being hidden behind a successful process exit.
 
+### Documentation
+
+- Added the `v1.1.0` manual release notes source for the debugging, resources, project-state, and startup-validation release, and removed the obsolete `v1.0.1` source note after the release line moved forward.
+- Updated README, architecture, runtime-service, tool-system, Tools page, testing, and CI documentation for MCP Resources and Prompts, DAP debugger tools, `system_project_state` compact reads, tool catalog resources, and harness validation behavior.
+- Completed and corrected localized DAP and system tool descriptions across English, Chinese, German, Spanish, French, Japanese, Portuguese, and Russian locale resources, and documented the emoji release-note template plus Documentation/Internal changelog maintenance rules in the release runbook.
+
+### Internal
+
+- Expanded plugin harness and contract coverage for DAP debugger workflows, MCP Resources and Prompts routing, `system_project_state` compact reads, JSON-RPC resource/prompt methods, tool-loader catalog classification, debug executor compatibility, update fixtures, and plugin entrypoint initialization.
+- Added runtime/parser error marker detection to the Godot harness so stdout/stderr diagnostics fail validation even when the Godot process exits successfully.
+- Isolated the Tools tab rendering harness case and updated the plugin-side Roslyn harness path so required validation remains stable while the new protocol and tool-surface coverage grows.
+
 ## [1.0.1] - 2026-05-26
 
 ### Fixed
