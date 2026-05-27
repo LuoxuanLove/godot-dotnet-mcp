@@ -723,7 +723,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_profiler_desc": "Ausführung des Profilcodes",
 	"tool_debug_class_db_desc": "Fragen Sie die Klassendatenbank von Godot ab",
 	"tool_dap_debugger_name": "Debugger",
-	"tool_dap_debugger_desc": "Send Godot Debug Adapter Protocol breakpoint, stepping, stack-trace, and output-event requests.",
+	"tool_dap_debugger_desc": "Senden Sie Godot Debug Adapter Protocol-Anfragen für Breakpoints, Schrittsteuerung, Stack-Traces und Output-Ereignisse.",
 	"tool_filesystem_directory_name": "Verzeichnis",
 	"tool_filesystem_file_name": "Datei",
 	"tool_filesystem_file_read_name": "Datei lesen",
