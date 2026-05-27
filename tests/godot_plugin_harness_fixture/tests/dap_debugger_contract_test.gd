@@ -16,6 +16,7 @@ class FakeDapServer extends Node:
 	var _buffer := PackedByteArray()
 	var _received_messages: Array[Dictionary] = []
 	var _queued_messages: Array[Dictionary] = []
+	var _failed_commands: Array[String] = []
 	var _output_on_connect := false
 	var _output_sent := false
 
@@ -42,15 +43,8 @@ class FakeDapServer extends Node:
 		if _client == null and _server.is_connection_available():
 			_client = _server.take_connection()
 			if _output_on_connect and not _output_sent:
-				_queue_message({
-					"seq": 1,
-					"type": "event",
-					"event": "output",
-					"body": {
-						"category": "stdout",
-						"output": "contract output\n"
-					}
-				})
+				_queue_output("contract output one\n")
+				_queue_output("contract output two\n")
 				_output_sent = true
 
 		if _client == null:
@@ -76,6 +70,20 @@ class FakeDapServer extends Node:
 		_received_messages.clear()
 		return copy
 
+	func fail_next_command(command: String) -> void:
+		_failed_commands.append(command)
+
+	func _queue_output(output: String) -> void:
+		_queue_message({
+			"seq": 1 + _queued_messages.size(),
+			"type": "event",
+			"event": "output",
+			"body": {
+				"category": "stdout",
+				"output": output
+			}
+		})
+
 	func _drain_messages() -> void:
 		while true:
 			var message := _try_parse_frame()
@@ -89,6 +97,17 @@ class FakeDapServer extends Node:
 			return
 		var command := str(message.get("command", ""))
 		var request_seq := int(message.get("seq", 0))
+		if _failed_commands.has(command):
+			_failed_commands.erase(command)
+			_queue_message({
+				"seq": 100 + request_seq,
+				"type": "response",
+				"request_seq": request_seq,
+				"success": false,
+				"command": command,
+				"message": "contract failure"
+			})
+			return
 		var body := {}
 		match command:
 			"setBreakpoints":
@@ -241,6 +260,24 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("DAP list_breakpoints should return the local breakpoint store.")
 	if int(list_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("DAP list_breakpoints should include the breakpoint added by set_breakpoint.")
+	request_server.fail_next_command("setBreakpoints")
+	var failed_set_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "set_breakpoint",
+		"host": "127.0.0.1",
+		"port": request_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS,
+		"source_path": CONTRACT_SOURCE_PATH,
+		"line": 77
+	})
+	if bool(failed_set_result.get("success", false)):
+		return _failure("DAP set_breakpoint should propagate failed DAP responses.")
+	if str(failed_set_result.get("data", {}).get("error_type", "")) != "dap_response_failed":
+		return _failure("DAP set_breakpoint failures should include data.error_type=dap_response_failed.")
+	request_server.drain_messages()
+	list_result = dap_executor.execute("debugger", {"action": "list_breakpoints"})
+	var cached_breakpoints: Array = list_result.get("data", {}).get("breakpoints", [])
+	if int(list_result.get("data", {}).get("count", 0)) != 1 or int((cached_breakpoints[0] as Dictionary).get("line", 0)) != 42:
+		return _failure("DAP failed set_breakpoint should not mutate the local breakpoint cache.")
 
 	var remove_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "remove_breakpoint",
@@ -258,6 +295,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var remove_args: Dictionary = remove_request.get("arguments", {})
 	if (remove_args.get("breakpoints", []) as Array).size() != 0:
 		return _failure("DAP remove_breakpoint should clear the removed breakpoint from the request.")
+	list_result = dap_executor.execute("debugger", {"action": "list_breakpoints"})
+	if int(list_result.get("data", {}).get("count", 0)) != 0:
+		return _failure("DAP successful remove_breakpoint should clear the local breakpoint cache.")
 
 	var pause_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "pause",
@@ -299,8 +339,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(output_result.get("success", false)):
 		return _failure("DAP output should collect output events from a fake DAP server.")
 	var output_lines: Array = output_result.get("data", {}).get("outputs", [])
-	if output_lines.is_empty() or str((output_lines[0] as Dictionary).get("output", "")).find("contract output") == -1:
-		return _failure("DAP output should preserve output event payloads.")
+	if output_lines.size() != 2:
+		return _failure("DAP output should keep collecting output events until timeout.")
+	if str((output_lines[0] as Dictionary).get("output", "")).find("contract output one") == -1 or str((output_lines[1] as Dictionary).get("output", "")).find("contract output two") == -1:
+		return _failure("DAP output should preserve all output event payloads.")
 
 	var system_executor = SystemExecutorScript.new()
 	var system_tools: Array[Dictionary] = system_executor.get_tools()

@@ -72,12 +72,15 @@ func _set_breakpoint(args: Dictionary) -> Dictionary:
 	var line := int(args.get("line", 0))
 	if line <= 0:
 		return _error("DAP set_breakpoint requires line")
-	var lines: Array = _breakpoints_by_source.get(source_path, [])
+	var lines: Array = (_breakpoints_by_source.get(source_path, []) as Array).duplicate()
 	if not lines.has(line):
 		lines.append(line)
 	lines.sort()
-	_breakpoints_by_source[source_path] = lines
-	return await _send_breakpoints(source_path, args)
+	var result := await _send_breakpoints(source_path, lines, args)
+	if bool(result.get("success", false)):
+		_store_breakpoints(source_path, lines)
+		result = _with_breakpoint_list(result)
+	return result
 
 
 func _remove_breakpoint(args: Dictionary) -> Dictionary:
@@ -85,26 +88,21 @@ func _remove_breakpoint(args: Dictionary) -> Dictionary:
 	if source_path.is_empty():
 		return _error("DAP remove_breakpoint requires source_path")
 	var line := int(args.get("line", 0))
-	var lines: Array = _breakpoints_by_source.get(source_path, [])
+	var lines: Array = (_breakpoints_by_source.get(source_path, []) as Array).duplicate()
 	lines.erase(line)
-	if lines.is_empty():
-		_breakpoints_by_source.erase(source_path)
-	else:
-		_breakpoints_by_source[source_path] = lines
-	return await _send_breakpoints(source_path, args)
+	var result := await _send_breakpoints(source_path, lines, args)
+	if bool(result.get("success", false)):
+		_store_breakpoints(source_path, lines)
+		result = _with_breakpoint_list(result)
+	return result
 
 
-func _send_breakpoints(source_path: String, args: Dictionary) -> Dictionary:
+func _send_breakpoints(source_path: String, lines: Array, args: Dictionary) -> Dictionary:
 	var breakpoints: Array[Dictionary] = []
-	for line in _breakpoints_by_source.get(source_path, []):
+	for line in lines:
 		breakpoints.append({"line": int(line)})
 	var dap_args := {"source": {"path": _dap_path(source_path)}, "breakpoints": breakpoints}
-	var result := await _send_request("setBreakpoints", dap_args, args)
-	if bool(result.get("success", false)):
-		var data: Dictionary = result.get("data", {})
-		data["breakpoints"] = _breakpoint_list_data().get("breakpoints", [])
-		result["data"] = data
-	return result
+	return await _send_request("setBreakpoints", dap_args, args)
 
 
 func _send_thread_request(command: String, args: Dictionary) -> Dictionary:
@@ -151,6 +149,8 @@ func _send_request(command: String, arguments: Dictionary, args: Dictionary) -> 
 	var response := _find_response(messages, request_seq)
 	if response.is_empty():
 		return _error("DAP request timed out", {"error_type": "dap_timeout", "command": command, "request": request, "messages": messages})
+	if not bool(response.get("success", true)):
+		return _error("DAP request failed", {"error_type": "dap_response_failed", "command": command, "request": request, "response": response, "messages": messages})
 	return _success({"request": request, "response": response, "messages": messages})
 
 
@@ -191,9 +191,21 @@ func _read_messages(peer: StreamPeerTCP, buffer: PackedByteArray, messages: Arra
 				buffer = _drain_frames(buffer, messages)
 				if request_seq >= 0 and not _find_response(messages, request_seq).is_empty():
 					return
-				if request_seq < 0 and not messages.is_empty():
-					return
 		await _wait_frame()
+
+
+func _store_breakpoints(source_path: String, lines: Array) -> void:
+	if lines.is_empty():
+		_breakpoints_by_source.erase(source_path)
+	else:
+		_breakpoints_by_source[source_path] = lines.duplicate()
+
+
+func _with_breakpoint_list(result: Dictionary) -> Dictionary:
+	var data: Dictionary = result.get("data", {})
+	data["breakpoints"] = _breakpoint_list_data().get("breakpoints", [])
+	result["data"] = data
+	return result
 
 
 func _drain_frames(buffer: PackedByteArray, messages: Array[Dictionary]) -> PackedByteArray:
