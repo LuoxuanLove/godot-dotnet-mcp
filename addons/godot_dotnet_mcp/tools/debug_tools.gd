@@ -10,7 +10,6 @@ const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared
 const DOTNET_DEFAULT_TIMEOUT_SEC := 30
 const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
 
-
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
@@ -779,12 +778,13 @@ func _parse_msbuild_diagnostics(output_text: String) -> Dictionary:
 			"source_file": source_file,
 			"source_path": res_path,
 			"source_line": source_line,
-			"source_column": source_column,
-			"open_command": null if res_path.is_empty() else {
+			"source_column": source_column
+		}
+		if not res_path.is_empty():
+			diagnostic["open_command"] = {
 				"path": res_path,
 				"line": source_line
 			}
-		}
 
 		if severity == "warning":
 			warnings.append(diagnostic)
