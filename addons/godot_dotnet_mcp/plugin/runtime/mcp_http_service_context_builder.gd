@@ -103,7 +103,6 @@ func build_json_rpc_router_context(server, json_rpc_method_service, http_respons
 	context.handle_resources_list = Callable(json_rpc_method_service, "handle_resources_list")
 	context.handle_resources_templates_list = Callable(json_rpc_method_service, "handle_resources_templates_list")
 	context.handle_resources_read = Callable(json_rpc_method_service, "handle_resources_read")
-	context.handle_resource_templates_list = Callable(json_rpc_method_service, "handle_resource_templates_list")
 	context.handle_prompts_list = Callable(json_rpc_method_service, "handle_prompts_list")
 	context.handle_prompts_get = Callable(json_rpc_method_service, "handle_prompts_get")
 	context.handle_notification = Callable(json_rpc_method_service, "handle_notification")

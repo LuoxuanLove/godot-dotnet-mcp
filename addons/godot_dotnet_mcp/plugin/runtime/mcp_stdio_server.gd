@@ -156,8 +156,6 @@ func _handle_request(body: String) -> void:
 			response = _handle_resources_templates_list(params, id)
 		"resources/read":
 			response = _handle_resources_read(params, id)
-		"resources/templates/list":
-			response = _handle_resource_templates_list(params, id)
 		"prompts/list":
 			response = _handle_prompts_list(params, id)
 		"prompts/get":
@@ -228,13 +226,6 @@ func _handle_resources_read(params: Dictionary, id) -> Dictionary:
 	if not bool(result.get("success", true)):
 		return _create_json_rpc_error(-32602, str(result.get("error", "Resource not found")), id)
 	return _create_json_rpc_response(result, id)
-
-
-
-func _handle_resource_templates_list(params: Dictionary, id) -> Dictionary:
-	_ensure_resources_prompts_services()
-	return _create_json_rpc_response(_resources_service.build_resource_templates_list_result(params), id)
-
 
 func _handle_prompts_list(params: Dictionary, id) -> Dictionary:
 	_ensure_resources_prompts_services()

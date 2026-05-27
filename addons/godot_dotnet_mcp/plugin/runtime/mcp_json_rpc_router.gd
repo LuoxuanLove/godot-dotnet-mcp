@@ -8,7 +8,6 @@ var _handle_tools_call_async := Callable()
 var _handle_resources_list := Callable()
 var _handle_resources_templates_list := Callable()
 var _handle_resources_read := Callable()
-var _handle_resource_templates_list := Callable()
 var _handle_prompts_list := Callable()
 var _handle_prompts_get := Callable()
 var _handle_notification := Callable()
@@ -27,7 +26,6 @@ func configure(context = null) -> void:
 	_handle_resources_list = context.handle_resources_list
 	_handle_resources_templates_list = context.handle_resources_templates_list
 	_handle_resources_read = context.handle_resources_read
-	_handle_resource_templates_list = context.handle_resource_templates_list
 	_handle_prompts_list = context.handle_prompts_list
 	_handle_prompts_get = context.handle_prompts_get
 	_handle_notification = context.handle_notification
@@ -43,7 +41,6 @@ func dispose() -> void:
 	_handle_resources_list = Callable()
 	_handle_resources_templates_list = Callable()
 	_handle_resources_read = Callable()
-	_handle_resource_templates_list = Callable()
 	_handle_prompts_list = Callable()
 	_handle_prompts_get = Callable()
 	_handle_notification = Callable()
@@ -73,8 +70,6 @@ func route_request_async(method: String, params: Dictionary, id, has_id: bool) -
 			response = _call_dict(_handle_resources_templates_list, [params, id], _method_unavailable("resources/templates/list", id))
 		"resources/read":
 			response = _call_dict(_handle_resources_read, [params, id], _method_unavailable("resources/read", id))
-		"resources/templates/list":
-			response = _call_dict(_handle_resource_templates_list, [params, id], _method_unavailable("resources/templates/list", id))
 		"prompts/list":
 			response = _call_dict(_handle_prompts_list, [params, id], _method_unavailable("prompts/list", id))
 		"prompts/get":

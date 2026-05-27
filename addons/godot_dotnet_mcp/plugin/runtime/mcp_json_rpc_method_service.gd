@@ -73,14 +73,6 @@ func handle_resources_read(params: Dictionary, id) -> Dictionary:
 		return _build_error(-32602, str(result.get("error", "Resource not found")), id)
 	return _build_response(result, id)
 
-
-
-func handle_resource_templates_list(params: Dictionary, id) -> Dictionary:
-	if _resources_service == null:
-		return _build_error(-32603, "resources/templates/list handler is unavailable", id)
-	return _build_response(_resources_service.build_resource_templates_list_result(params), id)
-
-
 func handle_prompts_list(params: Dictionary, id) -> Dictionary:
 	if _prompts_service == null:
 		return _build_error(-32603, "prompts/list handler is unavailable", id)
