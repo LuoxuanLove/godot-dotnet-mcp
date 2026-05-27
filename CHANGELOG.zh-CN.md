@@ -6,6 +6,10 @@
 
 ## [Unreleased] ([1.1.0])
 
+### Added
+
+- 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并在无法连接 DAP 端点时返回结构化 `dap_unavailable`。
+
 ### Documentation
 
 - 新增 `v1.1.0` 手写发布说明源文件，用于下一次稳定版发布；插件元数据已切换到 `1.1.0`，因此移除过时的 `v1.0.1` 源说明。
@@ -15,10 +19,6 @@
 - 将插件元数据、协议事实文件与 .NET bridge 元数据切换到 `1.1.0` 稳定版本。
 
 ## [1.0.1] - 2026-05-26
-
-### Added
-
-- 新增 `system_dap_debugger` 与内部 `dap` 工具分类，支持 Godot Debug Adapter Protocol 的端点状态、断点设置 / 移除 / 列表、暂停 / 继续 / 单步跳过、调用栈和输出事件读取，使用 `Content-Length` JSON 帧格式，并在无法连接 DAP 端点时返回结构化 `dap_unavailable`。
 
 ### Fixed
 

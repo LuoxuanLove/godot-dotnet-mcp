@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] ([1.1.0])
 
+### Added
+
+- Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and structured `dap_unavailable` responses when no DAP endpoint is reachable.
+
 ### Documentation
 
 - Added the `v1.1.0` manual release notes source for the next stable release and removed the obsolete `v1.0.1` source note now that plugin metadata targets `1.1.0`.
@@ -15,10 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Switched plugin metadata, protocol facts, and .NET bridge metadata to the `1.1.0` stable version.
 
 ## [1.0.1] - 2026-05-26
-
-### Added
-
-- Added `system_dap_debugger` and the internal `dap` tool category for Godot Debug Adapter Protocol workflows, including endpoint status, breakpoint set/remove/list, pause/continue/step-over, stack trace, output event collection, Content-Length JSON framing, and structured `dap_unavailable` responses when no DAP endpoint is reachable.
 
 ### Fixed
 
