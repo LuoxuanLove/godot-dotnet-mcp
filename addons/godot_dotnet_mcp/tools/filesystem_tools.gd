@@ -44,6 +44,10 @@ EXAMPLES:
 					"recursive": {
 						"type": "boolean",
 						"description": "Include subdirectories"
+					},
+					"count_only": {
+						"type": "boolean",
+						"description": "For get_files, return only the matching file count without including the files array"
 					}
 				},
 				"required": ["action", "path"]
@@ -298,7 +302,7 @@ func _execute_directory(args: Dictionary) -> Dictionary:
 		"exists":
 			return _directory_exists(path)
 		"get_files":
-			return _get_files(path, args.get("filter", "*"), args.get("recursive", false))
+			return _get_files(path, args.get("filter", "*"), args.get("recursive", false), bool(args.get("count_only", false)))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -383,7 +387,15 @@ func _directory_exists(path: String) -> Dictionary:
 	})
 
 
-func _get_files(path: String, filter: String, recursive: bool) -> Dictionary:
+func _get_files(path: String, filter: String, recursive: bool, count_only: bool = false) -> Dictionary:
+	if count_only:
+		return _success({
+			"path": path,
+			"filter": filter,
+			"recursive": recursive,
+			"count_only": true,
+			"count": _count_files(path, filter, recursive)
+		})
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
 
@@ -394,6 +406,26 @@ func _get_files(path: String, filter: String, recursive: bool) -> Dictionary:
 		"count": files.size(),
 		"files": files
 	})
+
+
+func _count_files(path: String, filter: String, recursive: bool) -> int:
+	var dir = DirAccess.open(path)
+	if not dir:
+		return 0
+	var count := 0
+	dir.list_dir_begin()
+	var file_name = dir.get_next()
+	while file_name != "":
+		var full_path = path.path_join(file_name)
+		if dir.current_is_dir():
+			if recursive and not file_name.begins_with("."):
+				count += _count_files(full_path, filter, recursive)
+		else:
+			if file_name.match(filter):
+				count += 1
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	return count
 
 
 func _collect_files(path: String, filter: String, recursive: bool, results: Array[String]) -> void:

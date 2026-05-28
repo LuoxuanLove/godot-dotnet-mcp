@@ -52,7 +52,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "project_state",
-			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. For large projects, pass summary=true for a compact payload or sections=[summary, project, files, runtime, capabilities, health] to read only selected sections. Default behavior returns the full flat payload. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
+			"description": "PROJECT STATE: Snapshot of current project health — file counts, runtime errors, compile errors, bridge status, runtime capability bits, and file enumeration validity. Use first to orient before diagnosing. For large projects, pass summary=true for a compact count-only payload, or sections=[summary, project, runtime, capabilities] to read selected lightweight sections without collecting full path arrays. Request sections=[files] only when scene_paths/script_paths/resource_paths are needed. sections takes precedence over summary=true. The health section triggers plugin runtime health collection even when include_runtime_health=false. Default behavior returns the full flat payload. Returns: error_count, compile_error_count, recent_errors[], has_dotnet, running, runtime_bridge_status, runtime_capabilities{can_start_project, can_control_runtime, can_capture_runtime, headless_logic_ok, visible_capture_required, can_run_without_focus, no_focus_launch_supported, foreground_window_policy, foreground_window_fallbacks[], blocking_reasons[]}, scene_paths[], script_paths[], file_enumeration_status, valid_file_enumeration, file_enumeration, enumeration_diagnostics[]. Optional: error_limit (default 10).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -66,12 +66,12 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"summary": {
 						"type": "boolean",
-						"description": "Return a compact project state summary with key counts, statuses, runtime capabilities, and available section keys instead of the full payload (default: false)"
+						"description": "Return a compact count-only project state summary with key counts, statuses, runtime capabilities, and available section keys instead of the full payload (default: false). Does not collect full project path arrays."
 					},
 					"sections": {
 						"type": "array",
 						"items": {"type": "string", "enum": ["summary", "project", "files", "runtime", "capabilities", "health"]},
-						"description": "Optional section keys to return instead of the full payload. Use summary first, then request project/files/runtime/capabilities/health as needed. The health section is included when requested even if include_runtime_health is false."
+						"description": "Optional section keys to return instead of the full payload. sections takes precedence over summary=true. Use summary/project/runtime/capabilities for lightweight reads, request files only when full path arrays are needed, and request health only when plugin runtime health collection is needed. The health section is included when requested even if include_runtime_health is false."
 					}
 				}
 			}
@@ -610,6 +610,12 @@ func _collect_project_files(pattern: String) -> Array[String]:
 	return collected
 
 
+func _collect_project_file_count(pattern: String) -> int:
+	if bridge != null and bridge.has_method("collect_file_count"):
+		return int(bridge.collect_file_count(pattern))
+	return _collect_project_files(pattern).size()
+
+
 func _count_matching_paths(paths: Array[String], extension: String) -> int:
 	var count := 0
 	for path in paths:
@@ -634,13 +640,16 @@ func _build_file_enumeration_diagnostic(code: String, message: String, scan_glob
 
 
 func _build_file_enumeration_status(gd_scripts: Array, cs_scripts: Array, scene_paths: Array, resource_paths: Array) -> Dictionary:
-	var counts := {
+	return _build_file_enumeration_status_from_counts({
 		"gd_scripts": gd_scripts.size(),
 		"cs_scripts": cs_scripts.size(),
 		"scripts": gd_scripts.size() + cs_scripts.size(),
 		"scenes": scene_paths.size(),
 		"resources": resource_paths.size()
-	}
+	})
+
+
+func _build_file_enumeration_status_from_counts(counts: Dictionary) -> Dictionary:
 	var diagnostics: Array = []
 	if int(counts.get("scripts", 0)) == 0 and int(counts.get("scenes", 0)) == 0:
 		diagnostics.append(_build_file_enumeration_diagnostic(
@@ -1179,11 +1188,12 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	var sections_result := _normalize_project_state_sections(args)
 	if not bool(sections_result.get("success", true)):
 		return bridge.error(str(sections_result.get("error", "Invalid project_state sections")))
-	var full_result := _execute_project_state_full(args)
+	var selected_sections: Array = sections_result.get("sections", [])
+	var collect_file_paths := _should_project_state_collect_file_paths(args, selected_sections)
+	var full_result := _execute_project_state_full(args, collect_file_paths)
 	if not bool(full_result.get("success", false)):
 		return full_result
 	var full_data: Dictionary = bridge.extract_data(full_result)
-	var selected_sections: Array = sections_result.get("sections", [])
 	if not selected_sections.is_empty():
 		return bridge.success(_build_project_state_sections_payload(full_data, selected_sections))
 	if bool(args.get("summary", false)):
@@ -1191,7 +1201,13 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	return full_result
 
 
-func _execute_project_state_full(args: Dictionary) -> Dictionary:
+func _should_project_state_collect_file_paths(args: Dictionary, selected_sections: Array) -> bool:
+	if not selected_sections.is_empty():
+		return selected_sections.has("files")
+	return not bool(args.get("summary", false))
+
+
+func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = true) -> Dictionary:
 	var error_limit: int = max(int(args.get("error_limit", 10)), 0)
 	var include_runtime_health := bool(args.get("include_runtime_health", false))
 	MCPDebugBuffer.record("debug", "system", "project_state: collecting stats (error_limit=%d)" % error_limit)
@@ -1201,16 +1217,34 @@ func _execute_project_state_full(args: Dictionary) -> Dictionary:
 	var runtime_summary := _get_runtime_summary()
 	var recent_errors := _get_runtime_errors(error_limit)
 	var recent_warnings := _get_runtime_warnings(min(error_limit, 10))
-	var gd_scripts: Array[String] = _collect_project_files("*.gd")
-	var cs_scripts: Array[String] = _collect_project_files("*.cs")
-	var scene_paths: Array[String] = _collect_project_files("*.tscn")
-	var resources_tres: Array[String] = _collect_project_files("*.tres")
-	var resources_res: Array[String] = _collect_project_files("*.res")
+	var gd_scripts: Array = []
+	var cs_scripts: Array = []
+	var scene_paths: Array = []
+	var resources_tres: Array = []
+	var resources_res: Array = []
+	if collect_file_paths:
+		gd_scripts = _collect_project_files("*.gd")
+		cs_scripts = _collect_project_files("*.cs")
+		scene_paths = _collect_project_files("*.tscn")
+		resources_tres = _collect_project_files("*.tres")
+		resources_res = _collect_project_files("*.res")
 	var all_resources: Array = []
 	all_resources.append_array(resources_tres)
 	all_resources.append_array(resources_res)
 	all_resources.sort()
-	var file_enumeration := _build_file_enumeration_status(gd_scripts, cs_scripts, scene_paths, all_resources)
+	var gd_script_count := gd_scripts.size() if collect_file_paths else _collect_project_file_count("*.gd")
+	var cs_script_count := cs_scripts.size() if collect_file_paths else _collect_project_file_count("*.cs")
+	var scene_count := scene_paths.size() if collect_file_paths else _collect_project_file_count("*.tscn")
+	var resource_count := all_resources.size()
+	if not collect_file_paths:
+		resource_count = _collect_project_file_count("*.tres") + _collect_project_file_count("*.res")
+	var file_enumeration := _build_file_enumeration_status(gd_scripts, cs_scripts, scene_paths, all_resources) if collect_file_paths else _build_file_enumeration_status_from_counts({
+		"gd_scripts": gd_script_count,
+		"cs_scripts": cs_script_count,
+		"scripts": gd_script_count + cs_script_count,
+		"scenes": scene_count,
+		"resources": resource_count
+	})
 
 	var compile_error_count := 0
 	var dotnet_errors_data: Dictionary = {}
@@ -1235,11 +1269,11 @@ func _execute_project_state_full(args: Dictionary) -> Dictionary:
 		"main_scene": main_scene,
 		"main_scene_exists": not main_scene.is_empty() and FileAccess.file_exists(main_scene),
 		"current_scene": current_scene,
-		"scripts": gd_scripts.size() + cs_scripts.size(),
-		"gd_scripts": gd_scripts.size(),
-		"cs_scripts": cs_scripts.size(),
-		"scenes": scene_paths.size(),
-		"resources": all_resources.size(),
+		"scripts": gd_script_count + cs_script_count,
+		"gd_scripts": gd_script_count,
+		"cs_scripts": cs_script_count,
+		"scenes": scene_count,
+		"resources": resource_count,
 		"scene_paths": scene_paths,
 		"script_paths": gd_scripts + cs_scripts,
 		"resource_paths": all_resources,
