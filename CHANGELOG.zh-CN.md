@@ -4,7 +4,7 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.1.1)]
+## [Unreleased] ([1.1.1])
 
 目标版本：1.1.1。
 
