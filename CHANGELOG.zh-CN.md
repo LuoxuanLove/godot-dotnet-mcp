@@ -8,6 +8,18 @@
 
 目标版本：1.1.1。
 
+### Fixed
+
+- 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用轻量文件计数，再返回紧凑载荷。
+
+### Documentation
+
+- 记录 `system_project_state(sections=[...])` 会优先于 `summary=true`，`health` 分段会触发插件健康采集，并明确 `files` 分段才是大型项目中需要完整路径数组的边界。
+
+### Internal
+
+- 增加契约覆盖，验证 `system_project_state` 紧凑读取会跳过完整路径枚举，而默认完整载荷与 `files` 分段仍会按需收集文件路径。
+
 ## [1.1.0] - 2026-05-28
 
 ### Added

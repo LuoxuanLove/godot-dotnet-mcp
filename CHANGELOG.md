@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.1.
 
+### Fixed
+
+- Fixed `system_project_state(summary=true)` and summary-only section reads so they use lightweight file counts instead of building full script, scene, and resource path arrays before trimming the response.
+
+### Documentation
+
+- Documented that `system_project_state(sections=[...])` takes precedence over `summary=true`, that the `health` section triggers plugin health collection, and that the `files` section is the path-array boundary for large projects.
+
+### Internal
+
+- Added contract coverage proving `system_project_state` compact reads skip full path enumeration while default and `files` section reads still collect file paths on demand.
+
 ## [1.1.0] - 2026-05-28
 
 ### Added
