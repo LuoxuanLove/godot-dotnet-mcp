@@ -6,11 +6,11 @@
     <Nullable>enable</Nullable>
     <AssemblyName>GodotDotnetMcp.PluginBridge</AssemblyName>
     <RootNamespace>GodotDotnetMcp.DotnetBridge</RootNamespace>
-    <Version>1.1.0</Version>
-    <VersionPrefix>1.1.0</VersionPrefix>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <InformationalVersion>1.1.0</InformationalVersion>
+    <Version>1.1.1</Version>
+    <VersionPrefix>1.1.1</VersionPrefix>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <FileVersion>1.1.1.0</FileVersion>
+    <InformationalVersion>1.1.1</InformationalVersion>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
