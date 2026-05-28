@@ -8,16 +8,13 @@ const TEMP_ROOT := "res://Tmp/godot_dotnet_mcp_filesystem_contracts"
 func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = FilesystemExecutorScript.new()
 
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd"):
-		return _failure("filesystem_tools.gd should be removed once the split executor becomes the only stable entry.")
-
 	_remove_tree(TEMP_ROOT)
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 6:
-		return _failure("Filesystem executor should expose 6 tool definitions after the split.")
+	if tool_defs.size() != 7:
+		return _failure("Filesystem executor should expose 7 tool definitions including the compatibility file alias.")
 
-	var expected_names := ["directory", "file_read", "file_write", "file_manage", "json", "search"]
+	var expected_names := ["directory", "file", "file_read", "file_write", "file_manage", "json", "search"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
@@ -109,6 +106,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(directory_files_result.get("success", false)):
 		return _failure("Directory get_files failed through the split directory service.")
+	var directory_files_data: Dictionary = directory_files_result.get("data", {})
+	var directory_count_only_result: Dictionary = executor.execute("directory", {
+		"action": "get_files",
+		"path": TEMP_ROOT,
+		"filter": "*.txt",
+		"recursive": true,
+		"count_only": true
+	})
+	if not bool(directory_count_only_result.get("success", false)):
+		return _failure("Directory get_files count_only failed through the split directory service.")
+	var directory_count_only_data: Dictionary = directory_count_only_result.get("data", {})
+	if int(directory_count_only_data.get("count", -1)) != int(directory_files_data.get("count", -2)):
+		return _failure("Directory get_files count_only should match normal get_files count.")
+	if directory_count_only_data.has("files"):
+		return _failure("Directory get_files count_only should not return a files array.")
+	if not bool(directory_count_only_data.get("count_only", false)):
+		return _failure("Directory get_files count_only should mark the response as count_only.")
 
 	return {
 		"name": "filesystem_tool_executor_contracts",
