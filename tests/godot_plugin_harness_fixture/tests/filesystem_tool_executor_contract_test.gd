@@ -11,6 +11,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_remove_tree(TEMP_ROOT)
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
+	# Migration note: the "file" compatibility alias (line 15) and expected tool count (currently 7)
+	# reflect the pre-split state. Once the filesystem_tools.gd monolith is fully retired and all
+	# callers use the split executor, the compatibility alias should be removed and the count should
+	# decrease to 6, with "file" dropped from expected_names.
 	if tool_defs.size() != 7:
 		return _failure("Filesystem executor should expose 7 tool definitions including the compatibility file alias.")
 

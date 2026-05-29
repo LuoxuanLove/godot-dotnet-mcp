@@ -18,12 +18,13 @@ ACTIONS:
 - create: Create a new directory
 - delete: Delete an empty directory
 - exists: Check if directory exists
-- get_files: Get all files in directory (with filters)
+- get_files: Get all files in directory (with filters). Pass count_only=true for a lightweight count-only response (returns count + count_only:true, files array absent). This is a public contract optimized for large-directory callers like project_state summary mode.
 
 EXAMPLES:
 - List directory: {"action": "list", "path": "res://scenes"}
 - Create directory: {"action": "create", "path": "res://new_folder"}
 - Get all .gd files: {"action": "get_files", "path": "res://scripts", "filter": "*.gd"}
+- Count-only: {"action": "get_files", "path": "res://", "filter": "*.cs", "recursive": true, "count_only": true}
 - Check exists: {"action": "exists", "path": "res://assets"}""",
 			"inputSchema": {
 				"type": "object",
@@ -45,10 +46,10 @@ EXAMPLES:
 						"type": "boolean",
 						"description": "Include subdirectories"
 					},
-					"count_only": {
-						"type": "boolean",
-						"description": "For get_files, return only the matching file count without including the files array"
-					}
+				"count_only": {
+					"type": "boolean",
+					"description": "For get_files, return only the matching file count (key 'count') without including the files array. This is a public API contract — callers such as project_state summary mode depend on the count-only response shape: {\"count\": <int>, \"count_only\": true}. The files array is guaranteed absent when count_only is true."
+				}
 				},
 				"required": ["action", "path"]
 			}
@@ -409,44 +410,47 @@ func _get_files(path: String, filter: String, recursive: bool, count_only: bool 
 
 
 func _count_files(path: String, filter: String, recursive: bool) -> int:
-	var dir = DirAccess.open(path)
-	if not dir:
-		return 0
 	var count := 0
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path.path_join(file_name)
-		if dir.current_is_dir():
-			if recursive and not file_name.begins_with("."):
-				count += _count_files(full_path, filter, recursive)
-		else:
-			if file_name.match(filter):
-				count += 1
-		file_name = dir.get_next()
-	dir.list_dir_end()
+	var pending: Array = [path]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var dir = DirAccess.open(current)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var full_path = current.path_join(file_name)
+			if dir.current_is_dir():
+				if recursive and not file_name.begins_with("."):
+					pending.append(full_path)
+			else:
+				if file_name.match(filter):
+					count += 1
+			file_name = dir.get_next()
+		dir.list_dir_end()
 	return count
 
 
 func _collect_files(path: String, filter: String, recursive: bool, results: Array[String]) -> void:
-	var dir = DirAccess.open(path)
-	if not dir:
-		return
-
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path.path_join(file_name)
-
-		if dir.current_is_dir():
-			if recursive and not file_name.begins_with("."):
-				_collect_files(full_path, filter, recursive, results)
-		else:
-			if file_name.match(filter):
-				results.append(full_path)
-
-		file_name = dir.get_next()
-	dir.list_dir_end()
+	var pending: Array = [path]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var dir = DirAccess.open(current)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var full_path = current.path_join(file_name)
+			if dir.current_is_dir():
+				if recursive and not file_name.begins_with("."):
+					pending.append(full_path)
+			else:
+				if file_name.match(filter):
+					results.append(full_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
 
 
 # ==================== FILE ====================
