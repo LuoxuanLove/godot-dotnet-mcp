@@ -138,8 +138,9 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 			"Unknown category: %s (from %s)" % [category, full_name])
 		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
 
+	var force_reinit := _is_write_action(args)
 	var executor = _atomic_executors.get(category)
-	if executor == null or not is_instance_valid(executor):
+	if executor == null or not is_instance_valid(executor) or force_reinit:
 		var path := str(EXECUTOR_SCRIPT_PATHS[category])
 		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
 			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
@@ -185,8 +186,9 @@ func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 			"Unknown category: %s (from %s)" % [category, full_name])
 		return error("Unknown atomic category: %s (from %s)" % category)
 
+	var force_reinit_async := _is_write_action(args)
 	var executor = _atomic_executors.get(category)
-	if executor == null or not is_instance_valid(executor):
+	if executor == null or not is_instance_valid(executor) or force_reinit_async:
 		var path := str(EXECUTOR_SCRIPT_PATHS[category])
 		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
 			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)

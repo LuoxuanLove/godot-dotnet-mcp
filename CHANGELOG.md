@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.1.
 
+### Fixed
+
+- Fixed `system_bindings_audit` freezing the Godot editor on large projects by adding a per-call scene audit cache so each unique scene is loaded and instantiated only once, and by reusing atomic executor instances across consecutive calls so the reference index and Roslyn caches survive between script inspections.
+
+### Internal
+
+- Reused atomic executor instances in `atomic_bridge.call_atomic` / `call_atomic_async` instead of recreating them on every call, preserving `reference_service._reference_index`, `inspect_service._plugin_roslyn_service`, and other instance-level caches across consecutive atomic invocations.
+
 ## [1.1.0] - 2026-05-28
 
 ### Added
