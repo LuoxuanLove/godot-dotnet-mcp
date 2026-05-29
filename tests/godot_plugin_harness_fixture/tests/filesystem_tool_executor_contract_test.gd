@@ -8,16 +8,13 @@ const TEMP_ROOT := "res://Tmp/godot_dotnet_mcp_filesystem_contracts"
 func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = FilesystemExecutorScript.new()
 
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd"):
-		return _failure("filesystem_tools.gd should be removed once the split executor becomes the only stable entry.")
-
 	_remove_tree(TEMP_ROOT)
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 6:
-		return _failure("Filesystem executor should expose 6 tool definitions after the split.")
+	if tool_defs.size() != 7:
+		return _failure("Filesystem executor should expose 7 tool definitions including the compatibility file alias.")
 
-	var expected_names := ["directory", "file_read", "file_write", "file_manage", "json", "search"]
+	var expected_names := ["directory", "file", "file_read", "file_write", "file_manage", "json", "search"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
