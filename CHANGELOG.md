@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.2.
 
+### Fixed
+
+- Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
+
+### Internal
+
+- Added a clean Asset Library install harness build that removes fixture Roslyn package references and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
+
 ## [1.1.1] - 2026-05-31
 
 ### Added
