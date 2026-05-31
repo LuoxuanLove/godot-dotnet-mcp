@@ -17,7 +17,7 @@ class FakeDapServer extends Node:
 	var _buffer := PackedByteArray()
 	var _received_messages: Array[Dictionary] = []
 	var _queued_messages: Array[Dictionary] = []
-	var _failed_commands: Array[String] = []
+	var _failed_commands: Dictionary = {}
 	var _output_on_connect := false
 	var _output_sent := false
 
@@ -71,8 +71,8 @@ class FakeDapServer extends Node:
 		_received_messages.clear()
 		return copy
 
-	func fail_next_command(command: String) -> void:
-		_failed_commands.append(command)
+	func fail_next_command(command: String, message: String = "contract failure") -> void:
+		_failed_commands[command] = message
 
 	func _queue_output(output: String) -> void:
 		_queue_message({
@@ -99,6 +99,7 @@ class FakeDapServer extends Node:
 		var command := str(message.get("command", ""))
 		var request_seq := int(message.get("seq", 0))
 		if _failed_commands.has(command):
+			var failure_message := str(_failed_commands.get(command, "contract failure"))
 			_failed_commands.erase(command)
 			_queue_message({
 				"seq": 100 + request_seq,
@@ -106,7 +107,11 @@ class FakeDapServer extends Node:
 				"request_seq": request_seq,
 				"success": false,
 				"command": command,
-				"message": "contract failure"
+				"message": failure_message,
+				"body": {
+					"output": failure_message,
+					"value": failure_message
+				}
 			})
 			return
 		var body := {}
@@ -281,6 +286,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Protocol facts should include the dap_invalid_session_state error code.")
 	if not ProtocolFactsScript.get_error_codes().has("dap_limit_exceeded"):
 		return _failure("Protocol facts should include the dap_limit_exceeded error code.")
+	var seeded_sources := {}
+	for index in range(512):
+		seeded_sources["res://scripts/seeded_%d.gd" % index] = [1]
+	DapExecutorScript._breakpoints_by_session["contract-default"] = seeded_sources
+	var breakpoint_limit_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "set_breakpoint",
+		"host": "127.0.0.1",
+		"port": unavailable_port,
+		"timeout_ms": 180,
+		"source_path": "res://scripts/new_source.gd",
+		"line": 1
+	})
+	if bool(breakpoint_limit_result.get("success", false)):
+		return _failure("DAP set_breakpoint should reject new sources after the per-session source limit is reached.")
+	if str(breakpoint_limit_result.get("data", {}).get("error_type", "")) != "dap_limit_exceeded":
+		return _failure("DAP breakpoint source limit should report dap_limit_exceeded.")
+	var seeded_list_result: Dictionary = dap_executor.execute("debugger", {"action": "list_breakpoints"})
+	if int(seeded_list_result.get("data", {}).get("count", 0)) != 512:
+		return _failure("DAP breakpoint source limit should not evict existing local breakpoint sources.")
+	DapExecutorScript._breakpoints_by_session.erase("contract-default")
 
 	var lifecycle_port := _pick_free_port(unavailable_port + 1)
 	if lifecycle_port < 0:
@@ -434,19 +459,25 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("DAP list_breakpoints should return the local breakpoint store.")
 	if int(list_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("DAP list_breakpoints should include the breakpoint added by set_breakpoint.")
-	request_server.fail_next_command("setBreakpoints")
+	request_server.fail_next_command("setBreakpoints", "password=hunter2 token=abc123")
 	var failed_set_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "set_breakpoint",
 		"host": "127.0.0.1",
 		"port": request_port,
 		"timeout_ms": REQUEST_TIMEOUT_MS,
 		"source_path": CONTRACT_SOURCE_PATH,
-		"line": 77
+		"line": 77,
+		"include_raw": true
 	})
 	if bool(failed_set_result.get("success", false)):
 		return _failure("DAP set_breakpoint should propagate failed DAP responses.")
 	if str(failed_set_result.get("data", {}).get("error_type", "")) != "dap_response_failed":
 		return _failure("DAP set_breakpoint failures should include data.error_type=dap_response_failed.")
+	var failed_set_json := JSON.stringify(failed_set_result)
+	if failed_set_json.find("hunter2") >= 0 or failed_set_json.find("abc123") >= 0:
+		return _failure("DAP include_raw error payloads should redact sensitive values embedded in generic string fields.")
+	if failed_set_json.find("[redacted]") == -1:
+		return _failure("DAP include_raw error payloads should preserve redaction markers for sensitive values.")
 	if not ProtocolFactsScript.get_error_codes().has("dap_response_failed"):
 		return _failure("Protocol facts should include the dap_response_failed error code.")
 	request_server.drain_messages()

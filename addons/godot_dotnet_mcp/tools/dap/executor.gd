@@ -13,6 +13,7 @@ const MAX_BREAKPOINT_SOURCES := 512
 const MAX_BREAKPOINTS_PER_SOURCE := 256
 
 const SENSITIVE_KEYS := ["authorization", "password", "secret", "token", "key", "apikey", "api_key", "access_token", "refresh_token"]
+const SENSITIVE_VALUE_MARKERS := ["authorization:", "bearer ", "password=", "password:", "secret=", "secret:", "token=", "token:", "api_key=", "api_key:", "apikey=", "apikey:", "access_token=", "access_token:", "refresh_token=", "refresh_token:"]
 
 const ACTIONS := [
 	"status",
@@ -207,6 +208,8 @@ func _set_breakpoint(args: Dictionary) -> Dictionary:
 		return _error("DAP set_breakpoint requires line")
 	var session_id := _session_id(args)
 	var breakpoint_store := _breakpoint_store(session_id)
+	if not breakpoint_store.has(source_path) and breakpoint_store.size() >= MAX_BREAKPOINT_SOURCES:
+		return _error("Too many DAP breakpoint sources for session", {"error_type": "dap_limit_exceeded", "limit": MAX_BREAKPOINT_SOURCES, "session_id": session_id})
 	var lines: Array = (breakpoint_store.get(source_path, []) as Array).duplicate()
 	if not lines.has(line):
 		lines.append(line)
@@ -412,8 +415,6 @@ func _store_breakpoints(session_id: String, source_path: String, lines: Array) -
 	if lines.is_empty():
 		breakpoint_store.erase(source_path)
 	else:
-		if not breakpoint_store.has(source_path) and breakpoint_store.size() >= MAX_BREAKPOINT_SOURCES:
-			breakpoint_store.erase(breakpoint_store.keys()[0])
 		breakpoint_store[source_path] = lines.duplicate()
 	if breakpoint_store.is_empty():
 		_breakpoints_by_session.erase(session_id)
@@ -677,6 +678,16 @@ func _sanitize_value(value):
 		for item in value:
 			out_array.append(_sanitize_value(item))
 		return out_array
+	if value is String:
+		return _sanitize_string(value)
+	return value
+
+
+func _sanitize_string(value: String) -> String:
+	var normalized := value.strip_edges().to_lower()
+	for marker in SENSITIVE_VALUE_MARKERS:
+		if normalized.find(str(marker)) >= 0:
+			return "[redacted]"
 	return value
 
 
