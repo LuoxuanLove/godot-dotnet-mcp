@@ -75,7 +75,7 @@ class FakeCallbacks:
 		return {
 			"jsonrpc": "2.0",
 			"result": {
-				"prompts": [{"name": "godot.scene_bootstrap", "description": "Plan scene work from live editor context before editing nodes or files."}]
+				"prompts": [{"name": "godot.content_authoring", "description": "Plan content work from grounded project, scene, or script evidence before editing."}]
 			},
 			"id": id
 		}
@@ -172,7 +172,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (prompts_list_result is Dictionary) or not ((prompts_list_result as Dictionary).get("prompts", []) is Array):
 		return _failure("JSON-RPC router did not dispatch prompts/list requests.")
 
-	var prompts_get_response: Dictionary = await router.route_request_async("prompts/get", {"name": "godot.scene_bootstrap"}, 6, true)
+	var prompts_get_response: Dictionary = await router.route_request_async("prompts/get", {"name": "godot.content_authoring"}, 6, true)
 	var prompts_get_result = prompts_get_response.get("result", {})
 	if not (prompts_get_result is Dictionary) or not ((prompts_get_result as Dictionary).get("messages", []) is Array):
 		return _failure("JSON-RPC router did not dispatch prompts/get requests.")

@@ -14,9 +14,12 @@ const SCENE_READ_URI := "godot-dotnet-mcp://scene/tests/headless_suite_entry.tsc
 const SCRIPT_READ_URI := "godot-dotnet-mcp://script/tests/headless_case_support.gd"
 const RESOURCE_READ_URI := "godot-dotnet-mcp://resource/tests/_fixtures/mcp_resources_prompts_sample.tres"
 const TRAVERSAL_URI := "godot-dotnet-mcp://script/../project.godot"
-const SCENE_BOOTSTRAP_PROMPT := "godot.scene_bootstrap"
+const PROJECT_ORIENTATION_PROMPT := "godot.project_orientation"
+const CONTENT_AUTHORING_PROMPT := "godot.content_authoring"
 const DEBUG_TRIAGE_PROMPT := "godot.debug_triage"
-const BINDING_FIX_PROMPT := "godot.binding_fix"
+const REFERENCE_INTEGRITY_PROMPT := "godot.reference_integrity"
+const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
+const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 
 var _server = null
 
@@ -125,9 +128,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (prompts_result is Dictionary):
 		return _failure("prompts/list should return a result object.")
 	var prompts = (prompts_result as Dictionary).get("prompts", [])
-	if not (prompts is Array) or (prompts as Array).size() != 3:
-		return _failure("prompts/list should expose exactly the three built-in prompt guides.")
-	for expected_prompt in [SCENE_BOOTSTRAP_PROMPT, DEBUG_TRIAGE_PROMPT, BINDING_FIX_PROMPT]:
+	if not (prompts is Array) or (prompts as Array).size() != 6:
+		return _failure("prompts/list should expose exactly the six high-level built-in prompt guides.")
+	for expected_prompt in [PROJECT_ORIENTATION_PROMPT, CONTENT_AUTHORING_PROMPT, DEBUG_TRIAGE_PROMPT, REFERENCE_INTEGRITY_PROMPT, RUNTIME_VALIDATION_PROMPT, EDITOR_UI_CONTROL_PROMPT]:
 		if not _has_prompt(prompts, expected_prompt):
 			return _failure("prompts/list should expose prompt: %s" % expected_prompt)
 		var prompt_metadata := _find_prompt(prompts, expected_prompt)
@@ -136,36 +139,56 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
 
-	var scene_prompt := await _get_prompt_text(SCENE_BOOTSTRAP_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "goal": "add a menu"}, 11)
-	if not bool(scene_prompt.get("ok", false)):
-		return _failure(str(scene_prompt.get("error", "scene prompt failed")))
-	if str(scene_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1:
-		return _failure("scene bootstrap prompt should normalize scene_path to res://.")
-	if not _prompt_text_is_actionable(str(scene_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_scene_analyze", "system_scene_patch"]):
-		return _failure("scene bootstrap prompt should provide actionable workflow sections and scene tools.")
+	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
+	if not bool(orientation_prompt.get("ok", false)):
+		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
+	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
+		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
 
-	var debug_prompt := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"error_summary": "NullReferenceException", "include_runtime": true}, 12)
+	var content_prompt := await _get_prompt_text(CONTENT_AUTHORING_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "script_path": "tests/headless_case_support.gd", "goal": "add a menu"}, 12)
+	if not bool(content_prompt.get("ok", false)):
+		return _failure(str(content_prompt.get("error", "content authoring prompt failed")))
+	if str(content_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(content_prompt.get("text", "")).find("res://tests/headless_case_support.gd") == -1:
+		return _failure("content authoring prompt should normalize scene_path and script_path to res://.")
+	if not _prompt_text_is_actionable(str(content_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_scene_analyze", "system_script_patch"]):
+		return _failure("content authoring prompt should provide actionable scene and script authoring sections.")
+
+	var debug_prompt := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"error_summary": "NullReferenceException", "include_runtime": true}, 13)
 	if not bool(debug_prompt.get("ok", false)):
 		return _failure(str(debug_prompt.get("error", "debug prompt failed")))
-	if str(debug_prompt.get("text", "")).find("runtime_diagnose") == -1 or str(debug_prompt.get("text", "")).find("NullReferenceException") == -1:
-		return _failure("debug triage prompt should mention runtime_diagnose and include the error summary.")
-	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_editor_log", "system_project_state"]):
+	if str(debug_prompt.get("text", "")).find("runtime_diagnose") == -1 or str(debug_prompt.get("text", "")).find("NullReferenceException") == -1 or str(debug_prompt.get("text", "")).find("system_dap_debugger") == -1:
+		return _failure("debug triage prompt should mention runtime_diagnose, DAP escalation, and include the error summary.")
+	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_log", "system_project_state"]):
 		return _failure("debug triage prompt should provide actionable workflow sections and diagnostic tools.")
 
-	var binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "binding_name": "HealthLabel"}, 13)
-	if not bool(binding_prompt.get("ok", false)):
-		return _failure(str(binding_prompt.get("error", "binding prompt failed")))
-	if str(binding_prompt.get("text", "")).find("bindings_audit") == -1 or str(binding_prompt.get("text", "")).find("res://Main.tscn") == -1:
-		return _failure("binding fix prompt should mention bindings_audit and normalize scene_path.")
-	if not _prompt_text_is_actionable(str(binding_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_script_analyze", "system_scene_validate"]):
-		return _failure("binding fix prompt should provide actionable workflow sections and validation tools.")
-	var gd_binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.gd"}, 16)
-	if not bool(gd_binding_prompt.get("ok", false)):
-		return _failure("binding fix prompt should accept GDScript paths.")
+	var reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "resource_path": "tests/_fixtures/mcp_resources_prompts_sample.tres", "binding_name": "HealthLabel"}, 14)
+	if not bool(reference_prompt.get("ok", false)):
+		return _failure(str(reference_prompt.get("error", "reference integrity prompt failed")))
+	if str(reference_prompt.get("text", "")).find("bindings_audit") == -1 or str(reference_prompt.get("text", "")).find("resource_reference_audit") == -1 or str(reference_prompt.get("text", "")).find("res://Main.tscn") == -1:
+		return _failure("reference integrity prompt should mention binding and resource audits and normalize scene_path.")
+	if not _prompt_text_is_actionable(str(reference_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_script_analyze", "system_scene_validate"]):
+		return _failure("reference integrity prompt should provide actionable workflow sections and validation tools.")
+	var gd_reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.gd"}, 16)
+	if not bool(gd_reference_prompt.get("ok", false)):
+		return _failure("reference integrity prompt should accept GDScript paths.")
 
-	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": BINDING_FIX_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 14)
+	var runtime_prompt := await _get_prompt_text(RUNTIME_VALIDATION_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "goal": "verify menu", "success_marker": "MENU_READY"}, 18)
+	if not bool(runtime_prompt.get("ok", false)):
+		return _failure(str(runtime_prompt.get("error", "runtime validation prompt failed")))
+	if str(runtime_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(runtime_prompt.get("text", "")).find("MENU_READY") == -1:
+		return _failure("runtime validation prompt should normalize scene_path and include success marker context.")
+	if not _prompt_text_is_actionable(str(runtime_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_run", "system_runtime_step"]):
+		return _failure("runtime validation prompt should provide actionable run/input/capture workflow sections.")
+
+	var editor_prompt := await _get_prompt_text(EDITOR_UI_CONTROL_PROMPT, {"ui_goal": "open settings", "target_path": "MCPDock/settings"}, 19)
+	if not bool(editor_prompt.get("ok", false)):
+		return _failure(str(editor_prompt.get("error", "editor UI control prompt failed")))
+	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_control"]):
+		return _failure("editor UI control prompt should provide actionable editor UI workflow sections.")
+
+	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 15)
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
-		return _failure("prompts/get should reject invalid binding_fix path arguments.")
+		return _failure("prompts/get should reject invalid reference_integrity path arguments.")
 	var stdio_server = StdioServerScript.new()
 	var invalid_stdio_params_response: Dictionary = stdio_server._handle_resources_read([], 17)
 	stdio_server.free()
