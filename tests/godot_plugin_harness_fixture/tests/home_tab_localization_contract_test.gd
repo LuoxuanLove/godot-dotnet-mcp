@@ -38,6 +38,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if locale.has("advanced_settings"):
 			return _failure("Localization dictionaries should not keep the removed Advanced Settings label.")
 	for key in [
+		"tool_system_help_name",
+		"tool_system_help_desc",
 		"tool_system_editor_state_name",
 		"tool_system_project_files_name",
 		"tool_system_scene_tree_name",
@@ -58,8 +60,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"config_client_qwen",
 		"config_client_cherry_studio"
 	]:
-		if not en.has(key) or not zh_cn.has(key) or not zh_tw.has(key):
-			return _failure("All supported locales should define visible Tools-page key: %s" % key)
+		for locale in supported_locales:
+			if not locale.has(key):
+				return _failure("All supported locales should define visible Tools-page key: %s" % key)
 	for key in [
 		"tab_settings",
 		"settings_general_title",
