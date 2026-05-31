@@ -33,7 +33,25 @@ class FakeLocalization extends RefCounted:
 		"tool_action_list_capture_cache_name": "列出截图缓存",
 		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
 		"tool_action_cleanup_legacy_cache_name": "清理旧缓存",
+		"tool_action_set_settings_name": "写入设置",
+		"tool_action_initialize_name": "初始化",
+		"tool_action_launch_name": "启动",
+		"tool_action_attach_name": "附加",
+		"tool_action_configuration_done_name": "配置完成",
+		"tool_action_disconnect_name": "断开连接",
+		"tool_action_terminate_name": "终止",
+		"tool_action_threads_name": "读取线程",
+		"tool_action_set_breakpoint_name": "设置断点",
+		"tool_action_remove_breakpoint_name": "移除断点",
+		"tool_action_list_breakpoints_name": "列出断点",
+		"tool_action_pause_name": "暂停",
+		"tool_action_continue_name": "继续",
+		"tool_action_step_over_name": "单步跳过",
+		"tool_action_stack_trace_name": "调用栈",
+		"tool_action_output_name": "输出事件",
+		"tool_param_system_dap_debugger_adapter_args_desc": "发送给调试适配器的启动或附加参数。",
 		"tool_system_project_state_name": "Project State",
+		"tool_system_dap_debugger_name": "DAP 调试器",
 		"tool_system_editor_state_name": "编辑器状态",
 		"tool_system_editor_log_name": "编辑器日志",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
@@ -138,12 +156,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var editor_state_tool = _find_child_by_metadata(system_category, "tool", "system_editor_state")
 	var system_tool = _find_child_by_metadata(system_category, "tool", "system_project_state")
+	var dap_tool = _find_child_by_metadata(system_category, "tool", "system_dap_debugger")
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
@@ -177,6 +196,35 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should render high-level system tool action children.")
 	if editor_log_action.get_text(0) != "读取输出" or userdata_action.get_text(0) != "确保目录结构":
 		return _failure("Tools tab should localize high-level system tool action children.")
+	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
+	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
+		return _failure("Tools tab should localize DAP debugger action children instead of humanizing snake_case action names.")
+	_instance.call("_apply_selection_metadata", dap_tool.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("adapter_args | object | 发送给调试适配器的启动或附加参数。"):
+		return _failure("Tools tab should localize DAP parameter descriptions in the selected tool preview.")
+	if preview_text.text.contains("Launch/attach arguments sent to the adapter"):
+		return _failure("Tools tab should not leak raw English DAP schema parameter descriptions in localized previews.")
+	if not preview_text.text.contains("fallback_note | string | Fallback-only schema description"):
+		return _failure("Tools tab should keep schema descriptions as fallback when no localized parameter description exists.")
+	var atomic_dap_tool = _find_child_by_metadata(dap_tool, "atomic", "dap_debugger")
+	if atomic_dap_tool == null:
+		return _failure("Tools tab should render the DAP atomic tool under the high-level DAP debugger entry.")
+	var atomic_dap_configuration_done_action = _find_child_by_metadata(atomic_dap_tool, "action", "dap_debugger.configuration_done")
+	if atomic_dap_configuration_done_action == null or atomic_dap_configuration_done_action.get_text(0) != "配置完成":
+		return _failure("Tools tab should localize DAP atomic action children.")
+	_instance.call("_apply_selection_metadata", atomic_dap_tool.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("adapter_args | object | 发送给调试适配器的启动或附加参数。"):
+		return _failure("Tools tab should localize DAP atomic parameter descriptions in the selected tool preview.")
+	if preview_text.text.contains("Launch/attach arguments sent to the adapter"):
+		return _failure("Tools tab should not leak raw English DAP atomic schema parameter descriptions in localized previews.")
+	_instance.call("_apply_selection_metadata", atomic_dap_configuration_done_action.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("adapter_args | object | 发送给调试适配器的启动或附加参数。"):
+		return _failure("Tools tab should localize DAP atomic action parameter descriptions in the selected action preview.")
+	if preview_text.text.contains("Launch/attach arguments sent to the adapter"):
+		return _failure("Tools tab should not leak raw English DAP atomic action schema parameter descriptions in localized previews.")
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():
 		return _failure(catalog_error)
@@ -270,6 +318,16 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 				"action": {"type": "string", "enum": actions}
 			}
 		}
+	if full_name == "system_dap_debugger" or full_name == "dap_debugger":
+		tool_def["inputSchema"] = {
+			"type": "object",
+			"properties": {
+				"action": {"type": "string", "enum": actions, "description": "DAP debugger action"},
+				"adapter_args": {"type": "object", "description": "Launch/attach arguments sent to the adapter"},
+				"fallback_note": {"type": "string", "description": "Fallback-only schema description"}
+			},
+			"required": ["action"]
+		}
 	tools_by_category[category].append(tool_def)
 
 
@@ -285,6 +343,8 @@ func _system_actions_for(full_name: String) -> Array:
 	match full_name:
 		"system_editor_log":
 			return ["get_output", "get_errors", "clear"]
+		"system_dap_debugger":
+			return ["status", "get_settings", "set_settings", "initialize", "launch", "attach", "configuration_done", "disconnect", "terminate", "threads", "set_breakpoint", "remove_breakpoint", "list_breakpoints", "pause", "continue", "step_over", "stack_trace", "output"]
 		"system_userdata_maintenance":
 			return ["ensure_layout", "list_capture_cache", "cleanup_capture_cache", "cleanup_legacy_cache"]
 		"system_runtime_control":
