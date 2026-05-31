@@ -10,8 +10,8 @@ Godot .NET MCP `v1.1.1` improves everyday Agent workflows with complete debugger
 
 ### 📚 Clearer Prompt Guide Discovery
 
-- `system_help` now points agents to MCP Prompt Guides through `prompts/list`, `prompts/get`, and six high-level prompt IDs for project orientation, content authoring, debug triage, reference integrity, runtime validation, and editor UI control.
-- The built-in Prompt Guides now include recommended tool order, validation expectations, and avoid notes, giving agents stronger nonredundant starting workflows without splitting DAP into a separate prompt guide.
+- `system_help` now points agents to MCP Prompt Guides through `prompts/list`, `prompts/get`, and the built-in `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompt IDs.
+- The built-in Prompt Guides now include recommended tool order, validation expectations, and avoid notes, giving agents stronger starting workflows for scene work, debugging, and C# binding repair.
 
 ### 🔧 Stability and Performance Fixes
 
