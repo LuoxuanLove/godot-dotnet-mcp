@@ -3,11 +3,16 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 internal static class Program
 {
     private const int HarnessTimeoutMs = 120_000;
+    private const int MaxSerializedProcessOutputChars = 12_000;
     private const string SelectedCasesEnvVar = "GODOT_PLUGIN_HARNESS_SELECTED_CASES";
+    private static readonly Regex SensitiveProcessOutputPattern = new(
+        @"(?i)(authorization|bearer|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password|passwd|pwd)(\s*[:=]\s*)([^\s,;\]\}"" ]+|""[^""]*"")",
+        RegexOptions.Compiled);
     private static readonly string[] LeakWarningMarkers =
     [
         "ObjectDB instances leaked at exit",
@@ -124,8 +129,8 @@ internal static class Program
                     godotPath = explicitGodotPath,
                     stageRoot,
                     stageKept = preserveStageRoot,
-                    stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
-                    stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                    stdout = ToSerializedProcessOutput(stageBuild.StdOut),
+                    stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                     phaseTimings,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(buildSummary, new JsonSerializerOptions { WriteIndented = true }));
@@ -228,7 +233,7 @@ internal static class Program
                 stageKept = preserveStageRoot,
                 suite,
                 phaseTimings,
-                stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
+                stderr = ToSerializedProcessOutput(stderr),
             };
 
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
@@ -252,7 +257,7 @@ internal static class Program
                 processRegistryPath = processRegistry.EntryPath,
                 suite = TryParseLastJsonLine(stdout),
                 phaseTimings,
-                stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
+                stderr = ToSerializedProcessOutput(stderr),
             };
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
             return 1;
@@ -299,8 +304,8 @@ internal static class Program
                     exitCode = archiveResult.ExitCode,
                     stageRoot,
                     stageKept = preserveStageRoot,
-                    stdout = string.IsNullOrWhiteSpace(archiveResult.StdOut) ? string.Empty : archiveResult.StdOut.Trim(),
-                    stderr = string.IsNullOrWhiteSpace(archiveResult.StdErr) ? string.Empty : archiveResult.StdErr.Trim(),
+                    stdout = ToSerializedProcessOutput(archiveResult.StdOut),
+                    stderr = ToSerializedProcessOutput(archiveResult.StdErr),
                     phaseTimings,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(archiveSummary, new JsonSerializerOptions { WriteIndented = true }));
@@ -338,8 +343,8 @@ internal static class Program
                 fixtureHasRoslynPackageReference,
                 exportedRoslynRuntimeSources,
                 exportedDotnetBridgeSources,
-                stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
-                stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                stdout = ToSerializedProcessOutput(stageBuild.StdOut),
+                stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                 phaseTimings,
             };
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
@@ -527,6 +532,25 @@ internal static class Program
         {
             return string.Empty;
         }
+    }
+
+    private static string ToSerializedProcessOutput(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return string.Empty;
+        }
+
+        var redacted = SensitiveProcessOutputPattern.Replace(output.Trim(), "$1$2[redacted]");
+        if (redacted.Length <= MaxSerializedProcessOutputChars)
+        {
+            return redacted;
+        }
+
+        return string.Concat(
+            redacted.AsSpan(0, MaxSerializedProcessOutputChars),
+            Environment.NewLine,
+            $"[truncated {redacted.Length - MaxSerializedProcessOutputChars} chars]");
     }
 
     private static void TryKillProcessTree(Process? process)
