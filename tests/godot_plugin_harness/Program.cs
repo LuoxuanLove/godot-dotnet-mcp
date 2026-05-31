@@ -1,12 +1,18 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Formats.Tar;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 internal static class Program
 {
     private const int HarnessTimeoutMs = 120_000;
+    private const int MaxSerializedProcessOutputChars = 12_000;
     private const string SelectedCasesEnvVar = "GODOT_PLUGIN_HARNESS_SELECTED_CASES";
+    private static readonly Regex SensitiveProcessOutputPattern = new(
+        @"(?i)(authorization|bearer|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password|passwd|pwd)(\s*[:=]\s*)([^\s,;\]\}"" ]+|""[^""]*"")",
+        RegexOptions.Compiled);
     private static readonly string[] LeakWarningMarkers =
     [
         "ObjectDB instances leaked at exit",
@@ -31,6 +37,7 @@ internal static class Program
         var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
         var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
         var cleanupStaleProcesses = args.Any(arg => string.Equals(arg, "--cleanup-stale-processes", StringComparison.OrdinalIgnoreCase));
+        var cleanAssetLibraryInstallBuild = args.Any(arg => string.Equals(arg, "--clean-asset-library-install-build", StringComparison.OrdinalIgnoreCase));
         var onlyCase = Environment.GetEnvironmentVariable("GODOT_PLUGIN_HARNESS_ONLY_CASE");
         var selectedCases = ParseSelectedCases(GetOptionValue(args, "--cases")
             ?? Environment.GetEnvironmentVariable(SelectedCasesEnvVar));
@@ -59,6 +66,11 @@ internal static class Program
         }
 
         HarnessProcessRegistry.CleanupOrphanedEntries(repoRoot);
+
+        if (cleanAssetLibraryInstallBuild)
+        {
+            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot);
+        }
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
         {
@@ -117,8 +129,8 @@ internal static class Program
                     godotPath = explicitGodotPath,
                     stageRoot,
                     stageKept = preserveStageRoot,
-                    stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
-                    stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                    stdout = ToSerializedProcessOutput(stageBuild.StdOut),
+                    stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                     phaseTimings,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(buildSummary, new JsonSerializerOptions { WriteIndented = true }));
@@ -221,7 +233,7 @@ internal static class Program
                 stageKept = preserveStageRoot,
                 suite,
                 phaseTimings,
-                stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
+                stderr = ToSerializedProcessOutput(stderr),
             };
 
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
@@ -245,7 +257,7 @@ internal static class Program
                 processRegistryPath = processRegistry.EntryPath,
                 suite = TryParseLastJsonLine(stdout),
                 phaseTimings,
-                stderr = string.IsNullOrWhiteSpace(stderr) ? string.Empty : stderr.Trim(),
+                stderr = ToSerializedProcessOutput(stderr),
             };
             Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
             return 1;
@@ -261,6 +273,158 @@ internal static class Program
             }
             catch
             {
+            }
+        }
+    }
+
+    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot)
+    {
+        var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stageRoot);
+        using var processRegistry = HarnessProcessRegistry.Create(repoRoot, stageRoot, "clean-asset-library-install-build");
+        var phaseTimings = new List<PhaseTiming>();
+        var preserveStageRoot = false;
+
+        try
+        {
+            var copyStopwatch = Stopwatch.StartNew();
+            CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
+            var archiveResult = await ExportAddonArchiveAsync(repoRoot, stageRoot, processRegistry);
+            copyStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
+
+            if (!archiveResult.Succeeded)
+            {
+                preserveStageRoot = keepStageRoot;
+                var archiveSummary = new
+                {
+                    success = false,
+                    skipped = false,
+                    reason = archiveResult.TimedOut ? "clean_asset_library_archive_timeout" : "clean_asset_library_archive_failed",
+                    exitCode = archiveResult.ExitCode,
+                    stageRoot,
+                    stageKept = preserveStageRoot,
+                    stdout = ToSerializedProcessOutput(archiveResult.StdOut),
+                    stderr = ToSerializedProcessOutput(archiveResult.StdErr),
+                    phaseTimings,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(archiveSummary, new JsonSerializerOptions { WriteIndented = true }));
+                return 1;
+            }
+
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
+            RemoveRoslynPackageReference(Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"));
+
+            var fixtureHasRoslynPackageReference = FileContainsText(
+                Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"),
+                "Microsoft.CodeAnalysis.CSharp");
+            var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+
+            var stageBuildStopwatch = Stopwatch.StartNew();
+            var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
+            stageBuildStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("build_stage_project", stageBuildStopwatch.ElapsedMilliseconds));
+
+            var succeeded = stageBuild.Succeeded
+                && !fixtureHasRoslynPackageReference
+                && !exportedRoslynRuntimeSources
+                && !exportedDotnetBridgeSources;
+            preserveStageRoot = keepStageRoot && !succeeded;
+            var summary = new
+            {
+                success = succeeded,
+                skipped = false,
+                reason = succeeded ? string.Empty : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed"),
+                exitCode = stageBuild.ExitCode,
+                exportedWithGitArchive = true,
+                stageRoot,
+                stageKept = preserveStageRoot,
+                fixtureHasRoslynPackageReference,
+                exportedRoslynRuntimeSources,
+                exportedDotnetBridgeSources,
+                stdout = ToSerializedProcessOutput(stageBuild.StdOut),
+                stderr = ToSerializedProcessOutput(stageBuild.StdErr),
+                phaseTimings,
+            };
+            Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+            return succeeded ? 0 : 1;
+        }
+        finally
+        {
+            try
+            {
+                if (!preserveStageRoot && Directory.Exists(stageRoot))
+                {
+                    Directory.Delete(stageRoot, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> ExportAddonArchiveAsync(string repoRoot, string stageRoot, HarnessProcessRegistry processRegistry)
+    {
+        var archivePath = Path.Combine(stageRoot, "asset-library-addon.tar");
+        Process? process = null;
+        Task<string>? stderrTask = null;
+        FileStream? archiveStream = null;
+
+        try
+        {
+            archiveStream = File.Create(archivePath);
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("git")
+                {
+                    WorkingDirectory = repoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.ArgumentList.Add("archive");
+            process.StartInfo.ArgumentList.Add("--format=tar");
+            process.StartInfo.ArgumentList.Add("--worktree-attributes");
+            process.StartInfo.ArgumentList.Add("HEAD");
+            process.StartInfo.ArgumentList.Add("addons/godot_dotnet_mcp");
+            process.Start();
+            processRegistry.Register(process, "git-archive", "git", repoRoot, process.StartInfo.ArgumentList);
+            var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(archiveStream);
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            await stdoutTask;
+            await archiveStream.DisposeAsync();
+            archiveStream = null;
+
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            if (process.ExitCode != 0)
+            {
+                return (false, process.ExitCode, string.Empty, stderr, false);
+            }
+
+            TarFile.ExtractToDirectory(archivePath, stageRoot, overwriteFiles: true);
+            File.Delete(archivePath);
+            return (true, process.ExitCode, string.Empty, stderr, false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, string.Empty, stderr, true);
+        }
+        finally
+        {
+            if (archiveStream is not null)
+            {
+                await archiveStream.DisposeAsync();
             }
         }
     }
@@ -370,6 +534,25 @@ internal static class Program
         }
     }
 
+    private static string ToSerializedProcessOutput(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return string.Empty;
+        }
+
+        var redacted = SensitiveProcessOutputPattern.Replace(output.Trim(), "$1$2[redacted]");
+        if (redacted.Length <= MaxSerializedProcessOutputChars)
+        {
+            return redacted;
+        }
+
+        return string.Concat(
+            redacted.AsSpan(0, MaxSerializedProcessOutputChars),
+            Environment.NewLine,
+            $"[truncated {redacted.Length - MaxSerializedProcessOutputChars} chars]");
+    }
+
     private static void TryKillProcessTree(Process? process)
     {
         if (process is null)
@@ -445,6 +628,37 @@ internal static class Program
         }
 
         Directory.Delete(path, recursive: true);
+    }
+
+    private static void RemoveRoslynPackageReference(string projectFilePath)
+    {
+        if (!File.Exists(projectFilePath))
+        {
+            return;
+        }
+
+        var lines = File.ReadAllLines(projectFilePath);
+        var filteredLines = lines
+            .Where(line => !line.Contains("Microsoft.CodeAnalysis.CSharp", StringComparison.Ordinal))
+            .ToArray();
+        File.WriteAllLines(projectFilePath, filteredLines, Encoding.UTF8);
+    }
+
+    private static bool FileContainsText(string path, string text)
+    {
+        return File.Exists(path) && File.ReadAllText(path).Contains(text, StringComparison.Ordinal);
+    }
+
+    private static bool HasExportedSourceFiles(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        return Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
+            .Any(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void CopyDirectory(string sourceRoot, string destinationRoot)
