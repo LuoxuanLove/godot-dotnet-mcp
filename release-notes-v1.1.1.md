@@ -1,6 +1,6 @@
-## 🧩 Godot .NET MCP v1.1.1: Complete DAP Sessions and Faster Project State
+## 🧩 Godot .NET MCP v1.1.1: Complete DAP Sessions, Prompt Guides, and Faster Project State
 
-Godot .NET MCP `v1.1.1` improves two everyday Agent workflows: complete debugger sessions through the built-in Godot Debug Adapter Protocol, and faster large-project orientation when callers only need compact project-state information.
+Godot .NET MCP `v1.1.1` improves three everyday Agent workflows: complete debugger sessions through the built-in Godot Debug Adapter Protocol, more actionable MCP Prompt Guides for common Godot tasks, and faster large-project orientation when callers only need compact project-state information.
 
 ### ✨ Full DAP Session Flow
 
@@ -13,10 +13,11 @@ Godot .NET MCP `v1.1.1` improves two everyday Agent workflows: complete debugger
 - Raw DAP request and message details are no longer returned by default; when protocol troubleshooting requires `include_raw=true`, sensitive-looking fields are redacted before being reported.
 - Session, message, frame, buffer, and breakpoint caches now have fixed bounds to keep long debugger sessions from growing without limit.
 
-### 🔧 Clearer Diagnostics and Tool Discovery
+### 🔧 Clearer Diagnostics and Prompt Guide Discovery
 
 - DAP lifecycle mistakes now return structured protocol errors such as `dap_invalid_session_state`, `dap_invalid_settings`, and `dap_limit_exceeded`, making client-side recovery easier.
-- Tool descriptions, Tools-page documentation, protocol facts, and harness coverage were updated so the advertised debugger actions match the runtime schema.
+- `system_help` now points agents to MCP Prompt Guides through `prompts/list`, `prompts/get`, and the built-in `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` prompt IDs.
+- The built-in Prompt Guides now include recommended tool order, validation expectations, and avoid notes, giving agents stronger starting workflows for scene work, debugging, and C# binding repair.
 
 ### ⚡ Faster Large-Project Orientation
 
@@ -30,4 +31,4 @@ Godot .NET MCP `v1.1.1` improves two everyday Agent workflows: complete debugger
 
 ### ✅ Compatibility and Upgrade Notes
 
-This release keeps the Godot 4.6+ / .NET 8 compatibility target and does not change installation paths. Users who rely on the DAP tool should reconnect or refresh their MCP tool schema after upgrading so clients see the new `2026-05-03.13` DAP action surface. Existing `system_project_state` callers that use the full payload or the `files` section continue to receive the same path arrays, while compact callers should see lower file-enumeration overhead on larger projects.
+This release keeps the Godot 4.6+ / .NET 8 compatibility target and does not change installation paths. Users should reconnect or refresh their MCP tool schema after upgrading so clients see the new `2026-05-03.13` DAP action surface and the updated `system_help` Prompt Guide discovery text. MCP Prompt Guides remain prompt templates accessed through `prompts/list` and `prompts/get`; executable editor actions continue to run through the existing high-level `system_*` tools. Existing `system_project_state` callers that use the full payload or the `files` section continue to receive the same path arrays, while compact callers should see lower file-enumeration overhead on larger projects.
