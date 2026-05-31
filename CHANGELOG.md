@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.2.
 
+### Changed
+
+- Reorganized built-in MCP Prompt Guides into six high-level, nonredundant entries: `godot.project_orientation`, `godot.content_authoring`, `godot.debug_triage`, `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control`.
+
+### Fixed
+
+- Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
+
+### Documentation
+
+- Updated Prompt Guides documentation to describe the six high-level workflow entries and clarify that DAP debugging is part of `godot.debug_triage` rather than a separate prompt guide.
+
+### Internal
+
+- Updated MCP prompt, system help, router, and localization contracts so the prompt surface remains exactly the six high-level workflow guides.
+
 ## [1.1.1] - 2026-05-31
 
 ### Added
@@ -16,21 +32,19 @@ Target version: 1.1.2.
 
 ### Changed
 
-- Strengthened built-in MCP Prompt Guides so each high-level workflow returns actionable guidance with recommended tool order, validation expectations, and avoid notes instead of thin one-line hints.
-- Reorganized built-in MCP Prompt Guides into six high-level, nonredundant entries: `godot.project_orientation`, `godot.content_authoring`, `godot.debug_triage`, `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control`.
+- Strengthened built-in MCP Prompt Guides so `godot.scene_bootstrap`, `godot.debug_triage`, and `godot.binding_fix` return actionable workflow guidance with recommended tool order, validation expectations, and avoid notes instead of thin one-line hints.
 
 ### Fixed
 
 - Fixed `system_bindings_audit` freezing the Godot editor on large projects by adding a per-call scene audit cache so each unique scene is loaded and instantiated only once, and by reusing atomic executor instances across consecutive calls so the reference index and Roslyn caches survive between script inspections.
 - Fixed atomic executor cache invalidation so read actions such as `get_settings` no longer match write-action substrings, while successful writes clear cached executors after mutation to avoid stale reference and Roslyn data.
 - Fixed `system_project_state(summary=true)` and summary-only section reads so they use one bulk lightweight file-count request instead of building full script, scene, and resource path arrays before trimming the response.
-- Exposed MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
+- Exposed MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the three built-in prompt IDs from the primary capability guide.
 
 ### Documentation
 
 - Documented that `system_project_state(sections=[...])` takes precedence over `summary=true`, that the `health` section triggers plugin health collection, and that the `files` section is the path-array boundary for large projects.
 - Documented Prompt Guides discovery and usage in the tool-system, service-routing, and runtime-service docs, including the separation between MCP prompts and executable tools.
-- Updated Prompt Guides documentation to describe the six high-level workflow entries and clarify that DAP debugging is part of `godot.debug_triage` rather than a separate prompt guide.
 
 ### Internal
 
@@ -38,7 +52,6 @@ Target version: 1.1.2.
 - Reused atomic executor instances in `atomic_bridge.call_atomic` / `call_atomic_async` instead of recreating them on every call, preserving `reference_service._reference_index`, `inspect_service._plugin_roslyn_service`, and other instance-level caches across consecutive atomic invocations.
 - Added contract coverage proving `system_project_state` compact reads skip full path enumeration, batch project file totals through one count-only request, and still collect file paths on demand for default and `files` section reads.
 - Expanded prompt guide, system help, router, and localization harness contracts to prevent regressions in prompt content depth, prompt discoverability, real prompt IDs, and supported-locale Help descriptions.
-- Updated MCP prompt and system help contracts so the prompt surface remains exactly the six high-level workflow guides.
 
 ## [1.1.0] - 2026-05-28
 
