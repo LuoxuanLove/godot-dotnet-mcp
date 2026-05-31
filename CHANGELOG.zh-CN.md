@@ -10,7 +10,7 @@
 
 ### Fixed
 
-- 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用轻量文件计数，再返回紧凑载荷。
+- 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用一次批量轻量文件计数，再返回紧凑载荷。
 
 ### Documentation
 
@@ -18,7 +18,7 @@
 
 ### Internal
 
-- 增加契约覆盖，验证 `system_project_state` 紧凑读取会跳过完整路径枚举，而默认完整载荷与 `files` 分段仍会按需收集文件路径。
+- 增加契约覆盖，验证 `system_project_state` 紧凑读取会跳过完整路径枚举、通过一次 count-only 请求批量统计项目文件总数，而默认完整载荷与 `files` 分段仍会按需收集文件路径。
 
 ## [1.1.0] - 2026-05-28
 
