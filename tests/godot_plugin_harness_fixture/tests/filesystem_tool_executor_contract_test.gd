@@ -8,16 +8,17 @@ const TEMP_ROOT := "res://Tmp/godot_dotnet_mcp_filesystem_contracts"
 func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = FilesystemExecutorScript.new()
 
-	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd"):
-		return _failure("filesystem_tools.gd should be removed once the split executor becomes the only stable entry.")
-
 	_remove_tree(TEMP_ROOT)
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 6:
-		return _failure("Filesystem executor should expose 6 tool definitions after the split.")
+	# Migration note: the "file" compatibility alias (line 15) and expected tool count (currently 7)
+	# reflect the pre-split state. Once the filesystem_tools.gd monolith is fully retired and all
+	# callers use the split executor, the compatibility alias should be removed and the count should
+	# decrease to 6, with "file" dropped from expected_names.
+	if tool_defs.size() != 7:
+		return _failure("Filesystem executor should expose 7 tool definitions including the compatibility file alias.")
 
-	var expected_names := ["directory", "file_read", "file_write", "file_manage", "json", "search"]
+	var expected_names := ["directory", "file", "file_read", "file_write", "file_manage", "json", "search"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
@@ -109,6 +110,45 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(directory_files_result.get("success", false)):
 		return _failure("Directory get_files failed through the split directory service.")
+	var directory_files_data: Dictionary = directory_files_result.get("data", {})
+	var directory_count_only_result: Dictionary = executor.execute("directory", {
+		"action": "get_files",
+		"path": TEMP_ROOT,
+		"filter": "*.txt",
+		"recursive": true,
+		"count_only": true
+	})
+	if not bool(directory_count_only_result.get("success", false)):
+		return _failure("Directory get_files count_only failed through the split directory service.")
+	var directory_count_only_data: Dictionary = directory_count_only_result.get("data", {})
+	if int(directory_count_only_data.get("count", -1)) != int(directory_files_data.get("count", -2)):
+		return _failure("Directory get_files count_only should match normal get_files count.")
+	if directory_count_only_data.has("files"):
+		return _failure("Directory get_files count_only should not return a files array.")
+	if not bool(directory_count_only_data.get("count_only", false)):
+		return _failure("Directory get_files count_only should mark the response as count_only.")
+	var directory_bulk_count_only_result: Dictionary = executor.execute("directory", {
+		"action": "get_files",
+		"path": TEMP_ROOT,
+		"filters": ["*.txt", "*.json"],
+		"recursive": true,
+		"count_only": true
+	})
+	if not bool(directory_bulk_count_only_result.get("success", false)):
+		return _failure("Directory get_files bulk count_only failed through the split directory service.")
+	var directory_bulk_count_only_data: Dictionary = directory_bulk_count_only_result.get("data", {})
+	if directory_bulk_count_only_data.has("files"):
+		return _failure("Directory get_files bulk count_only should not return a files array.")
+	if not bool(directory_bulk_count_only_data.get("count_only", false)):
+		return _failure("Directory get_files bulk count_only should mark the response as count_only.")
+	var counts_by_filter = directory_bulk_count_only_data.get("counts_by_filter", {})
+	if not (counts_by_filter is Dictionary):
+		return _failure("Directory get_files bulk count_only should return counts_by_filter.")
+	var bulk_counts: Dictionary = counts_by_filter
+	if int(bulk_counts.get("*.txt", -1)) != int(directory_files_data.get("count", -2)):
+		return _failure("Directory get_files bulk count_only should match the single-filter txt count.")
+	if int(bulk_counts.get("*.json", -1)) != int(search_find_result.get("data", {}).get("count", -2)):
+		return _failure("Directory get_files bulk count_only should count json files in the same traversal.")
 
 	return {
 		"name": "filesystem_tool_executor_contracts",

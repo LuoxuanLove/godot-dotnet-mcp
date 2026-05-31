@@ -18,12 +18,14 @@ ACTIONS:
 - create: Create a new directory
 - delete: Delete an empty directory
 - exists: Check if directory exists
-- get_files: Get all files in directory (with filters)
+- get_files: Get all files in directory (with filters). Pass count_only=true for a lightweight count-only response (returns count + count_only:true, files array absent). For count_only=true, callers may pass filters=["*.gd", "*.cs"] to count multiple patterns in one traversal; the response includes counts_by_filter. This is a public contract optimized for large-directory callers like project_state summary mode.
 
 EXAMPLES:
 - List directory: {"action": "list", "path": "res://scenes"}
 - Create directory: {"action": "create", "path": "res://new_folder"}
 - Get all .gd files: {"action": "get_files", "path": "res://scripts", "filter": "*.gd"}
+- Count-only: {"action": "get_files", "path": "res://", "filter": "*.cs", "recursive": true, "count_only": true}
+- Bulk count-only: {"action": "get_files", "path": "res://", "filters": ["*.gd", "*.cs", "*.tscn"], "recursive": true, "count_only": true}
 - Check exists: {"action": "exists", "path": "res://assets"}""",
 			"inputSchema": {
 				"type": "object",
@@ -41,10 +43,19 @@ EXAMPLES:
 						"type": "string",
 						"description": "File filter pattern (e.g., *.gd, *.tscn)"
 					},
+					"filters": {
+						"type": "array",
+						"items": {"type": "string"},
+						"description": "For count_only get_files, count multiple file filters in a single traversal and return counts_by_filter"
+					},
 					"recursive": {
 						"type": "boolean",
 						"description": "Include subdirectories"
-					}
+					},
+				"count_only": {
+					"type": "boolean",
+					"description": "For get_files, return only the matching file count (key 'count') without including the files array. This is a public API contract — callers such as project_state summary mode depend on the count-only response shape: {\"count\": <int>, \"count_only\": true}. The files array is guaranteed absent when count_only is true."
+				}
 				},
 				"required": ["action", "path"]
 			}
@@ -298,7 +309,7 @@ func _execute_directory(args: Dictionary) -> Dictionary:
 		"exists":
 			return _directory_exists(path)
 		"get_files":
-			return _get_files(path, args.get("filter", "*"), args.get("recursive", false))
+			return _get_files(path, args.get("filter", "*"), args.get("recursive", false), bool(args.get("count_only", false)), args.get("filters", []))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -383,7 +394,23 @@ func _directory_exists(path: String) -> Dictionary:
 	})
 
 
-func _get_files(path: String, filter: String, recursive: bool) -> Dictionary:
+func _get_files(path: String, filter: String, recursive: bool, count_only: bool = false, filters: Array = []) -> Dictionary:
+	if count_only:
+		if not filters.is_empty():
+			return _success({
+				"path": path,
+				"filters": filters.duplicate(),
+				"recursive": recursive,
+				"count_only": true,
+				"counts_by_filter": _count_files_by_filters(path, filters, recursive)
+			})
+		return _success({
+			"path": path,
+			"filter": filter,
+			"recursive": recursive,
+			"count_only": true,
+			"count": _count_files(path, filter, recursive)
+		})
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
 
@@ -396,25 +423,75 @@ func _get_files(path: String, filter: String, recursive: bool) -> Dictionary:
 	})
 
 
+func _count_files_by_filters(path: String, filters: Array, recursive: bool) -> Dictionary:
+	var counts := {}
+	for raw_filter in filters:
+		counts[str(raw_filter)] = 0
+	var pending: Array = [path]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var dir = DirAccess.open(current)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var full_path = current.path_join(file_name)
+			if dir.current_is_dir():
+				if recursive and not file_name.begins_with("."):
+					pending.append(full_path)
+			else:
+				for raw_filter in filters:
+					var filter_text := str(raw_filter)
+					if file_name.match(filter_text):
+						counts[filter_text] = int(counts.get(filter_text, 0)) + 1
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	return counts
+
+
+func _count_files(path: String, filter: String, recursive: bool) -> int:
+	var count := 0
+	var pending: Array = [path]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var dir = DirAccess.open(current)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var full_path = current.path_join(file_name)
+			if dir.current_is_dir():
+				if recursive and not file_name.begins_with("."):
+					pending.append(full_path)
+			else:
+				if file_name.match(filter):
+					count += 1
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	return count
+
+
 func _collect_files(path: String, filter: String, recursive: bool, results: Array[String]) -> void:
-	var dir = DirAccess.open(path)
-	if not dir:
-		return
-
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path.path_join(file_name)
-
-		if dir.current_is_dir():
-			if recursive and not file_name.begins_with("."):
-				_collect_files(full_path, filter, recursive, results)
-		else:
-			if file_name.match(filter):
-				results.append(full_path)
-
-		file_name = dir.get_next()
-	dir.list_dir_end()
+	var pending: Array = [path]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var dir = DirAccess.open(current)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var full_path = current.path_join(file_name)
+			if dir.current_is_dir():
+				if recursive and not file_name.begins_with("."):
+					pending.append(full_path)
+			else:
+				if file_name.match(filter):
+					results.append(full_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
 
 
 # ==================== FILE ====================
