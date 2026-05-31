@@ -751,7 +751,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_name": "运行时步进",
 	"tool_system_runtime_step_desc": "统一运行时自动化入口：通过 action=step|capture|input 执行步进闭环、截图或脚本化输入。",
 	"tool_system_dap_debugger_name": "DAP 调试器",
-	"tool_system_dap_debugger_desc": "连接 Godot 内置 Debug Adapter Protocol 端点，并发送启动、附加、断点和自定义 DAP 请求。",
+	"tool_system_dap_debugger_desc": "通过运行时设置、session ID、生命周期、线程、断点、步进、调用栈、输出、终止与断开动作驱动 Godot 内置 Debug Adapter Protocol 端点。",
 	"tool_runtime_control_name": "控制",
 	"tool_runtime_control_desc": "内部运行时控制：检查或启用正在运行项目的调试器会话。支持读取状态、启用与禁用。",
 	"tool_runtime_capture_name": "捕获",
@@ -930,7 +930,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_editor_log_desc": "读取、筛选或清空编辑器 Output 面板。",
 	"tool_debug_class_db_desc": "查询 Godot 类数据库",
 	"tool_dap_debugger_name": "调试器",
-	"tool_dap_debugger_desc": "发送 Godot Debug Adapter Protocol 断点、步进、调用栈和 output 事件请求。",
+	"tool_dap_debugger_desc": "发送 Godot Debug Adapter Protocol 生命周期、断点、步进、调用栈、output 事件、终止与断开请求。",
 
 	# Filesystem tools
 	"tool_filesystem_directory_name": "目录",
