@@ -392,6 +392,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(disconnect_result.get("success", false)):
 		return _failure("DAP disconnect should complete and close the session.")
+	lifecycle_breakpoints = dap_executor.execute("debugger", {
+		"action": "list_breakpoints",
+		"session_id": lifecycle_session
+	})
+	if int(lifecycle_breakpoints.get("data", {}).get("count", 0)) != 0:
+		return _failure("DAP disconnect should clear breakpoint state for the closed session.")
 
 	var request_port := _pick_free_port(mismatch_port + 1)
 	if request_port < 0:

@@ -621,6 +621,7 @@ func _close_session(session_id: String) -> void:
 	if peer != null:
 		peer.disconnect_from_host()
 	_sessions_by_id.erase(session_id)
+	_breakpoints_by_session.erase(session_id)
 
 
 func _remember_session(session_id: String, session: Dictionary) -> void:
