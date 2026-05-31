@@ -125,27 +125,40 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (prompts_result is Dictionary):
 		return _failure("prompts/list should return a result object.")
 	var prompts = (prompts_result as Dictionary).get("prompts", [])
+	if not (prompts is Array) or (prompts as Array).size() != 3:
+		return _failure("prompts/list should expose exactly the three built-in prompt guides.")
 	for expected_prompt in [SCENE_BOOTSTRAP_PROMPT, DEBUG_TRIAGE_PROMPT, BINDING_FIX_PROMPT]:
 		if not _has_prompt(prompts, expected_prompt):
 			return _failure("prompts/list should expose prompt: %s" % expected_prompt)
+		var prompt_metadata := _find_prompt(prompts, expected_prompt)
+		if str(prompt_metadata.get("description", "")).length() < 40:
+			return _failure("prompts/list should describe when and why to use prompt: %s" % expected_prompt)
+		if not _prompt_arguments_are_documented(prompt_metadata):
+			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
 
 	var scene_prompt := await _get_prompt_text(SCENE_BOOTSTRAP_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "goal": "add a menu"}, 11)
 	if not bool(scene_prompt.get("ok", false)):
 		return _failure(str(scene_prompt.get("error", "scene prompt failed")))
 	if str(scene_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1:
 		return _failure("scene bootstrap prompt should normalize scene_path to res://.")
+	if not _prompt_text_is_actionable(str(scene_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_scene_analyze", "system_scene_patch"]):
+		return _failure("scene bootstrap prompt should provide actionable workflow sections and scene tools.")
 
 	var debug_prompt := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"error_summary": "NullReferenceException", "include_runtime": true}, 12)
 	if not bool(debug_prompt.get("ok", false)):
 		return _failure(str(debug_prompt.get("error", "debug prompt failed")))
 	if str(debug_prompt.get("text", "")).find("runtime_diagnose") == -1 or str(debug_prompt.get("text", "")).find("NullReferenceException") == -1:
 		return _failure("debug triage prompt should mention runtime_diagnose and include the error summary.")
+	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_editor_log", "system_project_state"]):
+		return _failure("debug triage prompt should provide actionable workflow sections and diagnostic tools.")
 
 	var binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "binding_name": "HealthLabel"}, 13)
 	if not bool(binding_prompt.get("ok", false)):
 		return _failure(str(binding_prompt.get("error", "binding prompt failed")))
 	if str(binding_prompt.get("text", "")).find("bindings_audit") == -1 or str(binding_prompt.get("text", "")).find("res://Main.tscn") == -1:
 		return _failure("binding fix prompt should mention bindings_audit and normalize scene_path.")
+	if not _prompt_text_is_actionable(str(binding_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_script_analyze", "system_scene_validate"]):
+		return _failure("binding fix prompt should provide actionable workflow sections and validation tools.")
 	var gd_binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.gd"}, 16)
 	if not bool(gd_binding_prompt.get("ok", false)):
 		return _failure("binding fix prompt should accept GDScript paths.")
@@ -255,6 +268,48 @@ func _has_prompt(prompts, name: String) -> bool:
 		return false
 	for prompt in prompts:
 		if prompt is Dictionary and str((prompt as Dictionary).get("name", "")) == name:
+			return true
+	return false
+
+
+func _find_prompt(prompts, name: String) -> Dictionary:
+	if not (prompts is Array):
+		return {}
+	for prompt in prompts:
+		if prompt is Dictionary and str((prompt as Dictionary).get("name", "")) == name:
+			return (prompt as Dictionary)
+	return {}
+
+
+func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
+	var arguments = prompt.get("arguments", [])
+	if not (arguments is Array):
+		return false
+	for argument in arguments:
+		if not (argument is Dictionary):
+			return false
+		var argument_dict := argument as Dictionary
+		if str(argument_dict.get("name", "")).is_empty():
+			return false
+		if str(argument_dict.get("description", "")).length() < 20:
+			return false
+		if not argument_dict.has("required"):
+			return false
+	return true
+
+
+func _prompt_text_is_actionable(text: String, required_fragments: Array[String]) -> bool:
+	if text.length() < 250:
+		return false
+	for fragment in required_fragments:
+		if not _has_any_fragment(text, fragment):
+			return false
+	return true
+
+
+func _has_any_fragment(text: String, fragment_group: String) -> bool:
+	for fragment in fragment_group.split("||"):
+		if text.find(fragment) != -1:
 			return true
 	return false
 

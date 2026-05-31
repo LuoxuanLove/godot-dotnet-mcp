@@ -533,6 +533,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_audit_desc": "エクスポートされたバインディングに起因するシーンの問題を報告する",
 	"tool_system_project_state_name": "プロジェクトの状態",
 	"tool_system_project_state_desc": "数、最近のエラー、実行時ステータスなど、プロジェクトの現在の状態を要約します。",
+	"tool_system_help_name": "ヘルプ",
+	"tool_system_help_desc": "Agent 向け MCP 機能ガイド、Prompt Guide の発見、視覚検証ヒント、非表示コントロール案内、schema 情報を返します。",
 	"tool_system_plugin_reload_name": "プラグイン再読み込み",
 	"tool_system_plugin_reload_desc": "実行中のプラグインインスタンスが最新か確認し、前面 UI に依存せず完全なライフサイクル再読み込みを予約します。",
 	"tool_system_project_configure_name": "プロジェクトの構成",

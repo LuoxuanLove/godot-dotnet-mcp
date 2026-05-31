@@ -4,6 +4,7 @@ extends RefCounted
 ## System implementation: help
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -56,6 +57,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"purpose": "Editor-native MCP tools for Godot 4.6+ .NET projects.",
 		"recommended_start": [
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
+			"Call prompts/list and prompts/get when you need MCP-native workflow guides for scene bootstrap, debug triage, or binding repair before choosing tools.",
 			"Call system_editor_state when the task depends on the current editor UI.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
@@ -64,6 +66,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		],
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
+			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided scene bootstrap", "debug triage", "binding repair workflow"],
 			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
@@ -92,6 +95,20 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"schema": {
 			"tool_schema_version": str(facts.get("tool_schema_version", "")),
 			"refresh_hint": "After plugin reload or schema changes, reconnect or fetch /api/tools again before relying on cached tool descriptions."
+		},
+		"prompt_guides": {
+			"discovery_methods": ["prompts/list", "prompts/get"],
+			"usage_note": "Prompt guides are MCP-native prompt templates, not tools/call actions. Use prompts/list to discover them and prompts/get with optional arguments to fetch the workflow text.",
+			"available": [{
+				"name": MCPPromptsServiceScript.SCENE_BOOTSTRAP_PROMPT,
+				"purpose": "Plan scene edits after project and scene validation."
+			}, {
+				"name": MCPPromptsServiceScript.DEBUG_TRIAGE_PROMPT,
+				"purpose": "Collect editor, project, runtime, and DAP evidence before fixing errors."
+			}, {
+				"name": MCPPromptsServiceScript.BINDING_FIX_PROMPT,
+				"purpose": "Audit C#, GDScript, signal, export, and NodePath binding mismatches before patching."
+			}]
 		}
 	}
 	if include_tools:
