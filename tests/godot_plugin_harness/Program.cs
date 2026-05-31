@@ -31,6 +31,7 @@ internal static class Program
         var keepStageRoot = args.Any(arg => string.Equals(arg, "--keep-stage-root", StringComparison.OrdinalIgnoreCase));
         var listCases = args.Any(arg => string.Equals(arg, "--list-cases", StringComparison.OrdinalIgnoreCase));
         var cleanupStaleProcesses = args.Any(arg => string.Equals(arg, "--cleanup-stale-processes", StringComparison.OrdinalIgnoreCase));
+        var cleanAssetLibraryInstallBuild = args.Any(arg => string.Equals(arg, "--clean-asset-library-install-build", StringComparison.OrdinalIgnoreCase));
         var onlyCase = Environment.GetEnvironmentVariable("GODOT_PLUGIN_HARNESS_ONLY_CASE");
         var selectedCases = ParseSelectedCases(GetOptionValue(args, "--cases")
             ?? Environment.GetEnvironmentVariable(SelectedCasesEnvVar));
@@ -59,6 +60,11 @@ internal static class Program
         }
 
         HarnessProcessRegistry.CleanupOrphanedEntries(repoRoot);
+
+        if (cleanAssetLibraryInstallBuild)
+        {
+            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot);
+        }
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
         {
@@ -265,6 +271,76 @@ internal static class Program
         }
     }
 
+    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot)
+    {
+        var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stageRoot);
+        using var processRegistry = HarnessProcessRegistry.Create(repoRoot, stageRoot, "clean-asset-library-install-build");
+        var phaseTimings = new List<PhaseTiming>();
+        var preserveStageRoot = false;
+
+        try
+        {
+            var copyStopwatch = Stopwatch.StartNew();
+            CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
+            CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            copyStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
+
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            RemoveRoslynPackageReference(Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"));
+
+            var fixtureHasRoslynPackageReference = FileContainsText(
+                Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"),
+                "Microsoft.CodeAnalysis.CSharp");
+            var exportedRoslynRuntimeSources = Directory.Exists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            var exportedDotnetBridgeSources = Directory.Exists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+
+            var stageBuildStopwatch = Stopwatch.StartNew();
+            var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
+            stageBuildStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("build_stage_project", stageBuildStopwatch.ElapsedMilliseconds));
+
+            var succeeded = stageBuild.Succeeded
+                && !fixtureHasRoslynPackageReference
+                && !exportedRoslynRuntimeSources
+                && !exportedDotnetBridgeSources;
+            preserveStageRoot = keepStageRoot && !succeeded;
+            var summary = new
+            {
+                success = succeeded,
+                skipped = false,
+                reason = succeeded ? string.Empty : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed"),
+                exitCode = stageBuild.ExitCode,
+                stageRoot,
+                stageKept = preserveStageRoot,
+                fixtureHasRoslynPackageReference,
+                exportedRoslynRuntimeSources,
+                exportedDotnetBridgeSources,
+                stdout = string.IsNullOrWhiteSpace(stageBuild.StdOut) ? string.Empty : stageBuild.StdOut.Trim(),
+                stderr = string.IsNullOrWhiteSpace(stageBuild.StdErr) ? string.Empty : stageBuild.StdErr.Trim(),
+                phaseTimings,
+            };
+            Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+            return succeeded ? 0 : 1;
+        }
+        finally
+        {
+            try
+            {
+                if (!preserveStageRoot && Directory.Exists(stageRoot))
+                {
+                    Directory.Delete(stageRoot, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
     private static string[] ParseSelectedCases(string? rawCases)
     {
         if (string.IsNullOrWhiteSpace(rawCases))
@@ -445,6 +521,25 @@ internal static class Program
         }
 
         Directory.Delete(path, recursive: true);
+    }
+
+    private static void RemoveRoslynPackageReference(string projectFilePath)
+    {
+        if (!File.Exists(projectFilePath))
+        {
+            return;
+        }
+
+        var lines = File.ReadAllLines(projectFilePath);
+        var filteredLines = lines
+            .Where(line => !line.Contains("Microsoft.CodeAnalysis.CSharp", StringComparison.Ordinal))
+            .ToArray();
+        File.WriteAllLines(projectFilePath, filteredLines, Encoding.UTF8);
+    }
+
+    private static bool FileContainsText(string path, string text)
+    {
+        return File.Exists(path) && File.ReadAllText(path).Contains(text, StringComparison.Ordinal);
     }
 
     private static void CopyDirectory(string sourceRoot, string destinationRoot)

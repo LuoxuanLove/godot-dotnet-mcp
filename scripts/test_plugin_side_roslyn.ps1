@@ -119,6 +119,32 @@ function Assert-HarnessResults {
     }
 }
 
+function Assert-CleanAssetLibraryInstallBuild {
+    param(
+        [object]$HarnessJson
+    )
+
+    if ($HarnessJson -eq $null) {
+        throw "Clean Asset Library install build did not report JSON output."
+    }
+
+    $requiredFalseProperties = @(
+        "fixtureHasRoslynPackageReference",
+        "exportedRoslynRuntimeSources",
+        "exportedDotnetBridgeSources"
+    )
+
+    foreach ($propertyName in $requiredFalseProperties) {
+        if (-not ($HarnessJson.PSObject.Properties.Name -contains $propertyName)) {
+            throw "Clean Asset Library install build did not report required property: $propertyName"
+        }
+
+        if ([bool]$HarnessJson.$propertyName) {
+            throw "Clean Asset Library install build reported $propertyName=true."
+        }
+    }
+}
+
 function Write-HarnessTimingSummary {
     param(
         [object[]]$Timings,
@@ -385,6 +411,10 @@ try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build fixture Godot C# project" -Command {
         Invoke-DotnetBuildWithDiagnostics -Description "Build fixture Godot C# project" -ProjectPath ".\tests\godot_plugin_harness_fixture\GodotDotnetMcpPluginHarness.csproj" -Configuration Release
     }))
+
+    $cleanInstallResult = Invoke-Harness -Description "Build clean Asset Library install fixture" -ExtraArgs @("--clean-asset-library-install-build", "--keep-stage-root")
+    Assert-CleanAssetLibraryInstallBuild -HarnessJson $cleanInstallResult.Json
+    $TimingRecords.Add((New-TimingRecord -Name "Build clean Asset Library install fixture" -Duration $cleanInstallResult.Duration))
 
     $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases", "--keep-stage-root")
     $TimingRecords.Add((New-TimingRecord -Name "List harness cases" -Duration $manifestResult.Duration))
