@@ -8,6 +8,15 @@
 
 目标版本：1.1.1。
 
+### Fixed
+
+- 修复 `system_bindings_audit` 在大型项目中可能冻结 Godot 编辑器的问题：同一次调用内会缓存场景审计结果，使每个唯一场景只加载和实例化一次，并复用连续原子调用中的 executor，让 reference index 与 Roslyn 缓存可跨脚本检查保留。
+- 修复 atomic executor 缓存失效判断：`get_settings` 等读操作不再因子字符串命中被误判为写操作；成功写入后会清理 cached executor，避免 reference 与 Roslyn 数据过期。
+
+### Internal
+
+- 复用 `atomic_bridge.call_atomic` / `call_atomic_async` 中的原子 executor 实例，不再每次调用都重建，以便连续原子调用保留 `reference_service._reference_index`、`inspect_service._plugin_roslyn_service` 和其他实例级缓存。
+
 ## [1.1.0] - 2026-05-28
 
 ### Added
