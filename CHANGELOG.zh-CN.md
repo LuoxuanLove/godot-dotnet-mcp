@@ -8,6 +8,8 @@
 
 目标版本：1.1.2。
 
+## [1.1.1] - 2026-05-31
+
 ### Added
 
 - 将 `system_dap_debugger` 扩展为完整 Debug Adapter Protocol 会话入口，支持运行时设置、持久 session ID、`initialize`、`launch`、`attach`、`configuration_done`、`threads`、`terminate` 与 `disconnect` 动作，同时保持单一高层 DAP 工具表面。

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.2.
 
+## [1.1.1] - 2026-05-31
+
 ### Added
 
 - Expanded `system_dap_debugger` into a complete Debug Adapter Protocol session entry with runtime settings, persistent session IDs, `initialize`, `launch`, `attach`, `configuration_done`, `threads`, `terminate`, and `disconnect` actions while keeping one high-level DAP tool surface.
