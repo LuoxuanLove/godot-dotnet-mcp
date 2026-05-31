@@ -3,7 +3,7 @@
 
 > An MCP server plugin running inside the Godot editor. MCP clients can read live project state, manipulate scenes and scripts, and diagnose C# bindings without any external process.
 
-![Godot .NET MCP Tools](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/main/asset_library/tools-en.png)
+![Godot .NET MCP Tools](https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/heads/dev/asset_library/tools-en.png)
 
 ## What It Is
 
@@ -147,13 +147,13 @@ Use `system_runtime_diagnose` to read structured runtime information —errors, 
 ## Docs
 
 - [README.zh-CN.md](README.zh-CN.md)
-- Release notes are maintained in the repository root as `CHANGELOG.md` and `CHANGELOG.zh-CN.md`.
-- [docs/模块/System工具层.md](docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
-- [docs/模块/工具系统.md](docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
-- [docs/模块/用户扩展.md](docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
-- [docs/架构/服务与路由.md](docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
-- [docs/架构/配置与界面.md](docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
-- [docs/架构/安装与发布.md](docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
+- Release notes are maintained in [`CHANGELOG.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/CHANGELOG.md) and [`CHANGELOG.zh-CN.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/CHANGELOG.zh-CN.md).
+- [docs/模块/System工具层.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
+- [docs/模块/工具系统.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
+- [docs/模块/用户扩展.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
+- [docs/架构/服务与路由.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
+- [docs/架构/配置与界面.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
+- [docs/架构/安装与发布.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
 
 ## Current Boundaries
 
