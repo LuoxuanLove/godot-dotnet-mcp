@@ -272,7 +272,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var atomic_bridge = AtomicBridgeScript.new()
 	var read_actions := [
 		{"tool": "project_info", "args": {"action": "get_settings"}},
+		{"tool": "scene_hierarchy", "args": {"action": "select"}},
 		{"tool": "editor_filesystem", "args": {"action": "get_selected"}},
+		{"tool": "editor_filesystem", "args": {"action": "select_file"}},
 		{"tool": "filesystem_directory", "args": {"action": "get_files"}},
 		{"tool": "script_references", "args": {"action": "get_scene_refs"}},
 		{"tool": "debug_runtime_bridge", "args": {"action": "get_recent"}}
@@ -284,7 +286,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"tool": "project_settings", "args": {"action": "set_setting"}},
 		{"tool": "filesystem_directory", "args": {"action": "create"}},
 		{"tool": "filesystem_file_manage", "args": {"action": "move"}},
+		{"tool": "filesystem_file_write", "args": {"action": "save"}},
+		{"tool": "filesystem_file_write", "args": {"action": "save_as"}},
 		{"tool": "scene_hierarchy", "args": {"action": "add_node"}},
+		{"tool": "scene_file", "args": {"action": "patch"}},
 		{"tool": "script_edit_gd", "args": {"action": "add_function"}},
 		{"tool": "script_edit_cs", "args": {"action": "replace_method_body"}}
 	]
