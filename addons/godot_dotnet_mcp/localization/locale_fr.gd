@@ -534,7 +534,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_state_name": "脡tat du projet",
 	"tool_system_project_state_desc": "R茅sumez l鈥櫭﹖at actuel du projet, y compris les d茅comptes, les erreurs r茅centes et l鈥櫭﹖at d鈥檈x茅cution.",
 	"tool_system_help_name": "Aide",
-	"tool_system_help_desc": "Retourne le guide des capacités MCP pour agents, la découverte des Prompt Guides, les conseils de vérification visuelle, les contrôles cachés et les faits de schema.",
+	"tool_system_help_desc": "Retourne le guide des capacités MCP pour agents, la découverte des Prompt Guides, les conseils de vérification visuelle, les contrôles cachés et les faits de schéma.",
 	"tool_system_plugin_reload_name": "Rechargement du plugin",
 	"tool_system_plugin_reload_desc": "Vérifie si l'instance du plugin en cours est fraîche, ou planifie une recharge complète du cycle de vie sans dépendre de l'UI au premier plan.",
 	"tool_system_project_configure_name": "Configurer le projet",
