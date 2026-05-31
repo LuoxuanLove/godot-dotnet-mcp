@@ -4,6 +4,7 @@ extends RefCounted
 ## System implementation: help
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -98,31 +99,28 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"prompt_guides": {
 			"discovery_methods": ["prompts/list", "prompts/get"],
 			"usage_note": "Prompt guides are MCP-native prompt templates, not tools/call actions. Use prompts/list to discover them and prompts/get with optional arguments to fetch the workflow text.",
-			"available": [{
-				"name": "godot.project_orientation",
-				"purpose": "Read project state, health, files, symbols, and scene dependencies before choosing a workflow."
-			}, {
-				"name": "godot.content_authoring",
-				"purpose": "Create or modify scenes, nodes, scripts, resources, and narrow project configuration after analysis."
-			}, {
-				"name": "godot.debug_triage",
-				"purpose": "Collect editor, project, runtime, and DAP evidence before fixing failures."
-			}, {
-				"name": "godot.reference_integrity",
-				"purpose": "Audit and repair binding, NodePath, signal, UID/path, and resource script references."
-			}, {
-				"name": "godot.runtime_validation",
-				"purpose": "Run projects or scenes, wait for markers, drive inputs, and capture frames for behavior evidence."
-			}, {
-				"name": "godot.editor_ui_control",
-				"purpose": "Operate editor docks, panels, popups, controls, and screenshots through Godot editor APIs."
-			}]
+			"available": _build_prompt_guide_entries()
 		}
 	}
 	if include_tools:
 		payload["exposed_system_tools"] = _collect_exposed_system_tools()
 	return payload
 
+func _build_prompt_guide_entries() -> Array[Dictionary]:
+	var prompt_service = MCPPromptsServiceScript.new()
+	var prompt_result: Dictionary = prompt_service.build_prompts_list_result()
+	var prompts = prompt_result.get("prompts", [])
+	var entries: Array[Dictionary] = []
+	if prompts is Array:
+		for prompt in prompts:
+			if not (prompt is Dictionary):
+				continue
+			var prompt_data := prompt as Dictionary
+			entries.append({
+				"name": str(prompt_data.get("name", "")),
+				"purpose": str(prompt_data.get("description", ""))
+			})
+	return entries
 
 func _collect_exposed_system_tools() -> Array[String]:
 	var tool_loader = _runtime_context.get("tool_loader", null)
