@@ -14,19 +14,21 @@
 
 ### Changed
 
-- 强化内置 MCP Prompt Guides：`godot.scene_bootstrap`、`godot.debug_triage` 与 `godot.binding_fix` 现在会返回包含推荐工具顺序、验证要求和避免事项的可执行工作流说明，不再只是单行提示。
+- 强化内置 MCP Prompt Guides：每个高层工作流现在都会返回包含推荐工具顺序、验证要求和避免事项的可执行工作流说明，不再只是单行提示。
+- 将内置 MCP Prompt Guides 重组为六个高层且不冗余的入口：`godot.project_orientation`、`godot.content_authoring`、`godot.debug_triage`、`godot.reference_integrity`、`godot.runtime_validation` 与 `godot.editor_ui_control`。
 
 ### Fixed
 
 - 修复 `system_bindings_audit` 在大型项目中可能冻结 Godot 编辑器的问题：同一次调用内会缓存场景审计结果，使每个唯一场景只加载和实例化一次，并复用连续原子调用中的 executor，让 reference index 与 Roslyn 缓存可跨脚本检查保留。
 - 修复 atomic executor 缓存失效判断：`get_settings` 等读操作不再因子字符串命中被误判为写操作；成功写入后会清理 cached executor，避免 reference 与 Roslyn 数据过期。
 - 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用一次批量轻量文件计数，再返回紧凑载荷。
-- 通过 `system_help` 暴露 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和三个内置 prompt ID。
+- 通过 `system_help` 暴露 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和六个内置 prompt ID。
 
 ### Documentation
 
 - 记录 `system_project_state(sections=[...])` 会优先于 `summary=true`，`health` 分段会触发插件健康采集，并明确 `files` 分段才是大型项目中需要完整路径数组的边界。
 - 在工具系统、服务路由和运行时服务文档中记录 Prompt Guides 的发现与使用方式，并说明 MCP prompts 与可执行 tools 的边界。
+- 更新 Prompt Guides 文档，说明六个高层工作流入口，并明确 DAP 调试属于 `godot.debug_triage` 的诊断分支，而不是独立 prompt guide。
 
 ### Internal
 
@@ -34,6 +36,7 @@
 - 复用 `atomic_bridge.call_atomic` / `call_atomic_async` 中的原子 executor 实例，不再每次调用都重建，以便连续原子调用保留 `reference_service._reference_index`、`inspect_service._plugin_roslyn_service` 和其他实例级缓存。
 - 增加契约覆盖，验证 `system_project_state` 紧凑读取会跳过完整路径枚举、通过一次 count-only 请求批量统计项目文件总数，而默认完整载荷与 `files` 分段仍会按需收集文件路径。
 - 扩展 prompt guide、system help、router 和本地化 harness 契约，防止 prompt 内容深度、prompt 可发现性、真实 prompt ID 和多语言 Help 描述再次退化。
+- 更新 MCP prompt 与 system help 契约，确保 prompt surface 保持为六个高层工作流指南。
 
 ## [1.1.0] - 2026-05-28
 
