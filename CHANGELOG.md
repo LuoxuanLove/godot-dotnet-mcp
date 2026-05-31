@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.1.
 
+### Added
+
+- Expanded `system_dap_debugger` into a complete Debug Adapter Protocol session entry with runtime settings, persistent session IDs, `initialize`, `launch`, `attach`, `configuration_done`, `threads`, `terminate`, and `disconnect` actions while keeping one high-level DAP tool surface.
+
+### Internal
+
+- Extended the DAP contract harness with persistent fake-server lifecycle coverage, loopback-only default endpoint safety, sanitized raw-response handling, and published `dap_invalid_session_state` / `dap_invalid_settings` / `dap_limit_exceeded` protocol error identifiers.
+
 ## [1.1.0] - 2026-05-28
 
 ### Added
