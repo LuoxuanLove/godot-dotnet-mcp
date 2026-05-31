@@ -25,6 +25,7 @@ Target version: 1.1.1.
 
 ### Documentation
 
+- Updated the addon README copies for Asset Library installs so exported packages link to repository-hosted docs, changelogs, and current dev branch preview images instead of package-local paths that are not exported.
 - Documented that `system_project_state(sections=[...])` takes precedence over `summary=true`, that the `health` section triggers plugin health collection, and that the `files` section is the path-array boundary for large projects.
 - Documented Prompt Guides discovery and usage in the tool-system, service-routing, and runtime-service docs, including the separation between MCP prompts and executable tools.
 

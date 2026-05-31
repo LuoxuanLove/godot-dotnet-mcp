@@ -25,6 +25,7 @@
 
 ### Documentation
 
+- 更新插件包内 README 副本，使 Asset Library 安装后的导出包链接到仓库托管的文档、变更日志和当前 `dev` 分支预览图，不再指向包内未导出的相对路径。
 - 记录 `system_project_state(sections=[...])` 会优先于 `summary=true`，`health` 分段会触发插件健康采集，并明确 `files` 分段才是大型项目中需要完整路径数组的边界。
 - 在工具系统、服务路由和运行时服务文档中记录 Prompt Guides 的发现与使用方式，并说明 MCP prompts 与可执行 tools 的边界。
 
