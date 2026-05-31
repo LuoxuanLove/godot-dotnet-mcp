@@ -15,7 +15,7 @@ Target version: 1.1.2.
 ### Fixed
 
 - Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
-- Aligned the reference-integrity Prompt Guide esource_path argument with system_resource_reference_audit text-file support by accepting .tscn and .tres paths only.
+- Aligned the reference-integrity Prompt Guide `resource_path` argument with system_resource_reference_audit text-file support by accepting .tscn and .tres paths only.
 
 ### Documentation
 

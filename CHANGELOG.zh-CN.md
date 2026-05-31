@@ -15,7 +15,7 @@
 ### Fixed
 
 - 通过 `system_help` 暴露重组后的 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和六个内置 prompt ID。
-- 对齐 reference-integrity Prompt Guide 的 esource_path 参数与 system_resource_reference_audit 的文本文件支持范围，仅接受 .tscn 与 .tres 路径。
+- 对齐 reference-integrity Prompt Guide 的 `resource_path` 参数与 system_resource_reference_audit 的文本文件支持范围，仅接受 .tscn 与 .tres 路径。
 
 ### Documentation
 
