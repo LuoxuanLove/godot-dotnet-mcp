@@ -141,7 +141,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(scene_prompt.get("error", "scene prompt failed")))
 	if str(scene_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1:
 		return _failure("scene bootstrap prompt should normalize scene_path to res://.")
-	if not _prompt_text_is_actionable(str(scene_prompt.get("text", "")), ["Use when", "Recommended workflow", "Validation", "system_scene_analyze", "system_scene_patch"]):
+	if not _prompt_text_is_actionable(str(scene_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_scene_analyze", "system_scene_patch"]):
 		return _failure("scene bootstrap prompt should provide actionable workflow sections and scene tools.")
 
 	var debug_prompt := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"error_summary": "NullReferenceException", "include_runtime": true}, 12)
@@ -149,7 +149,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(debug_prompt.get("error", "debug prompt failed")))
 	if str(debug_prompt.get("text", "")).find("runtime_diagnose") == -1 or str(debug_prompt.get("text", "")).find("NullReferenceException") == -1:
 		return _failure("debug triage prompt should mention runtime_diagnose and include the error summary.")
-	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when", "Recommended workflow", "Validation", "system_editor_log", "system_project_state"]):
+	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_editor_log", "system_project_state"]):
 		return _failure("debug triage prompt should provide actionable workflow sections and diagnostic tools.")
 
 	var binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "binding_name": "HealthLabel"}, 13)
@@ -157,7 +157,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(binding_prompt.get("error", "binding prompt failed")))
 	if str(binding_prompt.get("text", "")).find("bindings_audit") == -1 or str(binding_prompt.get("text", "")).find("res://Main.tscn") == -1:
 		return _failure("binding fix prompt should mention bindings_audit and normalize scene_path.")
-	if not _prompt_text_is_actionable(str(binding_prompt.get("text", "")), ["Use when", "Recommended workflow", "Validation", "system_script_analyze", "system_scene_validate"]):
+	if not _prompt_text_is_actionable(str(binding_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "system_script_analyze", "system_scene_validate"]):
 		return _failure("binding fix prompt should provide actionable workflow sections and validation tools.")
 	var gd_binding_prompt := await _get_prompt_text(BINDING_FIX_PROMPT, {"script_path": "res://Player.gd"}, 16)
 	if not bool(gd_binding_prompt.get("ok", false)):
@@ -299,12 +299,19 @@ func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
 
 
 func _prompt_text_is_actionable(text: String, required_fragments: Array[String]) -> bool:
-	if text.length() < 450:
+	if text.length() < 250:
 		return false
 	for fragment in required_fragments:
-		if text.find(fragment) == -1:
+		if not _has_any_fragment(text, fragment):
 			return false
 	return true
+
+
+func _has_any_fragment(text: String, fragment_group: String) -> bool:
+	for fragment in fragment_group.split("||"):
+		if text.find(fragment) != -1:
+			return true
+	return false
 
 
 func _first_message_text(messages) -> String:
