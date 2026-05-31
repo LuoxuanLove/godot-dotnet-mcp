@@ -4,9 +4,11 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.1.1])
+## [Unreleased] ([1.1.2])
 
-目标版本：1.1.1。
+目标版本：1.1.2。
+
+## [1.1.1] - 2026-05-31
 
 ### Added
 
@@ -374,8 +376,9 @@
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...HEAD
-[1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
+[1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0-pre3...v1.0.0
