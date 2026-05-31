@@ -4,6 +4,7 @@ extends RefCounted
 ## System implementation: help
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -99,13 +100,13 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"discovery_methods": ["prompts/list", "prompts/get"],
 			"usage_note": "Prompt guides are MCP-native prompt templates, not tools/call actions. Use prompts/list to discover them and prompts/get with optional arguments to fetch the workflow text.",
 			"available": [{
-				"name": "godot.scene_bootstrap",
+				"name": MCPPromptsServiceScript.SCENE_BOOTSTRAP_PROMPT,
 				"purpose": "Plan scene edits after project and scene validation."
 			}, {
-				"name": "godot.debug_triage",
+				"name": MCPPromptsServiceScript.DEBUG_TRIAGE_PROMPT,
 				"purpose": "Collect editor, project, runtime, and DAP evidence before fixing errors."
 			}, {
-				"name": "godot.binding_fix",
+				"name": MCPPromptsServiceScript.BINDING_FIX_PROMPT,
 				"purpose": "Audit C#, GDScript, signal, export, and NodePath binding mismatches before patching."
 			}]
 		}
