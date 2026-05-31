@@ -8,6 +8,10 @@
 
 目标版本：1.1.2。
 
+### Fixed
+
+- 修复法语本地化文件，使重音字符、弯引号、不换行空格与连字正常显示，不再出现 mojibake 乱码。
+
 ## [1.1.1] - 2026-05-31
 
 ### Added
@@ -20,7 +24,6 @@
 
 ### Fixed
 
-- 修复法语本地化文件，使重音字符、弯引号、不换行空格与连字正常显示，不再出现 mojibake 乱码。
 - 修复 `system_bindings_audit` 在大型项目中可能冻结 Godot 编辑器的问题：同一次调用内会缓存场景审计结果，使每个唯一场景只加载和实例化一次，并复用连续原子调用中的 executor，让 reference index 与 Roslyn 缓存可跨脚本检查保留。
 - 修复 atomic executor 缓存失效判断：`get_settings` 等读操作不再因子字符串命中被误判为写操作；成功写入后会清理 cached executor，避免 reference 与 Roslyn 数据过期。
 - 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用一次批量轻量文件计数，再返回紧凑载荷。
