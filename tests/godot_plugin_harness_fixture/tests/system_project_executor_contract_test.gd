@@ -246,6 +246,17 @@ class FakeToolLoader extends RefCounted:
 		return {"status": "ready", "tool_count": 115, "exposed_tool_count": 18, "last_error": ""}
 
 
+class FakeDisposableExecutor extends RefCounted:
+	var disposed := false
+	var shutdown_called := false
+
+	func dispose() -> void:
+		disposed = true
+
+	func shutdown() -> void:
+		shutdown_called = true
+
+
 class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
 	var last_args: Dictionary = {}
 
@@ -258,6 +269,37 @@ class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	_prepare_temp_root()
+	var atomic_bridge = AtomicBridgeScript.new()
+	var read_actions := [
+		{"tool": "project_info", "args": {"action": "get_settings"}},
+		{"tool": "editor_filesystem", "args": {"action": "get_selected"}},
+		{"tool": "filesystem_directory", "args": {"action": "get_files"}},
+		{"tool": "script_references", "args": {"action": "get_scene_refs"}},
+		{"tool": "debug_runtime_bridge", "args": {"action": "get_recent"}}
+	]
+	for item in read_actions:
+		if atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridge should not classify read action as write: %s" % JSON.stringify(item))
+	var write_actions := [
+		{"tool": "project_settings", "args": {"action": "set_setting"}},
+		{"tool": "filesystem_directory", "args": {"action": "create"}},
+		{"tool": "filesystem_file_manage", "args": {"action": "move"}},
+		{"tool": "scene_hierarchy", "args": {"action": "add_node"}},
+		{"tool": "script_edit_gd", "args": {"action": "add_function"}},
+		{"tool": "script_edit_cs", "args": {"action": "replace_method_body"}}
+	]
+	for item in write_actions:
+		if not atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridge should classify mutating action as write: %s" % JSON.stringify(item))
+	if not atomic_bridge._is_write_atomic_action("script_edit_gd", {}):
+		return _failure("AtomicBridge should infer script_edit_* atomic calls without an action as writes.")
+	var disposable_executor := FakeDisposableExecutor.new()
+	atomic_bridge._atomic_executors["script"] = disposable_executor
+	atomic_bridge._invalidate_atomic_executors()
+	if not disposable_executor.disposed or not disposable_executor.shutdown_called:
+		return _failure("AtomicBridge write invalidation should dispose and shutdown cached executors.")
+	if not atomic_bridge._atomic_executors.is_empty():
+		return _failure("AtomicBridge write invalidation should clear all cached executors.")
 	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
 	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
 	if atomic_files.size() != 1:
