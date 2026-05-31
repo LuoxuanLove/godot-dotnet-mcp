@@ -266,6 +266,15 @@ func collect_file_count(filter: String) -> int:
 	return int(data.get("count", 0))
 
 
+func collect_file_counts(filters: Array) -> Dictionary:
+	var result := call_atomic("filesystem_directory", {"action": "get_files", "path": "res://", "filters": filters, "recursive": true, "count_only": true})
+	var data := extract_data(result)
+	var counts_raw = data.get("counts_by_filter", {})
+	if counts_raw is Dictionary:
+		return (counts_raw as Dictionary).duplicate(true)
+	return {}
+
+
 func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
 	var issue := {
 		"severity": severity,

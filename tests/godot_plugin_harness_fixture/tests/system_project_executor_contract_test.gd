@@ -18,6 +18,7 @@ class FakeBridge extends RefCounted:
 	var runtime_events_after_start: Array = []
 	var collect_files_calls := 0
 	var collect_file_count_calls := 0
+	var collect_file_counts_calls := 0
 	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
@@ -156,9 +157,18 @@ class FakeBridge extends RefCounted:
 			_:
 				return 0
 
+	func collect_file_counts(patterns: Array) -> Dictionary:
+		collect_file_counts_calls += 1
+		var counts := {}
+		for pattern in patterns:
+			var pattern_text := str(pattern)
+			counts[pattern_text] = collect_file_count(pattern_text)
+		return counts
+
 	func reset_collection_counters() -> void:
 		collect_files_calls = 0
 		collect_file_count_calls = 0
+		collect_file_counts_calls = 0
 
 	func _tail_runtime_events(limit: int) -> Array:
 		var resolved_limit: int = max(limit, 0)
@@ -432,8 +442,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_state summary mode should succeed.")
 	if bridge.collect_files_calls != 0:
 		return _failure("project_state summary mode should not collect full file path arrays.")
-	if bridge.collect_file_count_calls < 5:
-		return _failure("project_state summary mode should use lightweight file counts for project file totals.")
+	if bridge.collect_file_counts_calls != 1:
+		return _failure("project_state summary mode should use one bulk lightweight file count call for project file totals.")
+	if bridge.collect_file_count_calls != 5:
+		return _failure("project_state summary mode should resolve all project file glob totals through the bulk count helper.")
 	var summary_data: Dictionary = project_state_summary.get("data", {})
 	if not bool(summary_data.get("summary", false)):
 		return _failure("project_state summary mode should mark the payload as a summary.")
@@ -467,8 +479,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_state summary-only section mode should succeed.")
 	if bridge.collect_files_calls != 0:
 		return _failure("project_state summary-only section mode should not collect full file path arrays.")
-	if bridge.collect_file_count_calls < 5:
-		return _failure("project_state summary-only section mode should use lightweight file counts.")
+	if bridge.collect_file_counts_calls != 1:
+		return _failure("project_state summary-only section mode should use one bulk lightweight file count call.")
+	if bridge.collect_file_count_calls != 5:
+		return _failure("project_state summary-only section mode should resolve all project file glob totals through the bulk count helper.")
 
 	var invalid_project_state_section: Dictionary = executor.execute("project_state", {"sections": ["summary", "unknown"]})
 	if bool(invalid_project_state_section.get("success", false)):

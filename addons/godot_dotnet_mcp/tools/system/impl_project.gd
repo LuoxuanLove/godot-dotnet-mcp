@@ -616,6 +616,18 @@ func _collect_project_file_count(pattern: String) -> int:
 	return _collect_project_files(pattern).size()
 
 
+func _collect_project_file_counts(patterns: Array) -> Dictionary:
+	if bridge != null and bridge.has_method("collect_file_counts"):
+		var counts = bridge.collect_file_counts(patterns)
+		if counts is Dictionary and not (counts as Dictionary).is_empty():
+			return (counts as Dictionary).duplicate(true)
+	var fallback_counts := {}
+	for pattern in patterns:
+		var pattern_text := str(pattern)
+		fallback_counts[pattern_text] = _collect_project_file_count(pattern_text)
+	return fallback_counts
+
+
 func _count_matching_paths(paths: Array[String], extension: String) -> int:
 	var count := 0
 	for path in paths:
@@ -1228,16 +1240,19 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 		scene_paths = _collect_project_files("*.tscn")
 		resources_tres = _collect_project_files("*.tres")
 		resources_res = _collect_project_files("*.res")
+	var counts_by_filter := {}
+	if not collect_file_paths:
+		counts_by_filter = _collect_project_file_counts(["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"])
 	var all_resources: Array = []
 	all_resources.append_array(resources_tres)
 	all_resources.append_array(resources_res)
 	all_resources.sort()
-	var gd_script_count := gd_scripts.size() if collect_file_paths else _collect_project_file_count("*.gd")
-	var cs_script_count := cs_scripts.size() if collect_file_paths else _collect_project_file_count("*.cs")
-	var scene_count := scene_paths.size() if collect_file_paths else _collect_project_file_count("*.tscn")
+	var gd_script_count := gd_scripts.size() if collect_file_paths else int(counts_by_filter.get("*.gd", 0))
+	var cs_script_count := cs_scripts.size() if collect_file_paths else int(counts_by_filter.get("*.cs", 0))
+	var scene_count := scene_paths.size() if collect_file_paths else int(counts_by_filter.get("*.tscn", 0))
 	var resource_count := all_resources.size()
 	if not collect_file_paths:
-		resource_count = _collect_project_file_count("*.tres") + _collect_project_file_count("*.res")
+		resource_count = int(counts_by_filter.get("*.tres", 0)) + int(counts_by_filter.get("*.res", 0))
 	var file_enumeration := _build_file_enumeration_status(gd_scripts, cs_scripts, scene_paths, all_resources) if collect_file_paths else _build_file_enumeration_status_from_counts({
 		"gd_scripts": gd_script_count,
 		"cs_scripts": cs_script_count,
