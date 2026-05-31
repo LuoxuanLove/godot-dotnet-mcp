@@ -111,6 +111,8 @@ class FakeDapServer extends Node:
 			return
 		var body := {}
 		match command:
+			"initialize":
+				body = {"supportsConfigurationDoneRequest": true, "supportsTerminateRequest": true}
 			"setBreakpoints":
 				body = {"breakpoints": _build_verified_breakpoints(message)}
 			"stackTrace":
@@ -128,6 +130,8 @@ class FakeDapServer extends Node:
 				}
 			"continue":
 				body = {"allThreadsContinued": true}
+			"threads":
+				body = {"threads": [{"id": 1, "name": "Main"}]}
 			_:
 				body = {}
 		_queue_message({
@@ -210,7 +214,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if dap_tool.is_empty():
 		return _failure("DAP executor should expose the debugger atomic tool.")
 	var action_schema: Dictionary = dap_tool.get("inputSchema", {}).get("properties", {}).get("action", {})
-	for action in ["status", "set_breakpoint", "remove_breakpoint", "list_breakpoints", "pause", "continue", "step_over", "stack_trace", "output"]:
+	for action in ["status", "get_settings", "set_settings", "initialize", "launch", "attach", "configuration_done", "disconnect", "terminate", "threads", "set_breakpoint", "remove_breakpoint", "list_breakpoints", "pause", "continue", "step_over", "stack_trace", "output"]:
 		if not (action_schema.get("enum", []) as Array).has(action):
 			return _failure("DAP debugger schema should expose action '%s'." % action)
 
@@ -228,7 +232,134 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(unavailable_check.get("success", false)):
 		return unavailable_check
 
-	var request_port := _pick_free_port(unavailable_port + 1)
+	var settings_result: Dictionary = dap_executor.execute("debugger", {
+		"action": "set_settings",
+		"settings": {
+			"timeout_ms": REQUEST_TIMEOUT_MS,
+			"default_session_id": "contract-default",
+			"default_launch_args": {"project": "res://"}
+		}
+	})
+	if not bool(settings_result.get("success", false)):
+		return _failure("DAP set_settings should accept runtime defaults: %s" % str(settings_result.get("error", "")))
+	var settings_data: Dictionary = settings_result.get("data", {})
+	if str(settings_data.get("default_session_id", "")) != "contract-default" or int(settings_data.get("timeout_ms", 0)) != REQUEST_TIMEOUT_MS:
+		return _failure("DAP set_settings should return updated runtime defaults.")
+	var get_settings_result: Dictionary = dap_executor.execute("debugger", {"action": "get_settings"})
+	if str(get_settings_result.get("data", {}).get("default_session_id", "")) != "contract-default":
+		return _failure("DAP get_settings should return the current runtime defaults.")
+	if not (get_settings_result.get("data", {}).get("default_launch_args", {}) as Dictionary).is_empty():
+		return _failure("DAP get_settings should not expose default launch adapter args by default.")
+	var remote_settings_result: Dictionary = dap_executor.execute("debugger", {
+		"action": "set_settings",
+		"settings": {"host": "192.0.2.10"}
+	})
+	if bool(remote_settings_result.get("success", false)):
+		return _failure("DAP set_settings should reject non-loopback hosts unless remote hosts are explicitly enabled.")
+
+	var invalid_lifecycle_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "configuration_done",
+		"session_id": "missing-lifecycle"
+	})
+	if bool(invalid_lifecycle_result.get("success", false)):
+		return _failure("DAP configuration_done should fail before initialize/launch.")
+	if str(invalid_lifecycle_result.get("data", {}).get("error_type", "")) != "dap_invalid_session_state":
+		return _failure("DAP invalid lifecycle order should report dap_invalid_session_state.")
+	if not ProtocolFactsScript.get_error_codes().has("dap_invalid_session_state"):
+		return _failure("Protocol facts should include the dap_invalid_session_state error code.")
+	if not ProtocolFactsScript.get_error_codes().has("dap_limit_exceeded"):
+		return _failure("Protocol facts should include the dap_limit_exceeded error code.")
+
+	var lifecycle_port := _pick_free_port(unavailable_port + 1)
+	if lifecycle_port < 0:
+		return _failure("Could not reserve a fake DAP lifecycle server port.")
+	var lifecycle_server = _start_server(tree, lifecycle_port)
+	if lifecycle_server == null:
+		return _failure("Failed to start the fake DAP lifecycle server.")
+	var lifecycle_session := "contract-lifecycle"
+	var initialize_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "initialize",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS
+	})
+	if not bool(initialize_result.get("success", false)):
+		return _failure("DAP initialize should complete against a fake DAP server: %s" % str(initialize_result.get("error", "")))
+	var mismatch_port := _pick_free_port(lifecycle_port + 1)
+	if mismatch_port < 0:
+		return _failure("Could not reserve a fake DAP mismatch server port.")
+	var mismatch_server = _start_server(tree, mismatch_port)
+	if mismatch_server == null:
+		return _failure("Failed to start the fake DAP mismatch server.")
+	var mismatch_launch_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "launch",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": mismatch_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS
+	})
+	if bool(mismatch_launch_result.get("success", false)):
+		return _failure("DAP launch should reject endpoint changes for initialized sessions.")
+	if str(mismatch_launch_result.get("data", {}).get("error_type", "")) != "dap_invalid_session_state":
+		return _failure("DAP endpoint mismatch should report dap_invalid_session_state.")
+	if not _commands(mismatch_server.drain_messages()).is_empty():
+		return _failure("DAP endpoint mismatch should not send launch to the new endpoint.")
+	var launch_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "launch",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS,
+		"adapter_args": {"scene": "res://GameMain.tscn"}
+	})
+	if not bool(launch_result.get("success", false)):
+		return _failure("DAP launch should complete after initialize: %s" % str(launch_result.get("error", "")))
+	var lifecycle_breakpoint_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "set_breakpoint",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS,
+		"source_path": CONTRACT_SOURCE_PATH,
+		"line": 42
+	})
+	if not bool(lifecycle_breakpoint_result.get("success", false)):
+		return _failure("DAP lifecycle set_breakpoint should reuse the initialized session.")
+	var configuration_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "configuration_done",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS
+	})
+	if not bool(configuration_result.get("success", false)):
+		return _failure("DAP configuration_done should complete after initialize and launch.")
+	var threads_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "threads",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS
+	})
+	if (threads_result.get("data", {}).get("response", {}).get("body", {}).get("threads", []) as Array).is_empty():
+		return _failure("DAP threads should return thread data from the persistent session.")
+	var lifecycle_commands := _commands(lifecycle_server.drain_messages())
+	var expected_prefix := ["initialize", "launch", "setBreakpoints", "configurationDone", "threads"]
+	if lifecycle_commands.slice(0, expected_prefix.size()) != expected_prefix:
+		return _failure("DAP lifecycle should preserve command order. Expected %s, got %s" % [str(expected_prefix), str(lifecycle_commands)])
+	var disconnect_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "disconnect",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": lifecycle_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS,
+		"terminate_debuggee": true
+	})
+	if not bool(disconnect_result.get("success", false)):
+		return _failure("DAP disconnect should complete and close the session.")
+
+	var request_port := _pick_free_port(mismatch_port + 1)
 	if request_port < 0:
 		return _failure("Could not reserve a fake DAP request server port.")
 	var request_server = _start_server(tree, request_port)
@@ -245,6 +376,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(set_result.get("success", false)):
 		return _failure("DAP set_breakpoint should complete against a fake DAP server: %s" % str(set_result.get("error", "")))
+	if set_result.get("data", {}).has("request") or set_result.get("data", {}).has("messages"):
+		return _failure("DAP request results should not expose raw request/messages unless include_raw=true.")
 	var set_request := _find_command(request_server.drain_messages(), "setBreakpoints")
 	if set_request.is_empty():
 		return _failure("DAP set_breakpoint should send a setBreakpoints request frame.")
@@ -369,6 +502,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"dap_tool_count": dap_tools.size(),
+			"lifecycle_port": lifecycle_port,
 			"request_port": request_port,
 			"output_port": output_port,
 			"stack_frame_count": (stack_body.get("stackFrames", []) as Array).size()
@@ -407,6 +541,14 @@ func _find_command(messages: Array, command: String) -> Dictionary:
 		if message is Dictionary and str((message as Dictionary).get("command", "")) == command:
 			return (message as Dictionary)
 	return {}
+
+
+func _commands(messages: Array) -> Array[String]:
+	var commands: Array[String] = []
+	for message in messages:
+		if message is Dictionary and str((message as Dictionary).get("type", "")) == "request":
+			commands.append(str((message as Dictionary).get("command", "")))
+	return commands
 
 
 func _expect_unavailable(result: Dictionary, action: String) -> Dictionary:
