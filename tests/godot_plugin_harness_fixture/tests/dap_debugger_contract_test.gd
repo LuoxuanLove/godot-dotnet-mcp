@@ -305,6 +305,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("DAP endpoint mismatch should report dap_invalid_session_state.")
 	if not _commands(mismatch_server.drain_messages()).is_empty():
 		return _failure("DAP endpoint mismatch should not send launch to the new endpoint.")
+	var mismatch_disconnect_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "disconnect",
+		"session_id": lifecycle_session,
+		"host": "127.0.0.1",
+		"port": mismatch_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS
+	})
+	if bool(mismatch_disconnect_result.get("success", false)):
+		return _failure("DAP disconnect should reject endpoint changes for existing sessions.")
+	if str(mismatch_disconnect_result.get("data", {}).get("error_type", "")) != "dap_invalid_session_state":
+		return _failure("DAP endpoint mismatch disconnect should report dap_invalid_session_state.")
+	if not _commands(mismatch_server.drain_messages()).is_empty():
+		return _failure("DAP endpoint mismatch should not send disconnect to the new endpoint.")
 	var launch_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "launch",
 		"session_id": lifecycle_session,
@@ -479,6 +492,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("DAP output should keep collecting output events until timeout.")
 	if str((output_lines[0] as Dictionary).get("output", "")).find("contract output one") == -1 or str((output_lines[1] as Dictionary).get("output", "")).find("contract output two") == -1:
 		return _failure("DAP output should preserve all output event payloads.")
+	var repeated_output_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "output",
+		"host": "127.0.0.1",
+		"port": output_port,
+		"timeout_ms": 120
+	})
+	if not bool(repeated_output_result.get("success", false)):
+		return _failure("DAP repeated output polling should complete against a fake DAP server.")
+	if not (repeated_output_result.get("data", {}).get("outputs", []) as Array).is_empty():
+		return _failure("DAP repeated output polling should only return newly collected output events.")
 
 	var system_executor = SystemExecutorScript.new()
 	var system_tools: Array[Dictionary] = system_executor.get_tools()

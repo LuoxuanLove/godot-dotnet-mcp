@@ -186,7 +186,8 @@ func _disconnect(args: Dictionary) -> Dictionary:
 		"terminateDebuggee": bool(args.get("terminate_debuggee", args.get("terminateDebuggee", false)))
 	}
 	var result := await _session_request("disconnect", request_args, args, {"require_existing": true})
-	_close_session(_session_id(args))
+	if bool(result.get("success", false)):
+		_close_session(_session_id(args))
 	return result
 
 
@@ -248,15 +249,17 @@ func _collect_output(args: Dictionary) -> Dictionary:
 	if not bool(session_result.get("success", false)):
 		return session_result
 	var session: Dictionary = session_result.get("session", {})
+	var message_start := (session.get("messages", []) as Array).size()
 	await _read_messages(session, _timeout_ms(args))
 	var messages: Array = (session.get("messages", []) as Array).duplicate(true)
+	var new_messages := messages.slice(message_start)
 	var outputs: Array[Dictionary] = []
-	for message in messages:
+	for message in new_messages:
 		if str(message.get("type", "")) == "event" and str(message.get("event", "")) == "output":
 			outputs.append((message.get("body", {}) as Dictionary).duplicate(true))
 	var data := {"outputs": _sanitize_value(outputs), "session_id": str(session.get("id", ""))}
 	if bool(args.get("include_raw", false)):
-		data["messages"] = _sanitize_value(messages)
+		data["messages"] = _sanitize_value(new_messages)
 	return _success(data)
 
 
