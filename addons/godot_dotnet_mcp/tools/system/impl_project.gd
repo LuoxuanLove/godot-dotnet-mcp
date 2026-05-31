@@ -1242,7 +1242,7 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 		resources_res = _collect_project_files("*.res")
 	var counts_by_filter := {}
 	if not collect_file_paths:
-		counts_by_filter = _collect_project_file_counts(["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"])
+		counts_by_filter = _collect_project_file_counts(_PROJECT_STATE_SCAN_GLOBS)
 	var all_resources: Array = []
 	all_resources.append_array(resources_tres)
 	all_resources.append_array(resources_res)
