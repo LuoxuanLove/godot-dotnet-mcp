@@ -146,6 +146,7 @@ ACTIONS:
 - get_scene_refs: List .tscn files that reference a script via script = ExtResource(...)
 - get_base_type: Return the direct base type for a C# class
 - get_class_map: List all discovered C# class-to-path mappings
+- get_all_scene_refs: Return the full project-wide scene_refs_by_script mapping (no path required)
 
 NOTES:
 - The current stable implementation is path-first for get_scene_refs/get_base_type
@@ -155,13 +156,14 @@ NOTES:
 EXAMPLES:
 - Scene refs by path: {"action": "get_scene_refs", "path": "res://Scripts/Player.cs"}
 - Base type by path: {"action": "get_base_type", "path": "res://Scripts/Player.cs"}
-- Class map: {"action": "get_class_map"}""",
+- Class map: {"action": "get_class_map"}
+- All scene refs: {"action": "get_all_scene_refs"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_scene_refs", "get_base_type", "get_class_map"]
+						"enum": ["get_scene_refs", "get_base_type", "get_class_map", "get_all_scene_refs"]
 					},
 					"path": {
 						"type": "string",

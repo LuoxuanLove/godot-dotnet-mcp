@@ -24,6 +24,11 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 		return _get_reference_base_type(index, args)
 	if action == "get_scene_refs":
 		return _get_reference_scene_refs(index, args)
+	if action == "get_all_scene_refs":
+		return _success({
+			"built_at_unix": int(index.get("built_at_unix", 0)),
+			"scene_refs_by_script": index.get("scene_refs_by_script", {})
+		})
 
 	return _error("Unknown action: %s" % action)
 

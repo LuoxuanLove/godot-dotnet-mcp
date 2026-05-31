@@ -10,6 +10,8 @@ Target version: 1.1.1.
 
 ### Fixed
 
+- Fixed `system_bindings_audit` freezing the Godot editor on large projects by adding a per-call scene audit cache so each unique scene is loaded and instantiated only once, and by reusing atomic executor instances across consecutive calls so the reference index and Roslyn caches survive between script inspections.
+- Fixed atomic executor cache invalidation so read actions such as `get_settings` no longer match write-action substrings, while successful writes clear cached executors after mutation to avoid stale reference and Roslyn data.
 - Fixed `system_project_state(summary=true)` and summary-only section reads so they use one bulk lightweight file-count request instead of building full script, scene, and resource path arrays before trimming the response.
 
 ### Documentation
@@ -18,6 +20,7 @@ Target version: 1.1.1.
 
 ### Internal
 
+- Reused atomic executor instances in `atomic_bridge.call_atomic` / `call_atomic_async` instead of recreating them on every call, preserving `reference_service._reference_index`, `inspect_service._plugin_roslyn_service`, and other instance-level caches across consecutive atomic invocations.
 - Added contract coverage proving `system_project_state` compact reads skip full path enumeration, batch project file totals through one count-only request, and still collect file paths on demand for default and `files` section reads.
 
 ## [1.1.0] - 2026-05-28

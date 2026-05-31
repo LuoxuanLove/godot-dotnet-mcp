@@ -105,31 +105,30 @@ func tick(delta: float) -> void:
 
 # --- private helpers ---
 
-func _audit_scene(scene_path: String, include_warnings: bool) -> Dictionary:
+func _audit_scene(scene_path: String, include_warnings: bool, scene_cache: Dictionary) -> Dictionary:
+	if scene_cache.has(scene_path):
+		return scene_cache[scene_path]
+
 	var bindings_data: Dictionary = bridge.extract_data(bridge.call_atomic("scene_bindings", {
 		"action": "from_path", "path": scene_path
 	}))
-	var audit_data: Dictionary = bridge.extract_data(bridge.call_atomic("scene_audit", {
-		"action": "from_path", "path": scene_path
-	}))
 	var issues: Array = []
-	for issue in audit_data.get("issues", []):
-		if issue is Dictionary:
-			bridge.append_unique_issue(issues, (issue as Dictionary).duplicate(true))
 	for issue in bindings_data.get("issues", []):
 		if issue is Dictionary:
 			bridge.append_unique_issue(issues, (issue as Dictionary).duplicate(true))
 	if include_warnings and issues.is_empty():
 		bridge.append_unique_issue(issues, bridge.build_issue("info", "scene_clean",
 			"Scene bindings and audit checks returned no issues.", {"scene": scene_path}))
-	return {
+	var result := {
 		"kind": "scene", "scene": scene_path,
 		"binding_count": int(bindings_data.get("binding_count", bindings_data.get("count", 0))),
 		"issue_count": issues.size(), "issues": issues
 	}
+	scene_cache[scene_path] = result
+	return result
 
 
-func _audit_script(script_path: String, include_warnings: bool) -> Dictionary:
+func _audit_script(script_path: String, include_warnings: bool, scene_cache: Dictionary) -> Dictionary:
 	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
 	var references_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_references", {
 		"action": "get_scene_refs", "path": script_path
@@ -159,7 +158,7 @@ func _audit_script(script_path: String, include_warnings: bool) -> Dictionary:
 			"Script declares no signals.", {"script": script_path}))
 
 	for sp in scenes:
-		var scene_audit := _audit_scene(sp, include_warnings)
+		var scene_audit := _audit_scene(sp, include_warnings, scene_cache)
 		for issue in scene_audit.get("issues", []):
 			if not (issue is Dictionary):
 				continue
@@ -302,19 +301,20 @@ func _execute_bindings_audit(args: Dictionary) -> Dictionary:
 			return bridge.error("bindings_audit only supports C# scripts (.cs)")
 		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: script=%s" % target_script)
-		results.append(_audit_script(target_script, include_warnings))
+		results.append(_audit_script(target_script, include_warnings, {}))
 	elif not target_scene.is_empty():
 		if not target_scene.ends_with(".tscn"):
 			return bridge.error("scene must be a .tscn file")
 		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: scene=%s" % target_scene)
-		results.append(_audit_scene(target_scene, include_warnings))
+		results.append(_audit_scene(target_scene, include_warnings, {}))
 	else:
 		var cs_scripts: Array = bridge.collect_files("*.cs")
 		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: scanning %d C# scripts" % cs_scripts.size())
+		var scene_cache: Dictionary = {}
 		for sp in cs_scripts:
-			results.append(_audit_script(str(sp), include_warnings))
+			results.append(_audit_script(str(sp), include_warnings, scene_cache))
 
 	var total_issues := 0
 	var targets_with_issues := 0

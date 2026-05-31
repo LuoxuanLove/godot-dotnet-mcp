@@ -45,6 +45,65 @@ const PROJECT_FILE_PATTERNS := {
 var _atomic_executors := {}
 var _runtime_context: Dictionary = {}
 
+const WRITE_ACTIONS := {
+	"add": true,
+	"add_autoload": true,
+	"add_export": true,
+	"add_field": true,
+	"add_function": true,
+	"add_method": true,
+	"add_node": true,
+	"add_signal": true,
+	"add_variable": true,
+	"append": true,
+	"attach_script": true,
+	"capture": true,
+	"clear": true,
+	"cleanup_capture_cache": true,
+	"cleanup_legacy_cache": true,
+	"copy": true,
+	"create": true,
+	"delete": true,
+	"delete_member": true,
+	"disable": true,
+	"edit": true,
+	"enable": true,
+	"ensure_layout": true,
+	"find_and_replace": true,
+	"full_reload_plugin": true,
+	"move": true,
+	"play_custom": true,
+	"play_main": true,
+	"reimport": true,
+	"remove": true,
+	"remove_autoload": true,
+	"remove_member": true,
+	"rename": true,
+	"rename_member": true,
+	"reorder": true,
+	"reorder_node": true,
+	"reparent": true,
+	"reparent_node": true,
+	"patch": true,
+	"replace_function_body": true,
+	"replace_method_body": true,
+	"save": true,
+	"save_as": true,
+	"scan": true,
+	"set": true,
+	"set_control_text": true,
+	"set_popup_text": true,
+	"set_property": true,
+	"set_setting": true,
+	"set_source": true,
+	"set_transform": true,
+	"set_value": true,
+	"start_sync": true,
+	"stop": true,
+	"update_property": true,
+	"write": true
+}
+
 
 func success(data = null, message: String = "") -> Dictionary:
 	return {"success": true, "data": data, "message": message}
@@ -102,11 +161,39 @@ func is_protected_path(path: String) -> bool:
 
 
 func _is_write_action(args: Dictionary) -> bool:
-	var action := str(args.get("action", ""))
-	for keyword in ["write", "create", "delete", "edit", "save", "patch", "set"]:
-		if action.contains(keyword):
-			return true
-	return false
+	return _is_write_action_name(str(args.get("action", "")).strip_edges())
+
+
+func _is_write_atomic_action(full_name: String, args: Dictionary) -> bool:
+	var action := str(args.get("action", "")).strip_edges()
+	if action.is_empty():
+		action = _infer_write_action_from_atomic_name(full_name)
+	return _is_write_action_name(action)
+
+
+func _is_write_action_name(action: String) -> bool:
+	return WRITE_ACTIONS.has(action)
+
+
+func _infer_write_action_from_atomic_name(full_name: String) -> String:
+	if full_name.begins_with("script_edit_"):
+		return "write"
+	return ""
+
+
+func _dispose_executor(executor) -> void:
+	if executor == null:
+		return
+	if executor.has_method("dispose"):
+		executor.dispose()
+	if executor.has_method("shutdown"):
+		executor.shutdown()
+
+
+func _invalidate_atomic_executors() -> void:
+	for executor in _atomic_executors.values():
+		_dispose_executor(executor)
+	_atomic_executors.clear()
 
 
 func _find_path_in_args(args: Dictionary) -> String:
@@ -121,7 +208,8 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 	MCPDebugBuffer.record("debug", "atomic",
 		"%s action=%s" % [full_name, str(args.get("action", ""))])
 	# Write protection: block writes to plugin directory unless explicitly authorized
-	if _is_write_action(args):
+	var write_action := _is_write_atomic_action(full_name, args)
+	if write_action:
 		var target_path := _find_path_in_args(args)
 		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
 			MCPDebugBuffer.record("warning", "atomic",
@@ -137,34 +225,37 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 		MCPDebugBuffer.record("debug", "atomic",
 			"Unknown category: %s (from %s)" % [category, full_name])
 		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
-	var path := str(EXECUTOR_SCRIPT_PATHS[category])
-	for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
-		ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
-	var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
-	if script == null:
-		MCPDebugBuffer.record("error", "atomic",
-			"Failed to load executor for: %s (path: %s)" % [category, path])
-		return error("Failed to load atomic executor: %s" % path)
-	if _atomic_executors.has(category):
-		var old_executor = _atomic_executors[category]
-		if old_executor != null:
-			if old_executor.has_method("dispose"):
-				old_executor.dispose()
-			if old_executor.has_method("shutdown"):
-				old_executor.shutdown()
-	_atomic_executors[category] = script.new()
-	var executor = _atomic_executors[category]
-	if executor == null or not executor.has_method("execute"):
-		MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
-		return error("Atomic executor not available: %s" % category)
-	_configure_executor(executor, category)
-	return executor.execute(tool_name, args)
+
+	var executor = _atomic_executors.get(category)
+	if executor == null or not is_instance_valid(executor):
+		var path := str(EXECUTOR_SCRIPT_PATHS[category])
+		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
+			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
+		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+		if script == null:
+			MCPDebugBuffer.record("error", "atomic",
+				"Failed to load executor for: %s (path: %s)" % [category, path])
+			return error("Failed to load atomic executor: %s" % path)
+		if _atomic_executors.has(category):
+			_dispose_executor(_atomic_executors[category])
+		_atomic_executors[category] = script.new()
+		executor = _atomic_executors[category]
+		if executor == null or not executor.has_method("execute"):
+			MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
+			return error("Atomic executor not available: %s" % category)
+		_configure_executor(executor, category)
+
+	var result: Dictionary = executor.execute(tool_name, args)
+	if write_action and bool(result.get("success", false)):
+		_invalidate_atomic_executors()
+	return result
 
 
 func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 	MCPDebugBuffer.record("debug", "atomic",
 		"%s action=%s" % [full_name, str(args.get("action", ""))])
-	if _is_write_action(args):
+	var write_action := _is_write_atomic_action(full_name, args)
+	if write_action:
 		var target_path := _find_path_in_args(args)
 		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
 			MCPDebugBuffer.record("warning", "atomic",
@@ -180,31 +271,36 @@ func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 		MCPDebugBuffer.record("debug", "atomic",
 			"Unknown category: %s (from %s)" % [category, full_name])
 		return error("Unknown atomic category: %s (from %s)" % category)
-	var path := str(EXECUTOR_SCRIPT_PATHS[category])
-	for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
-		ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
-	var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
-	if script == null:
-		MCPDebugBuffer.record("error", "atomic",
-			"Failed to load executor for: %s (path: %s)" % [category, path])
-		return error("Failed to load atomic executor: %s" % path)
-	if _atomic_executors.has(category):
-		var old_executor = _atomic_executors[category]
-		if old_executor != null:
-			if old_executor.has_method("dispose"):
-				old_executor.dispose()
-			if old_executor.has_method("shutdown"):
-				old_executor.shutdown()
-	_atomic_executors[category] = script.new()
-	var executor = _atomic_executors[category]
-	if executor == null:
-		MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
-		return error("Atomic executor not available: %s" % category)
-	_configure_executor(executor, category)
+
+	var executor = _atomic_executors.get(category)
+	if executor == null or not is_instance_valid(executor):
+		var path := str(EXECUTOR_SCRIPT_PATHS[category])
+		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
+			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
+		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
+		if script == null:
+			MCPDebugBuffer.record("error", "atomic",
+				"Failed to load executor for: %s (path: %s)" % [category, path])
+			return error("Failed to load atomic executor: %s" % path)
+		if _atomic_executors.has(category):
+			_dispose_executor(_atomic_executors[category])
+		_atomic_executors[category] = script.new()
+		executor = _atomic_executors[category]
+		if executor == null:
+			MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
+			return error("Atomic executor not available: %s" % category)
+		_configure_executor(executor, category)
+	var result: Dictionary
 	if executor.has_method("execute_async"):
-		return await executor.execute_async(tool_name, args)
+		result = await executor.execute_async(tool_name, args)
+		if write_action and bool(result.get("success", false)):
+			_invalidate_atomic_executors()
+		return result
 	if executor.has_method("execute"):
-		return executor.execute(tool_name, args)
+		result = executor.execute(tool_name, args)
+		if write_action and bool(result.get("success", false)):
+			_invalidate_atomic_executors()
+		return result
 	return error("Atomic executor does not expose execute/execute_async: %s" % category)
 
 

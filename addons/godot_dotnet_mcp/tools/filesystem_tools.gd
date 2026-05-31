@@ -736,8 +736,6 @@ func _get_file_info(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return _error("File not found: %s" % path)
 
-	var abs_path = ProjectSettings.globalize_path(path)
-
 	return _success({
 		"path": path,
 		"name": path.get_file(),
