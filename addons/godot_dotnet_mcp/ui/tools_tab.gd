@@ -23,6 +23,7 @@ const CATEGORY_LABEL_KEYS := {
 	"plugin_evolution": "cat_plugin_evolution",
 	"plugin_developer": "cat_plugin_developer",
 	"debug": "cat_debug",
+	"dap": "cat_dap",
 	"animation": "cat_animation",
 	"signal": "cat_signal",
 	"group": "cat_group",
@@ -1250,7 +1251,7 @@ func _build_tool_preview() -> String:
 
 	lines.append("")
 	lines.append(_localization.get_text("tool_preview_params"))
-	var parameter_lines = _build_parameter_preview_lines(tool_def)
+	var parameter_lines = _build_parameter_preview_lines(tool_def, _selected_tree_key)
 	if parameter_lines.is_empty():
 		lines.append(_localization.get_text("tool_preview_no_params"))
 	else:
@@ -1405,6 +1406,13 @@ func _build_atomic_item_preview() -> String:
 		lines.append(_localization.get_text("tool_preview_actions"))
 		for action_value in actions:
 			lines.append("- %s" % _get_action_display_name(atomic_full_name, action_value))
+	lines.append("")
+	lines.append(_localization.get_text("tool_preview_params"))
+	var parameter_lines = _build_parameter_preview_lines(tool_def, atomic_full_name)
+	if parameter_lines.is_empty():
+		lines.append(_localization.get_text("tool_preview_no_params"))
+	else:
+		lines.append_array(parameter_lines)
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
@@ -1431,7 +1439,7 @@ func _build_action_item_preview() -> String:
 		_get_action_description(parent_tool, action_name, tool_def),
 	]
 	if not tool_def.is_empty():
-		var param_lines = _build_action_parameter_lines(tool_def)
+		var param_lines = _build_action_parameter_lines(tool_def, parent_tool)
 		if not param_lines.is_empty():
 			lines.append("")
 			lines.append(_localization.get_text("tool_preview_params"))
@@ -1439,7 +1447,7 @@ func _build_action_item_preview() -> String:
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
-func _build_action_parameter_lines(tool_def: Dictionary) -> Array[String]:
+func _build_action_parameter_lines(tool_def: Dictionary, full_name: String) -> Array[String]:
 	var input_schema = tool_def.get("inputSchema", {})
 	if not (input_schema is Dictionary):
 		return []
@@ -1458,7 +1466,7 @@ func _build_action_parameter_lines(tool_def: Dictionary) -> Array[String]:
 		var property_def = (properties as Dictionary).get(property_name, {})
 		if not (property_def is Dictionary):
 			continue
-		lines.append("- %s" % _format_parameter_summary(str(property_name), property_def as Dictionary, required_lookup))
+		lines.append("- %s" % _format_parameter_summary(str(property_name), property_def as Dictionary, required_lookup, full_name))
 	return lines
 
 
@@ -1552,7 +1560,7 @@ func _extract_action_values(tool_def: Dictionary) -> Array[String]:
 	return actions
 
 
-func _build_parameter_preview_lines(tool_def: Dictionary) -> Array[String]:
+func _build_parameter_preview_lines(tool_def: Dictionary, full_name: String) -> Array[String]:
 	var input_schema = tool_def.get("inputSchema", {})
 	if not (input_schema is Dictionary):
 		return []
@@ -1571,11 +1579,11 @@ func _build_parameter_preview_lines(tool_def: Dictionary) -> Array[String]:
 		var property_def = (properties as Dictionary).get(property_name, {})
 		if not (property_def is Dictionary):
 			continue
-		lines.append("- %s" % _format_parameter_summary(str(property_name), property_def as Dictionary, required_lookup))
+		lines.append("- %s" % _format_parameter_summary(str(property_name), property_def as Dictionary, required_lookup, full_name))
 	return lines
 
 
-func _format_parameter_summary(property_name: String, property_def: Dictionary, required_lookup: Dictionary) -> String:
+func _format_parameter_summary(property_name: String, property_def: Dictionary, required_lookup: Dictionary, full_name: String = "") -> String:
 	var parts: Array[String] = [property_name]
 	var type_name = str(property_def.get("type", "any"))
 	parts.append(type_name)
@@ -1586,10 +1594,33 @@ func _format_parameter_summary(property_name: String, property_def: Dictionary, 
 		for value in property_def.get("enum", []):
 			values.append(str(value))
 		parts.append("enum=%s" % ", ".join(values))
-	var description = str(property_def.get("description", ""))
+	var description = _get_parameter_description(full_name, property_name, property_def)
 	if not description.is_empty():
 		parts.append(description)
 	return " | ".join(parts)
+
+
+func _get_parameter_description(full_name: String, property_name: String, property_def: Dictionary) -> String:
+	if _localization != null:
+		for tool_key in _get_parameter_description_tool_keys(full_name):
+			var specific_key = "tool_param_%s_%s_desc" % [tool_key, property_name]
+			var specific_translation = _localization.get_text(specific_key)
+			if specific_translation != specific_key:
+				return specific_translation
+		var generic_key = "tool_param_%s_desc" % property_name
+		var generic_translation = _localization.get_text(generic_key)
+		if generic_translation != generic_key:
+			return generic_translation
+	return str(property_def.get("description", ""))
+
+
+func _get_parameter_description_tool_keys(full_name: String) -> Array[String]:
+	var keys: Array[String] = []
+	if not full_name.is_empty():
+		keys.append(full_name)
+	if full_name == "dap_debugger":
+		keys.append("system_dap_debugger")
+	return keys
 
 
 func _count_previewable_tools(tools: Array) -> int:
