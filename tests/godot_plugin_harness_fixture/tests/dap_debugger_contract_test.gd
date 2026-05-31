@@ -256,6 +256,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(remote_settings_result.get("success", false)):
 		return _failure("DAP set_settings should reject non-loopback hosts unless remote hosts are explicitly enabled.")
+	var remote_opt_in_settings_result: Dictionary = dap_executor.execute("debugger", {
+		"action": "set_settings",
+		"settings": {"host": "192.0.2.10", "allow_remote_hosts": true}
+	})
+	if not bool(remote_opt_in_settings_result.get("success", false)):
+		return _failure("DAP set_settings should allow host and allow_remote_hosts to be updated together.")
+	var reset_settings_result: Dictionary = dap_executor.execute("debugger", {
+		"action": "set_settings",
+		"settings": {"host": "127.0.0.1", "allow_remote_hosts": false}
+	})
+	if not bool(reset_settings_result.get("success", false)):
+		return _failure("DAP set_settings should reset host and allow_remote_hosts together.")
 
 	var invalid_lifecycle_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "configuration_done",
@@ -339,6 +351,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(lifecycle_breakpoint_result.get("success", false)):
 		return _failure("DAP lifecycle set_breakpoint should reuse the initialized session.")
+	var lifecycle_breakpoints: Dictionary = dap_executor.execute("debugger", {
+		"action": "list_breakpoints",
+		"session_id": lifecycle_session
+	})
+	if int(lifecycle_breakpoints.get("data", {}).get("count", 0)) != 1:
+		return _failure("DAP list_breakpoints should include breakpoints for the requested lifecycle session.")
+	var default_breakpoints_before_request: Dictionary = dap_executor.execute("debugger", {"action": "list_breakpoints"})
+	if int(default_breakpoints_before_request.get("data", {}).get("count", 0)) != 0:
+		return _failure("DAP list_breakpoints should not leak lifecycle session breakpoints into the default session.")
 	var configuration_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "configuration_done",
 		"session_id": lifecycle_session,

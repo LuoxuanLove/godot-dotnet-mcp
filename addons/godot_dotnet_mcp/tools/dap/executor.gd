@@ -36,7 +36,7 @@ const ACTIONS := [
 ]
 
 static var _sequence := 1
-static var _breakpoints_by_source := {}
+static var _breakpoints_by_session := {}
 static var _sessions_by_id := {}
 static var _settings := {
 	"host": DEFAULT_HOST,
@@ -88,7 +88,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"set_settings":
 			return _set_settings(args)
 		"list_breakpoints":
-			return _success(_breakpoint_list_data())
+			return _success(_breakpoint_list_data(_session_id(args)))
 		_:
 			return _error("DAP action requires asynchronous execution", {"error_type": "dap_async_required"})
 
@@ -205,7 +205,9 @@ func _set_breakpoint(args: Dictionary) -> Dictionary:
 	var line := int(args.get("line", 0))
 	if line <= 0:
 		return _error("DAP set_breakpoint requires line")
-	var lines: Array = (_breakpoints_by_source.get(source_path, []) as Array).duplicate()
+	var session_id := _session_id(args)
+	var breakpoint_store := _breakpoint_store(session_id)
+	var lines: Array = (breakpoint_store.get(source_path, []) as Array).duplicate()
 	if not lines.has(line):
 		lines.append(line)
 	lines.sort()
@@ -213,7 +215,7 @@ func _set_breakpoint(args: Dictionary) -> Dictionary:
 		return _error("Too many DAP breakpoints for source", {"error_type": "dap_limit_exceeded", "limit": MAX_BREAKPOINTS_PER_SOURCE})
 	var result := await _send_breakpoints(source_path, lines, args)
 	if bool(result.get("success", false)):
-		_store_breakpoints(source_path, lines)
+		_store_breakpoints(session_id, source_path, lines)
 		result = _with_breakpoint_list(result)
 	return result
 
@@ -223,11 +225,13 @@ func _remove_breakpoint(args: Dictionary) -> Dictionary:
 	if source_path.is_empty():
 		return _error("DAP remove_breakpoint requires source_path")
 	var line := int(args.get("line", 0))
-	var lines: Array = (_breakpoints_by_source.get(source_path, []) as Array).duplicate()
+	var session_id := _session_id(args)
+	var breakpoint_store := _breakpoint_store(session_id)
+	var lines: Array = (breakpoint_store.get(source_path, []) as Array).duplicate()
 	lines.erase(line)
 	var result := await _send_breakpoints(source_path, lines, args)
 	if bool(result.get("success", false)):
-		_store_breakpoints(source_path, lines)
+		_store_breakpoints(session_id, source_path, lines)
 		result = _with_breakpoint_list(result)
 	return result
 
@@ -403,19 +407,23 @@ func _read_messages(session: Dictionary, timeout_ms: int, request_seq: int = -1)
 	session["messages"] = messages
 
 
-func _store_breakpoints(source_path: String, lines: Array) -> void:
+func _store_breakpoints(session_id: String, source_path: String, lines: Array) -> void:
+	var breakpoint_store := _breakpoint_store(session_id)
 	if lines.is_empty():
-		_breakpoints_by_source.erase(source_path)
+		breakpoint_store.erase(source_path)
 	else:
-		if not _breakpoints_by_source.has(source_path) and _breakpoints_by_source.size() >= MAX_BREAKPOINT_SOURCES:
-			var first_key = _breakpoints_by_source.keys()[0]
-			_breakpoints_by_source.erase(first_key)
-		_breakpoints_by_source[source_path] = lines.duplicate()
+		if not breakpoint_store.has(source_path) and breakpoint_store.size() >= MAX_BREAKPOINT_SOURCES:
+			breakpoint_store.erase(breakpoint_store.keys()[0])
+		breakpoint_store[source_path] = lines.duplicate()
+	if breakpoint_store.is_empty():
+		_breakpoints_by_session.erase(session_id)
+	else:
+		_breakpoints_by_session[session_id] = breakpoint_store
 
 
 func _with_breakpoint_list(result: Dictionary) -> Dictionary:
 	var data: Dictionary = result.get("data", {})
-	data["breakpoints"] = _breakpoint_list_data().get("breakpoints", [])
+	data["breakpoints"] = _breakpoint_list_data(str(data.get("session_id", DEFAULT_SESSION_ID))).get("breakpoints", [])
 	result["data"] = data
 	return result
 
@@ -464,12 +472,26 @@ func _find_response(messages: Array, request_seq: int) -> Dictionary:
 	return {}
 
 
-func _breakpoint_list_data() -> Dictionary:
+func _breakpoint_store(session_id: String) -> Dictionary:
+	if _breakpoints_by_session.has(session_id) and _breakpoints_by_session[session_id] is Dictionary:
+		return (_breakpoints_by_session[session_id] as Dictionary).duplicate(true)
+	return {}
+
+
+func _breakpoint_list_data(session_id: String = DEFAULT_SESSION_ID) -> Dictionary:
 	var items: Array[Dictionary] = []
-	for source_path in _breakpoints_by_source.keys():
-		for line in _breakpoints_by_source[source_path]:
-			items.append({"source_path": str(source_path), "line": int(line)})
-	return {"count": items.size(), "breakpoints": items}
+	var breakpoint_store := _breakpoint_store(session_id)
+	for source_path in breakpoint_store.keys():
+		for line in breakpoint_store[source_path]:
+			items.append({"session_id": session_id, "source_path": str(source_path), "line": int(line)})
+	return {"session_id": session_id, "count": items.size(), "breakpoints": items}
+
+
+func _total_breakpoint_count() -> int:
+	var total := 0
+	for session_id in _breakpoints_by_session.keys():
+		total += int(_breakpoint_list_data(str(session_id)).get("count", 0))
+	return total
 
 
 func _status_data() -> Dictionary:
@@ -494,7 +516,7 @@ func _status_data() -> Dictionary:
 		"default_host": str(_settings.get("host", DEFAULT_HOST)),
 		"default_port": int(_settings.get("port", DEFAULT_PORT)),
 		"default_session_id": str(_settings.get("default_session_id", DEFAULT_SESSION_ID)),
-		"breakpoint_count": int(_breakpoint_list_data().get("count", 0)),
+		"breakpoint_count": _total_breakpoint_count(),
 		"session_count": sessions.size(),
 		"sessions": sessions,
 		"settings": _settings_data(false)
@@ -514,42 +536,48 @@ func _set_settings(args: Dictionary) -> Dictionary:
 	var incoming = args.get("settings", {})
 	if not (incoming is Dictionary):
 		return _error("DAP settings must be a dictionary", {"error_type": "dap_invalid_settings"})
+	var incoming_settings := incoming as Dictionary
 	var next_settings := _settings.duplicate(true)
-	for key in (incoming as Dictionary).keys():
+	if incoming_settings.has("allow_remote_hosts"):
+		next_settings["allow_remote_hosts"] = bool(incoming_settings["allow_remote_hosts"])
+	for key in incoming_settings.keys():
 		match str(key):
 			"host":
-				var host := str((incoming as Dictionary)[key]).strip_edges()
+				var host := str(incoming_settings[key]).strip_edges()
 				if host.is_empty():
 					return _error("DAP host setting cannot be empty", {"error_type": "dap_invalid_settings"})
 				if not _is_loopback_host(host) and not bool(next_settings.get("allow_remote_hosts", false)):
 					return _error("DAP host must be loopback unless allow_remote_hosts is enabled", {"error_type": "dap_invalid_settings"})
 				next_settings["host"] = host
 			"port":
-				var port := int((incoming as Dictionary)[key])
+				var port := int(incoming_settings[key])
 				if port <= 0 or port > 65535:
 					return _error("DAP port setting is invalid", {"error_type": "dap_invalid_settings"})
-				next_settings["port"] = port
+				else:
+					next_settings["port"] = port
 			"timeout_ms":
-				var timeout_ms := int((incoming as Dictionary)[key])
+				var timeout_ms := int(incoming_settings[key])
 				if timeout_ms <= 0:
 					return _error("DAP timeout_ms setting is invalid", {"error_type": "dap_invalid_settings"})
-				next_settings["timeout_ms"] = timeout_ms
+				else:
+					next_settings["timeout_ms"] = timeout_ms
 			"default_session_id":
-				var default_session_id := str((incoming as Dictionary)[key]).strip_edges()
+				var default_session_id := str(incoming_settings[key]).strip_edges()
 				if default_session_id.is_empty():
 					return _error("DAP default_session_id setting cannot be empty", {"error_type": "dap_invalid_settings"})
-				next_settings["default_session_id"] = default_session_id
+				else:
+					next_settings["default_session_id"] = default_session_id
 			"default_launch_args", "default_attach_args":
-				var value = (incoming as Dictionary)[key]
+				var value = incoming_settings[key]
 				if not (value is Dictionary):
 					return _error("DAP %s setting must be a dictionary" % str(key), {"error_type": "dap_invalid_settings"})
 				next_settings[str(key)] = (value as Dictionary).duplicate(true)
 			"allow_remote_hosts":
-				next_settings["allow_remote_hosts"] = bool((incoming as Dictionary)[key])
-				if not bool(next_settings.get("allow_remote_hosts", false)) and not _is_loopback_host(str(next_settings.get("host", DEFAULT_HOST))):
-					return _error("DAP host must be loopback unless allow_remote_hosts is enabled", {"error_type": "dap_invalid_settings"})
+				pass
 			_:
 				return _error("Unknown DAP setting: %s" % str(key), {"error_type": "dap_invalid_settings"})
+	if not bool(next_settings.get("allow_remote_hosts", false)) and not _is_loopback_host(str(next_settings.get("host", DEFAULT_HOST))):
+		return _error("DAP host must be loopback unless allow_remote_hosts is enabled", {"error_type": "dap_invalid_settings"})
 	_settings = next_settings
 	return _success(_settings_data(false), "DAP settings updated")
 
