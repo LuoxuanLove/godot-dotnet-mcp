@@ -53,7 +53,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (prompt_guides is Dictionary):
 		return _failure("system help should include MCP prompt guide discovery details.")
 	var prompt_methods_text := JSON.stringify(prompt_guides)
-	for expected_text in ["prompts/list", "prompts/get", "godot.scene_bootstrap", "godot.debug_triage", "godot.binding_fix"]:
+	for expected_text in ["prompts/list", "prompts/get", "godot.project_orientation", "godot.content_authoring", "godot.debug_triage", "godot.reference_integrity", "godot.runtime_validation", "godot.editor_ui_control"]:
 		if prompt_methods_text.find(expected_text) == -1:
 			return _failure("system help prompt guide details should mention: %s" % expected_text)
 	var capabilities = help_data.get("capabilities", {})

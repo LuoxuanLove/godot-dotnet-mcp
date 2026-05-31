@@ -8,18 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.2.
 
+### Changed
+
+- Reorganized built-in MCP Prompt Guides into six high-level, nonredundant entries: `godot.project_orientation`, `godot.content_authoring`, `godot.debug_triage`, `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control`.
+
 ### Fixed
 
 - Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
 - Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
+- Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
+- Aligned the reference-integrity Prompt Guide `resource_path` argument with system_resource_reference_audit text-file support by accepting .tscn and .tres paths only.
 
 ### Documentation
 
 - Updated the addon README copies for Asset Library installs so exported packages link to repository-hosted docs, changelogs, and current dev branch preview images instead of package-local paths that are not exported.
+- Updated Prompt Guides documentation to describe the six high-level workflow entries and clarify that DAP debugging is part of `godot.debug_triage` rather than a separate prompt guide.
 
 ### Internal
 
 - Added a clean Asset Library install harness build that uses `git archive --worktree-attributes`, removes fixture Roslyn package references, and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
+- Updated MCP prompt, system help, router, and localization contracts so the prompt surface remains exactly the six high-level workflow guides.
 
 ## [1.1.1] - 2026-05-31
 
