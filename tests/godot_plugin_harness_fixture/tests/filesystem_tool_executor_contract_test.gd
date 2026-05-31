@@ -127,6 +127,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Directory get_files count_only should not return a files array.")
 	if not bool(directory_count_only_data.get("count_only", false)):
 		return _failure("Directory get_files count_only should mark the response as count_only.")
+	var directory_bulk_count_only_result: Dictionary = executor.execute("directory", {
+		"action": "get_files",
+		"path": TEMP_ROOT,
+		"filters": ["*.txt", "*.json"],
+		"recursive": true,
+		"count_only": true
+	})
+	if not bool(directory_bulk_count_only_result.get("success", false)):
+		return _failure("Directory get_files bulk count_only failed through the split directory service.")
+	var directory_bulk_count_only_data: Dictionary = directory_bulk_count_only_result.get("data", {})
+	if directory_bulk_count_only_data.has("files"):
+		return _failure("Directory get_files bulk count_only should not return a files array.")
+	if not bool(directory_bulk_count_only_data.get("count_only", false)):
+		return _failure("Directory get_files bulk count_only should mark the response as count_only.")
+	var counts_by_filter = directory_bulk_count_only_data.get("counts_by_filter", {})
+	if not (counts_by_filter is Dictionary):
+		return _failure("Directory get_files bulk count_only should return counts_by_filter.")
+	var bulk_counts: Dictionary = counts_by_filter
+	if int(bulk_counts.get("*.txt", -1)) != int(directory_files_data.get("count", -2)):
+		return _failure("Directory get_files bulk count_only should match the single-filter txt count.")
+	if int(bulk_counts.get("*.json", -1)) != int(search_find_result.get("data", {}).get("count", -2)):
+		return _failure("Directory get_files bulk count_only should count json files in the same traversal.")
 
 	return {
 		"name": "filesystem_tool_executor_contracts",
