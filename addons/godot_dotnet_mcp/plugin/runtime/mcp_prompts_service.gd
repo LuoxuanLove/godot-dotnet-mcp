@@ -59,7 +59,7 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			"arguments": [
 				{"name": "script_path", "description": _text("prompt_arg_script_path_desc", "Optional C# or GDScript path whose declarations should be inspected."), "required": false},
 				{"name": "scene_path", "description": _text("prompt_arg_scene_path_desc", "Optional res:// scene path to validate and analyze before editing."), "required": false},
-				{"name": "resource_path", "description": _text("prompt_arg_resource_path_desc", "Optional res:// .tscn, .tres, or .res path to audit for UID, fallback path, or script reference consistency."), "required": false},
+				{"name": "resource_path", "description": _text("prompt_arg_resource_path_desc", "Optional res:// .tscn or .tres path to audit for UID, fallback path, or script reference consistency."), "required": false},
 				{"name": "binding_name", "description": _text("prompt_arg_binding_name_desc", "Optional export, signal, or NodePath binding name that should receive focused attention."), "required": false}
 			]
 		}, {
@@ -154,14 +154,14 @@ func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
-	var resource_path_result := _optional_res_path(arguments, "resource_path", [".tscn", ".tres", ".res"])
+	var resource_path_result := _optional_res_path(arguments, "resource_path", [".tscn", ".tres"])
 	if not bool(resource_path_result.get("success", false)):
 		return resource_path_result
 	var script_path := str(script_path_result.get("path", ""))
 	var scene_path := str(scene_path_result.get("path", ""))
 	var resource_path := str(resource_path_result.get("path", ""))
 	var binding_name := str(arguments.get("binding_name", "")).strip_edges()
-	var text := _text("prompt_reference_integrity_body", "Use when: Start here when C#, GDScript, export, signal, NodePath, scene dependency, resource UID, fallback path, or C# Resource script references disagree with saved scenes and resources. Recommended workflow: 1. Call system_bindings_audit with the script or scene path when member declarations may disagree with scene references. 2. Call system_resource_reference_audit for project-wide or focused .tscn/.tres/.res UID, fallback path, and Resource script consistency checks. 3. Call system_scene_validate to confirm the scene reference graph is loadable and system_script_analyze to ground exported members, signals, variables, and methods in saved source. 4. Compare the audited reference with the declaration or resource path, then apply the smallest matching rename, property, signal, UID/path, or script reference fix. 5. Re-run the same audit tools and validation on the same targets. Validation: the audited issue should disappear, the scene or resource should still validate, and no unrelated scene, resource, or binding reference should change. Avoid: do not add duplicate fallback bindings, do not rewrite unrelated node paths, and do not treat a passing .NET build as proof that resource references are valid.")
+	var text := _text("prompt_reference_integrity_body", "Use when: Start here when C#, GDScript, export, signal, NodePath, scene dependency, resource UID, fallback path, or C# Resource script references disagree with saved scenes and resources. Recommended workflow: 1. Call system_bindings_audit with the script or scene path when member declarations may disagree with scene references. 2. Call system_resource_reference_audit for project-wide or focused .tscn/.tres UID, fallback path, and Resource script consistency checks. 3. Call system_scene_validate to confirm the scene reference graph is loadable and system_script_analyze to ground exported members, signals, variables, and methods in saved source. 4. Compare the audited reference with the declaration or resource path, then apply the smallest matching rename, property, signal, UID/path, or script reference fix. 5. Re-run the same audit tools and validation on the same targets. Validation: the audited issue should disappear, the scene or resource should still validate, and no unrelated scene, resource, or binding reference should change. Avoid: do not add duplicate fallback bindings, do not rewrite unrelated node paths, and do not treat a passing .NET build as proof that resource references are valid.")
 	if not script_path.is_empty():
 		text += " Inspect script: %s." % script_path
 	if not scene_path.is_empty():

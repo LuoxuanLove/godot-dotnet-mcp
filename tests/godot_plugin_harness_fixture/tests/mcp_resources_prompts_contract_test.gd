@@ -171,6 +171,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var gd_reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.gd"}, 16)
 	if not bool(gd_reference_prompt.get("ok", false)):
 		return _failure("reference integrity prompt should accept GDScript paths.")
+	var invalid_res_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"resource_path": "res://PackedResource.res"}}, 17)
+	if not (invalid_res_prompt_response.get("error", null) is Dictionary):
+		return _failure("reference integrity prompt should reject .res resource_path because resource_reference_audit accepts text scene/resource files.")
 
 	var runtime_prompt := await _get_prompt_text(RUNTIME_VALIDATION_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "goal": "verify menu", "success_marker": "MENU_READY"}, 18)
 	if not bool(runtime_prompt.get("ok", false)):
