@@ -49,6 +49,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tools: Array = help_data.get("exposed_system_tools", [])
 	if not exposed_tools.has("system_help") or not exposed_tools.has("system_editor_control"):
 		return _failure("system help should include exposed system tool names when requested.")
+	var prompt_guides = help_data.get("prompt_guides", {})
+	if not (prompt_guides is Dictionary):
+		return _failure("system help should include MCP prompt guide discovery details.")
+	var prompt_methods_text := JSON.stringify(prompt_guides)
+	for expected_text in ["prompts/list", "prompts/get", "godot.scene_bootstrap", "godot.debug_triage", "godot.binding_fix"]:
+		if prompt_methods_text.find(expected_text) == -1:
+			return _failure("system help prompt guide details should mention: %s" % expected_text)
+	var capabilities = help_data.get("capabilities", {})
+	if not (capabilities is Dictionary) or not (((capabilities as Dictionary).get("prompts", []) is Array)):
+		return _failure("system help capabilities should include prompts as an explicit category.")
 
 	var compact_result: Dictionary = impl.execute("help", {"include_tools": false})
 	if not bool(compact_result.get("success", false)):
