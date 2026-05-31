@@ -11,6 +11,11 @@
 ### Fixed
 
 - 修复干净 Asset Library 安装：导出的插件下载内容不再包含 Roslyn bridge 实现源码，避免这些源码被宿主 Godot C# 项目直接编译。
+- 修复法语本地化文件，使重音字符、弯引号、不换行空格与连字正常显示，不再出现 mojibake 乱码。
+
+### Documentation
+
+- 更新插件包内 README 副本，使 Asset Library 安装后的导出包链接到仓库托管的文档、变更日志和当前 `dev` 分支预览图，不再指向包内未导出的相对路径。
 
 ### Internal
 

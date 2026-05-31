@@ -11,6 +11,11 @@ Target version: 1.1.2.
 ### Fixed
 
 - Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
+- Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
+
+### Documentation
+
+- Updated the addon README copies for Asset Library installs so exported packages link to repository-hosted docs, changelogs, and current dev branch preview images instead of package-local paths that are not exported.
 
 ### Internal
 
