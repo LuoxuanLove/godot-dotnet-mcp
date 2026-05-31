@@ -172,6 +172,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			if not locale.has(key):
 				return _failure("All supported locales should define runtime Tools-page key: %s" % key)
 
+	for locale_info in [
+		{"name": "en", "path": "res://addons/godot_dotnet_mcp/localization/locale_en.gd"},
+		{"name": "zh_CN", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd"},
+		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"}
+	]:
+		var duplicate_key = _find_duplicate_locale_key(str(locale_info["path"]))
+		if not duplicate_key.is_empty():
+			return _failure("Locale source should not define duplicate translation keys in %s: %s" % [str(locale_info["name"]), duplicate_key])
+
 	var server_panel = ServerPanelScene.instantiate() as Control
 	if server_panel == null:
 		return _failure("Server/Home panel scene should instantiate for removed Advanced Settings audit.")
@@ -193,6 +202,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"zh_tw_title": str(zh_tw.get("title", ""))
 		}
 	}
+
+
+func _find_duplicate_locale_key(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var source := FileAccess.get_file_as_string(path)
+	var key_pattern := RegEx.new()
+	if key_pattern.compile("(?m)^\\s*\\\"([^\\\"]+)\\\"\\s*:") != OK:
+		return ""
+	var seen := {}
+	for result in key_pattern.search_all(source):
+		var key := result.get_string(1)
+		if seen.has(key):
+			return key
+		seen[key] = true
+	return ""
 
 
 func _find_forbidden_advanced_control(node: Node) -> String:
