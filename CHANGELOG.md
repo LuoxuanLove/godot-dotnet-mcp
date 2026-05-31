@@ -14,7 +14,7 @@ Target version: 1.1.2.
 
 ### Internal
 
-- Added a clean Asset Library install harness build that removes fixture Roslyn package references and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
+- Added a clean Asset Library install harness build that uses `git archive --worktree-attributes`, removes fixture Roslyn package references, and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
 
 ## [1.1.1] - 2026-05-31
 

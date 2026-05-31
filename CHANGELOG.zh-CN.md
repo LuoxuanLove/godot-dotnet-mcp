@@ -14,7 +14,7 @@
 
 ### Internal
 
-- 新增干净 Asset Library 安装 harness 构建：移除 fixture 中的 Roslyn 包引用，并验证导出的插件副本在没有 Roslyn runtime 源码与 bridge 源码时仍可完成构建。
+- 新增干净 Asset Library 安装 harness 构建：使用 `git archive --worktree-attributes`，移除 fixture 中的 Roslyn 包引用，并验证导出的插件副本在没有 Roslyn runtime 源码与 bridge 源码时仍可完成构建。
 
 ## [1.1.1] - 2026-05-31
 
