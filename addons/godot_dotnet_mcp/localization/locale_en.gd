@@ -751,7 +751,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_name": "Runtime Step",
 	"tool_system_runtime_step_desc": "Unified runtime automation entry: run step loops, capture frames, or send scripted input through action=step|capture|input.",
 	"tool_system_dap_debugger_name": "DAP Debugger",
-	"tool_system_dap_debugger_desc": "Connect to Godot's built-in Debug Adapter Protocol endpoint and send launch, attach, breakpoint, and custom DAP requests.",
+	"tool_system_dap_debugger_desc": "Drive Godot's built-in Debug Adapter Protocol endpoint with runtime settings, session IDs, lifecycle, thread, breakpoint, stepping, stack-trace, output, terminate, and disconnect actions.",
 	"tool_runtime_control_name": "Control",
 	"tool_runtime_control_desc": "Internal runtime control: inspect or arm the running project's debugger session. Supports status, enable and disable.",
 	"tool_runtime_capture_name": "Capture",
@@ -930,7 +930,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_editor_log_desc": "Read, filter, or clear the editor Output panel.",
 	"tool_debug_class_db_desc": "Query Godot's class database",
 	"tool_dap_debugger_name": "Debugger",
-	"tool_dap_debugger_desc": "Send Godot Debug Adapter Protocol breakpoint, stepping, stack-trace, and output-event requests.",
+	"tool_dap_debugger_desc": "Send Godot Debug Adapter Protocol lifecycle, breakpoint, stepping, stack-trace, output-event, terminate, and disconnect requests.",
 
 	# Filesystem tools
 	"tool_filesystem_directory_name": "Directory",
