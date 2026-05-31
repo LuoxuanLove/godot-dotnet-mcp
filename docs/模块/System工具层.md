@@ -58,7 +58,7 @@ tools/system/
 - `system_runtime_step`：统一运行时 I/O 入口；`action=step` 标准化封装“输入 -> 等待若干帧 -> 截图 -> 返回状态”闭环，`action=capture` 提供单帧 / 低频多帧截图，`action=input` 注入 `InputMap action` 或原始键盘输入。
 
 ### DAP 调试级
-- `system_dap_debugger`：连接 Godot Debug Adapter Protocol 端点（默认 `127.0.0.1:6006`），支持 `status`、`set_breakpoint`、`remove_breakpoint`、`list_breakpoints`、`pause`、`continue`、`step_over`、`stack_trace` 与 `output`。所有需要 DAP 端点的动作都会先按 `Content-Length` JSON 帧格式建立 TCP 请求；端点不可达时返回 `data.error_type=dap_unavailable`、`endpoint`、`timeout_ms` 和传输状态，而不是抛出脚本错误。
+- `system_dap_debugger`：连接 Godot Debug Adapter Protocol 端点（默认 `127.0.0.1:6006`，默认仅允许 loopback 主机），支持运行时设置、持久 session、`initialize`、`launch` / `attach`、`configuration_done`、断点、暂停 / 继续 / 单步、线程、调用栈、输出事件、终止与断开连接。所有需要 DAP 端点的动作都会按 `Content-Length` JSON 帧格式发送请求；端点不可达时返回 `data.error_type=dap_unavailable`、`endpoint`、`timeout_ms` 和传输状态，而不是抛出脚本错误。响应默认只返回整理后的结果；需要排查协议帧时可显式传入 `include_raw=true` 获取已脱敏的 request / messages。
 
 默认截图、运行时事件、User Tool 审计日志和 profile 均收敛在 `user://godot_dotnet_mcp/` 分层目录下。插件启动不会自动清理缓存；需要查看或整理当前截图缓存时，由 Agent 显式调用 `system_userdata_maintenance(action=list_capture_cache)` 或 `system_userdata_maintenance(action=cleanup_capture_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。当前截图缓存清理会跳过 symlink、Windows junction 与 reparse point。需要整理历史遗留根级文件时，调用 `system_userdata_maintenance(action=cleanup_legacy_cache, dry_run=true)` 预览，再用 `dry_run=false` 应用。
 

@@ -86,7 +86,8 @@ root
   │   │   │   ├─ runtime_capture
   │   │   │   └─ runtime_input
   │   │   ├─ system_dap_debugger
-  │   │   │   ├─ status / set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output
+  │   │   │   ├─ status / get_settings / set_settings / initialize / launch / attach / configuration_done / threads / disconnect
+  │   │   │   ├─ set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output / terminate
   │   │   │   └─ dap_debugger
   │   │   └─ ...
   │   └─ ... internal atomic categories

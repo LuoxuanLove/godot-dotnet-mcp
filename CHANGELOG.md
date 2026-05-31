@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.1.
 
+### Added
+
+- Expanded `system_dap_debugger` into a complete Debug Adapter Protocol session entry with runtime settings, persistent session IDs, `initialize`, `launch`, `attach`, `configuration_done`, `threads`, `terminate`, and `disconnect` actions while keeping one high-level DAP tool surface.
+
 ### Fixed
 
 - Fixed `system_bindings_audit` freezing the Godot editor on large projects by adding a per-call scene audit cache so each unique scene is loaded and instantiated only once, and by reusing atomic executor instances across consecutive calls so the reference index and Roslyn caches survive between script inspections.
@@ -20,6 +24,7 @@ Target version: 1.1.1.
 
 ### Internal
 
+- Extended the DAP contract harness with persistent fake-server lifecycle coverage, loopback-only default endpoint safety, sanitized raw-response handling, and published `dap_invalid_session_state` / `dap_invalid_settings` / `dap_limit_exceeded` protocol error identifiers.
 - Reused atomic executor instances in `atomic_bridge.call_atomic` / `call_atomic_async` instead of recreating them on every call, preserving `reference_service._reference_index`, `inspect_service._plugin_roslyn_service`, and other instance-level caches across consecutive atomic invocations.
 - Added contract coverage proving `system_project_state` compact reads skip full path enumeration, batch project file totals through one count-only request, and still collect file paths on demand for default and `files` section reads.
 

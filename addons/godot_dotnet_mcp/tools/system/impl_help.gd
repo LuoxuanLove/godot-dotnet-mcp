@@ -66,7 +66,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
 			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
-			"dap": ["endpoint status", "breakpoint set/remove/list", "pause", "continue", "step over", "stack trace", "output events", "structured dap_unavailable"],
+			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
 			"analysis": ["scene validation", "scene analysis", "script analysis", "C# binding audit", "Godot LSP diagnostics", "project symbol search", "scene dependency graph"],
 			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"]

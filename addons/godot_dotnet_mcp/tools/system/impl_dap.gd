@@ -22,7 +22,7 @@ func get_tools() -> Array[Dictionary]:
 		return []
 	var tool := (tools[0] as Dictionary).duplicate(true)
 	tool["name"] = "dap_debugger"
-	tool["description"] = "GODOT DAP DEBUGGER: High-level Debug Adapter Protocol entry for Godot debugger endpoints. Supports status, breakpoint set/remove/list, pause/continue/step_over, stack_trace, and output. Defaults to 127.0.0.1:6006 and returns structured dap_unavailable when no endpoint is reachable."
+	tool["description"] = "GODOT DAP DEBUGGER: High-level Debug Adapter Protocol entry for Godot debugger endpoints. Supports runtime settings, session IDs, initialize, launch/attach, configuration_done, breakpoint set/remove/list, pause/continue/step_over, threads, stack_trace, output, terminate, and disconnect. Defaults to 127.0.0.1:6006 and returns structured dap_unavailable when no endpoint is reachable."
 	return [tool]
 
 

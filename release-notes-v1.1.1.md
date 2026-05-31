@@ -1,8 +1,24 @@
-## ⚡ Godot .NET MCP v1.1.1: Faster Project State Probing
+## 🧩 Godot .NET MCP v1.1.1: Complete DAP Sessions and Faster Project State
 
-Godot .NET MCP `v1.1.1` improves the large-project experience for Agents that start by checking project health. Compact project-state reads now avoid building full file path arrays unless the caller explicitly asks for the files section.
+Godot .NET MCP `v1.1.1` improves two everyday Agent workflows: complete debugger sessions through the built-in Godot Debug Adapter Protocol, and faster large-project orientation when callers only need compact project-state information.
 
-### ✨ Faster Large-Project Orientation
+### ✨ Full DAP Session Flow
+
+- `system_dap_debugger` now supports runtime settings, explicit session IDs, `initialize`, `launch`, `attach`, `configuration_done`, `threads`, `terminate`, and `disconnect` while keeping one high-level Debug Adapter Protocol entry point.
+- Existing breakpoint, pause, continue, step-over, stack-trace, and output-event actions continue to work through the same tool, so clients do not need to switch between fragmented debugger tools.
+
+### 🛡️ Safer Debugger Endpoint Handling
+
+- DAP endpoint access defaults to loopback hosts, keeping normal Godot editor debugging local unless remote hosts are explicitly enabled.
+- Raw DAP request and message details are no longer returned by default; when protocol troubleshooting requires `include_raw=true`, sensitive-looking fields are redacted before being reported.
+- Session, message, frame, buffer, and breakpoint caches now have fixed bounds to keep long debugger sessions from growing without limit.
+
+### 🔧 Clearer Diagnostics and Tool Discovery
+
+- DAP lifecycle mistakes now return structured protocol errors such as `dap_invalid_session_state`, `dap_invalid_settings`, and `dap_limit_exceeded`, making client-side recovery easier.
+- Tool descriptions, Tools-page documentation, protocol facts, and harness coverage were updated so the advertised debugger actions match the runtime schema.
+
+### ⚡ Faster Large-Project Orientation
 
 - `system_project_state(summary=true)` now uses lightweight file counts for the compact summary path.
 - `system_project_state(sections=["summary", "project", "runtime", "capabilities"])` keeps the same sectioned workflow without forcing full path-array collection.
@@ -14,4 +30,4 @@ Godot .NET MCP `v1.1.1` improves the large-project experience for Agents that st
 
 ### ✅ Compatibility and Upgrade Notes
 
-This update keeps the Godot 4.6+ and .NET 8 requirements unchanged. Existing callers that use the full payload or the `files` section continue to receive the same path arrays; compact callers should see lower file-enumeration overhead on larger projects.
+This release keeps the Godot 4.6+ / .NET 8 compatibility target and does not change installation paths. Users who rely on the DAP tool should reconnect or refresh their MCP tool schema after upgrading so clients see the new `2026-05-03.13` DAP action surface. Existing `system_project_state` callers that use the full payload or the `files` section continue to receive the same path arrays, while compact callers should see lower file-enumeration overhead on larger projects.
