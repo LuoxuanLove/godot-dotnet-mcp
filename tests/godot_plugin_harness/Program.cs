@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Formats.Tar;
 using System.Text;
 using System.Text.Json;
 
@@ -283,20 +284,37 @@ internal static class Program
         {
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
-            CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            var archiveResult = await ExportAddonArchiveAsync(repoRoot, stageRoot, processRegistry);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
 
+            if (!archiveResult.Succeeded)
+            {
+                preserveStageRoot = keepStageRoot;
+                var archiveSummary = new
+                {
+                    success = false,
+                    skipped = false,
+                    reason = archiveResult.TimedOut ? "clean_asset_library_archive_timeout" : "clean_asset_library_archive_failed",
+                    exitCode = archiveResult.ExitCode,
+                    stageRoot,
+                    stageKept = preserveStageRoot,
+                    stdout = string.IsNullOrWhiteSpace(archiveResult.StdOut) ? string.Empty : archiveResult.StdOut.Trim(),
+                    stderr = string.IsNullOrWhiteSpace(archiveResult.StdErr) ? string.Empty : archiveResult.StdErr.Trim(),
+                    phaseTimings,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(archiveSummary, new JsonSerializerOptions { WriteIndented = true }));
+                return 1;
+            }
+
             DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
-            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
-            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
             RemoveRoslynPackageReference(Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"));
 
             var fixtureHasRoslynPackageReference = FileContainsText(
                 Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"),
                 "Microsoft.CodeAnalysis.CSharp");
-            var exportedRoslynRuntimeSources = Directory.Exists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
-            var exportedDotnetBridgeSources = Directory.Exists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
 
             var stageBuildStopwatch = Stopwatch.StartNew();
             var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
@@ -314,6 +332,7 @@ internal static class Program
                 skipped = false,
                 reason = succeeded ? string.Empty : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed"),
                 exitCode = stageBuild.ExitCode,
+                exportedWithGitArchive = true,
                 stageRoot,
                 stageKept = preserveStageRoot,
                 fixtureHasRoslynPackageReference,
@@ -337,6 +356,70 @@ internal static class Program
             }
             catch
             {
+            }
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> ExportAddonArchiveAsync(string repoRoot, string stageRoot, HarnessProcessRegistry processRegistry)
+    {
+        var archivePath = Path.Combine(stageRoot, "asset-library-addon.tar");
+        Process? process = null;
+        Task<string>? stderrTask = null;
+        FileStream? archiveStream = null;
+
+        try
+        {
+            archiveStream = File.Create(archivePath);
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("git")
+                {
+                    WorkingDirectory = repoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.ArgumentList.Add("archive");
+            process.StartInfo.ArgumentList.Add("--format=tar");
+            process.StartInfo.ArgumentList.Add("--worktree-attributes");
+            process.StartInfo.ArgumentList.Add("HEAD");
+            process.StartInfo.ArgumentList.Add("addons/godot_dotnet_mcp");
+            process.Start();
+            processRegistry.Register(process, "git-archive", "git", repoRoot, process.StartInfo.ArgumentList);
+            var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(archiveStream);
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            await stdoutTask;
+            await archiveStream.DisposeAsync();
+            archiveStream = null;
+
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            if (process.ExitCode != 0)
+            {
+                return (false, process.ExitCode, string.Empty, stderr, false);
+            }
+
+            TarFile.ExtractToDirectory(archivePath, stageRoot, overwriteFiles: true);
+            File.Delete(archivePath);
+            return (true, process.ExitCode, string.Empty, stderr, false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, string.Empty, stderr, true);
+        }
+        finally
+        {
+            if (archiveStream is not null)
+            {
+                await archiveStream.DisposeAsync();
             }
         }
     }
@@ -540,6 +623,18 @@ internal static class Program
     private static bool FileContainsText(string path, string text)
     {
         return File.Exists(path) && File.ReadAllText(path).Contains(text, StringComparison.Ordinal);
+    }
+
+    private static bool HasExportedSourceFiles(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        return Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
+            .Any(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void CopyDirectory(string sourceRoot, string destinationRoot)

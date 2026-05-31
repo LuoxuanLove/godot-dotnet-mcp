@@ -128,6 +128,10 @@ function Assert-CleanAssetLibraryInstallBuild {
         throw "Clean Asset Library install build did not report JSON output."
     }
 
+    if (-not ($HarnessJson.PSObject.Properties.Name -contains "exportedWithGitArchive") -or -not [bool]$HarnessJson.exportedWithGitArchive) {
+        throw "Clean Asset Library install build did not report exportedWithGitArchive=true."
+    }
+
     $requiredFalseProperties = @(
         "fixtureHasRoslynPackageReference",
         "exportedRoslynRuntimeSources",
