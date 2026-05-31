@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.1.2.
 
+### Fixed
+
+- Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
+
 ### Documentation
 
 - Updated the addon README copies for Asset Library installs so exported packages link to repository-hosted docs, changelogs, and current dev branch preview images instead of package-local paths that are not exported.

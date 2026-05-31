@@ -29,6 +29,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("简体中文本地化应将第一个 Dock 页签显示为“主页”。")
 	if str(zh_tw.get("tab_server", "")) != "首頁":
 		return _failure("繁體中文本地化應將第一個 Dock 頁籤顯示為“首頁”。")
+	if str(fr.get("language_name", "")) != "Français":
+		return _failure("French localization should expose a readable native language name.")
+	if str(fr.get("status_stopped", "")) != "Arrêté":
+		return _failure("French localization should preserve accented status labels.")
+	if str(fr.get("self_diag_cleared", "")) != "L’autodiagnostic du plugin a été effacé.":
+		return _failure("French localization should preserve curly apostrophes and accented self-diagnostic text.")
+	if str(fr.get("cat_node", "")) != "Nœud":
+		return _failure("French localization should preserve ligatures.")
+	var french_mojibake_markers := ["莽", "锚", "茅", "鈥", "檃", "脡", "猫", "聽", "芒", "禄", "艙", "脿", "么"]
+	for value in fr.values():
+		if not (value is String):
+			continue
+		var french_text := str(value)
+		for marker in french_mojibake_markers:
+			if french_text.contains(marker):
+				return _failure("French localization should not contain mojibake marker: %s" % marker)
 	for locale in supported_locales:
 		if str(locale.get("title", "")) != "Godot .NET MCP":
 			return _failure("All supported locales should expose the Dock header title as Godot .NET MCP.")
