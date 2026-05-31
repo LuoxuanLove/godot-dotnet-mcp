@@ -533,6 +533,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_audit_desc": "Сообщать о проблемах со сценой, возникших из-за экспортированных привязок",
 	"tool_system_project_state_name": "Состояние проекта",
 	"tool_system_project_state_desc": "Суммируйте текущее состояние проекта, включая количество, недавние ошибки и статус выполнения.",
+	"tool_system_help_name": "Справка",
+	"tool_system_help_desc": "Возвращает руководство возможностей MCP для агентов, обнаружение Prompt Guides, подсказки визуальной проверки, скрытые элементы управления и сведения schema.",
 	"tool_system_plugin_reload_name": "Перезагрузка плагина",
 	"tool_system_plugin_reload_desc": "Проверяет актуальность запущенного экземпляра плагина или планирует полную перезагрузку жизненного цикла без зависимости от UI на переднем плане.",
 	"tool_system_project_configure_name": "Настройка проекта",

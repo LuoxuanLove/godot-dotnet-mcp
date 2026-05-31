@@ -533,6 +533,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_audit_desc": "Relatar problemas de cena derivados de vinculações exportadas",
 	"tool_system_project_state_name": "Estado do projeto",
 	"tool_system_project_state_desc": "Resuma o estado atual do projeto, incluindo contagens, erros recentes e status do tempo de execução.",
+	"tool_system_help_name": "Ajuda",
+	"tool_system_help_desc": "Retorna o guia de capacidades MCP para agentes, descoberta de Prompt Guides, dicas de verificação visual, controles ocultos e fatos de schema.",
 	"tool_system_plugin_reload_name": "Recarregar plugin",
 	"tool_system_plugin_reload_desc": "Verifica se a instância do plugin em execução está atualizada ou agenda uma recarga completa do ciclo de vida sem depender da UI em primeiro plano.",
 	"tool_system_project_configure_name": "Configuração do projeto",
