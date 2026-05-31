@@ -80,6 +80,7 @@ const WRITE_ACTIONS := {
 	"remove_member": true,
 	"rename": true,
 	"rename_member": true,
+	"reorder": true,
 	"reorder_node": true,
 	"reparent": true,
 	"reparent_node": true,

@@ -316,6 +316,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"tool": "filesystem_file_write", "args": {"action": "save"}},
 		{"tool": "filesystem_file_write", "args": {"action": "save_as"}},
 		{"tool": "scene_hierarchy", "args": {"action": "add_node"}},
+		{"tool": "scene_hierarchy", "args": {"action": "reorder"}},
 		{"tool": "scene_file", "args": {"action": "patch"}},
 		{"tool": "script_edit_gd", "args": {"action": "add_function"}},
 		{"tool": "script_edit_cs", "args": {"action": "replace_method_body"}}
