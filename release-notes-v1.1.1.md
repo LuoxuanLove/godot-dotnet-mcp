@@ -1,6 +1,6 @@
-## 🧩 Godot .NET MCP v1.1.1: Complete DAP Debugger Sessions
+## 🧩 Godot .NET MCP v1.1.1: Complete DAP Sessions and Faster Project State
 
-Godot .NET MCP `v1.1.1` focuses on making the built-in Godot Debug Adapter Protocol workflow usable as a complete session, not just a collection of one-off breakpoint and stepping calls. Agents can now initialize a debugger connection, launch or attach, finish configuration, inspect threads, and close the session through the same high-level DAP tool surface.
+Godot .NET MCP `v1.1.1` improves two everyday Agent workflows: complete debugger sessions through the built-in Godot Debug Adapter Protocol, and faster large-project orientation when callers only need compact project-state information.
 
 ### ✨ Full DAP Session Flow
 
@@ -18,6 +18,16 @@ Godot .NET MCP `v1.1.1` focuses on making the built-in Godot Debug Adapter Proto
 - DAP lifecycle mistakes now return structured protocol errors such as `dap_invalid_session_state`, `dap_invalid_settings`, and `dap_limit_exceeded`, making client-side recovery easier.
 - Tool descriptions, Tools-page documentation, protocol facts, and harness coverage were updated so the advertised debugger actions match the runtime schema.
 
+### ⚡ Faster Large-Project Orientation
+
+- `system_project_state(summary=true)` now uses lightweight file counts for the compact summary path.
+- `system_project_state(sections=["summary", "project", "runtime", "capabilities"])` keeps the same sectioned workflow without forcing full path-array collection.
+
+### 🔧 Clearer Section Boundaries
+
+- Full `scene_paths`, `script_paths`, and `resource_paths` are still available through the default full payload or `sections=["files"]`.
+- Tool guidance now clarifies that `sections=[...]` takes precedence over `summary=true`, and that `sections=["health"]` triggers plugin health collection.
+
 ### ✅ Compatibility and Upgrade Notes
 
-This release keeps the Godot 4.6 / .NET 8 compatibility target and does not change installation paths. Users who rely on the DAP tool should reconnect or refresh their MCP tool schema after upgrading so clients see the new `2026-05-03.13` DAP action surface.
+This release keeps the Godot 4.6+ / .NET 8 compatibility target and does not change installation paths. Users who rely on the DAP tool should reconnect or refresh their MCP tool schema after upgrading so clients see the new `2026-05-03.13` DAP action surface. Existing `system_project_state` callers that use the full payload or the `files` section continue to receive the same path arrays, while compact callers should see lower file-enumeration overhead on larger projects.

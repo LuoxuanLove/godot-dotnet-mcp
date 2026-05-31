@@ -32,7 +32,7 @@ tools/system/
 连接后建议先调用 `system_help` 或读取工具说明，确认当前 schema 版本；涉及 Dock、页签、弹窗、布局、按钮可见性或焦点切换时，应优先使用 `system_editor_control(action=activate_ui)` 通过 Godot API 激活目标界面，再用 `system_editor_control(action=capture_editor)` 获取编辑器截图。插件不提供系统级鼠标 / 键盘注入、物理光标移动、强制前台或系统窗口移动能力；如果可见控件枚举找不到目标，应立即用 `include_hidden=true` 重试。
 
 ### 项目级
-- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位；同时返回 `file_enumeration_status`、`valid_file_enumeration`、`file_enumeration` 与 `enumeration_diagnostics`，用于区分“项目确实没有匹配文件”和“文件枚举范围可疑”。大型项目建议先调用 `system_project_state(summary=true)` 获取紧凑状态，再用 `sections=["project", "files", "runtime", "capabilities", "health"]` 按需读取具体段落，避免一次性返回超大响应；未传入 `summary` 或 `sections` 时保持完整平铺响应。
+- `system_project_state`：汇总当前项目状态，包括文件计数、最近错误、运行状态和 `runtime_capabilities` 能力位；同时返回 `file_enumeration_status`、`valid_file_enumeration`、`file_enumeration` 与 `enumeration_diagnostics`，用于区分“项目确实没有匹配文件”和“文件枚举范围可疑”。大型项目建议先调用 `system_project_state(summary=true)` 获取紧凑状态，该路径只采集文件计数而不构建完整 `scene_paths` / `script_paths` / `resource_paths`；再用 `sections=["project", "runtime", "capabilities"]` 按需读取轻量段落，只有确实需要完整路径数组时再请求 `sections=["files"]`。`sections=[...]` 会优先于 `summary=true`；请求 `sections=["health"]` 即使未传入 `include_runtime_health=true` 也会触发插件健康摘要采集。未传入 `summary` 或 `sections` 时保持完整平铺响应。
 - `system_editor_state`：统一聚合当前编辑器主屏幕、Inspector、FileSystem、项目运行摘要、runtime control 状态与 `runtime_capabilities` 能力位。
 - `system_runtime_diagnose`：收集运行时错误、编译错误与性能快照。
 - `system_project_configure`：读写项目设置、输入映射与自动加载配置。

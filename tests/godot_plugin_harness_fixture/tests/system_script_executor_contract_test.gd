@@ -48,6 +48,7 @@ class FakeBridge extends RefCounted:
 	var tool_loader = null
 	var last_atomic_tool := ""
 	var last_atomic_args: Dictionary = {}
+	var scene_bindings_call_count := 0
 
 	func get_tool_loader():
 		return tool_loader
@@ -56,7 +57,10 @@ class FakeBridge extends RefCounted:
 		last_atomic_tool = tool_name
 		last_atomic_args = args.duplicate(true)
 		match tool_name:
-			"scene_bindings", "scene_audit":
+			"scene_bindings":
+				scene_bindings_call_count += 1
+				return success({"issues": [], "binding_count": 0})
+			"scene_audit":
 				return success({"issues": [], "binding_count": 0})
 			"script_inspect":
 				return success({
@@ -83,6 +87,10 @@ class FakeBridge extends RefCounted:
 						return success({"scenes": ["res://tests/contract_scene.tscn"]})
 					"get_base_type":
 						return success({"base_type": "Node"})
+					"get_all_scene_refs":
+						return success({"scene_refs_by_script": {
+							"res://tests/Contract.cs": ["res://tests/contract_scene.tscn"]
+						}})
 					_:
 						return error("Unsupported script_references action")
 			"script_edit_gd", "script_edit_cs":
@@ -90,8 +98,12 @@ class FakeBridge extends RefCounted:
 			_:
 				return error("Unsupported fake bridge call: %s" % tool_name)
 
+	var _custom_cs_files: Array = []
+
 	func collect_files(pattern: String) -> Array:
 		if pattern == "*.cs":
+			if not _custom_cs_files.is_empty():
+				return _custom_cs_files
 			return ["res://tests/Contract.cs"]
 		return []
 
@@ -150,6 +162,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var bindings_audit: Dictionary = executor.execute("bindings_audit", {"script": cs_path})
 	if not bool(bindings_audit.get("success", false)):
 		return _failure("bindings_audit did not succeed through the split system script executor.")
+
+	# Batch path with scene cache: 2 scripts referencing the same scene should only audit the scene once
+	var cs_path_2 := TEMP_ROOT.path_join("ContractScript2.cs")
+	_write_text(cs_path_2, "public partial class ContractScript2 : Godot.Node { }\n")
+	bridge.scene_bindings_call_count = 0
+	bridge._custom_cs_files = [cs_path, cs_path_2]
+	var batch_audit: Dictionary = executor.execute("bindings_audit", {})
+	bridge._custom_cs_files = []
+	if not bool(batch_audit.get("success", false)):
+		return _failure("bindings_audit batch path did not succeed.")
+	var batch_data = batch_audit.get("data", {}) as Dictionary
+	if int(batch_data.get("target_count", 0)) != 2:
+		return _failure("bindings_audit batch path should return 2 targets for 2 scripts.")
+	if bridge.scene_bindings_call_count != 1:
+		return _failure("bindings_audit batch path should cache scene audits: expected 1 scene_bindings call for 2 scripts sharing the same scene, got %d." % bridge.scene_bindings_call_count)
 
 	var analyze: Dictionary = executor.execute("script_analyze", {
 		"script": gd_path,

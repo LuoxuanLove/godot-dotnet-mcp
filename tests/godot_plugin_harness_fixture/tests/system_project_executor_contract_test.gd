@@ -16,6 +16,9 @@ class FakeBridge extends RefCounted:
 	var scene_run_actions: Array[String] = []
 	var runtime_events: Array = []
 	var runtime_events_after_start: Array = []
+	var collect_files_calls := 0
+	var collect_file_count_calls := 0
+	var collect_file_counts_calls := 0
 	var atomic_bridge = AtomicBridgeScript.new()
 
 	func _init(tool_loader = null) -> void:
@@ -133,6 +136,7 @@ class FakeBridge extends RefCounted:
 				return error("Unsupported fake bridge call: %s" % tool_name)
 
 	func collect_files(pattern: String) -> Array:
+		collect_files_calls += 1
 		match pattern:
 			"*.gd":
 				return ["res://Player.gd"]
@@ -144,6 +148,27 @@ class FakeBridge extends RefCounted:
 				return ["res://mat/test.tres"]
 			_:
 				return []
+
+	func collect_file_count(pattern: String) -> int:
+		collect_file_count_calls += 1
+		match pattern:
+			"*.gd", "*.cs", "*.tscn", "*.tres", "*.res":
+				return 1
+			_:
+				return 0
+
+	func collect_file_counts(patterns: Array) -> Dictionary:
+		collect_file_counts_calls += 1
+		var counts := {}
+		for pattern in patterns:
+			var pattern_text := str(pattern)
+			counts[pattern_text] = collect_file_count(pattern_text)
+		return counts
+
+	func reset_collection_counters() -> void:
+		collect_files_calls = 0
+		collect_file_count_calls = 0
+		collect_file_counts_calls = 0
 
 	func _tail_runtime_events(limit: int) -> Array:
 		var resolved_limit: int = max(limit, 0)
@@ -246,6 +271,17 @@ class FakeToolLoader extends RefCounted:
 		return {"status": "ready", "tool_count": 115, "exposed_tool_count": 18, "last_error": ""}
 
 
+class FakeDisposableExecutor extends RefCounted:
+	var disposed := false
+	var shutdown_called := false
+
+	func dispose() -> void:
+		disposed = true
+
+	func shutdown() -> void:
+		shutdown_called = true
+
+
 class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
 	var last_args: Dictionary = {}
 
@@ -253,17 +289,61 @@ class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
 		if tool_name != "filesystem_directory":
 			return error("Unexpected atomic tool: %s" % tool_name)
 		last_args = args.duplicate(true)
-		return success({"files": ["res://Player.gd"]})
+		if bool(args.get("count_only", false)):
+			return success({"count": 1, "count_only": true})
+		return success({"files": ["res://Player.gd"], "count": 1})
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	_prepare_temp_root()
+	var atomic_bridge = AtomicBridgeScript.new()
+	var read_actions := [
+		{"tool": "project_info", "args": {"action": "get_settings"}},
+		{"tool": "scene_hierarchy", "args": {"action": "select"}},
+		{"tool": "editor_filesystem", "args": {"action": "get_selected"}},
+		{"tool": "editor_filesystem", "args": {"action": "select_file"}},
+		{"tool": "filesystem_directory", "args": {"action": "get_files"}},
+		{"tool": "script_references", "args": {"action": "get_scene_refs"}},
+		{"tool": "debug_runtime_bridge", "args": {"action": "get_recent"}}
+	]
+	for item in read_actions:
+		if atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridge should not classify read action as write: %s" % JSON.stringify(item))
+	var write_actions := [
+		{"tool": "project_settings", "args": {"action": "set_setting"}},
+		{"tool": "filesystem_directory", "args": {"action": "create"}},
+		{"tool": "filesystem_file_manage", "args": {"action": "move"}},
+		{"tool": "filesystem_file_write", "args": {"action": "save"}},
+		{"tool": "filesystem_file_write", "args": {"action": "save_as"}},
+		{"tool": "scene_hierarchy", "args": {"action": "add_node"}},
+		{"tool": "scene_hierarchy", "args": {"action": "reorder"}},
+		{"tool": "scene_file", "args": {"action": "patch"}},
+		{"tool": "script_edit_gd", "args": {"action": "add_function"}},
+		{"tool": "script_edit_cs", "args": {"action": "replace_method_body"}}
+	]
+	for item in write_actions:
+		if not atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridge should classify mutating action as write: %s" % JSON.stringify(item))
+	if not atomic_bridge._is_write_atomic_action("script_edit_gd", {}):
+		return _failure("AtomicBridge should infer script_edit_* atomic calls without an action as writes.")
+	var disposable_executor := FakeDisposableExecutor.new()
+	atomic_bridge._atomic_executors["script"] = disposable_executor
+	atomic_bridge._invalidate_atomic_executors()
+	if not disposable_executor.disposed or not disposable_executor.shutdown_called:
+		return _failure("AtomicBridge write invalidation should dispose and shutdown cached executors.")
+	if not atomic_bridge._atomic_executors.is_empty():
+		return _failure("AtomicBridge write invalidation should clear all cached executors.")
 	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
 	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
 	if atomic_files.size() != 1:
 		return _failure("AtomicBridge.collect_files should return files from filesystem_directory.")
 	if str(atomic_collect_bridge.last_args.get("path", "")) != "res://":
 		return _failure("AtomicBridge.collect_files should pass res:// as the filesystem_directory root path.")
+	var atomic_file_count: int = atomic_collect_bridge.collect_file_count("*.gd")
+	if atomic_file_count != 1:
+		return _failure("AtomicBridge.collect_file_count should return count from filesystem_directory.")
+	if not bool(atomic_collect_bridge.last_args.get("count_only", false)):
+		return _failure("AtomicBridge.collect_file_count should request count_only filesystem enumeration.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var valid_resource_path := TEMP_ROOT.path_join("ValidNoteData.tres")
 	var quoted_id_path_resource_path := TEMP_ROOT.path_join("QuotedPathIdNoteData.tres")
@@ -295,7 +375,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	)
 
 	var executor = SystemProjectExecutorScript.new()
-	executor.bridge = FakeBridge.new(FakeToolLoader.new())
+	var bridge := FakeBridge.new(FakeToolLoader.new())
+	executor.bridge = bridge
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
@@ -403,9 +484,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not ((project_state_data as Dictionary).get("scene_paths", []) is Array):
 		return _failure("project_state default payload should preserve scene_paths for backward compatibility.")
 
+	bridge.reset_collection_counters()
 	var project_state_summary: Dictionary = executor.execute("project_state", {"summary": true, "include_runtime_health": true})
 	if not bool(project_state_summary.get("success", false)):
 		return _failure("project_state summary mode should succeed.")
+	if bridge.collect_files_calls != 0:
+		return _failure("project_state summary mode should not collect full file path arrays.")
+	if bridge.collect_file_counts_calls != 1:
+		return _failure("project_state summary mode should use one bulk lightweight file count call for project file totals.")
+	if bridge.collect_file_count_calls != 5:
+		return _failure("project_state summary mode should resolve all project file glob totals through the bulk count helper.")
 	var summary_data: Dictionary = project_state_summary.get("data", {})
 	if not bool(summary_data.get("summary", false)):
 		return _failure("project_state summary mode should mark the payload as a summary.")
@@ -416,9 +504,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(summary_data.get("compile_error_count", -1)) != 1 or int(summary_data.get("scripts", 0)) < 2:
 		return _failure("project_state summary mode should preserve key project counts.")
 
+	bridge.reset_collection_counters()
 	var project_state_sections: Dictionary = executor.execute("project_state", {"sections": ["summary", "files", "health"]})
 	if not bool(project_state_sections.get("success", false)):
 		return _failure("project_state sections mode should succeed.")
+	if bridge.collect_files_calls < 5:
+		return _failure("project_state sections mode should collect full file path arrays when the files section is requested.")
 	var sections_data: Dictionary = project_state_sections.get("data", {})
 	var sections = sections_data.get("sections", {})
 	if not (sections is Dictionary):
@@ -430,6 +521,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_state files section should expose path arrays on demand.")
 	if not ((section_dict.get("health", {}) as Dictionary).get("self_diagnostics", {}) is Dictionary):
 		return _failure("project_state health section should include runtime health even without include_runtime_health.")
+	bridge.reset_collection_counters()
+	var project_state_summary_section: Dictionary = executor.execute("project_state", {"sections": ["summary"]})
+	if not bool(project_state_summary_section.get("success", false)):
+		return _failure("project_state summary-only section mode should succeed.")
+	if bridge.collect_files_calls != 0:
+		return _failure("project_state summary-only section mode should not collect full file path arrays.")
+	if bridge.collect_file_counts_calls != 1:
+		return _failure("project_state summary-only section mode should use one bulk lightweight file count call.")
+	if bridge.collect_file_count_calls != 5:
+		return _failure("project_state summary-only section mode should resolve all project file glob totals through the bulk count helper.")
 
 	var invalid_project_state_section: Dictionary = executor.execute("project_state", {"sections": ["summary", "unknown"]})
 	if bool(invalid_project_state_section.get("success", false)):

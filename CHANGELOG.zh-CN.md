@@ -12,9 +12,21 @@
 
 - 将 `system_dap_debugger` 扩展为完整 Debug Adapter Protocol 会话入口，支持运行时设置、持久 session ID、`initialize`、`launch`、`attach`、`configuration_done`、`threads`、`terminate` 与 `disconnect` 动作，同时保持单一高层 DAP 工具表面。
 
+### Fixed
+
+- 修复 `system_bindings_audit` 在大型项目中可能冻结 Godot 编辑器的问题：同一次调用内会缓存场景审计结果，使每个唯一场景只加载和实例化一次，并复用连续原子调用中的 executor，让 reference index 与 Roslyn 缓存可跨脚本检查保留。
+- 修复 atomic executor 缓存失效判断：`get_settings` 等读操作不再因子字符串命中被误判为写操作；成功写入后会清理 cached executor，避免 reference 与 Roslyn 数据过期。
+- 修复 `system_project_state(summary=true)` 与仅请求 summary 分段时仍会先构建完整脚本、场景和资源路径数组的问题；现在会使用一次批量轻量文件计数，再返回紧凑载荷。
+
+### Documentation
+
+- 记录 `system_project_state(sections=[...])` 会优先于 `summary=true`，`health` 分段会触发插件健康采集，并明确 `files` 分段才是大型项目中需要完整路径数组的边界。
+
 ### Internal
 
 - 扩展 DAP 契约 harness，覆盖持久 fake server 生命周期流程、默认仅允许 loopback 端点的安全边界和原始响应脱敏处理，并公开 `dap_invalid_session_state` / `dap_invalid_settings` / `dap_limit_exceeded` 协议错误标识。
+- 复用 `atomic_bridge.call_atomic` / `call_atomic_async` 中的原子 executor 实例，不再每次调用都重建，以便连续原子调用保留 `reference_service._reference_index`、`inspect_service._plugin_roslyn_service` 和其他实例级缓存。
+- 增加契约覆盖，验证 `system_project_state` 紧凑读取会跳过完整路径枚举、通过一次 count-only 请求批量统计项目文件总数，而默认完整载荷与 `files` 分段仍会按需收集文件路径。
 
 ## [1.1.0] - 2026-05-28
 
