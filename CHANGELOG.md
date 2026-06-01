@@ -4,9 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.1.2])
+## [Unreleased] ([1.2.0])
 
-Target version: 1.1.2.
+Target version: 1.2.0.
+
+### Documentation
+
+- Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
+
+### Internal
+
+- Switched plugin metadata, protocol facts, .NET bridge metadata, and plugin-update contract fixture expectations to the `1.2.0` development line.
+
+## [1.1.2] - 2026-06-02
 
 ### Changed
 
@@ -400,8 +410,9 @@ Target version: 1.1.2.
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
-[1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
+[1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...v1.0.1
