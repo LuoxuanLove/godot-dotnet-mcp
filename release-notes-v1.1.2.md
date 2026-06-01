@@ -2,12 +2,11 @@
 
 Godot .NET MCP `v1.1.2` is a maintenance update for agents and users who rely on clear workflow guidance, localized tool previews, and clean plugin installation. The release reorganizes MCP Prompt Guides into six practical workflows, improves Tools-page language coverage, and tightens Asset Library export validation so installed projects avoid plugin-internal build noise.
 
-### ✨ Six High-Level Workflow Guides
+### ✨ Clearer Workflow Guide Taxonomy
 
-- `godot.project_orientation` gives agents a stable starting path for reading project state, files, scenes, symbols, and dependency context before acting.
-- `godot.content_authoring` broadens authoring guidance for scene, script, and resource changes instead of focusing on one bootstrap path.
-- `godot.debug_triage` keeps debugger guidance inside one failure-triage workflow, so agents can move from diagnostics to DAP debugging without discovering a separate prompt category.
-- `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control` cover stale references, runtime checks, and editor UI automation as first-class agent workflows.
+The built-in Prompt Guides now use six workflow-oriented entries instead of mixing broad project workflows with narrower one-off prompts. Agents can discover guidance for project orientation, content authoring, debugging, reference checks, runtime validation, and editor UI control from one clearer prompt surface.
+
+Debugger guidance is now part of `godot.debug_triage`, while scene/script/resource authoring and reference validation each have their own workflow paths. This keeps prompt discovery focused on what the agent is trying to do, not on which underlying tool family happens to be involved.
 
 ### 🌐 More Complete Localized Tool Previews
 
