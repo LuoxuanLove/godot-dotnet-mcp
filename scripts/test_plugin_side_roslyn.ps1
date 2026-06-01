@@ -363,6 +363,7 @@ $RequiredCases = @(
     "editor_tool_executor_contracts"
     "tool_loader_contracts"
     "tool_localization_inventory_contracts"
+    "locale_key_parity_contracts"
     "tool_manifest_contracts"
     "plugin_action_router_contracts"
     "plugin_entrypoint_contracts"
