@@ -30,6 +30,7 @@ Target version: 1.1.2.
 
 - Added a clean Asset Library install harness build that uses `git archive --worktree-attributes`, removes fixture Roslyn package references, and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
 - Added a real tool-loader localization inventory contract so visible Tools-page tree, action, and parameter fallback coverage is checked across every supported locale.
+- Added a locale key parity harness contract to fail CI when any supported language is missing a translation key present in another locale.
 - Updated MCP prompt, system help, router, and localization contracts so the prompt surface remains exactly the six high-level workflow guides.
 
 ## [1.1.1] - 2026-05-31

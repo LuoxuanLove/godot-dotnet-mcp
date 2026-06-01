@@ -1102,6 +1102,10 @@ const TRANSLATIONS: Dictionary = {
 	# Group tools
 	"tool_group_group_name": "分组",
 	"tool_group_group_desc": "全局查询和管理节点分组",
+
+	# Parity fallback entries
+	"language_name": "简体中文",
+	"log_level_trace": "跟踪",
 }
 
 

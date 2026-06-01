@@ -30,6 +30,7 @@
 
 - 新增干净 Asset Library 安装 harness 构建：使用 `git archive --worktree-attributes`，移除 fixture 中的 Roslyn 包引用，并验证导出的插件副本在没有 Roslyn runtime 源码与 bridge 源码时仍可完成构建。
 - 新增基于真实 tool-loader 的本地化 inventory 契约，覆盖所有支持语言中的 Tools 页可见工具树、动作与参数 fallback 文案。
+- 新增本地化 key parity harness 契约：任一支持语言缺少其他 locale 中已存在的翻译 key 时会阻断 CI。
 - 更新 MCP prompt、system help、router 和本地化契约，确保 prompt surface 保持为六个高层工作流指南。
 
 ## [1.1.1] - 2026-05-31
