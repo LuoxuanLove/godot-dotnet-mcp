@@ -156,8 +156,7 @@ func _collect_schema_key_groups(tool: Dictionary, full_name: String, key_groups:
 				_collect_action_key_groups(full_name, str(action_value), key_groups, seen)
 			continue
 		if str((property_def as Dictionary).get("description", "")).is_empty():
-			continue
-		_collect_parameter_key_group(full_name, property_name, key_groups, seen)
+			_collect_parameter_key_group(full_name, property_name, key_groups, seen)
 
 
 func _get_preview_action_values(full_name: String, action_definition: Dictionary) -> Array[String]:
