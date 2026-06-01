@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- 补齐 DAP 调试器在 Tools 页的分类、动作名与参数说明本地化，使本地化工具预览不再回退显示原始英文 schema 文案。
 - 修复干净 Asset Library 安装：导出的插件下载内容不再包含 Roslyn bridge 实现源码，避免这些源码被宿主 Godot C# 项目直接编译。
 - 修复法语本地化文件，使重音字符、弯引号、不换行空格与连字正常显示，不再出现 mojibake 乱码。
 - 通过 `system_help` 暴露重组后的 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和六个内置 prompt ID。

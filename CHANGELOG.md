@@ -14,6 +14,7 @@ Target version: 1.1.2.
 
 ### Fixed
 
+- Localized DAP debugger Tools-page category labels, action names, and parameter descriptions so localized tool previews no longer fall back to raw English schema text.
 - Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
 - Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
 - Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.

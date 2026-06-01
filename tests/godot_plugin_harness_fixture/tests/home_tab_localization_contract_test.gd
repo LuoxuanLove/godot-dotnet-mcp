@@ -61,6 +61,40 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_system_scene_tree_name",
 		"tool_system_userdata_maintenance_name",
 		"tool_system_editor_log_name",
+		"cat_dap",
+		"tool_system_dap_debugger_name",
+		"tool_dap_debugger_name",
+		"tool_action_set_settings_name",
+		"tool_action_initialize_name",
+		"tool_action_launch_name",
+		"tool_action_attach_name",
+		"tool_action_configuration_done_name",
+		"tool_action_disconnect_name",
+		"tool_action_terminate_name",
+		"tool_action_threads_name",
+		"tool_action_set_breakpoint_name",
+		"tool_action_remove_breakpoint_name",
+		"tool_action_list_breakpoints_name",
+		"tool_action_pause_name",
+		"tool_action_continue_name",
+		"tool_action_step_over_name",
+		"tool_action_stack_trace_name",
+		"tool_action_output_name",
+		"tool_param_system_dap_debugger_action_desc",
+		"tool_param_system_dap_debugger_session_id_desc",
+		"tool_param_system_dap_debugger_host_desc",
+		"tool_param_system_dap_debugger_port_desc",
+		"tool_param_system_dap_debugger_timeout_ms_desc",
+		"tool_param_system_dap_debugger_settings_desc",
+		"tool_param_system_dap_debugger_include_raw_desc",
+		"tool_param_system_dap_debugger_adapter_args_desc",
+		"tool_param_system_dap_debugger_program_desc",
+		"tool_param_system_dap_debugger_cwd_desc",
+		"tool_param_system_dap_debugger_restart_desc",
+		"tool_param_system_dap_debugger_terminate_debuggee_desc",
+		"tool_param_system_dap_debugger_source_path_desc",
+		"tool_param_system_dap_debugger_line_desc",
+		"tool_param_system_dap_debugger_thread_id_desc",
 		"tool_action_get_output_name",
 		"tool_action_ensure_layout_name",
 		"tool_action_list_capture_cache_name",
@@ -138,6 +172,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			if not locale.has(key):
 				return _failure("All supported locales should define runtime Tools-page key: %s" % key)
 
+	for locale_info in [
+		{"name": "en", "path": "res://addons/godot_dotnet_mcp/localization/locale_en.gd"},
+		{"name": "zh_CN", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd"},
+		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"}
+	]:
+		var duplicate_key = _find_duplicate_locale_key(str(locale_info["path"]))
+		if not duplicate_key.is_empty():
+			return _failure("Locale source should not define duplicate translation keys in %s: %s" % [str(locale_info["name"]), duplicate_key])
+
 	var server_panel = ServerPanelScene.instantiate() as Control
 	if server_panel == null:
 		return _failure("Server/Home panel scene should instantiate for removed Advanced Settings audit.")
@@ -159,6 +202,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"zh_tw_title": str(zh_tw.get("title", ""))
 		}
 	}
+
+
+func _find_duplicate_locale_key(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var source := FileAccess.get_file_as_string(path)
+	var key_pattern := RegEx.new()
+	if key_pattern.compile("(?m)^\\s*\\\"([^\\\"]+)\\\"\\s*:") != OK:
+		return ""
+	var seen := {}
+	for result in key_pattern.search_all(source):
+		var key := result.get_string(1)
+		if seen.has(key):
+			return key
+		seen[key] = true
+	return ""
 
 
 func _find_forbidden_advanced_control(node: Node) -> String:
