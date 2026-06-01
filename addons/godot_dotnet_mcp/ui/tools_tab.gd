@@ -572,6 +572,10 @@ func _get_action_display_name(parent_tool: String, action_name: String) -> Strin
 		translated = _localization.get_text(generic_key)
 		if translated != generic_key:
 			return translated
+		var fallback_key = "tool_action_name_fallback"
+		var fallback_template = _localization.get_text(fallback_key)
+		if fallback_template != fallback_key:
+			return fallback_template % _humanize_identifier(action_name)
 	return _humanize_identifier(action_name)
 
 
@@ -1611,7 +1615,15 @@ func _get_parameter_description(full_name: String, property_name: String, proper
 		var generic_translation = _localization.get_text(generic_key)
 		if generic_translation != generic_key:
 			return generic_translation
-	return str(property_def.get("description", ""))
+	var schema_description := str(property_def.get("description", ""))
+	if not schema_description.is_empty():
+		return schema_description
+	if _localization != null:
+		var fallback_key = "tool_param_desc_fallback"
+		var fallback_template = _localization.get_text(fallback_key)
+		if fallback_template != fallback_key:
+			return fallback_template % _humanize_identifier(property_name)
+	return ""
 
 
 func _get_parameter_description_tool_keys(full_name: String) -> Array[String]:

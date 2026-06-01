@@ -1,0 +1,243 @@
+extends RefCounted
+
+# {"name": "tool_localization_inventory_contracts"}
+
+const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
+const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+
+
+class FakeServerContext extends RefCounted:
+	var _tool_access_provider
+	var _runtime_control_service
+
+	func _init(tool_access_provider, runtime_control_service = null) -> void:
+		_tool_access_provider = tool_access_provider
+		_runtime_control_service = runtime_control_service
+
+	func get_tool_access_provider():
+		return _tool_access_provider
+
+	func get_runtime_control_service():
+		return _runtime_control_service
+
+
+class FakeToolAccessProvider extends RefCounted:
+	func is_tool_category_visible(_category: String) -> bool:
+		return true
+
+	func is_tool_category_executable(_category: String) -> bool:
+		return true
+
+	func get_tool_access_denied_message(_category: String) -> String:
+		return "Tool category disabled"
+
+
+class FakeRuntimeControlService extends RefCounted:
+	func get_status() -> Dictionary:
+		return {
+			"available": true,
+			"armed": false,
+			"message": "Runtime control is disabled for the current session."
+		}
+
+
+var _loader = null
+
+
+func run_case(_tree: SceneTree) -> Dictionary:
+	_loader = ToolLoaderScript.new()
+	_loader.configure(FakeServerContext.new(FakeToolAccessProvider.new(), FakeRuntimeControlService.new()))
+	var summary: Dictionary = _loader.initialize([])
+	if int(summary.get("tool_count", 0)) <= 0:
+		return _failure("Tool localization inventory requires initialized tool definitions.")
+
+	var tools_by_category: Dictionary = _loader.get_tools_by_category()
+	var presentation: Dictionary = ToolPresentationServiceScript.build_tool_presentation(
+		_loader.get_exposed_tool_definitions(),
+		tools_by_category,
+		_loader.get_domain_states()
+	)
+	var required_key_groups := _collect_required_visible_tool_key_groups(presentation, tools_by_category)
+	var localization = LocalizationServiceScript.new()
+	localization._init_translations()
+	var locale_codes: Array[String] = localization.get_available_language_codes()
+
+	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
+	if not missing.is_empty():
+		return _failure("Visible Tools page localization key groups are missing: %s" % ", ".join(missing.slice(0, 120)))
+
+	return {
+		"name": "tool_localization_inventory_contracts",
+		"success": true,
+		"error": "",
+		"details": {
+			"tool_category_count": tools_by_category.size(),
+			"locale_count": locale_codes.size(),
+			"required_key_group_count": required_key_groups.size()
+		}
+	}
+
+
+func cleanup_case(_tree: SceneTree) -> void:
+	if _loader != null and _loader.has_method("shutdown"):
+		_loader.shutdown()
+	_loader = null
+
+
+func _collect_required_visible_tool_key_groups(presentation: Dictionary, tools_by_category: Dictionary) -> Array:
+	var key_groups: Array = []
+	var seen := {}
+	var tool_index := _build_tool_index(tools_by_category)
+	for node in presentation.get("toolTree", []):
+		if node is Dictionary:
+			_collect_visible_tree_node_key_groups(node as Dictionary, tool_index, key_groups, seen)
+	return key_groups
+
+
+func _build_tool_index(tools_by_category: Dictionary) -> Dictionary:
+	var tool_index := {}
+	for category in tools_by_category.keys():
+		var category_name := str(category)
+		for tool_def in tools_by_category.get(category, []):
+			if not (tool_def is Dictionary):
+				continue
+			var tool := (tool_def as Dictionary).duplicate(true)
+			if bool(tool.get("compatibility_alias", false)):
+				continue
+			var tool_name := str(tool.get("name", ""))
+			if tool_name.is_empty():
+				continue
+			var full_name := "%s_%s" % [category_name, tool_name]
+			tool["category"] = category_name
+			tool["full_name"] = full_name
+			tool_index[full_name] = tool
+	return tool_index
+
+
+func _collect_visible_tree_node_key_groups(node: Dictionary, tool_index: Dictionary, key_groups: Array, seen: Dictionary) -> void:
+	var kind := str(node.get("kind", ""))
+	match kind:
+		"domain", "category":
+			var label_key := str(node.get("labelKey", ""))
+			_add_required_group(key_groups, seen, [label_key])
+			_add_required_group(key_groups, seen, ["%s_desc" % label_key])
+		"tool", "atomic":
+			var full_name := str(node.get("fullName", node.get("key", "")))
+			_add_required_group(key_groups, seen, ["tool_%s_name" % full_name])
+			_add_required_group(key_groups, seen, ["tool_%s_desc" % full_name])
+			_collect_schema_key_groups(tool_index.get(full_name, {}), full_name, key_groups, seen)
+		"action":
+			var parent_tool := str(node.get("parentTool", node.get("parent_tool", "")))
+			var action_name := str(node.get("actionName", node.get("action", "")))
+			_collect_action_key_groups(parent_tool, action_name, key_groups, seen)
+	for child in node.get("children", []):
+		if child is Dictionary:
+			_collect_visible_tree_node_key_groups(child as Dictionary, tool_index, key_groups, seen)
+
+
+func _collect_schema_key_groups(tool: Dictionary, full_name: String, key_groups: Array, seen: Dictionary) -> void:
+	if tool.is_empty():
+		return
+	var input_schema = tool.get("inputSchema", {})
+	if not (input_schema is Dictionary):
+		return
+	var properties = (input_schema as Dictionary).get("properties", {})
+	if not (properties is Dictionary):
+		return
+	for property_name_value in (properties as Dictionary).keys():
+		var property_name := str(property_name_value)
+		var property_def = (properties as Dictionary).get(property_name, {})
+		if not (property_def is Dictionary):
+			continue
+		if property_name == "action":
+			for action_value in _get_preview_action_values(full_name, property_def as Dictionary):
+				_collect_action_key_groups(full_name, str(action_value), key_groups, seen)
+			continue
+		if str((property_def as Dictionary).get("description", "")).is_empty():
+			_collect_parameter_key_group(full_name, property_name, key_groups, seen)
+
+
+func _get_preview_action_values(full_name: String, action_definition: Dictionary) -> Array[String]:
+	if full_name.begins_with("system_"):
+		return []
+	var values: Array[String] = []
+	for action_value in action_definition.get("enum", []):
+		values.append(str(action_value))
+	return values
+
+
+func _collect_action_key_groups(parent_tool: String, action_name: String, key_groups: Array, seen: Dictionary) -> void:
+	if parent_tool.is_empty() or action_name.is_empty():
+		return
+	_add_required_group(key_groups, seen, [
+		SystemTreeCatalog.get_action_name_key(parent_tool, action_name),
+		SystemTreeCatalog.get_generic_action_name_key(action_name),
+		"tool_action_name_fallback"
+	])
+	_add_required_group(key_groups, seen, [
+		SystemTreeCatalog.get_action_desc_key(parent_tool, action_name),
+		SystemTreeCatalog.get_generic_action_desc_key(action_name),
+		"tool_action_desc_fallback"
+	])
+
+
+func _collect_parameter_key_group(full_name: String, property_name: String, key_groups: Array, seen: Dictionary) -> void:
+	if full_name.is_empty() or property_name.is_empty():
+		return
+	var keys: Array[String] = ["tool_param_%s_%s_desc" % [full_name, property_name]]
+	if full_name == "dap_debugger":
+		keys.append("tool_param_system_dap_debugger_%s_desc" % property_name)
+	keys.append("tool_param_%s_desc" % property_name)
+	keys.append("tool_param_desc_fallback")
+	_add_required_group(key_groups, seen, keys)
+
+
+func _add_required_group(key_groups: Array, seen: Dictionary, keys: Array) -> void:
+	var normalized: Array[String] = []
+	for key in keys:
+		var key_text := str(key)
+		if key_text.is_empty():
+			continue
+		normalized.append(key_text)
+	normalized.sort()
+	if normalized.is_empty():
+		return
+	var signature := "|".join(normalized)
+	if seen.has(signature):
+		return
+	seen[signature] = true
+	key_groups.append(normalized)
+
+
+func _find_missing_key_groups(localization, locale_codes: Array[String], required_key_groups: Array) -> Array[String]:
+	var missing: Array[String] = []
+	var seen := {}
+	for locale_name in locale_codes:
+		for key_group in required_key_groups:
+			if _has_any_translation(localization, locale_name, key_group):
+				continue
+			var label := " or ".join(key_group)
+			if seen.has(label):
+				continue
+			seen[label] = true
+			missing.append(label)
+	missing.sort()
+	return missing
+
+
+func _has_any_translation(localization, locale_name: String, key_group: Array) -> bool:
+	for key in key_group:
+		var key_text := str(key)
+		if localization.get_text_for(locale_name, key_text) != key_text:
+			return true
+	return false
+
+
+func _failure(message: String) -> Dictionary:
+	return {
+		"name": "tool_localization_inventory_contracts",
+		"success": false,
+		"error": message
+	}
