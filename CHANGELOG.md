@@ -10,19 +10,21 @@ Target version: 1.1.2.
 
 ### Changed
 
-- Reorganized built-in MCP Prompt Guides into six high-level, nonredundant entries: `godot.project_orientation`, `godot.content_authoring`, `godot.debug_triage`, `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control`.
+- Reorganized built-in MCP Prompt Guides into six workflow-oriented entries: `godot.project_orientation`, `godot.content_authoring`, `godot.debug_triage`, `godot.reference_integrity`, `godot.runtime_validation`, and `godot.editor_ui_control`.
+- Folded debugger guidance into `godot.debug_triage` so prompt discovery presents one failure-triage workflow instead of a separate debugger-only guide.
 
 ### Fixed
 
+- Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and all six built-in prompt IDs from the primary capability guide.
 - Localized DAP debugger Tools-page category labels, action names, and parameter descriptions so localized tool previews no longer fall back to raw English schema text.
 - Localized Tools-page dynamic action and empty-parameter fallback text while preserving existing schema descriptions when a specific tool key is not defined.
 - Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
 - Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
-- Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
 - Aligned the reference-integrity Prompt Guide `resource_path` argument with system_resource_reference_audit text-file support by accepting .tscn and .tres paths only.
 
 ### Documentation
 
+- Added the `v1.1.2` manual release notes source for the Prompt Guides, localization, and clean Asset Library install maintenance release.
 - Updated the addon README copies for Asset Library installs so exported packages link to repository-hosted docs, changelogs, and current dev branch preview images instead of package-local paths that are not exported.
 - Updated Prompt Guides documentation to describe the six high-level workflow entries and clarify that DAP debugging is part of `godot.debug_triage` rather than a separate prompt guide.
 

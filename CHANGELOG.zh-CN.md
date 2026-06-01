@@ -10,19 +10,21 @@
 
 ### Changed
 
-- 将内置 MCP Prompt Guides 重组为六个高层且不冗余的入口：`godot.project_orientation`、`godot.content_authoring`、`godot.debug_triage`、`godot.reference_integrity`、`godot.runtime_validation` 与 `godot.editor_ui_control`。
+- 将内置 MCP Prompt Guides 重组为六个面向工作流的入口：`godot.project_orientation`、`godot.content_authoring`、`godot.debug_triage`、`godot.reference_integrity`、`godot.runtime_validation` 与 `godot.editor_ui_control`。
+- 将调试器指引收束到 `godot.debug_triage`，使 prompt 发现结果呈现为一个失败诊断工作流，而不是单独的调试器专用指南。
 
 ### Fixed
 
+- 通过 `system_help` 暴露重组后的 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和全部六个内置 prompt ID。
 - 补齐 DAP 调试器在 Tools 页的分类、动作名与参数说明本地化，使本地化工具预览不再回退显示原始英文 schema 文案。
 - 补齐 Tools 页动态动作与空参数 fallback 文案本地化，并在缺少特定工具 key 时保留已有 schema 说明。
 - 修复干净 Asset Library 安装：导出的插件下载内容不再包含 Roslyn bridge 实现源码，避免这些源码被宿主 Godot C# 项目直接编译。
 - 修复法语本地化文件，使重音字符、弯引号、不换行空格与连字正常显示，不再出现 mojibake 乱码。
-- 通过 `system_help` 暴露重组后的 MCP Prompt Guides，使 Agent 能从主要能力说明中发现 `prompts/list`、`prompts/get` 和六个内置 prompt ID。
 - 对齐 reference-integrity Prompt Guide 的 `resource_path` 参数与 system_resource_reference_audit 的文本文件支持范围，仅接受 .tscn 与 .tres 路径。
 
 ### Documentation
 
+- 新增 `v1.1.2` 手写发布说明源文件，用于本次 Prompt Guides、本地化与干净 Asset Library 安装维护版本。
 - 更新插件包内 README 副本，使 Asset Library 安装后的导出包链接到仓库托管的文档、变更日志和当前 `dev` 分支预览图，不再指向包内未导出的相对路径。
 - 更新 Prompt Guides 文档，说明六个高层工作流入口，并明确 DAP 调试属于 `godot.debug_triage` 的诊断分支，而不是独立 prompt guide。
 
