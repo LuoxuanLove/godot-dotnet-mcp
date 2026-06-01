@@ -34,7 +34,7 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 | 🌳 | **Scene, resource, and binding diagnostics** | Helps inspect scene trees, resource references, dependencies, scene structure issues, and C# export binding state. |
 | ▶️ | **Game runtime support** | Starts and stops scenes, inspects runtime diagnostics, performs input, and captures game runtime views. |
 | 🔎 | **Roslyn-based C# support** | Uses the plugin's internal Roslyn syntax checks to read C# script structure, including classes, base types, methods, enums, and exported members. |
-| 🐞 | **Godot DAP debugging** | Reads breakpoints, threads, stack traces, and output events through Godot DAP, and performs pause, continue, and step-over actions. |
+| 🐞 | **Godot DAP debugging** | Reads breakpoints, threads, stack traces, and output events through Godot DAP, and performs pause, continue, and step-over actions for Godot script debugging; managed C# breakpoints still require a separate .NET debugger. |
 | 📚 | **MCP Resources and Prompts** | Provides project resources, diagnostics read entry points, and common Godot workflow Prompt Guides. |
 | 🧰 | **Tool extensions** | Optionally hot-loads `user_*` GDScript tools from `custom_tools/`, so projects can add their own MCP capabilities. |
 
