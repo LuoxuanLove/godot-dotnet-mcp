@@ -4,9 +4,19 @@
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased] ([1.1.2])
+## [Unreleased] ([1.2.0])
 
-目标版本：1.1.2。
+目标版本：1.2.0。
+
+### Documentation
+
+- 使用 pending-theme 模板初始化 `v1.2.0` 发布说明源文件，并在插件元数据推进后移除过时的 `v1.1.2` 源文件。
+
+### Internal
+
+- 将插件元数据、协议事实文件、.NET bridge 元数据和插件更新契约 fixture 期望值切换到 `1.2.0` 开发版本线。
+
+## [1.1.2] - 2026-06-02
 
 ### Changed
 
@@ -400,8 +410,9 @@
 
 - `/root/...` 路径兼容已做补丁，但最终行为仍依赖插件重载后的稳定性。
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
-[1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
+[1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.0...v1.0.1
