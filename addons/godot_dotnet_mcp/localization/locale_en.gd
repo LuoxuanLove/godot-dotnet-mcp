@@ -1102,6 +1102,10 @@ const TRANSLATIONS: Dictionary = {
 	# Group tools
 	"tool_group_group_name": "Group",
 	"tool_group_group_desc": "Query and manage node groups globally",
+
+	# Parity fallback entries
+	"language_name": "English",
+	"log_level_trace": "Trace",
 }
 
 
