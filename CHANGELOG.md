@@ -15,6 +15,7 @@ Target version: 1.1.2.
 ### Fixed
 
 - Localized DAP debugger Tools-page category labels, action names, and parameter descriptions so localized tool previews no longer fall back to raw English schema text.
+- Localized Tools-page dynamic action and parameter fallback text so visible tool previews no longer expose raw schema descriptions when a specific tool key is not defined.
 - Fixed clean Asset Library installs so Roslyn bridge implementation sources are excluded from exported plugin downloads instead of being compiled by the host Godot C# project.
 - Fixed the French localization file so accented characters, curly apostrophes, non-breaking spaces, and ligatures render correctly instead of mojibake.
 - Exposed the reorganized MCP Prompt Guides through `system_help` so agents can discover `prompts/list`, `prompts/get`, and the six built-in prompt IDs from the primary capability guide.
@@ -28,6 +29,7 @@ Target version: 1.1.2.
 ### Internal
 
 - Added a clean Asset Library install harness build that uses `git archive --worktree-attributes`, removes fixture Roslyn package references, and verifies the exported plugin copy still builds without Roslyn runtime sources or bridge sources.
+- Added a real tool-loader localization inventory contract so visible Tools-page tree, action, and parameter fallback coverage is checked across every supported locale.
 - Updated MCP prompt, system help, router, and localization contracts so the prompt surface remains exactly the six high-level workflow guides.
 
 ## [1.1.1] - 2026-05-31
