@@ -28,16 +28,15 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 
 |       | Feature | What it does |
 | :---: | :--- | :--- |
-| 🎛️ | **In-editor local MCP plugin** | The MCP service is provided directly by the Godot plugin, with no extra background process required. |
-| 🚀 | **Simple installation** | Install it from the Godot Asset Library, or copy the `addons/godot_dotnet_mcp/` source files into your project. |
-| 🔄 | **Latest GitHub code** | Keep a copied addon current through normal editor or GUI file updates, or through MCP project-file tools when appropriate. |
-| 🎮 | **Live Godot editor context** | Provides your agent with the current scene, selected nodes, Dock state, logs, run information, and editor screenshots. |
-| 🌳 | **Scene and resource workflows** | Helps inspect scene trees, resource references, dependencies, and scene structure issues. |
+| 🎛️ | **Runs with the editor** | The MCP service is provided directly by the Godot plugin, with no extra background process required. |
+| 🚀 | **Low-friction setup** | Install it from the Godot Asset Library, generate connection settings for common MCP clients, and update the plugin from GitHub sources. |
+| 🎮 | **Live Godot editor context** | Provides your agent with the current scene, selected nodes, Dock state, logs, run information, diagnostics summaries, and editor screenshots. |
+| 🌳 | **Scene, resource, and binding diagnostics** | Helps inspect scene trees, resource references, dependencies, scene structure issues, and C# export binding state. |
 | ▶️ | **Game runtime support** | Starts and stops scenes, inspects runtime diagnostics, performs input, and captures game runtime views. |
-| 🔎 | **Roslyn-based C# support** | Uses the plugin's internal Roslyn syntax checks to read C# scripts, focusing on structure recognition and diagnostic boundaries. |
-| ⚙️ | **Client configuration** | Generates or copies connection settings for common MCP clients from the plugin config page, and opens the current project with one click. |
-| 🧰 | **User extensions** | Optionally hot-loads `user_*` GDScript tools from `custom_tools/`. |
-| 📚 | **MCP resources and prompts** | Exposes project info, diagnostics, scene/script/resource reads, and guided workflow prompts. |
+| 🔎 | **Roslyn-based C# support** | Uses the plugin's internal Roslyn syntax checks to read C# script structure, including classes, base types, methods, enums, and exported members. |
+| 🐞 | **Godot DAP debugging** | Reads breakpoints, threads, stack traces, and output events through Godot DAP, and performs pause, continue, and step-over actions for Godot script debugging; managed C# breakpoints still require a separate .NET debugger. |
+| 📚 | **MCP Resources and Prompts** | Provides project resources, diagnostics read entry points, and common Godot workflow Prompt Guides. |
+| 🧰 | **Tool extensions** | Optionally hot-loads `user_*` GDScript tools from `custom_tools/`, so projects can add their own MCP capabilities. |
 
 ## Installation
 
@@ -82,15 +81,11 @@ Although I am only a student, I am deeply passionate about making games. I once 
 
 In the AI era, everything changed, and code became cheap. After discovering great concepts like agents and MCP, I was ecstatic. I wanted AI to turn my ideas into reality simply and quickly, and to autonomously complete design, development, validation, and everything else.
 
-After briefly trying some other Godot MCPs, I gave up on them. Faced with my ever-changing game development needs, existing MCPs felt like screwdrivers that could only tighten fixed screws. They were nowhere near enough.
-
 So I decided to write this MCP plugin myself, and to use it personally while building my own game. This great plugin will be battle-tested by me in real work; I will hit the pitfalls first, polish it, and fix it for you.
 
-Try Godot .NET MCP. It will become the tightest connection between your agent and your game project.
+Even though 100% of this project's code is generated directly by AI, I have prepared the strictest automated checks, development flow, and release flow I can, so AI-written code is verified as much as possible before it enters an official version.
 
-As an aside, great open-source projects like oh-my-openagent are what I admire and strive to catch up with. Its authors used AI to build a magnificent palace, then polished every detail with a rigorous workflow. I learned a lot by studying the oh-my-openagent workflow.
-
-At the same time, I am also using opencode + oh-my-openagent to develop this plugin. 100% of this project's code was generated directly by AI. I actually do not understand GDScript. But I promise: this README was personally reviewed and heavily rewritten by me.
+After reading all this, why not try Godot .NET MCP? I will keep studying the market, stealing the strongest ideas, and updating them here; it will become the tightest connection between your agent and your game project.
 
 Does that sound arrogant? Maybe. If you have a more badass implementation idea, send a PR. You are very welcome!
 
