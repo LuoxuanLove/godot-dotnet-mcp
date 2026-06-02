@@ -4,7 +4,7 @@
 
 <p align="center"><a href="../../../CHANGELOG.md">English</a> | <a href="CHANGELOG.md">日本語</a> | <a href="../zh-CN/CHANGELOG.md">简体中文</a></p>
 
-## [未リリース] ([1.2.0])
+## 未リリース (1.2.0)
 
 対象バージョン: 1.2.0。
 
@@ -17,7 +17,7 @@
 
 - プラグインメタデータ、protocol facts、.NET bridge メタデータ、プラグイン更新契約 fixture の期待値を `1.2.0` 開発ラインへ切り替えました。
 
-## [1.1.2] - 2026-06-02
+## 1.1.2 - 2026-06-02
 
 ### Changed
 
