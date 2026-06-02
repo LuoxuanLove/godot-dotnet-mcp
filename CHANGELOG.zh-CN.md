@@ -10,6 +10,7 @@
 
 ### Documentation
 
+- 新增英文与中文路线图入口：`ROADMAP.md` 与 `ROADMAP.zh-CN.md`。
 - 使用 pending-theme 模板初始化 `v1.2.0` 发布说明源文件，并在插件元数据推进后移除过时的 `v1.1.2` 源文件。
 
 ### Internal
