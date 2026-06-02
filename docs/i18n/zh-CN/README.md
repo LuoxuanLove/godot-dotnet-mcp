@@ -74,7 +74,7 @@ addons/godot_dotnet_mcp
 - [日本語 README](../ja/README.md)
 - [更新日志](CHANGELOG.md)
 - [路线图](ROADMAP.md)
-- [English Changelog](../../../CHANGELOG.md)
+- [English Changelog](../../CHANGELOG.md)
 - [文档概述](../../../docs/概述.md)
 - [安装与发布](../../../docs/架构/安装与发布.md)
 - [用户扩展](../../../docs/模块/用户扩展.md)

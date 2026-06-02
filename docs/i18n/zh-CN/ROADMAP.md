@@ -1,6 +1,6 @@
 # 路线图
 
-<p align="center"><a href="../../../ROADMAP.md">English</a> | <a href="../ko/ROADMAP.md">한국어</a> | <a href="../ja/ROADMAP.md">日本語</a> | <a href="ROADMAP.md">简体中文</a></p>
+<p align="center"><a href="../../ROADMAP.md">English</a> | <a href="../ko/ROADMAP.md">한국어</a> | <a href="../ja/ROADMAP.md">日本語</a> | <a href="ROADMAP.md">简体中文</a></p>
 
 本文档描述 Godot .NET MCP 的产品方向。它是规划文档，不是发布承诺，也不能替代 issue 级设计。随着实现约束、测试结果和用户反馈逐步清晰，版本范围可能调整。
 

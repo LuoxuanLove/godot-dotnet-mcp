@@ -1,6 +1,6 @@
 # 变更日志
 
-<p align="center"><a href="../../../CHANGELOG.md">English</a> | <a href="../ko/CHANGELOG.md">한국어</a> | <a href="../ja/CHANGELOG.md">日本語</a> | <a href="CHANGELOG.md">简体中文</a></p>
+<p align="center"><a href="../../CHANGELOG.md">English</a> | <a href="../ko/CHANGELOG.md">한국어</a> | <a href="../ja/CHANGELOG.md">日本語</a> | <a href="CHANGELOG.md">简体中文</a></p>
 
 本项目的所有重要变更都会记录在此文件中。
 

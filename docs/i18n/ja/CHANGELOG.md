@@ -1,8 +1,8 @@
 # 変更履歴
 
-このファイルは Godot .NET MCP の日本語変更履歴のエントリーです。完全で正規の変更履歴は [英語版 CHANGELOG](../../../CHANGELOG.md) に記録されています。
+このファイルは Godot .NET MCP の日本語変更履歴のエントリーです。完全で正規の変更履歴は [英語版 CHANGELOG](../../CHANGELOG.md) に記録されています。
 
-<p align="center"><a href="../../../CHANGELOG.md">English</a> | <a href="../ko/CHANGELOG.md">한국어</a> | <a href="CHANGELOG.md">日本語</a> | <a href="../zh-CN/CHANGELOG.md">简体中文</a></p>
+<p align="center"><a href="../../CHANGELOG.md">English</a> | <a href="../ko/CHANGELOG.md">한국어</a> | <a href="CHANGELOG.md">日本語</a> | <a href="../zh-CN/CHANGELOG.md">简体中文</a></p>
 
 ## 未リリース (1.2.0)
 
@@ -48,4 +48,4 @@
 
 ## 過去のバージョン
 
-1.1.1 以前の完全な履歴は [英語版 CHANGELOG](../../../CHANGELOG.md) を参照してください。日本語版は今後の公開変更に合わせて継続的に更新されます。
+1.1.1 以前の完全な履歴は [英語版 CHANGELOG](../../CHANGELOG.md) を参照してください。日本語版は今後の公開変更に合わせて継続的に更新されます。

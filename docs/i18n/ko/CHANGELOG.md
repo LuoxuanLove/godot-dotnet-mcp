@@ -1,8 +1,8 @@
 # 변경 로그
 
-이 파일은 Godot .NET MCP의 한국어 변경 로그 진입점입니다. 전체 정식 변경 기록은 [영어 CHANGELOG](../../../CHANGELOG.md)에 기록됩니다.
+이 파일은 Godot .NET MCP의 한국어 변경 로그 진입점입니다. 전체 정식 변경 기록은 [영어 CHANGELOG](../../CHANGELOG.md)에 기록됩니다.
 
-<p align="center"><a href="../../../CHANGELOG.md">English</a> | <a href="CHANGELOG.md">한국어</a> | <a href="../ja/CHANGELOG.md">日本語</a> | <a href="../zh-CN/CHANGELOG.md">简体中文</a></p>
+<p align="center"><a href="../../CHANGELOG.md">English</a> | <a href="CHANGELOG.md">한국어</a> | <a href="../ja/CHANGELOG.md">日本語</a> | <a href="../zh-CN/CHANGELOG.md">简体中文</a></p>
 
 ## 미출시 (1.2.0)
 
@@ -48,4 +48,4 @@
 
 ## 이전 버전
 
-1.1.1 이전의 전체 기록은 [영어 CHANGELOG](../../../CHANGELOG.md)를 참조하세요. 한국어 변경 로그는 앞으로 공개 변경에 맞춰 계속 업데이트됩니다.
+1.1.1 이전의 전체 기록은 [영어 CHANGELOG](../../CHANGELOG.md)를 참조하세요. 한국어 변경 로그는 앞으로 공개 변경에 맞춰 계속 업데이트됩니다.

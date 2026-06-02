@@ -2,7 +2,7 @@
 
 このロードマップは Godot .NET MCP の今後の製品方向を説明するものです。これは計画文書であり、リリース約束や issue レベル設計の代替ではありません。実装上の制約、テスト結果、ユーザーフィードバックが明確になるにつれて、バージョン範囲は変わる可能性があります。
 
-<p align="center"><a href="../../../ROADMAP.md">English</a> | <a href="../ko/ROADMAP.md">한국어</a> | <a href="ROADMAP.md">日本語</a> | <a href="../zh-CN/ROADMAP.md">简体中文</a></p>
+<p align="center"><a href="../../ROADMAP.md">English</a> | <a href="../ko/ROADMAP.md">한국어</a> | <a href="ROADMAP.md">日本語</a> | <a href="../zh-CN/ROADMAP.md">简体中文</a></p>
 
 ## 製品ポジショニング
 

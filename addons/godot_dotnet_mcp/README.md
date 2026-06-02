@@ -147,7 +147,7 @@ Use `system_runtime_diagnose` to read structured runtime information —errors, 
 ## Docs
 
 - [README.zh-CN.md](README.zh-CN.md)
-- Release notes are maintained in [`CHANGELOG.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/CHANGELOG.md) and [`CHANGELOG.zh-CN.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/CHANGELOG.zh-CN.md).
+- Release notes are maintained in [`CHANGELOG.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/CHANGELOG.md) and [`docs/i18n/zh-CN/CHANGELOG.md`](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/i18n/zh-CN/CHANGELOG.md).
 - [docs/模块/System工具层.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
 - [docs/模块/工具系统.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
 - [docs/模块/用户扩展.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
