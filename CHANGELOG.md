@@ -10,6 +10,7 @@ Target version: 1.2.0.
 
 ### Documentation
 
+- Added English and Chinese roadmap entry points in `ROADMAP.md` and `ROADMAP.zh-CN.md`.
 - Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
 
 ### Internal
