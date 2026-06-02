@@ -69,9 +69,6 @@ Then enable it from `Project Settings > Plugins`.
 
 ## Documentation
 
-- [한국어 README](docs/i18n/ko/README.md)
-- [日本語 README](docs/i18n/ja/README.md)
-- [简体中文 README](docs/i18n/zh-CN/README.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Documentation overview](docs/概述.md)

@@ -145,8 +145,8 @@ POST http://127.0.0.1:3000/mcp
 
 ## 文档
 
-- [README.md](README.md)
-- [CHANGELOG.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/CHANGELOG.md)
+- [更新日志](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/i18n/zh-CN/CHANGELOG.md)
+- [路线图](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/i18n/zh-CN/ROADMAP.md)
 - [docs/概述.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A6%82%E8%BF%B0.md)
 - [docs/模块/System工具层.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
 - [docs/模块/工具系统.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
