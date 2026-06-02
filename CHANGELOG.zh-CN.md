@@ -1,5 +1,7 @@
 # 变更日志
 
+<p align="center"><a href="CHANGELOG.md">English</a> | <a href="docs/i18n/ja/CHANGELOG.md">日本語</a> | <a href="docs/i18n/zh-CN/CHANGELOG.md">简体中文</a></p>
+
 本项目的所有重要变更都会记录在此文件中。
 
 本文档格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
@@ -10,6 +12,7 @@
 
 ### Documentation
 
+- 在 `docs/i18n/` 下新增结构化的日文与简体中文 README 和变更日志入口，并从根文档补充语言切换链接。
 - 使用 pending-theme 模板初始化 `v1.2.0` 发布说明源文件，并在插件元数据推进后移除过时的 `v1.1.2` 源文件。
 
 ### Internal
