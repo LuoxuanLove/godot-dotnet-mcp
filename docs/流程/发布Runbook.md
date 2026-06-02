@@ -17,8 +17,8 @@
 
 ## 2. 发布前检查
 
-1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`docs/CHANGELOG.md`、`docs/i18n/zh-CN/CHANGELOG.md` 和公开文档一致。
-   - Changelog 必须记录目标版本相对上一已发布版本的完整重要变化，不只记录用户可见的 `Added` / `Changed` / `Fixed`。重要的 `Documentation` 与 `Internal` 变化也必须维护到 `docs/CHANGELOG.md` 与 `docs/i18n/zh-CN/CHANGELOG.md`，例如 release note 源文件、README / docs / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化。
+1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`docs/CHANGELOG.md`、`docs/i18n/ko/CHANGELOG.md`、`docs/i18n/ja/CHANGELOG.md`、`docs/i18n/zh-CN/CHANGELOG.md` 和公开文档一致。
+   - Changelog 必须记录目标版本相对上一已发布版本的完整重要变化，不只记录用户可见的 `Added` / `Changed` / `Fixed`。重要的 `Documentation` 与 `Internal` 变化也必须维护到 `docs/CHANGELOG.md`、`docs/i18n/ko/CHANGELOG.md`、`docs/i18n/ja/CHANGELOG.md` 与 `docs/i18n/zh-CN/CHANGELOG.md`，例如 release note 源文件、README / docs / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化。
    - 纯版本元数据切换本身不写入 changelog，除非它同时改变用户可见兼容性、安装方式或发布验证行为；开发过程中引入后又在同一版本线内修复的内部问题也不作为独立 changelog 条目。
 2. 确认对应版本的 `docs/流程/release-notes/release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
 3. 确认 `next` draft release 已按正式发布格式刷新，并可作为正式 GitHub Release 正文预览。
@@ -31,7 +31,7 @@
 ```
 
 7. 如修改了 `.github/workflows/**`，确认 `lint-workflows` 通过。
-8. 如推送正式发布 tag，确认 tag 使用 `v*`，tag 指向可从 `dev` 到达的提交，且 tag 版本与 `plugin.cfg`、英文 changelog 与简体中文 changelog 和对应 `docs/流程/release-notes/release-notes-v*.md` 一致。
+8. 如推送正式发布 tag，确认 tag 使用 `v*`，tag 指向可从 `dev` 到达的提交，且 tag 版本与 `plugin.cfg`、英文、韩文、日文与简体中文 changelog 和对应 `docs/流程/release-notes/release-notes-v*.md` 一致。
 
 ---
 
