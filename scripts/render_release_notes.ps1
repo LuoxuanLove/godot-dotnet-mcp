@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
   [string]$Version,
@@ -7,7 +7,7 @@ param(
   [string]$OutputPath,
 
   [string]$ManualNotesPath = "",
-  [string]$ChangelogPath = "CHANGELOG.zh-CN.md",
+  [string]$ChangelogPath = "docs/i18n/zh-CN/CHANGELOG.md",
   [string]$TagName = "",
   [int]$CommitLimit = 30,
   [switch]$PreferUnreleased
@@ -18,7 +18,7 @@ $ErrorActionPreference = "Stop"
 $env:LESSCHARSET = "utf-8"
 
 if ([string]::IsNullOrWhiteSpace($ManualNotesPath)) {
-  $ManualNotesPath = "release-notes-v$Version.md"
+  $ManualNotesPath = "docs/流程/release-notes/release-notes-v$Version.md"
 }
 
 function Read-Utf8Text {

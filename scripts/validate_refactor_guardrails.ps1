@@ -1,4 +1,4 @@
-﻿param(
+param(
     [switch]$SkipVersionPolicy
 )
 
@@ -31,7 +31,6 @@ function Find-BannedSourceMatches {
                     --glob ".github/**/*.yaml" `
                     --glob "scripts/**/*.ps1" `
                     --glob "README.md" `
-                    --glob "README.zh-CN.md" `
                     --glob "AGENTS.md" `
                     --glob "CLAUDE.md" `
                     --glob "addons/godot_dotnet_mcp/dotnet_bridge/**/*.cs" `
@@ -56,7 +55,7 @@ function Find-BannedSourceMatches {
     )
 
     $candidateFiles = @()
-    foreach ($rootFile in @("README.md", "README.zh-CN.md", "AGENTS.md", "CLAUDE.md")) {
+    foreach ($rootFile in @("README.md", "AGENTS.md", "CLAUDE.md")) {
         $absoluteRootFile = Join-Path $RepositoryRoot $rootFile
         if (Test-Path $absoluteRootFile) {
             $candidateFiles += Get-Item -LiteralPath $absoluteRootFile

@@ -17,10 +17,10 @@
 
 ## 2. 发布前检查
 
-1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`CHANGELOG.md`、`CHANGELOG.zh-CN.md` 和公开文档一致。
-   - Changelog 必须记录目标版本相对上一已发布版本的完整重要变化，不只记录用户可见的 `Added` / `Changed` / `Fixed`。重要的 `Documentation` 与 `Internal` 变化也必须维护到 `CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`，例如 release note 源文件、README / docs / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化。
+1. 确认 `addons/godot_dotnet_mcp/plugin.cfg` 版本、`docs/CHANGELOG.md`、`docs/i18n/zh-CN/CHANGELOG.md` 和公开文档一致。
+   - Changelog 必须记录目标版本相对上一已发布版本的完整重要变化，不只记录用户可见的 `Added` / `Changed` / `Fixed`。重要的 `Documentation` 与 `Internal` 变化也必须维护到 `docs/CHANGELOG.md` 与 `docs/i18n/zh-CN/CHANGELOG.md`，例如 release note 源文件、README / docs / i18n / Runbook 更新、CI / harness / workflow 行为、policy 检查、protocol facts 和验证覆盖变化。
    - 纯版本元数据切换本身不写入 changelog，除非它同时改变用户可见兼容性、安装方式或发布验证行为；开发过程中引入后又在同一版本线内修复的内部问题也不作为独立 changelog 条目。
-2. 确认对应版本的 `release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
+2. 确认对应版本的 `docs/流程/release-notes/release-notes-v*.md` 存在，且内容为面向用户的手写发布叙事；workflow 会校验 changelog 版本段落并追加 commit summary。
 3. 确认 `next` draft release 已按正式发布格式刷新，并可作为正式 GitHub Release 正文预览。
 4. 确认 PR 只包含当前发布目标范围，未夹带其它修复或历史未合并提交。
 5. 确认公开文档只描述插件自身的安装、使用、发布与兼容性信息。
@@ -31,7 +31,7 @@
 ```
 
 7. 如修改了 `.github/workflows/**`，确认 `lint-workflows` 通过。
-8. 如推送正式发布 tag，确认 tag 使用 `v*`，tag 指向可从 `dev` 到达的提交，且 tag 版本与 `plugin.cfg`、中英文 changelog 和对应 `release-notes-v*.md` 一致。
+8. 如推送正式发布 tag，确认 tag 使用 `v*`，tag 指向可从 `dev` 到达的提交，且 tag 版本与 `plugin.cfg`、英文 changelog 与简体中文 changelog 和对应 `docs/流程/release-notes/release-notes-v*.md` 一致。
 
 ---
 
@@ -39,15 +39,15 @@
 
 正式 GitHub Release 正文由 `scripts/render_release_notes.ps1` 生成，保持两层结构：
 
-1. 手写摘要层：来自 `release-notes-v<version>.md`，用于说明版本主题、关键亮点、兼容性提示和升级判断。
-2. 自动摘要层：workflow 先校验 `CHANGELOG.zh-CN.md` 中的目标版本或 `Unreleased` 段落，再追加最近 commit summary。
+1. 手写摘要层：来自 `docs/流程/release-notes/release-notes-v<version>.md`，用于说明版本主题、关键亮点、兼容性提示和升级判断。
+2. 自动摘要层：workflow 先校验 `docs/i18n/zh-CN/CHANGELOG.md` 中的目标版本或 `Unreleased` 段落，再追加最近 commit summary。
 
 编写手写摘要时应遵循：
 
 - 学习已发布 `v1.0.1` 的 emoji 叙事结构：带 emoji、版本和用户主题的二级标题，一段用户可理解的版本主题说明，按用户影响划分且每项都带 emoji 的三级章节，以及最后带 emoji 的兼容性 / 安装 / 升级提示。
 - 只描述用户可感知的插件能力、编辑器体验、诊断质量、安装 / 升级影响与兼容性变化，不复述 commit 列表、内部任务列表或 PR 内容。
 - 不把维护流程、开发流程或发布机械变化写入手写摘要，例如 GitHub Actions 触发界面、dry-run 缓存、PR / branch policy、CI 内部拆分、tag 校验实现等；除非这些变化本身直接改变最终用户安装或使用插件的方式。
-- 当前 `plugin.cfg` 版本对应的 `release-notes-v<plugin.cfg version>.md` 必须存在并提到该版本，只有在插件元数据切换到新版本并新增对应 note 后，才清理旧版本源文件。
+- 当前 `plugin.cfg` 版本对应的 `docs/流程/release-notes/release-notes-v<plugin.cfg version>.md` 必须存在并提到该版本，只有在插件元数据切换到新版本并新增对应 note 后，才清理旧版本源文件。
 - 版本刚切换但尚无实际开发内容时，先创建可后续填充的初始空模板；模板只能说明版本线已初始化，正式发布前将按相对上一版本的实际用户可见变更补全，不得提前编造功能、修复或维护流程。
 - 推荐模板：
 
@@ -92,7 +92,7 @@ Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment
 ## 4. 远程发布流程
 
 1. 从最新 `origin/dev` 创建发布短分支，例如 `release/v1.0.1`。
-2. 完成版本、变更记录、`release-notes-v*.md` 和公开文档收口。
+2. 完成版本、变更记录、`docs/流程/release-notes/release-notes-v*.md` 和公开文档收口。
 3. 推送短分支并创建指向 `dev` 的 PR。
 4. 等待 `validate-plugin-harness` 和相关 workflow 检查通过。
 5. 由维护者在 GitHub PR 页面手动确认并合并。
@@ -111,4 +111,4 @@ Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment
 - CI 失败时，修复应回到短分支并重新推送，不直接修改 `dev`。
 - 发布说明错误时，优先编辑 GitHub Release 正文；如果源文档或 changelog 错误，再开短分支修正。
 - tag 错误时，由维护者决定是否删除远程 tag；Agent 不擅自删除或重写发布 tag。
-- `next` draft release 内容错误时，优先修正 `release-notes-v*.md` 或 changelog 后重新运行 `draft-release-notes`；如渲染规则本身错误，应通过短分支 PR 修改 workflow 或脚本。
+- `next` draft release 内容错误时，优先修正 `docs/流程/release-notes/release-notes-v*.md` 或 changelog 后重新运行 `draft-release-notes`；如渲染规则本身错误，应通过短分支 PR 修改 workflow 或脚本。

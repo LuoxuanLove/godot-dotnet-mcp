@@ -126,8 +126,8 @@ Review:
 - dotnet bridge library、harness runner 与 fixture build
 - refactor guardrails
 - plugin headless harness required subset
-- tag 发布前的 `plugin.cfg`、tag 和中英文 changelog 版本一致性检查
-- tag 发布前的 `release-notes-v*.md` 存在性和版本一致性检查
+- tag 发布前的 `plugin.cfg`、tag 和英文 changelog 与简体中文 changelog 版本一致性检查
+- tag 发布前的 `docs/流程/release-notes/release-notes-v*.md` 存在性和版本一致性检查
 - 远程 `dev` 合并前应要求 PR、`validate-plugin-harness` 通过并基于最新 `dev` 重新验证；当前 ruleset 不要求 approving review
 
 ### 仍是软门禁或环境依赖的部分
