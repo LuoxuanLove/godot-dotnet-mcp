@@ -1,5 +1,7 @@
 # Roadmap
 
+<p align="center"><a href="ROADMAP.md">English</a> | <a href="i18n/ko/ROADMAP.md">한국어</a> | <a href="i18n/ja/ROADMAP.md">日本語</a> | <a href="i18n/zh-CN/ROADMAP.md">简体中文</a></p>
+
 This roadmap describes the intended product direction for Godot .NET MCP. It is a planning document, not a release promise or a substitute for issue-level design. Version scope may change as implementation constraints, testing results, and user feedback become clearer.
 
 ## Product Positioning

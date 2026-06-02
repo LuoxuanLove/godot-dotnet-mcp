@@ -39,8 +39,8 @@ jobs:
           .\scripts\render_release_notes.ps1 `
             -Version $version `
             -OutputPath $notesFile `
-            -ManualNotesPath "release-notes-v$version.md" `
-            -ChangelogPath "CHANGELOG.zh-CN.md" `
+            -ManualNotesPath "docs/流程/release-notes/release-notes-v$version.md" `
+            -ChangelogPath "docs/i18n/zh-CN/CHANGELOG.md" `
             -CommitLimit 30 `
             -PreferUnreleased
 

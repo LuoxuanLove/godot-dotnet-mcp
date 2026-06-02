@@ -1,5 +1,7 @@
 # Changelog
 
+<p align="center"><a href="CHANGELOG.md">English</a> | <a href="i18n/ko/CHANGELOG.md">한국어</a> | <a href="i18n/ja/CHANGELOG.md">日本語</a> | <a href="i18n/zh-CN/CHANGELOG.md">简体中文</a></p>
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,7 +12,8 @@ Target version: 1.2.0.
 
 ### Documentation
 
-- Added English and Chinese roadmap entry points in `ROADMAP.md` and `ROADMAP.zh-CN.md`.
+- Added English and Chinese roadmap entry points in `docs/ROADMAP.md` and `docs/i18n/zh-CN/ROADMAP.md`.
+- Added structured Korean, Japanese, and Simplified Chinese README, changelog, and roadmap entries under `docs/i18n/` with language switch links from the root docs.
 - Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
 
 ### Internal
