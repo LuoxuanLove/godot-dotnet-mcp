@@ -4,7 +4,7 @@
 
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square&amp;labelColor=24292f"></a></p>
 
-<p align="center"><a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a></p>
+<p align="center"><a href="README.md">English</a> | <a href="docs/i18n/ko/README.md">한국어</a> | <a href="docs/i18n/ja/README.md">日本語</a> | <a href="docs/i18n/zh-CN/README.md">简体中文</a></p>
 
 | Home | Tools | Config |
 |---|---|---|
@@ -69,8 +69,11 @@ Then enable it from `Project Settings > Plugins`.
 
 ## Documentation
 
-- [中文 README](README.zh-CN.md)
+- [한국어 README](docs/i18n/ko/README.md)
+- [日本語 README](docs/i18n/ja/README.md)
+- [简体中文 README](docs/i18n/zh-CN/README.md)
 - [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
 - [Documentation overview](docs/概述.md)
 - [Installation and release](docs/架构/安装与发布.md)
 - [User extensions](docs/模块/用户扩展.md)
