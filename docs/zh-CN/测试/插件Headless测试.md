@@ -1,0 +1,292 @@
+# 插件 Headless 测试
+
+本文档说明 `Godot Headless Harness` 当前的结构、覆盖范围与已知边界。
+
+---
+
+## 目标
+
+插件侧测试的目标是：
+
+- 不引入 `gdUnit`、`GUT` 等第三方框架
+- 直接基于仓库内建 fixture 工程运行 `headless Godot`
+- 验证插件运行时、工具装载、路由和系统 impl 的关键行为
+- 为插件运行时重构提供快速回归面
+
+---
+
+## 当前文件结构
+
+```text
+tests/godot_plugin_harness/
+├─ GodotPluginHarness.csproj
+└─ Program.cs
+
+tests/godot_plugin_harness_fixture/
+├─ project.godot
+└─ tests/
+   ├─ headless_suite_runner.gd
+   ├─ runtime_bridge_contract_test.gd
+   ├─ runtime_control_contract_test.gd
+   ├─ runtime_control_request_coordinator_contract_test.gd
+   ├─ runtime_control_reply_resolver_contract_test.gd
+   ├─ runtime_fallback_store_contract_test.gd
+   ├─ runtime_reply_service_contract_test.gd
+   ├─ user_tool_service_contract_test.gd
+   ├─ script_tool_executor_contract_test.gd
+   ├─ script_edit_service_contract_test.gd
+   ├─ node_tool_executor_contract_test.gd
+   ├─ animation_tool_executor_contract_test.gd
+   ├─ physics_tool_executor_contract_test.gd
+   ├─ scene_tool_executor_contract_test.gd
+   ├─ debug_tool_executor_contract_test.gd
+   ├─ editor_tool_executor_contract_test.gd
+   ├─ lighting_tool_executor_contract_test.gd
+   ├─ geometry_tool_executor_contract_test.gd
+   ├─ filesystem_tool_executor_contract_test.gd
+   ├─ project_tool_executor_contract_test.gd
+   ├─ material_tool_executor_contract_test.gd
+   ├─ ui_tool_executor_contract_test.gd
+   ├─ particle_tool_executor_contract_test.gd
+   ├─ resource_tool_executor_contract_test.gd
+   ├─ shader_tool_executor_contract_test.gd
+   ├─ tilemap_tool_executor_contract_test.gd
+   ├─ signal_tool_executor_contract_test.gd
+   ├─ group_tool_executor_contract_test.gd
+   ├─ audio_tool_executor_contract_test.gd
+   ├─ navigation_tool_executor_contract_test.gd
+    ├─ plugin_dock_coordinator_contract_test.gd
+    ├─ plugin_runtime_coordinator_contract_test.gd
+    ├─ plugin_self_diagnostic_store_contract_test.gd
+   ├─ client_config_serializer_contract_test.gd
+   ├─ client_config_inspection_service_contract_test.gd
+   ├─ client_config_file_transaction_contract_test.gd
+   ├─ client_config_launcher_adapter_contract_test.gd
+   ├─ http_server_contract_test.gd
+   ├─ http_request_router_contract_test.gd
+   ├─ http_request_decoder_contract_test.gd
+   ├─ http_response_service_contract_test.gd
+   ├─ json_rpc_router_contract_test.gd
+   ├─ editor_lifecycle_action_service_contract_test.gd
+   ├─ editor_lifecycle_state_builder_contract_test.gd
+   ├─ system_project_executor_contract_test.gd
+   ├─ system_script_executor_contract_test.gd
+   ├─ system_runtime_impl_contract_test.gd
+   ├─ system_index_impl_contract_test.gd
+   ├─ tool_loader_contract_test.gd
+    ├─ tools_tab_rendering_contract_test.gd
+    ├─ editor_lifecycle_endpoint_contract_test.gd
+    └─ plugin_entrypoint_contract_test.gd
+```
+
+职责分布如下：
+
+| 文件 | 作用 |
+|---|---|
+| `Program.cs` | 复制 fixture 与 addon 到临时 stage root，启动 Godot，收集 stdout/stderr，解析 suite JSON，并记录 stage copy、stage build、Godot runtime 阶段耗时 |
+| `project.godot` | 最小测试工程 |
+| `headless_suite_runner.gd` | suite 入口，逐 case 执行并汇总结果 |
+| 各 `*_contract_test.gd` | 单 case 文件，按模块拆分验证 |
+
+---
+
+## 当前覆盖范围
+
+当前 case 由 harness 自动发现，以下列出当前可发现 case 中的一组代表性 case（CI 只硬门禁其中的 required subset）：
+
+| 用例 | 目标 |
+|---|---|
+| `runtime_bridge_invalid_action_fallback` | 验证 `mcp_runtime_bridge` 对非法 action 的 fallback reply |
+| `runtime_control_contracts` | 验证 `runtime_control_service` 在无 session 时的状态和参数错误模型 |
+| `runtime_control_request_coordinator_contracts` | 验证 `mcp_runtime_control_request_coordinator` 的请求往返、pending request 清理与 session-lost 失效路径 |
+| `runtime_control_reply_resolver_contracts` | 验证 `mcp_runtime_control_reply_resolver` 对 fallback reply 的归一化与错误映射 |
+| `runtime_fallback_store_contracts` | 验证 `mcp_runtime_fallback_store` 的持久化、裁剪与读取语义 |
+| `runtime_reply_service_contracts` | 验证 `mcp_runtime_reply_service` 的 success/error payload、`runtime_context`、`runtime_state` 与 hint |
+| `user_tool_watch_service_contracts` | 验证 `user_tool_watch_service.gd` 通过显式 callback 触发外部用户工具刷新 |
+| `user_tool_service_contracts` | 验证 `user_tool_service.gd` 的 scaffold 创建、目录扫描、兼容报告、删除、恢复与审计 |
+| `script_tool_executor_contracts` | 验证 `script` 域拆分后的 catalog、稳定 executor 入口与代表性 `read / inspect / references / edit_gd` 路径 |
+| `script_edit_service_contracts` | 验证脚本编辑 façade 拆分后，GDScript 语义请求只经由 Godot LSP，插件侧仅保留 `*EditHelper` 文本编辑辅助；C# 官方语义来源为插件内 Roslyn |
+| `node_tool_executor_contracts` | 验证 `node` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / lifecycle / property / metadata / visibility` 路径 |
+| `animation_tool_executor_contracts` | 验证 `animation` 域拆分后的 catalog、稳定 executor 入口与代表性 `player / animation / track / tween / animation_tree / state_machine / blend_space / blend_tree` 路径 |
+| `physics_tool_executor_contracts` | 验证 `physics` 域拆分后的 catalog、稳定 executor 入口与代表性 `physics_body / collision_shape / physics_joint / physics_query` 路径 |
+| `scene_tool_executor_contracts` | 验证 `scene` 域拆分后的 catalog、稳定 executor 入口与代表性 `management / hierarchy / run / bindings / audit` 路径 |
+| `debug_tool_executor_contracts` | 验证 `debug` 域拆分后的 catalog、稳定 executor 入口与代表性 `log_buffer / runtime_bridge / dotnet / performance / class_db` 路径 |
+| `editor_tool_executor_contracts` | 验证 `editor` 域拆分后的 catalog、稳定 executor 入口与代表性 `status / screenshot / settings / undo_redo / notification / ui_control / popup / inspector / filesystem / plugin` 路径 |
+| `lighting_tool_executor_contracts` | 验证 `lighting` 域拆分后的 catalog、稳定 executor 入口与代表性 `light / environment / sky` 路径 |
+| `geometry_tool_executor_contracts` | 验证 `geometry` 域拆分后的 catalog、稳定 executor 入口与代表性 `csg / gridmap / multimesh` 路径 |
+| `filesystem_tool_executor_contracts` | 验证 `filesystem` 域拆分后的 catalog、稳定 executor 入口与代表性 `directory / file_read / file_write / file_manage / json / search` 路径，并断言旧根文件已删除 |
+| `project_tool_executor_contracts` | 验证 `project` 域拆分后的 catalog、稳定 executor 入口与代表性 `info / dotnet / settings / input / autoload` 路径，并断言旧根文件已删除 |
+| `material_tool_executor_contracts` | 验证 `material` 域拆分后的 catalog、稳定 executor 入口与代表性 `material / mesh / parameter` 路径，并断言旧根文件已删除 |
+| `ui_tool_executor_contracts` | 验证 `ui` 域拆分后的 catalog、稳定 executor 入口与代表性 `theme / control / layout / focus` 路径，并断言旧根文件已删除 |
+| `particle_tool_executor_contracts` | 验证 `particle` 域拆分后的 catalog、稳定 executor 入口与代表性 `particles / particle_material` 路径，并断言旧根文件已删除 |
+| `resource_tool_executor_contracts` | 验证 `resource` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / create / file_ops / texture` 路径，并断言旧根文件已删除 |
+| `shader_tool_executor_contracts` | 验证 `shader` 域拆分后的 catalog、稳定 executor 入口与代表性 `shader / shader_material` 路径，并断言旧根文件已删除 |
+| `tilemap_tool_executor_contracts` | 验证 `tilemap` 域拆分后的 catalog、稳定 executor 入口与代表性 `tileset / tilemap` 路径，并断言旧根文件已删除 |
+| `signal_tool_executor_contracts` | 验证 `signal` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / connect / emit` 路径，并断言旧根文件已删除 |
+| `group_tool_executor_contracts` | 验证 `group` 域拆分后的 catalog、稳定 executor 入口与代表性 `query / operation / membership` 路径，并断言旧根文件已删除 |
+| `audio_tool_executor_contracts` | 验证 `audio` 域拆分后的 catalog、稳定 executor 入口与代表性 `bus / player` 路径，并断言旧根文件已删除 |
+| `navigation_tool_executor_contracts` | 验证 `navigation` 域拆分后的 catalog、稳定 executor 入口与代表性 `map / region / agent` 路径，并断言旧根文件已删除 |
+| `plugin_dock_coordinator_contracts` | 验证 `plugin_dock_coordinator.gd` 的高阶 dock create/remove/recreate、dock signal wiring、dock instance 计数、`FileDialog` 创建与 dialog 清理语义 |
+| `plugin_runtime_coordinator_contracts` | 验证 `plugin_runtime_coordinator.gd` 的 runtime bridge autoload、debugger bridge 安装/卸载与无树场景下的 root instance 判断 |
+| `plugin_self_diagnostic_store_contracts` | 验证 `plugin_self_diagnostic_store.gd` 的 slow-operation code、`phase_timings`、`slowest_phase` 与复制诊断文本中的最慢阶段输出 |
+| `config_feature_config_workflow_contracts` | 验证 `config_feature_config_workflow.gd` 的写入/移除确认流、成功提示、noop 移除和运行后 follow-up 提示 |
+| `client_config_serializer_contracts` | 验证 `client_config_serializer.gd` 的配置容器键、配置解析与确认语义 |
+| `client_config_inspection_service_contracts` | 验证 `client_config_inspection_service.gd` 的 `inspect/preflight` 状态归类 |
+| `client_config_file_transaction_contracts` | 验证 `client_config_file_transaction.gd` 的 merge、remove、backup 与 opencode 阻断写入 |
+| `client_config_launcher_adapter_contracts` | 验证 `client_config_launcher_adapter.gd` 的 CLI invocation 与 Windows command line 包装 |
+| `http_server_contracts` | 验证 `mcp_http_server` 的 lifecycle、`tools/list`、`tools/call` 结构契约 |
+| `http_request_router_contracts` | 验证 `mcp_http_request_router` 的 path 分发、`GET /mcp` 405、默认拒绝跨源、显式 CORS allowlist、Host / Content-Type 校验与 404 语义 |
+| `http_request_decoder_contracts` | 验证 `mcp_http_request_decoder` 的 `Content-Length` / chunked body 解码、header 保留、等待态与 trailing data 保留 |
+| `http_response_service_contracts` | 验证 `mcp_http_response_service` 的 JSON-RPC 构造、`/health` 投影、精确 Origin CORS 响应与 JSON 清洗 |
+| `json_rpc_router_contracts` | 验证 `mcp_json_rpc_router` 的 initialize、notification 无响应与 method-not-found 语义 |
+| `editor_lifecycle_action_service_contracts` | 验证 `mcp_editor_lifecycle_action_service` 的确认语义、accepted payload 与调度行为 |
+| `editor_lifecycle_state_builder_contracts` | 验证 `mcp_editor_lifecycle_state_builder` 的默认状态、scene 排序与 hint 投影 |
+| `system_project_executor_contracts` | 验证 `impl_project.gd` 作为当前项目级 system 聚合入口的工具暴露、runtime health 聚合与项目级路由 |
+| `system_editor_control_contracts` | 验证 `impl_editor.gd` 的高层编辑器界面路由，把 `set_main_screen / activate_ui / capture_editor / list_controls / capture_control / popup` 动作稳定委托到对应原子工具 |
+| `system_script_executor_contracts` | 验证 `impl_script.gd` 作为当前脚本级 system 聚合入口，以及 `system_script_analyze` 通过真实 `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` 链获取 Godot LSP 诊断 |
+| `system_runtime_impl_contracts` | 验证 `impl_runtime.gd` 的状态、capture 注解和参数处理 |
+| `system_plugin_update_contracts` | 验证 `impl_project.gd` 中 `system_plugin_update` 的当前版本 / 状态读取、更新来源选择、ref discovery 与 sync 路由契约 |
+| `system_index_impl_contracts` | 验证 `impl_index.gd` 的 built -> stale_refreshed 刷新路径 |
+| `tool_loader_contracts` | 验证默认工具访问 provider 下的 loader 初始化和 disabled tool 收缩 |
+| `server_tab_model_projection_contracts` | 验证 `server_tab_model_projection.gd` 的状态概览、自诊断摘要、运行时状态投影和日志/语言选项模型 |
+| `tool_lsp_diagnostics_adapter_contracts` | 验证 `tool_lsp_diagnostics_adapter.gd` 的 configure、tick、reset、release 与 runtime bridge 绑定语义 |
+| `gdscript_lsp_diagnostics_service_contracts` | 验证 `gdscript_lsp_diagnostics_service.gd` 的请求替换、缓存命中、clear 与 debug snapshot 语义 |
+| `lsp_client_contracts` | 验证 `lsp_client.gd` 的 initialize、`publishDiagnostics` 帧解析、超时、连接失败，以及 `cancel / retry / failed-then-restart` 恢复路径 |
+| `lsp_service_access_contracts` | 验证 `mcp_http_server.gd` 与 `mcp_stdio_server.gd` 只暴露 loader-owned 的 GDScript diagnostics service，不再自行创建或回退 singleton |
+| `tools_tab_rendering_contracts` | 验证 `tools_tab.gd` 的 TreeItem 渲染、树交互、上下文菜单、Dock 内自建 Popup 坐标契约与预览回流语义 |
+| `editor_lifecycle_endpoint_contracts` | 验证 `mcp_editor_lifecycle_endpoint.gd` 的请求解析与 action 分派 |
+| `plugin_entrypoint_contracts` | 验证 `plugin.gd` 的真实运行时入口生命周期：`_enter_tree/_exit_tree` 期间的 autoload、debugger bridge、dock attach/detach 与 server controller 装配；该 case 通过 editor probe 运行 |
+
+当前实测状态：
+
+- suite：通过
+- harness `stderr` 仍会包含 editor 退出噪音，但 `plugin_entrypoint_contracts` 已在 harness 内按 editor probe 例外放行
+- `tool_loader_status=ready`
+- `category_count=26`
+- `tool_count=115`
+- `exposed_tool_count=18`
+
+---
+
+## 当前重要实现点
+
+### 1. `Program.cs` 负责构建临时真实环境
+
+当前 harness 不是在原仓库目录中直接跑，而是：
+
+1. 复制 `tests/godot_plugin_harness_fixture/`
+2. 复制 `addons/godot_dotnet_mcp/`
+3. 在新的临时 `stageRoot` 中启动 Godot
+4. 运行 `res://tests/headless_suite_runner.gd`
+5. 将 harness 自己启动的 `dotnet build` 与 headless Godot PID 登记到 `.tmp/godot_plugin_harness/processes/<runId>.json`
+
+这样做的好处是：
+
+- 测试环境更接近真实装配路径
+- 不直接污染工作目录
+- 失败时可通过 `--keep-stage-root` 保留现场排查
+- 进程清理只针对 registry 中登记的 harness-owned 临时进程；不会按 `godot` / `dotnet` 进程名泛杀，也不会把当前承载 MCP 的编辑器会话视为可清理对象
+
+### 2. suite 已支持单 case 与批量选择运行
+
+`headless_suite_runner.gd` 当前支持：
+
+- case 级开始/结束日志
+- 通过 `GODOT_PLUGIN_HARNESS_ONLY_CASE` 筛选单 case
+- 通过 `--cases` / `GODOT_PLUGIN_HARNESS_SELECTED_CASES` 一次选择多个 case
+- suite 与逐 case `duration_ms` 耗时输出
+- 逐 case `cleanup_case()` 钩子
+- suite 级 `_suite_final_cleanup()` 收尾
+
+这对排查卡死、性能问题和资源清理问题很有帮助；CI required subset 中普通 headless case 会合并到一次 stage / Godot 运行；少量对共享 headless 进程状态敏感的 case 会以独立 headless 运行保留覆盖，需要真实 editor probe 的 case 也保持隔离运行。
+
+### 3. headless 路径具备默认工具访问 provider
+
+bare `MCPHttpServer.new()` 在无插件父节点的 headless 路径下，会创建默认工具访问 provider，避免 loader 在测试环境中缺少访问状态来源导致：
+
+- `tool_loader_status=no_visible_tools`
+
+当前 headless 路径可以真实装载工具目录并暴露工具状态；插件不再提供权限等级配置。
+
+### 4. 已补第一轮稳定测试 seam
+
+当前插件侧已经加入以下测试 seam：
+
+- `mcp_editor_lifecycle_endpoint.gd`
+- `mcp_editor_lifecycle_action_service.gd`
+- `mcp_editor_lifecycle_state_builder.gd`
+- `mcp_http_request_router.gd`
+- `mcp_http_response_service.gd`
+- `mcp_json_rpc_router.gd`
+- `mcp_protocol_facts.gd`
+- `mcp_tools_api_service.gd`
+- `mcp_runtime_fallback_store.gd`
+- `mcp_runtime_reply_service.gd`
+- `mcp_runtime_control_request_coordinator.gd`
+- `mcp_runtime_control_reply_resolver.gd`
+- `plugin_dock_coordinator.gd`
+- `plugin_runtime_coordinator.gd`
+- `client_config_serializer.gd`
+- `client_config_inspection_service.gd`
+- `client_config_file_transaction.gd`
+- `client_config_file_support.gd`
+- `client_config_launcher_adapter.gd`
+- `tools_tab.gd`：已内聚上下文菜单、模型、选择、搜索与预览逻辑
+- `mcp_http_server.gd` 的公共测试入口
+- `mcp_runtime_bridge.gd` 的公共 command capture / fallback 入口
+- `initialize / /health` 路径对 `protocolVersion / toolSchemaVersion / serverInfo` 的统一协议字段断言
+- `tool_loader.gd` 的 façade + `tool_lsp_diagnostics_adapter.gd` 的 loader-owned GDScript diagnostics 分层
+- `tool_lsp_diagnostics_adapter.gd` 现已成为 GDScript LSP 诊断服务的唯一主链拥有者，正式源码不再允许 `GDScriptLspDiagnosticsService.get_singleton()` 回退
+- `script/csharp_edit_service.gd` 与 `script/gdscript_edit_service.gd` 的 façade + semantic provider + edit action service 分层
+
+这意味着当前 headless contract tests 已经不再直接依赖生产代码中的下划线方法名。
+
+---
+
+## 当前边界
+
+### 1. 已摆脱私有方法名耦合，但 seam 仍可继续独立
+
+当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。
+这显著降低了“内部方法改名或拆分导致测试先碎”的风险。
+
+不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮已经把 runtime fallback / reply 行为抽到独立 helper，并把 `client_config_service.gd` 收成门面。
+
+### 2. 当前仍偏“结构契约 + 局部 fake”混合模式
+
+这是当前阶段的实际测试形态。
+
+---
+
+## 当前运行方式
+
+推荐命令：
+
+```powershell
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Editor Path>"
+```
+
+`plugin_entrypoint_contracts` 与 `plugin_update_settings_persistence_contracts` 通过 editor probe 运行；harness 会自动追加 `--editor`，CI 可继续使用 Godot console 可执行文件。
+
+常用附加选项：
+
+- `--keep-stage-root`
+- `--cases case_a,case_b`：一次运行指定多个 case；不能与 `GODOT_PLUGIN_HARNESS_ONLY_CASE` 同时使用
+- `--cleanup-stale-processes`：只清理 owner harness 进程已退出且 PID / 启动时间匹配的登记子进程，并输出清理摘要。`scripts/test_plugin_side_roslyn.ps1` 的 `finally` 会先调用该清理入口；成功时删除 `.tmp/godot_plugin_harness`，失败时保留该目录供 CI artifact 上传。
+
+当前返回内容包括：
+
+- suite success 与是否解析到成功标记
+- stage root
+- 每个 case 的结果与 `duration_ms`
+- suite 总耗时与 `phaseTimings`（`copy_stage_inputs`、`build_stage_project`、`run_godot_process`）
+- Godot 进程 exit code
+- 退出清理诊断，包括 `exitCleanupWarningsDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy` 与 `failureClass`
+- stderr 摘要
+
+普通 headless suite 中若出现 `ObjectDB instances leaked at exit` 或 `resources still in use at exit`，harness 仍会失败并保留 `reason=godot_exit_leaks_detected`。报告会同时保留 `suiteSuccess`，用于区分“case 逻辑已经通过”与“Godot 退出清理存在风险”。`plugin_entrypoint_contracts` 的 editor probe 模式仍按既有策略忽略编辑器退出噪音，并通过 `exitCleanupWarningPolicy=ignored_editor_probe` 标明。
+
+## 结论
+
+插件 headless harness 已经可用，而且已经真实发现并推动修复过运行时问题。
+当前它的重点是维持测试 seam 与清理边界的稳定。
