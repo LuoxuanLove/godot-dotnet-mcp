@@ -4,10 +4,6 @@
 
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=%E6%AD%A3%E5%BC%8F%E7%89%88&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square&amp;labelColor=24292f"></a></p>
 
-| ??? | ??? | ?? |
-|---|---|---|
-| ![??????????](../../asset_library/home-en.png) | ![????????](../../asset_library/tools-en.png) | ![????](../../asset_library/config-en.png) |
-
 # Godot .NET MCP
 
 Godot .NET MCP は、Godot 4.6 以降の .NET プロジェクト向けに作られた、エディター内で動作する MCP プラグインです。Godot エディターの中で直接動き、MCP 対応クライアントにエディター状態、現在のシーン、選択中ノード、実行情報、診断結果、スクリーンショットなどのリアルタイムなプロジェクト文脈を渡します。
@@ -24,17 +20,6 @@ Godot プロジェクトは、単なる `.tscn`、`.tres`、スクリプトフ�
 
 ## 主な機能
 
-|       | 機能 | 内容 |
-| :---: | :--- | :--- |
-| 🎛️ | **エディターと一緒に動作** | MCP サービスは Godot プラグインから直接提供され、追加のバックグラウンドプロセスは不要です。 |
-| 🚀 | **低い導入コスト** | Godot Asset Library からインストールし、一般的な MCP クライアント向け設定を生成し、GitHub ソースからプラグインを更新できます。 |
-| 🎮 | **ライブ Godot エディター文脈** | 現在のシーン、選択中ノード、Dock 状態、ログ、実行情報、診断サマリー、エディタースクリーンショットを Agent に提供します。 |
-| 🌳 | **シーン、リソース、バインディング診断** | シーンツリー、リソース参照、依存関係、シーン構造の問題、C# エクスポートバインディング状態の確認を支援します。 |
-| ▶️ | **ゲーム実行時サポート** | シーンの開始と停止、実行時診断の確認、入力操作、ゲーム実行時画面のキャプチャを行えます。 |
-| 🔎 | **Roslyn ベースの C# サポート** | プラグイン内部の Roslyn 構文チェックにより、クラス、基底型、メソッド、列挙型、エクスポートメンバーなどの C# スクリプト構造を読み取ります。 |
-| 🐞 | **Godot DAP デバッグ** | Godot DAP 経由でブレークポイント、スレッド、スタックトレース、出力イベントを読み取り、一時停止、続行、ステップオーバーを実行します。C# のマネージドブレークポイントには別途 .NET デバッガーが必要です。 |
-| 📚 | **MCP Resources と Prompts** | プロジェクトリソース、診断読み取りエントリー、一般的な Godot ワークフロー向け Prompt Guide を提供します。 |
-| 🧰 | **ツール拡張** | `custom_tools/` から `user_*` GDScript ツールを任意でホットロードし、プロジェクト独自の MCP 機能を追加できます。 |
 
 ## インストール
 
