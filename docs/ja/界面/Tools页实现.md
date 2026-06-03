@@ -1,6 +1,6 @@
 # Tools ページの実装
 
-この文書は、`ui/tools_tab.tscn` と `ui/tools_tab.gd` が、どうやって tool tree、search、preview、preset、折りたたみ、shadow を組み立てているかを説明します。
+この文書は、`ui/tools_tab.tscn` と `ui/tools_tab.gd` が、どうやって tool tree、search、preview、折りたたみ、shadow を組み立てているかを説明します。
 
 ---
 
@@ -15,17 +15,26 @@ Tools page は、今動いている plugin が何を見せるかを編集者が�
 `ui/tools_tab.tscn` の主な node は次の通りです。
 
 - `ToolsTab`
-- `ToolsTab/VBox`
-- `ToolsTab/VBox/Header`
-- `ToolsTab/VBox/SearchRow`
-- `ToolsTab/VBox/ProfileRow`
-- `ToolsTab/VBox/TreeSplit`
-- `ToolsTab/VBox/TreeSplit/ToolTree`
-- `ToolsTab/VBox/TreeSplit/PreviewPanel`
-- `ToolsTab/VBox/TreeSplit/PreviewPanel/PreviewText`
-- `ToolsTab/VBox/TreeSplit/PreviewPanel/PreviewMeta`
+- `ToolsTab/HeaderCard`
+- `ToolsTab/HeaderCard/HeaderMargin`
+- `ToolsTab/HeaderCard/HeaderMargin/HeaderContent`
+- `ToolsTab/HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel`
+- `ToolsTab/ContentSplit`
+- `ToolsTab/ContentSplit/TopPane`
+- `ToolsTab/ContentSplit/TopPane/SearchSeparator`
+- `ToolsTab/ContentSplit/TopPane/SearchOuterMargin`
+- `ToolsTab/ContentSplit/TopPane/SearchOuterMargin/ToolSearchEdit`
+- `ToolsTab/ContentSplit/TopPane/ToolListOuterMargin`
+- `ToolsTab/ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel`
+- `ToolsTab/ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree`
+- `ToolsTab/ContentSplit/TopPane/PreviewSeparator`
+- `ToolsTab/ContentSplit/BottomPane`
+- `ToolsTab/ContentSplit/BottomPane/PreviewOuterMargin`
+- `ToolsTab/ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel`
+- `ToolsTab/ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewTitle`
+- `ToolsTab/ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText`
 
-実際の node 名は実装の都合で少し変わることがありますが、役割はこの形です。
+構造の要点は、HeaderCard の下に `ContentSplit` があり、`TopPane` に検索と tree、`BottomPane` に preview が入ることです。`ProfileRow` はありません。
 
 ---
 
@@ -34,8 +43,8 @@ Tools page は、今動いている plugin が何を見せるかを編集者が�
 `ToolsTab` の data は次の順で来ます。
 
 1. `plugin.gd` が統一 model を作る
-2. `mcp_dock.gd` が `tools_tab.gd.apply_model()` を呼ぶ
-3. `tools_tab.gd` が tool tree、search input、preview、profile summary を更新する
+2. `mcp_dock.gd` が model を受け取り、各 tab に `apply_model()` で配る
+3. `tools_tab.gd` が tool tree、search input、preview、折りたたみ状態を更新する
 4. user が操作すると signal を上げる
 5. `plugin.gd` が state や tool access を更新し、もう一度 model を作る
 
@@ -66,7 +75,7 @@ search は単なる文字列一致ではなく、tree 全体を再構成する�
 
 - search text は tree の表示 label、tool ID、説明 text を対象にする
 - result があるときは、該当 item を開き、path を表示する
-- search 中でも profile と折りたたみ状態はできるだけ保つ
+- search 中でも折りたたみ状態はできるだけ保つ
 
 ---
 
@@ -87,18 +96,6 @@ preview text は独立 collaborator が作るので、UI script は文字列の�
 
 ---
 
-## preset と profile
-
-Tools page では、builtin profile と custom profile を切り替えます。
-
-- builtin profile は plugin の既定 tool set を表す
-- custom profile はユーザーが保存した tool exposure の組み合わせを表す
-- 現在の profile と `disabled_tools` の整合を常に見えるようにする
-
-profile を切り替えたら、tree の enabled state、count、summary がその場で変わります。
-
----
-
 ## 折りたたみ状態
 
 root / domain / category / tool / atomic の折りたたみ状態は、UI の見やすさをかなり左右します。
@@ -106,6 +103,16 @@ root / domain / category / tool / atomic の折りたたみ状態は、UI の見
 - `collapsed_system_tools` は system tool の既定折りたたみを決める
 - いくつかの root state は settings に保存され、次の起動でも戻る
 - 折りたたみは見た目だけでなく、目標の tool を素早く見つけるための手段
+
+---
+
+## 無効化された tool と tree の保存
+
+現在の Tools page は、builtin profile と custom profile の切り替え UI を持ちません。代わりに、無効化された tool は model から反映され、tree の enabled state と count にそのまま出ます。
+
+- disabled tool は tree 上で無効状態として見える
+- tree の折りたたみ状態は settings に保存される
+- 次回起動時も、保存された折りたたみ状態を使って同じ見た目に戻る
 
 ---
 
