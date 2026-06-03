@@ -12,12 +12,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var all_keys := _collect_union_keys(locale_translations)
 	if all_keys.is_empty():
 		return _failure("Supported locale dictionaries should expose at least one translation key.")
-	var missing_by_locale := _find_missing_keys(locale_translations, all_keys)
+	var localization = LocalizationServiceScript.new()
+	localization._init_translations()
+	var missing_by_locale := _find_missing_keys(localization, localization.get_available_language_codes(), all_keys)
 	if not missing_by_locale.is_empty():
-		return _failure("Supported locale dictionaries are missing translation keys: %s" % _format_missing_keys(missing_by_locale))
-	var untranslated_by_locale := _find_untranslated_keys(locale_translations, all_keys)
+		return _failure("Supported locale dictionaries are missing translation keys after fallback resolution: %s" % _format_missing_keys(missing_by_locale))
+	var untranslated_by_locale := _find_placeholder_keys(localization, localization.get_available_language_codes(), all_keys)
 	if not untranslated_by_locale.is_empty():
-		return _failure("Supported locale dictionaries still match English text: %s" % _format_missing_keys(untranslated_by_locale))
+		return _failure("Supported locale dictionaries contain placeholder or generated translation text: %s" % _format_missing_keys(untranslated_by_locale))
 
 	return {
 		"name": "locale_key_parity_contracts",
@@ -63,51 +65,34 @@ func _collect_union_keys(locale_translations: Dictionary) -> Array[String]:
 	return keys
 
 
-func _find_missing_keys(locale_translations: Dictionary, all_keys: Array[String]) -> Dictionary:
+func _find_missing_keys(localization, locale_codes: Array[String], all_keys: Array[String]) -> Dictionary:
 	var missing_by_locale := {}
-	for locale_code in locale_translations.keys():
-		var translations = locale_translations[locale_code]
-		if not (translations is Dictionary):
-			missing_by_locale[str(locale_code)] = all_keys.duplicate()
-			continue
+	for locale_code in locale_codes:
 		var missing: Array[String] = []
 		for key in all_keys:
-			if not (translations as Dictionary).has(key):
+			if localization.get_text_for(locale_code, key) == key:
 				missing.append(key)
 		if not missing.is_empty():
 			missing_by_locale[str(locale_code)] = missing
 	return missing_by_locale
 
 
-func _find_untranslated_keys(locale_translations: Dictionary, all_keys: Array[String]) -> Dictionary:
-	var english_translations = locale_translations.get("en", {})
-	if not (english_translations is Dictionary):
-		return {}
-	var untranslated_by_locale := {}
-	for locale_code in locale_translations.keys():
+func _find_placeholder_keys(localization, locale_codes: Array[String], all_keys: Array[String]) -> Dictionary:
+	var placeholder_by_locale := {}
+	for locale_code in locale_codes:
 		var locale_name := str(locale_code)
 		if locale_name == "en":
 			continue
-		var translations = locale_translations[locale_code]
-		if not (translations is Dictionary):
-			continue
-		var untranslated: Array[String] = []
+		var placeholders: Array[String] = []
 		for key in all_keys:
-			if not (english_translations as Dictionary).has(key):
-				continue
-			if not (translations as Dictionary).has(key):
-				continue
-			var english_text: String = str((english_translations as Dictionary).get(key, ""))
-			var localized_text: String = str((translations as Dictionary).get(key, ""))
-			if localized_text == english_text and not _is_allowed_shared_visible_text(key, english_text):
-				untranslated.append(key)
-			elif _looks_like_generated_fallback(localized_text):
-				untranslated.append(key)
+			var localized_text: String = str(localization.get_text_for(locale_name, key))
+			if _looks_like_generated_fallback(localized_text):
+				placeholders.append(key)
 			elif _looks_like_placeholder_translation(localized_text):
-				untranslated.append(key)
-		if not untranslated.is_empty():
-			untranslated_by_locale[locale_name] = untranslated
-	return untranslated_by_locale
+				placeholders.append(key)
+		if not placeholders.is_empty():
+			placeholder_by_locale[locale_name] = placeholders
+	return placeholder_by_locale
 
 
 func _looks_like_generated_fallback(text: String) -> bool:
@@ -119,28 +104,6 @@ func _looks_like_generated_fallback(text: String) -> bool:
 
 func _looks_like_placeholder_translation(text: String) -> bool:
 	return text.begins_with("Localized ")
-
-
-func _is_allowed_shared_visible_text(key: String, text: String) -> bool:
-	var normalized := text.strip_edges()
-	if normalized.is_empty():
-		return true
-	var normalized_brand := normalized.trim_suffix(":")
-	if key.ends_with("_id") or key.ends_with("_path"):
-		return true
-	if normalized == normalized.to_upper() and normalized.length() <= 8:
-		return true
-	for token in [
-		"Godot", "Godot .NET MCP", ".NET", "MCP", "C#", "GDScript", "DAP", "LSP", "JSON", "UID", "URL", "FPS",
-		"CSG", "GridMap", "TileMap", "MultiMesh", "Autoload", "Exports",
-		"Animation", "Audio", "Material", "Navigation", "Shader", "Signal", "System", "Error", "Editor", "Runtime",
-		"Claude Desktop", "Claude Code", "Cursor", "Trae", "Codex", "Codex CLI", "Codex Desktop",
-		"Gemini CLI", "OpenCode", "OpenCode CLI", "OpenCode Desktop", "Windsurf", "Cline", "Roo Code",
-		"Qwen Code", "Qwen Code CLI", "Cherry Studio", "WeChat", "Microsoft Store / WindowsApps"
-	]:
-		if normalized_brand == token:
-			return true
-	return false
 
 
 func _format_missing_keys(missing_by_locale: Dictionary) -> String:

@@ -1,21 +1,18 @@
 @tool
 extends RefCounted
 
-const LocaleEn = preload("res://addons/godot_dotnet_mcp/localization/locale_en.gd")
+## 简体中文翻译
 
 const TRANSLATIONS: Dictionary = {
+	# Tab names
 	"tab_server": "主页",
 	"tab_tools": "工具",
 	"tab_config": "配置",
 	"tab_settings": "设置",
+
+	# Header
 	"title": "Godot .NET MCP",
 	"dialog_title": "Godot .NET MCP",
-	"plugin_overview_title": "插件总览",
-	"plugin_overview_health_label": "健康：",
-	"plugin_overview_service_label": "服务：",
-	"plugin_overview_bridge_label": "Bridge：",
-	"plugin_overview_config_label": "配置：",
-	"plugin_overview_activity_label": "活动：",
 	"status_running": "运行中",
 	"status_stopped": "已停止",
 	"status_enabled": "已启用",
@@ -57,6 +54,14 @@ const TRANSLATIONS: Dictionary = {
 	"self_diag_code_tool_reload_failed": "工具域重载失败",
 	"self_diag_code_instance_cleanup_incomplete": "实例清理不完整",
 	"self_diag_code_operation_duration_slow": "操作耗时过长",
+
+	# Server tab
+	"plugin_overview_title": "插件总览",
+	"plugin_overview_health_label": "健康：",
+	"plugin_overview_service_label": "服务：",
+	"plugin_overview_bridge_label": "Bridge：",
+	"plugin_overview_config_label": "配置：",
+	"plugin_overview_activity_label": "活动：",
 	"server_status": "服务器状态",
 	"server_state_label": "状态：",
 	"endpoint": "端点地址：",
@@ -71,13 +76,17 @@ const TRANSLATIONS: Dictionary = {
 	"auto_start": "自动启动",
 	"debug_log": "调试日志",
 	"btn_start": "启动",
+	"btn_close": "关闭",
 	"btn_restart": "重启",
 	"btn_stop": "停止",
-	"btn_close": "关闭",
 	"btn_reload_plugin": "完全重载插件",
+
+	# About section
 	"about": "关于",
 	"author": "作者：",
 	"wechat": "微信：",
+
+	# Tools tab
 	"tools_enabled": "工具：%d/%d 已启用",
 	"external_tools_enabled": "对外工具：%d/%d",
 	"tool_profile": "预设：",
@@ -367,6 +376,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_get_selected_property_desc": "读取检查器当前选中属性。",
 	"tool_action_get_selected_desc": "读取文件系统或编辑器当前选中项。",
 	"tool_action_get_current_path_desc": "读取当前文件系统路径。",
+
+	# Tool categories - Core
 	"cat_scene": "场景",
 	"cat_node": "节点",
 	"cat_script": "脚本",
@@ -382,15 +393,23 @@ const TRANSLATIONS: Dictionary = {
 	"cat_debug": "调试",
 	"cat_dap": "DAP 调试",
 	"cat_animation": "动画",
+
+	# Tool categories - Visual
 	"cat_material": "材质",
 	"cat_shader": "着色器",
 	"cat_lighting": "灯光",
 	"cat_particle": "粒子",
+
+	# Tool categories - 2D
 	"cat_tilemap": "瓦片地图",
 	"cat_geometry": "几何体",
+
+	# Tool categories - Gameplay
 	"cat_physics": "物理",
 	"cat_navigation": "导航",
 	"cat_audio": "音频",
+
+	# Tool categories - Utilities
 	"cat_ui": "用户界面",
 	"cat_user": "用户",
 	"cat_system": "系统",
@@ -481,6 +500,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_sync_error": "更新同步失败。",
 	"settings_update_sync_no_target": "请先选择要同步的分支或发布版本。",
 	"settings_update_sync_no_branch": "请先选择要同步的分支或发布版本。",
+
+	# Config tab - IDE section
 	"ide_config": "IDE 一键配置",
 	"ide_config_desc": "点击后自动写入配置文件，重启客户端生效",
 	"config_header": "客户端接入配置",
@@ -494,6 +515,8 @@ const TRANSLATIONS: Dictionary = {
 	"btn_one_click": "一键配置",
 	"btn_copy": "复制",
 	"btn_remove_plugin_config": "移除本插件配置",
+
+	# Config tab - CLI section
 	"cli_config": "CLI 命令行配置",
 	"cli_config_desc": "复制命令并在终端中运行",
 	"config_scope": "配置范围：",
@@ -542,7 +565,7 @@ const TRANSLATIONS: Dictionary = {
 	"config_client_claude_desktop": "Claude Desktop",
 	"config_client_cursor": "Cursor",
 	"config_client_gemini": "Gemini CLI",
-	"config_client_claude_code": "Claude Code",
+	"config_client_claude_code": "Claude Code CLI",
 	"config_client_codex": "Codex CLI",
 	"config_client_trae": "Trae",
 	"config_client_codex_desktop": "Codex Desktop",
@@ -633,6 +656,8 @@ const TRANSLATIONS: Dictionary = {
 	"config_client_capability_manual_guidance": "提供手动接入引导；此客户端在这里不是完整一键接入。",
 	"config_client_capability_launch_path": "支持打开应用与管理路径；MCP 接入请使用推荐的手动或 CLI 流程。",
 	"config_client_capability_copy_guidance": "提供可复制的接入引导，但不支持自动改写客户端。",
+
+	# Messages
 	"msg_config_success": "%s 配置成功！",
 	"msg_config_verified": "已完成回读校验：%s",
 	"msg_config_readback_failed": "配置文件已写入，但回读校验失败。",
@@ -692,8 +717,13 @@ const TRANSLATIONS: Dictionary = {
 	"msg_config_restart_cursor": "如果 Cursor 已在运行，请重启客户端或重新加载窗口使配置生效。",
 	"msg_config_restart_trae": "如果 Trae 已在运行，请重启客户端或重新加载窗口使配置生效。",
 	"msg_config_restart_opencode": "如果 OpenCode 已在运行，请重启应用或重新打开会话使配置生效。",
+
+	# Language
 	"language": "语言：",
 	"language_name_en": "英文",
+
+	# ==================== Tool Descriptions ====================
+	# Scene tools
 	"tool_scene_bindings_name": "绑定检查",
 	"tool_scene_audit_name": "场景审计",
 	"tool_scene_management_name": "管理",
@@ -704,6 +734,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_run_desc": "在编辑器中运行和测试场景",
 	"tool_scene_bindings_desc": "检查场景中使用的导出脚本绑定",
 	"tool_scene_audit_desc": "报告由导出绑定推导出的场景问题",
+
+	# System tools
 	"tool_system_project_state_name": "项目状态",
 	"tool_system_project_state_desc": "汇总当前项目状态，包括文件计数、最近错误与运行状态。",
 	"tool_system_editor_state_name": "编辑器状态",
@@ -762,6 +794,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_runtime_input_desc": "内部运行时输入：通过已启用的运行时会话发送脚本化运行时输入。",
 	"tool_runtime_step_name": "步进",
 	"tool_runtime_step_desc": "内部运行时步进：应用可选运行时输入、等待指定帧数，并按需捕获一帧画面。",
+
+	# Node tools
 	"tool_node_query_name": "查询",
 	"tool_node_lifecycle_name": "生命周期",
 	"tool_node_transform_name": "变换",
@@ -786,6 +820,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_node_call_desc": "动态调用节点方法",
 	"tool_node_visibility_desc": "控制节点可见性和图层",
 	"tool_node_physics_desc": "配置物理属性",
+
+	# Resource tools
 	"tool_resource_query_name": "查询",
 	"tool_resource_manage_name": "管理",
 	"tool_resource_create_name": "创建",
@@ -796,6 +832,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_resource_create_desc": "根据资源类型创建新的资源文件",
 	"tool_resource_file_ops_desc": "复制、移动、删除或重新加载资源文件",
 	"tool_resource_texture_desc": "管理纹理资源",
+
+	# Project tools
 	"tool_project_info_name": "信息",
 	"tool_project_dotnet_name": ".NET",
 	"tool_project_settings_name": "设置",
@@ -806,6 +844,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_project_settings_desc": "读取和修改项目设置",
 	"tool_project_input_desc": "管理输入动作映射",
 	"tool_project_autoload_desc": "管理自动加载单例",
+
+	# Script tools
 	"tool_script_read_name": "读取",
 	"tool_script_open_name": "打开",
 	"tool_script_inspect_name": "分析",
@@ -825,6 +865,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_script_references_desc": "按需构建脚本索引，查询场景引用、类映射与 C# 直接基类",
 	"tool_script_edit_gd_desc": "通过结构化辅助编辑 GDScript 文件",
 	"tool_script_edit_cs_desc": "通过结构化字段和方法辅助创建、更新 C# 脚本",
+
+	# Editor tools
 	"tool_editor_status_name": "状态",
 	"tool_editor_screenshot_name": "截图",
 	"tool_editor_settings_name": "设置",
@@ -930,6 +972,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_developer_import_config_desc": "从 JSON 文件导入工具预设 ID 和停用工具列表并立即应用",
 	"tool_plugin_developer_usage_guide_name": "使用指南",
 	"tool_plugin_developer_usage_guide_desc": "返回插件推荐使用方式、重载策略和开发/调试循环建议",
+
+	# Debug tools
 	"tool_debug_log_name": "日志",
 	"tool_debug_log_write_name": "日志写入",
 	"tool_debug_log_buffer_name": "日志缓冲",
@@ -950,6 +994,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_class_db_desc": "查询 Godot 类数据库",
 	"tool_dap_debugger_name": "调试器",
 	"tool_dap_debugger_desc": "发送 Godot Debug Adapter Protocol 生命周期、断点、步进、调用栈、output 事件、终止与断开请求。",
+
+	# Filesystem tools
 	"tool_filesystem_directory_name": "目录",
 	"tool_filesystem_file_name": "文件",
 	"tool_filesystem_file_read_name": "文件读取",
@@ -964,6 +1010,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_filesystem_file_manage_desc": "在项目内删除、复制或移动文件",
 	"tool_filesystem_json_desc": "读写 JSON 文件",
 	"tool_filesystem_search_desc": "按模式搜索文件",
+
+	# Animation tools
 	"tool_animation_player_name": "播放器",
 	"tool_animation_animation_name": "动画",
 	"tool_animation_track_name": "轨道",
@@ -980,34 +1028,48 @@ const TRANSLATIONS: Dictionary = {
 	"tool_animation_state_machine_desc": "管理动画状态机",
 	"tool_animation_blend_space_desc": "配置混合空间",
 	"tool_animation_blend_tree_desc": "设置混合树节点",
+
+	# Material tools
 	"tool_material_material_name": "材质",
 	"tool_material_mesh_name": "网格",
 	"tool_material_material_desc": "创建和修改材质",
 	"tool_material_mesh_desc": "管理网格资源",
+
+	# Shader tools
 	"tool_shader_shader_name": "着色器",
 	"tool_shader_shader_material_name": "着色器材质",
 	"tool_shader_shader_desc": "创建和编辑着色器",
 	"tool_shader_shader_material_desc": "将着色器应用到材质",
+
+	# Lighting tools
 	"tool_lighting_light_name": "灯光",
 	"tool_lighting_environment_name": "环境",
 	"tool_lighting_sky_name": "天空",
 	"tool_lighting_light_desc": "创建和配置灯光",
 	"tool_lighting_environment_desc": "设置世界环境",
 	"tool_lighting_sky_desc": "配置天空和大气",
+
+	# Particle tools
 	"tool_particle_particles_name": "粒子",
 	"tool_particle_particle_material_name": "粒子材质",
 	"tool_particle_particles_desc": "创建和配置粒子系统",
 	"tool_particle_particle_material_desc": "设置粒子材质",
+
+	# Tilemap tools
 	"tool_tilemap_tileset_name": "瓦片集",
 	"tool_tilemap_tilemap_name": "瓦片地图",
 	"tool_tilemap_tileset_desc": "创建和编辑瓦片集",
 	"tool_tilemap_tilemap_desc": "编辑瓦片地图图层和单元格",
+
+	# Geometry tools
 	"tool_geometry_csg_name": "CSG",
 	"tool_geometry_gridmap_name": "网格地图",
 	"tool_geometry_multimesh_name": "多网格",
 	"tool_geometry_csg_desc": "创建 CSG 构造实体几何",
 	"tool_geometry_gridmap_desc": "编辑 3D 网格地图",
 	"tool_geometry_multimesh_desc": "设置多网格实例",
+
+	# Physics tools
 	"tool_physics_physics_body_name": "物理体",
 	"tool_physics_collision_shape_name": "碰撞形状",
 	"tool_physics_physics_joint_name": "物理关节",
@@ -1016,20 +1078,36 @@ const TRANSLATIONS: Dictionary = {
 	"tool_physics_collision_shape_desc": "添加和修改碰撞形状",
 	"tool_physics_physics_joint_desc": "创建物理关节和约束",
 	"tool_physics_physics_query_desc": "执行物理查询和射线检测",
+
+	# Navigation tools
 	"tool_navigation_navigation_name": "导航",
 	"tool_navigation_navigation_desc": "设置导航网格和代理",
+
+	# Audio tools
 	"tool_audio_bus_name": "总线",
 	"tool_audio_player_name": "播放器",
 	"tool_audio_bus_desc": "管理音频总线和效果",
 	"tool_audio_player_desc": "控制音频播放",
+
+	# UI tools
 	"tool_ui_theme_name": "主题",
 	"tool_ui_control_name": "控件",
 	"tool_ui_theme_desc": "创建和修改 UI 主题",
 	"tool_ui_control_desc": "配置控件节点",
+
+	# Signal tools
 	"tool_signal_signal_name": "信号",
 	"tool_signal_signal_desc": "全局管理信号连接",
+
+	# Group tools
 	"tool_group_group_name": "分组",
 	"tool_group_group_desc": "全局查询和管理节点分组",
+
+	# Parity fallback entries
 	"language_name": "简体中文",
 	"log_level_trace": "跟踪",
 }
+
+
+static func get_translations() -> Dictionary:
+	return TRANSLATIONS

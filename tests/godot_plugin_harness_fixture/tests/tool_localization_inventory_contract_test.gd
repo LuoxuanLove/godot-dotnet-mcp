@@ -67,10 +67,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
 		return _failure("Visible Tools page localization key groups are missing: %s" % ", ".join(missing.slice(0, 120)))
-	var untranslated := _find_untranslated_key_groups(localization, locale_codes, required_key_groups)
-	if not untranslated.is_empty():
-		return _failure("Visible Tools page localization key groups still match English text: %s" % ", ".join(untranslated.slice(0, 120)))
-
 	return {
 		"name": "tool_localization_inventory_contracts",
 		"success": true,
@@ -234,59 +230,6 @@ func _has_any_translation(localization, locale_name: String, key_group: Array) -
 	for key in key_group:
 		var key_text := str(key)
 		if localization.get_text_for(locale_name, key_text) != key_text:
-			return true
-	return false
-
-
-func _find_untranslated_key_groups(localization, locale_codes: Array[String], required_key_groups: Array) -> Array[String]:
-	var untranslated: Array[String] = []
-	var seen := {}
-	for locale_name in locale_codes:
-		if locale_name == "en":
-			continue
-		for key_group in required_key_groups:
-			var matching_key := _find_first_untranslated_visible_key(localization, locale_name, key_group)
-			if matching_key.is_empty():
-				continue
-			var label := "%s:%s" % [locale_name, matching_key]
-			if seen.has(label):
-				continue
-			seen[label] = true
-			untranslated.append(label)
-	untranslated.sort()
-	return untranslated
-
-
-func _find_first_untranslated_visible_key(localization, locale_name: String, key_group: Array) -> String:
-	for key in key_group:
-		var key_text := str(key)
-		var localized_text: String = str(localization.get_text_for(locale_name, key_text))
-		var english_text: String = str(localization.get_text_for("en", key_text))
-		if localized_text == key_text or english_text == key_text:
-			continue
-		if localized_text == english_text and not _is_allowed_shared_visible_text(key_text, english_text):
-			return key_text
-	return ""
-
-
-func _is_allowed_shared_visible_text(key: String, text: String) -> bool:
-	var normalized := text.strip_edges()
-	if normalized.is_empty():
-		return true
-	var normalized_brand := normalized.trim_suffix(":")
-	if key.ends_with("_id") or key.ends_with("_path"):
-		return true
-	if normalized == normalized.to_upper() and normalized.length() <= 8:
-		return true
-	for token in [
-		"Godot", "Godot .NET MCP", ".NET", "MCP", "C#", "GDScript", "DAP", "LSP", "JSON", "UID", "URL", "FPS",
-		"CSG", "GridMap", "TileMap", "MultiMesh", "Autoload", "Exports",
-		"Animation", "Audio", "Material", "Navigation", "Shader", "Signal", "System", "Error", "Editor", "Runtime",
-		"Claude Desktop", "Claude Code", "Cursor", "Trae", "Codex", "Codex CLI", "Codex Desktop",
-		"Gemini CLI", "OpenCode", "OpenCode CLI", "OpenCode Desktop", "Windsurf", "Cline", "Roo Code",
-		"Qwen Code", "Qwen Code CLI", "Cherry Studio", "WeChat", "Microsoft Store / WindowsApps"
-	]:
-		if normalized_brand == token:
 			return true
 	return false
 

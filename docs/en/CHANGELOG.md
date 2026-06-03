@@ -30,6 +30,7 @@ Target version: 1.2.0.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, and plugin-update contract fixture expectations to the `1.2.0` development line.
 - Updated locale contract coverage so merged fallback translations are validated for languages that keep localized overrides instead of duplicating the full English table.
 - Tightened localization CI contracts so every supported locale must expose the same key set and may not silently reuse English strings except for explicit shared product names, paths, identifiers, and technical abbreviations.
+- Fixed the refactor guardrail scan so the banned-source identifier audit no longer reports its own validation script as a violation.
 
 ## [1.1.2] - 2026-06-02
 
