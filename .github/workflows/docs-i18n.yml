@@ -1,0 +1,41 @@
+name: docs-i18n
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    paths:
+      - "README.md"
+      - "docs/**"
+      - "scripts/validate_docs_i18n.ps1"
+      - ".github/workflows/docs-i18n.yml"
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+    paths:
+      - "README.md"
+      - "docs/**"
+      - "scripts/validate_docs_i18n.ps1"
+      - ".github/workflows/docs-i18n.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docs-i18n:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate localized documentation structure and links
+        shell: pwsh
+        run: .\scripts\validate_docs_i18n.ps1
