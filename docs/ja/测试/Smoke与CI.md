@@ -1,0 +1,161 @@
+# Smoke と CI
+
+この文書は、今の test 構造、CI 接続状態、今後の gate 方針を説明します。
+
+---
+
+## 1. Smoke の位置づけ
+
+plugin headless harness は、外部 process や third-party test framework に頼らず、plugin runtime の tool loading と routing behavior を確かめます。CI が hard gate にするのは、`scripts/test_plugin_side_roslyn.ps1` で指定した required subset だけです。
+
+---
+
+## 2. 現在の構造
+
+関連 file。
+
+```text
+tests/
+├─ godot_plugin_harness/
+│  └─ GodotPluginHarness.csproj
+└─ godot_plugin_harness_fixture/
+   └─ tests/
+      └─ *.gd  (contract tests)
+
+.github/workflows/
+├─ actions-bot-relay.yml
+├─ dotnet-build.yml
+├─ draft-release-notes.yml
+├─ lint-workflows.yml
+├─ pr-policy.yml
+├─ publish-release.yml
+├─ publish-plugin.yml
+├─ validate-plugin.yml
+└─ version-policy.yml
+```
+
+---
+
+## 3. 現在の進み具合
+
+- plugin headless harness は CI の required subset に入っている
+- いくつかの contract test case はまだ harness から見つかるが、今の hard gate そのものではない
+- `plugin_entrypoint_contracts` は editor probe で動き、終了時の editor shutdown warning は harness で非致命 noise として扱う
+- PR の target branch、公開 version metadata policy、速い .NET build、release tag の version 一致、次版 draft release は workflow 管理に入っている
+- `actions-bot-relay` は `github-actions[bot]` に、maintainer が渡した patch から短命 branch と PR を作らせられる
+
+---
+
+## 4. 現在の CI 状態
+
+今の workflow は次の通りです。
+
+- `.github/workflows/actions-bot-relay.yml`
+- `.github/workflows/dotnet-build.yml`
+- `.github/workflows/draft-release-notes.yml`
+- `.github/workflows/lint-workflows.yml`
+- `.github/workflows/pr-policy.yml`
+- `.github/workflows/publish-release.yml`
+- `.github/workflows/publish-plugin.yml`
+- `.github/workflows/validate-plugin.yml`
+- `.github/workflows/version-policy.yml`
+
+今の役割。
+
+1. `actions-bot-relay`: base64 patch を手動で受け取り、`github-actions[bot]` が `actions-bot/*` branch と `dev` 向け PR を作る。PR 本文には base / head SHA、changed paths、diffstat、起動者、run URL、validation workflow link を追記する
+2. `pr-policy`: 間違った target branch の PR を止める。PR は `dev` 向けだけにし、title、summary、testing などの客観字段を確認する
+3. `version-policy`: 信頼された `dev` 側 workflow と script で PR の公開 version metadata を検証し、`release/*` 以外の branch が早く version を変えるのを防ぐ
+4. `dotnet-build`: plugin Roslyn library、harness runner、fixture を素早く build し、refactor guardrails を走らせる
+5. `lint-workflows`: `.github/workflows/**` に対して `actionlint` をかける
+6. `validate-plugin-harness`: Godot 4.6 を download して plugin harness の required subset を走らせる。`scripts/test_plugin_side_roslyn.ps1` の `$RequiredCases` が基準。普通の headless case は batch で走り、少数の隔離が必要な headless case と editor probe case は分ける
+7. `publish-release`: 手動の一鍵 release 入口。GitHub Actions の `Use workflow from` で `dev` を選び、まず `dry_run=true` で version、release note、build、harness を確認する。同じ version と同じ commit の最近の成功 dry-run 記録があれば、正式実行では重複 build と harness を飛ばせる
+8. `publish-plugin`: `v*` tag の前に tag version、`dev` 到達性、release note source file を確認してから build / harness を走らせ、2 層の release note 本文で GitHub Release を作る
+9. `draft-release-notes`: `dev` 更新後に同じ render script で `next` draft release を作るか更新する。次版の正式本文プレビューになる
+
+`validate-plugin.yml` は重い Godot harness だけを残し、安定した `validate-plugin-harness` check 名を出し続けます。`pr-policy.yml` は PR target branch と軽い PR standards を見る役です。`dotnet-build.yml` は速い .NET build と guardrails を担当します。通常の同 repository 短命 branch PR は `pull_request` で検証し、`push` は `dev` だけにします。これで同じ commit で短命 branch の `push` と `pull_request.synchronize` が二重に回るのを避けます。`actions-bot-relay` が PR を作ったあとには、`dotnet-build.yml`、`validate-plugin.yml`、`version-policy.yml` を明示的に起動し、workflow file が変わったときは `lint-workflows.yml` も明示的に起動します。遠隔 `dev` branch には GitHub branch ruleset を設定し、`validate-plugin-harness` を required check にします。さらに厳しくしたいなら `dotnet-build` も required にできます。`pr-policy` は早期 feedback 用で、`validate-plugin-harness` の代わりにしません。`validate-plugin.yml` と `dotnet-build.yml` はどちらも `merge_group` trigger を持ち、将来の merge queue に備えています。
+
+`dotnet-build.yml` と `validate-plugin.yml` は、同じ PR の新しい run にだけ concurrency cancellation を使います。同じ PR の古い build や harness が runner を占有し続けるのを防ぐためです。`dev` push、`workflow_dispatch`、`merge_group`、tag、release のような PR 以外の run は、それぞれ一意の run id を concurrency group に使うので、互いに cancel しません。`dotnet-build` job の timeout は 30 分、`validate-plugin-harness` job の timeout は 90 分で、check 名は変えません。
+
+重い harness 入口は、総所要時間と build、case list、batch headless、isolated headless、isolated editor probe、各 case、guardrail の timing summary を出します。GitHub Actions では Step Summary にも追記し、遅い case や遅い段階を見つけやすくします。
+`dotnet-build.yml` と `scripts/test_plugin_side_roslyn.ps1` の .NET build 段階は、`CS2012`、Godot `.godot/mono/temp` path、file lock や security software scan の信号に合う失敗を認識し、`transient_file_lock` 診断を出します。この診断は、一時的な build artifact が短く lock された可能性を示すだけで、source の compile error ではありません。script は再実行と security software の除外項目だけを案内し、自動 retry、`.godot` 削除、process kill はしません。
+
+Harness JSON report は、suite の成功 marker と Godot 終了時の cleanup warning を分けます。普通の headless suite が `ObjectDB instances leaked at exit` や `resources still in use at exit` を見つけたときは失敗扱いのままですが、`suiteSuccess`、`successMarkerDetected`、`exitCleanupWarningMarkers`、`exitCleanupWarningPolicy`、`failureClass=exit_cleanup_warning` を出して、失敗の原因が exit cleanup なのか case logic なのかを見分けやすくします。
+
+`dotnet-build.yml`、`validate-plugin.yml`、`publish-release.yml`、`publish-plugin.yml` は `windows-2025` hosted runner を使い、`global.json` で .NET SDK を .NET 8 feature band に絞ります。workflow は先に `dotnet --info` と `dotnet --list-sdks` を出し、.NET 8 SDK が選ばれていなければその場で fail します。`dotnet-build.yml` と `validate-plugin.yml` は NuGet global package directory を cache し、cache key は `Directory.Build.props`、project file、props / targets、`global.json`、central package management file、lock file を含みます。`publish-release.yml` は同じ version と同じ commit の dry-run 记录も保存し、正式 release のときは重複 build と harness を飛ばせるようにします。`validate-plugin.yml` は Godot 4.6 mono Windows の解凍 directory も cache し、cache hit でも console ではない Godot executable を探し、なければ再 download と再解凍をします。壊れた cache が静かに通るのを防ぐためです。
+
+`validate-plugin-harness` が失敗したときは `.tmp/godot_plugin_harness` を残し、7 日の artifact を上げて、stage root、process registry などの失敗現場を maintainer が取れるようにします。成功した run はその directory を消します。
+
+---
+
+## 5. local と remote の検証の分け方
+
+PR 検証は、local precheck、remote CI、review gate の 3 層に分かれます。役割が違うので、互いの代わりにはなりません。
+
+1. local precheck は、はっきりした問題を早く見つけるためのものです。Godot editor の path が取れるなら、影響を受ける harness か script を先に走らせます。workflow を変えたときは、まず YAML と script の syntax を確認します
+2. remote CI は merge 前の客観 gate です。`dotnet-build`、`validate-plugin-harness`、`pr-policy`、必要なら `lint-workflows` は、最新 head の結果で判断します
+3. review gate は、CI では見えにくい問題を拾います。human、Cubic、Codex、その他 review tool が出した問題には reply して resolve します。Cubic は最新 head commit を見ていなければなりません
+
+記録のおすすめ形。
+
+```text
+Local:
+- <command or editor/plugin validation> -> <result>
+
+Remote:
+- pr-policy -> <result or relay metadata / maintainer review path>
+- dotnet-build -> <result>
+- validate-plugin-harness -> <result>
+- lint-workflows -> <result or not applicable>
+
+Review:
+- conversations -> <resolved / pending>
+- Cubic latest head -> <covered / pending / issues found>
+```
+
+local に Godot editor や必要な環境がない場合は、PR 本文で何を走らせなかったかを明記し、同等の remote CI 結果を待ちます。「未実行」で検証結論の代わりにはしません。
+
+---
+
+## 6. 現在の gate 境界
+
+### もう hard gate になっているもの
+
+- workflow YAML syntax lint。workflow file が変わったときだけ
+- PR target branch と軽い PR standards check。間違った target branch なら失敗して `dev` へ投げ直すよう伝える。必要字段が欠けていれば補うよう伝える
+- dotnet bridge library、harness runner、fixture build
+- refactor guardrails
+- plugin headless harness required subset
+- release tag 前の `plugin.cfg`、tag、英語 changelog、簡体字 changelog の version 一致確認
+- release tag 前の `docs/流程/release-notes/release-notes-v*.md` の存在確認と version 一致確認
+- 遠隔 `dev` merge 前には PR、`validate-plugin-harness` 通過、最新 `dev` を基準にした再検証を求める。今の ruleset は approving review を必須にしていない
+
+### まだ soft gate か environment dependent のもの
+
+- `tests/godot_plugin_harness` は `--allow-skip-missing-godot` をサポートするが、CI の入口 `scripts/test_plugin_side_roslyn.ps1` は実際の Godot executable を要求する。ほかの見つかる case は CI の hard gate に自動で入らない
+- `actions-bot-relay` は repository Settings で GitHub Actions に pull request 作成を許可していなければ失敗する
+- `actions-bot-relay` は maintainer が渡した patch だけを適用し、要求を自分で作ったり理解したりしない。relay が足す metadata は review の助けにはなるが、検証結果や人の判断の代わりにはならない
+- `next` draft release は release note の保守を助けるだけで、正式 release ではない。手書き summary、changelog 明細、commit summary の最終本文を先に見せるためのものです
+- Agent は短命 branch の作成、commit、許可された push はできますが、遠隔 `dev` の merge は作者が GitHub PR page で手動確認して実行します。Agent は local merge 後に `dev` を push したり、required checks を回避したりしてはいけません
+- 各 PR は、対応する短命 branch の目的内の変更だけを入れます。別の修正や過去の未 merge commit が混ざったら、独立 PR に分けるか、最新 `origin/dev` からきれいに作り直します
+
+---
+
+## 7. 推奨の実行方法
+
+### local plugin harness
+
+```powershell
+dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c Release -- --godot-path "<Godot Path>"
+```
+
+CI required subset を再現したいときは、script 入口を直接走らせます。script は普通の headless case を 1 回の batch にまとめ、少数の隔離が必要な headless case と editor probe case を別に走らせます。
+
+```powershell
+.\scripts\test_plugin_side_roslyn.ps1 -GodotPath "<Godot Path>"
+```
+
+---
+
+## 8. 結論
+
+今の harness、CI、review gate は層として閉じています。`pr-policy` は間違った target branch を早い段階で止め、`dotnet-build` は速い .NET build と guardrail の feedback を出し、`validate-plugin-harness` は安定した required check 名を保ったまま重い Godot harness を走らせ、`next` draft release は次版の説明草稿を保ち、`actions-bot-relay` は追加アカウントを増やさずに `github-actions[bot]` を PR 作成と push の actor にできます。

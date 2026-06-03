@@ -1,0 +1,148 @@
+# Server と Config ページの実装
+
+この文書は、`ui/server_tab.gd` と `ui/config_tab.gd` がどう状態表示、responsive layout、動的 card 構築を行うかを説明します。
+
+---
+
+## page の役割
+
+### `Home` page
+
+`Home` page は、service の生存状態、port、language、debug mode、短い自診断 summary を見せます。ここは plugin の heartbeat を確認する場所です。
+
+### `Config` page
+
+`Config` page は、外部 MCP client との接続設定を見せ、書き込み、copy し、client ごとの命令を組み立てる場所です。
+
+---
+
+## `Home` page の構造
+
+`ui/server_panel.tscn` は次のような部分からできています。
+
+- `ServerTab`
+- `ServerHeader`
+- `ServerStatusRow`
+- `ServerActionRow`
+- `ServerStatsGrid`
+- `ServerDiagnosticBox`
+
+この page は、state そのものより「今どうなっているか」がすぐ見えることを重視します。
+
+---
+
+## `Home` page の data flow
+
+1. `plugin.gd` が現在の service state を model に入れる
+2. `mcp_dock.gd` が `server_tab.gd.apply_model()` を呼ぶ
+3. `server_tab.gd` は model を `server_tab_model_projection.gd` に渡し、表示用の pure data にする
+4. pure data を使って label、button、indicator、summary box を更新する
+5. user action は signal として `plugin.gd` に戻る
+
+`server_tab_model_projection.gd` があるおかげで、表示のための整形が UI logic に散らばりません。
+
+---
+
+## `Home` page の見せる内容
+
+- 現在の service status
+- listen address と port
+- active connection 数
+- request 統計
+- 最近の method と time
+- debug / auto start / language の状態
+- 自診断の短い summary
+
+---
+
+## `Home` page の操作
+
+### 実行できること
+
+- port を変える
+- auto start を切り替える
+- debug log level を切り替える
+- language を変える
+- service を起動 / 再起動 / 停止する
+- plugin を完全 reload する
+
+### 補助的な見え方
+
+- start / restart / stop の button 状態は、今の service state に応じて有効無効が変わる
+- `full reload` は強い操作なので、少し目立つ形にする
+- diagnostic summary は、短くても内容があるようにする
+
+---
+
+## `Config` page の構造
+
+`ui/config_panel.tscn` は主に次の部分でできています。
+
+- `ConfigTab`
+- `ConfigHeader`
+- `PlatformSelector`
+- `ScopeSelector`
+- `ConfigBody`
+- `ConfigCardList`
+- `ConfigTextPanel`
+- `ConfigActionRow`
+
+この page は、client ごとに「何をコピーできるか」「どこへ書き込めるか」をわかりやすく見せます。
+
+---
+
+## `Config` page の data flow
+
+1. `plugin.gd` が client config の model を作る
+2. `mcp_dock.gd` が `config_tab.gd.apply_model()` を呼ぶ
+3. `config_tab.gd` は presenter の助けで、platform ごとの card、text、button、path を作る
+4. write / copy / open action を signal で返す
+5. `plugin.gd` が settings service や config service を呼び、再度 model を配る
+
+---
+
+## responsive layout
+
+`Home` と `Config` は、単なる text page よりも layout の癖が強いです。
+
+- `GridContainer`
+- 長い `Label`
+- 読み取り専用 `TextEdit`
+- 横に広い `OptionButton`
+- 小さすぎると読みづらい `Button`
+
+そのため、script 側で次を補います。
+
+- `size_flags_horizontal = SIZE_EXPAND_FILL`
+- 倍率に応じた minimum height
+- text area の最小高さ
+- card 間の spacing
+
+---
+
+## `Config` page の card 生成
+
+card は static ではなく、platform ごとに動的に作ります。
+
+- desktop client は config file path と JSON text を見せる
+- CLI client は command text と scope を見せる
+- それぞれの card に対して、copy、write、open、install 的な action を付ける
+
+card を動的に組む理由は、client ごとの違いを UI にそのまま出したいからです。
+
+---
+
+## 実装メモ
+
+- `Home` page は summary を短く保ち、情報を詰め込みすぎない
+- `Config` page は client ごとの差分を隠しすぎない
+- `server_tab.gd` と `config_tab.gd` は model をそのまま画面に出すだけでなく、操作の意味を崩さない
+- copy button は見つけやすく、しかし邪魔にならない位置に置く
+
+---
+
+## 関連文書
+
+- page 全体の構造は [总览.md](总览.md)
+- UI と settings の boundary は [../架构/配置与界面.md](../架构/配置与界面.md)
+- install と release の流れは [../架构/安装与发布.md](../架构/安装与发布.md)

@@ -12,12 +12,14 @@ Target version: 1.2.0.
 
 ### Documentation
 
+- Added complete English, Simplified Chinese, Korean, and Japanese documentation trees under `docs/en/`, `docs/zh-CN/`, `docs/ko/`, and `docs/ja/` with same-locale internal links.
 - Added English and Chinese roadmap entry points in `docs/ROADMAP.md` and `docs/i18n/zh-CN/ROADMAP.md`.
 - Added structured Korean, Japanese, and Simplified Chinese README, changelog, and roadmap entries under `docs/i18n/` with language switch links from the root docs.
 - Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
 
 ### Internal
 
+- Added a docs i18n validation workflow and guardrail coverage for locale directory parity, file parity, same-locale Markdown links, and cross-locale link leakage.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, and plugin-update contract fixture expectations to the `1.2.0` development line.
 
 ## [1.1.2] - 2026-06-02
