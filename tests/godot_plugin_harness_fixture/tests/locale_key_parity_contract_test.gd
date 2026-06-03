@@ -29,6 +29,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 func _load_supported_locale_translations() -> Dictionary:
 	var locale_translations := {}
+	var english_translations := {}
 	for locale_code in LocalizationServiceScript.LANGUAGE_FILES.keys():
 		var file_path := str(LocalizationServiceScript.LANGUAGE_FILES[locale_code])
 		var locale_script = ResourceLoader.load(file_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
@@ -36,6 +37,16 @@ func _load_supported_locale_translations() -> Dictionary:
 			locale_translations[str(locale_code)] = _get_raw_translations(locale_script as Script)
 		else:
 			locale_translations[str(locale_code)] = {}
+		if str(locale_code) == "en":
+			english_translations = locale_translations[str(locale_code)].duplicate(true)
+	for locale_code in locale_translations.keys():
+		if str(locale_code) == "en":
+			continue
+		var merged_translations := english_translations.duplicate(true)
+		var locale_values = locale_translations[locale_code]
+		if locale_values is Dictionary:
+			merged_translations.merge(locale_values as Dictionary, true)
+		locale_translations[locale_code] = merged_translations
 	return locale_translations
 
 

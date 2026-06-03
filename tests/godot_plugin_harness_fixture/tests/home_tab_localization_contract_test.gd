@@ -7,6 +7,7 @@ const LocaleDe = preload("res://addons/godot_dotnet_mcp/localization/locale_de.g
 const LocaleEs = preload("res://addons/godot_dotnet_mcp/localization/locale_es.gd")
 const LocaleFr = preload("res://addons/godot_dotnet_mcp/localization/locale_fr.gd")
 const LocaleJa = preload("res://addons/godot_dotnet_mcp/localization/locale_ja.gd")
+const LocaleKo = preload("res://addons/godot_dotnet_mcp/localization/locale_ko.gd")
 const LocalePt = preload("res://addons/godot_dotnet_mcp/localization/locale_pt.gd")
 const LocaleRu = preload("res://addons/godot_dotnet_mcp/localization/locale_ru.gd")
 const ServerPanelScene = preload("res://addons/godot_dotnet_mcp/ui/server_panel.tscn")
@@ -20,15 +21,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var es := LocaleEs.get_translations()
 	var fr := LocaleFr.get_translations()
 	var ja := LocaleJa.get_translations()
+	var ko := LocaleKo.get_translations()
 	var pt := LocalePt.get_translations()
 	var ru := LocaleRu.get_translations()
-	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, pt, ru]
+	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, ko, pt, ru]
 	if str(en.get("tab_server", "")) != "Home":
 		return _failure("English localization should expose the first Dock tab as Home after the service-page-to-homepage migration.")
 	if str(zh_cn.get("tab_server", "")) != "主页":
 		return _failure("简体中文本地化应将第一个 Dock 页签显示为“主页”。")
 	if str(zh_tw.get("tab_server", "")) != "首頁":
 		return _failure("繁體中文本地化應將第一個 Dock 頁籤顯示為“首頁”。")
+	if str(ko.get("tab_server", "")) != "홈":
+		return _failure("Korean localization should expose the first Dock tab as 홈.")
+	if str(ko.get("language_name", "")) != "한국어":
+		return _failure("Korean localization should expose a readable native language name.")
 	if str(fr.get("language_name", "")) != "Français":
 		return _failure("French localization should expose a readable native language name.")
 	if str(fr.get("status_stopped", "")) != "Arrêté":
@@ -175,7 +181,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for locale_info in [
 		{"name": "en", "path": "res://addons/godot_dotnet_mcp/localization/locale_en.gd"},
 		{"name": "zh_CN", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd"},
-		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"}
+		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"},
+		{"name": "ko", "path": "res://addons/godot_dotnet_mcp/localization/locale_ko.gd"}
 	]:
 		var duplicate_key = _find_duplicate_locale_key(str(locale_info["path"]))
 		if not duplicate_key.is_empty():

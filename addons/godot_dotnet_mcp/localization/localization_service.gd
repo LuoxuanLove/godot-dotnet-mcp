@@ -11,6 +11,7 @@ const AVAILABLE_LANGUAGES: Dictionary = {
 	"en": "English",
 	"zh_CN": "Chinese (Simplified)",
 	"zh_TW": "Chinese (Traditional)",
+	"ko": "Korean",
 	"ja": "Japanese",
 	"ru": "Russian",
 	"fr": "French",
@@ -23,6 +24,7 @@ const LANGUAGE_ORDER: Array[String] = [
 	"en",
 	"zh_CN",
 	"zh_TW",
+	"ko",
 	"ja",
 	"fr",
 	"de",
@@ -35,6 +37,7 @@ const LANGUAGE_NATIVE_NAMES: Dictionary = {
 	"en": "English",
 	"zh_CN": "简体中文",
 	"zh_TW": "繁體中文",
+	"ko": "한국어",
 	"ja": "日本語",
 	"ru": "Русский",
 	"fr": "Français",
@@ -47,6 +50,7 @@ const LANGUAGE_FILES: Dictionary = {
 	"en": "res://addons/godot_dotnet_mcp/localization/locale_en.gd",
 	"zh_CN": "res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd",
 	"zh_TW": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd",
+	"ko": "res://addons/godot_dotnet_mcp/localization/locale_ko.gd",
 	"ja": "res://addons/godot_dotnet_mcp/localization/locale_ja.gd",
 	"ru": "res://addons/godot_dotnet_mcp/localization/locale_ru.gd",
 	"fr": "res://addons/godot_dotnet_mcp/localization/locale_fr.gd",
@@ -128,6 +132,8 @@ func _detect_system_language() -> String:
 			return "zh_CN"
 		"ja":
 			return "ja"
+		"ko":
+			return "ko"
 		"ru":
 			return "ru"
 		"fr":
