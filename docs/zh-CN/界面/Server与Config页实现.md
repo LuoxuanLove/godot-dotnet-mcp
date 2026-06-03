@@ -1,0 +1,148 @@
+# Home 与 Config 页实现
+
+本文档说明 `Home` 页和 `Config` 页的场景脚本职责、动态布局逻辑和配置生成方式。`server_panel.tscn` / `server_tab.gd` 的文件名保持不变，但用户可见的一号页签已按最新 README 改造成 `Home`。
+
+---
+
+## `Home` 页
+
+### 目标职责
+
+`Home` 页负责：
+
+- 展示当前服务状态与服务地址
+- 展示连接数、请求数和最近请求
+- 修改端口、自动启动、日志等级与语言
+- 启动、重启、停止内嵌 server
+- 触发完整插件重载
+- 展示插件自身诊断摘要
+
+当前 Home 页不直接暴露 CORS allowlist。浏览器型客户端需要跨源访问本地 HTTP MCP 时，通过环境变量 `GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS` 配置精确 origin；CLI 与桌面配置文件类客户端默认不需要 CORS。
+
+### 控制器职责
+
+`server_tab.gd` 当前主要做四件事：
+
+1. 调 `server_tab_model_projection.gd` 将 model 投影成纯展示数据
+2. 把投影结果写回状态文本、按钮状态与下拉框
+3. 维护 `Home` 页自己的响应式布局和缩放逻辑
+4. 把按钮与设置操作转成 signal
+
+状态概览、自诊断摘要和日志/语言选项模型不再直接在 `server_tab.gd` 中拼装，而是统一下沉到 `server_tab_model_projection.gd`。
+
+### 响应式布局
+
+`server_tab.gd` 当前保留了比 `Tools` 页更多的运行时布局控制，原因是它本身依赖：
+
+- `GridContainer`
+- 诊断卡片
+- 多列设置区域
+
+这些控件在不同宽度下需要切换为更紧凑的排列方式。
+
+### 自诊断卡片
+
+Home 页头部的自诊断卡片展示数据来自：
+
+- `plugin_runtime_state(action=get_lsp_diagnostics_status)`：详细运行态自检快照
+- `project_state(include_runtime_health=true)`：轻量健康摘要
+
+这块内容跟随 `Home` 页展示，让服务状态、服务地址、重载入口和插件自诊断常驻首页，避免继续保留独立服务页流程。
+
+---
+
+## `Config` 页
+
+### 目标职责
+
+`Config` 页负责：
+
+- 平台切换
+- 桌面端客户端配置展示
+- CLI 命令展示
+- Claude Code 作用域切换
+- 一键安装 / 写入 / 卸载 `godot-mcp`
+- 复制配置文本或命令
+- 明确展示安装状态与安装位置 / 作用域
+
+### 控制器结构
+
+`config_tab.gd` 当前做法不是提前在 `.tscn` 中写死所有客户端卡片，而是运行时动态创建卡片。这样做的原因是：
+
+- 平台切换后只展示当前目标客户端
+- 卡片内容由 model 决定，更适合多客户端扩展
+- CLI 与桌面端客户端的按钮组合不同
+
+### 客户端卡片生成
+
+每个客户端卡片在 `_create_client_card()` 中动态创建：
+
+- `PanelContainer`
+- `MarginContainer`
+- `VBoxContainer`
+- 标题、说明、路径文本、内容区、按钮区
+
+Config 页静态分组卡片与动态客户端卡片都通过 `config_tab.gd::_make_framed_panel_style()` 覆盖 `PanelContainer.panel`：背景复制编辑器主题的 `Tree.panel`，再在 `StyleBoxFlat` 上补 `Editor.separator_color` 的 1px 边框。这样能保持与 `Tools` 页树区一致的背景深度，同时恢复卡片边界可见性。
+
+配置内容区不再直接使用可编辑控件，而是使用 `PanelContainer + Label` 并套用 `TextEdit.read_only` 主题样式；复制按钮悬浮在内容区右上角，默认隐藏，鼠标进入内容区域后显示。这样既保留只读文本区的视觉层级，也避免 TextEdit 在窄宽度下引入额外滚动和焦点行为。
+
+按钮逻辑：
+
+- 桌面端客户端：根据能力显示 `Write Config`、`Remove Config`、打开客户端、路径管理与复制动作
+- CLI 客户端：根据能力显示一键安装 / 卸载、打开终端、路径管理与复制动作
+
+### 平台分组
+
+`Config` 页当前将平台分为：
+
+- `desktop`
+- `cli`
+
+同时对 Claude Code 做单独的 scope 行显示控制。
+
+---
+
+## 配置生成与写入链路
+
+运行时链路如下：
+
+```text
+plugin.gd
+  -> build model
+  -> config_tab.gd
+  -> 用户点击 Write / Copy
+  -> mcp_dock.gd signal
+  -> plugin.gd / config_feature.gd
+  -> config_feature_config_workflow.gd
+  -> ClientConfigService.write_config_file()
+```
+
+写入时：
+
+1. 先解析当前 UI 中展示的 JSON 文本。
+2. 若目标文件已存在且可解析，则读取其原始配置。
+3. 只操作 `mcpServers` 节点。
+4. 只更新 `godot-mcp` 对应项，不覆盖其它 MCP server。
+
+---
+
+## `Server` 与 `Config` 页的共同约束
+
+- 文本统一由本地化服务驱动，不依赖 Godot 自动翻译
+- 动作都通过 signal 回流到 `plugin.gd`
+- 页签本身不持有 `MCPHttpServer` 或 `SettingsStore` 实例
+- 只读文本区优先复用 Godot 文本控件主题；Config 页配置内容区使用 `PanelContainer + Label` 承载文本，并套用 `TextEdit.read_only` 样式以保持外观一致
+
+---
+
+## 相关文件
+
+| 路径 | 作用 |
+|---|---|
+| `ui/server_panel.tscn` | Server 页场景 |
+| `ui/server_tab.gd` | Server 页控制器，负责投影结果写回、布局与 signal |
+| `ui/server_tab_model_projection.gd` | Server 页纯投影协作者，负责状态摘要、自诊断和选项模型构建 |
+| `ui/config_panel.tscn` | Config 页场景 |
+| `ui/config_tab.gd` | Config 页控制器 |
+| `plugin/config/client_config_service.gd` | Config 页配置服务门面，统一委托 serializer / inspection / transaction / launcher adapter |
+| `plugin/config/config_paths.gd` | 各客户端路径与命令模板 |
