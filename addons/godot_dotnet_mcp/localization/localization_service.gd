@@ -97,6 +97,11 @@ func _load_language_translations(file_path: String):
 	if lang_script is Script:
 		(lang_script as Script).reload(false)
 
+	if lang_script.has_method("get_translations"):
+		var merged_translations = lang_script.call("get_translations")
+		if merged_translations is Dictionary:
+			return (merged_translations as Dictionary).duplicate(true)
+
 	var translations = lang_script.get("TRANSLATIONS")
 	if translations is Dictionary:
 		return (translations as Dictionary).duplicate(true)

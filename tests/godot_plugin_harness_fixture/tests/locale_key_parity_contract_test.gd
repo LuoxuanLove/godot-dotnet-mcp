@@ -14,9 +14,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Supported locale dictionaries should expose at least one translation key.")
 	var localization = LocalizationServiceScript.new()
 	localization._init_translations()
-	var missing_by_locale := _find_missing_keys(localization, localization.get_available_language_codes(), all_keys)
+	var missing_by_locale := _find_missing_keys(locale_translations, localization.get_available_language_codes(), all_keys)
 	if not missing_by_locale.is_empty():
-		return _failure("Supported locale dictionaries are missing translation keys after fallback resolution: %s" % _format_missing_keys(missing_by_locale))
+		return _failure("Supported locale dictionaries are missing raw translation keys: %s" % _format_missing_keys(missing_by_locale))
 	var untranslated_by_locale := _find_placeholder_keys(localization, localization.get_available_language_codes(), all_keys)
 	if not untranslated_by_locale.is_empty():
 		return _failure("Supported locale dictionaries contain placeholder or generated translation text: %s" % _format_missing_keys(untranslated_by_locale))
@@ -45,6 +45,10 @@ func _load_supported_locale_translations() -> Dictionary:
 
 
 func _get_raw_translations(locale_script: Script) -> Dictionary:
+	if locale_script.has_method("get_translations"):
+		var merged_translations = locale_script.call("get_translations")
+		if merged_translations is Dictionary:
+			return (merged_translations as Dictionary).duplicate(true)
 	var translations = locale_script.get("TRANSLATIONS")
 	if translations is Dictionary:
 		return (translations as Dictionary).duplicate(true)
@@ -65,15 +69,17 @@ func _collect_union_keys(locale_translations: Dictionary) -> Array[String]:
 	return keys
 
 
-func _find_missing_keys(localization, locale_codes: Array[String], all_keys: Array[String]) -> Dictionary:
+func _find_missing_keys(locale_translations: Dictionary, locale_codes: Array[String], all_keys: Array[String]) -> Dictionary:
 	var missing_by_locale := {}
 	for locale_code in locale_codes:
+		var locale_name := str(locale_code)
+		var translations: Dictionary = locale_translations.get(locale_name, {})
 		var missing: Array[String] = []
 		for key in all_keys:
-			if localization.get_text_for(locale_code, key) == key:
+			if not translations.has(key):
 				missing.append(key)
 		if not missing.is_empty():
-			missing_by_locale[str(locale_code)] = missing
+			missing_by_locale[locale_name] = missing
 	return missing_by_locale
 
 
@@ -103,7 +109,12 @@ func _looks_like_generated_fallback(text: String) -> bool:
 
 
 func _looks_like_placeholder_translation(text: String) -> bool:
-	return text.begins_with("Localized ")
+	if text.begins_with("Localized "):
+		return true
+	for marker in ["쓰기s", "읽기-back", "열기ed", "구성uration", "설정ting", "설정up", "디버그gee", "오류s", "작업s", "생성 and", "읽기 or", "실행 and", "구성ure"]:
+		if text.contains(marker):
+			return true
+	return false
 
 
 func _format_missing_keys(missing_by_locale: Dictionary) -> String:
