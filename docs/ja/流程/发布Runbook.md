@@ -1,4 +1,4 @@
-﻿# リリース Runbook
+# リリース Runbook
 
 この文書は、Godot .NET MCP の release 前チェックと遠隔 release の流れを記録します。ここで扱うのはプラグイン自身の release だけで、リポジトリ外のプロジェクトやローカル worktree の流れは含みません。
 
@@ -112,4 +112,3 @@ Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment
 - release note の内容が間違っていたら、まず GitHub Release 本文を直す。source document や changelog が間違っているなら、短命 branch を切って直す
 - tag が間違っていたら、remote tag を消すかどうかは maintainer が決める。Agent は勝手に消したり書き換えたりしない
 - `next` draft release の内容が間違っていたら、まず `docs/zh-CN/流程/release-notes/release-notes-v*.md` か changelog を直してから `draft-release-notes` をもう一度走らせる。render rule 自体が間違っているなら、workflow か script を短命 branch PR で直す
-

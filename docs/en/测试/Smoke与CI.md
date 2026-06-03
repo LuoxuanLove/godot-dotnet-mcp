@@ -1,4 +1,4 @@
-﻿# Smoke and CI
+# Smoke and CI
 
 This document explains the current test structure, CI integration status, and the direction of future gating.
 

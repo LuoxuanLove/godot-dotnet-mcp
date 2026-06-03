@@ -1,4 +1,4 @@
-﻿# Smoke と CI
+# Smoke と CI
 
 この文書は、今の test 構造、CI 接続状態、今後の gate 方針を説明します。
 
@@ -159,4 +159,3 @@ CI required subset を再現したいときは、script 入口を直接走らせ
 ## 8. 結論
 
 今の harness、CI、review gate は層として閉じています。`pr-policy` は間違った target branch を早い段階で止め、`dotnet-build` は速い .NET build と guardrail の feedback を出し、`validate-plugin-harness` は安定した required check 名を保ったまま重い Godot harness を走らせ、`next` draft release は次版の説明草稿を保ち、`actions-bot-relay` は追加アカウントを増やさずに `github-actions[bot]` を PR 作成と push の actor にできます。
-

@@ -1,4 +1,4 @@
-﻿# Release Runbook
+# Release Runbook
 
 This document records the pre-release checks and remote release flow for Godot .NET MCP. It only describes releases for this plugin, not any project outside the repository or any local workspace flow.
 

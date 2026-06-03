@@ -1,4 +1,4 @@
-﻿# 发布 Runbook
+# 发布 Runbook
 
 本文档记录 Godot .NET MCP 的发布前检查与远程发布流程。它只描述插件自身发布，不包含仓库外项目或本地工作区流程。
 
@@ -112,4 +112,3 @@ Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment
 - 发布说明错误时，优先编辑 GitHub Release 正文；如果源文档或 changelog 错误，再开短分支修正。
 - tag 错误时，由维护者决定是否删除远程 tag；Agent 不擅自删除或重写发布 tag。
 - `next` draft release 内容错误时，优先修正 `docs/zh-CN/流程/release-notes/release-notes-v*.md` 或 changelog 后重新运行 `draft-release-notes`；如渲染规则本身错误，应通过短分支 PR 修改 workflow 或脚本。
-

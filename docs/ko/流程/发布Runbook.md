@@ -1,4 +1,4 @@
-﻿# 릴리스 Runbook
+# 릴리스 Runbook
 
 이 문서는 Godot .NET MCP의 릴리스 전 점검과 원격 릴리스 흐름을 정리합니다. 저장소 밖 프로젝트나 로컬 작업공간 흐름은 다루지 않습니다.
 
@@ -112,4 +112,3 @@ Confirm Godot/.NET compatibility, supported installation paths, upgrade judgment
 - 릴리스 노트가 틀렸다면 먼저 GitHub Release 본문을 고칩니다. 원본 문서나 changelog가 틀렸다면 단기 분기를 새로 열어 고칩니다.
 - tag가 틀렸다면 원격 tag를 지울지 유지보수자가 결정합니다. Agent가 릴리스 tag를 함부로 지우거나 다시 쓰지 않습니다.
 - `next` draft release 내용이 틀렸다면 먼저 `docs/zh-CN/流程/release-notes/release-notes-v*.md`나 changelog를 고치고 다시 `draft-release-notes`를 실행합니다. 렌더링 규칙 자체가 틀렸다면 workflow나 스크립트를 단기 분기 PR로 수정합니다.
-
