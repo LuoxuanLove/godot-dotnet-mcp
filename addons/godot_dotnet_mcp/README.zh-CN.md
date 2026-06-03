@@ -145,16 +145,11 @@ POST http://127.0.0.1:3000/mcp
 
 ## 文档
 
-- [更新日志](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/i18n/zh-CN/CHANGELOG.md)
-- [路线图](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/i18n/zh-CN/ROADMAP.md)
-- [docs/概述.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A6%82%E8%BF%B0.md)
-- [docs/模块/System工具层.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
-- [docs/模块/工具系统.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
-- [docs/模块/用户扩展.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
-- [docs/架构/服务与路由.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
-- [docs/架构/配置与界面.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
-- [docs/架构/安装与发布.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
-
+- [更新日志](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/CHANGELOG.md)
+- [路线图](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/ROADMAP.md)
+- [文档概述](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/概述.md)
+- [安装与发布](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/架构/安装与发布.md)
+- [用户扩展](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/模块/用户扩展.md)
 ## 当前边界
 
 - 当前调试回读支持项目运行时桥接事件与编辑器调试会话状态，但不是 Godot 原生输出 / 调试器面板的 1:1 文本镜像

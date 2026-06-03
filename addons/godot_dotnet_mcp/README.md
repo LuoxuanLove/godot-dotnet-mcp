@@ -146,15 +146,11 @@ Use `system_runtime_diagnose` to read structured runtime information —errors, 
 
 ## Docs
 
-- [Changelog](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/CHANGELOG.md)
-- [Roadmap](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/ROADMAP.md)
-- [docs/模块/System工具层.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/System%E5%B7%A5%E5%85%B7%E5%B1%82.md)
-- [docs/模块/工具系统.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E5%B7%A5%E5%85%B7%E7%B3%BB%E7%BB%9F.md)
-- [docs/模块/用户扩展.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%A8%A1%E5%9D%97/%E7%94%A8%E6%88%B7%E6%89%A9%E5%B1%95.md)
-- [docs/架构/服务与路由.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%B7%AF%E7%94%B1.md)
-- [docs/架构/配置与界面.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%95%8C%E9%9D%A2.md)
-- [docs/架构/安装与发布.md](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/%E6%9E%B6%E6%9E%84/%E5%AE%89%E8%A3%85%E4%B8%8E%E5%8F%91%E5%B8%83.md)
-
+- [Changelog](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/en/CHANGELOG.md)
+- [Roadmap](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/en/ROADMAP.md)
+- [Documentation overview](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/en/overview.md)
+- [Installation and release](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/en/architecture/installation-and-release.md)
+- [User extensions](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/en/modules/user-extensions.md)
 ## Current Boundaries
 
 - Runtime debug readback supports structured project-side bridge events and editor debugger session state; it does not mirror the native Godot Output / Debugger panels 1:1
