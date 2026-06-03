@@ -134,5 +134,5 @@ But the plugin interface is no longer centered on GDScript. It is centered on th
 ## Troubleshooting Tips
 
 - If `script_exports` does not show `[Export]` fields, first check whether the property or field syntax is in the supported range.
-- If `bindings` can see the script but cannot read the exported value, first suspect the scene instance binding or the export extraction logic, not the user?s binding.
+- If `bindings` can see the script but cannot read the exported value, first suspect the scene instance binding or the export extraction logic, not the user's binding.
 - If you need large-scale C# rewrites, the current tool set is not suitable. Switch to a dedicated external code modification flow instead.
