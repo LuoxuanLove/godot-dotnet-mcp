@@ -1,0 +1,216 @@
+# Tools 페이지 구현
+
+이 문서는 `addons/godot_dotnet_mcp/ui/tools_tab.tscn`과 `addons/godot_dotnet_mcp/ui/tools_tab.gd`의 노드 구조, 도구 트리, 미리보기 패널, 현재 레이아웃 제약을 설명합니다.
+
+## 목표 역할
+
+현재 `Tools` 페이지는 네 가지 능력에 집중합니다.
+
+1. 현재 활성화된 도구 수를 보여줍니다.
+2. 런타임이 만든 Tool Presentation Model을 소비해 `domain → category → tool → atomic/action` 계층으로 현재 도구를 보여줍니다.
+3. `system_*` 도구가 의존하는 atomic tool chain을 펼쳐 봅니다.
+4. 현재 선택한 항목의 설명, 매개변수, 런타임 정보, atomic tool 미리보기를 보여줍니다.
+
+이 페이지는 더 이상 profile 선택, 저장, 이름 변경, 삭제를 맡지 않습니다.
+
+## 장면 구조
+
+현재 `tools_tab.tscn`은 크게 두 부분으로 나뉩니다.
+
+```text
+ToolsTab
+  ├─ HeaderMargin
+  │   └─ HeaderContent
+  │       ├─ ToolCountLabel
+  │       ├─ ActionsRow
+  │       └─ UserActionsRow
+  └─ ContentSplit, VSplitContainer
+      ├─ TopPane
+      │   ├─ SearchSeparator
+      │   ├─ SearchOuterMargin
+      │   │   └─ ToolSearchEdit
+      │   ├─ ToolListOuterMargin
+      │   │   └─ ToolListPanel
+      │   │       └─ ToolListOverlay
+      │   │           ├─ ToolListMargin
+      │   │           │   └─ ToolTree
+      │   │           ├─ TopShadow
+      │   │           └─ BottomShadow
+      │   └─ PreviewSeparator
+      └─ BottomPane
+          └─ PreviewOuterMargin
+              └─ ToolPreviewPanel
+                  └─ ToolPreviewMargin
+                      └─ ToolPreviewContent
+                          ├─ ToolPreviewTitle
+                          └─ ToolPreviewText
+```
+
+오래된 노드는 제거했습니다.
+
+- `ProfileRow`
+- `ToolProfileDescription`
+- `SaveProfileDialog`
+- `DeleteProfileDialog`
+
+## 시스템 도구 트리
+
+현재 트리는 런타임 Tool Presentation Model로 생성되며, 주 계층은 다음과 같습니다.
+
+```text
+root
+  ├─ core
+  │   ├─ system
+  │   │   ├─ system_editor_state
+  │   │   │   ├─ editor_status
+  │   │   │   ├─ editor_inspector
+  │   │   │   ├─ editor_filesystem
+  │   │   │   ├─ debug_runtime_bridge
+  │   │   │   └─ debug_dotnet
+  │   │   ├─ system_project_index_build
+  │   │   │   ├─ filesystem_directory
+  │   │   │   ├─ script_inspect
+  │   │   │   └─ resource_query
+  │   │   ├─ system_runtime_control
+  │   │   │   ├─ status / enable / disable
+  │   │   │   └─ runtime_control
+  │   │   ├─ system_runtime_step
+  │   │   │   ├─ step / capture / input
+  │   │   │   ├─ runtime_step
+  │   │   │   ├─ runtime_capture
+  │   │   │   └─ runtime_input
+  │   │   ├─ system_dap_debugger
+  │   │   │   ├─ status / get_settings / set_settings / initialize / launch / attach / configuration_done / threads / disconnect
+  │   │   │   ├─ set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output / terminate
+  │   │   │   └─ dap_debugger
+  │   │   └─ ...
+  │   └─ ... internal atomic categories
+  └─ user
+      └─ user
+          ├─ user_tool_a
+          └─ user_tool_b
+```
+
+설명은 다음과 같습니다.
+
+- 루트 아래에서 domain 노드를 먼저 그리고, 그다음 category 노드를 그립니다. `system`과 `user`는 더 이상 하드코딩된 루트 노드가 아닙니다.
+- `system_*` 상위 도구는 `SystemTreeCatalog`를 통해 실제 내부 atomic/action 경로를 펼칩니다. 예를 들면 `system_editor_control`은 `click_control` / `right_click_control` 같은 컨트롤 로컬 좌표 클릭 action을 보여줍니다.
+- `runtime_*`는 내부 atomic category이며, 오직 `system_runtime_*`의 하위 경로로만 보이고 외부 MCP 도구로 노출하지 않습니다.
+- atomic tool 노드는 계속 재귀적으로 펼칠 수 있습니다.
+- atomic tool의 체크 동작은 일반 도구 행 로직을 따르며, 여전히 `tool_toggled`로 되돌아갑니다.
+
+## 오른쪽 클릭 메뉴와 팝업 좌표 계약
+
+Tools 페이지는 도구 트리에만 Dock 내부에서 직접 만든 `PopupMenu` 하나를 만듭니다. 이 메뉴는 이름, 영어 ID, schema, 펼치기와 접기를 복사하는 데 씁니다. `Tree.gui_input`가 넘기는 `mouse_event.position`은 `ToolTree`의 Control local 좌표이며, `PopupMenu.popup(Rect2i)`에 그대로 넣을 수 없습니다.
+
+좌표 경계는 다음과 같이 정합니다.
+
+- **local**: 특정 `Control` 자체의 로컬 좌표, 예를 들면 `ToolTree.gui_input` 안의 `mouse_event.position`
+- **canvas global**: Control / CanvasItem 변환 뒤의 캔버스 좌표, `get_global_transform_with_canvas()` 같은 경로로 얻으며, 위젯 충돌과 viewport 입력 변환에 적합
+- **viewport**: 현재 `Viewport` 안의 좌표, `Viewport.push_input()`와 스크린샷 자르기, viewport 가시 영역 변환에 사용
+- **screen**: 화면 좌표, `PopupMenu.popup(Rect2i)` 같은 편집기 팝업 위치 지정은 반드시 이 좌표를 사용해야 함, 여기서는 Godot 팝업 위치 변환만 뜻하고 데스크톱 창 제어를 뜻하지 않음
+
+따라서 오른쪽 클릭 메뉴 위치는 `_get_tree_context_menu_screen_position(local_position)` 같은 테스트 가능한 helper를 통해 구해야 하고, `ToolTree.get_screen_transform() * local_position` 또는 같은 종류의 local-to-screen 변환으로 screen 좌표를 얻어야 합니다. `mouse_event.position`, `get_screen_position() + local_position`, canvas global 좌표를 바로 `popup(Rect2i)`에 넣지 마세요. 나중에 Dock 안의 `PopupMenu` / `PopupPanel`을 더 만들게 되면, 같은 helper로 감싸고 가벼운 계약 테스트도 보강해야 합니다.
+
+## 컨트롤러 책임
+
+`tools_tab.gd`는 현재 다음을 맡습니다.
+
+- model을 받아 문구를 갱신
+- model 안의 `toolTree` / `toolGroups` / `tool_presentation`을 우선 써서 TreeItem을 생성
+- presentation model이 없을 때만 예전 로컬 트리 재생성 로직으로 돌아감
+- 현재 선택 항목, 컨텍스트 메뉴, 미리보기 영역 스크롤 복원 관리
+- 도구 켜기와 끄기, 펼치기와 접기 signal 발신
+- 아주 작은 크기에서 트리와 미리보기 영역 내용을 잘라냄
+
+메인 컨트롤러는 더 이상 모든 순수 logic helper를 직접 들고 있지 않습니다. 현재 협력자는 다시 `ui/tools_tab.gd` 메인 컨트롤러 안으로 정리되었습니다.
+
+맡지 않는 것:
+
+- profile 영속화
+- profile UI 상호작용
+- server 생명주기 제어
+- 클라이언트 설정 생성
+
+## 검색 구현
+
+`ToolSearchEdit.text_changed`가 트리 재생성을 이끕니다.
+
+현재 검색 전략은 다음과 같습니다.
+
+- 시스템 도구 이름이 맞으면 그 도구를 남깁니다.
+- atomic tool 이름이나 설명이 맞으면 그 도구의 시스템 조상을 남깁니다.
+- 검색은 `SYSTEM_TOOL_ATOMIC_CHILDREN`을 재귀적으로 타기 때문에 atomic tool을 검색해도 상위 시스템 도구를 찾을 수 있습니다.
+- 현재 필터 결과는 `tools_tab.gd` 내부에서 직접 계산하고, 그다음 그룹별로 렌더링합니다.
+
+검색은 영속적 collapse 상태를 바꾸지 않으며, 현재 트리 재생성 결과에만 영향을 줍니다.
+
+## 미리보기 패널 구현
+
+미리보기 영역은 여전히 읽기 전용 `TextEdit`를 씁니다.
+
+현재 미리보기 대상은 다음입니다.
+
+- domain
+- category
+- tool
+- atomic
+- action
+
+이 중 시스템 도구 수준 미리보기는 추가로 다음을 보여줍니다.
+
+- 설명
+- action 개요
+- 매개변수 schema 요약
+- 재귀 atomic tool 목록
+- "이 도구는 atomic tool을 펼쳐 볼 수 있습니다"라는 안내 문구
+
+## 분리선과 그림자 구현
+
+### 분리선
+
+트리 영역과 미리보기 영역은 `ContentSplit` (`VSplitContainer`)이 관리합니다. 스크립트는 `split_offset`을 억지로 덮지 않으며, 이후 레이아웃 미세 조정은 `.tscn`을 먼저 고칩니다.
+
+### 그림자
+
+트리 영역의 위쪽과 아래쪽 그림자는 다음으로 만듭니다.
+
+- `TopShadow`
+- `BottomShadow`
+
+그리고 `_configure_tree_shadow()`로 shader를 초기화하고, 실행 중 스크롤 위치에 따라 보이거나 숨깁니다.
+
+## 아주 작은 높이 보호
+
+아주 작은 높이에서는 현재 두 겹으로 보호합니다.
+
+1. 더 낮은 `custom_minimum_size`를 써서 트리와 미리보기 영역이 계속 줄어들 수 있게 합니다.
+2. `TopPane`, `BottomPane`, 도구 트리 패널, 미리보기 패널에 `clip_contents`를 켭니다.
+
+이렇게 하면 서로 넘쳐 덮기보다 내용이 잘리는 쪽으로 먼저 보입니다.
+
+## 현재 UI 제약
+
+현재 `tools_tab.gd`는 profile 관련 런타임 덮어쓰기를 제거했으므로 다음 항목은 우선 `tools_tab.tscn`에서 손보는 편이 좋습니다.
+
+- 검색창 위아래 간격
+- 도구 트리 위아래 여백
+- 미리보기 영역과 분리선 거리
+
+스크립트가 여전히 제어하는 UI 수준 항목은 다음이 주입니다.
+
+- 컨트롤 최소 높이
+- 트리 열 너비
+- 그림자 크기
+
+## 관련 파일
+
+| 경로 | 역할 |
+|---|---|
+| `ui/tools_tab.tscn` | Tools 페이지 노드 트리와 레이아웃 |
+| `ui/tools_tab.gd` | Tools 페이지 메인 컨트롤러, 컨텍스트 메뉴, model, 선택, 검색, 미리보기 로직 통합 |
+| `tools/system/executor.gd`, `tools/system/impl_*.gd` | 현재 시스템 상위 도구 조정과 구현 진입점 |
+| `tools/tool_registry.gd` | builtin executor 등록 사실 소스 |
+| `tools/tool_manifest.gd` | domain/category 메타데이터와 manifest 접근층 |
+| `plugin/runtime/plugin_runtime_state.gd` | 현재 settings / custom profile 상태 |
+| `plugin/runtime/tool_profile_catalog.gd` | builtin profile 디렉터리 |

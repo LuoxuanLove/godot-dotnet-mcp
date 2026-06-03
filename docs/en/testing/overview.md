@@ -1,0 +1,66 @@
+# Test Overview
+
+This document summarizes the overall structure, coverage, and known boundaries of the current `godot-dotnet-mcp` test system.
+
+The test system currently keeps only one CI gate surface:
+
+1. `Godot Headless Harness`
+
+---
+
+## Current Status
+
+### What has been implemented
+
+- `tests/godot_plugin_harness_fixture/tests/` contains multiple headless cases that cover plugin runtime, tool loading, and routing behavior.
+- The plugin now includes stable testing seams for HTTP routing, JSON-RPC, editor lifecycle, runtime fallback, runtime replies, runtime control, user tools, the Config workflow, the Dock, the tool loader, and the runtime bridge.
+- `validate-plugin.yml` uses the plugin harness as the main CI gate and only hard-enforces the required subset. Regular headless required cases run in batch, while editor probe cases stay isolated.
+
+### Already verified results
+
+- Plugin harness required subset: regular headless cases pass in batch, and the editor probe case passes in isolation
+- Plugin headless harness exits without leak warnings, except for the editor probe case which is allowed by the harness
+
+---
+
+## Current Structure Judgment
+
+### What is already reasonable
+
+- The tests have moved from a single smoke script to a separate harness layer, so validation is no longer piled into one entry point.
+- Plugin tests already use fake collaborators to verify runtime and index helpers, which means not every test depends on a real runtime.
+- The Config page runtime chain now includes serializer, inspection, file transaction, and launcher adapter contracts.
+
+### Current boundary
+
+#### 1. Plugin contract tests no longer rely on private method names, but the seams can still be tightened
+
+`http_server_contract_test.gd` and `runtime_bridge_contract_test.gd` now go through public entry points and no longer depend on underscore methods directly. That significantly reduces the risk that internal renames break tests first.
+
+#### 2. Environment-dependent tests are not yet fully hard gated in CI
+
+`validate-plugin.yml` downloads Godot 4.6 first and then runs the plugin harness. That means the plugin test layer is already a strong CI gate, not just an optional fast check.
+
+---
+
+## Recommended Reading Order
+
+1. [Plugin headless testing](plugin-headless-testing.md)
+2. [Smoke and CI](smoke-and-ci.md)
+
+---
+
+## Design Principles
+
+- test capability is a first-class structure concern
+- prefer stable seam tests for external behavior instead of private implementation details
+- split large files first, then change them, and apply the same rule to tests
+- when public tool behavior, UI structure, lifecycle semantics, or workflow behavior changes, update the affected contract tests in the same batch
+- if review finds old structure references in tests or docs, treat them as repair items
+- environment-dependent cases must declare their gate policy separately and must not be mixed into the fast-check layer
+
+---
+
+## Conclusion
+
+The test system has entered a stable governance state. The current focus is to keep the harness tests, fixture cleanup, and testing seams clearly separated.
