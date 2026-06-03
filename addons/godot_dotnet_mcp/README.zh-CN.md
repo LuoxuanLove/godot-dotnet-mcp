@@ -1,4 +1,4 @@
-# Godot .NET MCP
+﻿# Godot .NET MCP
 [![最新正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&query=%24.tag_name&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=orange)](https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest) [![English README](https://img.shields.io/badge/README-English-24292f)](README.md)
 
 > 运行在 Godot 编辑器进程内的 MCP 插件。支持 MCP 的客户端可读取当前项目状态、操作场景与脚本、诊断 C# 绑定，无需任何外部进程。
@@ -145,8 +145,8 @@ POST http://127.0.0.1:3000/mcp
 
 ## 文档
 
-- [更新日志](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/CHANGELOG.md)
-- [路线图](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/ROADMAP.md)
+- [更新日志](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/变更日志.md)
+- [路线图](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/路线图.md)
 - [文档概述](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/概述.md)
 - [安装与发布](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/架构/安装与发布.md)
 - [用户扩展](https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/dev/docs/zh-CN/模块/用户扩展.md)

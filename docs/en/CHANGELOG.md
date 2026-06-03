@@ -1,4 +1,4 @@
-# Change Log
+﻿# Change Log
 
 All important changes to this project are recorded here.
 
@@ -10,13 +10,14 @@ Target version: 1.2.0.
 
 ### Documentation
 
-- Added complete English, Simplified Chinese, Korean, and Japanese documentation trees under `docs/en/`, `docs/zh-CN/`, `docs/ko/`, and `docs/ja/` with same-locale internal links.
+- Added complete English, Simplified Chinese, Korean, and Japanese documentation trees under `docs/en/`, `docs/zh-CN/`, `docs/ko/`, and `docs/ja/`, with each locale using localized directory and file names.
 - Added structured English README, changelog, and roadmap entry points under `docs/en/`, and added locale-switch links in the root docs.
+- Removed short redirect stubs and completed the Japanese and Korean documentation content so localized trees no longer rely on placeholders or duplicate fragments.
 - Initialized the `v1.2.0` release-note source file with the pending-theme template, and removed the obsolete `v1.1.2` source file after the plugin metadata moved forward.
 
 ### Internal
 
-- Added a docs i18n validation workflow and guardrail coverage for locale directory parity, file parity, same-locale Markdown links, and cross-locale link leakage.
+- Added a docs i18n validation workflow with tree-shape hashing, localized path mapping, placeholder checks, same-locale Markdown link validation, and cross-locale link leakage checks.
 - Switched the plugin metadata, protocol facts file, .NET bridge metadata, and plugin update contract fixture expectations to the `1.2.0` development line.
 
 ## [1.1.2] - 2026-06-02
@@ -270,7 +271,7 @@ Target version: 1.2.0.
 - Removed the old public `intelligence_*` tool names. Most workflows now use matching `system_*` tools instead, such as `system_project_state`, `system_runtime_diagnose`, `system_scene_analyze`, `system_script_analyze`, and `system_bindings_audit`.
 - Removed `intelligence_project_advise` as a separate advice tool. Agents should now inspect state with `system_help`, `system_project_state`, `system_editor_state`, diagnostics, scene/script analysis, and then choose the next tool directly.
 - Removed low-level atomic tool domains as the primary public workflow surface. Scene, script, editor, runtime, filesystem, animation, node, resource, debug, and other lower-level building blocks remain internal implementation details behind high-level tools and the Tools page tree.
-- Removed the old public Intelligence tool tree and documentation page in favor of the System tool tree and `docs/妯″潡/System宸ュ叿灞?md`.
+- Removed the old public Intelligence tool tree and documentation page in favor of the System tool tree and `docs/en/modules/system-tool-layer.md`.
 - Removed the old permission-level UI and Home-tab advanced permission settings; users no longer need to manually choose a capability level.
 - Removed `trace` as a distinct public log level. Legacy `trace` input is still accepted as a compatibility alias for `debug`.
 - Removed the old root-level `user://` cache layout as the active storage model. Plugin-managed captures, runtime data, logs, profiles, and config exchange files now live under `user://godot_dotnet_mcp/`, with explicit maintenance tools for legacy cleanup.

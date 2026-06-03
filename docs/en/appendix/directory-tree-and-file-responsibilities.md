@@ -1,0 +1,267 @@
+﻿# Directory Tree and File Responsibilities
+
+This document describes the main file structure and responsibility split of `addons/godot_dotnet_mcp` from the directory-tree point of view, so maintainers can find the implementation entry points quickly.
+
+---
+
+## Top-Level Directories
+
+```text
+addons/godot_dotnet_mcp
+├─ custom_tools/
+├─ docs/
+├─ localization/
+├─ plugin/
+├─ release/
+├─ tools/
+├─ ui/
+├─ plugin.cfg
+├─ plugin.gd
+├─ README.md
+└─ README.zh-CN.md
+```
+
+---
+
+## Top-Level Files
+
+| Path | Purpose |
+|---|---|
+| `plugin.gd` | Plugin entry point, top-level lifecycle coordinator, stable bridge entry, and top-level Dock call entry |
+| `plugin.cfg` | Godot plugin declaration and version info |
+| `README.md` / `README.zh-CN.md` | User-facing installation and usage guide |
+| `docs/en/CHANGELOG.md` / localized changelog entry points | Repository-level version increments and multilingual entry points. They are not part of the plugin package tree |
+| `.gitignore` | Ignore rules, including `.backup/` and other runtime artifacts |
+
+## `docs/`
+
+The docs are organized into six layers:
+
+- `architecture/`
+- `interface/`
+- `modules/`
+- `testing/`
+- `process/`
+- `appendix/`
+
+The docs are part of the project and must stay in sync with the code.
+
+---
+
+## `localization/`
+
+### Key Files
+
+| Path | Purpose |
+|---|---|
+| `localization_service.gd` | Language-dictionary loading, current-language switching, and text lookup |
+| `locale_en.gd` | English baseline dictionary |
+| `locale_zh_cn.gd` | Simplified Chinese |
+| `locale_zh_tw.gd` | Traditional Chinese |
+| `locale_ja.gd` | Japanese |
+| other `locale_*.gd` | German, Spanish, French, Portuguese, Russian, and other language resources |
+
+`.uid` files are Godot resource metadata and do not hold business logic by themselves.
+
+---
+
+## `plugin/`
+
+### `plugin/config/`
+
+| Path | Purpose |
+|---|---|
+| `config_paths.gd` | Client paths and command templates |
+| `client_config_service.gd` | Facade for the Config page, delegating to serializer, inspection, transaction, and launcher adapter |
+| `client_config_serializer.gd` | Config text generation, config-container key selection, and new-config parsing |
+| `client_config_inspection_service.gd` | `inspect / preflight` status classification and confirmation semantics for config files |
+| `client_config_file_transaction.gd` | Config write and remove orchestration, including merge, remove, backup, and rollback scheduling |
+| `client_config_file_support.gd` | Config file read/write, backup, rollback, readback verify, and deep-compare helpers |
+| `client_config_launcher_adapter.gd` | CLI execution, desktop-client launch, terminal opening, and path-opening adapters |
+| `client_install_detection_service.gd` | Client install detection, runtime-state detection, and short-lived cache |
+| `plugin_runtime_state.gd` | Runtime fields, default settings, and default collapsed input |
+| `settings_store.gd` | Settings, profile, and tool-config persistence |
+
+### `plugin/presenters/`
+
+| Path | Purpose |
+|---|---|
+| `dock_model_service.gd` | Aggregates the Dock runtime context, including tool-state projection and client-install detection |
+| `dock_presenter.gd` | Maps Dock context to the final UI model and carries central service and config presentation helpers |
+| `client_config_presenter.gd` | Builds the Config page client model, connection mode, and install-state display text |
+
+### `plugin/features/`
+
+| Path | Purpose |
+|---|---|
+| `server_feature.gd` | Handles MCP server start, stop, self-diagnostics, and open-log interaction flows |
+| `config_feature.gd` | Handles Config page client actions, file selection, path cleanup, and install detection, acting as the feature coordinator for the Config workflow |
+| `config_feature_config_workflow.gd` | Confirmation flow, success and failure prompts, noop removal, and post-run follow-up collaboration for Config writes and removals |
+| `ui_state_feature.gd` | Handles Dock tab state, language switching, tree-collapse persistence, copy tips, and Config detection cache invalidation |
+| `user_tool_feature.gd` | Handles user-tool create, delete, restore, audit, and runtime-refresh orchestration |
+| `reload_feature.gd` | Handles runtime restart, soft reload, and full reload scheduling and restoration |
+| `tool_profile_feature.gd` | Handles profile management and tool-config import and export orchestration |
+| `tool_access_feature.gd` | Handles tool toggles, language-switch entry points, `disabled_tools` consolidation, and tool-access status |
+| `self_diagnostic_feature.gd` | Handles self-diagnostic queries, cleanup, and health snapshot aggregation |
+
+### `plugin/runtime/`
+
+| Path | Purpose |
+|---|---|
+| `mcp_http_server.gd` | Embedded MCP server implementation |
+| `mcp_protocol_facts.gd` | Plugin-side access layer for protocol and version facts. It reads `mcp_protocol_facts.json` and exposes `protocol_version`, `tool_schema_version`, `server_name`, and `server_version` |
+| `mcp_tool_loader_supervisor.gd` | Supervision layer for the `MCPToolLoader` lifecycle, self-recovery, and state summaries |
+| `mcp_tool_rpc_router.gd` | `tools/list` and `tools/call`, tool-name resolution, and result normalization |
+| `mcp_editor_lifecycle_endpoint.gd` | Parses `/api/editor/lifecycle`, validates `action`, and dispatches `status`, `close`, and `restart` |
+| `mcp_editor_lifecycle_action_service.gd` | Confirmation handling, accepted payloads, and deferred execution for editor-lifecycle close and restart |
+| `mcp_editor_lifecycle_state_builder.gd` | Builds editor-lifecycle state snapshots, including open, dirty, current-scene projection and hint assembly |
+| `mcp_http_request_router.gd` | HTTP path router for `/mcp`, `/health`, `/api/tools`, `/api/editor/lifecycle`, and `OPTIONS` |
+| `mcp_json_rpc_router.gd` | JSON-RPC method router for initialize, tools/list, tools/call, ping, and notification semantics, while reusing the shared protocol fields |
+| `mcp_tools_api_service.gd` | Snapshot builder for `/api/tools`, including tool list, domain state, loader status, and performance summary |
+| `tool_presentation_service.gd` | Unified tool presentation model builder for `toolTree`, `toolGroups`, and flat tool metadata |
+| `mcp_http_response_service.gd` | HTTP and JSON-RPC response builder, shared protocol-field health snapshots, CORS, and JSON cleanup |
+| `server_runtime_controller.gd` | Server lifecycle controller |
+| `plugin_instance_freshness.gd` | Compares the running plugin instance, the on-disk source fingerprint, sync markers, and lifecycle-reload status |
+| `plugin_runtime_state.gd` | Pure runtime state container for current settings, custom profiles, and UI state fields |
+| `plugin_runtime_state_service.gd` | Load and save orchestration for runtime state, including default settings, custom-profile loading, and state normalization |
+| `tool_profile_catalog.gd` | Builtin profile source and profile storage directory |
+| `tool_catalog_service.gd` | Profile matching, counts, and category helpers |
+| `user_tool_service.gd` | Facade for user-tool discovery and management, delegating to catalog and maintenance helpers |
+| `user_tool_catalog_service.gd` | User-tool directory scanning and compatibility reporting |
+| `user_tool_maintenance_service.gd` | User-tool scaffold, delete, restore, and audit operations |
+| `plugin_reload_coordinator.gd` | Coordinates the full plugin disable and enable lifecycle reload |
+| `plugin_self_diagnostic_store.gd` | Plugin self-diagnostic events |
+| `mcp_runtime_debug_store.gd` | Runtime bridge and session cache |
+| `mcp_runtime_bridge.gd` | Main-project runtime bridge Autoload. It sends events, captures commands, flushes fallback data, and wires runtime helpers |
+| `mcp_runtime_command_service.gd` | Runtime `status`, `capture`, `input`, and `step` command executor collaborator |
+| `mcp_runtime_reply_service.gd` | Runtime reply builder, including unified success and error payloads, `runtime_context`, `runtime_state`, and hints |
+| `mcp_runtime_fallback_store.gd` | Runtime fallback event cache, trimming, persistence, and readback collaborator |
+| `mcp_editor_debugger_bridge.gd` | Editor debug bridge |
+| `runtime_control_service.gd` | Runtime-control coordinator, including armed state, request orchestration, reply waiting, and session-loss handling |
+| `mcp_runtime_control_session_selector.gd` | Session selection, commandable checks, session snapshots, and waiting for an available session |
+| `mcp_runtime_control_error_mapper.gd` | Maps `editor_context`, hints, and unified error payloads for runtime control |
+| `mcp_runtime_control_request_coordinator.gd` | request_id handling, pending-request lifecycle, runtime-reply fill-in, and session-loss coordination |
+| `mcp_runtime_control_reply_resolver.gd` | fallback reply search and runtime-reply normalization for runtime control |
+
+### `plugin/` Root Collaborators
+
+| Path | Purpose |
+|---|---|
+| `plugin_runtime_coordinator.gd` | Plugin runtime collaborator, responsible for user-tool watch, runtime-bridge Autoload, editor-debugger bridge, and local endpoint reachability orchestration. External watcher refreshes enter through an explicit callback in the action router |
+| `plugin_dock_coordinator.gd` | Plugin Dock collaborator, responsible for plugin-specific Dock create, remove, recreate, stale cleanup, signal wiring, dock-instance counting, and `FileDialog` node ownership |
+| `plugin_action_router.gd` | Plugin action forwarder, responsible for Dock, Config, Server, and User Tool UI event routing, plus the explicit callback exit for the user-tool watcher |
+
+---
+
+## `tools/`
+
+### Root Level
+
+| Path | Purpose |
+|---|---|
+| `tool_registry.gd` | Builtin executor registration source, defining category, domain key, script path, and hot-reload metadata |
+| `tool_manifest.gd` | Tool catalog access layer. It keeps `MCPToolManifest` as the stable entry point and provides domain and category metadata |
+| `base_tools.gd` | Shared base helpers |
+| `mcp_debug_buffer.gd` | Log buffer |
+| `mcp_file_utils.gd` / `mcp_json_utils.gd` / `mcp_node_utils.gd` / `mcp_type_utils.gd` | General helpers |
+| `mcp_script_parser.gd` | Script parsing helper |
+| `*_tools.gd` | Only shared root-level scripts remain. The formal entry points for builtin tool domains are now `tools/<category>/executor.gd` |
+
+### `tools/core/`
+
+| Path | Purpose |
+|---|---|
+| `tool_loader.gd` | Tool-platform facade and public API entry |
+| `tool_lsp_diagnostics_adapter.gd` | Loader-owned GDScript LSP diagnostics lifecycle, runtime-bridge binding, and debug snapshots |
+
+### Category Executor Directories
+
+There are currently **26** executor category directories on disk. The builtin registration chain is centralized in `tools/tool_registry.gd`.
+
+- `animation/`
+- `audio/`
+- `debug/`
+- `editor/`
+- `filesystem/`
+- `geometry/`
+- `group/`
+- `system/`
+- `lighting/`
+- `material/`
+- `navigation/`
+- `node/`
+- `particle/`
+- `physics/`
+- `plugin_developer/`
+- `plugin_evolution/`
+- `plugin_runtime/`
+- `project/`
+- `resource/`
+- `scene/`
+- `script/`
+- `shader/`
+- `signal/`
+- `tilemap/`
+- `ui/`
+- `user/`
+
+Each tool-domain directory normally has an `executor.gd`, and the formal builtin loading chain follows the categories registered in `tools/tool_registry.gd`.
+
+### `tools/system/`
+
+The `system` domain is more complex than the others. It has been split into executor, impl files, and the subdirectory layout for project and script:
+
+| File | Responsibility |
+|---|---|
+| `executor.gd` | Scheduler. It initializes the system subdomain executors, scans and loads `custom_tools/`, and routes `execute` and `execute_async` calls |
+| `atomic_bridge.gd` | Atomic bridge. `call_atomic(executor_name, tool_name, args)` loads lower-level executors dynamically and includes write protection that blocks changes to `res://addons/godot_dotnet_mcp/`, except for `custom_tools/` |
+| `impl_editor.gd` | Implements `system_editor_control`, aggregating main-screen switching, editor screenshots, control enumeration, coordinate mapping, local clicks on controls, and popup interaction |
+| `impl_runtime.gd` | Implements `runtime_control` and the unified runtime I/O entry `runtime_step(action=step|capture|input)` |
+| `impl_scene.gd` | Implements `scene_validate`, `scene_analyze`, and `scene_patch` |
+| `impl_index.gd` | Implements internal index cache, `project_symbol_search`, and `scene_dependency_graph` |
+| `impl_project.gd` | Implements `project_state`, `editor_state`, `project_configure`, `project_run`, `project_stop`, and `runtime_diagnose` |
+| `impl_script.gd` | Implements `bindings_audit`, `script_analyze`, and `script_patch` |
+
+---
+
+## `ui/`
+
+| Path | Purpose |
+|---|---|
+| `mcp_dock.tscn` / `mcp_dock.gd` | Dock root scene and controller |
+| `server_panel.tscn` / `server_tab.gd` | Server tab main controller, responsible for writing back projections, layout, and signals |
+| `server_tab_model_projection.gd` | Pure projection collaborator for the Server tab, responsible for summary, self-diagnostics, and option-model construction |
+| `tools_tab.tscn` / `tools_tab.gd` | Tools tab scene and main controller, now centered around `TreeItem` rendering, tree interaction coordination, context menu, selection, search, preview, and collapse-state return flow |
+| `config_panel.tscn` / `config_tab.gd` | Config tab |
+
+The UI is now scene-based, and `plugin.gd` no longer builds the whole Dock dynamically.
+
+---
+
+## `custom_tools/`
+
+This is the User tool directory. Typical content includes:
+
+- user scripts
+- self-evolution scaffold outputs
+- `.backup/` directories before deletion
+
+This content is mutable at runtime and should not be mixed into the builtin tool domains.
+
+---
+
+## `release/`
+
+Used for release-related content. It does not participate in plugin runtime wiring.
+
+---
+
+## Files You Usually Do Not Need to Read for Normal Feature Work
+
+The following files usually do not need to be read separately during feature maintenance:
+
+- `*.uid`
+- pure resource-ID mapping files
+- old test fixtures that are no longer referenced
+
+If a resource-loss or Godot resource-redirection issue appears, you still need to check `.tscn`, `.gd`, and `.uid` together.

@@ -7,7 +7,7 @@ param(
   [string]$OutputPath,
 
   [string]$ManualNotesPath = "",
-  [string]$ChangelogPath = "docs/zh-CN/CHANGELOG.md",
+  [string]$ChangelogPath = "docs/zh-CN/变更日志.md",
   [string]$TagName = "",
   [int]$CommitLimit = 30,
   [switch]$PreferUnreleased
@@ -18,7 +18,7 @@ $ErrorActionPreference = "Stop"
 $env:LESSCHARSET = "utf-8"
 
 if ([string]::IsNullOrWhiteSpace($ManualNotesPath)) {
-  $ManualNotesPath = "docs/zh-CN/流程/release-notes/release-notes-v$Version.md"
+  $ManualNotesPath = "docs/zh-CN/流程/发布说明/发布说明-v$Version.md"
 }
 
 function Read-Utf8Text {

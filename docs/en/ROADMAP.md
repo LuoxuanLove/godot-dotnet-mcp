@@ -1,4 +1,4 @@
-# Roadmap
+﻿# Roadmap
 
 This document describes the product direction for Godot .NET MCP. It is a planning document, not a release promise, and it cannot replace issue-level design. As implementation constraints, test results, and user feedback become clearer, the version scope may change.
 

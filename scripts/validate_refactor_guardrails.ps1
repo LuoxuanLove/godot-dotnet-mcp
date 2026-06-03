@@ -33,6 +33,7 @@ function Find-BannedSourceMatches {
                     --glob "README.md" `
                     --glob "AGENTS.md" `
                     --glob "CLAUDE.md" `
+                    --glob "!scripts/validate_refactor_guardrails.ps1" `
                     --glob "addons/godot_dotnet_mcp/dotnet_bridge/**/*.cs" `
                     $Pattern $RepositoryRoot 2>$null
             )

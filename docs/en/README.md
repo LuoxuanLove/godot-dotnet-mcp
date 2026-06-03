@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <a href="#godot-net-mcp"><img src="../../asset_library/hero.svg" alt="GODOT .NET MCP - Editor-native MCP bridge for Godot .NET" width="960"></a>
 </div>
 
@@ -68,8 +68,8 @@ Then enable the plugin in `Project Settings > Plugins`.
 
 ## Documentation
 
-- [Change Log](CHANGELOG.md)
-- [Roadmap](ROADMAP.md)
+- [Change Log](changelog.md)
+- [Roadmap](roadmap.md)
 - [Documentation Overview](overview.md)
 - [Installation and Release](architecture/installation-and-release.md)
 - [User Extensions](modules/user-extensions.md)
