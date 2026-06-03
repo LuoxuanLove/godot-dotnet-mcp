@@ -1,69 +1,150 @@
 # .NET Support
 
-この文書は、C# static analysis の範囲、export の識別、scene binding check、境界を説明します。
+## 範囲
+
+今の `.NET` support は、エディター内の static analysis と scene binding check に集中していて、C# code generation や full semantic compilation は対象にしません。
+
+今できること。
+
+- `.cs` file text を読む
+- `.cs` file を script editor で開く
+- `namespace` を認識する
+- `class` を認識する
+- `partial class` を認識する
+- base type を認識する
+- public method を認識する
+- enum を認識する
+- `[Export]` field と property を認識する
+- `[ExportGroup]` を認識する
+- scene analysis 中に exported member の binding state を読む
 
 ---
 
-## 何をやるか
+## 使い方
 
-plugin の .NET support は、C# の構造を素早く読むためのものです。
+### C# script structure を見る
 
-- file を開かずに構造を理解したい
-- export member を見たい
-- class や method の骨格を知りたい
-- scene との binding に問題がないか確認したい
+推奨 call。
 
----
+1. `bindings_audit`
+2. `scene_analyze`
 
-## 何をやらないか
+より深く見るときは、次も追加できます。
 
-- project 全体を compile して解釈することはしない
-- SemanticModel に依存しない
-- 外部 IDE debugger の代わりにはしない
-- heavy な code analysis engine にはしない
+- `script_inspect`
+- `script_symbols`
+- `script_exports`
 
----
+よくある用途。
 
-## Roslyn の使い方
+- `partial class` が期待した base type をまだ使っているか確かめる
+- `namespace`、`class`、`method`、`[Export]` が認識されているか見る
+- Inspector の field 名と script の exported member を対応づける
 
-Roslyn は syntax-first で使います。
+### scene binding を確認する
 
-- syntax tree を読む
-- class、base type、method、enum、export member を抜く
-- analysis の結果を tool response に返す
+推奨 call。
 
----
+1. `bindings_audit`
+2. `scene_analyze`
 
-## export の識別
+より深く見るときは、次も追加できます。
 
-C# export は、script と scene の bridge で重要です。
+- `bindings`
+- `audit`
 
-- どの member が export されているかを見る
-- scene に入っている値と対応を取る
-- 変な binding があれば診断する
+よくある用途。
 
----
+- scene node の `[Export] NodePath`、resource reference、value field が反映されない
+- node script は正しそうなのに、Inspector 上の field が空のまま
+- Godot scene の問題を、具体的な C# export declaration までたどりたい
 
-## scene binding check
+### 手で直す編集に戻る
 
-scene binding check では、次のような問題を探します。
+推奨 call。
 
-- NodePath がずれている
-- export が scene に反映されていない
-- custom Resource の定義と scene 側の使い方が合っていない
+1. `scene_analyze`
+2. `script_open.open`
+3. `script_open.open_at_line`
 
----
+これでできること。
 
-## 境界
-
-- plugin 内 Roslyn は、Godot .NET project の実務に合わせる
-- しかし、フルな C# compiler service にはしない
-- まず実用的な binding と構造の確認を優先する
+- structured analysis から実際の script に戻る
+- MCP は location を示し、人間が最後の edit を行う
 
 ---
 
-## 関連文書
+## 代表的な使い道
 
-- script / scene analysis は [脚本与场景分析.md](脚本与场景分析.md)
-- tool system 全体は [工具系统.md](工具系统.md)
-- runtime service との接点は [../架构/运行时服务.md](../架构/运行时服务.md)
+- scene から参照された C# export が空かどうか見る
+- script が scene に見せている public structure を確認する
+- 自動チェックのために exported field を素早く抜き出す
+- script declaration と実際の scene binding の結果を比べる
+
+---
+
+## 実装メモ
+
+### なぜ syntax-first なのか
+
+実装の狙いは、Godot editor process の中で役立つ構造を安定して返すことです。そのため plugin は、完全な SemanticModel や project-level semantic analysis ではなく、Godot .NET runtime 内の syntax-first Roslyn path を使います。理由は次の通りです。
+
+- plugin は editor の中で直接動く必要があり、外部 compile step や別の background host に依存できない
+- 目標は exported field、class information、scene binding であって、full language service ではない
+- 速さと移植性の方が、完全な semantic coverage より大事
+
+### 現在の pipeline
+
+1. `addons/godot_dotnet_mcp/dotnet_bridge/` と `plugin/runtime/roslyn/*` が plugin 内 Roslyn syntax analysis core を提供する
+2. `tools/script/csharp_edit_service.gd`、`tools/script/inspect_service.gd`、および system script entry points が `.cs` file text を読み、Roslyn facade につなぐ
+3. Roslyn path は `namespace`、`class`、`partial class`、`base_type`、`method`、`enum`、`[Export]`、`[ExportGroup]`、parse error を抜き出す
+4. `addons/godot_dotnet_mcp/tools/scene_tools.gd` が scene-level binding tool を実装し、`tools/system/impl_scene.gd` と `tools/system/impl_script.gd` がその上の audit flow をつなぐ
+5. `bindings` と `audit` が declaration state を実際の binding state に結びつける
+
+### 向いていること
+
+この実装が向いているのは次です。
+
+- 標準的な Godot Mono と .NET gameplay script
+- export field の監査
+- scene binding のトラブルシュート
+- script surface information の structured inspection
+
+この実装が向いていないのは次です。
+
+- cross-file inheritance chain の推論
+- generic constraint や複雑な property accessor semantics
+- conditional compilation branch をまたぐ member の完全な parsing
+- 大きな C# file の自動書き換え
+
+---
+
+## 非目標
+
+今の非目標。
+
+- Roslyn-level semantic analysis
+- cross-assembly symbol resolution
+- arbitrary C# AST rewriting
+- generic C# code-generation workflow
+
+---
+
+## GDScript との関係
+
+GDScript には、今も必要なサポートがあります。
+
+- read
+- open
+- export と symbol analysis
+- limited editing
+
+ただし、plugin interface の中心はもう GDScript だけではありません。Godot project で共通に使う script workflow の中心に置かれています。
+
+---
+
+## troubleshooting
+
+- `script_exports` に `[Export]` field が出ないときは、まず property か field の syntax が対応範囲に入っているかを確認する
+- `bindings` が script は見えているのに exported value を読めないときは、まず user の binding ではなく scene instance binding か export extraction logic を疑う
+- 大規模な C# rewrite が必要なら、今の tool set は向いていない。専用の external code modification flow に切り替える
