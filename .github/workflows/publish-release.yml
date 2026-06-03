@@ -100,14 +100,14 @@ jobs:
           }
 
           $versionMentionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($version))(?![0-9A-Za-z.-])"
-          foreach ($path in @("docs/CHANGELOG.md", "docs/i18n/zh-CN/CHANGELOG.md")) {
+          foreach ($path in @("docs/en/CHANGELOG.md", "docs/zh-CN/CHANGELOG.md")) {
             $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
             if ($content -notmatch $versionMentionPattern) {
               throw "$path does not mention release version $version"
             }
           }
 
-          $releaseNotesPath = "docs/流程/release-notes/release-notes-v$version.md"
+          $releaseNotesPath = "docs/zh-CN/流程/release-notes/release-notes-v$version.md"
           if (-not (Test-Path -LiteralPath $releaseNotesPath)) {
             throw "Manual release notes file $releaseNotesPath is required for a formal release."
           }
@@ -235,8 +235,8 @@ jobs:
           .\scripts\render_release_notes.ps1 `
             -Version $env:VERSION `
             -OutputPath $notesFile `
-            -ManualNotesPath "docs/流程/release-notes/release-notes-v$env:VERSION.md" `
-            -ChangelogPath "docs/i18n/zh-CN/CHANGELOG.md" `
+            -ManualNotesPath "docs/zh-CN/流程/release-notes/release-notes-v$env:VERSION.md" `
+            -ChangelogPath "docs/zh-CN/CHANGELOG.md" `
             -TagName $env:TAG_NAME `
             -CommitLimit 30
 
