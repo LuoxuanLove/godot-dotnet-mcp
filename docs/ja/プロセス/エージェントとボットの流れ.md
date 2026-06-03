@@ -1,0 +1,138 @@
+# Agent と Bot の流れ
+
+この文書は、Agent や bot が Godot .NET MCP 開発に参加するときの GitHub 上の動き方を決めます。
+
+---
+
+## 1. 身分の原則
+
+- 推奨は、独立した machine user か GitHub App を使って、Agent の push と PR 作成を行うことです
+- 追加アカウントを使わない場合は、`actions-bot-relay` で `github-actions[bot]` に maintainer 提供の patch から短命 branch と PR を作らせます
+- git commit author を変えるだけでは、GitHub 上の PR author や latest push actor は変わりません
+- Bot の権限は最小限にし、普通は branch push、PR create / update、repository 内容の read だけで足ります
+
+---
+
+## 2. branch と PR
+
+- Agent は最新の `origin/dev` から、意味がわかる短命 branch を切ります。`feature/*`、`fix/*`、`docs/*`、`chore/*`、`hotfix/*`、`release/*` のいずれかです
+- 検証が通ったら、Agent はその短命 branch を commit して push できます
+- 各短命 branch と PR には、その branch の目的に関係する変更だけを入れます
+- ほかの作業、別の修正、過去の未 merge commit が混ざっていたら、独立 PR に分けるか、最新の `origin/dev` からきれいに作り直します
+- すべての PR は `dev` 向けでなければなりません。`pr-policy` は間違った target branch に fail を返します
+- `actions-bot-relay` が作る短命 branch は `actions-bot/*` prefix を使います
+
+---
+
+## 3. PR 本文の要件
+
+PR 本文は短い template を使い、maintainer が素早く読める公開情報だけを残します。
+
+- `Summary`: この PR の目的と結果を 1 から 3 行で書く
+- `Changes`: 実際の変更を review しやすい形で列挙する
+- `Screenshots`: UI や visual 変更があるときだけ残す
+- `Testing`: 実行した local command、CI check、editor / plugin 検証を書く
+- `Related Issues`: 関連 issue を書く。なければ空でよい
+
+より厳しい branch、changelog、review、Cubic、merge の条件は、この流れの文書と CI gate が持ちます。PR template 本文には書きません。PR title は Conventional Commits 形式にします。例: `fix(scope): 短い説明`
+
+---
+
+## 4. 完了定義と返修の閉ループ
+
+公開 tool の挙動、UI の構造、ライフサイクルの意味、CI / workflow の動き、release 内容が変わったら、開発が終わったとみなす条件は、実装、contract test、文書、change log の全部を含みます。コードが動くことだけでは閉ループ完了ではありません。関連 test や文書が古い path、古い field、古い意味を説明したままなら、その PR はまだ返修中です。
+
+Agent が PR を submit または update する前に、次を確認します。
+
+- 影響を受ける contract test が、今の本当の契約を表していること。古い path や古い意味で test が落ちるなら、最後の説明で「関係ない失敗」とせず、まず test 契約を直す
+- `docs/`、`README*`、tool 説明、protocol facts source、`CHANGELOG*` のうち、今回の公開挙動に関係する内容がそろっていること。`CHANGELOG*` には重要な `Documentation` と `Internal` の変化を入れる。例: release note source file、文書 / i18n / Runbook 更新、CI / harness / workflow の動き、policy check、protocol facts、検証範囲の変化。version metadata だけの切替は独立項目にしない。更新不要なら、PR 回答でその理由を説明する
+- Review、Cubic、Codex、または人が見つけた test / 文書の穴は阻塞的な返修項目として扱い、同じ PR で resolved、outdated、または maintainer 裁定まで持っていく
+- 検証記録には、実際に走らせた target test、build、harness case を書く。read-only check が通っても、影響した contract test の代わりにはならない
+
+---
+
+## 5. PR 完了 gate
+
+次の条件を全部満たして初めて、maintainer が merge できる状態として報告します。
+
+1. PR の target は `dev` で、今の検証可能な `dev` に対して再確認している
+2. 通常 PR の `pr-policy` が通り、PR title と本文の客観字段がそろっている。`actions-bot-relay` が作った、または自然にはこの check を起こせない PR は、relay metadata、明示的に起こした validation workflow、maintainer review を合わせて確認する
+3. `dotnet-build` が通る
+4. `validate-plugin-harness` が通る
+5. `.github/workflows/**` を変えたら `lint-workflows` が通る
+6. human、Cubic、Codex、または他の review conversation がすべて reply 済みで resolved になっている。無効な指摘には理由を書き、有効な指摘は修正する
+7. Cubic が最新 head commit をカバーしていて、最新結果に blocker がない
+8. `CHANGELOG*`、公開文書、検証記録、実際の変更範囲が一致し、重要な Documentation / Internal の変化が changelog に入っている。更新不要なら、PR 本文で plugin 側の理由を説明している
+
+いずれかの gate が満たせなければ、その PR は返修待ちか検証待ちであり、完了とは言えません。
+
+---
+
+## 6. 返修イテレーションの規律
+
+返修は、今落ちている gate か reviewer が指摘した具体的な問題だけを直します。検証ループの中に新しい範囲を混ぜません。
+
+おすすめの順序。
+
+1. 失敗した check、review thread、Cubic の最新結果を読む
+2. 問題が有効かどうかを判断する。有効なら局所修正し、無効なら理由を書いて返す
+3. 直接関係する test、文書、changelog を更新する
+4. 短命 branch に commit して push する
+5. CI と review gate で最新 head をもう一度検証する
+
+コードを変えたあとに、古い CI、古い review、古い Cubic 結果を完成の根拠にしてはいけません。
+
+---
+
+## 7. merge 境界
+
+- Agent は `dev` に直接 push しません
+- Agent は local merge 後に `dev` を push しません
+- Agent は required checks を回避しません
+- Agent は GitHub PR を merge しません。遠隔 `dev` の merge は maintainer が GitHub PR page で手動確認して実行します
+
+---
+
+## 8. GitHub Actions Bot Relay
+
+`actions-bot-relay` は、追加 machine user を増やしたくないときの中継方法です。maintainer か Agent が最新 `dev` を元に unified patch を作り、workflow を手動起動すると、`github-actions[bot]` が patch を適用して commit、`actions-bot/*` branch に push し、`dev` 向け PR を作成または更新します。
+
+使う前提として、repository Settings > Actions > General で GitHub Actions に pull request の作成と approval を許可しておく必要があります。この workflow は default `GITHUB_TOKEN` だけを使い、PAT は不要です。
+
+入力。
+
+- `patch_base64`: base64 encoded の unified git patch。`workflow_dispatch` の入力サイズ制限があるので、小から中規模の変更に向きます
+- `pr_title`: PR title
+- `pr_body`: PR 本文。短い template を使い、`pr-policy` の title、summary、testing の客観字段を満たす必要があります
+- `commit_message`: commit message
+- `branch_name`: 省略可。空か `actions-bot/*` prefix にしてください
+- `base_branch`: 固定で `dev`
+
+実行の境界。
+
+- workflow は patch だけを受け付け、任意の user script は実行しない
+- workflow は `dotnet-build.yml`、`validate-plugin.yml`、信頼された `version-policy.yml` を明示的に起動する。patch が `.github/workflows/**` を変えるなら `lint-workflows.yml` も起動する
+- 通常の短命 branch push は PR の自動検証入口にはしない。relay は引き続き `workflow_dispatch` で bot branch の検証を明示する
+- `GITHUB_TOKEN` で起きる push / PR event は、普通の user push のようにすべての workflow を自動起動しないため、relay は検証 workflow を明示的に起動しなければならない
+- maintainer が GitHub PR page で review、approve、merge する
+
+---
+
+## 9. 自動化の境界
+
+- 自動生成、自動更新、定期保守のような変更は、短命 branch PR で落とし込み、`dev` に直接書き込まない
+- 自動化 workflow は `next` draft release を作成または更新して次版の説明草稿にできるが、正式 release の作成、zip / sha256 / local build artifact の upload、maintainer の release 判断の代わりはできない
+- 正式 release tag、remote tag 削除、release 本文の修正、既存 release の扱いは maintainer が決める。Agent は release history を勝手に書き換えない
+- npm / Bun package release、OIDC trusted publisher、CLA Assistant、force push 付き主 branch、PAT 駆動の自主 merge 流れは使わない
+
+---
+
+## 10. PR 回答の要件
+
+Agent が PR を作るか更新するときは、次を説明します。
+
+- 変更範囲と target branch
+- changelog / 文書更新の有無
+- 実行した検証コマンドと結果
+- 現在の CI、review conversation、Cubic の状態
+- 残っている maintainer 手動作業
