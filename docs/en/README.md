@@ -70,9 +70,9 @@ Then enable the plugin in `Project Settings > Plugins`.
 
 - [Change Log](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
-- [Documentation Overview](概述.md)
-- [Installation and Release](架构/安装与发布.md)
-- [User Extensions](模块/用户扩展.md)
+- [Documentation Overview](overview.md)
+- [Installation and Release](architecture/installation-and-release.md)
+- [User Extensions](modules/user-extensions.md)
 
 ## Author's Note
 

@@ -69,9 +69,9 @@ addons/godot_dotnet_mcp
 
 - [변경 로그](CHANGELOG.md)
 - [로드맵](ROADMAP.md)
-- [문서 개요](概述.md)
-- [설치와 배포](架构/安装与发布.md)
-- [사용자 확장](模块/用户扩展.md)
+- [문서 개요](overview.md)
+- [설치와 배포](architecture/installation-and-release.md)
+- [사용자 확장](modules/user-extensions.md)
 
 ## 저자의 말
 
