@@ -130,6 +130,12 @@ foreach ($pattern in $bannedSourcePatterns) {
     }
 }
 
+try {
+    & (Join-Path $repoRoot "scripts\validate_docs_i18n.ps1")
+} catch {
+    $errors.Add("Docs i18n validation failed: $($_.Exception.Message)")
+}
+
 if ($SkipVersionPolicy) {
     Write-Host "Version policy validation skipped: caller opted out."
 } else {
