@@ -24,8 +24,8 @@ Supported today:
 
 Recommended calls:
 
-1. `system_script_analyze`
-2. `system_bindings_audit`
+1. `bindings_audit`
+2. `scene_analyze`
 
 For deeper inspection, add:
 
@@ -43,17 +43,17 @@ Typical cases:
 
 Recommended calls:
 
-1. `system_bindings_audit`
-2. `system_scene_analyze`
+1. `bindings_audit`
+2. `scene_analyze`
 
 For deeper inspection, add:
 
-- `scene_bindings`
-- `scene_audit`
+- `bindings`
+- `audit`
 
 Typical cases:
 
-- a scene node’s `[Export] NodePath`, resource reference, or value field does not take effect
+- a scene node's `[Export] NodePath`, resource reference, or value field does not take effect
 - the node script looks correct, but the field is empty in the Inspector
 - you want to trace a Godot scene issue back to a concrete C# export declaration
 
@@ -61,7 +61,7 @@ Typical cases:
 
 Recommended calls:
 
-1. `system_script_analyze`
+1. `scene_analyze`
 2. `script_open.open`
 3. `script_open.open_at_line`
 
@@ -92,8 +92,8 @@ The implementation goal is to return useful structure reliably inside the Godot 
 1. `addons/godot_dotnet_mcp/dotnet_bridge/` and `plugin/runtime/roslyn/*` provide the plugin-local Roslyn syntax-analysis core.
 2. `tools/script/csharp_edit_service.gd`, `tools/script/inspect_service.gd`, and the system script entry points read `.cs` file text and connect to the Roslyn facade.
 3. The Roslyn path extracts `namespace`, `class`, `partial class`, `base_type`, `method`, `enum`, `[Export]`, `[ExportGroup]`, and parse errors.
-4. `tools/scene/bindings_service.gd` reads script instances and exported values from scenes.
-5. `scene_bindings` and `scene_audit` tie the declaration state to the actual binding state.
+4. `addons/godot_dotnet_mcp/tools/scene_tools.gd` implements the scene-level binding tools, while `tools/system/impl_scene.gd` and `tools/system/impl_script.gd` bridge the higher-level audit flow to those scene and script entry points.
+5. `bindings` and `audit` tie the declaration state to the actual binding state.
 
 ### Best fit
 
@@ -134,5 +134,5 @@ But the plugin interface is no longer centered on GDScript. It is centered on th
 ## Troubleshooting Tips
 
 - If `script_exports` does not show `[Export]` fields, first check whether the property or field syntax is in the supported range.
-- If `scene_bindings` can see the script but cannot read the exported value, first suspect the scene instance binding or the export extraction logic, not the user’s binding.
+- If `bindings` can see the script but cannot read the exported value, first suspect the scene instance binding or the export extraction logic, not the user?s binding.
 - If you need large-scale C# rewrites, the current tool set is not suitable. Switch to a dedicated external code modification flow instead.
