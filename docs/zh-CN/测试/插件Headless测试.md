@@ -247,7 +247,7 @@ bare `MCPHttpServer.new()` 在无插件父节点的 headless 路径下，会创�
 
 ### 1. 已摆脱私有方法名耦合，但 seam 仍可继续独立
 
-当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。  
+当前 `http_server_contract_test.gd` 与 `runtime_bridge_contract_test.gd` 已经改为走公共测试入口。
 这显著降低了“内部方法改名或拆分导致测试先碎”的风险。
 
 不过当前 seam 仍然有一部分挂在 `mcp_http_server.gd` 与 `mcp_runtime_bridge.gd` 上；这轮已经把 runtime fallback / reply 行为抽到独立 helper，并把 `client_config_service.gd` 收成门面。
@@ -288,5 +288,5 @@ dotnet run --project .\tests\godot_plugin_harness\GodotPluginHarness.csproj -c R
 
 ## 结论
 
-插件 headless harness 已经可用，而且已经真实发现并推动修复过运行时问题。  
+插件 headless harness 已经可用，而且已经真实发现并推动修复过运行时问题。
 当前它的重点是维持测试 seam 与清理边界的稳定。
