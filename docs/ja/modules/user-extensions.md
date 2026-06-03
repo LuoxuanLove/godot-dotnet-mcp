@@ -1,3 +1,3 @@
-# User extensions
+# ユーザー拡張
 
-See [User extensions](../模块/用户扩展.md).
+See [ユーザー拡張](../模块/用户扩展.md).
