@@ -271,7 +271,7 @@
 - Removed the old public `intelligence_*` tool names. Most workflows now use matching `system_*` tools instead, such as `system_project_state`, `system_runtime_diagnose`, `system_scene_analyze`, `system_script_analyze`, and `system_bindings_audit`.
 - Removed `intelligence_project_advise` as a separate advice tool. Agents should now inspect state with `system_help`, `system_project_state`, `system_editor_state`, diagnostics, scene/script analysis, and then choose the next tool directly.
 - Removed low-level atomic tool domains as the primary public workflow surface. Scene, script, editor, runtime, filesystem, animation, node, resource, debug, and other lower-level building blocks remain internal implementation details behind high-level tools and the Tools page tree.
-- Removed the old public Intelligence tool tree and documentation page in favor of the System tool tree and `docs/妯″潡/System宸ュ叿灞?md`.
+- Removed the old public Intelligence tool tree and documentation page in favor of the System tool tree and `docs/ja/模块/System工具层.md`.
 - Removed the old permission-level UI and Home-tab advanced permission settings; users no longer need to manually choose a capability level.
 - Removed `trace` as a distinct public log level. Legacy `trace` input is still accepted as a compatibility alias for `debug`.
 - Removed the old root-level `user://` cache layout as the active storage model. Plugin-managed captures, runtime data, logs, profiles, and config exchange files now live under `user://godot_dotnet_mcp/`, with explicit maintenance tools for legacy cleanup.
