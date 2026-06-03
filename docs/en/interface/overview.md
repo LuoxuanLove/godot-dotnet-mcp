@@ -80,6 +80,7 @@ The signals currently bridged by `mcp_dock.gd` are roughly divided into four gro
 - `restart_requested`
 - `stop_requested`
 - `full_reload_requested`
+- `clear_self_diagnostics_requested`
 
 ### Tools Tab Actions
 
@@ -93,7 +94,14 @@ The signals currently bridged by `mcp_dock.gd` are roughly divided into four gro
 
 - `cli_scope_changed`
 - `config_platform_changed`
+- `config_client_action_requested`
+- `config_client_launch_requested`
+- `config_client_path_pick_requested`
+- `config_client_path_clear_requested`
+- `config_client_open_config_dir_requested`
+- `config_client_open_config_file_requested`
 - `config_write_requested`
+- `config_remove_requested`
 - `copy_requested`
 
 ### Settings Tab Actions
