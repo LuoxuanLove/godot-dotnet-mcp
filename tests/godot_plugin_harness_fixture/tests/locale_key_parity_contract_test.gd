@@ -15,6 +15,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing_by_locale := _find_missing_keys(locale_translations, all_keys)
 	if not missing_by_locale.is_empty():
 		return _failure("Supported locale dictionaries are missing translation keys: %s" % _format_missing_keys(missing_by_locale))
+	var untranslated_by_locale := _find_untranslated_keys(locale_translations, all_keys)
+	if not untranslated_by_locale.is_empty():
+		return _failure("Supported locale dictionaries still match English text: %s" % _format_missing_keys(untranslated_by_locale))
 
 	return {
 		"name": "locale_key_parity_contracts",
@@ -29,7 +32,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 func _load_supported_locale_translations() -> Dictionary:
 	var locale_translations := {}
-	var english_translations := {}
 	for locale_code in LocalizationServiceScript.LANGUAGE_FILES.keys():
 		var file_path := str(LocalizationServiceScript.LANGUAGE_FILES[locale_code])
 		var locale_script = ResourceLoader.load(file_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
@@ -37,16 +39,6 @@ func _load_supported_locale_translations() -> Dictionary:
 			locale_translations[str(locale_code)] = _get_raw_translations(locale_script as Script)
 		else:
 			locale_translations[str(locale_code)] = {}
-		if str(locale_code) == "en":
-			english_translations = locale_translations[str(locale_code)].duplicate(true)
-	for locale_code in locale_translations.keys():
-		if str(locale_code) == "en":
-			continue
-		var merged_translations := english_translations.duplicate(true)
-		var locale_values = locale_translations[locale_code]
-		if locale_values is Dictionary:
-			merged_translations.merge(locale_values as Dictionary, true)
-		locale_translations[locale_code] = merged_translations
 	return locale_translations
 
 
@@ -85,6 +77,70 @@ func _find_missing_keys(locale_translations: Dictionary, all_keys: Array[String]
 		if not missing.is_empty():
 			missing_by_locale[str(locale_code)] = missing
 	return missing_by_locale
+
+
+func _find_untranslated_keys(locale_translations: Dictionary, all_keys: Array[String]) -> Dictionary:
+	var english_translations = locale_translations.get("en", {})
+	if not (english_translations is Dictionary):
+		return {}
+	var untranslated_by_locale := {}
+	for locale_code in locale_translations.keys():
+		var locale_name := str(locale_code)
+		if locale_name == "en":
+			continue
+		var translations = locale_translations[locale_code]
+		if not (translations is Dictionary):
+			continue
+		var untranslated: Array[String] = []
+		for key in all_keys:
+			if not (english_translations as Dictionary).has(key):
+				continue
+			if not (translations as Dictionary).has(key):
+				continue
+			var english_text: String = str((english_translations as Dictionary).get(key, ""))
+			var localized_text: String = str((translations as Dictionary).get(key, ""))
+			if localized_text == english_text and not _is_allowed_shared_visible_text(key, english_text):
+				untranslated.append(key)
+			elif _looks_like_generated_fallback(localized_text):
+				untranslated.append(key)
+			elif _looks_like_placeholder_translation(localized_text):
+				untranslated.append(key)
+		if not untranslated.is_empty():
+			untranslated_by_locale[locale_name] = untranslated
+	return untranslated_by_locale
+
+
+func _looks_like_generated_fallback(text: String) -> bool:
+	for prefix in ["Deutsch: ", "Español: ", "Français: ", "日本語: ", "Português: ", "Русский: ", "简体中文: ", "繁體中文: ", "한국어: "]:
+		if text.begins_with(prefix):
+			return true
+	return false
+
+
+func _looks_like_placeholder_translation(text: String) -> bool:
+	return text.begins_with("Localized ")
+
+
+func _is_allowed_shared_visible_text(key: String, text: String) -> bool:
+	var normalized := text.strip_edges()
+	if normalized.is_empty():
+		return true
+	var normalized_brand := normalized.trim_suffix(":")
+	if key.ends_with("_id") or key.ends_with("_path"):
+		return true
+	if normalized == normalized.to_upper() and normalized.length() <= 8:
+		return true
+	for token in [
+		"Godot", "Godot .NET MCP", ".NET", "MCP", "C#", "GDScript", "DAP", "LSP", "JSON", "UID", "URL", "FPS",
+		"CSG", "GridMap", "TileMap", "MultiMesh", "Autoload", "Exports",
+		"Animation", "Audio", "Material", "Navigation", "Shader", "Signal", "System", "Error", "Editor", "Runtime",
+		"Claude Desktop", "Claude Code", "Cursor", "Trae", "Codex", "Codex CLI", "Codex Desktop",
+		"Gemini CLI", "OpenCode", "OpenCode CLI", "OpenCode Desktop", "Windsurf", "Cline", "Roo Code",
+		"Qwen Code", "Qwen Code CLI", "Cherry Studio", "WeChat", "Microsoft Store / WindowsApps"
+	]:
+		if normalized_brand == token:
+			return true
+	return false
 
 
 func _format_missing_keys(missing_by_locale: Dictionary) -> String:
