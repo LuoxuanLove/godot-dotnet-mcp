@@ -96,7 +96,13 @@ func build_health_response() -> Dictionary:
 		"connections": int(server_stats.get("connections", 0)),
 		"total_connections": int(server_stats.get("total_connections", 0)),
 		"total_requests": int(server_stats.get("total_requests", 0)),
+		"rejected_requests": int(server_stats.get("rejected_requests", 0)),
+		"client_session_count": int(server_stats.get("client_session_count", 0)),
+		"client_sessions": _duplicate_array(server_stats.get("client_sessions", [])),
+		"recent_client_sessions": _duplicate_array(server_stats.get("recent_client_sessions", [])),
+		"last_request_id": str(server_stats.get("last_request_id", "")),
 		"last_request_method": str(server_stats.get("last_request_method", "")),
+		"last_request_path": str(server_stats.get("last_request_path", "")),
 		"last_request_at_unix": int(server_stats.get("last_request_at_unix", 0)),
 		"tool_count": tool_count,
 		"exposed_tool_count": exposed_tools.size(),
@@ -241,6 +247,12 @@ func _get_freshness_snapshot_safe() -> Dictionary:
 		if snapshot is Dictionary:
 			return (snapshot as Dictionary).duplicate(true)
 	return {}
+
+
+func _duplicate_array(value) -> Array:
+	if value is Array:
+		return (value as Array).duplicate(true)
+	return []
 
 
 func _status_text_for(status_code: int) -> String:

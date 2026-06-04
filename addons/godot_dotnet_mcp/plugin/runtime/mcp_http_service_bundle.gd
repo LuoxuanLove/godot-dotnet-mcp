@@ -144,7 +144,8 @@ func _ensure_tool_loader_supervisor() -> void:
 func _ensure_runtime_control_service() -> void:
 	if _runtime_control_service == null:
 		_runtime_control_service = MCPRuntimeControlServiceScript.new()
-	var plugin = _server.get_parent()
+	var parent = _server.get_parent()
+	var plugin: EditorPlugin = parent if parent is EditorPlugin else null
 	var debugger_bridge = null
 	if plugin != null and plugin.has_method("get_editor_debugger_bridge"):
 		debugger_bridge = plugin.get_editor_debugger_bridge()
