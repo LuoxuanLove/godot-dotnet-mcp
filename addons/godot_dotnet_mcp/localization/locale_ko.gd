@@ -701,7 +701,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_editor_control_name": "에디터 제어",
 	"tool_system_editor_control_desc": "High-level editor UI 워크플로 entry for switching main screens, activating dock/plugin/bottom-panel UI through Godot APIs, capturing the editor, enumerating controls with coordinate mapping, dispatching control-local clicks, and interacting with popups.",
 	"tool_system_editor_plugin_control_name": "에디터 플러그인 제어",
-	"tool_system_editor_plugin_control_desc": "Inspect and toggle third-party EditorPlugin session state with plugin.cfg metadata, project-setting state, editor-session state, visible UI hints, and self-plugin protection.",
+	"tool_system_editor_plugin_control_desc": "plugin.cfg 메타데이터, 프로젝트 설정 상태, 에디터 세션 상태, 보이는 UI 힌트, 자체 플러그인 보호와 함께 타사 EditorPlugin 세션 상태를 검사하고 전환합니다.",
 	"tool_plugin_runtime_name": "플러그인 런타임",
 	"tool_plugin_runtime_desc": "플러그인 런타임 제어의 기존 집계 레이블",
 	"tool_plugin_runtime_state_name": "상태",
