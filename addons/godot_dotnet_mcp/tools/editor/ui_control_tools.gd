@@ -288,6 +288,8 @@ func _leave_control(ei, args: Dictionary) -> Dictionary:
 		return _error("Editor control rect is empty: %s" % target_path)
 
 	var viewport_position := _resolve_leave_viewport_position(control, args)
+	if _read_control_rect(control).has_point(viewport_position):
+		return _error("Failed to resolve leave position outside control rect: %s" % target_path)
 	var screen_position := _viewport_to_screen_position(control, viewport_position)
 	var dispatch_result := _dispatch_control_mouse_motion(control, viewport_position)
 	if not bool(dispatch_result.get("success", false)):

@@ -714,6 +714,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control hover_control should dispatch mouse motion at the requested local point.")
 	if not (pushed_events[5] is InputEventMouseMotion) or Vector2(pushed_events[5].position) == Vector2(34, 32):
 		return _failure("Editor ui_control leave_control should dispatch mouse motion away from the hovered point.")
+	var invalid_leave_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": search_field_path,
+		"local_x": 4,
+		"local_y": 4
+	})
+	if bool(invalid_leave_control_result.get("success", false)):
+		return _failure("Editor ui_control leave_control should reject explicit positions inside the control rect.")
 
 	var tab_container_path := str(mcp_tabs.get_path())
 	var activate_tab_result: Dictionary = executor.execute("ui_control", {
