@@ -4,6 +4,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 
 ### ✨ Highlights
 
+- Added top menu control to `system_editor_control`, so agents can list editor menus, open a `MenuButton`, and choose a `PopupMenu` item by text or index before continuing with popup inspection or text/button actions.
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
@@ -21,6 +22,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✅ Compatibility and Upgrade Notes
 
 - Existing tool names remain compatible.
+- The tool schema version changed because `system_editor_control` gained `list_menus`, `open_menu`, and `select_menu_item`.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - No file layout or tool schema migration is required.
