@@ -222,7 +222,7 @@ func _build_main_screen_button_summary(control, current_name: String) -> Diction
 		return {}
 	var rect := _control_rect(control)
 	var builtin_names := ["2D", "3D", "Script", "AssetLib"]
-	if not label in builtin_names and rect.has("y") and float(rect.get("y", 9999.0)) > 48.0:
+	if not label in builtin_names and not _is_plugin_main_screen_button(control, builtin_names):
 		return {}
 	var source := "builtin" if label in builtin_names else "plugin"
 	return {
@@ -266,6 +266,55 @@ func _main_screen_summary_exists(screens: Array, name: String, control_path: Str
 				return true
 			if str(data.get("name", "")).to_lower() == name.to_lower() and str(data.get("control_path", "")).is_empty():
 				return true
+	return false
+
+
+func _is_plugin_main_screen_button(control, builtin_names: Array) -> bool:
+	if not _control_visible(control) or _control_disabled(control):
+		return false
+	if _has_builtin_main_screen_sibling(control, builtin_names):
+		return true
+	if _has_named_main_screen_ancestor(control):
+		return true
+	return false
+
+
+func _has_builtin_main_screen_sibling(control, builtin_names: Array) -> bool:
+	if control == null or not control.has_method("get_parent"):
+		return false
+	var parent = control.get_parent()
+	if parent == null or not parent.has_method("get_children"):
+		return false
+	for sibling in parent.get_children():
+		if sibling == null or sibling == control:
+			continue
+		var sibling_class := _control_class_name(sibling)
+		if sibling_class.find("Button") == -1:
+			continue
+		if builtin_names.has(_control_label(sibling)):
+			return true
+	return false
+
+
+func _has_named_main_screen_ancestor(control) -> bool:
+	var current = control
+	var depth := 0
+	while current != null and depth < 6:
+		var path_label := ""
+		if current.has_method("get_path"):
+			path_label = str(current.get_path()).to_lower()
+		var node_name := ""
+		if current is Object:
+			node_name = str(current.get("name")).to_lower()
+		var combined := "%s %s" % [node_name, path_label]
+		if combined.find("main_screen") != -1 or combined.find("mainscreen") != -1 or combined.find("main screen") != -1:
+			return true
+		if combined.find("editor_title_bar") != -1 or combined.find("top_bar") != -1 or combined.find("topbar") != -1:
+			return true
+		if not current.has_method("get_parent"):
+			return false
+		current = current.get_parent()
+		depth += 1
 	return false
 
 

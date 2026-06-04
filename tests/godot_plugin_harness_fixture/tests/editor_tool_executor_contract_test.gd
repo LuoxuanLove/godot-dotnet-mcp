@@ -486,8 +486,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
-	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 8, 72, 24))
+	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
+	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
+		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
+		builtin_button.text = builtin_screen
+		main_screen_bar.add_child(builtin_button)
+	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
 	godex_button.text = "Godex"
+	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -508,7 +514,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
-	editor_interface.get_base_control().add_popup_child(godex_button)
+	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
 	editor_interface.get_base_control().add_popup_child(output_panel)
