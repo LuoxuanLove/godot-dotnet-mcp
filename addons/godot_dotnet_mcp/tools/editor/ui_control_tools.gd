@@ -163,14 +163,14 @@ func _select_menu_item(ei, args: Dictionary) -> Dictionary:
 	var popup = _get_menu_popup(menu)
 	if popup == null:
 		return _error("Editor menu does not expose a PopupMenu")
+	var open_result := _open_menu_button(menu)
+	if not bool(open_result.get("success", false)):
+		return open_result
 	var index := _resolve_menu_item_index(popup, args)
 	if index < 0:
 		return _error("Editor menu item not found")
 	if _is_popup_menu_item_disabled(popup, index):
 		return _error("Editor menu item is disabled: %s" % _read_popup_menu_item_label(popup, index))
-	var open_result := _open_menu_button(menu)
-	if not bool(open_result.get("success", false)):
-		return open_result
 	_activate_popup_menu_item(popup, index)
 	return _success({
 		"target_path": _safe_control_path(menu),
@@ -399,14 +399,21 @@ func _resolve_menu_button(ei, args: Dictionary):
 
 
 func _find_menu_button_by_title_recursive(node, menu_title: String):
+	var visible_match = _find_menu_button_by_title_recursive_internal(node, menu_title, true)
+	if visible_match != null:
+		return visible_match
+	return _find_menu_button_by_title_recursive_internal(node, menu_title, false)
+
+
+func _find_menu_button_by_title_recursive_internal(node, menu_title: String, require_visible: bool):
 	if node == null:
 		return null
-	if _is_menu_button(node) and _menu_title_matches(node, menu_title):
+	if _is_menu_button(node) and _menu_title_matches(node, menu_title) and (not require_visible or _is_control_visible(node)):
 		return node
 	if not node.has_method("get_children"):
 		return null
 	for child in node.get_children():
-		var nested = _find_menu_button_by_title_recursive(child, menu_title)
+		var nested = _find_menu_button_by_title_recursive_internal(child, menu_title, require_visible)
 		if nested != null:
 			return nested
 	return null
