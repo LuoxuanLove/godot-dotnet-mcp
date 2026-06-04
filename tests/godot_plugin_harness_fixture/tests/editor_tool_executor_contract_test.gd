@@ -485,6 +485,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	refresh_button.text = "Refresh"
+	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 8, 72, 24))
+	godex_button.text = "Godex"
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -505,6 +508,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(godex_button)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
 	editor_interface.get_base_control().add_popup_child(output_panel)
@@ -531,12 +535,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		if not actual_names.has(expected_name):
 			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
 
-	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "3D"})
+	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "Godex"})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("Editor status set_main_screen failed through the split service path.")
+	if str(set_screen_result.get("data", {}).get("matched_main_screen", {}).get("name", "")) != "Godex":
+		return _failure("Editor status set_main_screen should report the matched plugin main screen button.")
 	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
-	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "3D":
+	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "Godex":
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+	if not (get_screen_result.get("data", {}).get("available", []) as Array).has("Godex"):
+		return _failure("Editor status get_main_screen should include discovered plugin main screens.")
+	var list_screens_result: Dictionary = executor.execute("status", {"action": "list_main_screens"})
+	if not bool(list_screens_result.get("success", false)):
+		return _failure("Editor status list_main_screens failed through the split service path.")
+	if int(list_screens_result.get("data", {}).get("count", 0)) < 5:
+		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):

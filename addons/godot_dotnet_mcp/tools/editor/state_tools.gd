@@ -29,6 +29,8 @@ func _execute_status(ei, action: String, args: Dictionary) -> Dictionary:
 			return _get_editor_info(ei)
 		"get_main_screen":
 			return _get_main_screen(ei)
+		"list_main_screens":
+			return _list_main_screens(ei)
 		"get_focus_context":
 			return _get_focus_context(ei)
 		"set_main_screen":
@@ -70,7 +72,28 @@ func _get_main_screen(ei) -> Dictionary:
 		if current_name.is_empty():
 			current_name = str(current_screen.get_class())
 
-	return _success({"current_screen": current_name, "available": ["2D", "3D", "Script", "AssetLib"]})
+	var main_screens := _collect_main_screens(ei, current_name)
+	return _success({
+		"current_screen": current_name,
+		"available": _extract_main_screen_names(main_screens),
+		"main_screens": main_screens
+	})
+
+
+func _list_main_screens(ei) -> Dictionary:
+	var current_screen = ei.get_editor_main_screen()
+	var current_name := ""
+	if current_screen != null:
+		current_name = str(current_screen.name)
+		if current_name.is_empty() and current_screen.has_method("get_class"):
+			current_name = str(current_screen.get_class())
+	var main_screens := _collect_main_screens(ei, current_name)
+	return _success({
+		"current_screen": current_name,
+		"count": main_screens.size(),
+		"main_screens": main_screens,
+		"available": _extract_main_screen_names(main_screens)
+	})
 
 
 func _get_focus_context(ei) -> Dictionary:
@@ -115,15 +138,26 @@ func _get_focus_context(ei) -> Dictionary:
 
 
 func _set_main_screen(ei, screen: String) -> Dictionary:
+	screen = screen.strip_edges()
 	if screen.is_empty():
 		return _error("Screen is required")
 
-	var valid_screens = ["2D", "3D", "Script", "AssetLib"]
-	if not screen in valid_screens:
-		return _error("Invalid screen: %s. Valid options: %s" % [screen, str(valid_screens)])
-
+	var before_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
+	var before_screens: Array = _collect_main_screens(ei, before_screen)
+	var matched_screen := _find_main_screen_summary(before_screens, screen)
 	ei.set_main_screen_editor(screen)
-	return _success({"screen": screen}, "Switched to %s editor" % screen)
+	var after_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
+	var after_screens: Array = _collect_main_screens(ei, after_screen)
+	return _success({
+		"screen": screen,
+		"before_screen": before_screen,
+		"after_screen": after_screen,
+		"current_screen": after_screen,
+		"matched_main_screen": matched_screen,
+		"main_screens": after_screens,
+		"available": _extract_main_screen_names(after_screens),
+		"visible_button_found": not matched_screen.is_empty()
+	}, "Switched to %s editor" % screen)
 
 
 func _get_distraction_free(ei) -> Dictionary:
@@ -142,6 +176,148 @@ func _get_godot_path() -> Dictionary:
 		"project_root_path": str(identity.get("project_root_path", ProjectSettings.globalize_path("res://"))),
 		"editor_session_identity": identity
 	})
+
+
+func _collect_main_screens(ei, current_name: String) -> Array[Dictionary]:
+	var builtin_names := ["2D", "3D", "Script", "AssetLib"]
+	var collected: Array[Dictionary] = []
+	for builtin_name in builtin_names:
+		collected.append({
+			"name": builtin_name,
+			"title": builtin_name,
+			"text": builtin_name,
+			"control_path": "",
+			"visible": true,
+			"disabled": false,
+			"active": builtin_name == current_name,
+			"inferred_active": builtin_name == current_name,
+			"rect": {},
+			"source": "builtin"
+		})
+	var base_control = ei.get_base_control() if ei != null and ei.has_method("get_base_control") else null
+	if base_control == null:
+		return collected
+	_collect_main_screen_buttons(base_control, collected, current_name, 0)
+	return collected
+
+
+func _collect_main_screen_buttons(node, collected: Array[Dictionary], current_name: String, depth: int) -> void:
+	if node == null or depth > 8 or not node.has_method("get_children"):
+		return
+	for child in node.get_children():
+		if child == null:
+			continue
+		var summary := _build_main_screen_button_summary(child, current_name)
+		if not summary.is_empty() and not _main_screen_summary_exists(collected, str(summary.get("name", "")), str(summary.get("control_path", ""))):
+			collected.append(summary)
+		_collect_main_screen_buttons(child, collected, current_name, depth + 1)
+
+
+func _build_main_screen_button_summary(control, current_name: String) -> Dictionary:
+	var control_class := _control_class_name(control)
+	if control_class.find("Button") == -1:
+		return {}
+	var label := _control_label(control)
+	if label.is_empty():
+		return {}
+	var rect := _control_rect(control)
+	var builtin_names := ["2D", "3D", "Script", "AssetLib"]
+	if not label in builtin_names and rect.has("y") and float(rect.get("y", 9999.0)) > 48.0:
+		return {}
+	var source := "builtin" if label in builtin_names else "plugin"
+	return {
+		"name": label,
+		"title": label,
+		"text": label,
+		"control_path": _control_path(control),
+		"visible": _control_visible(control),
+		"disabled": _control_disabled(control),
+		"active": label == current_name,
+		"inferred_active": label == current_name,
+		"rect": rect,
+		"source": source
+	}
+
+
+func _find_main_screen_summary(screens: Array, screen: String) -> Dictionary:
+	for item in screens:
+		if item is Dictionary:
+			var data: Dictionary = item
+			if str(data.get("name", "")).to_lower() == screen.to_lower() or str(data.get("title", "")).to_lower() == screen.to_lower() or str(data.get("text", "")).to_lower() == screen.to_lower():
+				return data.duplicate(true)
+	return {}
+
+
+func _extract_main_screen_names(screens: Array) -> Array[String]:
+	var names: Array[String] = []
+	for item in screens:
+		if item is Dictionary:
+			var name := str((item as Dictionary).get("name", "")).strip_edges()
+			if not name.is_empty() and not names.has(name):
+				names.append(name)
+	return names
+
+
+func _main_screen_summary_exists(screens: Array, name: String, control_path: String) -> bool:
+	for item in screens:
+		if item is Dictionary:
+			var data: Dictionary = item
+			if not control_path.is_empty() and str(data.get("control_path", "")) == control_path:
+				return true
+			if str(data.get("name", "")).to_lower() == name.to_lower() and str(data.get("control_path", "")).is_empty():
+				return true
+	return false
+
+
+func _control_class_name(control) -> String:
+	if control.has_method("get_ui_class"):
+		return str(control.get_ui_class())
+	if control.has_method("get_popup_class"):
+		return str(control.get_popup_class())
+	if control.has_method("get_class"):
+		return str(control.get_class())
+	return ""
+
+
+func _control_label(control) -> String:
+	for property_name in ["text", "title", "name"]:
+		var value = control.get(property_name) if control is Object else null
+		var label := str(value).strip_edges()
+		if not label.is_empty():
+			return label
+	return ""
+
+
+func _control_path(control) -> String:
+	if control.has_method("get_path"):
+		return str(control.get_path())
+	return ""
+
+
+func _control_visible(control) -> bool:
+	if control.has_method("is_visible_in_tree"):
+		return bool(control.is_visible_in_tree())
+	if control is Object:
+		return bool(control.get("visible"))
+	return true
+
+
+func _control_disabled(control) -> bool:
+	if control is Object:
+		return bool(control.get("disabled"))
+	return false
+
+
+func _control_rect(control) -> Dictionary:
+	if not control.has_method("get_global_rect"):
+		return {}
+	var rect: Rect2 = control.get_global_rect()
+	return {
+		"x": rect.position.x,
+		"y": rect.position.y,
+		"width": rect.size.x,
+		"height": rect.size.y
+	}
 
 
 func _capture_editor_screenshot(ei, args: Dictionary) -> Dictionary:

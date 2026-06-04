@@ -24,6 +24,7 @@ Target version: 1.2.0.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
 - Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
 
 ### Fixed
 
@@ -45,6 +46,7 @@ Target version: 1.2.0.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
+- Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
 
 ## [1.1.2] - 2026-06-02
 
