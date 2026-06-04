@@ -25,6 +25,7 @@ var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
 var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
+var _processing_stdin := false
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 
 
@@ -67,7 +68,8 @@ func get_gdscript_lsp_diagnostics_service():
 
 
 func _process(_delta: float) -> void:
-	if _enabled:
+	if _enabled and not _processing_stdin:
+		_processing_stdin = true
 		while true:
 			var chunk: PackedByteArray = OS.read_buffer_from_stdin(STDIN_READ_SIZE)
 			if chunk.is_empty():
@@ -75,6 +77,7 @@ func _process(_delta: float) -> void:
 			_buffer.append_array(chunk)
 			if await _try_parse_frame():
 				break
+		_processing_stdin = false
 
 	if _tool_loader != null and _tool_loader.has_method("tick"):
 		_tool_loader.tick(_delta)

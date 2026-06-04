@@ -63,7 +63,32 @@ class FakePlugin extends Node:
 
 	func start_plugin_update_sync_from_tools() -> Dictionary:
 		sync_requested = true
-		return {"success": true, "accepted": true, "loading": true, "status": "accepted", "data": {"sync": {"state": "loading"}, "lifecycle_reload": {"state": "idle"}}}
+		var maintenance := {
+			"active": true,
+			"kind": "plugin_update_sync",
+			"state": "loading",
+			"transport_state": "updating",
+			"disconnect_expected": true,
+			"reconnect_required": true,
+			"refetch_tools_required": true,
+			"retry_after_ms": 500,
+			"safe_to_retry": true
+		}
+		return {
+			"success": true,
+			"accepted": true,
+			"loading": true,
+			"status": "accepted",
+			"maintenance": maintenance,
+			"maintenance_window": maintenance,
+			"data": {
+				"sync": {"state": "loading"},
+				"lifecycle_reload": {"state": "idle"},
+				"maintenance": maintenance,
+				"maintenance_window": maintenance,
+				"reconnect_hint": "Reconnect and fetch tools again."
+			}
+		}
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -115,6 +140,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should return an accepted async response.")
 	if not plugin.sync_requested:
 		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should route to the plugin sync bridge.")
+	var sync_maintenance: Dictionary = sync_result.get("maintenance_window", {})
+	if not bool(sync_maintenance.get("active", false)) or str(sync_maintenance.get("kind", "")) != "plugin_update_sync":
+		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should preserve the active update sync maintenance window.")
+	var sync_data: Dictionary = sync_result.get("data", {})
+	if not (sync_data.get("maintenance_window", {}) is Dictionary) or str(sync_data.get("reconnect_hint", "")).is_empty():
+		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should expose nested reconnect guidance.")
 
 	plugin.queue_free()
 	await tree.process_frame

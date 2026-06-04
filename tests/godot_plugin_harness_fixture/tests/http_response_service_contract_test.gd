@@ -30,6 +30,7 @@ class FakeCallbacks:
 	var loader
 	var loader_status: Dictionary
 	var server_stats: Dictionary
+	var freshness_snapshot: Dictionary = {"status": "fresh", "needs_lifecycle_reload": false}
 	var last_log: Dictionary = {}
 
 	func _init(current_loader, current_loader_status: Dictionary, current_server_stats: Dictionary) -> void:
@@ -60,7 +61,7 @@ class FakeCallbacks:
 		}
 
 	func get_freshness_snapshot() -> Dictionary:
-		return {"status": "fresh", "needs_lifecycle_reload": false}
+		return freshness_snapshot.duplicate(true)
 
 	func log(message: String, level: String) -> void:
 		last_log = {
@@ -137,6 +138,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var freshness: Dictionary = health.get("freshness", {})
 	if str(freshness.get("status", "")) != "fresh" or bool(freshness.get("needs_lifecycle_reload", true)):
 		return _failure("Health response should expose plugin instance freshness.")
+	var maintenance: Dictionary = health.get("maintenance", {})
+	if bool(maintenance.get("active", true)) or str(maintenance.get("transport_state", "")) != "ready":
+		return _failure("Health response should expose an idle maintenance window when the plugin is fresh.")
+	if not (health.get("maintenance_window", {}) is Dictionary):
+		return _failure("Health response should include a maintenance_window alias for clients.")
+	callbacks.freshness_snapshot = {
+		"status": "stale",
+		"needs_lifecycle_reload": true,
+		"lifecycle_reload": {
+			"state": "scheduled",
+			"pending": true,
+			"last_request_id": "reload-1",
+			"last_source": "tool"
+		}
+	}
+	var maintenance_health: Dictionary = service.build_health_response()
+	var active_maintenance: Dictionary = maintenance_health.get("maintenance_window", {})
+	if not bool(active_maintenance.get("active", false)) or not bool(active_maintenance.get("disconnect_expected", false)):
+		return _failure("Health response should expose an active maintenance window during lifecycle reload.")
+	if not bool(active_maintenance.get("refetch_tools_required", false)) or int(active_maintenance.get("retry_after_ms", 0)) <= 0:
+		return _failure("Health maintenance window should tell clients to retry and refetch tools after reconnect.")
 
 	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST", "Content-Type, Accept")
 	var cors_headers: Dictionary = cors_response.get("_headers", {})

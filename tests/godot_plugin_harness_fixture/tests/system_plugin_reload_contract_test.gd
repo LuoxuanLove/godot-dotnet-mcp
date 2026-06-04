@@ -18,7 +18,30 @@ class FakePlugin extends Node:
 
 	func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 		lifecycle_reload_called = true
-		return {"success": true, "message": "Plugin lifecycle reload scheduled", "deferred": true}
+		var maintenance := {
+			"active": true,
+			"kind": "plugin_lifecycle_reload",
+			"state": "scheduled",
+			"transport_state": "disconnecting",
+			"disconnect_expected": true,
+			"reconnect_required": true,
+			"refetch_tools_required": true,
+			"retry_after_ms": 500,
+			"safe_to_retry": false
+		}
+		return {
+			"success": true,
+			"message": "Plugin lifecycle reload scheduled",
+			"deferred": true,
+			"maintenance": maintenance,
+			"maintenance_window": maintenance,
+			"data": {
+				"request_id": "reload-1",
+				"reconnect_hint": "Reconnect and fetch tools again after reload.",
+				"maintenance": maintenance,
+				"maintenance_window": maintenance
+			}
+		}
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -49,6 +72,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("system_plugin_reload should route to the plugin lifecycle reload bridge.")
 	if not bool(reload_result.get("deferred", false)):
 		return _failure("system_plugin_reload should return a deferred accepted response.")
+	var maintenance: Dictionary = reload_result.get("maintenance_window", {})
+	if not bool(maintenance.get("disconnect_expected", false)) or not bool(maintenance.get("refetch_tools_required", false)):
+		return _failure("system_plugin_reload should preserve the lifecycle reload maintenance window.")
+	var data: Dictionary = reload_result.get("data", {})
+	if str(data.get("request_id", "")).is_empty() or str(data.get("reconnect_hint", "")).is_empty():
+		return _failure("system_plugin_reload should return request_id and reconnect guidance.")
 
 	return {
 		"name": "system_plugin_reload_contracts",

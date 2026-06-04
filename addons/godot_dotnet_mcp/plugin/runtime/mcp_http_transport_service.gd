@@ -10,6 +10,8 @@ var _route_request_async := Callable()
 var _write_http_response := Callable()
 var _tick_loader := Callable()
 
+const MAX_REQUESTS_PER_DRAIN := 16
+
 
 func configure(connection_state, request_decoder, context = null) -> void:
 	_connection_state = connection_state
@@ -73,17 +75,17 @@ func _process_client(client: StreamPeerTCP) -> bool:
 		if _connection_state.is_processing(client):
 			return false
 		var available = client.get_available_bytes()
-		if available <= 0:
-			return false
-		var data = client.get_data(available)
-		if data[0] != OK:
-			_log("Error receiving data: %s" % data[0], "warning")
-			return false
-		var request_str = data[1].get_string_from_utf8()
-		var pending_data = _connection_state.get_pending_data(client) + request_str
-		_connection_state.set_pending_data(client, pending_data)
-		_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
-		_process_http_request_async(client)
+		if available > 0:
+			var data = client.get_data(available)
+			if data[0] != OK:
+				_log("Error receiving data: %s" % data[0], "warning")
+				return false
+			var request_str = data[1].get_string_from_utf8()
+			var pending_data = _connection_state.get_pending_data(client) + request_str
+			_connection_state.set_pending_data(client, pending_data)
+			_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
+		if not _connection_state.get_pending_data(client).is_empty():
+			_process_http_request_async(client)
 		return false
 
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
@@ -94,64 +96,78 @@ func _process_client(client: StreamPeerTCP) -> bool:
 
 
 func _process_http_request_async(client: StreamPeerTCP) -> void:
-	var data = _connection_state.get_pending_data(client)
-	if data.is_empty():
-		return
 	if _connection_state.is_processing(client):
 		return
 	if _request_decoder == null:
 		return
 
-	var decoded_request: Dictionary = _request_decoder.decode_pending_request(data)
-	if not bool(decoded_request.get("ready", false)):
-		var waiting_for := str(decoded_request.get("waiting_for", ""))
-		if waiting_for == "headers" and data.length() > 0:
-			_log("Waiting for headers... current data length: %d" % data.length(), "debug")
-		elif waiting_for == "chunked_body":
-			_log("Waiting for chunked body...", "debug")
-		elif waiting_for == "body":
-			_log(
-				"Waiting for body... need %d bytes, have %d bytes"
-				% [int(decoded_request.get("content_length", 0)), int(decoded_request.get("body_byte_size", 0))],
-				"debug"
-			)
-		return
+	var drained_count := 0
+	while _connection_state != null and _connection_state.has_client(client):
+		var data = _connection_state.get_pending_data(client)
+		if data.is_empty():
+			return
+		var decoded_request: Dictionary = _request_decoder.decode_pending_request(data)
+		if not bool(decoded_request.get("ready", false)):
+			_log_pending_request_wait(decoded_request, data)
+			return
 
-	var headers: Dictionary = decoded_request.get("headers", {})
-	if headers.is_empty():
+		var headers: Dictionary = decoded_request.get("headers", {})
 		_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
-		return
+		if headers.is_empty():
+			if _connection_state.get_pending_data(client).is_empty():
+				return
+			continue
 
-	var request_body := str(decoded_request.get("request_body", ""))
-	var content_length := int(decoded_request.get("content_length", 0))
-	var body_byte_size := int(decoded_request.get("body_byte_size", 0))
-	var is_chunked := bool(decoded_request.get("is_chunked", false))
-	_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
+		var request_body := str(decoded_request.get("request_body", ""))
+		var content_length := int(decoded_request.get("content_length", 0))
+		var body_byte_size := int(decoded_request.get("body_byte_size", 0))
+		var is_chunked := bool(decoded_request.get("is_chunked", false))
 
-	_log(
-		"Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s"
-		% [headers.get("method", "?"), content_length, body_byte_size, is_chunked],
-		"debug"
-	)
+		_log(
+			"Request headers: method=%s, content_length=%d, body_bytes=%d, chunked=%s"
+			% [headers.get("method", "?"), content_length, body_byte_size, is_chunked],
+			"debug"
+		)
 
-	_connection_state.mark_processing(client)
-	var method = headers.get("method", "GET")
-	var path = headers.get("path", "/")
-	_log("Processing: %s %s (body: %d bytes)" % [method, path, request_body.length()], "debug")
-	_connection_state.record_request(method)
+		_connection_state.mark_processing(client)
+		var method = headers.get("method", "GET")
+		var path = headers.get("path", "/")
+		_log("Processing: %s %s (body: %d bytes)" % [method, path, request_body.length()], "debug")
+		_connection_state.record_request(method)
 
-	if not _route_request_async.is_valid() or not _write_http_response.is_valid():
+		if not _route_request_async.is_valid() or not _write_http_response.is_valid():
+			_connection_state.clear_processing(client)
+			return
+
+		var response: Dictionary = await _route_request_async.call(method, path, request_body, headers)
+		var no_body := bool(response.get("_no_body", false))
+		if response.has("_no_body"):
+			response.erase("_no_body")
+
+		if _connection_state == null:
+			return
+		if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			_write_http_response.call(client, response, no_body)
 		_connection_state.clear_processing(client)
-		return
 
-	var response: Dictionary = await _route_request_async.call(method, path, request_body, headers)
-	var no_body := bool(response.get("_no_body", false))
-	if response.has("_no_body"):
-		response.erase("_no_body")
+		drained_count += 1
+		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.get_pending_data(client).is_empty():
+			call_deferred("_process_http_request_async", client)
+			return
 
-	if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-		_write_http_response.call(client, response, no_body)
-	_connection_state.clear_processing(client)
+
+func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:
+	var waiting_for := str(decoded_request.get("waiting_for", ""))
+	if waiting_for == "headers" and data.length() > 0:
+		_log("Waiting for headers... current data length: %d" % data.length(), "debug")
+	elif waiting_for == "chunked_body":
+		_log("Waiting for chunked body...", "debug")
+	elif waiting_for == "body":
+		_log(
+			"Waiting for body... need %d bytes, have %d bytes"
+			% [int(decoded_request.get("content_length", 0)), int(decoded_request.get("body_byte_size", 0))],
+			"debug"
+		)
 
 
 func _log(message: String, level: String = "debug") -> void:
