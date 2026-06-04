@@ -7,6 +7,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
+- Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
 
 ### 🔧 Fixes
 

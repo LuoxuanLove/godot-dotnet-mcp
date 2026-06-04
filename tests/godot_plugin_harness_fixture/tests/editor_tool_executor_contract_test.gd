@@ -694,6 +694,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control right_click_control should dispatch a right-button press first.")
 	if Vector2(pushed_events[0].position) != Vector2(32, 30):
 		return _failure("Editor ui_control click_control should convert local coordinates to viewport coordinates.")
+	var hover_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "hover_control",
+		"target_path": search_field_path,
+		"local_x": 10,
+		"local_y": 8
+	})
+	if not bool(hover_control_result.get("success", false)):
+		return _failure("Editor ui_control hover_control failed through the split service path.")
+	var leave_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": search_field_path
+	})
+	if not bool(leave_control_result.get("success", false)):
+		return _failure("Editor ui_control leave_control failed through the split service path.")
+	if pushed_events.size() != 6:
+		return _failure("Editor ui_control hover/leave actions should dispatch mouse motion input events.")
+	if not (pushed_events[4] is InputEventMouseMotion) or Vector2(pushed_events[4].position) != Vector2(34, 32):
+		return _failure("Editor ui_control hover_control should dispatch mouse motion at the requested local point.")
+	if not (pushed_events[5] is InputEventMouseMotion) or Vector2(pushed_events[5].position) == Vector2(34, 32):
+		return _failure("Editor ui_control leave_control should dispatch mouse motion away from the hovered point.")
 
 	var tab_container_path := str(mcp_tabs.get_path())
 	var activate_tab_result: Dictionary = executor.execute("ui_control", {

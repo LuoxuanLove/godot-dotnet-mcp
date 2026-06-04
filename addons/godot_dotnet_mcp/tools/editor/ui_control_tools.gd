@@ -38,6 +38,10 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _click_control(ei, args, MOUSE_BUTTON_LEFT, "left")
 		"right_click_control":
 			return _click_control(ei, args, MOUSE_BUTTON_RIGHT, "right")
+		"hover_control":
+			return _hover_control(ei, args)
+		"leave_control":
+			return _leave_control(ei, args)
 		"set_text":
 			return _set_control_text(ei, str(args.get("target_path", "")).strip_edges(), str(args.get("text", "")))
 		_:
@@ -238,6 +242,64 @@ func _click_control(ei, args: Dictionary, button_index: int, button_name: String
 		"screen_position": _vector2_to_dict(screen_position),
 		"coordinate_mapping": _build_control_coordinate_mapping(control)
 	}, "Editor control %s-click dispatched" % button_name)
+
+
+func _hover_control(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var control = _find_control(ei, target_path)
+	if control == null:
+		return _error("Editor control not found: %s" % target_path)
+	if not _is_control_visible(control):
+		return _error("Editor control is not visible: %s" % target_path)
+	if not _has_non_empty_rect(control):
+		return _error("Editor control rect is empty: %s" % target_path)
+
+	var local_position := _resolve_local_click_position(control, args)
+	var local_rect := _read_control_local_rect(control)
+	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x > local_rect.size.x or local_position.y > local_rect.size.y:
+		return _error("local_x/local_y is outside the control rect: %s" % target_path)
+
+	var viewport_position := _control_local_to_viewport_position(control, local_position)
+	var screen_position := _viewport_to_screen_position(control, viewport_position)
+	var dispatch_result := _dispatch_control_mouse_motion(control, viewport_position)
+	if not bool(dispatch_result.get("success", false)):
+		return dispatch_result
+
+	return _success({
+		"target_path": target_path,
+		"class": _control_class_name(control),
+		"local_position": _vector2_to_dict(local_position),
+		"viewport_position": _vector2_to_dict(viewport_position),
+		"screen_position": _vector2_to_dict(screen_position),
+		"coordinate_mapping": _build_control_coordinate_mapping(control)
+	}, "Editor control hover dispatched")
+
+
+func _leave_control(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var control = _find_control(ei, target_path)
+	if control == null:
+		return _error("Editor control not found: %s" % target_path)
+	if not _has_non_empty_rect(control):
+		return _error("Editor control rect is empty: %s" % target_path)
+
+	var viewport_position := _resolve_leave_viewport_position(control, args)
+	var screen_position := _viewport_to_screen_position(control, viewport_position)
+	var dispatch_result := _dispatch_control_mouse_motion(control, viewport_position)
+	if not bool(dispatch_result.get("success", false)):
+		return dispatch_result
+
+	return _success({
+		"target_path": target_path,
+		"class": _control_class_name(control),
+		"viewport_position": _vector2_to_dict(viewport_position),
+		"screen_position": _vector2_to_dict(screen_position),
+		"coordinate_mapping": _build_control_coordinate_mapping(control)
+	}, "Editor control leave dispatched")
 
 
 func _set_control_text(ei, target_path: String, text: String) -> Dictionary:
@@ -682,6 +744,8 @@ func _build_actionable_actions(control) -> Array[String]:
 	if _has_non_empty_rect(control):
 		actions.append("click_control")
 		actions.append("right_click_control")
+		actions.append("hover_control")
+		actions.append("leave_control")
 	if _supports_text_input(control):
 		actions.append("set_text")
 	return actions
@@ -793,6 +857,31 @@ func _dispatch_control_mouse_click(control, button_index: int, viewport_position
 	release_event.button_mask = 0
 	viewport.push_input(release_event, false)
 	return _success({"event_count": 2})
+
+
+func _dispatch_control_mouse_motion(control, viewport_position: Vector2) -> Dictionary:
+	var viewport = _resolve_viewport_for_control(control)
+	if viewport == null or not viewport.has_method("push_input"):
+		return _error("Editor viewport does not support GUI input dispatch")
+	var motion_event := InputEventMouseMotion.new()
+	motion_event.position = viewport_position
+	motion_event.global_position = viewport_position
+	viewport.push_input(motion_event, false)
+	return _success({"event_count": 1})
+
+
+func _resolve_leave_viewport_position(control, args: Dictionary) -> Vector2:
+	if args.has("local_x") or args.has("local_y"):
+		return _control_local_to_viewport_position(control, _resolve_local_click_position(control, args))
+	var rect := _read_control_rect(control)
+	var visible_rect := _read_viewport_visible_rect(control)
+	var candidate := rect.position + Vector2(-8.0, -8.0)
+	if visible_rect.has_point(candidate):
+		return candidate
+	candidate = rect.position + rect.size + Vector2(8.0, 8.0)
+	if visible_rect.has_point(candidate):
+		return candidate
+	return visible_rect.position
 
 
 func _mouse_button_mask(button_index: int) -> int:
