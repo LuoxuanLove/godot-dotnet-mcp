@@ -224,7 +224,7 @@ func _click_control(ei, args: Dictionary, button_index: int, button_name: String
 
 	var local_position := _resolve_local_click_position(control, args)
 	var local_rect := _read_control_local_rect(control)
-	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x > local_rect.size.x or local_position.y > local_rect.size.y:
+	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x >= local_rect.size.x or local_position.y >= local_rect.size.y:
 		return _error("local_x/local_y is outside the control rect: %s" % target_path)
 
 	var viewport_position := _control_local_to_viewport_position(control, local_position)
@@ -258,7 +258,7 @@ func _hover_control(ei, args: Dictionary) -> Dictionary:
 
 	var local_position := _resolve_local_click_position(control, args)
 	var local_rect := _read_control_local_rect(control)
-	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x > local_rect.size.x or local_position.y > local_rect.size.y:
+	if local_position.x < 0.0 or local_position.y < 0.0 or local_position.x >= local_rect.size.x or local_position.y >= local_rect.size.y:
 		return _error("local_x/local_y is outside the control rect: %s" % target_path)
 
 	var viewport_position := _control_local_to_viewport_position(control, local_position)
@@ -877,13 +877,21 @@ func _resolve_leave_viewport_position(control, args: Dictionary) -> Vector2:
 		return _control_local_to_viewport_position(control, _resolve_local_click_position(control, args))
 	var rect := _read_control_rect(control)
 	var visible_rect := _read_viewport_visible_rect(control)
-	var candidate := rect.position + Vector2(-8.0, -8.0)
-	if visible_rect.has_point(candidate):
-		return candidate
-	candidate = rect.position + rect.size + Vector2(8.0, 8.0)
-	if visible_rect.has_point(candidate):
-		return candidate
-	return visible_rect.position
+	var candidates: Array[Vector2] = [
+		rect.position + Vector2(-8.0, -8.0),
+		rect.position + rect.size + Vector2(8.0, 8.0),
+		Vector2(rect.position.x - 8.0, rect.position.y + rect.size.y * 0.5),
+		Vector2(rect.position.x + rect.size.x + 8.0, rect.position.y + rect.size.y * 0.5),
+		Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y - 8.0),
+		Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + rect.size.y + 8.0),
+	]
+	for candidate in candidates:
+		if not rect.has_point(candidate) and visible_rect.has_point(candidate):
+			return candidate
+	for candidate in candidates:
+		if not rect.has_point(candidate):
+			return candidate
+	return rect.position + Vector2(-8.0, -8.0)
 
 
 func _mouse_button_mask(button_index: int) -> int:

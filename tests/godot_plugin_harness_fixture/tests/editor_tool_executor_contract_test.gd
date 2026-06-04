@@ -722,6 +722,25 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(invalid_leave_control_result.get("success", false)):
 		return _failure("Editor ui_control leave_control should reject explicit positions inside the control rect.")
+	var invalid_hover_edge_result: Dictionary = executor.execute("ui_control", {
+		"action": "hover_control",
+		"target_path": search_field_path,
+		"local_x": 160,
+		"local_y": 24
+	})
+	if bool(invalid_hover_edge_result.get("success", false)):
+		return _failure("Editor ui_control hover_control should reject right/bottom edge coordinates outside the control rect.")
+	var full_viewport_panel := FakeUiControl.new("FullViewportPanel", "PanelContainer", Rect2(0, 0, 320, 180))
+	editor_interface.get_base_control().add_popup_child(full_viewport_panel)
+	var full_viewport_leave_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": str(full_viewport_panel.get_path())
+	})
+	if not bool(full_viewport_leave_result.get("success", false)):
+		return _failure("Editor ui_control leave_control should resolve an outside fallback for full-viewport controls.")
+	var full_leave_position := Vector2(pushed_events[pushed_events.size() - 1].position)
+	if full_viewport_panel.get_global_rect().has_point(full_leave_position):
+		return _failure("Editor ui_control leave_control should dispatch outside a full-viewport control rect.")
 
 	var tab_container_path := str(mcp_tabs.get_path())
 	var activate_tab_result: Dictionary = executor.execute("ui_control", {
