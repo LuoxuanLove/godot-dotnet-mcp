@@ -47,6 +47,7 @@ const UPDATE_SYNC_HTTP_TIMEOUT := 60.0
 const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
 const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
 const UPDATE_SYNC_ADDON_PREFIX := "addons/godot_dotnet_mcp/"
+const UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS := 15000
 
 var _state = null
 var _settings_store = null
@@ -1080,8 +1081,11 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 
 
 func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result: Dictionary, serial: int) -> void:
-	await _request_update_sync_editor_refresh(serial)
+	var refresh_result: Dictionary = await _request_update_sync_editor_refresh(serial)
 	if _state == null or serial != _update_sync_request_serial:
+		return
+	if not bool(refresh_result.get("success", false)):
+		_mark_update_sync_failed(_get_localized_text("settings_update_sync_refresh_timeout"), serial)
 		return
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
@@ -1105,16 +1109,19 @@ func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
 	if file_system != null:
 		file_system.scan()
 	var tree := get_tree()
+	var scan_completed := true
 	if tree != null:
 		await tree.process_frame
 		if file_system != null and file_system.has_method("is_scanning"):
-			for _index in range(30):
-				if not bool(file_system.is_scanning()):
-					break
+			var deadline_msec := Time.get_ticks_msec() + UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS
+			scan_completed = not bool(file_system.is_scanning())
+			while not scan_completed and Time.get_ticks_msec() < deadline_msec:
 				await tree.process_frame
+				scan_completed = not bool(file_system.is_scanning())
 	return {
-		"success": true,
-		"scan_requested": file_system != null
+		"success": scan_completed,
+		"scan_requested": file_system != null,
+		"scan_completed": scan_completed
 	}
 
 

@@ -52,6 +52,7 @@ class SyncReloadProbePlugin extends PluginScript:
 	var editor_refresh_count := 0
 	var editor_refresh_state := ""
 	var editor_refresh_status := ""
+	var editor_refresh_result := {"success": true, "scan_requested": true}
 	var sync_events: Array[String] = []
 	var compare_refresh_count := 0
 	var dock_refresh_count := 0
@@ -73,7 +74,7 @@ class SyncReloadProbePlugin extends PluginScript:
 		editor_refresh_state = str(_state.update_sync_state)
 		editor_refresh_status = str(_state.update_sync_status)
 		sync_events.append("editor_refresh")
-		return {"success": true, "scan_requested": true}
+		return editor_refresh_result.duplicate(true)
 
 	func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 		reload_requests.append(source)
@@ -263,6 +264,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		reload_probe.free()
 		return _failure("plugin.gd should refresh the editor file system before scheduling one deferred lifecycle reload after a successful update sync.")
 	reload_probe.free()
+
+	var refresh_timeout_probe := SyncReloadProbePlugin.new()
+	refresh_timeout_probe._update_sync_request_serial = 16
+	refresh_timeout_probe._state.update_sync_state = "loading"
+	refresh_timeout_probe.editor_refresh_result = {"success": false, "scan_requested": true, "scan_completed": false}
+	await refresh_timeout_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16, null)
+	var localized_refresh_timeout := LocalizationServiceScript.translate("settings_update_sync_refresh_timeout")
+	if refresh_timeout_probe.reload_requests != [] or refresh_timeout_probe.sync_events != ["editor_refresh"] or str(refresh_timeout_probe._state.update_sync_state) != "error" or str(refresh_timeout_probe._state.update_sync_error) != localized_refresh_timeout or refresh_timeout_probe.compare_refresh_count != 0:
+		refresh_timeout_probe.free()
+		return _failure("plugin.gd should fail update sync without scheduling lifecycle reload when editor file-system refresh does not finish.")
+	refresh_timeout_probe.free()
 
 	var failed_sync_reload_probe := SyncReloadProbePlugin.new()
 	failed_sync_reload_probe._update_sync_request_serial = 11

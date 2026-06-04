@@ -497,6 +497,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_apply": "同步",
 	"settings_update_sync_loading": "正在同步 %s...",
 	"settings_update_sync_refreshing_editor": "正在重新扫描编辑器文件系统，然后重载插件。",
+	"settings_update_sync_refresh_timeout": "编辑器文件系统刷新未在重载前完成。",
 	"settings_update_sync_success": "已同步 %s（%d 个文件）。",
 	"settings_update_sync_error": "更新同步失败。",
 	"settings_update_sync_no_target": "请先选择要同步的分支或发布版本。",

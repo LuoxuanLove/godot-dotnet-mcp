@@ -497,6 +497,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_apply": "Sync",
 	"settings_update_sync_loading": "Syncing %s...",
 	"settings_update_sync_refreshing_editor": "Refreshing editor file system before reload.",
+	"settings_update_sync_refresh_timeout": "Editor file system refresh did not finish before reload.",
 	"settings_update_sync_success": "Synced %s (%d files).",
 	"settings_update_sync_error": "Update sync failed.",
 	"settings_update_sync_no_target": "Select a branch or release before syncing.",

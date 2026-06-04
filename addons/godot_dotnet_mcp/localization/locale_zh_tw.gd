@@ -468,6 +468,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_apply": "同步",
 	"settings_update_sync_loading": "正在同步 %s...",
 	"settings_update_sync_refreshing_editor": "正在重新掃描編輯器檔案系統，然後重新載入外掛。",
+	"settings_update_sync_refresh_timeout": "編輯器檔案系統重新整理未在重新載入前完成。",
 	"settings_update_sync_success": "已同步 %s（%d 個檔案）。",
 	"settings_update_sync_error": "更新同步失敗。",
 	"settings_update_sync_no_target": "請先選擇要同步的分支或發佈版本。",

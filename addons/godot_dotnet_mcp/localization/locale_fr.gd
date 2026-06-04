@@ -352,6 +352,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_apply": "Synchroniser",
 	"settings_update_sync_loading": "Synchronisation de %s...",
 	"settings_update_sync_refreshing_editor": "Actualisation du système de fichiers de l'éditeur avant le rechargement.",
+	"settings_update_sync_refresh_timeout": "L'actualisation du système de fichiers de l'éditeur ne s'est pas terminée avant le rechargement.",
 	"settings_update_sync_success": "%s synchronisé (%d fichiers).",
 	"settings_update_sync_error": "Échec de la synchronisation de mise à jour.",
 	"settings_update_sync_no_target": "Sélectionnez une branche ou une version avant de synchroniser.",
