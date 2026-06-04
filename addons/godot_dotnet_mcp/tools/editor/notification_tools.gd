@@ -155,6 +155,8 @@ func _select_popup_menu_item(ei, args: Dictionary) -> Dictionary:
 		return _error("PopupMenu item is a separator: %s" % JSON.stringify(item))
 	if bool(item.get("disabled", false)):
 		return _error("PopupMenu item is disabled: %s" % JSON.stringify(item))
+	if bool(item.get("has_submenu", false)):
+		return _error("PopupMenu item opens a submenu and cannot be selected as a leaf action: %s" % JSON.stringify(item))
 	_activate_popup_menu_item(popup_root, item_index, item)
 	return _success({
 		"target_path": target_path,
@@ -359,8 +361,16 @@ func _describe_popup_menu_item(node, index: int) -> Dictionary:
 		item["separator"] = bool(node.is_item_separator(index))
 	else:
 		item["separator"] = false
+	var submenu_node = null
 	if node != null and node.has_method("get_item_submenu"):
 		item["submenu"] = str(node.get_item_submenu(index))
+	else:
+		item["submenu"] = ""
+	if node != null and node.has_method("get_item_submenu_node"):
+		submenu_node = node.get_item_submenu_node(index)
+	item["has_submenu"] = not str(item.get("submenu", "")).is_empty() or submenu_node != null
+	if submenu_node != null:
+		item["submenu_node_path"] = _safe_control_path(submenu_node)
 	return item
 
 
