@@ -17,6 +17,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Improved HTTP keep-alive handling so already buffered pipelined requests continue draining after async tool execution.
 - Added reconnect backpressure safeguards for multi-client recovery, including bounded pending request buffers and connection cleanup after response write failures.
 - Hardened stdio burst processing and lifecycle reload scheduling so stale responses and failed reload schedules do not leave misleading pending state.
+- Made malformed JSON-RPC parameter handling consistent across HTTP and stdio, so invalid top-level `params` return a standard error while invalid tool arguments stay in the tool-result error channel.
 
 ### ✅ Compatibility and Upgrade Notes
 
@@ -25,3 +26,4 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - No file layout or tool schema migration is required.
 - Existing installs do not need migration.
+- Clients can treat non-object JSON-RPC `params` as `-32602` across transports; `tools/call.arguments` validation continues to report a normal MCP tool error result.

@@ -67,6 +67,8 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 
 	if tool_name.is_empty():
 		return _create_tool_result_payload({"success": false, "error": "Missing tool name"})
+	if not (arguments is Dictionary):
+		return _create_tool_result_payload({"success": false, "error": "Tool arguments must be an object"})
 
 	if not _call_bool(_is_tool_enabled, [tool_name], false):
 		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is disabled" % tool_name})

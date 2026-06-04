@@ -140,6 +140,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var error_result: Dictionary = await router.build_tool_call_result_async({})
 	if not bool(error_result.get("isError", false)):
 		return _failure("Tool RPC router should return isError=true when the tool name is missing.")
+	var invalid_arguments_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_project_state",
+		"arguments": []
+	})
+	if not bool(invalid_arguments_result.get("isError", false)):
+		return _failure("Tool RPC router should return isError=true when arguments are not an object.")
+	var invalid_arguments_content = invalid_arguments_result.get("content", [])
+	if not (invalid_arguments_content is Array) or (invalid_arguments_content as Array).is_empty():
+		return _failure("Tool RPC router non-object arguments error should include text content.")
+	if str(((invalid_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
+		return _failure("Tool RPC router non-object arguments error should preserve the validation message.")
 
 	return {
 		"name": "tool_rpc_router_contracts",

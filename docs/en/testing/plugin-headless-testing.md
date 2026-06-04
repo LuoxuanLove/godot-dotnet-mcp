@@ -134,11 +134,12 @@ The harness discovers cases automatically. The following list shows representati
 | `client_config_inspection_service_contracts` | Verify `inspect / preflight` state classification |
 | `client_config_file_transaction_contracts` | Verify merge, remove, backup, and `opencode` blocking writes |
 | `client_config_launcher_adapter_contracts` | Verify CLI invocation and Windows command-line wrapping |
-| `http_server_contracts` | Verify `mcp_http_server` lifecycle, `tools/list`, and `tools/call` structural contracts |
+| `http_server_contracts` | Verify `mcp_http_server` lifecycle, `tools/list`, `tools/call` structural contracts, and malformed `params` / `arguments` JSON-RPC boundaries |
 | `http_request_router_contracts` | Verify path routing, `GET /mcp` 405, default cross-origin denial, explicit CORS allowlist, Host and Content-Type validation, and `404` semantics |
 | `http_request_decoder_contracts` | Verify `Content-Length` and chunked body decoding, header retention, waiting states, and trailing data retention |
 | `http_response_service_contracts` | Verify JSON-RPC construction, `/health` projection, exact-Origin CORS responses, and JSON cleanup |
 | `json_rpc_router_contracts` | Verify `initialize`, notification no-response semantics, and method-not-found behavior |
+| `json_rpc_request_service_contracts` | Verify parse errors, request-object validation, non-object `params` rejection, request emission, and router forwarding |
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
 | `system_project_executor_contracts` | Verify the tool exposure, runtime-health aggregation, and project-level routing of `impl_project.gd` as the current project-level system aggregator |
@@ -148,6 +149,7 @@ The harness discovers cases automatically. The following list shows representati
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
 | `system_index_impl_contracts` | Verify the refresh path from built to `stale_refreshed` in `impl_index.gd` |
 | `tool_loader_contracts` | Verify loader initialization and disabled-tool shrinking under the default tool access provider |
+| `tool_rpc_router_contracts` | Verify tool list presentation, successful tool calls, missing tool name errors, and non-object `arguments` validation |
 | `server_tab_model_projection_contracts` | Verify the status overview, self-diagnostic summary, runtime-state projection, and log and language option model |
 | `tool_lsp_diagnostics_adapter_contracts` | Verify configure, tick, reset, release, and runtime bridge binding semantics in `tool_lsp_diagnostics_adapter.gd` |
 | `gdscript_lsp_diagnostics_service_contracts` | Verify request replacement, cache hits, clear, and debug snapshot behavior in `gdscript_lsp_diagnostics_service.gd` |

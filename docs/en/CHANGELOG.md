@@ -27,6 +27,7 @@ Target version: 1.2.0.
 
 ### Fixed
 
+- Fixed malformed JSON-RPC parameter handling so HTTP and stdio requests reject non-object top-level `params` consistently with `-32602`, while non-object `tools/call.arguments` remains a tool-level `isError` result.
 - Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
 - Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
 - Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
@@ -35,6 +36,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended JSON-RPC request, HTTP server, stdio resources/prompts, and tool router contracts to cover malformed `params` and `tools/call.arguments` boundaries with the `2026-06-05.6` tool schema facts update.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.

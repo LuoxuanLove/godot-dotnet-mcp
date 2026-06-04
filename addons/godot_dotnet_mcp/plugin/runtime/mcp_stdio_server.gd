@@ -220,15 +220,20 @@ func _handle_tools_list(id) -> Dictionary:
 	}, id)
 
 
-func _handle_tools_call(params: Dictionary, id) -> Dictionary:
+func _handle_tools_call(params, id) -> Dictionary:
 	return await _handle_tools_call_async(params, id)
 
 
-func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
+func _handle_tools_call_async(params, id) -> Dictionary:
+	if not (params is Dictionary):
+		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
+	var params_dict := params as Dictionary
+	if params_dict.has("arguments") and not (params_dict.get("arguments") is Dictionary):
+		return _create_tool_response({"success": false, "error": "Tool arguments must be an object"}, id)
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var tool_name := str(params.get("name", ""))
-	var arguments = params.get("arguments", {})
+	var tool_name := str(params_dict.get("name", ""))
+	var arguments = params_dict.get("arguments", {})
 
 	if tool_name.is_empty():
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
