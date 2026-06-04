@@ -351,6 +351,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "準備",
 	"settings_update_apply": "同期",
 	"settings_update_sync_loading": "%s を同期中...",
+	"settings_update_sync_refreshing_editor": "再読み込み前にエディターのファイルシステムを更新しています。",
 	"settings_update_sync_success": "%s を同期しました（%d ファイル）。",
 	"settings_update_sync_error": "更新の同期に失敗しました。",
 	"settings_update_sync_no_target": "同期する前にブランチまたはリリースを選択してください。",

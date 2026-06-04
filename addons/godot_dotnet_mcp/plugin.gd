@@ -1068,6 +1068,15 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	if marker_error != OK:
 		_mark_update_sync_failed("Update files were written, but sync marker write failed: %s" % marker_error, serial)
 		return
+	_state.update_sync_status = _localization.get_text("settings_update_sync_refreshing_editor") if _localization != null else "Refreshing editor file system before reload."
+	_refresh_dock()
+	await _complete_update_sync_after_editor_refresh(target_ref, sync_result, serial)
+
+
+func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result: Dictionary, serial: int) -> void:
+	await _request_update_sync_editor_refresh(serial)
+	if _state == null or serial != _update_sync_request_serial:
+		return
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
 	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
@@ -1080,6 +1089,27 @@ func _request_update_sync_lifecycle_reload() -> void:
 	if _plugin_reenable_pending:
 		return
 	_request_plugin_lifecycle_reload("settings_sync")
+
+
+func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
+	var file_system = null
+	var editor_interface = get_editor_interface()
+	if editor_interface != null:
+		file_system = editor_interface.get_resource_filesystem()
+	if file_system != null:
+		file_system.scan()
+	var tree := get_tree()
+	if tree != null:
+		await tree.process_frame
+		if file_system != null and file_system.has_method("is_scanning"):
+			for _index in range(30):
+				if not bool(file_system.is_scanning()):
+					break
+				await tree.process_frame
+	return {
+		"success": true,
+		"scan_requested": file_system != null
+	}
 
 
 func _write_update_sync_marker(target: Dictionary, written: int) -> int:
