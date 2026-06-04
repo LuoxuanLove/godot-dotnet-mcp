@@ -414,7 +414,8 @@ func _activate_popup_menu_item(node, index: int, item: Dictionary) -> void:
 	if node.has_method("emit_signal"):
 		node.emit_signal("index_pressed", index)
 		if item.has("id"):
-			node.emit_signal("id_pressed", int(item.get("id", index)))
+			var item_id := int(item.get("id", index))
+			node.emit_signal("id_pressed", item_id if item_id >= 0 else index)
 	if node.has_method("hide"):
 		node.hide()
 

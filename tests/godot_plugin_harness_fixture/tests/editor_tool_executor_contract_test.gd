@@ -274,6 +274,32 @@ class FakePopupNode:
 		selected_id = get_item_id(index)
 
 
+class FakeLegacyPopupMenu:
+	extends RefCounted
+
+	signal index_pressed(index: int)
+	signal id_pressed(id: int)
+
+	var emitted_index := -1
+	var emitted_id := -1
+
+	func _init() -> void:
+		index_pressed.connect(_record_index_pressed)
+		id_pressed.connect(_record_id_pressed)
+
+	func dispose() -> void:
+		if index_pressed.is_connected(_record_index_pressed):
+			index_pressed.disconnect(_record_index_pressed)
+		if id_pressed.is_connected(_record_id_pressed):
+			id_pressed.disconnect(_record_id_pressed)
+
+	func _record_index_pressed(index: int) -> void:
+		emitted_index = index
+
+	func _record_id_pressed(id: int) -> void:
+		emitted_id = id
+
+
 class FakeUiControl:
 	extends RefCounted
 
@@ -823,6 +849,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(popup_select_by_id_result.get("success", false)) or popup_root.selected_index != 3:
 		return _failure("Editor popup select_item should select a visible PopupMenu item by id.")
+
+	var legacy_popup := FakeLegacyPopupMenu.new()
+	executor._notification_tools._activate_popup_menu_item(legacy_popup, 2, {"id": -1})
+	if legacy_popup.emitted_index != 2 or legacy_popup.emitted_id != 2:
+		legacy_popup.dispose()
+		return _failure("Editor popup select_item fallback should emit the item index for negative PopupMenu ids.")
+	legacy_popup.dispose()
 
 	var popup_select_disabled_result: Dictionary = executor.execute("popup", {
 		"action": "select_item",
