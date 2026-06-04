@@ -69,6 +69,23 @@ class FakeBridge extends RefCounted:
 						return success({"target_path": str(args.get("target_path", ""))})
 					_:
 						return error("Unsupported editor_popup action")
+			"editor_plugin":
+				match str(args.get("action", "")):
+					"list":
+						return success({
+							"count": 1,
+							"plugins": [{"plugin": "diagnostic_plugin", "editor_enabled": true, "setting_enabled": true}]
+						})
+					"inspect":
+						return success({"plugin": str(args.get("plugin", "")), "editor_enabled": true, "setting_enabled": true})
+					"enable", "disable":
+						return success({
+							"plugin": str(args.get("plugin", "")),
+							"requested_enabled": str(args.get("action", "")) == "enable",
+							"allow_self": bool(args.get("allow_self", false))
+						})
+					_:
+						return error("Unsupported editor_plugin action")
 			_:
 				return error("Unsupported atomic tool: %s" % tool_name)
 
@@ -84,8 +101,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	impl.bridge = FakeBridge.new()
 
 	var tool_defs: Array[Dictionary] = impl.get_tools()
-	if tool_defs.size() != 2:
-		return _failure("impl_editor.gd should expose exactly two high-level system tools after adding editor_log.")
+	if tool_defs.size() != 3:
+		return _failure("impl_editor.gd should expose exactly three high-level system tools after adding editor_plugin_control.")
 	var tool_names: Array[String] = []
 	for tool_def in tool_defs:
 		tool_names.append(str(tool_def.get("name", "")))
@@ -93,6 +110,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("impl_editor.gd should expose editor_control.")
 	if not tool_names.has("editor_log"):
 		return _failure("impl_editor.gd should expose editor_log alongside editor_control.")
+	if not tool_names.has("editor_plugin_control"):
+		return _failure("impl_editor.gd should expose editor_plugin_control.")
 
 	var editor_control_schema: Dictionary = {}
 	for tool_def in tool_defs:
@@ -229,6 +248,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(set_text_result.get("success", false)):
 		return _failure("system editor_control should delegate set_control_text.")
+
+	var plugin_list_result: Dictionary = impl.execute("editor_plugin_control", {"action": "list"})
+	if not bool(plugin_list_result.get("success", false)) or int(plugin_list_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("system editor_plugin_control should delegate plugin list.")
+	var plugin_status_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "get_status",
+		"plugin": "diagnostic_plugin"
+	})
+	if not bool(plugin_status_result.get("success", false)) or str(plugin_status_result.get("data", {}).get("plugin", "")) != "diagnostic_plugin":
+		return _failure("system editor_plugin_control should delegate plugin status inspection.")
+	var plugin_enable_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "enable",
+		"plugin": "diagnostic_plugin"
+	})
+	if not bool(plugin_enable_result.get("success", false)) or not bool(plugin_enable_result.get("data", {}).get("requested_enabled", false)):
+		return _failure("system editor_plugin_control should delegate plugin enable.")
+	var plugin_disable_self_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "disable",
+		"plugin": "godot_dotnet_mcp",
+		"allow_self": true
+	})
+	if not bool(plugin_disable_self_result.get("success", false)) or not bool(plugin_disable_self_result.get("data", {}).get("allow_self", false)):
+		return _failure("system editor_plugin_control should forward allow_self for explicit self-toggle requests.")
 
 	return {
 		"name": "system_editor_control_contracts",
