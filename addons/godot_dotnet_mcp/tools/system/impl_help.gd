@@ -5,6 +5,7 @@ extends RefCounted
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
+const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -58,7 +59,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"recommended_start": [
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
-			"Call system_tool_activity when coordinating with other agents or sessions; optional _mcp_context fields are self-reported coordination hints, not authentication.",
+			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",

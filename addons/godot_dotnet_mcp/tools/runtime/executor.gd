@@ -13,6 +13,8 @@ func configure_runtime(context: Dictionary) -> void:
 	_runtime_context = context.duplicate()
 	if _runtime_context.has("runtime_control_service"):
 		_runtime_control_service = _runtime_context.get("runtime_control_service", null)
+	else:
+		_runtime_control_service = null
 	MCPDebugBuffer.record("info", "runtime", "executor configure_runtime runtime_service=%s" % str(_runtime_control_service != null))
 
 

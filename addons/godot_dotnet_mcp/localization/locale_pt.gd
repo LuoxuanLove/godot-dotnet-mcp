@@ -577,6 +577,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_dap_debugger_desc": "Controla o endpoint Debug Adapter Protocol integrado do Godot com configurações em tempo de execução, IDs de sessão, ciclo de vida, threads, pontos de interrupção, passos, pilha, saída, encerramento e desconexão.",
 	"tool_system_tool_activity_name": "Atividade de ferramentas",
 	"tool_system_tool_activity_desc": "Inspeciona chamadas MCP em execução e recentes, ordem de execução e contexto opcional informado pelo Agent.",
+	"help_recommended_start_tool_activity": "Chame system_tool_activity ao coordenar com outros agentes ou sessões; os campos opcionais _mcp_context são pistas de coordenação autodeclaradas, não autenticação.",
 	"tool_runtime_control_name": "Controle",
 	"tool_runtime_control_desc": "Controle interno de execução: inspeciona ou arma a sessão do depurador do projeto em execução. Suporta status, enable e disable.",
 	"tool_runtime_capture_name": "Captura",

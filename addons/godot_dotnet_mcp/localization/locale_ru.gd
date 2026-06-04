@@ -577,6 +577,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_dap_debugger_desc": "Управляет встроенной конечной точкой Debug Adapter Protocol Godot через параметры времени выполнения, ID сессий, жизненный цикл, потоки, точки останова, шаги, стек, вывод, завершение и отключение.",
 	"tool_system_tool_activity_name": "Активность инструментов",
 	"tool_system_tool_activity_desc": "Показывает выполняющиеся и недавние вызовы MCP-инструментов, порядок выполнения и необязательный самозаявленный контекст Agent.",
+	"help_recommended_start_tool_activity": "Вызывайте system_tool_activity при координации с другими агентами или сессиями; необязательные поля _mcp_context являются самозаявленными подсказками координации, а не аутентификацией.",
 	"tool_runtime_control_name": "Управление",
 	"tool_runtime_control_desc": "Внутреннее управление средой выполнения: проверяет или включает сеанс отладчика запущенного проекта. Поддерживает status, enable и disable.",
 	"tool_runtime_capture_name": "Захват",
