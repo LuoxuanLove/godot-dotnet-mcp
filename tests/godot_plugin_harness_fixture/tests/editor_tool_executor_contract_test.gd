@@ -199,6 +199,9 @@ class FakePopupNode:
 	var _children: Array = []
 	var pressed := false
 	var _rect := Rect2(0, 0, 100, 24)
+	var _items: Array[Dictionary] = []
+	var selected_index := -1
+	var selected_id := -1
 
 	func _init(node_name: String = "", popup_class: String = "Control") -> void:
 		name = node_name
@@ -238,6 +241,37 @@ class FakePopupNode:
 
 	func press() -> void:
 		pressed = true
+
+	func add_menu_item(text_value: String, id_value: int, disabled_value: bool = false, separator_value: bool = false) -> void:
+		_items.append({
+			"text": text_value,
+			"id": id_value,
+			"disabled": disabled_value,
+			"separator": separator_value,
+			"submenu": ""
+		})
+
+	func get_item_count() -> int:
+		return _items.size()
+
+	func get_item_id(index: int) -> int:
+		return int(_items[index].get("id", index))
+
+	func get_item_text(index: int) -> String:
+		return str(_items[index].get("text", ""))
+
+	func is_item_disabled(index: int) -> bool:
+		return bool(_items[index].get("disabled", false))
+
+	func is_item_separator(index: int) -> bool:
+		return bool(_items[index].get("separator", false))
+
+	func get_item_submenu(index: int) -> String:
+		return str(_items[index].get("submenu", ""))
+
+	func activate_item(index: int) -> void:
+		selected_index = index
+		selected_id = get_item_id(index)
 
 
 class FakeUiControl:
@@ -470,12 +504,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_scene_root = _build_scene_fixture(tree)
 	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
 	popup_root.title = "Search"
+	popup_root.add_menu_item("Rename", 101)
+	popup_root.add_menu_item("Disabled", 102, true)
+	popup_root.add_menu_item("", 103, false, true)
+	popup_root.add_menu_item("Delete", 104)
 	var popup_button := FakePopupNode.new("ConfirmButton", "Button")
 	popup_button.text = "Confirm"
 	var popup_input := FakePopupNode.new("SearchInput", "LineEdit")
 	popup_input.text = "OldValue"
 	var hidden_popup_root := FakePopupNode.new("HiddenDialog", "PopupMenu")
 	hidden_popup_root.visible = false
+	hidden_popup_root.add_menu_item("Hidden Rename", 201)
 	var hidden_popup_button := FakePopupNode.new("HiddenButton", "Button")
 	hidden_popup_root.add_child(hidden_popup_button)
 	var non_popup_button := FakePopupNode.new("ToolbarButton", "Button")
@@ -760,9 +799,54 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor popup list_visible should expose popup parent_path and rect metadata.")
 	if str(popup_summary.get("text", "")) != "":
 		return _failure("Editor popup list_visible should expose popup text separately from title.")
+	var popup_items: Array = popup_summary.get("items", [])
+	if popup_items.size() != 4 or str(popup_items[0].get("text", "")) != "Rename":
+		return _failure("Editor popup list_visible should expose PopupMenu item metadata.")
 	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
 	var popup_button_path := "%s/ConfirmButton" % popup_root_path
 	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var popup_select_by_text_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"text": "Rename"
+	})
+	if not bool(popup_select_by_text_result.get("success", false)):
+		return _failure("Editor popup select_item should select a visible PopupMenu item by exact text.")
+	if popup_root.selected_index != 0 or int(popup_select_by_text_result.get("data", {}).get("selected_item", {}).get("id", -1)) != 101:
+		return _failure("Editor popup select_item should activate and return the selected item metadata.")
+
+	var popup_select_by_id_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104
+	})
+	if not bool(popup_select_by_id_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should select a visible PopupMenu item by id.")
+
+	var popup_select_disabled_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 1
+	})
+	if bool(popup_select_disabled_result.get("success", false)):
+		return _failure("Editor popup select_item should reject disabled PopupMenu items.")
+
+	var popup_select_separator_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 2
+	})
+	if bool(popup_select_separator_result.get("success", false)):
+		return _failure("Editor popup select_item should reject PopupMenu separators.")
+
+	var hidden_popup_select_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": str(hidden_popup_root.get_path()),
+		"index": 0
+	})
+	if bool(hidden_popup_select_result.get("success", false)):
+		return _failure("Editor popup select_item should reject hidden PopupMenu roots.")
 
 	var popup_press_result: Dictionary = executor.execute("popup", {
 		"action": "press_button",

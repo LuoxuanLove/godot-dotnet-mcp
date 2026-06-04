@@ -50,6 +50,8 @@ func execute_popup(ei, args: Dictionary) -> Dictionary:
 			return _list_visible_popups(ei)
 		"press_button":
 			return _press_popup_button(ei, str(args.get("target_path", "")).strip_edges())
+		"select_item":
+			return _select_popup_menu_item(ei, args)
 		"set_text":
 			return _set_popup_text(ei, str(args.get("target_path", "")).strip_edges(), str(args.get("text", "")))
 		"close_popup":
@@ -126,6 +128,40 @@ func _press_popup_button(ei, target_path: String) -> Dictionary:
 	elif target.has_method("emit_signal"):
 		target.emit_signal("pressed")
 	return _success({"target_path": target_path, "class": control_class}, "Popup button pressed")
+
+
+func _select_popup_menu_item(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var target = _find_popup_target(ei, target_path)
+	if target == null:
+		return _error("Popup target not found: %s" % target_path)
+	var popup_root = _resolve_popup_root(target)
+	if popup_root == null:
+		return _error("Target is not inside a visible popup: %s" % target_path)
+	if not _is_visible_popup_root(popup_root):
+		return _error("Target is not inside a visible popup: %s" % target_path)
+	if _control_class_name(popup_root) != "PopupMenu":
+		return _error("Target is not inside a PopupMenu: %s" % target_path)
+	var selector := _read_popup_item_selector(args)
+	if selector.is_empty():
+		return _error("index, id, or text is required")
+	var item_index := _find_popup_menu_item_index(popup_root, selector)
+	if item_index < 0:
+		return _error("PopupMenu item not found for selector: %s" % JSON.stringify(selector))
+	var item := _describe_popup_menu_item(popup_root, item_index)
+	if bool(item.get("separator", false)):
+		return _error("PopupMenu item is a separator: %s" % JSON.stringify(item))
+	if bool(item.get("disabled", false)):
+		return _error("PopupMenu item is disabled: %s" % JSON.stringify(item))
+	_activate_popup_menu_item(popup_root, item_index, item)
+	return _success({
+		"target_path": target_path,
+		"popup_path": _safe_control_path(popup_root),
+		"selector": selector,
+		"selected_item": item
+	}, "PopupMenu item selected")
 
 
 func _set_popup_text(ei, target_path: String, text: String) -> Dictionary:
@@ -305,19 +341,82 @@ func _collect_popup_menu_items(node) -> Array[Dictionary]:
 		return items
 	var count := int(node.get_item_count())
 	for index in range(count):
-		var item := {"index": index}
-		if node.has_method("get_item_id"):
-			item["id"] = int(node.get_item_id(index))
-		if node.has_method("get_item_text"):
-			item["text"] = str(node.get_item_text(index))
-		if node.has_method("is_item_disabled"):
-			item["disabled"] = bool(node.is_item_disabled(index))
-		if node.has_method("is_item_separator"):
-			item["separator"] = bool(node.is_item_separator(index))
-		if node.has_method("get_item_submenu"):
-			item["submenu"] = str(node.get_item_submenu(index))
-		items.append(item)
+		items.append(_describe_popup_menu_item(node, index))
 	return items
+
+
+func _describe_popup_menu_item(node, index: int) -> Dictionary:
+	var item := {"index": index}
+	if node != null and node.has_method("get_item_id"):
+		item["id"] = int(node.get_item_id(index))
+	if node != null and node.has_method("get_item_text"):
+		item["text"] = str(node.get_item_text(index))
+	if node != null and node.has_method("is_item_disabled"):
+		item["disabled"] = bool(node.is_item_disabled(index))
+	else:
+		item["disabled"] = false
+	if node != null and node.has_method("is_item_separator"):
+		item["separator"] = bool(node.is_item_separator(index))
+	else:
+		item["separator"] = false
+	if node != null and node.has_method("get_item_submenu"):
+		item["submenu"] = str(node.get_item_submenu(index))
+	return item
+
+
+func _read_popup_item_selector(args: Dictionary) -> Dictionary:
+	if args.has("index") and args.get("index", null) != null:
+		return {"type": "index", "value": int(args.get("index", -1))}
+	if args.has("id") and args.get("id", null) != null:
+		return {"type": "id", "value": int(args.get("id", -1))}
+	if args.has("text") and args.get("text", null) != null:
+		var text := str(args.get("text", ""))
+		if not text.is_empty():
+			return {"type": "text", "value": text}
+	return {}
+
+
+func _find_popup_menu_item_index(node, selector: Dictionary) -> int:
+	if node == null or not node.has_method("get_item_count"):
+		return -1
+	var selector_type := str(selector.get("type", ""))
+	var selector_value = selector.get("value", null)
+	var count := int(node.get_item_count())
+	match selector_type:
+		"index":
+			var index := int(selector_value)
+			return index if index >= 0 and index < count else -1
+		"id":
+			if not node.has_method("get_item_id"):
+				return -1
+			for index in range(count):
+				if int(node.get_item_id(index)) == int(selector_value):
+					return index
+		"text":
+			if not node.has_method("get_item_text"):
+				return -1
+			var matches: Array[int] = []
+			for index in range(count):
+				if str(node.get_item_text(index)) == str(selector_value):
+					matches.append(index)
+			if matches.size() == 1:
+				return int(matches[0])
+			return -1
+	return -1
+
+
+func _activate_popup_menu_item(node, index: int, item: Dictionary) -> void:
+	if node == null:
+		return
+	if node.has_method("activate_item"):
+		node.activate_item(index)
+		return
+	if node.has_method("emit_signal"):
+		node.emit_signal("index_pressed", index)
+		if item.has("id"):
+			node.emit_signal("id_pressed", int(item.get("id", index)))
+	if node.has_method("hide"):
+		node.hide()
 
 
 func _read_node_rect(node) -> Rect2:

@@ -65,6 +65,16 @@ class FakeBridge extends RefCounted:
 				match str(args.get("action", "")):
 					"list_visible":
 						return success({"count": 1, "popups": [{"node_path": "/root/Editor/SearchDialog"}]})
+					"select_item":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"selector": {
+								"index": args.get("index", null),
+								"id": args.get("id", null),
+								"text": args.get("text", null)
+							},
+							"selected_item": {"index": int(args.get("index", -1)), "id": int(args.get("id", -1)), "text": str(args.get("text", ""))}
+						})
 					"press_button", "set_text", "close_popup":
 						return success({"target_path": str(args.get("target_path", ""))})
 					_:
@@ -110,6 +120,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
 	if not editor_control_properties.has("local_x") or not editor_control_properties.has("local_y"):
 		return _failure("editor_control schema should expose local_x/local_y for control-local mouse clicks.")
+	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
+		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
@@ -221,6 +233,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var popup_result: Dictionary = impl.execute("editor_control", {"action": "list_popups"})
 	if not bool(popup_result.get("success", false)):
 		return _failure("system editor_control should delegate list_popups.")
+
+	var popup_select_result: Dictionary = impl.execute("editor_control", {
+		"action": "select_popup_menu_item",
+		"target_path": "/root/Editor/SearchDialog",
+		"index": 2,
+		"id": 42,
+		"text": "Rename"
+	})
+	if not bool(popup_select_result.get("success", false)):
+		return _failure("system editor_control should delegate select_popup_menu_item.")
+	if int(popup_select_result.get("data", {}).get("selected_item", {}).get("index", -1)) != 2:
+		return _failure("system editor_control should preserve select_popup_menu_item index.")
 
 	var set_text_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_control_text",
