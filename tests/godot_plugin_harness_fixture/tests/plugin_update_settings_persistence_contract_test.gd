@@ -3,6 +3,7 @@ extends RefCounted
 const PluginScript = preload("res://addons/godot_dotnet_mcp/plugin.gd")
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 var _plugin = null
 
@@ -257,7 +258,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	reload_probe._update_sync_request_serial = 10
 	reload_probe._state.update_sync_state = "loading"
 	await reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10, null)
-	if reload_probe.reload_requests != ["settings_sync"] or reload_probe.sync_events != ["editor_refresh", "lifecycle_reload"] or reload_probe.editor_refresh_count != 1 or reload_probe.editor_refresh_state != "loading" or not reload_probe.editor_refresh_status.contains("Refreshing editor file system") or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count < 2:
+	var localized_refresh_status := LocalizationServiceScript.translate("settings_update_sync_refreshing_editor")
+	if reload_probe.reload_requests != ["settings_sync"] or reload_probe.sync_events != ["editor_refresh", "lifecycle_reload"] or reload_probe.editor_refresh_count != 1 or reload_probe.editor_refresh_state != "loading" or reload_probe.editor_refresh_status != localized_refresh_status or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count < 2:
 		reload_probe.free()
 		return _failure("plugin.gd should refresh the editor file system before scheduling one deferred lifecycle reload after a successful update sync.")
 	reload_probe.free()

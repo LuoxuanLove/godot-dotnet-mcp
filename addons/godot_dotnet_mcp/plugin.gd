@@ -85,6 +85,12 @@ func _init() -> void:
 	_ensure_runtime_state()
 
 
+func _get_localized_text(key: String) -> String:
+	if _localization != null:
+		return _localization.get_text(key)
+	return LocalizationService.translate(key)
+
+
 func _enter_tree() -> void:
 	PluginSelfDiagnosticStore.clear()
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_enter_tree", "_enter_tree")
@@ -1068,7 +1074,7 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	if marker_error != OK:
 		_mark_update_sync_failed("Update files were written, but sync marker write failed: %s" % marker_error, serial)
 		return
-	_state.update_sync_status = _localization.get_text("settings_update_sync_refreshing_editor") if _localization != null else "Refreshing editor file system before reload."
+	_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_editor")
 	_refresh_dock()
 	await _complete_update_sync_after_editor_refresh(target_ref, sync_result, serial)
 
@@ -1079,7 +1085,7 @@ func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result:
 		return
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
-	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
+	_state.update_sync_status = _get_localized_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 	_request_update_sync_lifecycle_reload()
