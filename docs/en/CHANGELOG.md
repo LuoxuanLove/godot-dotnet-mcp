@@ -45,6 +45,7 @@ Target version: 1.2.0.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
+- Extended plugin harness failure reports with `failureClasses`, `primaryFailureClass`, and `exitCleanupWarningFailure` so Godot exit cleanup warnings are visible without hiding runtime error markers.
 
 ## [1.1.2] - 2026-06-02
 

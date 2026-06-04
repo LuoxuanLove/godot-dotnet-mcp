@@ -17,6 +17,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Improved HTTP keep-alive handling so already buffered pipelined requests continue draining after async tool execution.
 - Added reconnect backpressure safeguards for multi-client recovery, including bounded pending request buffers and connection cleanup after response write failures.
 - Hardened stdio burst processing and lifecycle reload scheduling so stale responses and failed reload schedules do not leave misleading pending state.
+- Made plugin harness failure reports clearer by separating Godot exit-cleanup warnings from runtime error markers and test-case failures in CI output.
 
 ### ✅ Compatibility and Upgrade Notes
 
