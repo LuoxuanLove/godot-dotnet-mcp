@@ -853,6 +853,54 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(popup_select_by_id_result.get("success", false)) or popup_root.selected_index != 3:
 		return _failure("Editor popup select_item should select a visible PopupMenu item by id.")
 
+	var popup_select_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"id": 104
+	})
+	if bool(popup_select_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject conflicting item selectors without activating a new item.")
+	var popup_select_empty_text_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"text": ""
+	})
+	if bool(popup_select_empty_text_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should treat an empty text field as a conflicting selector when index is also provided.")
+	var popup_select_id_text_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104,
+		"text": "Rename"
+	})
+	if bool(popup_select_id_text_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject id and text selectors when both are provided.")
+	var popup_select_all_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"id": 104,
+		"text": "Rename"
+	})
+	if bool(popup_select_all_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject index, id, and text selectors when all are provided.")
+	var popup_select_invalid_index_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": "0"
+	})
+	if bool(popup_select_invalid_index_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject string index selectors instead of coercing them.")
+	var popup_select_invalid_id_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104.5
+	})
+	if bool(popup_select_invalid_id_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject fractional id selectors instead of coercing them.")
+
 	var legacy_popup := FakeLegacyPopupMenu.new()
 	executor._notification_tools._activate_popup_menu_item(legacy_popup, 2, {"id": -1})
 	if legacy_popup.emitted_index != 2 or legacy_popup.emitted_id != 2:

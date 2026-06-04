@@ -145,6 +145,8 @@ func _select_popup_menu_item(ei, args: Dictionary) -> Dictionary:
 	if _control_class_name(popup_root) != "PopupMenu":
 		return _error("Target is not inside a PopupMenu: %s" % target_path)
 	var selector := _read_popup_item_selector(args)
+	if selector.has("error"):
+		return _error(str(selector.get("error", "")))
 	if selector.is_empty():
 		return _error("index, id, or text is required")
 	var item_index := _find_popup_menu_item_index(popup_root, selector)
@@ -375,15 +377,41 @@ func _describe_popup_menu_item(node, index: int) -> Dictionary:
 
 
 func _read_popup_item_selector(args: Dictionary) -> Dictionary:
+	var selector_keys: Array[String] = []
 	if args.has("index") and args.get("index", null) != null:
-		return {"type": "index", "value": int(args.get("index", -1))}
+		selector_keys.append("index")
 	if args.has("id") and args.get("id", null) != null:
-		return {"type": "id", "value": int(args.get("id", -1))}
+		selector_keys.append("id")
 	if args.has("text") and args.get("text", null) != null:
-		var text := str(args.get("text", ""))
-		if not text.is_empty():
-			return {"type": "text", "value": text}
+		selector_keys.append("text")
+	if selector_keys.size() > 1:
+		return {"error": "Only one popup item selector is allowed: %s" % ", ".join(selector_keys)}
+	if selector_keys.has("index"):
+		var index_value := _read_popup_integer_selector_value(args, "index")
+		if not bool(index_value.get("success", false)):
+			return {"error": str(index_value.get("error", ""))}
+		return {"type": "index", "value": int(index_value.get("value", -1))}
+	if selector_keys.has("id"):
+		var id_value := _read_popup_integer_selector_value(args, "id")
+		if not bool(id_value.get("success", false)):
+			return {"error": str(id_value.get("error", ""))}
+		return {"type": "id", "value": int(id_value.get("value", -1))}
+	if selector_keys.has("text"):
+		return {"type": "text", "value": str(args.get("text", ""))}
 	return {}
+
+
+func _read_popup_integer_selector_value(args: Dictionary, key: String) -> Dictionary:
+	var value = args.get(key, null)
+	match typeof(value):
+		TYPE_INT:
+			return {"success": true, "value": int(value)}
+		TYPE_FLOAT:
+			var float_value := float(value)
+			var rounded_value := round(float_value)
+			if abs(float_value - rounded_value) < 0.000001:
+				return {"success": true, "value": int(rounded_value)}
+	return {"success": false, "error": "PopupMenu %s selector must be an integer" % key}
 
 
 func _find_popup_menu_item_index(node, selector: Dictionary) -> int:

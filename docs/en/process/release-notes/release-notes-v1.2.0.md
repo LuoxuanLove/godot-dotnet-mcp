@@ -14,7 +14,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### 🔧 Fixes
 
 - Refreshed the Godot editor file system after plugin update sync writes files, before scheduling the plugin lifecycle reload.
-- Guarded popup menu automation against hidden popups, disabled items, separators, submenu rows, and ambiguous duplicate text matches.
+- Guarded popup menu automation against hidden popups, disabled items, separators, submenu rows, conflicting selectors, and ambiguous duplicate text matches.
 - Corrected English and Japanese documentation facts around service routing, .NET support, UI flow, and tool-domain indexes.
 - Replaced broken or outdated localization draft fragments with current user-facing content.
 - Removed invalid screenshot references from the Japanese README.
