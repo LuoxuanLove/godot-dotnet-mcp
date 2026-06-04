@@ -41,7 +41,7 @@ const HANDLED_TOOLS := [
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 
 
 func handles(tool_name: String) -> bool:

@@ -609,6 +609,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_name": "런타임 단계 실행",
 	"tool_system_dap_debugger_name": "DAP 디버거",
 	"tool_system_dap_debugger_desc": "Drive Godot's built-in 디버그 Adapter Protocol endpoint with runtime settings, session IDs, lifecycle, thread, breakpoint, stepping, stack-trace, output, terminate, and disconnect actions.",
+	"tool_system_tool_activity_name": "도구 활동",
+	"tool_system_tool_activity_desc": "실행 중이거나 최근 완료된 MCP 도구 호출, 실행 순서, 선택적 Agent 자체 보고 컨텍스트를 확인합니다.",
 	"tool_runtime_control_name": "컨트롤",
 	"tool_runtime_control_desc": "Internal runtime control: inspect or arm the running project's debugger 세션. Supports status, enable and disable.",
 	"tool_runtime_capture_name": "캡처",

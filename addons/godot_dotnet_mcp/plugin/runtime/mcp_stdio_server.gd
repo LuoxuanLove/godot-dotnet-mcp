@@ -229,6 +229,12 @@ func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
 	var tool_name := str(params.get("name", ""))
 	var arguments = params.get("arguments", {})
+	if not (arguments is Dictionary):
+		arguments = {}
+	else:
+		arguments = (arguments as Dictionary).duplicate(true)
+	if not (arguments as Dictionary).has("_mcp_context") and params.get("_mcp_context", null) is Dictionary:
+		(arguments as Dictionary)["_mcp_context"] = (params.get("_mcp_context", {}) as Dictionary).duplicate(true)
 
 	if tool_name.is_empty():
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
@@ -360,6 +366,8 @@ func _normalize_tool_result(result) -> Dictionary:
 	var normalized: Dictionary = result.duplicate(true)
 	normalized["success"] = bool(normalized.get("success", true))
 	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true}
+	if _is_protocol_activity_summary(normalized.get("activity", null)):
+		reserved["activity"] = true
 	var extra := {}
 	for key in normalized.keys():
 		if not reserved.has(key):
@@ -379,6 +387,12 @@ func _normalize_tool_result(result) -> Dictionary:
 	for key in extra.keys():
 		normalized.erase(key)
 	return normalized
+
+
+func _is_protocol_activity_summary(value) -> bool:
+	if not (value is Dictionary):
+		return false
+	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
 
 
 func _create_json_rpc_response(result, id) -> Dictionary:

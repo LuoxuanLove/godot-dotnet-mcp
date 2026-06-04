@@ -575,6 +575,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_desc": "Einheitlicher Laufzeit-Automatisierungseinstieg: action=step|capture|input führt Schrittfolgen, Erfassung oder skriptgesteuerte Eingabe aus.",
 	"tool_system_dap_debugger_name": "DAP-Debugger",
 	"tool_system_dap_debugger_desc": "Steuert Godots integrierten Debug Adapter Protocol-Endpunkt mit Laufzeiteinstellungen, Sitzungs-IDs, Lebenszyklus-, Thread-, Breakpoint-, Schritt-, Stacktrace-, Ausgabe-, Beenden- und Trennen-Aktionen.",
+	"tool_system_tool_activity_name": "Werkzeugaktivität",
+	"tool_system_tool_activity_desc": "Prüft laufende und kürzlich abgeschlossene MCP-Werkzeugaufrufe, Ausführungsreihenfolge und optional selbst gemeldeten Agent-Kontext.",
 	"tool_runtime_control_name": "Steuerung",
 	"tool_runtime_control_desc": "Interne Laufzeitsteuerung: Debugger-Sitzung des laufenden Projekts prüfen oder aktivieren. Unterstützt Status, Aktivieren und Deaktivieren.",
 	"tool_runtime_capture_name": "Erfassen",

@@ -575,6 +575,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_desc": "Entrada unificada de automatización en ejecución: action=step|capture|input ejecuta bucles de paso, capturas o entrada con script.",
 	"tool_system_dap_debugger_name": "Depurador DAP",
 	"tool_system_dap_debugger_desc": "Controla el endpoint Debug Adapter Protocol integrado de Godot con ajustes de ejecución, ID de sesión, ciclo de vida, hilos, puntos de interrupción, pasos, trazas de pila, salida, terminación y desconexión.",
+	"tool_system_tool_activity_name": "Actividad de herramientas",
+	"tool_system_tool_activity_desc": "Inspecciona llamadas MCP en curso y recientes, orden de ejecución y contexto opcional declarado por el Agent.",
 	"tool_runtime_control_name": "Control",
 	"tool_runtime_control_desc": "Control interno en ejecución: inspecciona o activa la sesión del depurador del proyecto en ejecución. Admite estado, activar y desactivar.",
 	"tool_runtime_capture_name": "Captura",

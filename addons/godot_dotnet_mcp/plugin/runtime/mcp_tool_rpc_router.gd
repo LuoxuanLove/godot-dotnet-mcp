@@ -10,6 +10,7 @@ var _is_tool_enabled := Callable()
 var _is_tool_exposed := Callable()
 var _log := Callable()
 var _sanitize_for_json := Callable()
+var _tool_activity_registry = null
 
 
 func configure(context = null) -> void:
@@ -21,6 +22,7 @@ func configure(context = null) -> void:
 	_is_tool_exposed = context.is_tool_exposed
 	_log = context.log
 	_sanitize_for_json = context.sanitize_for_json
+	_tool_activity_registry = context.tool_activity_registry
 
 
 func dispose() -> void:
@@ -29,6 +31,7 @@ func dispose() -> void:
 	_is_tool_exposed = Callable()
 	_log = Callable()
 	_sanitize_for_json = Callable()
+	_tool_activity_registry = null
 
 
 func build_tools_list_result() -> Dictionary:
@@ -62,6 +65,11 @@ func build_tool_call_result(params: Dictionary) -> Dictionary:
 func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var tool_name = params.get("name", "")
 	var arguments = params.get("arguments", {})
+	if not (arguments is Dictionary):
+		arguments = {}
+	else:
+		arguments = (arguments as Dictionary).duplicate(true)
+	_merge_agent_context(params, arguments)
 
 	_log_message("Tool call: %s" % tool_name, "debug")
 
@@ -88,12 +96,14 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)
 	if not result.get("success", false):
+		var logged_arguments: Dictionary = arguments.duplicate(true)
+		logged_arguments.erase("_mcp_context")
 		MCPDebugBuffer.record(
 			"warning",
 			"server",
 			"Tool failed: %s — %s" % [tool_name, str(result.get("error", "execution failed"))],
 			tool_name,
-			{"arguments": _sanitize(arguments)}
+			{"arguments": _sanitize(logged_arguments)}
 		)
 	elif tool_name.begins_with("scene_run_"):
 		MCPDebugBuffer.record(
@@ -104,6 +114,13 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 		)
 
 	return _create_tool_result_payload(result)
+
+
+func _merge_agent_context(params: Dictionary, arguments: Dictionary) -> void:
+	if arguments.has("_mcp_context"):
+		return
+	if params.get("_mcp_context", null) is Dictionary:
+		arguments["_mcp_context"] = (params.get("_mcp_context", {}) as Dictionary).duplicate(true)
 
 
 func _resolve_tool_call_name(tool_name: String) -> Dictionary:
@@ -188,6 +205,8 @@ func _normalize_tool_result(result) -> Dictionary:
 		"error": true,
 		"hints": true
 	}
+	if _is_protocol_activity_summary(normalized.get("activity", null)):
+		reserved_keys["activity"] = true
 	var extra_data := {}
 	for key in normalized.keys():
 		if reserved_keys.has(str(key)):
@@ -213,6 +232,12 @@ func _normalize_tool_result(result) -> Dictionary:
 		normalized.erase(key)
 
 	return normalized
+
+
+func _is_protocol_activity_summary(value) -> bool:
+	if not (value is Dictionary):
+		return false
+	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
 
 
 func _get_loader():

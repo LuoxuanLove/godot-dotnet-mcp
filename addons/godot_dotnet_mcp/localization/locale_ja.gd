@@ -575,6 +575,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_runtime_step_desc": "統一された実行時自動化入口: action=step|capture|input でステップループ、キャプチャ、またはスクリプト入力を実行します。",
 	"tool_system_dap_debugger_name": "DAP デバッガー",
 	"tool_system_dap_debugger_desc": "ランタイム設定、セッション ID、ライフサイクル、スレッド、ブレークポイント、ステップ実行、スタックトレース、出力、終了、切断の各アクションで Godot 組み込みの Debug Adapter Protocol エンドポイントを操作します。",
+	"tool_system_tool_activity_name": "ツール活動",
+	"tool_system_tool_activity_desc": "実行中および最近の MCP ツール呼び出し、実行順序、任意の Agent 自己申告コンテキストを確認します。",
 	"tool_runtime_control_name": "制御",
 	"tool_runtime_control_desc": "内部実行時制御: 実行中プロジェクトのデバッガー セッションを検査または有効化します。status、enable、disable をサポートします。",
 	"tool_runtime_capture_name": "キャプチャ",

@@ -10,8 +10,9 @@ var _runtime_control_service = null
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
-	_runtime_control_service = _resolve_runtime_control_service()
+	_runtime_context = context.duplicate()
+	if _runtime_context.has("runtime_control_service"):
+		_runtime_control_service = _runtime_context.get("runtime_control_service", null)
 	MCPDebugBuffer.record("info", "runtime", "executor configure_runtime runtime_service=%s" % str(_runtime_control_service != null))
 
 
@@ -187,13 +188,13 @@ func _execute_step(args: Dictionary) -> Dictionary:
 
 
 func _resolve_runtime_control_service():
+	if _runtime_context.has("runtime_control_service"):
+		return _runtime_context.get("runtime_control_service", null)
 	var server = _runtime_context.get("server", null)
 	if server != null and server.has_method("get_runtime_control_service"):
 		var service = server.get_runtime_control_service()
 		if service != null:
 			return service
-	if _runtime_context.has("runtime_control_service"):
-		return _runtime_context.get("runtime_control_service", null)
 	return null
 
 

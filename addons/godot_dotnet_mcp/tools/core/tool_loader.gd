@@ -18,6 +18,7 @@ var _load_errors: Array[Dictionary] = []
 var _reload_status: Dictionary = {}
 var _tool_lsp_diagnostics_adapter = null
 var _force_reload_script_load := false
+var _tool_activity_registry = null
 var _performance: Dictionary = {
 	"startup_ms": 0.0,
 	"definition_scan_ms": 0.0,
@@ -68,6 +69,17 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 		"category_count": _ordered_categories.size(),
 		"tool_load_error_count": _load_errors.size()
 	}
+
+
+func set_tool_activity_registry(registry) -> void:
+	if _tool_activity_registry == registry:
+		return
+	_tool_activity_registry = registry
+	_refresh_runtime_context()
+
+
+func get_tool_activity_registry():
+	return _tool_activity_registry
 
 
 func reload_registry(disabled_tools: Array = []) -> Dictionary:
@@ -270,6 +282,8 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	var execution_args := args.duplicate(true)
+	var agent_context := _extract_agent_context(execution_args)
 	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
 			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
@@ -277,7 +291,7 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
 
 	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
+		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
 		"%s_%s" % [category, tool_name])
 
 	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
@@ -290,11 +304,15 @@ func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dict
 		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
 
 	var started_usec = Time.get_ticks_usec()
-	var result = executor.execute(tool_name, args)
-	return _finalize_tool_execution(category, tool_name, args, started_usec, result)
+	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
+	var result = executor.execute(tool_name, execution_args)
+	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
+	return _finish_tool_activity(result, activity_record)
 
 
 func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	var execution_args := args.duplicate(true)
+	var agent_context := _extract_agent_context(execution_args)
 	if not _is_category_executable(category):
 		MCPDebugBuffer.record("warning", "tool_loader",
 			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
@@ -302,7 +320,7 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
 
 	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(args.get("action", ""))],
+		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
 		"%s_%s" % [category, tool_name])
 
 	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
@@ -315,12 +333,14 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
 
 	var started_usec = Time.get_ticks_usec()
+	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
 	var result
 	if executor.has_method("execute_async"):
-		result = await executor.execute_async(tool_name, args)
+		result = await executor.execute_async(tool_name, execution_args)
 	else:
-		result = executor.execute(tool_name, args)
-	return _finalize_tool_execution(category, tool_name, args, started_usec, result)
+		result = executor.execute(tool_name, execution_args)
+	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
+	return _finish_tool_activity(result, activity_record)
 
 
 func tick(delta: float) -> void:
@@ -382,13 +402,14 @@ func _refresh_runtime_context() -> void:
 	var context: Dictionary = {
 		"tool_loader": self,
 		"server": _server_context,
-		"plugin_host": _get_plugin_host()
+		"plugin_host": _get_plugin_host(),
+		"tool_activity_registry": _tool_activity_registry
 	}
 	for category in _runtime_by_category.keys():
 		var runtime: Dictionary = _runtime_by_category.get(category, {})
 		var executor = runtime.get("instance", null)
 		if executor != null and executor.has_method("configure_runtime"):
-			executor.configure_runtime(context.duplicate(true))
+			executor.configure_runtime(context.duplicate())
 
 
 func reload_domain(category: String) -> Dictionary:
@@ -677,6 +698,7 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 			"tool_loader": self,
 			"server": _server_context,
 			"plugin_host": _get_plugin_host(),
+			"tool_activity_registry": _tool_activity_registry,
 			"category": category,
 			"reason": reason,
 			"entry": entry.duplicate(true)
@@ -732,6 +754,35 @@ func _finalize_tool_execution(category: String, tool_name: String, args: Diction
 		"action": str(args.get("action", "")),
 		"elapsed_ms": elapsed_ms
 	})
+
+
+func _extract_agent_context(args: Dictionary) -> Dictionary:
+	var context := {}
+	if args.get("_mcp_context", null) is Dictionary:
+		context = (args.get("_mcp_context", {}) as Dictionary).duplicate(true)
+	args.erase("_mcp_context")
+	return context
+
+
+func _begin_tool_activity(category: String, tool_name: String, args: Dictionary, agent_context: Dictionary) -> Dictionary:
+	if _tool_activity_registry == null or not _tool_activity_registry.has_method("begin_call"):
+		return {}
+	return _tool_activity_registry.begin_call("%s_%s" % [category, tool_name], category, tool_name, args, agent_context, {})
+
+
+func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> Dictionary:
+	if activity_record.is_empty() or _tool_activity_registry == null:
+		return result
+	var out := result.duplicate(true)
+	var error_message := ""
+	if not bool(out.get("success", true)):
+		error_message = str(out.get("error", out.get("message", "")))
+	var finished := {}
+	if _tool_activity_registry.has_method("finish_call"):
+		finished = _tool_activity_registry.finish_call(str(activity_record.get("call_id", "")), bool(out.get("success", true)), error_message)
+	if _tool_activity_registry.has_method("summarize_record"):
+		out["activity"] = _tool_activity_registry.summarize_record(finished if not finished.is_empty() else activity_record)
+	return out
 
 
 func _load_script_resource(path: String, force_reload: bool) -> Resource:
