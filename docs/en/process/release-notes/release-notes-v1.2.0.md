@@ -17,6 +17,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Improved HTTP keep-alive handling so already buffered pipelined requests continue draining after async tool execution.
 - Added reconnect backpressure safeguards for multi-client recovery, including bounded pending request buffers and connection cleanup after response write failures.
 - Hardened stdio burst processing and lifecycle reload scheduling so stale responses and failed reload schedules do not leave misleading pending state.
+- Project file reimport now reports clear `not_importable_resource` errors for project settings, text files, sidecar metadata, and unsupported paths.
 
 ### ✅ Compatibility and Upgrade Notes
 
