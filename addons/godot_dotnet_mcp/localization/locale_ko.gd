@@ -265,6 +265,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_output_name": "출력",
 	"tool_param_system_dap_debugger_session_id_desc": "DAP 세션 ID입니다. 저장된 설정을 기본값으로 사용하며 초기값은 `default`입니다.",
 	"tool_param_system_dap_debugger_settings_desc": "set_settings에서 사용할 런타임 DAP 설정입니다.",
+	"tool_param_system_dap_debugger_timeout_ms_desc": "밀리초 단위 timeout입니다. 최대값은 30000입니다.",
 	"tool_param_system_dap_debugger_terminate_debuggee_desc": "연결 해제 시 사용할 DAP terminateDebuggee 플래그입니다.",
 	"tool_action_get_summary_desc": "요약 가져오기 작업을 수행합니다.",
 	"tool_action_get_errors_context_desc": "오류 컨텍스트 가져오기 작업을 수행합니다.",

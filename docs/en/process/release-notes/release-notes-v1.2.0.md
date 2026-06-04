@@ -17,6 +17,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Improved HTTP keep-alive handling so already buffered pipelined requests continue draining after async tool execution.
 - Added reconnect backpressure safeguards for multi-client recovery, including bounded pending request buffers and connection cleanup after response write failures.
 - Hardened stdio burst processing and lifecycle reload scheduling so stale responses and failed reload schedules do not leave misleading pending state.
+- Added DAP debugger size and timeout guards so abnormal debug endpoints report clear limit errors instead of tying up an agent request.
 
 ### ✅ Compatibility and Upgrade Notes
 

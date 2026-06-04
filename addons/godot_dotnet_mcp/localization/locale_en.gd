@@ -276,7 +276,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_param_system_dap_debugger_session_id_desc": "DAP session ID. Defaults to the saved setting, initially `default`.",
 	"tool_param_system_dap_debugger_host_desc": "DAP host. Defaults to 127.0.0.1.",
 	"tool_param_system_dap_debugger_port_desc": "DAP port. Defaults to 6006.",
-	"tool_param_system_dap_debugger_timeout_ms_desc": "Timeout in milliseconds.",
+	"tool_param_system_dap_debugger_timeout_ms_desc": "Timeout in milliseconds, capped at 30000.",
 	"tool_param_system_dap_debugger_settings_desc": "Runtime DAP settings used by set_settings.",
 	"tool_param_system_dap_debugger_include_raw_desc": "Include sanitized raw DAP requests and messages in responses.",
 	"tool_param_system_dap_debugger_adapter_args_desc": "Launch/attach arguments sent to the adapter.",

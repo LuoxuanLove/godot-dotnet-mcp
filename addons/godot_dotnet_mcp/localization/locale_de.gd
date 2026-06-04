@@ -1021,7 +1021,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_param_system_dap_debugger_source_path_desc": "Source path for breakpoint actions.",
 	"tool_param_system_dap_debugger_terminate_debuggee_desc": "DAP terminateDebuggee flag for disconnect.",
 	"tool_param_system_dap_debugger_thread_id_desc": "DAP thread ID.",
-	"tool_param_system_dap_debugger_timeout_ms_desc": "Timeout in milliseconds.",
+	"tool_param_system_dap_debugger_timeout_ms_desc": "Timeout in milliseconds, capped at 30000.",
 	"tool_system_editor_control_desc": "High-level editor UI workflow entry for switching main screens, activating dock/plugin/bottom-panel UI through Godot APIs, capturing the editor, enumerating controls with coordinate mapping, dispatching control-local clicks, and interacting with popups.",
 	"tool_system_editor_control_name": "Editor Control",
 	"tool_system_editor_log_desc": "Read the current editor Output panel, filter errors or warnings, or clear the output.",
