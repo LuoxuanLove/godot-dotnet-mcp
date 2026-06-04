@@ -21,6 +21,7 @@ const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
+const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
@@ -1395,19 +1396,27 @@ func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 
 
 func get_plugin_update_current_from_tools() -> Dictionary:
-	return {
+	var data := _build_plugin_update_current_snapshot()
+	var maintenance := MCPMaintenanceContract.build_from_freshness(PluginInstanceFreshness.get_freshness_snapshot())
+	data["maintenance"] = maintenance
+	data["maintenance_window"] = maintenance
+	return MCPMaintenanceContract.enrich_response({
 		"success": true,
-		"data": _build_plugin_update_current_snapshot(),
+		"data": data,
 		"message": "Plugin update current fetched"
-	}
+	}, maintenance)
 
 
 func get_plugin_update_status_from_tools() -> Dictionary:
-	return {
+	var data := _build_plugin_update_status_snapshot()
+	var maintenance := MCPMaintenanceContract.build_update_sync_maintenance(data)
+	data["maintenance"] = maintenance
+	data["maintenance_window"] = maintenance
+	return MCPMaintenanceContract.enrich_response({
 		"success": true,
-		"data": _build_plugin_update_status_snapshot(),
+		"data": data,
 		"message": "Plugin update status fetched"
-	}
+	}, maintenance)
 
 
 func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
@@ -1423,14 +1432,14 @@ func set_plugin_update_source_from_tools(source: String, custom_branch: String =
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = false
 	data["action_status"] = "selected"
-	return {
+	return _build_plugin_update_tool_response({
 		"success": true,
 		"accepted": false,
 		"loading": str(_state.update_refs_state) == "loading",
 		"status": "selected",
 		"data": data,
 		"message": "Plugin update source selected"
-	}
+	})
 
 
 func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dictionary:
@@ -1439,14 +1448,14 @@ func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dicti
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = accepted
 	data["action_status"] = action_status
-	return {
+	return _build_plugin_update_tool_response({
 		"success": true,
 		"accepted": accepted,
 		"loading": str(_state.update_refs_state) == "loading",
 		"status": action_status,
 		"data": data,
 		"message": "Plugin update ref discovery requested"
-	}
+	})
 
 
 func start_plugin_update_sync_from_tools() -> Dictionary:
@@ -1454,14 +1463,14 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 		var loading_data := _build_plugin_update_status_snapshot()
 		loading_data["accepted"] = false
 		loading_data["action_status"] = "loading"
-		return {
+		return _build_plugin_update_tool_response({
 			"success": true,
 			"accepted": false,
 			"loading": true,
 			"status": "loading",
 			"data": loading_data,
 			"message": "Plugin update sync is already running"
-		}
+		})
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
@@ -1469,38 +1478,38 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 		var missing_target_data := _build_plugin_update_status_snapshot()
 		missing_target_data["accepted"] = false
 		missing_target_data["action_status"] = str(_state.update_sync_state)
-		return {
+		return _build_plugin_update_tool_response({
 			"success": true,
 			"accepted": false,
 			"loading": false,
 			"status": str(_state.update_sync_state),
 			"data": missing_target_data,
 			"message": "Plugin update sync target is unavailable"
-		}
+		})
 	if _get_update_request_parent() == null:
 		var unavailable_data := _build_plugin_update_status_snapshot()
 		unavailable_data["accepted"] = false
 		unavailable_data["action_status"] = "unavailable"
-		return {
+		return _build_plugin_update_tool_response({
 			"success": true,
 			"accepted": false,
 			"loading": false,
 			"status": "unavailable",
 			"data": unavailable_data,
 			"message": "Plugin update sync request host is unavailable"
-		}
+		})
 	_on_update_sync_requested()
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = str(_state.update_sync_state) == "loading"
 	data["action_status"] = _resolve_plugin_update_request_status("sync", bool(data.get("accepted", false)))
-	return {
+	return _build_plugin_update_tool_response({
 		"success": true,
 		"accepted": bool(data.get("accepted", false)),
 		"loading": str(_state.update_sync_state) == "loading",
 		"status": str(data.get("action_status", "")),
 		"data": data,
 		"message": "Plugin update sync requested"
-	}
+	})
 
 
 func _build_plugin_update_current_snapshot() -> Dictionary:
@@ -1551,6 +1560,18 @@ func _build_plugin_update_status_snapshot() -> Dictionary:
 		"sync": _build_plugin_update_sync_status(),
 		"lifecycle_reload": PluginInstanceFreshness.get_freshness_snapshot().get("lifecycle_reload", {})
 	}
+
+
+func _build_plugin_update_tool_response(response: Dictionary) -> Dictionary:
+	var data = response.get("data", {})
+	if not (data is Dictionary):
+		data = {}
+	var data_dict: Dictionary = (data as Dictionary).duplicate(true)
+	var maintenance := MCPMaintenanceContract.build_update_sync_maintenance(data_dict)
+	data_dict["maintenance"] = maintenance
+	data_dict["maintenance_window"] = maintenance
+	response["data"] = data_dict
+	return MCPMaintenanceContract.enrich_response(response, maintenance)
 
 
 func _build_plugin_update_refs_status() -> Dictionary:
@@ -1621,25 +1642,32 @@ func _shorten_plugin_update_fingerprint(source_fingerprint: String) -> String:
 
 func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 	if _plugin_reenable_pending:
-		return {
+		var pending_freshness := PluginInstanceFreshness.get_freshness_snapshot()
+		var pending_maintenance := MCPMaintenanceContract.build_from_freshness(pending_freshness)
+		return MCPMaintenanceContract.enrich_response({
 			"success": false,
 			"error": "Plugin lifecycle reload already scheduled",
-			"data": {"freshness": PluginInstanceFreshness.get_freshness_snapshot()}
-		}
+			"data": {"freshness": pending_freshness}
+		}, pending_maintenance)
 	var focus_snapshot := {}
 	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
 		focus_snapshot = _dock.capture_focus_snapshot()
 	_store_pending_focus_snapshot(focus_snapshot)
 	_save_settings()
 	var lifecycle_reload: Dictionary = PluginInstanceFreshness.mark_lifecycle_reload_requested(source)
-	_plugin_reenable_pending = true
+	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
+	var maintenance := MCPMaintenanceContract.build_from_lifecycle(lifecycle_reload, freshness)
 	if not _schedule_plugin_reenable_deferred():
-		return {
+		lifecycle_reload = PluginInstanceFreshness.mark_lifecycle_reload_failed("Plugin lifecycle reload bridge is unavailable", str(lifecycle_reload.get("last_request_id", "")))
+		freshness = PluginInstanceFreshness.get_freshness_snapshot()
+		maintenance = MCPMaintenanceContract.build_from_lifecycle(lifecycle_reload, freshness)
+		return MCPMaintenanceContract.enrich_response({
 			"success": false,
 			"error": "Plugin lifecycle reload bridge is unavailable",
-			"data": {"lifecycle_reload": lifecycle_reload, "freshness": PluginInstanceFreshness.get_freshness_snapshot()}
-		}
-	return {
+			"data": {"lifecycle_reload": lifecycle_reload, "freshness": freshness}
+		}, maintenance)
+	_plugin_reenable_pending = true
+	return MCPMaintenanceContract.enrich_response({
 		"success": true,
 		"message": "Plugin lifecycle reload scheduled",
 		"deferred": true,
@@ -1650,10 +1678,10 @@ func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 			"state": "scheduled",
 			"completion_observed": false,
 			"lifecycle_reload": lifecycle_reload,
-			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
-			"reconnect_hint": "The MCP transport may disconnect while the Godot editor disables and re-enables the plugin. Reconnect and fetch tools again after reload."
+			"freshness": freshness,
+			"reconnect_hint": str(maintenance.get("reconnect_hint", ""))
 		}
-	}
+	}, maintenance)
 
 
 func _on_log_level_changed(level: String) -> void:

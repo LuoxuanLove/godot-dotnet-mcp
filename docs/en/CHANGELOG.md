@@ -21,6 +21,15 @@ Target version: 1.2.0.
 
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
+- Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
+- Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+
+### Fixed
+
+- Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
+- Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
+- Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
+- Fixed lifecycle reload scheduling failures so failed schedule attempts no longer leave the plugin reload state marked as pending.
 
 ### Internal
 
@@ -31,6 +40,7 @@ Target version: 1.2.0.
 - Updated locale contract coverage so merged fallback translations are validated for languages that keep localized overrides instead of duplicating the full English table.
 - Tightened localization CI contracts so every supported locale must expose the same key set and may not silently reuse English strings except for explicit shared product names, paths, identifiers, and technical abbreviations.
 - Fixed the refactor guardrail scan so the banned-source identifier audit no longer reports its own validation script as a violation.
+- Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
 
 ## [1.1.2] - 2026-06-02
 

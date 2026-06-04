@@ -2,6 +2,8 @@
 extends RefCounted
 class_name MCPHttpResponseService
 
+const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
+
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
 var _get_server_stats := Callable()
@@ -77,6 +79,8 @@ func build_health_response() -> Dictionary:
 		performance = loader.get_performance_summary()
 	var loader_status := _get_loader_status_safe()
 	var server_stats := _get_server_stats_safe()
+	var freshness := _get_freshness_snapshot_safe()
+	var maintenance := MCPMaintenanceContract.build_from_freshness(freshness)
 	var status_text := "ok" if bool(loader_status.get("healthy", false)) else str(loader_status.get("status", "degraded"))
 	return {
 		"status": status_text,
@@ -99,7 +103,9 @@ func build_health_response() -> Dictionary:
 		"tool_loader_status": loader_status,
 		"domain_states": domain_states,
 		"reload_status": reload_status,
-		"freshness": _get_freshness_snapshot_safe(),
+		"freshness": freshness,
+		"maintenance": maintenance,
+		"maintenance_window": maintenance,
 		"performance": performance
 	}
 
@@ -119,7 +125,7 @@ func build_cors_response(origin: String = "", allow_methods: String = "GET, POST
 	}
 
 
-func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
+func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> bool:
 	var response_data = data.duplicate(true)
 	var extra_headers = response_data.get("_headers", {})
 	if response_data.has("_headers"):
@@ -158,6 +164,7 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 		],
 		"debug"
 	)
+	return header_error == OK and body_error == OK
 
 
 func sanitize_for_json(value):

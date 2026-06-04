@@ -15,6 +15,7 @@ var _last_path := ""
 var _last_body := ""
 var _last_headers: Dictionary = {}
 var _last_no_body := false
+var _routed_bodies: Array[String] = []
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -48,6 +49,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		client.poll()
 		if not request_sent and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 			var body := "{\"ping\":true}"
+			var second_body := "{\"ping\":2}"
 			var frame := (
 				"POST /mcp HTTP/1.1\r\n"
 				+ "Host: localhost\r\n"
@@ -55,21 +57,28 @@ func run_case(tree: SceneTree) -> Dictionary:
 				+ "Content-Type: application/json; charset=utf-8\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [body.to_utf8_buffer().size(), body]
-			client.put_data(frame.to_utf8_buffer())
+			var second_frame := (
+				"POST /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "Origin: http://localhost:5173\r\n"
+				+ "Content-Type: application/json; charset=utf-8\r\n"
+				+ "Content-Length: %d\r\n\r\n%s"
+			) % [second_body.to_utf8_buffer().size(), second_body]
+			client.put_data((frame + second_frame).to_utf8_buffer())
 			request_sent = true
 		transport.process_frame(tcp_server, true, 0.016)
-		if _write_count > 0:
+		if _write_count >= 2:
 			break
 		await tree.process_frame
 
 	if _connected_count != 1:
 		return _failure("HTTP transport should emit exactly one client_connected event.")
-	if _write_count != 1:
-		return _failure("HTTP transport should route and write exactly one response for the test request.")
+	if _write_count != 2:
+		return _failure("HTTP transport should drain and write both pipelined responses from one socket read.")
 	if _last_method != "POST" or _last_path != "/mcp":
 		return _failure("HTTP transport did not preserve the routed request method or path.")
-	if _last_body != "{\"ping\":true}":
-		return _failure("HTTP transport did not preserve the routed request body.")
+	if _routed_bodies != ["{\"ping\":true}", "{\"ping\":2}"]:
+		return _failure("HTTP transport did not preserve both pipelined request bodies.")
 	if str(_last_headers.get("origin", "")) != "http://localhost:5173":
 		return _failure("HTTP transport did not preserve the Origin header for route security decisions.")
 	if str(_last_headers.get("content-type", "")) != "application/json; charset=utf-8":
@@ -77,8 +86,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if _tick_count <= 0:
 		return _failure("HTTP transport should tick the tool loader callback during processing.")
 	var stats: Dictionary = connection_state.get_connection_stats()
-	if int(stats.get("total_requests", 0)) != 1:
-		return _failure("HTTP transport should record exactly one processed request.")
+	if int(stats.get("total_requests", 0)) != 2:
+		return _failure("HTTP transport should record both processed pipelined requests.")
 
 	client.disconnect_from_host()
 	for _i in range(20):
@@ -113,15 +122,18 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 	_last_path = path
 	_last_body = body
 	_last_headers = headers.duplicate(true)
+	_routed_bodies.append(body)
+	await (Engine.get_main_loop() as SceneTree).process_frame
 	return {
 		"status": 200,
 		"body": "ok"
 	}
 
 
-func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = false) -> void:
+func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = false) -> bool:
 	_write_count += 1
 	_last_no_body = no_body
+	return true
 
 
 func _tick_loader(_delta: float) -> void:
@@ -159,6 +171,7 @@ func _reset_state() -> void:
 	_last_body = ""
 	_last_headers = {}
 	_last_no_body = false
+	_routed_bodies = []
 
 
 func _failure(message: String) -> Dictionary:

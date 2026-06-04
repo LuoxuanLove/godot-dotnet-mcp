@@ -1104,6 +1104,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_group_group_desc": "全局查询和管理节点分组",
 
 	# Parity fallback entries
+	"maintenance_lifecycle_reconnect_hint": "Godot 编辑器禁用并重新启用插件时，MCP 传输可能会短暂断开。请在重载后重新连接并再次获取工具列表。",
+	"maintenance_update_sync_reconnect_hint": "插件更新同步写入文件后可能会安排插件生命周期重载。请轮询状态直到完成；如果传输断开，请重新连接并再次获取工具列表。",
 	"language_name": "简体中文",
 	"log_level_trace": "跟踪",
 }

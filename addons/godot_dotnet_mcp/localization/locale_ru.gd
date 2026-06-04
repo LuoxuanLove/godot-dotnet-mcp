@@ -1034,6 +1034,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_scene_tree_name": "Scene Tree",
 	"tool_system_userdata_maintenance_desc": "Create the current user:// directory layout, list or clean managed screenshot caches, or inspect and clean legacy MCP cache files.",
 	"tool_system_userdata_maintenance_name": "Userdata Maintenance",
+	"maintenance_lifecycle_reconnect_hint": "Транспорт MCP может кратковременно отключиться, пока редактор Godot отключает и снова включает плагин. После перезагрузки подключитесь заново и снова получите список инструментов.",
+	"maintenance_update_sync_reconnect_hint": "Синхронизация обновления плагина может запланировать перезагрузку жизненного цикла после записи файлов. Опрашивайте состояние до завершения; если транспорт отключится, подключитесь заново и снова получите список инструментов.",
 }
 
 

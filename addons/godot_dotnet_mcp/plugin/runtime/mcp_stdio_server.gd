@@ -25,7 +25,11 @@ var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
 var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
+var _processing_stdin := false
+var _transport_generation := 0
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
+const MAX_STDIN_FRAMES_PER_TICK := 16
+const MAX_STDIN_BYTES_PER_TICK := 8192
 
 
 func _ready() -> void:
@@ -40,11 +44,15 @@ func initialize(tool_loader, debug_mode: bool = false) -> void:
 
 func start() -> void:
 	_enabled = true
+	_transport_generation += 1
+	_buffer = PackedByteArray()
 	_log("stdio transport started", "info")
 
 
 func stop() -> void:
 	_enabled = false
+	_transport_generation += 1
+	_buffer = PackedByteArray()
 	_log("stdio transport stopped", "info")
 
 
@@ -67,21 +75,38 @@ func get_gdscript_lsp_diagnostics_service():
 
 
 func _process(_delta: float) -> void:
-	if _enabled:
-		while true:
-			var chunk: PackedByteArray = OS.read_buffer_from_stdin(STDIN_READ_SIZE)
-			if chunk.is_empty():
+	if _enabled and not _processing_stdin:
+		_processing_stdin = true
+		var generation := _transport_generation
+		var frames_processed := 0
+		var bytes_read := 0
+		while _enabled and generation == _transport_generation and frames_processed < MAX_STDIN_FRAMES_PER_TICK:
+			if await _try_parse_frame(generation):
+				frames_processed += 1
+				continue
+			if bytes_read >= MAX_STDIN_BYTES_PER_TICK:
 				break
-			_buffer.append_array(chunk)
-			if await _try_parse_frame():
+			var read_any := false
+			while bytes_read < MAX_STDIN_BYTES_PER_TICK:
+				var read_size = mini(STDIN_READ_SIZE, MAX_STDIN_BYTES_PER_TICK - bytes_read)
+				var chunk: PackedByteArray = OS.read_buffer_from_stdin(read_size)
+				if chunk.is_empty():
+					break
+				read_any = true
+				bytes_read += chunk.size()
+				_buffer.append_array(chunk)
+			if not read_any:
 				break
+		_processing_stdin = false
 
 	if _tool_loader != null and _tool_loader.has_method("tick"):
 		_tool_loader.tick(_delta)
 
 
-func _try_parse_frame() -> bool:
+func _try_parse_frame(generation: int) -> bool:
 	while true:
+		if not _enabled or generation != _transport_generation:
+			return false
 		var buffer_text: String = _buffer.get_string_from_ascii()
 		var header_end: int = buffer_text.find("\r\n\r\n")
 		if header_end == -1:
@@ -103,13 +128,15 @@ func _try_parse_frame() -> bool:
 		var body_bytes: PackedByteArray = _buffer.slice(body_start, body_start + content_length)
 		var body: String = body_bytes.get_string_from_utf8()
 		_buffer = _buffer.slice(body_start + content_length)
-		await _handle_request(body)
+		await _handle_request(body, generation)
 		return true
 
 	return false
 
 
-func _handle_request(body: String) -> void:
+func _handle_request(body: String, generation: int = -1) -> void:
+	if generation < 0:
+		generation = _transport_generation
 	_log("Parsing request (%d bytes)" % body.length(), "debug")
 	var json := JSON.new()
 	if json.parse(body) != OK:
@@ -166,6 +193,9 @@ func _handle_request(body: String) -> void:
 		_:
 			response = _create_json_rpc_error(-32601, "Method not found: %s" % method, id)
 
+	if not _enabled or generation != _transport_generation:
+		_log("Dropping stdio response after transport stop or restart", "debug")
+		return
 	_write_response(response)
 
 
