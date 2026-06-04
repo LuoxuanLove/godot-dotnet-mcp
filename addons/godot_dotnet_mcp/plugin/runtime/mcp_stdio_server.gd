@@ -29,6 +29,7 @@ var _processing_stdin := false
 var _transport_generation := 0
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
+const MAX_STDIN_BYTES_PER_TICK := 8192
 
 
 func _ready() -> void:
@@ -44,12 +45,14 @@ func initialize(tool_loader, debug_mode: bool = false) -> void:
 func start() -> void:
 	_enabled = true
 	_transport_generation += 1
+	_buffer = PackedByteArray()
 	_log("stdio transport started", "info")
 
 
 func stop() -> void:
 	_enabled = false
 	_transport_generation += 1
+	_buffer = PackedByteArray()
 	_log("stdio transport stopped", "info")
 
 
@@ -76,17 +79,22 @@ func _process(_delta: float) -> void:
 		_processing_stdin = true
 		var generation := _transport_generation
 		var frames_processed := 0
+		var bytes_read := 0
 		while _enabled and generation == _transport_generation and frames_processed < MAX_STDIN_FRAMES_PER_TICK:
-			var read_any := false
-			while true:
-				var chunk: PackedByteArray = OS.read_buffer_from_stdin(STDIN_READ_SIZE)
-				if chunk.is_empty():
-					break
-				read_any = true
-				_buffer.append_array(chunk)
 			if await _try_parse_frame(generation):
 				frames_processed += 1
 				continue
+			if bytes_read >= MAX_STDIN_BYTES_PER_TICK:
+				break
+			var read_any := false
+			while bytes_read < MAX_STDIN_BYTES_PER_TICK:
+				var read_size = mini(STDIN_READ_SIZE, MAX_STDIN_BYTES_PER_TICK - bytes_read)
+				var chunk: PackedByteArray = OS.read_buffer_from_stdin(read_size)
+				if chunk.is_empty():
+					break
+				read_any = true
+				bytes_read += chunk.size()
+				_buffer.append_array(chunk)
 			if not read_any:
 				break
 		_processing_stdin = false

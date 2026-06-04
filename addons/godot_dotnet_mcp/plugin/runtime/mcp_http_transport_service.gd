@@ -85,8 +85,9 @@ func _process_client(client: StreamPeerTCP) -> bool:
 				return false
 			var request_str = data[1].get_string_from_utf8()
 			var pending_data = _connection_state.get_pending_data(client) + request_str
-			if pending_data.length() > MAX_PENDING_REQUEST_BYTES:
-				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_data.length(), "warning")
+			var pending_byte_size: int = pending_data.to_utf8_buffer().size()
+			if pending_byte_size > MAX_PENDING_REQUEST_BYTES:
+				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_byte_size, "warning")
 				if _connection_state.has_method("record_rejected_request"):
 					_connection_state.record_rejected_request()
 				client.disconnect_from_host()
