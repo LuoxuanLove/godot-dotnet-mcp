@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolRpcRouter
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 var _get_tool_loader := Callable()
@@ -10,7 +11,6 @@ var _is_tool_enabled := Callable()
 var _is_tool_exposed := Callable()
 var _log := Callable()
 var _sanitize_for_json := Callable()
-var _tool_activity_registry = null
 
 
 func configure(context = null) -> void:
@@ -22,7 +22,6 @@ func configure(context = null) -> void:
 	_is_tool_exposed = context.is_tool_exposed
 	_log = context.log
 	_sanitize_for_json = context.sanitize_for_json
-	_tool_activity_registry = context.tool_activity_registry
 
 
 func dispose() -> void:
@@ -31,7 +30,6 @@ func dispose() -> void:
 	_is_tool_exposed = Callable()
 	_log = Callable()
 	_sanitize_for_json = Callable()
-	_tool_activity_registry = null
 
 
 func build_tools_list_result() -> Dictionary:
@@ -205,7 +203,7 @@ func _normalize_tool_result(result) -> Dictionary:
 		"error": true,
 		"hints": true
 	}
-	if _is_protocol_activity_summary(normalized.get("activity", null)):
+	if MCPToolActivityRegistry.is_protocol_activity_summary(normalized.get("activity", null)):
 		reserved_keys["activity"] = true
 	var extra_data := {}
 	for key in normalized.keys():
@@ -232,12 +230,6 @@ func _normalize_tool_result(result) -> Dictionary:
 		normalized.erase(key)
 
 	return normalized
-
-
-func _is_protocol_activity_summary(value) -> bool:
-	if not (value is Dictionary):
-		return false
-	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
 
 
 func _get_loader():

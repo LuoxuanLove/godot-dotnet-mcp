@@ -20,11 +20,11 @@ func _init() -> void:
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate()
+	_runtime_context = context.duplicate(true)
 	for slot in _slots_by_script.values():
 		var instance = (slot as Dictionary).get("instance", null)
 		if instance != null and instance.has_method("configure_runtime"):
-			instance.configure_runtime(_runtime_context.duplicate())
+			instance.configure_runtime(_runtime_context.duplicate(true))
 
 
 func get_tools() -> Array[Dictionary]:

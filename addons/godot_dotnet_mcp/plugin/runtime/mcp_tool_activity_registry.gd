@@ -21,6 +21,12 @@ var _recent: Array[Dictionary] = []
 var _order: Array[String] = []
 
 
+static func is_protocol_activity_summary(value) -> bool:
+	if not (value is Dictionary):
+		return false
+	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
+
+
 func begin_call(full_name: String, category: String, tool_name: String, args: Dictionary, agent_context: Dictionary = {}, transport: Dictionary = {}) -> Dictionary:
 	var sequence := _next_sequence
 	_next_sequence += 1

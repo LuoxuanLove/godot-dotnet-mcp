@@ -14,6 +14,7 @@ const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/
 const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
+const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
@@ -366,7 +367,7 @@ func _normalize_tool_result(result) -> Dictionary:
 	var normalized: Dictionary = result.duplicate(true)
 	normalized["success"] = bool(normalized.get("success", true))
 	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true}
-	if _is_protocol_activity_summary(normalized.get("activity", null)):
+	if MCPToolActivityRegistry.is_protocol_activity_summary(normalized.get("activity", null)):
 		reserved["activity"] = true
 	var extra := {}
 	for key in normalized.keys():
@@ -387,12 +388,6 @@ func _normalize_tool_result(result) -> Dictionary:
 	for key in extra.keys():
 		normalized.erase(key)
 	return normalized
-
-
-func _is_protocol_activity_summary(value) -> bool:
-	if not (value is Dictionary):
-		return false
-	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
 
 
 func _create_json_rpc_response(result, id) -> Dictionary:
