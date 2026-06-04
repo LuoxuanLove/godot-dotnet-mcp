@@ -684,6 +684,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "Lesen Sie aktuelle Audit-Einträge für Benutzer-Tool-Änderungen",
 	"tool_plugin_evolution_check_compatibility_name": "Kompatibilität",
 	"tool_plugin_evolution_check_compatibility_desc": "Vergleichen Sie Benutzertools mit der aktuellen Gerüstversion und weisen Sie auf Kompatibilitätsrisiken hin",
+	"tool_plugin_evolution_runtime_diagnostics_name": "Laufzeitdiagnose",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "Fasst Benutzertool-Erkennung, Ladefehler, Überwachungsstatus, Kompatibilität und aktuelle Audit-Einträge zusammen",
 	"tool_plugin_evolution_usage_guide_name": "Nutzungsleitfaden",
 	"tool_plugin_evolution_usage_guide_desc": "Gibt den empfohlenen Autorisierungs- und Benutzertool-Workflow für dieses Plugin zurück",
 	"tool_plugin_developer_settings_name": "Einstellungen",

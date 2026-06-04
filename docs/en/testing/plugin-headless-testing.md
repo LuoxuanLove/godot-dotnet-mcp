@@ -103,7 +103,7 @@ The harness discovers cases automatically. The following list shows representati
 | `runtime_fallback_store_contracts` | Verify persistence, trimming, and read semantics of `mcp_runtime_fallback_store` |
 | `runtime_reply_service_contracts` | Verify success and error payloads, `runtime_context`, `runtime_state`, and hints in `mcp_runtime_reply_service` |
 | `user_tool_watch_service_contracts` | Verify that `user_tool_watch_service.gd` refreshes external user tools through an explicit callback |
-| `user_tool_service_contracts` | Verify scaffold creation, directory scanning, compatibility reports, deletion, restore, and audit in `user_tool_service.gd` |
+| `user_tool_service_contracts` | Verify scaffold creation, directory scanning, compatibility reports, runtime diagnostics, failed-load reporting, deletion, restore, and audit in `user_tool_service.gd` |
 | `script_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `read / inspect / references / edit_gd` paths after the script domain split |
 | `script_edit_service_contracts` | Verify that script editing facade split keeps GDScript semantic requests routed through Godot LSP only, while the plugin keeps `*EditHelper` text-edit helpers; the official C# semantic source is plugin-local Roslyn |
 | `node_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `query / lifecycle / property / metadata / visibility` paths after the node domain split |

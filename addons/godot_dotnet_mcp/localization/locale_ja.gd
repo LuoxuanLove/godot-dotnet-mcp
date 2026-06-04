@@ -684,6 +684,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "ユーザーツール変更の最近の監査エントリを読み取ります。",
 	"tool_plugin_evolution_check_compatibility_name": "互換性チェック",
 	"tool_plugin_evolution_check_compatibility_desc": "ユーザーツールを現在のスキャフォールド版と比較し、互換性リスクを示します。",
+	"tool_plugin_evolution_runtime_diagnostics_name": "実行時診断",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "ユーザーツールの検出、読み込み失敗、監視状態、互換性、最近の監査記録を要約します。",
 	"tool_plugin_evolution_usage_guide_name": "使い方ガイド",
 	"tool_plugin_evolution_usage_guide_desc": "このプラグインで推奨される承認フローとユーザーツールのワークフローを返します。",
 	"tool_plugin_developer_settings_name": "設定",

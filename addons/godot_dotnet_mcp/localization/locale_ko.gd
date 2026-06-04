@@ -724,6 +724,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "사용자 도구 변경에 대한 최근 감사 항목을 읽습니다",
 	"tool_plugin_evolution_check_compatibility_name": "호환성",
 	"tool_plugin_evolution_check_compatibility_desc": "User 도구를 현재 스캐폴드 버전과 비교하고 호환성 위험을 표시합니다",
+	"tool_plugin_evolution_runtime_diagnostics_name": "런타임 진단",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "User 도구 발견, 로드 실패, 감시자 상태, 호환성, 최근 감사 기록을 요약합니다",
 	"tool_plugin_evolution_usage_guide_name": "사용 가이드",
 	"tool_plugin_evolution_usage_guide_desc": "이 플러그인에 권장되는 승인 및 User 도구 워크플로를 반환합니다",
 	"tool_plugin_developer_settings_name": "설정",

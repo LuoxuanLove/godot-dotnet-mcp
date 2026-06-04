@@ -80,6 +80,16 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "runtime_diagnostics",
+			"description": "PLUGIN EVOLUTION RUNTIME DIAGNOSTICS: Summarize User-tool discovery, load failures, watcher state, compatibility, and recent audit entries.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"limit": {"type": "integer", "minimum": 1, "maximum": 50}
+				}
+			}
+		},
+		{
 			"name": "usage_guide",
 			"description": "PLUGIN EVOLUTION USAGE GUIDE: Return the recommended authorization and User-tool workflow for this plugin.",
 			"inputSchema": {
@@ -127,6 +137,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"get_user_tool_compatibility_from_tools",
 				[],
 				"Plugin evolution compatibility bridge is unavailable"
+			)
+		"runtime_diagnostics":
+			return _call_plugin_method(
+				"get_user_tool_runtime_diagnostics_from_tools",
+				[clamp(int(args.get("limit", 10)), 1, 50)],
+				"Plugin evolution runtime diagnostics bridge is unavailable"
 			)
 		"usage_guide":
 			return _call_plugin_method("get_evolution_usage_guide_from_tools", [], "Plugin evolution guide bridge is unavailable")

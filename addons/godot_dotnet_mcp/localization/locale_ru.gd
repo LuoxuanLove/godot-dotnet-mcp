@@ -684,6 +684,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "Прочтите последние записи аудита на предмет изменений в пользовательских инструментах.",
 	"tool_plugin_evolution_check_compatibility_name": "Совместимость",
 	"tool_plugin_evolution_check_compatibility_desc": "Сравните пользовательские инструменты с текущей версией scaffold и отметьте риски совместимости.",
+	"tool_plugin_evolution_runtime_diagnostics_name": "Диагностика выполнения",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "Сводка обнаружения пользовательских инструментов, ошибок загрузки, состояния наблюдателя, совместимости и последних записей аудита.",
 	"tool_plugin_evolution_usage_guide_name": "Руководство по использованию",
 	"tool_plugin_evolution_usage_guide_desc": "Возвращает рекомендуемые правила доступа и рабочий процесс пользовательских инструментов для этого плагина.",
 	"tool_plugin_developer_settings_name": "Настройки",

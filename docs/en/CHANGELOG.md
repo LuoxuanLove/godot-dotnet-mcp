@@ -20,6 +20,7 @@ Target version: 1.2.0.
 ### Added
 
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
+- Added User-tool runtime diagnostics through `plugin_evolution_runtime_diagnostics` and `project_state(include_runtime_health=true)`, including discovery counts, load failures, watcher state, compatibility summary, and recent audit entries.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
@@ -35,6 +36,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended User-tool service, runtime health, and project-state harness coverage for runtime diagnostics and failed custom-tool load reporting.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.
