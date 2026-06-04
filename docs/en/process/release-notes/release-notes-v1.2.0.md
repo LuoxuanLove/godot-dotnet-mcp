@@ -7,6 +7,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
+- Added output size safeguards for MCP resources and prompt guides so very large file-backed resources are rejected before expensive reads, while long generated prompt text reports byte-size truncation metadata.
 
 ### 🔧 Fixes
 
@@ -25,3 +26,4 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - No file layout or tool schema migration is required.
 - Existing installs do not need migration.
+- Clients that read resources should handle standard JSON-RPC errors for oversized file-backed resources and inspect `_meta` on prompt responses when prompt text is shortened.
