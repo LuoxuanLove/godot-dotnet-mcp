@@ -149,6 +149,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"settings_update_sync_no_branch",
 		"settings_update_sync_no_target",
 		"settings_update_sync_loading",
+		"settings_update_sync_refreshing_editor",
 		"settings_update_sync_success",
 		"settings_update_sync_error",
 		"settings_update_branch_unavailable",

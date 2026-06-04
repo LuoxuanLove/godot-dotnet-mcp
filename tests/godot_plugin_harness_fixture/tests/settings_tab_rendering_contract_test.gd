@@ -17,6 +17,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_prepare": "Prepare",
 		"settings_update_apply": "应用",
 		"settings_update_sync_loading": "Syncing",
+		"settings_update_sync_refreshing_editor": "Refreshing editor",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed",
 		"settings_update_source_latest_dev": "Latest dev",

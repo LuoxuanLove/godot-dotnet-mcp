@@ -30,6 +30,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
 		"settings_update_sync_loading": "Syncing",
+		"settings_update_sync_refreshing_editor": "Refreshing editor",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed"
 	}
@@ -171,6 +172,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool((latest_stable_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
 		return _failure("Settings projection should resolve latest stable release targets from discovered release state.")
+
+	var refresh_loading_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},
+		"update_refs_state": "success",
+		"update_sync_state": "loading",
+		"update_sync_status": "Refreshing editor file system before reload.",
+		"plugin_freshness": {}
+	})
+	var refresh_loading_updates: Dictionary = refresh_loading_projection.get("updates", {})
+	if bool(refresh_loading_updates.get("apply_enabled", true)) or bool(refresh_loading_updates.get("check_enabled", true)) or not str(refresh_loading_updates.get("status_text", "")).contains("Refreshing editor file system before reload."):
+		return _failure("Settings projection should keep update sync controls disabled and show the editor refresh status while sync remains loading.")
 
 	var fallback: Dictionary = service.project({
 		"localization": FakeLocalization.new(),

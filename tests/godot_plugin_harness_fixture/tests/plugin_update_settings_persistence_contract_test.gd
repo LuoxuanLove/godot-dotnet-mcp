@@ -3,6 +3,7 @@ extends RefCounted
 const PluginScript = preload("res://addons/godot_dotnet_mcp/plugin.gd")
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 var _plugin = null
 
@@ -48,6 +49,11 @@ class SyncReloadProbePlugin extends PluginScript:
 	var sync_result := {"success": true, "written": 3}
 	var marker_error := OK
 	var reload_requests: Array[String] = []
+	var editor_refresh_count := 0
+	var editor_refresh_state := ""
+	var editor_refresh_status := ""
+	var editor_refresh_result := {"success": true, "scan_requested": true}
+	var sync_events: Array[String] = []
 	var compare_refresh_count := 0
 	var dock_refresh_count := 0
 
@@ -63,8 +69,16 @@ class SyncReloadProbePlugin extends PluginScript:
 	func _refresh_dock() -> void:
 		dock_refresh_count += 1
 
+	func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
+		editor_refresh_count += 1
+		editor_refresh_state = str(_state.update_sync_state)
+		editor_refresh_status = str(_state.update_sync_status)
+		sync_events.append("editor_refresh")
+		return editor_refresh_result.duplicate(true)
+
 	func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 		reload_requests.append(source)
+		sync_events.append("lifecycle_reload")
 		return {"success": true, "deferred": true, "data": {"source": source}}
 
 
@@ -243,16 +257,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var reload_probe := SyncReloadProbePlugin.new()
 	reload_probe._update_sync_request_serial = 10
-	reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10, null)
-	if reload_probe.reload_requests != ["settings_sync"] or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count != 1:
+	reload_probe._state.update_sync_state = "loading"
+	await reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10, null)
+	var localized_refresh_status := LocalizationServiceScript.translate("settings_update_sync_refreshing_editor")
+	if reload_probe.reload_requests != ["settings_sync"] or reload_probe.sync_events != ["editor_refresh", "lifecycle_reload"] or reload_probe.editor_refresh_count != 1 or reload_probe.editor_refresh_state != "loading" or reload_probe.editor_refresh_status != localized_refresh_status or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count < 2:
 		reload_probe.free()
-		return _failure("plugin.gd should refresh the sync success state and schedule one deferred lifecycle reload after a successful update sync.")
+		return _failure("plugin.gd should refresh the editor file system before scheduling one deferred lifecycle reload after a successful update sync.")
 	reload_probe.free()
+
+	var refresh_timeout_probe := SyncReloadProbePlugin.new()
+	refresh_timeout_probe._update_sync_request_serial = 16
+	refresh_timeout_probe._state.update_sync_state = "loading"
+	refresh_timeout_probe.editor_refresh_result = {"success": false, "scan_requested": true, "scan_completed": false}
+	await refresh_timeout_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16, null)
+	var localized_refresh_timeout := LocalizationServiceScript.translate("settings_update_sync_refresh_timeout")
+	if refresh_timeout_probe.reload_requests != [] or refresh_timeout_probe.sync_events != ["editor_refresh"] or str(refresh_timeout_probe._state.update_sync_state) != "error" or str(refresh_timeout_probe._state.update_sync_error) != localized_refresh_timeout or refresh_timeout_probe.compare_refresh_count != 0:
+		refresh_timeout_probe.free()
+		return _failure("plugin.gd should fail update sync without scheduling lifecycle reload when editor file-system refresh does not finish.")
+	refresh_timeout_probe.free()
 
 	var failed_sync_reload_probe := SyncReloadProbePlugin.new()
 	failed_sync_reload_probe._update_sync_request_serial = 11
-	failed_sync_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 500, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11, null)
-	if not failed_sync_reload_probe.reload_requests.is_empty() or str(failed_sync_reload_probe._state.update_sync_state) != "error":
+	await failed_sync_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 500, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11, null)
+	if failed_sync_reload_probe.editor_refresh_count != 0 or not failed_sync_reload_probe.reload_requests.is_empty() or str(failed_sync_reload_probe._state.update_sync_state) != "error":
 		failed_sync_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when the update archive request fails.")
 	failed_sync_reload_probe.free()
@@ -260,8 +287,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failed_copy_reload_probe := SyncReloadProbePlugin.new()
 	failed_copy_reload_probe._update_sync_request_serial = 12
 	failed_copy_reload_probe.sync_result = {"success": false, "error": "copy failed"}
-	failed_copy_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12, null)
-	if not failed_copy_reload_probe.reload_requests.is_empty() or str(failed_copy_reload_probe._state.update_sync_state) != "error":
+	await failed_copy_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12, null)
+	if failed_copy_reload_probe.editor_refresh_count != 0 or not failed_copy_reload_probe.reload_requests.is_empty() or str(failed_copy_reload_probe._state.update_sync_state) != "error":
 		failed_copy_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when archive files fail to sync into the addon.")
 	failed_copy_reload_probe.free()
@@ -269,8 +296,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stale_serial_reload_probe := SyncReloadProbePlugin.new()
 	stale_serial_reload_probe._update_sync_request_serial = 14
 	stale_serial_reload_probe._state.update_sync_state = "pending"
-	stale_serial_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
-	if not stale_serial_reload_probe.reload_requests.is_empty() or str(stale_serial_reload_probe._state.update_sync_state) != "pending" or stale_serial_reload_probe.compare_refresh_count != 0 or stale_serial_reload_probe.dock_refresh_count != 0:
+	await stale_serial_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	if stale_serial_reload_probe.editor_refresh_count != 0 or not stale_serial_reload_probe.reload_requests.is_empty() or str(stale_serial_reload_probe._state.update_sync_state) != "pending" or stale_serial_reload_probe.compare_refresh_count != 0 or stale_serial_reload_probe.dock_refresh_count != 0:
 		stale_serial_reload_probe.free()
 		return _failure("plugin.gd should ignore stale update archive callbacks without scheduling a lifecycle reload.")
 	stale_serial_reload_probe.free()
@@ -278,17 +305,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var marker_failure_reload_probe := SyncReloadProbePlugin.new()
 	marker_failure_reload_probe._update_sync_request_serial = 15
 	marker_failure_reload_probe.marker_error = ERR_CANT_CREATE
-	marker_failure_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15, null)
-	if not marker_failure_reload_probe.reload_requests.is_empty() or str(marker_failure_reload_probe._state.update_sync_state) != "error":
+	await marker_failure_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15, null)
+	if marker_failure_reload_probe.editor_refresh_count != 0 or not marker_failure_reload_probe.reload_requests.is_empty() or str(marker_failure_reload_probe._state.update_sync_state) != "error":
 		marker_failure_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when sync marker writing fails.")
 	marker_failure_reload_probe.free()
 
 	var pending_reload_probe := SyncReloadProbePlugin.new()
 	pending_reload_probe._update_sync_request_serial = 13
+	pending_reload_probe._state.update_sync_state = "loading"
 	pending_reload_probe._plugin_reenable_pending = true
-	pending_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
-	if not pending_reload_probe.reload_requests.is_empty() or str(pending_reload_probe._state.update_sync_state) != "success":
+	await pending_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	if pending_reload_probe.editor_refresh_count != 1 or not pending_reload_probe.reload_requests.is_empty() or str(pending_reload_probe._state.update_sync_state) != "success":
 		pending_reload_probe.free()
 		return _failure("plugin.gd should keep sync success state without scheduling a duplicate lifecycle reload when one is already pending.")
 	pending_reload_probe.free()

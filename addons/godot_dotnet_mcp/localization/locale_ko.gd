@@ -458,6 +458,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "준비",
 	"settings_update_apply": "동기화",
 	"settings_update_sync_loading": "%s 동기화 중...",
+	"settings_update_sync_refreshing_editor": "다시 로드하기 전에 편집기 파일 시스템을 새로고침하는 중입니다.",
+	"settings_update_sync_refresh_timeout": "다시 로드하기 전에 편집기 파일 시스템 새로고침이 완료되지 않았습니다.",
 	"settings_update_sync_success": "%s 동기화됨(%d개 파일).",
 	"settings_update_sync_error": "업데이트 동기화 실패.",
 	"settings_update_sync_no_target": "동기화하기 전에 브랜치 또는 릴리스를 선택하세요.",

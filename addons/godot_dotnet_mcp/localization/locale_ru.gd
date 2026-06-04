@@ -351,6 +351,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "Подготовить",
 	"settings_update_apply": "Синхронизировать",
 	"settings_update_sync_loading": "Синхронизация %s...",
+	"settings_update_sync_refreshing_editor": "Обновление файловой системы редактора перед перезагрузкой.",
+	"settings_update_sync_refresh_timeout": "Обновление файловой системы редактора не завершилось перед перезагрузкой.",
 	"settings_update_sync_success": "%s синхронизировано (файлов: %d).",
 	"settings_update_sync_error": "Не удалось синхронизировать обновление.",
 	"settings_update_sync_no_target": "Выберите ветку или релиз перед синхронизацией.",

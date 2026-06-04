@@ -47,6 +47,7 @@ const UPDATE_SYNC_HTTP_TIMEOUT := 60.0
 const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
 const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
 const UPDATE_SYNC_ADDON_PREFIX := "addons/godot_dotnet_mcp/"
+const UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS := 15000
 
 var _state = null
 var _settings_store = null
@@ -83,6 +84,12 @@ var _update_sync_request_serial := 0
 
 func _init() -> void:
 	_ensure_runtime_state()
+
+
+func _get_localized_text(key: String) -> String:
+	if _localization != null:
+		return _localization.get_text(key)
+	return LocalizationService.translate(key)
 
 
 func _enter_tree() -> void:
@@ -1068,9 +1075,21 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	if marker_error != OK:
 		_mark_update_sync_failed("Update files were written, but sync marker write failed: %s" % marker_error, serial)
 		return
+	_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_editor")
+	_refresh_dock()
+	await _complete_update_sync_after_editor_refresh(target_ref, sync_result, serial)
+
+
+func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result: Dictionary, serial: int) -> void:
+	var refresh_result: Dictionary = await _request_update_sync_editor_refresh(serial)
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	if not bool(refresh_result.get("success", false)):
+		_mark_update_sync_failed(_get_localized_text("settings_update_sync_refresh_timeout"), serial)
+		return
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
-	_state.update_sync_status = (_localization.get_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]) if _localization != null else "Synced %s." % target_ref
+	_state.update_sync_status = _get_localized_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 	_request_update_sync_lifecycle_reload()
@@ -1080,6 +1099,30 @@ func _request_update_sync_lifecycle_reload() -> void:
 	if _plugin_reenable_pending:
 		return
 	_request_plugin_lifecycle_reload("settings_sync")
+
+
+func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
+	var file_system = null
+	var editor_interface = get_editor_interface()
+	if editor_interface != null:
+		file_system = editor_interface.get_resource_filesystem()
+	if file_system != null:
+		file_system.scan()
+	var tree := get_tree()
+	var scan_completed := true
+	if tree != null:
+		await tree.process_frame
+		if file_system != null and file_system.has_method("is_scanning"):
+			var deadline_msec := Time.get_ticks_msec() + UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS
+			scan_completed = not bool(file_system.is_scanning())
+			while not scan_completed and Time.get_ticks_msec() < deadline_msec:
+				await tree.process_frame
+				scan_completed = not bool(file_system.is_scanning())
+	return {
+		"success": scan_completed,
+		"scan_requested": file_system != null,
+		"scan_completed": scan_completed
+	}
 
 
 func _write_update_sync_marker(target: Dictionary, written: int) -> int:
