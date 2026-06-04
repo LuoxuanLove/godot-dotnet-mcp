@@ -1657,13 +1657,16 @@ func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 	var lifecycle_reload: Dictionary = PluginInstanceFreshness.mark_lifecycle_reload_requested(source)
 	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
 	var maintenance := MCPMaintenanceContract.build_from_lifecycle(lifecycle_reload, freshness)
-	_plugin_reenable_pending = true
 	if not _schedule_plugin_reenable_deferred():
+		lifecycle_reload = PluginInstanceFreshness.mark_lifecycle_reload_failed("Plugin lifecycle reload bridge is unavailable", str(lifecycle_reload.get("last_request_id", "")))
+		freshness = PluginInstanceFreshness.get_freshness_snapshot()
+		maintenance = MCPMaintenanceContract.build_from_lifecycle(lifecycle_reload, freshness)
 		return MCPMaintenanceContract.enrich_response({
 			"success": false,
 			"error": "Plugin lifecycle reload bridge is unavailable",
 			"data": {"lifecycle_reload": lifecycle_reload, "freshness": freshness}
 		}, maintenance)
+	_plugin_reenable_pending = true
 	return MCPMaintenanceContract.enrich_response({
 		"success": true,
 		"message": "Plugin lifecycle reload scheduled",
@@ -1676,7 +1679,7 @@ func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
 			"completion_observed": false,
 			"lifecycle_reload": lifecycle_reload,
 			"freshness": freshness,
-			"reconnect_hint": MCPMaintenanceContract.LIFECYCLE_RECONNECT_HINT
+			"reconnect_hint": str(maintenance.get("reconnect_hint", ""))
 		}
 	}, maintenance)
 

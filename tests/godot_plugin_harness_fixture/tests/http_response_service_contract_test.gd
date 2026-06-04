@@ -141,8 +141,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var maintenance: Dictionary = health.get("maintenance", {})
 	if bool(maintenance.get("active", true)) or str(maintenance.get("transport_state", "")) != "ready":
 		return _failure("Health response should expose an idle maintenance window when the plugin is fresh.")
-	if not (health.get("maintenance_window", {}) is Dictionary):
+	if not health.has("maintenance_window") or not (health.get("maintenance_window") is Dictionary):
 		return _failure("Health response should include a maintenance_window alias for clients.")
+	var maintenance_window: Dictionary = health.get("maintenance_window", {})
+	if str(maintenance_window.get("transport_state", "")) != str(maintenance.get("transport_state", "")):
+		return _failure("Health response maintenance_window should mirror the maintenance contract.")
 	callbacks.freshness_snapshot = {
 		"status": "stale",
 		"needs_lifecycle_reload": true,

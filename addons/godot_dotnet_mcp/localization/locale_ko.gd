@@ -835,6 +835,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_ui_control_desc": "Control 노드를 구성합니다.",
 	"tool_signal_signal_name": "시그널",
 	"tool_group_group_name": "그룹",
+	"maintenance_lifecycle_reconnect_hint": "Godot 편집기가 플러그인을 비활성화한 뒤 다시 활성화하는 동안 MCP 전송이 일시적으로 끊길 수 있습니다. 다시 로드된 후 재연결하고 도구 목록을 다시 가져오세요.",
+	"maintenance_update_sync_reconnect_hint": "플러그인 업데이트 동기화가 파일을 쓴 뒤 플러그인 수명 주기 다시 로드를 예약할 수 있습니다. 완료될 때까지 상태를 폴링하고, 전송이 끊기면 재연결한 뒤 도구 목록을 다시 가져오세요.",
 	"language_name": "한국어",
 	"log_level_trace": "추적",
 }

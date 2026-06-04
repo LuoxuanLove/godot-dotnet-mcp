@@ -970,6 +970,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_signal_signal_desc": "全局管理信號連接",
 	"tool_group_group_name": "分組",
 	"tool_group_group_desc": "全局查詢和管理節點分組",
+	"maintenance_lifecycle_reconnect_hint": "Godot 編輯器停用並重新啟用外掛時，MCP 傳輸可能會短暫中斷。請在重新載入後重新連線並再次取得工具清單。",
+	"maintenance_update_sync_reconnect_hint": "外掛更新同步寫入檔案後，可能會安排外掛生命週期重新載入。請輪詢狀態直到完成；如果傳輸中斷，請重新連線並再次取得工具清單。",
 	"language_name": "繁體中文",
 
 	# Parity fallback entries

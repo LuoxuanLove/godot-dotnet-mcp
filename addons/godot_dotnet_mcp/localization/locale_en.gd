@@ -1104,6 +1104,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_group_group_desc": "Query and manage node groups globally",
 
 	# Parity fallback entries
+	"maintenance_lifecycle_reconnect_hint": "The MCP transport may disconnect while the Godot editor disables and re-enables the plugin. Reconnect and fetch tools again after reload.",
+	"maintenance_update_sync_reconnect_hint": "Plugin update sync may schedule a plugin lifecycle reload after files are written. Poll status until completion; if the transport disconnects, reconnect and fetch tools again.",
 	"language_name": "English",
 	"log_level_trace": "Trace",
 }

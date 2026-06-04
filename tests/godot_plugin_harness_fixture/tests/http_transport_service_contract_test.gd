@@ -130,9 +130,10 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 	}
 
 
-func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = false) -> void:
+func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = false) -> bool:
 	_write_count += 1
 	_last_no_body = no_body
+	return true
 
 
 func _tick_loader(_delta: float) -> void:

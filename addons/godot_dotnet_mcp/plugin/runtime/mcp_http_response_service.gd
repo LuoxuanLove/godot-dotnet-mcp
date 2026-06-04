@@ -125,7 +125,7 @@ func build_cors_response(origin: String = "", allow_methods: String = "GET, POST
 	}
 
 
-func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> void:
+func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool = false) -> bool:
 	var response_data = data.duplicate(true)
 	var extra_headers = response_data.get("_headers", {})
 	if response_data.has("_headers"):
@@ -164,6 +164,7 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 		],
 		"debug"
 	)
+	return header_error == OK and body_error == OK
 
 
 func sanitize_for_json(value):

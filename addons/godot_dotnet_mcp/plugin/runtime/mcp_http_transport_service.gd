@@ -11,6 +11,8 @@ var _write_http_response := Callable()
 var _tick_loader := Callable()
 
 const MAX_REQUESTS_PER_DRAIN := 16
+const MAX_ACCEPTS_PER_FRAME := 8
+const MAX_PENDING_REQUEST_BYTES := 1024 * 1024
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
@@ -56,15 +58,16 @@ func process_frame(tcp_server: TCPServer, running: bool, delta: float) -> void:
 
 
 func _accept_new_connections(tcp_server: TCPServer) -> void:
-	if not tcp_server.is_connection_available():
-		return
-	var client = tcp_server.take_connection()
-	if client == null:
-		return
-	_connection_state.add_client(client)
-	_log("Client connected (total: %d)" % _connection_state.get_connection_count(), "info")
-	if _emit_client_connected.is_valid():
-		_emit_client_connected.call()
+	var accepted_count := 0
+	while accepted_count < MAX_ACCEPTS_PER_FRAME and tcp_server.is_connection_available():
+		var client = tcp_server.take_connection()
+		if client == null:
+			return
+		_connection_state.add_client(client)
+		accepted_count += 1
+		_log("Client connected (total: %d)" % _connection_state.get_connection_count(), "info")
+		if _emit_client_connected.is_valid():
+			_emit_client_connected.call()
 
 
 func _process_client(client: StreamPeerTCP) -> bool:
@@ -82,6 +85,12 @@ func _process_client(client: StreamPeerTCP) -> bool:
 				return false
 			var request_str = data[1].get_string_from_utf8()
 			var pending_data = _connection_state.get_pending_data(client) + request_str
+			if pending_data.length() > MAX_PENDING_REQUEST_BYTES:
+				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_data.length(), "warning")
+				if _connection_state.has_method("record_rejected_request"):
+					_connection_state.record_rejected_request()
+				client.disconnect_from_host()
+				return true
 			_connection_state.set_pending_data(client, pending_data)
 			_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
 		if not _connection_state.get_pending_data(client).is_empty():
@@ -147,7 +156,12 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		if _connection_state == null:
 			return
 		if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			_write_http_response.call(client, response, no_body)
+			var write_ok := bool(_write_http_response.call(client, response, no_body))
+			if not write_ok:
+				_log("Closing client after HTTP response write failure", "warning")
+				client.disconnect_from_host()
+				_connection_state.clear_processing(client)
+				return
 		_connection_state.clear_processing(client)
 
 		drained_count += 1

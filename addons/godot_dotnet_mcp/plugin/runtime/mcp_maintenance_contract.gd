@@ -2,9 +2,11 @@
 extends RefCounted
 class_name MCPMaintenanceContract
 
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+
 const RECONNECT_RETRY_AFTER_MS := 500
-const LIFECYCLE_RECONNECT_HINT := "The MCP transport may disconnect while the Godot editor disables and re-enables the plugin. Reconnect and fetch tools again after reload."
-const UPDATE_SYNC_RECONNECT_HINT := "Plugin update sync may schedule a plugin lifecycle reload after files are written. Poll status until completion; if the transport disconnects, reconnect and fetch tools again."
+const LIFECYCLE_RECONNECT_HINT_KEY := "maintenance_lifecycle_reconnect_hint"
+const UPDATE_SYNC_RECONNECT_HINT_KEY := "maintenance_update_sync_reconnect_hint"
 
 
 static func build_from_freshness(freshness: Dictionary = {}) -> Dictionary:
@@ -32,13 +34,13 @@ static func build_from_freshness(freshness: Dictionary = {}) -> Dictionary:
 		"safe_to_retry": not transport_may_disconnect,
 		"completion_observed": bool(lifecycle_reload.get("completion_observed", false)),
 		"completed_instance_id": str(lifecycle_reload.get("completed_instance_id", "")),
-		"reconnect_hint": LIFECYCLE_RECONNECT_HINT if active else ""
+		"reconnect_hint": _localized_hint(LIFECYCLE_RECONNECT_HINT_KEY) if active else ""
 	}
 
 
 static func build_from_lifecycle(lifecycle_reload: Dictionary = {}, freshness: Dictionary = {}) -> Dictionary:
-	var merged := freshness.duplicate(true)
-	merged["lifecycle_reload"] = lifecycle_reload.duplicate(true)
+	var merged := freshness.duplicate()
+	merged["lifecycle_reload"] = lifecycle_reload.duplicate()
 	return build_from_freshness(merged)
 
 
@@ -60,11 +62,12 @@ static func build_update_sync_maintenance(status_snapshot: Dictionary = {}) -> D
 		maintenance["pending"] = true
 		maintenance["disconnect_expected"] = true
 		maintenance["transport_may_disconnect"] = true
+		maintenance["reconnect_required"] = true
 		maintenance["retry_after_ms"] = RECONNECT_RETRY_AFTER_MS
 		maintenance["refresh_tools_after_reconnect"] = true
 		maintenance["refetch_tools_required"] = true
 		maintenance["safe_to_retry"] = true
-		maintenance["reconnect_hint"] = UPDATE_SYNC_RECONNECT_HINT
+		maintenance["reconnect_hint"] = _localized_hint(UPDATE_SYNC_RECONNECT_HINT_KEY)
 	return maintenance
 
 
@@ -86,8 +89,12 @@ static func enrich_response(response: Dictionary, maintenance: Dictionary) -> Di
 static func _transport_state_for(active: bool, transport_may_disconnect: bool, state: String) -> String:
 	if transport_may_disconnect:
 		return "disconnecting"
-	if state == "completed":
-		return "reconnecting"
 	if active:
 		return "stale_schema"
+	if state == "completed":
+		return "reconnecting"
 	return "ready"
+
+
+static func _localized_hint(key: String) -> String:
+	return LocalizationServiceScript.translate(key)
