@@ -136,7 +136,13 @@ func build_http_response_context(server, tool_loader_supervisor):
 			"connections": int(connection_stats.get("connections", 0)),
 			"total_connections": int(connection_stats.get("total_connections", 0)),
 			"total_requests": int(connection_stats.get("total_requests", 0)),
+			"rejected_requests": int(connection_stats.get("rejected_requests", 0)),
+			"client_session_count": int(connection_stats.get("client_session_count", 0)),
+			"client_sessions": connection_stats.get("client_sessions", []),
+			"recent_client_sessions": connection_stats.get("recent_client_sessions", []),
+			"last_request_id": str(connection_stats.get("last_request_id", "")),
 			"last_request_method": str(connection_stats.get("last_request_method", "")),
+			"last_request_path": str(connection_stats.get("last_request_path", "")),
 			"last_request_at_unix": int(connection_stats.get("last_request_at_unix", 0))
 		}
 	context.get_editor_session_identity = func() -> Dictionary:

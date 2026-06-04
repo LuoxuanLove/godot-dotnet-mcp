@@ -140,10 +140,13 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		)
 
 		_connection_state.mark_processing(client)
-		var method = headers.get("method", "GET")
-		var path = headers.get("path", "/")
+		var method := str(headers.get("method", "GET"))
+		var path := str(headers.get("path", "/"))
 		_log("Processing: %s %s (body: %d bytes)" % [method, path, request_body.length()], "debug")
-		_connection_state.record_request(method)
+		var request_id := ""
+		if _connection_state.has_method("record_request"):
+			request_id = str(_connection_state.record_request(method, client, path, headers, request_body, body_byte_size))
+		_log("Request audit identity: connection_request_id=%s" % request_id, "debug")
 
 		if not _route_request_async.is_valid() or not _write_http_response.is_valid():
 			_connection_state.clear_processing(client)

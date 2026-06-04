@@ -86,7 +86,55 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"connections": 3,
 			"total_connections": 5,
 			"total_requests": 12,
+			"rejected_requests": 1,
+			"client_session_count": 1,
+			"client_sessions": [
+				{
+					"connection_id": "http-5",
+					"active": true,
+					"connected_at_unix": 123400,
+					"last_seen_at_unix": 123456,
+					"request_count": 2,
+					"last_request_id": "http-5-req-2",
+					"last_request_method": "POST",
+					"last_request_path": "/mcp",
+					"last_request_at_unix": 123456,
+					"last_json_rpc_method": "tools/list",
+					"client_summary": {
+						"host": "localhost",
+						"origin": "http://localhost:5173",
+						"user_agent": "ContractClient/1.0",
+						"authorization_present": true
+					},
+					"recent_requests": [
+						{
+							"request_id": "http-5-req-1",
+							"method": "POST",
+							"path": "/mcp",
+							"json_rpc_method": "initialize"
+						},
+						{
+							"request_id": "http-5-req-2",
+							"method": "POST",
+							"path": "/mcp",
+							"json_rpc_method": "tools/list"
+						}
+					]
+				}
+			],
+			"recent_client_sessions": [
+				{
+					"connection_id": "http-4",
+					"active": false,
+					"request_count": 1,
+					"last_request_id": "http-4-req-1",
+					"client_summary": {"user_agent": "PreviousClient/1.0"},
+					"recent_requests": []
+				}
+			],
+			"last_request_id": "http-5-req-2",
 			"last_request_method": "POST",
+			"last_request_path": "/mcp",
 			"last_request_at_unix": 123456
 		}
 	)
@@ -118,6 +166,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not reflect a healthy loader state.")
 	if int(health.get("connections", -1)) != 3:
 		return _failure("Health response did not project server stats.")
+	if int(health.get("rejected_requests", -1)) != 1:
+		return _failure("Health response did not project rejected request stats.")
+	if str(health.get("last_request_id", "")) != "http-5-req-2":
+		return _failure("Health response did not project the latest request identity.")
+	if str(health.get("last_request_path", "")) != "/mcp":
+		return _failure("Health response did not project the latest request path.")
+	var client_sessions = health.get("client_sessions", [])
+	if not (client_sessions is Array) or (client_sessions as Array).size() != 1:
+		return _failure("Health response should expose active client sessions.")
+	var client_session: Dictionary = (client_sessions as Array)[0]
+	if str(client_session.get("connection_id", "")) != "http-5":
+		return _failure("Health response client session should expose connection_id.")
+	if str(client_session.get("last_request_id", "")) != "http-5-req-2":
+		return _failure("Health response client session should expose the last request id.")
+	if str(client_session.get("last_json_rpc_method", "")) != "tools/list":
+		return _failure("Health response client session should summarize the latest JSON-RPC method.")
+	var client_summary: Dictionary = client_session.get("client_summary", {})
+	if str(client_summary.get("user_agent", "")) != "ContractClient/1.0":
+		return _failure("Health response client session should retain the client summary.")
+	if not bool(client_summary.get("authorization_present", false)) or client_summary.has("authorization"):
+		return _failure("Health response client summary should only report authorization presence, not token contents.")
+	var recent_client_sessions = health.get("recent_client_sessions", [])
+	if not (recent_client_sessions is Array) or (recent_client_sessions as Array).is_empty():
+		return _failure("Health response should expose recent disconnected client sessions.")
+	if str(((recent_client_sessions as Array)[0] as Dictionary).get("connection_id", "")) != "http-4":
+		return _failure("Health response recent client session should preserve the disconnected connection id.")
 	if str(health.get("listen_host", "")) != "127.0.0.1" or int(health.get("listen_port", 0)) != 3000:
 		return _failure("Health response should expose the MCP listen endpoint.")
 	var health_identity: Dictionary = health.get("editor_session_identity", {})

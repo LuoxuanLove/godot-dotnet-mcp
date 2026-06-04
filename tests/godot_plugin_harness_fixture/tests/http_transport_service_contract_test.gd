@@ -48,12 +48,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	for _i in range(40):
 		client.poll()
 		if not request_sent and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			var body := "{\"ping\":true}"
-			var second_body := "{\"ping\":2}"
+			var body := "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"
+			var second_body := "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"
 			var frame := (
 				"POST /mcp HTTP/1.1\r\n"
 				+ "Host: localhost\r\n"
 				+ "Origin: http://localhost:5173\r\n"
+				+ "User-Agent: ContractClient/1.0\r\n"
 				+ "Content-Type: application/json; charset=utf-8\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [body.to_utf8_buffer().size(), body]
@@ -61,6 +62,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 				"POST /mcp HTTP/1.1\r\n"
 				+ "Host: localhost\r\n"
 				+ "Origin: http://localhost:5173\r\n"
+				+ "User-Agent: ContractClient/1.0\r\n"
 				+ "Content-Type: application/json; charset=utf-8\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [second_body.to_utf8_buffer().size(), second_body]
@@ -77,7 +79,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("HTTP transport should drain and write both pipelined responses from one socket read.")
 	if _last_method != "POST" or _last_path != "/mcp":
 		return _failure("HTTP transport did not preserve the routed request method or path.")
-	if _routed_bodies != ["{\"ping\":true}", "{\"ping\":2}"]:
+	if _routed_bodies != ["{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"]:
 		return _failure("HTTP transport did not preserve both pipelined request bodies.")
 	if str(_last_headers.get("origin", "")) != "http://localhost:5173":
 		return _failure("HTTP transport did not preserve the Origin header for route security decisions.")
@@ -88,6 +90,30 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var stats: Dictionary = connection_state.get_connection_stats()
 	if int(stats.get("total_requests", 0)) != 2:
 		return _failure("HTTP transport should record both processed pipelined requests.")
+	if str(stats.get("last_request_id", "")) != "http-1-req-2":
+		return _failure("HTTP transport should assign stable per-connection request identities.")
+	if str(stats.get("last_request_path", "")) != "/mcp":
+		return _failure("HTTP transport should record the last request path for audit diagnostics.")
+	var client_sessions = stats.get("client_sessions", [])
+	if not (client_sessions is Array) or (client_sessions as Array).size() != 1:
+		return _failure("HTTP transport should expose one active client session summary.")
+	var active_session: Dictionary = (client_sessions as Array)[0]
+	if str(active_session.get("connection_id", "")) != "http-1":
+		return _failure("HTTP transport client session should expose a stable connection id.")
+	if int(active_session.get("request_count", 0)) != 2:
+		return _failure("HTTP transport client session should count requests per connection.")
+	if str(active_session.get("last_json_rpc_method", "")) != "tools/list":
+		return _failure("HTTP transport client session should summarize the last JSON-RPC method without changing the response payload.")
+	var client_summary: Dictionary = active_session.get("client_summary", {})
+	if str(client_summary.get("origin", "")) != "http://localhost:5173":
+		return _failure("HTTP transport client summary should retain the request Origin.")
+	if str(client_summary.get("user_agent", "")) != "ContractClient/1.0":
+		return _failure("HTTP transport client summary should retain the User-Agent.")
+	var recent_requests = active_session.get("recent_requests", [])
+	if not (recent_requests is Array) or (recent_requests as Array).size() != 2:
+		return _failure("HTTP transport client session should retain recent request summaries.")
+	if str(((recent_requests as Array)[0] as Dictionary).get("request_id", "")) != "http-1-req-1":
+		return _failure("HTTP transport recent request audit should preserve the first request id.")
 
 	client.disconnect_from_host()
 	for _i in range(20):
@@ -103,6 +129,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("HTTP transport should emit exactly one client_disconnected event after disconnect.")
 	if connection_state.get_connection_count() != 0:
 		return _failure("HTTP transport should clear disconnected clients from connection state.")
+	var disconnected_stats: Dictionary = connection_state.get_connection_stats()
+	var recent_client_sessions = disconnected_stats.get("recent_client_sessions", [])
+	if not (recent_client_sessions is Array) or (recent_client_sessions as Array).is_empty():
+		return _failure("HTTP transport should retain a recent disconnected client session for diagnostics.")
+	var disconnected_session: Dictionary = (recent_client_sessions as Array)[0]
+	if bool(disconnected_session.get("active", true)):
+		return _failure("HTTP transport recent client session should be marked inactive after disconnect.")
+	if str(disconnected_session.get("connection_id", "")) != "http-1":
+		return _failure("HTTP transport recent client session should preserve the stable connection id.")
 
 	return {
 		"name": "http_transport_service_contracts",

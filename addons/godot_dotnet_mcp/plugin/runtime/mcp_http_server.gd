@@ -150,7 +150,9 @@ func get_connection_stats() -> Dictionary:
 	if _connection_state == null:
 		return {
 			"active_connections": 0, "connections": 0, "total_connections": 0,
-			"total_requests": 0, "last_request_method": "", "last_request_at_unix": 0
+			"total_requests": 0, "rejected_requests": 0, "client_session_count": 0,
+			"client_sessions": [], "recent_client_sessions": [], "last_request_id": "",
+			"last_request_method": "", "last_request_path": "", "last_request_at_unix": 0
 		}
 	var stats = _connection_state.get_connection_stats()
 	if not stats.has("active_connections"):
