@@ -17,12 +17,20 @@ Target version: 1.2.0.
 - Corrected localized Japanese and Korean documentation links, encoding examples, release-note wording, and UI/config implementation references.
 - Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
 
+### Added
+
+- Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
+- Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
+
 ### Internal
 
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, and plugin-update contract fixture expectations to the `1.2.0` development line.
+- Updated locale contract coverage so merged fallback translations are validated for languages that keep localized overrides instead of duplicating the full English table.
+- Tightened localization CI contracts so every supported locale must expose the same key set and may not silently reuse English strings except for explicit shared product names, paths, identifiers, and technical abbreviations.
+- Fixed the refactor guardrail scan so the banned-source identifier audit no longer reports its own validation script as a violation.
 
 ## [1.1.2] - 2026-06-02
 

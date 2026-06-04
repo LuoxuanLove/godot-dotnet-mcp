@@ -914,7 +914,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_click_control_name": "Click Control",
 	"tool_action_close_popup_desc": "Close the target popup or transient editor window.",
 	"tool_action_close_popup_name": "Close Popup",
-	"tool_action_configuration_done_name": "Configuration Done",
+	"tool_action_configuration_done_name": "Configuration terminée",
 	"tool_action_continue_name": "Continue",
 	"tool_action_disable_desc": "Disable the target capability or clear the current session binding.",
 	"tool_action_disable_name": "Disable",

@@ -7,28 +7,38 @@ const LocaleDe = preload("res://addons/godot_dotnet_mcp/localization/locale_de.g
 const LocaleEs = preload("res://addons/godot_dotnet_mcp/localization/locale_es.gd")
 const LocaleFr = preload("res://addons/godot_dotnet_mcp/localization/locale_fr.gd")
 const LocaleJa = preload("res://addons/godot_dotnet_mcp/localization/locale_ja.gd")
+const LocaleKo = preload("res://addons/godot_dotnet_mcp/localization/locale_ko.gd")
 const LocalePt = preload("res://addons/godot_dotnet_mcp/localization/locale_pt.gd")
 const LocaleRu = preload("res://addons/godot_dotnet_mcp/localization/locale_ru.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 const ServerPanelScene = preload("res://addons/godot_dotnet_mcp/ui/server_panel.tscn")
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	var en := LocaleEn.get_translations()
-	var zh_cn := LocaleZhCn.get_translations()
-	var zh_tw := LocaleZhTw.get_translations()
-	var de := LocaleDe.get_translations()
-	var es := LocaleEs.get_translations()
-	var fr := LocaleFr.get_translations()
-	var ja := LocaleJa.get_translations()
-	var pt := LocalePt.get_translations()
-	var ru := LocaleRu.get_translations()
-	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, pt, ru]
+	var en := _get_translations(LocaleEn)
+	var zh_cn := _get_translations(LocaleZhCn)
+	var zh_tw := _get_translations(LocaleZhTw)
+	var de := _get_translations(LocaleDe)
+	var es := _get_translations(LocaleEs)
+	var fr := _get_translations(LocaleFr)
+	var ja := _get_translations(LocaleJa)
+	var ko := _get_translations(LocaleKo)
+	var pt := _get_translations(LocalePt)
+	var ru := _get_translations(LocaleRu)
+	var supported_locales := [en, zh_cn, zh_tw, de, es, fr, ja, ko, pt, ru]
+	var localization = LocalizationServiceScript.new()
+	localization._init_translations()
+	var supported_locale_codes := localization.get_available_language_codes()
 	if str(en.get("tab_server", "")) != "Home":
 		return _failure("English localization should expose the first Dock tab as Home after the service-page-to-homepage migration.")
 	if str(zh_cn.get("tab_server", "")) != "主页":
 		return _failure("简体中文本地化应将第一个 Dock 页签显示为“主页”。")
 	if str(zh_tw.get("tab_server", "")) != "首頁":
 		return _failure("繁體中文本地化應將第一個 Dock 頁籤顯示為“首頁”。")
+	if str(ko.get("tab_server", "")) != "홈":
+		return _failure("Korean localization should expose the first Dock tab as 홈.")
+	if str(ko.get("language_name", "")) != "한국어":
+		return _failure("Korean localization should expose a readable native language name.")
 	if str(fr.get("language_name", "")) != "Français":
 		return _failure("French localization should expose a readable native language name.")
 	if str(fr.get("status_stopped", "")) != "Arrêté":
@@ -110,9 +120,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"config_client_qwen",
 		"config_client_cherry_studio"
 	]:
-		for locale in supported_locales:
-			if not locale.has(key):
-				return _failure("All supported locales should define visible Tools-page key: %s" % key)
+		for locale_code in supported_locale_codes:
+			if localization.get_text_for(locale_code, key) == key:
+				return _failure("All supported locales should resolve visible Tools-page key: %s" % key)
 	for key in [
 		"tab_settings",
 		"settings_general_title",
@@ -168,14 +178,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_runtime_step_name",
 		"tool_runtime_step_desc"
 	]:
-		for locale in supported_locales:
-			if not locale.has(key):
-				return _failure("All supported locales should define runtime Tools-page key: %s" % key)
+		for locale_code in supported_locale_codes:
+			if localization.get_text_for(locale_code, key) == key:
+				return _failure("All supported locales should resolve runtime Tools-page key: %s" % key)
 
 	for locale_info in [
 		{"name": "en", "path": "res://addons/godot_dotnet_mcp/localization/locale_en.gd"},
 		{"name": "zh_CN", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_cn.gd"},
-		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"}
+		{"name": "zh_TW", "path": "res://addons/godot_dotnet_mcp/localization/locale_zh_tw.gd"},
+		{"name": "ko", "path": "res://addons/godot_dotnet_mcp/localization/locale_ko.gd"}
 	]:
 		var duplicate_key = _find_duplicate_locale_key(str(locale_info["path"]))
 		if not duplicate_key.is_empty():
@@ -202,6 +213,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"zh_tw_title": str(zh_tw.get("title", ""))
 		}
 	}
+
+
+func _get_translations(locale_script: Script) -> Dictionary:
+	var translations = locale_script.get("TRANSLATIONS")
+	if translations is Dictionary:
+		return (translations as Dictionary).duplicate(true)
+	return {}
 
 
 func _find_duplicate_locale_key(path: String) -> String:

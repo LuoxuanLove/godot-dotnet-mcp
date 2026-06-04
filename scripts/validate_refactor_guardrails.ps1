@@ -30,6 +30,7 @@ function Find-BannedSourceMatches {
                     --glob ".github/**/*.yml" `
                     --glob ".github/**/*.yaml" `
                     --glob "scripts/**/*.ps1" `
+                    --glob "!scripts/validate_refactor_guardrails.ps1" `
                     --glob "README.md" `
                     --glob "AGENTS.md" `
                     --glob "CLAUDE.md" `

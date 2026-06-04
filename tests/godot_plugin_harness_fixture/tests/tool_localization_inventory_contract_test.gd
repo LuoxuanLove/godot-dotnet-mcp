@@ -67,7 +67,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
 		return _failure("Visible Tools page localization key groups are missing: %s" % ", ".join(missing.slice(0, 120)))
-
 	return {
 		"name": "tool_localization_inventory_contracts",
 		"success": true,
