@@ -145,11 +145,20 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 	var before_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
 	var before_screens: Array = _collect_main_screens(ei, before_screen)
 	var matched_screen := _find_main_screen_summary(before_screens, screen)
-	ei.set_main_screen_editor(screen)
+	if matched_screen.is_empty():
+		return _error("Screen not found: %s" % screen, {
+			"screen": screen,
+			"before_screen": before_screen,
+			"available": _extract_main_screen_names(before_screens),
+			"main_screens": before_screens
+		})
+	var resolved_screen := _main_screen_summary_label(matched_screen)
+	ei.set_main_screen_editor(resolved_screen)
 	var after_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
 	var after_screens: Array = _collect_main_screens(ei, after_screen)
 	return _success({
-		"screen": screen,
+		"screen": resolved_screen,
+		"requested_screen": screen,
 		"before_screen": before_screen,
 		"after_screen": after_screen,
 		"current_screen": after_screen,
@@ -157,7 +166,7 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 		"main_screens": after_screens,
 		"available": _extract_main_screen_names(after_screens),
 		"visible_button_found": not matched_screen.is_empty()
-	}, "Switched to %s editor" % screen)
+	}, "Switched to %s editor" % resolved_screen)
 
 
 func _get_distraction_free(ei) -> Dictionary:
@@ -248,6 +257,14 @@ func _find_main_screen_summary(screens: Array, screen: String) -> Dictionary:
 	return {}
 
 
+func _main_screen_summary_label(screen: Dictionary) -> String:
+	for property_name in ["name", "title", "text"]:
+		var value := str(screen.get(property_name, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	return ""
+
+
 func _extract_main_screen_names(screens: Array) -> Array[String]:
 	var names: Array[String] = []
 	for item in screens:
@@ -329,7 +346,7 @@ func _control_class_name(control) -> String:
 
 
 func _control_label(control) -> String:
-	for property_name in ["text", "title", "name"]:
+	for property_name in ["text", "title"]:
 		var value = control.get(property_name) if control is Object else null
 		var label := str(value).strip_edges()
 		if not label.is_empty():

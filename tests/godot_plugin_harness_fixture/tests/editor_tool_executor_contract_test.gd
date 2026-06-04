@@ -491,6 +491,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
 		builtin_button.text = builtin_screen
 		main_screen_bar.add_child(builtin_button)
+	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
+	main_screen_bar.add_child(stray_toolbar_button)
 	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
 	godex_button.text = "Godex"
 	main_screen_bar.add_child(godex_button)
@@ -551,11 +553,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
 	if not (get_screen_result.get("data", {}).get("available", []) as Array).has("Godex"):
 		return _failure("Editor status get_main_screen should include discovered plugin main screens.")
+	var lowercase_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "script"})
+	if not bool(lowercase_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should match screen names case-insensitively.")
+	if str(lowercase_screen_result.get("data", {}).get("after_screen", "")) != "Script":
+		return _failure("Editor status set_main_screen should switch using the discovered screen label, not the raw input.")
+	var missing_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "NotARegisteredScreen"})
+	if bool(missing_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should reject undiscovered screen names instead of using raw input.")
 	var list_screens_result: Dictionary = executor.execute("status", {"action": "list_main_screens"})
 	if not bool(list_screens_result.get("success", false)):
 		return _failure("Editor status list_main_screens failed through the split service path.")
 	if int(list_screens_result.get("data", {}).get("count", 0)) < 5:
 		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("RunProjectButton"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control name as a main screen label.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):
