@@ -169,6 +169,8 @@ func _select_menu_item(ei, args: Dictionary) -> Dictionary:
 	var index := _resolve_menu_item_index(popup, args)
 	if index < 0:
 		return _error("Editor menu item not found")
+	if _is_popup_menu_item_separator(popup, index):
+		return _error("Editor menu item is a separator: %s" % _read_popup_menu_item_label(popup, index))
 	if _is_popup_menu_item_disabled(popup, index):
 		return _error("Editor menu item is disabled: %s" % _read_popup_menu_item_label(popup, index))
 	_activate_popup_menu_item(popup, index)

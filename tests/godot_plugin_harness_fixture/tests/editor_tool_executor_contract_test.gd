@@ -546,6 +546,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	project_menu.get_popup().add_item("Project Settings...", 101)
 	project_menu.get_popup().add_item("Export...", 102)
 	project_menu.get_popup().add_item("Disabled Item", 103, true)
+	project_menu.get_popup().add_item("---", 104, false, true)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -804,7 +805,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(list_menus_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("Editor ui_control list_menus should return the visible Project menu.")
 	var listed_menu: Dictionary = list_menus_result.get("data", {}).get("menus", [{}])[0]
-	if int(listed_menu.get("item_count", 0)) != 3:
+	if int(listed_menu.get("item_count", 0)) != 4:
 		return _failure("Editor ui_control list_menus should expose PopupMenu item metadata.")
 
 	var open_menu_result: Dictionary = executor.execute("ui_control", {
@@ -832,6 +833,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(disabled_menu_result.get("success", false)):
 		return _failure("Editor ui_control select_menu_item should reject disabled PopupMenu items.")
+	var separator_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "---"
+	})
+	if bool(separator_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should reject separator PopupMenu items.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",
