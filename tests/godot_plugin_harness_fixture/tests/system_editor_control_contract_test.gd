@@ -9,9 +9,27 @@ class FakeBridge extends RefCounted:
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
 			"editor_status":
-				if str(args.get("action", "")) == "set_main_screen":
-					return success({"screen": str(args.get("screen", ""))})
-				return error("Unsupported editor_status action")
+				match str(args.get("action", "")):
+					"set_main_screen":
+						return success({
+							"screen": str(args.get("screen", "")),
+							"before_screen": "2D",
+							"after_screen": str(args.get("screen", "")),
+							"visible_button_found": str(args.get("screen", "")) == "Godex"
+						})
+					"list_main_screens":
+						return success({
+							"current_screen": "2D",
+							"count": 5,
+							"available": ["2D", "3D", "Script", "AssetLib", "Godex"],
+							"main_screens": [{"name": "Godex", "control_path": "/root/Editor/TopBar/Godex"}]
+						})
+					"get_distraction_free":
+						return success({"enabled": false})
+					"set_distraction_free":
+						return success({"enabled": bool(args.get("enabled", false))})
+					_:
+						return error("Unsupported editor_status action")
 			"editor_screenshot":
 				if str(args.get("action", "")) == "capture":
 					return success({"path": "user://editor.png"})
@@ -65,10 +83,37 @@ class FakeBridge extends RefCounted:
 				match str(args.get("action", "")):
 					"list_visible":
 						return success({"count": 1, "popups": [{"node_path": "/root/Editor/SearchDialog"}]})
+					"select_item":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"selector": {
+								"index": args.get("index", null),
+								"id": args.get("id", null),
+								"text": args.get("text", null)
+							},
+							"selected_item": {"index": int(args.get("index", -1)), "id": int(args.get("id", -1)), "text": str(args.get("text", ""))}
+						})
 					"press_button", "set_text", "close_popup":
 						return success({"target_path": str(args.get("target_path", ""))})
 					_:
 						return error("Unsupported editor_popup action")
+			"editor_plugin":
+				match str(args.get("action", "")):
+					"list":
+						return success({
+							"count": 1,
+							"plugins": [{"plugin": "diagnostic_plugin", "editor_enabled": true, "setting_enabled": true}]
+						})
+					"inspect":
+						return success({"plugin": str(args.get("plugin", "")), "editor_enabled": true, "setting_enabled": true})
+					"enable", "disable":
+						return success({
+							"plugin": str(args.get("plugin", "")),
+							"requested_enabled": str(args.get("action", "")) == "enable",
+							"allow_self": bool(args.get("allow_self", false))
+						})
+					_:
+						return error("Unsupported editor_plugin action")
 			_:
 				return error("Unsupported atomic tool: %s" % tool_name)
 
@@ -84,8 +129,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	impl.bridge = FakeBridge.new()
 
 	var tool_defs: Array[Dictionary] = impl.get_tools()
-	if tool_defs.size() != 2:
-		return _failure("impl_editor.gd should expose exactly two high-level system tools after adding editor_log.")
+	if tool_defs.size() != 3:
+		return _failure("impl_editor.gd should expose exactly three high-level system tools after adding editor_plugin_control.")
 	var tool_names: Array[String] = []
 	for tool_def in tool_defs:
 		tool_names.append(str(tool_def.get("name", "")))
@@ -93,6 +138,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("impl_editor.gd should expose editor_control.")
 	if not tool_names.has("editor_log"):
 		return _failure("impl_editor.gd should expose editor_log alongside editor_control.")
+	if not tool_names.has("editor_plugin_control"):
+		return _failure("impl_editor.gd should expose editor_plugin_control.")
 
 	var editor_control_schema: Dictionary = {}
 	for tool_def in tool_defs:
@@ -110,13 +157,39 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
 	if not editor_control_properties.has("local_x") or not editor_control_properties.has("local_y"):
 		return _failure("editor_control schema should expose local_x/local_y for control-local mouse clicks.")
+	if not editor_control_properties.has("enabled"):
+		return _failure("editor_control schema should expose enabled for distraction-free mode.")
+	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
+		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
+	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item"]:
+		if not editor_control_actions.has(expected_action):
+			return _failure("editor_control schema should expose %s." % expected_action)
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
-		"screen": "3D"
+		"screen": "Godex"
 	})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("system editor_control should delegate set_main_screen.")
+	if str(set_screen_result.get("data", {}).get("after_screen", "")) != "Godex":
+		return _failure("system editor_control should allow plugin main screen names.")
+
+	var list_screens_result: Dictionary = impl.execute("editor_control", {"action": "list_main_screens"})
+	if not bool(list_screens_result.get("success", false)):
+		return _failure("system editor_control should delegate list_main_screens.")
+	if not (list_screens_result.get("data", {}).get("available", []) as Array).has("Godex"):
+		return _failure("system editor_control list_main_screens should expose plugin main screens.")
+
+	var distraction_result: Dictionary = impl.execute("editor_control", {"action": "get_distraction_free"})
+	if not bool(distraction_result.get("success", false)):
+		return _failure("system editor_control should delegate get_distraction_free.")
+	var set_distraction_result: Dictionary = impl.execute("editor_control", {
+		"action": "set_distraction_free",
+		"enabled": true
+	})
+	if not bool(set_distraction_result.get("success", false)) or not bool(set_distraction_result.get("data", {}).get("enabled", false)):
+		return _failure("system editor_control should delegate set_distraction_free.")
 
 	var capture_editor_result: Dictionary = impl.execute("editor_control", {
 		"action": "capture_editor"
@@ -222,6 +295,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(popup_result.get("success", false)):
 		return _failure("system editor_control should delegate list_popups.")
 
+	var popup_select_result: Dictionary = impl.execute("editor_control", {
+		"action": "select_popup_menu_item",
+		"target_path": "/root/Editor/SearchDialog",
+		"index": 2,
+		"id": 42,
+		"text": "Rename"
+	})
+	if not bool(popup_select_result.get("success", false)):
+		return _failure("system editor_control should delegate select_popup_menu_item.")
+	if int(popup_select_result.get("data", {}).get("selected_item", {}).get("index", -1)) != 2:
+		return _failure("system editor_control should preserve select_popup_menu_item index.")
+
 	var set_text_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_control_text",
 		"target_path": "/root/Editor/SearchPanel/SearchField",
@@ -229,6 +314,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(set_text_result.get("success", false)):
 		return _failure("system editor_control should delegate set_control_text.")
+
+	var plugin_list_result: Dictionary = impl.execute("editor_plugin_control", {"action": "list"})
+	if not bool(plugin_list_result.get("success", false)) or int(plugin_list_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("system editor_plugin_control should delegate plugin list.")
+	var plugin_status_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "get_status",
+		"plugin": "diagnostic_plugin"
+	})
+	if not bool(plugin_status_result.get("success", false)) or str(plugin_status_result.get("data", {}).get("plugin", "")) != "diagnostic_plugin":
+		return _failure("system editor_plugin_control should delegate plugin status inspection.")
+	var plugin_enable_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "enable",
+		"plugin": "diagnostic_plugin"
+	})
+	if not bool(plugin_enable_result.get("success", false)) or not bool(plugin_enable_result.get("data", {}).get("requested_enabled", false)):
+		return _failure("system editor_plugin_control should delegate plugin enable.")
+	var plugin_disable_self_result: Dictionary = impl.execute("editor_plugin_control", {
+		"action": "disable",
+		"plugin": "godot_dotnet_mcp",
+		"allow_self": true
+	})
+	if not bool(plugin_disable_self_result.get("success", false)) or not bool(plugin_disable_self_result.get("data", {}).get("allow_self", false)):
+		return _failure("system editor_plugin_control should forward allow_self for explicit self-toggle requests.")
 
 	return {
 		"name": "system_editor_control_contracts",
