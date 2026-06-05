@@ -134,11 +134,12 @@ The harness discovers cases automatically. The following list shows representati
 | `client_config_inspection_service_contracts` | Verify `inspect / preflight` state classification |
 | `client_config_file_transaction_contracts` | Verify merge, remove, backup, and `opencode` blocking writes |
 | `client_config_launcher_adapter_contracts` | Verify CLI invocation and Windows command-line wrapping |
-| `http_server_contracts` | Verify `mcp_http_server` lifecycle, `tools/list`, and `tools/call` structural contracts |
+| `http_server_contracts` | Verify `mcp_http_server` lifecycle, `tools/list`, `tools/call` structural contracts, and malformed `params` / `arguments` JSON-RPC boundaries |
 | `http_request_router_contracts` | Verify path routing, `GET /mcp` 405, default cross-origin denial, explicit CORS allowlist, Host and Content-Type validation, and `404` semantics |
 | `http_request_decoder_contracts` | Verify `Content-Length` and chunked body decoding, header retention, waiting states, and trailing data retention |
 | `http_response_service_contracts` | Verify JSON-RPC construction, `/health` projection, exact-Origin CORS responses, and JSON cleanup |
 | `json_rpc_router_contracts` | Verify `initialize`, notification no-response semantics, and method-not-found behavior |
+| `json_rpc_request_service_contracts` | Verify parse errors, request-object validation, non-object `params` rejection, request emission, and router forwarding |
 | `mcp_resources_prompts_contracts` | Verify MCP resources/prompts discovery, resource read safety, oversized resource rejection, prompt truncation metadata, and HTTP/stdio error boundaries |
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
@@ -151,6 +152,7 @@ The harness discovers cases automatically. The following list shows representati
 | `stdio_tool_activity_contracts` | Verify stdio `tools/call` preserves loader activity summaries and strips top-level `_mcp_context` before concrete tool execution |
 | `tool_activity_registry_contracts` | Verify activity registry running/recent/get state transitions, execution order, scope hints, and agent-context sanitization |
 | `tool_loader_contracts` | Verify loader initialization and disabled-tool shrinking under the default tool access provider |
+| `tool_rpc_router_contracts` | Verify tool list presentation, successful tool calls, missing tool name errors, and non-object `arguments` validation |
 | `server_tab_model_projection_contracts` | Verify the status overview, self-diagnostic summary, runtime-state projection, and log and language option model |
 | `tool_lsp_diagnostics_adapter_contracts` | Verify configure, tick, reset, release, and runtime bridge binding semantics in `tool_lsp_diagnostics_adapter.gd` |
 | `gdscript_lsp_diagnostics_service_contracts` | Verify request replacement, cache hits, clear, and debug snapshot behavior in `gdscript_lsp_diagnostics_service.gd` |
