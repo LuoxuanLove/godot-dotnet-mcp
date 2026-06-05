@@ -336,13 +336,16 @@ EXAMPLES:
 		},
 		{
 			"name": "ui_control",
-			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks, and write text into text-editing controls.
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls and top menus, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks, select menu items, and write text into text-editing controls.
 
 ACTIONS:
 - list_visible: Enumerate visible editor controls
 - list_dock_tabs: Enumerate dock tabs by title/path, including hidden ones when requested
 - activate_dock_tab: Activate a dock tab by its title
 - activate_ui: Non-invasively activate dock/plugin/bottom-panel UI by semantic_path, dock title, bottom_panel_title/path, or TabContainer target_path plus tab_title/tab_index
+- list_menus: Enumerate visible MenuButton controls and their PopupMenu items
+- open_menu: Open a MenuButton by menu_title or target_path
+- select_menu_item: Open a MenuButton and select one PopupMenu item by item_text or item_index
 - get_control: Fetch one control summary by target_path
 - capture_control: Capture a screenshot cropped to one control
 - focus_control: Move editor focus to a control
@@ -358,6 +361,9 @@ EXAMPLES:
 - Activate MCPDock config: {"action": "activate_ui", "semantic_path": "MCPDock/config", "path": "user://godot_dotnet_mcp/captures/editor_controls/mcpdock_config.png"}
 - Activate TabContainer tab: {"action": "activate_ui", "target_path": "/root/Editor/MCP/TabContainer", "tab_title": "ConfigTab"}
 - Activate bottom panel: {"action": "activate_ui", "bottom_panel_title": "Output"}
+- List menus: {"action": "list_menus", "text_query": "Project"}
+- Open Project menu: {"action": "open_menu", "menu_title": "Project"}
+- Select Project Settings: {"action": "select_menu_item", "menu_title": "Project", "item_text": "Project Settings..."}
 - Inspect one control: {"action": "get_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
@@ -369,7 +375,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -387,6 +393,18 @@ EXAMPLES:
 					"tab_index": {
 						"type": "integer",
 						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+					},
+					"menu_title": {
+						"type": "string",
+						"description": "Top menu title/text/name for open_menu/select_menu_item"
+					},
+					"item_text": {
+						"type": "string",
+						"description": "PopupMenu item text for select_menu_item"
+					},
+					"item_index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_menu_item"
 					},
 					"bottom_panel_title": {
 						"type": "string",
