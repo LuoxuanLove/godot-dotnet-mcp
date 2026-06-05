@@ -36,6 +36,7 @@ Target version: 1.2.0.
 ### Fixed
 
 - Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
+- Fixed C# empty-method generation so internal edit helpers no longer emit ambiguous fallback bodies when a body is missing.
 - Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
 - Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
 - Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
@@ -45,6 +46,7 @@ Target version: 1.2.0.
 ### Internal
 
 - Extended `mcp_resources_prompts_contracts` to verify resource output limits, prompt truncation metadata, and the `2026-06-05.5` tool schema facts update.
+- Extended script edit service harness coverage to require explicit C# `NotImplementedException` guard bodies instead of ambiguous generated fallback bodies.
 - Extended User-tool service, runtime health, and project-state harness coverage for runtime diagnostics and failed custom-tool load reporting.
 - Extended plugin-evolution harness coverage so public runtime diagnostics keep forwarding the live user-tool runtime snapshot.
 - Bumped the tool schema facts version and extended editor UI harness coverage for `list_menus`, `open_menu`, and `select_menu_item`.
