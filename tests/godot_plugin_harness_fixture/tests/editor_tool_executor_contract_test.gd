@@ -514,6 +514,20 @@ class FakeEditorInterface:
 
 	func set_plugin_enabled(plugin_name: String, enabled: bool) -> void:
 		_plugin_states[plugin_name] = enabled
+		var enabled_plugins = ProjectSettings.get_setting("editor_plugins/enabled", PackedStringArray())
+		var updated := PackedStringArray()
+		if enabled_plugins is PackedStringArray:
+			updated = enabled_plugins
+		elif enabled_plugins is Array:
+			for item in enabled_plugins:
+				updated.append(str(item))
+		var plugin_cfg := "res://addons/%s/plugin.cfg" % plugin_name
+		if enabled:
+			if not updated.has(plugin_cfg):
+				updated.append(plugin_cfg)
+		elif updated.has(plugin_cfg):
+			updated.remove_at(updated.find(plugin_cfg))
+		ProjectSettings.set_setting("editor_plugins/enabled", updated)
 
 
 class FakeEditorPlugin:
@@ -541,6 +555,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var executor = EditorExecutorScript.new()
 	var editor_interface := FakeEditorInterface.new()
 	var editor_plugin := FakeEditorPlugin.new(editor_interface)
+	_ensure_editor_plugin_fixture()
 	_scene_root = _build_scene_fixture(tree)
 	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
 	popup_root.title = "Search"
@@ -592,6 +607,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.register_main_screen_button("Godex", godex_button)
 	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
+	var diagnostic_plugin_button := FakeUiControl.new("DiagnosticPluginButton", "Button", Rect2(460, 16, 160, 24))
+	diagnostic_plugin_button.text = "Diagnostic Plugin"
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
 	var tools_tab := FakeUiControl.new("ToolsTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -615,6 +632,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
+	editor_interface.get_base_control().add_popup_child(diagnostic_plugin_button)
 	editor_interface.get_base_control().add_popup_child(output_panel)
 	editor_interface._edited_scene_root = _scene_root
 	editor_interface.get_base_control().get_viewport().focus_owner = FakeFocusOwner.new()
@@ -1116,18 +1134,42 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(region_screenshot_data.get("width", 0)) != 64 or int(region_screenshot_data.get("height", 0)) != 48:
 		return _failure("Editor screenshot region capture returned unexpected cropped dimensions.")
 
+	var plugin_list_result: Dictionary = executor.execute("plugin", {"action": "list"})
+	if not bool(plugin_list_result.get("success", false)):
+		return _failure("Editor plugin list failed through the split service path.")
+	var listed_plugins: Array = plugin_list_result.get("data", {}).get("plugins", [])
+	if not _has_plugin_summary(listed_plugins, "diagnostic_plugin"):
+		return _failure("Editor plugin list should include plugin.cfg metadata and diagnostics for fixture plugins.")
+
 	var enable_plugin_result: Dictionary = executor.execute("plugin", {
 		"action": "enable",
-		"plugin": "godot_dotnet_mcp"
+		"plugin": "diagnostic_plugin"
 	})
 	if not bool(enable_plugin_result.get("success", false)):
 		return _failure("Editor plugin enable failed through the split service path.")
+	var enable_plugin_data: Dictionary = enable_plugin_result.get("data", {})
+	if not bool(enable_plugin_data.get("editor_enabled", false)) or not bool(enable_plugin_data.get("setting_enabled", false)):
+		return _failure("Editor plugin enable should return editor-session and project-setting diagnostics.")
+	if not bool(enable_plugin_data.get("main_screen_visible", false)):
+		return _failure("Editor plugin diagnostics should detect visible plugin UI labels when present.")
 	var plugin_state_result: Dictionary = executor.execute("plugin", {
 		"action": "is_enabled",
-		"plugin": "godot_dotnet_mcp"
+		"plugin": "diagnostic_plugin"
 	})
 	if not bool(plugin_state_result.get("data", {}).get("enabled", false)):
 		return _failure("Editor plugin is_enabled should report the enabled state after enable.")
+	var missing_plugin_result: Dictionary = executor.execute("plugin", {
+		"action": "inspect",
+		"plugin": "missing_plugin"
+	})
+	if bool(missing_plugin_result.get("success", false)) or str(missing_plugin_result.get("data", {}).get("error_type", "")) != "plugin_not_found":
+		return _failure("Editor plugin inspect should return a structured plugin_not_found error.")
+	var self_disable_result: Dictionary = executor.execute("plugin", {
+		"action": "disable",
+		"plugin": "godot_dotnet_mcp"
+	})
+	if bool(self_disable_result.get("success", false)) or not bool(self_disable_result.get("data", {}).get("self_plugin", false)):
+		return _failure("Editor plugin disable should refuse to toggle the active MCP plugin by default.")
 
 	return {
 		"name": "editor_tool_executor_contracts",
@@ -1166,6 +1208,23 @@ func _build_scene_fixture(tree: SceneTree) -> Node:
 	target.owner = root
 
 	return root
+
+
+func _ensure_editor_plugin_fixture() -> void:
+	var root_dir := DirAccess.open("res://")
+	if root_dir != null:
+		root_dir.make_dir_recursive("addons/diagnostic_plugin")
+	var file := FileAccess.open("res://addons/diagnostic_plugin/plugin.cfg", FileAccess.WRITE)
+	if file != null:
+		file.store_string("[plugin]\nname=\"Diagnostic Plugin\"\ndescription=\"Fixture plugin for editor diagnostics.\"\nauthor=\"Harness\"\nversion=\"1.0.0\"\nscript=\"res://addons/diagnostic_plugin/plugin.gd\"\n")
+		file.close()
+
+
+func _has_plugin_summary(plugins: Array, plugin_name: String) -> bool:
+	for plugin in plugins:
+		if plugin is Dictionary and str((plugin as Dictionary).get("plugin", (plugin as Dictionary).get("name", ""))) == plugin_name:
+			return (plugin as Dictionary).has("editor_enabled") and (plugin as Dictionary).has("setting_enabled")
+	return false
 
 
 func _failure(message: String) -> Dictionary:

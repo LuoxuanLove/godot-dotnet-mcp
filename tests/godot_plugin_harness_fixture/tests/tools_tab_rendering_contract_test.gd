@@ -353,6 +353,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["step", "capture", "input"]
 		"system_editor_control":
 			return ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free", "capture_editor", "list_controls", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_control_text", "list_popups", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
+		"system_editor_plugin_control":
+			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"]
 		"system_plugin_update":

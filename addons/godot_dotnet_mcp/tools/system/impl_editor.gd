@@ -5,7 +5,7 @@ extends RefCounted
 
 var bridge
 
-const HANDLED_TOOLS := ["editor_control", "editor_log"]
+const HANDLED_TOOLS := ["editor_control", "editor_log", "editor_plugin_control"]
 
 
 func handles(tool_name: String) -> bool:
@@ -136,6 +136,34 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "editor_plugin_control",
+			"description": "EDITOR PLUGIN CONTROL: Inspect and toggle third-party EditorPlugin session state. Reports plugin.cfg metadata, project-setting state, current editor-session state, visible UI/main-screen hints, and restart/manual-activation guidance. Refuses to toggle this MCP plugin by default; use dedicated plugin reload/update tools for this plugin.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": [
+							"list",
+							"get_status",
+							"enable",
+							"disable"
+						],
+						"description": "Editor plugin control action"
+					},
+					"plugin": {
+						"type": "string",
+						"description": "Plugin folder name under res://addons/"
+					},
+					"allow_self": {
+						"type": "boolean",
+						"description": "Allow toggling this MCP plugin despite reconnect/disconnect risk (default false)"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "editor_log",
 			"description": "EDITOR LOG: High-level Output panel access for agents. Use it to read current editor output, read filtered warning/error lines, or clear the Output panel without dropping down to atomic debug tools.",
 			"inputSchema": {
@@ -171,6 +199,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 	if tool_name == "editor_log":
 		return _execute_editor_log(args)
+	if tool_name == "editor_plugin_control":
+		return _execute_editor_plugin_control(args)
 
 	var action := str(args.get("action", "")).strip_edges()
 	match action:
@@ -314,6 +344,26 @@ func _capture_editor(args: Dictionary) -> Dictionary:
 		data["visible_popups"] = popup_data.get("popups", [])
 		capture_result["data"] = data
 	return capture_result
+
+
+func _execute_editor_plugin_control(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"list":
+			return bridge.call_atomic("editor_plugin", {"action": "list"})
+		"get_status":
+			return bridge.call_atomic("editor_plugin", {
+				"action": "inspect",
+				"plugin": str(args.get("plugin", "")).strip_edges()
+			})
+		"enable", "disable":
+			return bridge.call_atomic("editor_plugin", {
+				"action": action,
+				"plugin": str(args.get("plugin", "")).strip_edges(),
+				"allow_self": bool(args.get("allow_self", false))
+			})
+		_:
+			return bridge.error("Unknown action: %s" % action)
 
 
 func _execute_editor_log(args: Dictionary) -> Dictionary:
