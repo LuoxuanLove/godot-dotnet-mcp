@@ -2,6 +2,7 @@ extends RefCounted
 
 const GDScriptEditServiceScript = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_service.gd")
 const CSharpEditServiceScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_service.gd")
+const CSharpEditActionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_action_service.gd")
 const GDScriptEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/script/gdscript_edit_helper.gd")
 const CSharpEditHelperScript = preload("res://addons/godot_dotnet_mcp/tools/script/csharp_edit_helper.gd")
 const MCPScriptParserScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_script_parser.gd")
@@ -14,6 +15,7 @@ var _cs_service = null
 func run_case(_tree: SceneTree) -> Dictionary:
 	_gd_service = GDScriptEditServiceScript.new()
 	_cs_service = CSharpEditServiceScript.new()
+	var cs_action_service = CSharpEditActionServiceScript.new()
 	var gd_helper = GDScriptEditHelperScript.new()
 	var cs_helper = CSharpEditHelperScript.new()
 
@@ -88,6 +90,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_variable = (parser_variables as Array)[0]
 	if not (parsed_variable is Dictionary) or str((parsed_variable as Dictionary).get("default", "")) != "7":
 		return _failure("MCPScriptParser should preserve ordinary GDScript variable default values.")
+
+	var fallback_method = cs_action_service.call("_build_method_code", {
+		"name": "NeedsBody",
+		"return_type": "int"
+	})
+	if not (fallback_method is String):
+		return _failure("C# action service should build method code as text.")
+	var fallback_method_text := str(fallback_method)
+	if fallback_method_text.find("TODO: implement") != -1 or fallback_method_text.find("return default;") != -1:
+		return _failure("C# fallback method generation should not emit ambiguous fallback bodies.")
+	if fallback_method_text.find("throw new System.NotImplementedException") == -1:
+		return _failure("C# fallback method generation should emit an explicit NotImplementedException.")
+
+	var cs_missing_body_method: Dictionary = _cs_service.execute("edit_cs", {
+		"action": "upsert_method",
+		"path": cs_path,
+		"type_name": "SampleServiceSplit",
+		"member_name": "NeedsBody",
+		"return_type": "int"
+	})
+	if not bool(cs_missing_body_method.get("success", false)):
+		return _failure("C# upsert_method without a body should succeed through the Roslyn-backed split service.")
+	if str(cs_missing_body_method.get("data", {}).get("engine", "")) != "roslyn":
+		return _failure("C# upsert_method without a body should report engine=roslyn.")
+	var cs_missing_body_content := _read_text(cs_path)
+	if cs_missing_body_content.find("TODO: implement") != -1 or cs_missing_body_content.find("return default;") != -1:
+		return _failure("C# Roslyn upsert_method without a body should not emit ambiguous fallback bodies.")
+	if cs_missing_body_content.find("throw new System.NotImplementedException") == -1:
+		return _failure("C# Roslyn upsert_method without a body should emit an explicit NotImplementedException.")
 
 	var cs_upsert_method: Dictionary = _cs_service.execute("edit_cs", {
 		"action": "upsert_method",

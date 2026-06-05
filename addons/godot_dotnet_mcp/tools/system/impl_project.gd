@@ -41,7 +41,7 @@ const HANDLED_TOOLS := [
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 
 
 func handles(tool_name: String) -> bool:
@@ -762,6 +762,8 @@ func _get_plugin_from_runtime_context():
 	var server = _runtime_context.get("server", null)
 	if server == null or not is_instance_valid(server):
 		return null
+	if not server.has_method("get_parent"):
+		return null
 	return server.get_parent()
 
 
@@ -1180,6 +1182,41 @@ func _get_self_diagnostics_health_summary() -> Dictionary:
 	}, 3)
 
 
+func _get_user_tool_runtime_health_summary() -> Dictionary:
+	var unavailable := {
+		"available": false,
+		"runtime_loading_enabled": false,
+		"discovered_script_count": 0,
+		"loadable_count": 0,
+		"failed_load_count": 0,
+		"tool_count": 0,
+		"last_error": "User Tool runtime diagnostics bridge is unavailable"
+	}
+	var plugin = _get_plugin_from_runtime_context()
+	if plugin == null or not plugin.has_method("get_user_tool_runtime_diagnostics_from_tools"):
+		return unavailable
+	var runtime_state: Array = []
+	var tool_loader = _runtime_context.get("tool_loader", null)
+	if tool_loader != null and tool_loader.has_method("get_user_tool_runtime_snapshot"):
+		runtime_state = tool_loader.get_user_tool_runtime_snapshot()
+	var result = plugin.get_user_tool_runtime_diagnostics_from_tools(5, runtime_state)
+	if not (result is Dictionary):
+		return unavailable
+	var result_dict: Dictionary = result
+	if not bool(result_dict.get("success", false)):
+		unavailable["last_error"] = str(result_dict.get("error", result_dict.get("message", unavailable.get("last_error", ""))))
+		return unavailable
+	var data = result_dict.get("data", {})
+	if not (data is Dictionary):
+		return unavailable
+	var diagnostics: Dictionary = (data as Dictionary).duplicate(true)
+	diagnostics["available"] = true
+	if not diagnostics.has("last_error"):
+		var watch = diagnostics.get("watch", {})
+		diagnostics["last_error"] = str((watch as Dictionary).get("last_error", "")) if watch is Dictionary else ""
+	return diagnostics
+
+
 func _is_runtime_running(summary: Dictionary) -> bool:
 	var sessions = summary.get("sessions", {})
 	if sessions is Dictionary:
@@ -1314,6 +1351,7 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 			"self_diagnostics": _get_self_diagnostics_health_summary(),
 			"lsp_diagnostics": _get_lsp_runtime_health_summary(),
 			"tool_loader": _get_tool_loader_health_summary(),
+			"user_tools": _get_user_tool_runtime_health_summary(),
 			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 			"capabilities": runtime_capabilities
 		}
@@ -1451,6 +1489,7 @@ func _build_project_state_health_section(full_data: Dictionary) -> Dictionary:
 		"self_diagnostics": _get_self_diagnostics_health_summary(),
 		"lsp_diagnostics": _get_lsp_runtime_health_summary(),
 		"tool_loader": _get_tool_loader_health_summary(),
+		"user_tools": _get_user_tool_runtime_health_summary(),
 		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 		"capabilities": full_data.get("runtime_capabilities", {})
 	}
