@@ -214,10 +214,41 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject invalid reference_integrity path arguments.")
 	var stdio_server = StdioServerScript.new()
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 22,
+		"method": "initialize",
+		"params": []
+	}))
+	var invalid_stdio_request_response = stdio_server.get("_last_written_response")
+	if not (invalid_stdio_request_response is Dictionary):
+		return _failure("stdio full request path should record the invalid params response.")
+	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio full request path should reject non-object params before method dispatch.")
+	stdio_server.set("_last_written_response", {})
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": "tools/list",
+		"params": []
+	}))
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("stdio notifications with non-object params should not write a response.")
 	var invalid_stdio_params_response: Dictionary = stdio_server._handle_resources_read([], 17)
-	stdio_server.free()
 	if int((invalid_stdio_params_response.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio resources/read should reject non-object params with -32602.")
+	var invalid_stdio_tool_params: Dictionary = await stdio_server._handle_tools_call_async([], 20)
+	if int((invalid_stdio_tool_params.get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio tools/call should reject non-object params with -32602.")
+	var invalid_stdio_tool_arguments: Dictionary = await stdio_server._handle_tools_call_async({"name": "system_help", "arguments": []}, 21)
+	var invalid_stdio_tool_arguments_result = invalid_stdio_tool_arguments.get("result", {})
+	if not (invalid_stdio_tool_arguments_result is Dictionary) or not bool((invalid_stdio_tool_arguments_result as Dictionary).get("isError", false)):
+		return _failure("stdio tools/call should return isError=true for non-object arguments.")
+	var invalid_stdio_tool_arguments_content = (invalid_stdio_tool_arguments_result as Dictionary).get("content", [])
+	if not (invalid_stdio_tool_arguments_content is Array) or (invalid_stdio_tool_arguments_content as Array).is_empty():
+		return _failure("stdio tools/call non-object arguments should include text content.")
+	if str(((invalid_stdio_tool_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
+		return _failure("stdio tools/call non-object arguments should preserve the validation message.")
+	stdio_server.free()
 
 	return {
 		"name": "mcp_resources_prompts_contracts",
