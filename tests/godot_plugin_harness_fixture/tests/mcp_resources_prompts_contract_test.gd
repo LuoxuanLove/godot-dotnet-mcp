@@ -22,6 +22,7 @@ const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 
 var _server = null
+var _temp_paths: Array[String] = []
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -118,6 +119,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(resource_read.get("error", "resource read failed")))
 	if str(resource_read.get("text", "")).find("resource_name") == -1:
 		return _failure("resource template resource should read resource text.")
+	var large_script_path := "res://tests_tmp/mcp_resources_prompts_contracts/large_script.gd"
+	_write_large_text_file(large_script_path, 600000)
+	var large_resource_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://script/tests_tmp/mcp_resources_prompts_contracts/large_script.gd"}, 20)
+	if not (large_resource_response.get("error", null) is Dictionary):
+		return _failure("resources/read should reject oversized template file resources with a JSON-RPC error.")
+	var large_resource_error: Dictionary = large_resource_response.get("error", {})
+	if int(large_resource_error.get("code", 0)) != -32602 or str(large_resource_error.get("message", "")).find("exceeds") == -1:
+		return _failure("resources/read oversized template resource errors should use -32602 and describe the output limit.")
 
 	var traversal_response: Dictionary = await _json_rpc("resources/read", {"uri": TRAVERSAL_URI}, 9)
 	if not (traversal_response.get("error", null) is Dictionary):
@@ -144,6 +153,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
 	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
 		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
+	var long_goal_prompt: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "G".repeat(40000)}}, 21)
+	var long_goal_result = long_goal_prompt.get("result", {})
+	if not (long_goal_result is Dictionary):
+		return _failure("prompts/get should return a result object when prompt text is oversized.")
+	var long_goal_meta = (long_goal_result as Dictionary).get("_meta", {})
+	if not (long_goal_meta is Dictionary):
+		return _failure("prompts/get should include _meta when prompt text is truncated.")
+	var output_meta = ((long_goal_meta as Dictionary).get("godotDotnetMcp", {}) as Dictionary).get("output", {})
+	if not (output_meta is Dictionary) or not bool((output_meta as Dictionary).get("truncated", false)):
+		return _failure("prompts/get output metadata should mark oversized prompt text as truncated.")
+	if int((output_meta as Dictionary).get("returnedByteSize", 0)) > int((output_meta as Dictionary).get("maxByteSize", 0)):
+		return _failure("prompts/get truncated output should not exceed maxByteSize.")
 
 	var content_prompt := await _get_prompt_text(CONTENT_AUTHORING_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "script_path": "tests/headless_case_support.gd", "goal": "add a menu"}, 12)
 	if not bool(content_prompt.get("ok", false)):
@@ -212,6 +233,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(tree: SceneTree) -> void:
+	for path in _temp_paths:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	for i in range(_temp_paths.size() - 1, -1, -1):
+		var path := _temp_paths[i]
+		var absolute_path := ProjectSettings.globalize_path(path)
+		if DirAccess.dir_exists_absolute(absolute_path):
+			DirAccess.remove_absolute(absolute_path)
+	_temp_paths.clear()
 	if _server == null:
 		return
 	if _server.has_method("stop"):
@@ -231,6 +261,21 @@ func _json_rpc(method: String, params: Dictionary, id: int) -> Dictionary:
 		"method": method,
 		"params": params
 	}))
+
+
+func _write_large_text_file(path: String, size: int) -> void:
+	var dir_path := path.get_base_dir()
+	var absolute_dir := ProjectSettings.globalize_path(dir_path)
+	if not DirAccess.dir_exists_absolute(absolute_dir):
+		DirAccess.make_dir_recursive_absolute(absolute_dir)
+		_temp_paths.append(dir_path)
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string("# oversized contract fixture\n")
+	file.store_string("A".repeat(size))
+	file.close()
+	_temp_paths.append(path)
 
 
 func _read_json_resource(uri: String, id: int) -> Dictionary:

@@ -8,7 +8,7 @@ const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor
 class FakeMainScreen:
 	extends RefCounted
 
-	var name := "2D"
+	var name := "MainScreenContainer"
 
 
 class FakeEditorSettings:
@@ -199,6 +199,9 @@ class FakePopupNode:
 	var _children: Array = []
 	var pressed := false
 	var _rect := Rect2(0, 0, 100, 24)
+	var _items: Array[Dictionary] = []
+	var selected_index := -1
+	var selected_id := -1
 
 	func _init(node_name: String = "", popup_class: String = "Control") -> void:
 		name = node_name
@@ -239,6 +242,63 @@ class FakePopupNode:
 	func press() -> void:
 		pressed = true
 
+	func add_menu_item(text_value: String, id_value: int, disabled_value: bool = false, separator_value: bool = false, submenu_value: String = "") -> void:
+		_items.append({
+			"text": text_value,
+			"id": id_value,
+			"disabled": disabled_value,
+			"separator": separator_value,
+			"submenu": submenu_value
+		})
+
+	func get_item_count() -> int:
+		return _items.size()
+
+	func get_item_id(index: int) -> int:
+		return int(_items[index].get("id", index))
+
+	func get_item_text(index: int) -> String:
+		return str(_items[index].get("text", ""))
+
+	func is_item_disabled(index: int) -> bool:
+		return bool(_items[index].get("disabled", false))
+
+	func is_item_separator(index: int) -> bool:
+		return bool(_items[index].get("separator", false))
+
+	func get_item_submenu(index: int) -> String:
+		return str(_items[index].get("submenu", ""))
+
+	func activate_item(index: int) -> void:
+		selected_index = index
+		selected_id = get_item_id(index)
+
+
+class FakeLegacyPopupMenu:
+	extends RefCounted
+
+	signal index_pressed(index: int)
+	signal id_pressed(id: int)
+
+	var emitted_index := -1
+	var emitted_id := -1
+
+	func _init() -> void:
+		index_pressed.connect(_record_index_pressed)
+		id_pressed.connect(_record_id_pressed)
+
+	func dispose() -> void:
+		if index_pressed.is_connected(_record_index_pressed):
+			index_pressed.disconnect(_record_index_pressed)
+		if id_pressed.is_connected(_record_id_pressed):
+			id_pressed.disconnect(_record_id_pressed)
+
+	func _record_index_pressed(index: int) -> void:
+		emitted_index = index
+
+	func _record_id_pressed(id: int) -> void:
+		emitted_id = id
+
 
 class FakeUiControl:
 	extends RefCounted
@@ -254,6 +314,7 @@ class FakeUiControl:
 	var _parent_ref: WeakRef = null
 	var _children: Array = []
 	var _rect := Rect2(0, 0, 100, 24)
+	var _button_group = null
 
 	func _init(node_name: String = "", ui_class: String = "Control", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
 		name = node_name
@@ -292,6 +353,12 @@ class FakeUiControl:
 	func get_ui_class() -> String:
 		return _ui_class
 
+	func get_button_group():
+		return _button_group
+
+	func set_button_group(group) -> void:
+		_button_group = group
+
 	func grab_focus() -> void:
 		focused = true
 
@@ -300,6 +367,71 @@ class FakeUiControl:
 
 	func set_text(value: String) -> void:
 		text = value
+
+
+class FakePopupMenuControl:
+	extends FakeUiControl
+
+	var activated_index := -1
+	var _items: Array[Dictionary] = []
+
+	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 160, 120)) -> void:
+		super(node_name, "PopupMenu", rect)
+		visible = false
+
+	func add_item(label: String, id: int = -1, disabled: bool = false, separator: bool = false, submenu: String = "", submenu_node = null) -> void:
+		_items.append({
+			"text": label,
+			"id": id if id >= 0 else _items.size(),
+			"disabled": disabled,
+			"separator": separator,
+			"submenu": submenu,
+			"submenu_node": submenu_node
+		})
+
+	func get_item_count() -> int:
+		return _items.size()
+
+	func get_item_text(index: int) -> String:
+		return str(_items[index].get("text", ""))
+
+	func get_item_id(index: int) -> int:
+		return int(_items[index].get("id", index))
+
+	func is_item_disabled(index: int) -> bool:
+		return bool(_items[index].get("disabled", false))
+
+	func is_item_separator(index: int) -> bool:
+		return bool(_items[index].get("separator", false))
+
+	func get_item_submenu(index: int) -> String:
+		return str(_items[index].get("submenu", ""))
+
+	func get_item_submenu_node(index: int):
+		return _items[index].get("submenu_node", null)
+
+	func popup() -> void:
+		visible = true
+
+	func activate_item(index: int) -> void:
+		activated_index = index
+
+
+class FakeMenuButton:
+	extends FakeUiControl
+
+	var _popup := FakePopupMenuControl.new("ProjectPopup")
+
+	func _init(node_name: String = "", label: String = "", rect: Rect2 = Rect2(0, 0, 80, 24)) -> void:
+		super(node_name, "MenuButton", rect)
+		text = label
+		add_child(_popup)
+
+	func get_popup():
+		return _popup
+
+	func show_popup() -> void:
+		_popup.popup()
 
 
 class FakeTabContainer:
@@ -375,6 +507,7 @@ class FakeEditorInterface:
 	var _edited_scene_root: Node = null
 	var _selected_paths: PackedStringArray = PackedStringArray()
 	var _plugin_states := {}
+	var _main_screen_buttons := {}
 	var last_edit_node = null
 	var last_inspected_resource = null
 
@@ -385,7 +518,13 @@ class FakeEditorInterface:
 		return _main_screen
 
 	func set_main_screen_editor(screen: String) -> void:
-		_main_screen.name = screen
+		for button_name in _main_screen_buttons.keys():
+			var button = _main_screen_buttons.get(button_name, null)
+			if button != null and button is Object:
+				button.pressed = str(button_name).to_lower() == screen.to_lower()
+
+	func register_main_screen_button(screen: String, button) -> void:
+		_main_screen_buttons[screen] = button
 
 	func is_distraction_free_mode_enabled() -> bool:
 		return _distraction_free
@@ -440,6 +579,20 @@ class FakeEditorInterface:
 
 	func set_plugin_enabled(plugin_name: String, enabled: bool) -> void:
 		_plugin_states[plugin_name] = enabled
+		var enabled_plugins = ProjectSettings.get_setting("editor_plugins/enabled", PackedStringArray())
+		var updated := PackedStringArray()
+		if enabled_plugins is PackedStringArray:
+			updated = enabled_plugins
+		elif enabled_plugins is Array:
+			for item in enabled_plugins:
+				updated.append(str(item))
+		var plugin_cfg := "res://addons/%s/plugin.cfg" % plugin_name
+		if enabled:
+			if not updated.has(plugin_cfg):
+				updated.append(plugin_cfg)
+		elif updated.has(plugin_cfg):
+			updated.remove_at(updated.find(plugin_cfg))
+		ProjectSettings.set_setting("editor_plugins/enabled", updated)
 
 
 class FakeEditorPlugin:
@@ -467,15 +620,22 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var executor = EditorExecutorScript.new()
 	var editor_interface := FakeEditorInterface.new()
 	var editor_plugin := FakeEditorPlugin.new(editor_interface)
+	_ensure_editor_plugin_fixture()
 	_scene_root = _build_scene_fixture(tree)
 	var popup_root := FakePopupNode.new("SearchDialog", "PopupMenu")
 	popup_root.title = "Search"
+	popup_root.add_menu_item("Rename", 101)
+	popup_root.add_menu_item("Disabled", 102, true)
+	popup_root.add_menu_item("", 103, false, true)
+	popup_root.add_menu_item("Delete", 104)
+	popup_root.add_menu_item("More", 105, false, false, "MoreMenu")
 	var popup_button := FakePopupNode.new("ConfirmButton", "Button")
 	popup_button.text = "Confirm"
 	var popup_input := FakePopupNode.new("SearchInput", "LineEdit")
 	popup_input.text = "OldValue"
 	var hidden_popup_root := FakePopupNode.new("HiddenDialog", "PopupMenu")
 	hidden_popup_root.visible = false
+	hidden_popup_root.add_menu_item("Hidden Rename", 201)
 	var hidden_popup_button := FakePopupNode.new("HiddenButton", "Button")
 	hidden_popup_root.add_child(hidden_popup_button)
 	var non_popup_button := FakePopupNode.new("ToolbarButton", "Button")
@@ -485,7 +645,43 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	refresh_button.text = "Refresh"
+	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
+	project_menu.get_popup().add_item("Project Settings...", 101)
+	project_menu.get_popup().add_item("Export...", 102)
+	project_menu.get_popup().add_item("Disabled Item", 103, true)
+	project_menu.get_popup().add_item("---", 104, false, true)
+	project_menu.get_popup().add_item("More Tools", 105, false, false, "MoreTools")
+	var node_backed_submenu := FakePopupMenuControl.new("NodeBackedTools", Rect2(0, 0, 160, 120))
+	project_menu.get_popup().add_item("Node Backed Tools", 106, false, false, "", node_backed_submenu)
+	var editor_top_bar := FakeUiControl.new("EditorTopBar", "HBoxContainer", Rect2(16, 88, 220, 28))
+	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
+	ordinary_top_bar_button.text = "Ordinary Action"
+	editor_top_bar.add_child(ordinary_top_bar_button)
+	var ordinary_script_button := FakeUiControl.new("OrdinaryScriptButton", "Button", Rect2(24, 124, 128, 24))
+	ordinary_script_button.text = "Script"
+	ordinary_script_button.pressed = true
+	editor_top_bar.add_child(ordinary_script_button)
+	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
+	var main_screen_group := RefCounted.new()
+	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
+		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
+		builtin_button.text = builtin_screen
+		builtin_button.set_button_group(main_screen_group)
+		builtin_button.pressed = builtin_screen == "2D"
+		editor_interface.register_main_screen_button(builtin_screen, builtin_button)
+		main_screen_bar.add_child(builtin_button)
+	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
+	stray_toolbar_button.text = "Run Project"
+	main_screen_bar.add_child(stray_toolbar_button)
+	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
+	godex_button.text = "Godex"
+	godex_button.set_button_group(main_screen_group)
+	editor_interface.register_main_screen_button("Godex", godex_button)
+	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
+	var diagnostic_plugin_button := FakeUiControl.new("DiagnosticPluginButton", "Button", Rect2(460, 16, 160, 24))
+	diagnostic_plugin_button.text = "Diagnostic Plugin"
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
 	var server_tab := FakeUiControl.new("ServerTab", "VBoxContainer", Rect2(220, 48, 200, 128))
 	var tools_tab := FakeUiControl.new("ToolsTab", "VBoxContainer", Rect2(220, 48, 200, 128))
@@ -505,8 +701,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(project_menu)
+	editor_interface.get_base_control().add_popup_child(editor_top_bar)
+	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
+	editor_interface.get_base_control().add_popup_child(diagnostic_plugin_button)
 	editor_interface.get_base_control().add_popup_child(output_panel)
 	editor_interface._edited_scene_root = _scene_root
 	editor_interface.get_base_control().get_viewport().focus_owner = FakeFocusOwner.new()
@@ -531,12 +731,45 @@ func run_case(tree: SceneTree) -> Dictionary:
 		if not actual_names.has(expected_name):
 			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
 
-	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "3D"})
+	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "Godex"})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("Editor status set_main_screen failed through the split service path.")
+	if str(set_screen_result.get("data", {}).get("matched_main_screen", {}).get("name", "")) != "Godex":
+		return _failure("Editor status set_main_screen should report the matched plugin main screen button.")
+	if str(set_screen_result.get("data", {}).get("main_screen_container", "")) == "Godex":
+		return _failure("Editor status set_main_screen should not depend on get_editor_main_screen() returning the selected screen name.")
 	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
-	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "3D":
+	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "Godex":
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+	if str(get_screen_result.get("data", {}).get("main_screen_container", "")) != "MainScreenContainer":
+		return _failure("Editor status get_main_screen should report the stable editor main-screen container separately.")
+	if not (get_screen_result.get("data", {}).get("available", []) as Array).has("Godex"):
+		return _failure("Editor status get_main_screen should include discovered plugin main screens.")
+	var lowercase_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "script"})
+	if not bool(lowercase_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should match screen names case-insensitively.")
+	if str(lowercase_screen_result.get("data", {}).get("after_screen", "")) != "Script":
+		return _failure("Editor status set_main_screen should switch using the discovered screen label, not the raw input.")
+	if str(lowercase_screen_result.get("data", {}).get("verification_source", "")) != "active_button_state":
+		return _failure("Editor status set_main_screen should verify observable active button state when available.")
+	var missing_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "NotARegisteredScreen"})
+	if bool(missing_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should reject undiscovered screen names instead of using raw input.")
+	var list_screens_result: Dictionary = executor.execute("status", {"action": "list_main_screens"})
+	if not bool(list_screens_result.get("success", false)):
+		return _failure("Editor status list_main_screens failed through the split service path.")
+	if int(list_screens_result.get("data", {}).get("count", 0)) < 5:
+		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("RunProjectButton"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control name as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Run Project"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control text as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Ordinary Action"):
+		return _failure("Editor status list_main_screens should not treat ordinary top bar buttons as main screen labels.")
+	var listed_main_screens: Array = list_screens_result.get("data", {}).get("main_screens", [])
+	for listed_screen in listed_main_screens:
+		if listed_screen is Dictionary and str((listed_screen as Dictionary).get("control_path", "")).find("OrdinaryScriptButton") != -1:
+			return _failure("Editor status list_main_screens should ignore ordinary buttons whose text matches a built-in screen name.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):
@@ -694,6 +927,53 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control right_click_control should dispatch a right-button press first.")
 	if Vector2(pushed_events[0].position) != Vector2(32, 30):
 		return _failure("Editor ui_control click_control should convert local coordinates to viewport coordinates.")
+	var hover_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "hover_control",
+		"target_path": search_field_path,
+		"local_x": 10,
+		"local_y": 8
+	})
+	if not bool(hover_control_result.get("success", false)):
+		return _failure("Editor ui_control hover_control failed through the split service path.")
+	var leave_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": search_field_path
+	})
+	if not bool(leave_control_result.get("success", false)):
+		return _failure("Editor ui_control leave_control failed through the split service path.")
+	if pushed_events.size() != 6:
+		return _failure("Editor ui_control hover/leave actions should dispatch mouse motion input events.")
+	if not (pushed_events[4] is InputEventMouseMotion) or Vector2(pushed_events[4].position) != Vector2(34, 32):
+		return _failure("Editor ui_control hover_control should dispatch mouse motion at the requested local point.")
+	if not (pushed_events[5] is InputEventMouseMotion) or Vector2(pushed_events[5].position) == Vector2(34, 32):
+		return _failure("Editor ui_control leave_control should dispatch mouse motion away from the hovered point.")
+	var invalid_leave_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": search_field_path,
+		"local_x": 4,
+		"local_y": 4
+	})
+	if bool(invalid_leave_control_result.get("success", false)):
+		return _failure("Editor ui_control leave_control should reject explicit positions inside the control rect.")
+	var invalid_hover_edge_result: Dictionary = executor.execute("ui_control", {
+		"action": "hover_control",
+		"target_path": search_field_path,
+		"local_x": 160,
+		"local_y": 24
+	})
+	if bool(invalid_hover_edge_result.get("success", false)):
+		return _failure("Editor ui_control hover_control should reject right/bottom edge coordinates outside the control rect.")
+	var full_viewport_panel := FakeUiControl.new("FullViewportPanel", "PanelContainer", Rect2(0, 0, 320, 180))
+	editor_interface.get_base_control().add_popup_child(full_viewport_panel)
+	var full_viewport_leave_result: Dictionary = executor.execute("ui_control", {
+		"action": "leave_control",
+		"target_path": str(full_viewport_panel.get_path())
+	})
+	if not bool(full_viewport_leave_result.get("success", false)):
+		return _failure("Editor ui_control leave_control should resolve an outside fallback for full-viewport controls.")
+	var full_leave_position := Vector2(pushed_events[pushed_events.size() - 1].position)
+	if full_viewport_panel.get_global_rect().has_point(full_leave_position):
+		return _failure("Editor ui_control leave_control should dispatch outside a full-viewport control rect.")
 
 	var tab_container_path := str(mcp_tabs.get_path())
 	var activate_tab_result: Dictionary = executor.execute("ui_control", {
@@ -733,6 +1013,68 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if mcp_tabs.current_tab != 2 or not config_tab.visible or tools_tab.visible:
 		return _failure("Editor ui_control activate_ui MCP semantic path should switch to the requested tab.")
 
+	var list_menus_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_menus",
+		"text_query": "Project"
+	})
+	if not bool(list_menus_result.get("success", false)):
+		return _failure("Editor ui_control list_menus failed through the split service path.")
+	if int(list_menus_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("Editor ui_control list_menus should return the visible Project menu.")
+	var listed_menu: Dictionary = list_menus_result.get("data", {}).get("menus", [{}])[0]
+	if int(listed_menu.get("item_count", 0)) != 6:
+		return _failure("Editor ui_control list_menus should expose PopupMenu item metadata.")
+	var listed_menu_items: Array = listed_menu.get("items", [])
+	if listed_menu_items.size() < 6 or not bool((listed_menu_items[4] as Dictionary).get("has_submenu", false)) or not bool((listed_menu_items[5] as Dictionary).get("has_submenu", false)):
+		return _failure("Editor ui_control list_menus should expose submenu item metadata.")
+
+	var open_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "open_menu",
+		"menu_title": "Project"
+	})
+	if not bool(open_menu_result.get("success", false)):
+		return _failure("Editor ui_control open_menu should open a MenuButton by title.")
+	if not bool(project_menu.get_popup().visible):
+		return _failure("Editor ui_control open_menu should make the MenuButton popup visible.")
+
+	var select_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"target_path": str(project_menu.get_path()),
+		"item_text": "Project Settings..."
+	})
+	if not bool(select_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should select a PopupMenu item by text.")
+	if int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should activate the matched PopupMenu item index.")
+	var disabled_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Disabled Item"
+	})
+	if bool(disabled_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should reject disabled PopupMenu items.")
+	var separator_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "---"
+	})
+	if bool(separator_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should reject separator PopupMenu items.")
+	var submenu_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "More Tools"
+	})
+	if bool(submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should reject submenu PopupMenu items without activating them.")
+	var node_submenu_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Node Backed Tools"
+	})
+	if bool(node_submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should reject node-backed submenu PopupMenu items without activating them.")
+
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",
 		"bottom_panel_title": "Output",
@@ -760,9 +1102,119 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor popup list_visible should expose popup parent_path and rect metadata.")
 	if str(popup_summary.get("text", "")) != "":
 		return _failure("Editor popup list_visible should expose popup text separately from title.")
+	var popup_items: Array = popup_summary.get("items", [])
+	if popup_items.size() != 5 or str(popup_items[0].get("text", "")) != "Rename":
+		return _failure("Editor popup list_visible should expose PopupMenu item metadata.")
+	if not bool((popup_items[4] as Dictionary).get("has_submenu", false)) or str((popup_items[4] as Dictionary).get("submenu", "")) != "MoreMenu":
+		return _failure("Editor popup list_visible should mark PopupMenu submenu rows.")
 	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
 	var popup_button_path := "%s/ConfirmButton" % popup_root_path
 	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var popup_select_by_text_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"text": "Rename"
+	})
+	if not bool(popup_select_by_text_result.get("success", false)):
+		return _failure("Editor popup select_item should select a visible PopupMenu item by exact text.")
+	if popup_root.selected_index != 0 or int(popup_select_by_text_result.get("data", {}).get("selected_item", {}).get("id", -1)) != 101:
+		return _failure("Editor popup select_item should activate and return the selected item metadata.")
+
+	var popup_select_by_id_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104
+	})
+	if not bool(popup_select_by_id_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should select a visible PopupMenu item by id.")
+
+	var popup_select_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"id": 104
+	})
+	if bool(popup_select_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject conflicting item selectors without activating a new item.")
+	var popup_select_empty_text_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"text": ""
+	})
+	if bool(popup_select_empty_text_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should treat an empty text field as a conflicting selector when index is also provided.")
+	var popup_select_id_text_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104,
+		"text": "Rename"
+	})
+	if bool(popup_select_id_text_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject id and text selectors when both are provided.")
+	var popup_select_all_conflict_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 0,
+		"id": 104,
+		"text": "Rename"
+	})
+	if bool(popup_select_all_conflict_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject index, id, and text selectors when all are provided.")
+	var popup_select_invalid_index_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": "0"
+	})
+	if bool(popup_select_invalid_index_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject string index selectors instead of coercing them.")
+	var popup_select_invalid_id_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"id": 104.5
+	})
+	if bool(popup_select_invalid_id_result.get("success", false)) or popup_root.selected_index != 3:
+		return _failure("Editor popup select_item should reject fractional id selectors instead of coercing them.")
+
+	var legacy_popup := FakeLegacyPopupMenu.new()
+	executor._notification_tools._activate_popup_menu_item(legacy_popup, 2, {"id": -1})
+	if legacy_popup.emitted_index != 2 or legacy_popup.emitted_id != 2:
+		legacy_popup.dispose()
+		return _failure("Editor popup select_item fallback should emit the item index for negative PopupMenu ids.")
+	legacy_popup.dispose()
+
+	var popup_select_disabled_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 1
+	})
+	if bool(popup_select_disabled_result.get("success", false)):
+		return _failure("Editor popup select_item should reject disabled PopupMenu items.")
+
+	var popup_select_separator_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 2
+	})
+	if bool(popup_select_separator_result.get("success", false)):
+		return _failure("Editor popup select_item should reject PopupMenu separators.")
+
+	var popup_select_submenu_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": popup_root_path,
+		"index": 4
+	})
+	if bool(popup_select_submenu_result.get("success", false)) or popup_root.selected_index != 3 or not bool(popup_root.visible):
+		return _failure("Editor popup select_item should reject submenu rows without activating or hiding the parent menu.")
+
+	var hidden_popup_select_result: Dictionary = executor.execute("popup", {
+		"action": "select_item",
+		"target_path": str(hidden_popup_root.get_path()),
+		"index": 0
+	})
+	if bool(hidden_popup_select_result.get("success", false)):
+		return _failure("Editor popup select_item should reject hidden PopupMenu roots.")
 
 	var popup_press_result: Dictionary = executor.execute("popup", {
 		"action": "press_button",
@@ -906,18 +1358,42 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(region_screenshot_data.get("width", 0)) != 64 or int(region_screenshot_data.get("height", 0)) != 48:
 		return _failure("Editor screenshot region capture returned unexpected cropped dimensions.")
 
+	var plugin_list_result: Dictionary = executor.execute("plugin", {"action": "list"})
+	if not bool(plugin_list_result.get("success", false)):
+		return _failure("Editor plugin list failed through the split service path.")
+	var listed_plugins: Array = plugin_list_result.get("data", {}).get("plugins", [])
+	if not _has_plugin_summary(listed_plugins, "diagnostic_plugin"):
+		return _failure("Editor plugin list should include plugin.cfg metadata and diagnostics for fixture plugins.")
+
 	var enable_plugin_result: Dictionary = executor.execute("plugin", {
 		"action": "enable",
-		"plugin": "godot_dotnet_mcp"
+		"plugin": "diagnostic_plugin"
 	})
 	if not bool(enable_plugin_result.get("success", false)):
 		return _failure("Editor plugin enable failed through the split service path.")
+	var enable_plugin_data: Dictionary = enable_plugin_result.get("data", {})
+	if not bool(enable_plugin_data.get("editor_enabled", false)) or not bool(enable_plugin_data.get("setting_enabled", false)):
+		return _failure("Editor plugin enable should return editor-session and project-setting diagnostics.")
+	if not bool(enable_plugin_data.get("main_screen_visible", false)):
+		return _failure("Editor plugin diagnostics should detect visible plugin UI labels when present.")
 	var plugin_state_result: Dictionary = executor.execute("plugin", {
 		"action": "is_enabled",
-		"plugin": "godot_dotnet_mcp"
+		"plugin": "diagnostic_plugin"
 	})
 	if not bool(plugin_state_result.get("data", {}).get("enabled", false)):
 		return _failure("Editor plugin is_enabled should report the enabled state after enable.")
+	var missing_plugin_result: Dictionary = executor.execute("plugin", {
+		"action": "inspect",
+		"plugin": "missing_plugin"
+	})
+	if bool(missing_plugin_result.get("success", false)) or str(missing_plugin_result.get("data", {}).get("error_type", "")) != "plugin_not_found":
+		return _failure("Editor plugin inspect should return a structured plugin_not_found error.")
+	var self_disable_result: Dictionary = executor.execute("plugin", {
+		"action": "disable",
+		"plugin": "godot_dotnet_mcp"
+	})
+	if bool(self_disable_result.get("success", false)) or not bool(self_disable_result.get("data", {}).get("self_plugin", false)):
+		return _failure("Editor plugin disable should refuse to toggle the active MCP plugin by default.")
 
 	return {
 		"name": "editor_tool_executor_contracts",
@@ -956,6 +1432,23 @@ func _build_scene_fixture(tree: SceneTree) -> Node:
 	target.owner = root
 
 	return root
+
+
+func _ensure_editor_plugin_fixture() -> void:
+	var root_dir := DirAccess.open("res://")
+	if root_dir != null:
+		root_dir.make_dir_recursive("addons/diagnostic_plugin")
+	var file := FileAccess.open("res://addons/diagnostic_plugin/plugin.cfg", FileAccess.WRITE)
+	if file != null:
+		file.store_string("[plugin]\nname=\"Diagnostic Plugin\"\ndescription=\"Fixture plugin for editor diagnostics.\"\nauthor=\"Harness\"\nversion=\"1.0.0\"\nscript=\"res://addons/diagnostic_plugin/plugin.gd\"\n")
+		file.close()
+
+
+func _has_plugin_summary(plugins: Array, plugin_name: String) -> bool:
+	for plugin in plugins:
+		if plugin is Dictionary and str((plugin as Dictionary).get("plugin", (plugin as Dictionary).get("name", ""))) == plugin_name:
+			return (plugin as Dictionary).has("editor_enabled") and (plugin as Dictionary).has("setting_enabled")
+	return false
 
 
 func _failure(message: String) -> Dictionary:

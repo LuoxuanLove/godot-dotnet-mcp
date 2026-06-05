@@ -466,6 +466,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
+	var user_tools_health = runtime_health_dict.get("user_tools", {})
+	if not (user_tools_health is Dictionary):
+		return _failure("project_state runtime_health.user_tools did not return a dictionary payload.")
 	var runtime_capabilities = (project_state_data as Dictionary).get("runtime_capabilities", {})
 	if not (runtime_capabilities is Dictionary):
 		return _failure("project_state should return runtime_capabilities.")
@@ -531,6 +534,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_state files section should expose path arrays on demand.")
 	if not ((section_dict.get("health", {}) as Dictionary).get("self_diagnostics", {}) is Dictionary):
 		return _failure("project_state health section should include runtime health even without include_runtime_health.")
+	if not ((section_dict.get("health", {}) as Dictionary).get("user_tools", {}) is Dictionary):
+		return _failure("project_state health section should include User Tool runtime diagnostics.")
 	bridge.reset_collection_counters()
 	var project_state_summary_section: Dictionary = executor.execute("project_state", {"sections": ["summary"]})
 	if not bool(project_state_summary_section.get("success", false)):
