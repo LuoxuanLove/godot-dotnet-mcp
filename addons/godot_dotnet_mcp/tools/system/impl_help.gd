@@ -5,6 +5,7 @@ extends RefCounted
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
+const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -17,7 +18,7 @@ func handles(tool_name: String) -> bool:
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 
 
 func get_tools() -> Array[Dictionary]:
@@ -58,6 +59,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"recommended_start": [
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
+			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
@@ -72,7 +74,8 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
 			"analysis": ["scene validation", "scene analysis", "script analysis", "C# binding audit", "Godot LSP diagnostics", "project symbol search", "scene dependency graph"],
-			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"]
+			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"],
+			"coordination": ["running tool call activity", "recent tool call history", "self-reported agent context", "execution order visibility"]
 		},
 		"runtime_capability_guidance": {
 			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
