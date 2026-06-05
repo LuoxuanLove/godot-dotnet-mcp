@@ -27,7 +27,10 @@ func get_tools() -> Array[Dictionary]:
 					"action": {
 						"type": "string",
 						"enum": [
+							"list_main_screens",
 							"set_main_screen",
+							"get_distraction_free",
+							"set_distraction_free",
 							"capture_editor",
 							"list_controls",
 							"list_dock_tabs",
@@ -50,8 +53,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
 						"description": "Main screen for set_main_screen"
+					},
+					"enabled": {
+						"type": "boolean",
+						"description": "Enable or disable distraction-free mode"
 					},
 					"path": {
 						"type": "string",
@@ -172,6 +178,15 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_status", {
 				"action": "set_main_screen",
 				"screen": str(args.get("screen", "")).strip_edges()
+			})
+		"list_main_screens":
+			return bridge.call_atomic("editor_status", {"action": "list_main_screens"})
+		"get_distraction_free":
+			return bridge.call_atomic("editor_status", {"action": "get_distraction_free"})
+		"set_distraction_free":
+			return bridge.call_atomic("editor_status", {
+				"action": "set_distraction_free",
+				"enabled": bool(args.get("enabled", false))
 			})
 		"capture_editor":
 			return _capture_editor(args)
