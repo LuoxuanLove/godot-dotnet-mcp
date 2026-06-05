@@ -8,7 +8,7 @@ const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor
 class FakeMainScreen:
 	extends RefCounted
 
-	var name := "2D"
+	var name := "MainScreenContainer"
 
 
 class FakeEditorSettings:
@@ -314,6 +314,7 @@ class FakeUiControl:
 	var _parent_ref: WeakRef = null
 	var _children: Array = []
 	var _rect := Rect2(0, 0, 100, 24)
+	var _button_group = null
 
 	func _init(node_name: String = "", ui_class: String = "Control", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
 		name = node_name
@@ -351,6 +352,12 @@ class FakeUiControl:
 
 	func get_ui_class() -> String:
 		return _ui_class
+
+	func get_button_group():
+		return _button_group
+
+	func set_button_group(group) -> void:
+		_button_group = group
 
 	func grab_focus() -> void:
 		focused = true
@@ -435,6 +442,7 @@ class FakeEditorInterface:
 	var _edited_scene_root: Node = null
 	var _selected_paths: PackedStringArray = PackedStringArray()
 	var _plugin_states := {}
+	var _main_screen_buttons := {}
 	var last_edit_node = null
 	var last_inspected_resource = null
 
@@ -445,7 +453,13 @@ class FakeEditorInterface:
 		return _main_screen
 
 	func set_main_screen_editor(screen: String) -> void:
-		_main_screen.name = screen
+		for button_name in _main_screen_buttons.keys():
+			var button = _main_screen_buttons.get(button_name, null)
+			if button != null and button is Object:
+				button.pressed = str(button_name).to_lower() == screen.to_lower()
+
+	func register_main_screen_button(screen: String, button) -> void:
+		_main_screen_buttons[screen] = button
 
 	func is_distraction_free_mode_enabled() -> bool:
 		return _distraction_free
@@ -566,6 +580,32 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
+	refresh_button.text = "Refresh"
+	var editor_top_bar := FakeUiControl.new("EditorTopBar", "HBoxContainer", Rect2(16, 88, 220, 28))
+	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
+	ordinary_top_bar_button.text = "Ordinary Action"
+	editor_top_bar.add_child(ordinary_top_bar_button)
+	var ordinary_script_button := FakeUiControl.new("OrdinaryScriptButton", "Button", Rect2(24, 124, 128, 24))
+	ordinary_script_button.text = "Script"
+	ordinary_script_button.pressed = true
+	editor_top_bar.add_child(ordinary_script_button)
+	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
+	var main_screen_group := RefCounted.new()
+	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
+		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
+		builtin_button.text = builtin_screen
+		builtin_button.set_button_group(main_screen_group)
+		builtin_button.pressed = builtin_screen == "2D"
+		editor_interface.register_main_screen_button(builtin_screen, builtin_button)
+		main_screen_bar.add_child(builtin_button)
+	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
+	stray_toolbar_button.text = "Run Project"
+	main_screen_bar.add_child(stray_toolbar_button)
+	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
+	godex_button.text = "Godex"
+	godex_button.set_button_group(main_screen_group)
+	editor_interface.register_main_screen_button("Godex", godex_button)
+	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var diagnostic_plugin_button := FakeUiControl.new("DiagnosticPluginButton", "Button", Rect2(460, 16, 160, 24))
 	diagnostic_plugin_button.text = "Diagnostic Plugin"
@@ -588,6 +628,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(editor_top_bar)
+	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
 	editor_interface.get_base_control().add_popup_child(diagnostic_plugin_button)
@@ -615,12 +657,45 @@ func run_case(tree: SceneTree) -> Dictionary:
 		if not actual_names.has(expected_name):
 			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
 
-	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "3D"})
+	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "Godex"})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("Editor status set_main_screen failed through the split service path.")
+	if str(set_screen_result.get("data", {}).get("matched_main_screen", {}).get("name", "")) != "Godex":
+		return _failure("Editor status set_main_screen should report the matched plugin main screen button.")
+	if str(set_screen_result.get("data", {}).get("main_screen_container", "")) == "Godex":
+		return _failure("Editor status set_main_screen should not depend on get_editor_main_screen() returning the selected screen name.")
 	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
-	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "3D":
+	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "Godex":
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+	if str(get_screen_result.get("data", {}).get("main_screen_container", "")) != "MainScreenContainer":
+		return _failure("Editor status get_main_screen should report the stable editor main-screen container separately.")
+	if not (get_screen_result.get("data", {}).get("available", []) as Array).has("Godex"):
+		return _failure("Editor status get_main_screen should include discovered plugin main screens.")
+	var lowercase_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "script"})
+	if not bool(lowercase_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should match screen names case-insensitively.")
+	if str(lowercase_screen_result.get("data", {}).get("after_screen", "")) != "Script":
+		return _failure("Editor status set_main_screen should switch using the discovered screen label, not the raw input.")
+	if str(lowercase_screen_result.get("data", {}).get("verification_source", "")) != "active_button_state":
+		return _failure("Editor status set_main_screen should verify observable active button state when available.")
+	var missing_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "NotARegisteredScreen"})
+	if bool(missing_screen_result.get("success", false)):
+		return _failure("Editor status set_main_screen should reject undiscovered screen names instead of using raw input.")
+	var list_screens_result: Dictionary = executor.execute("status", {"action": "list_main_screens"})
+	if not bool(list_screens_result.get("success", false)):
+		return _failure("Editor status list_main_screens failed through the split service path.")
+	if int(list_screens_result.get("data", {}).get("count", 0)) < 5:
+		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("RunProjectButton"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control name as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Run Project"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control text as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Ordinary Action"):
+		return _failure("Editor status list_main_screens should not treat ordinary top bar buttons as main screen labels.")
+	var listed_main_screens: Array = list_screens_result.get("data", {}).get("main_screens", [])
+	for listed_screen in listed_main_screens:
+		if listed_screen is Dictionary and str((listed_screen as Dictionary).get("control_path", "")).find("OrdinaryScriptButton") != -1:
+			return _failure("Editor status list_main_screens should ignore ordinary buttons whose text matches a built-in screen name.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):
