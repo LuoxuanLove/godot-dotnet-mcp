@@ -61,13 +61,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"watching": true,
 		"known_script_count": 2,
 		"last_error": ""
-	}, 5)
+	}, 5, [{
+		"script_path": "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd",
+		"runtime_domain": "user/runtime_failed_user_tool",
+		"version": 3,
+		"state": "reload_failed",
+		"active_calls": 0,
+		"pending_reload": false,
+		"removed_pending": false,
+		"last_loaded_at_unix": 0,
+		"last_error": "Duplicate user tool logical name: duplicated_tool",
+		"discovery_source": "watcher",
+		"last_refresh_reason": "file_changed"
+	}])
 	if int(diagnostics.get("discovered_script_count", 0)) < 2:
 		return _failure("Runtime diagnostics should report discovered user tool scripts.")
-	if int(diagnostics.get("failed_load_count", 0)) < 1:
+	if int(diagnostics.get("failed_load_count", 0)) < 2:
 		return _failure("Runtime diagnostics should report failed user tool script loads.")
 	if not _contains_failed_load(diagnostics.get("failed_loads", []), _invalid_script_path):
 		return _failure("Runtime diagnostics should identify failed user tool script paths.")
+	if int(diagnostics.get("runtime_failed_count", 0)) != 1:
+		return _failure("Runtime diagnostics should report executor-level runtime failures.")
+	if not _contains_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd"):
+		return _failure("Runtime diagnostics should merge executor-level reload failures into failed loads.")
+	if int(diagnostics.get("runtime_state_count", 0)) != 1:
+		return _failure("Runtime diagnostics should preserve runtime state snapshot entries.")
 	var watch_status = diagnostics.get("watch", {})
 	if not (watch_status is Dictionary) or not bool((watch_status as Dictionary).get("watching", false)):
 		return _failure("Runtime diagnostics should preserve watcher status.")

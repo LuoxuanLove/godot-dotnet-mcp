@@ -1195,7 +1195,11 @@ func _get_user_tool_runtime_health_summary() -> Dictionary:
 	var plugin = _get_plugin_from_runtime_context()
 	if plugin == null or not plugin.has_method("get_user_tool_runtime_diagnostics_from_tools"):
 		return unavailable
-	var result = plugin.get_user_tool_runtime_diagnostics_from_tools(5)
+	var runtime_state: Array = []
+	var tool_loader = _runtime_context.get("tool_loader", null)
+	if tool_loader != null and tool_loader.has_method("get_user_tool_runtime_snapshot"):
+		runtime_state = tool_loader.get_user_tool_runtime_snapshot()
+	var result = plugin.get_user_tool_runtime_diagnostics_from_tools(5, runtime_state)
 	if not (result is Dictionary):
 		return unavailable
 	var result_dict: Dictionary = result

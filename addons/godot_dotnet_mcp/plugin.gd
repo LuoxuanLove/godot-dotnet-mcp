@@ -2114,10 +2114,10 @@ func get_user_tool_compatibility_from_tools() -> Dictionary:
 	}
 
 
-func get_user_tool_runtime_diagnostics_from_tools(limit: int = 10) -> Dictionary:
+func get_user_tool_runtime_diagnostics_from_tools(limit: int = 10, runtime_state: Array = []) -> Dictionary:
 	return {
 		"success": true,
-		"data": _user_tool_service.get_runtime_diagnostics(_get_user_tool_watch_status(), limit)
+		"data": _user_tool_service.get_runtime_diagnostics(_get_user_tool_watch_status(), limit, runtime_state)
 	}
 
 
