@@ -292,8 +292,9 @@ func _redact_url_credentials(text: String) -> String:
 
 
 func _find_next_url_scheme(text: String, from_index: int) -> int:
-	var http_index := text.find("http://", from_index)
-	var https_index := text.find("https://", from_index)
+	var lower_text := text.to_lower()
+	var http_index := lower_text.find("http://", from_index)
+	var https_index := lower_text.find("https://", from_index)
 	if http_index == -1:
 		return https_index
 	if https_index == -1:

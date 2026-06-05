@@ -83,7 +83,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	MCPDebugBufferScript.record(
 		"warning",
 		"contract",
-		"https://agent:super-url-secret@example.test/path bearer loose-bearer-secret x-api-key: header-secret api-key=hyphen-secret {\"access-token\":\"json-secret\"}",
+		"https://agent:super-url-secret@example.test/path HTTPS://agent:upper-url-secret@example.test/path bearer loose-bearer-secret x-api-key: header-secret api-key=hyphen-secret {\"access-token\":\"json-secret\"}",
 		"",
 		{
 			"api-key": "metadata-secret",
@@ -103,7 +103,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
 	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2") or diagnostics_text.contains("top-secret-bearer"):
 		return _failure("diagnostics summary resource should redact sensitive log content.")
-	for leaked_secret in ["super-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
+	for leaked_secret in ["super-url-secret", "upper-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
 		if diagnostics_text.contains(leaked_secret):
 			return _failure("diagnostics summary resource should redact extended sensitive pattern: %s." % leaked_secret)
 	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("still-visible") or not diagnostics_text.contains("[redacted]"):
