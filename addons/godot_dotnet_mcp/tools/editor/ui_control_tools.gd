@@ -26,6 +26,12 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _activate_dock_tab(ei, str(args.get("title", "")).strip_edges())
 		"activate_ui":
 			return _activate_ui(ei, args)
+		"list_menus":
+			return _list_menus(ei, args)
+		"open_menu":
+			return _open_menu(ei, args)
+		"select_menu_item":
+			return _select_menu_item(ei, args)
 		"get_control":
 			return _get_control(ei, str(args.get("target_path", "")).strip_edges())
 		"capture_control":
@@ -121,6 +127,67 @@ func _activate_ui(ei, args: Dictionary) -> Dictionary:
 			return dock_result
 		return _maybe_capture_activation_result(ei, dock_result, str(dock_result.get("data", {}).get("target_path", "")), args)
 	return _error("semantic_path, title, or target_path with tab_title/tab_index is required")
+
+
+func _list_menus(ei, args: Dictionary) -> Dictionary:
+	var root = _get_editor_root(ei)
+	if root == null:
+		return _error("Editor base control not available")
+	var include_hidden := bool(args.get("include_hidden", false))
+	var text_query := str(args.get("text_query", "")).strip_edges().to_lower()
+	var limit := maxi(int(args.get("limit", DEFAULT_LIST_LIMIT)), 1)
+	var max_depth := maxi(int(args.get("max_depth", DEFAULT_MAX_DEPTH)), 0)
+	var menus: Array[Dictionary] = []
+	_collect_menu_buttons_recursive(root, 0, max_depth, include_hidden, text_query, limit, menus)
+	return _success({
+		"count": menus.size(),
+		"menus": menus
+	}, "Editor menus listed")
+
+
+func _open_menu(ei, args: Dictionary) -> Dictionary:
+	var menu = _resolve_menu_button(ei, args)
+	if menu == null:
+		return _error("Editor menu not found")
+	var open_result := _open_menu_button(menu)
+	if not bool(open_result.get("success", false)):
+		return open_result
+	var popup = _get_menu_popup(menu)
+	return _success({
+		"target_path": _safe_control_path(menu),
+		"menu": _describe_menu_button(menu),
+		"popup": _describe_menu_popup(popup),
+	}, "Editor menu opened")
+
+
+func _select_menu_item(ei, args: Dictionary) -> Dictionary:
+	var menu = _resolve_menu_button(ei, args)
+	if menu == null:
+		return _error("Editor menu not found")
+	var popup = _get_menu_popup(menu)
+	if popup == null:
+		return _error("Editor menu does not expose a PopupMenu")
+	var open_result := _open_menu_button(menu)
+	if not bool(open_result.get("success", false)):
+		return open_result
+	var index := _resolve_menu_item_index(popup, args)
+	if index < 0:
+		return _error("Editor menu item not found")
+	if _is_popup_menu_item_separator(popup, index):
+		return _error("Editor menu item is a separator: %s" % _read_popup_menu_item_label(popup, index))
+	if _is_popup_menu_item_disabled(popup, index):
+		return _error("Editor menu item is disabled: %s" % _read_popup_menu_item_label(popup, index))
+	if _is_popup_menu_item_submenu(popup, index):
+		return _error("Editor menu item opens a submenu: %s" % _read_popup_menu_item_label(popup, index))
+	_activate_popup_menu_item(popup, index)
+	return _success({
+		"target_path": _safe_control_path(menu),
+		"item_index": index,
+		"item_text": _read_popup_menu_item_label(popup, index),
+		"item_id": _read_popup_menu_item_id(popup, index),
+		"menu": _describe_menu_button(menu),
+		"popup": _describe_menu_popup(popup),
+	}, "Editor menu item selected")
 
 
 func _get_control(ei, target_path: String) -> Dictionary:
@@ -366,6 +433,233 @@ func _collect_dock_tabs_recursive(node, include_hidden: bool, out: Array[Diction
 		return
 	for child in node.get_children():
 		_collect_dock_tabs_recursive(child, include_hidden, out)
+
+
+func _collect_menu_buttons_recursive(node, depth: int, max_depth: int, include_hidden: bool, text_query: String, limit: int, out: Array[Dictionary]) -> void:
+	if node == null or out.size() >= limit:
+		return
+	if _is_menu_button(node) and (include_hidden or _is_control_visible(node)):
+		var menu_summary := _describe_menu_button(node)
+		if _menu_matches_query(menu_summary, text_query):
+			out.append(menu_summary)
+			if out.size() >= limit:
+				return
+	if depth >= max_depth or not node.has_method("get_children"):
+		return
+	for child in node.get_children():
+		_collect_menu_buttons_recursive(child, depth + 1, max_depth, include_hidden, text_query, limit, out)
+		if out.size() >= limit:
+			return
+
+
+func _resolve_menu_button(ei, args: Dictionary):
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	var menu_title := str(args.get("menu_title", "")).strip_edges()
+	var root = _get_editor_root(ei)
+	if root == null:
+		return null
+	if not target_path.is_empty():
+		var target = _find_control(ei, target_path)
+		return target if _is_menu_button(target) else null
+	if not menu_title.is_empty():
+		return _find_menu_button_by_title_recursive(root, menu_title)
+	return null
+
+
+func _find_menu_button_by_title_recursive(node, menu_title: String):
+	var visible_match = _find_menu_button_by_title_recursive_internal(node, menu_title, true)
+	if visible_match != null:
+		return visible_match
+	return _find_menu_button_by_title_recursive_internal(node, menu_title, false)
+
+
+func _find_menu_button_by_title_recursive_internal(node, menu_title: String, require_visible: bool):
+	if node == null:
+		return null
+	if _is_menu_button(node) and _menu_title_matches(node, menu_title) and (not require_visible or _is_control_visible(node)):
+		return node
+	if not node.has_method("get_children"):
+		return null
+	for child in node.get_children():
+		var nested = _find_menu_button_by_title_recursive_internal(child, menu_title, require_visible)
+		if nested != null:
+			return nested
+	return null
+
+
+func _is_menu_button(control) -> bool:
+	return control != null and _control_class_name(control) == "MenuButton"
+
+
+func _menu_title_matches(control, menu_title: String) -> bool:
+	var requested := menu_title.strip_edges().to_lower()
+	if requested.is_empty():
+		return false
+	for value in [_read_node_name(control), _read_control_text(control), _read_control_title(control)]:
+		if str(value).strip_edges().to_lower() == requested:
+			return true
+	return false
+
+
+func _menu_matches_query(menu_summary: Dictionary, text_query: String) -> bool:
+	if text_query.is_empty():
+		return true
+	var haystacks := [
+		str(menu_summary.get("name", "")).to_lower(),
+		str(menu_summary.get("title", "")).to_lower(),
+		str(menu_summary.get("text", "")).to_lower(),
+		str(menu_summary.get("path", "")).to_lower()
+	]
+	for item in menu_summary.get("items", []):
+		if item is Dictionary:
+			haystacks.append(str((item as Dictionary).get("text", "")).to_lower())
+	for haystack in haystacks:
+		if haystack.contains(text_query):
+			return true
+	return false
+
+
+func _describe_menu_button(menu) -> Dictionary:
+	var popup = _get_menu_popup(menu)
+	var summary := _describe_control(menu, _resolve_parent_path(menu), 0)
+	summary["items"] = _collect_menu_popup_items(popup)
+	summary["item_count"] = summary["items"].size()
+	summary["popup_path"] = _safe_control_path(popup)
+	summary["popup_visible"] = _is_control_visible(popup) if popup != null else false
+	return summary
+
+
+func _describe_menu_popup(popup) -> Dictionary:
+	if popup == null:
+		return {}
+	var rect := _read_control_rect(popup)
+	return {
+		"path": _safe_control_path(popup),
+		"class": _control_class_name(popup),
+		"name": _read_node_name(popup),
+		"visible": _is_control_visible(popup),
+		"rect": _rect2_to_dict(rect),
+		"items": _collect_menu_popup_items(popup)
+	}
+
+
+func _get_menu_popup(menu):
+	if menu != null and menu.has_method("get_popup"):
+		return menu.get_popup()
+	return null
+
+
+func _open_menu_button(menu) -> Dictionary:
+	if menu == null:
+		return _error("Editor menu not found")
+	if not _is_control_visible(menu):
+		return _error("Editor menu is not visible: %s" % _safe_control_path(menu))
+	if _is_control_disabled(menu):
+		return _error("Editor menu is disabled: %s" % _safe_control_path(menu))
+	if menu.has_method("show_popup"):
+		menu.show_popup()
+	elif menu.has_method("press"):
+		menu.press()
+	else:
+		var popup = _get_menu_popup(menu)
+		if popup != null and popup.has_method("popup"):
+			popup.popup()
+		else:
+			return _error("Editor menu cannot be opened: %s" % _safe_control_path(menu))
+	return _success({"target_path": _safe_control_path(menu)}, "Editor menu opened")
+
+
+func _resolve_menu_item_index(popup, args: Dictionary) -> int:
+	var item_index := int(args.get("item_index", -1))
+	if item_index >= 0 and item_index < _get_popup_menu_item_count(popup):
+		return item_index
+	var item_text := str(args.get("item_text", "")).strip_edges()
+	if item_text.is_empty():
+		return -1
+	var item_text_lower := item_text.to_lower()
+	for index in range(_get_popup_menu_item_count(popup)):
+		if _read_popup_menu_item_label(popup, index).strip_edges().to_lower() == item_text_lower:
+			return index
+	return -1
+
+
+func _collect_menu_popup_items(popup) -> Array[Dictionary]:
+	var items: Array[Dictionary] = []
+	for index in range(_get_popup_menu_item_count(popup)):
+		items.append({
+			"index": index,
+			"id": _read_popup_menu_item_id(popup, index),
+			"text": _read_popup_menu_item_label(popup, index),
+			"disabled": _is_popup_menu_item_disabled(popup, index),
+			"separator": _is_popup_menu_item_separator(popup, index),
+			"has_submenu": _is_popup_menu_item_submenu(popup, index),
+			"submenu": _read_popup_menu_item_submenu(popup, index)
+		})
+	return items
+
+
+func _get_popup_menu_item_count(popup) -> int:
+	if popup == null or not popup.has_method("get_item_count"):
+		return 0
+	return int(popup.get_item_count())
+
+
+func _read_popup_menu_item_label(popup, index: int) -> String:
+	if popup != null and popup.has_method("get_item_text"):
+		return str(popup.get_item_text(index))
+	return ""
+
+
+func _read_popup_menu_item_id(popup, index: int) -> int:
+	if popup != null and popup.has_method("get_item_id"):
+		return int(popup.get_item_id(index))
+	return index
+
+
+func _is_popup_menu_item_disabled(popup, index: int) -> bool:
+	if popup != null and popup.has_method("is_item_disabled"):
+		return bool(popup.is_item_disabled(index))
+	return false
+
+
+func _is_popup_menu_item_separator(popup, index: int) -> bool:
+	if popup != null and popup.has_method("is_item_separator"):
+		return bool(popup.is_item_separator(index))
+	return false
+
+
+func _is_popup_menu_item_submenu(popup, index: int) -> bool:
+	return not _read_popup_menu_item_submenu(popup, index).is_empty()
+
+
+func _read_popup_menu_item_submenu(popup, index: int) -> String:
+	if popup != null and popup.has_method("get_item_submenu"):
+		var submenu := str(popup.get_item_submenu(index))
+		if not submenu.is_empty():
+			return submenu
+	var submenu_node = _read_popup_menu_item_submenu_node(popup, index)
+	if submenu_node != null:
+		if submenu_node.has_method("get_path"):
+			return str(submenu_node.get_path())
+		if _has_property(submenu_node, "name"):
+			return str(submenu_node.name)
+		return str(submenu_node)
+	return ""
+
+
+func _read_popup_menu_item_submenu_node(popup, index: int):
+	if popup != null and popup.has_method("get_item_submenu_node"):
+		return popup.get_item_submenu_node(index)
+	return null
+
+
+func _activate_popup_menu_item(popup, index: int) -> void:
+	if popup == null:
+		return
+	if popup.has_method("activate_item"):
+		popup.activate_item(index)
+	elif popup.has_method("emit_signal"):
+		popup.emit_signal("index_pressed", index)
 
 
 func _find_dock_tab_by_title_recursive(node, title: String):

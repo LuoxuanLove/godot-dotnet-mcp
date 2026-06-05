@@ -36,6 +36,9 @@ func get_tools() -> Array[Dictionary]:
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
+							"list_menus",
+							"open_menu",
+							"select_menu_item",
 							"get_control",
 							"capture_control",
 							"focus_control",
@@ -84,6 +87,18 @@ func get_tools() -> Array[Dictionary]:
 					"tab_index": {
 						"type": "integer",
 						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+					},
+					"menu_title": {
+						"type": "string",
+						"description": "Top menu title/text/name for open_menu/select_menu_item"
+					},
+					"item_text": {
+						"type": "string",
+						"description": "PopupMenu item text for select_menu_item"
+					},
+					"item_index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_menu_item"
 					},
 					"bottom_panel_title": {
 						"type": "string",
@@ -255,6 +270,28 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"bottom_panel_title": str(args.get("bottom_panel_title", "")).strip_edges(),
 				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
 				"path": str(args.get("path", "")).strip_edges()
+			})
+		"list_menus":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "list_menus",
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200)),
+				"max_depth": int(args.get("max_depth", 6))
+			})
+		"open_menu":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "open_menu",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"menu_title": str(args.get("menu_title", "")).strip_edges()
+			})
+		"select_menu_item":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "select_menu_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"menu_title": str(args.get("menu_title", "")).strip_edges(),
+				"item_text": str(args.get("item_text", "")).strip_edges(),
+				"item_index": int(args.get("item_index", -1))
 			})
 		"get_control":
 			return bridge.call_atomic("editor_ui_control", {

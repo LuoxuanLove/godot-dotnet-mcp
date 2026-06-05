@@ -369,6 +369,71 @@ class FakeUiControl:
 		text = value
 
 
+class FakePopupMenuControl:
+	extends FakeUiControl
+
+	var activated_index := -1
+	var _items: Array[Dictionary] = []
+
+	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 160, 120)) -> void:
+		super(node_name, "PopupMenu", rect)
+		visible = false
+
+	func add_item(label: String, id: int = -1, disabled: bool = false, separator: bool = false, submenu: String = "", submenu_node = null) -> void:
+		_items.append({
+			"text": label,
+			"id": id if id >= 0 else _items.size(),
+			"disabled": disabled,
+			"separator": separator,
+			"submenu": submenu,
+			"submenu_node": submenu_node
+		})
+
+	func get_item_count() -> int:
+		return _items.size()
+
+	func get_item_text(index: int) -> String:
+		return str(_items[index].get("text", ""))
+
+	func get_item_id(index: int) -> int:
+		return int(_items[index].get("id", index))
+
+	func is_item_disabled(index: int) -> bool:
+		return bool(_items[index].get("disabled", false))
+
+	func is_item_separator(index: int) -> bool:
+		return bool(_items[index].get("separator", false))
+
+	func get_item_submenu(index: int) -> String:
+		return str(_items[index].get("submenu", ""))
+
+	func get_item_submenu_node(index: int):
+		return _items[index].get("submenu_node", null)
+
+	func popup() -> void:
+		visible = true
+
+	func activate_item(index: int) -> void:
+		activated_index = index
+
+
+class FakeMenuButton:
+	extends FakeUiControl
+
+	var _popup := FakePopupMenuControl.new("ProjectPopup")
+
+	func _init(node_name: String = "", label: String = "", rect: Rect2 = Rect2(0, 0, 80, 24)) -> void:
+		super(node_name, "MenuButton", rect)
+		text = label
+		add_child(_popup)
+
+	func get_popup():
+		return _popup
+
+	func show_popup() -> void:
+		_popup.popup()
+
+
 class FakeTabContainer:
 	extends FakeUiControl
 
@@ -581,6 +646,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
+	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
+	project_menu.get_popup().add_item("Project Settings...", 101)
+	project_menu.get_popup().add_item("Export...", 102)
+	project_menu.get_popup().add_item("Disabled Item", 103, true)
+	project_menu.get_popup().add_item("---", 104, false, true)
+	project_menu.get_popup().add_item("More Tools", 105, false, false, "MoreTools")
+	var node_backed_submenu := FakePopupMenuControl.new("NodeBackedTools", Rect2(0, 0, 160, 120))
+	project_menu.get_popup().add_item("Node Backed Tools", 106, false, false, "", node_backed_submenu)
 	var editor_top_bar := FakeUiControl.new("EditorTopBar", "HBoxContainer", Rect2(16, 88, 220, 28))
 	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
 	ordinary_top_bar_button.text = "Ordinary Action"
@@ -628,6 +701,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(project_menu)
 	editor_interface.get_base_control().add_popup_child(editor_top_bar)
 	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
@@ -938,6 +1012,68 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_ui should support MCP/config semantic path.")
 	if mcp_tabs.current_tab != 2 or not config_tab.visible or tools_tab.visible:
 		return _failure("Editor ui_control activate_ui MCP semantic path should switch to the requested tab.")
+
+	var list_menus_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_menus",
+		"text_query": "Project"
+	})
+	if not bool(list_menus_result.get("success", false)):
+		return _failure("Editor ui_control list_menus failed through the split service path.")
+	if int(list_menus_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("Editor ui_control list_menus should return the visible Project menu.")
+	var listed_menu: Dictionary = list_menus_result.get("data", {}).get("menus", [{}])[0]
+	if int(listed_menu.get("item_count", 0)) != 6:
+		return _failure("Editor ui_control list_menus should expose PopupMenu item metadata.")
+	var listed_menu_items: Array = listed_menu.get("items", [])
+	if listed_menu_items.size() < 6 or not bool((listed_menu_items[4] as Dictionary).get("has_submenu", false)) or not bool((listed_menu_items[5] as Dictionary).get("has_submenu", false)):
+		return _failure("Editor ui_control list_menus should expose submenu item metadata.")
+
+	var open_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "open_menu",
+		"menu_title": "Project"
+	})
+	if not bool(open_menu_result.get("success", false)):
+		return _failure("Editor ui_control open_menu should open a MenuButton by title.")
+	if not bool(project_menu.get_popup().visible):
+		return _failure("Editor ui_control open_menu should make the MenuButton popup visible.")
+
+	var select_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"target_path": str(project_menu.get_path()),
+		"item_text": "Project Settings..."
+	})
+	if not bool(select_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should select a PopupMenu item by text.")
+	if int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should activate the matched PopupMenu item index.")
+	var disabled_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Disabled Item"
+	})
+	if bool(disabled_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should reject disabled PopupMenu items.")
+	var separator_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "---"
+	})
+	if bool(separator_menu_result.get("success", false)):
+		return _failure("Editor ui_control select_menu_item should reject separator PopupMenu items.")
+	var submenu_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "More Tools"
+	})
+	if bool(submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should reject submenu PopupMenu items without activating them.")
+	var node_submenu_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Node Backed Tools"
+	})
+	if bool(node_submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should reject node-backed submenu PopupMenu items without activating them.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",

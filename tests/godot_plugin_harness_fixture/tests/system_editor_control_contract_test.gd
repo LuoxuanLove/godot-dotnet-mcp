@@ -59,6 +59,23 @@ class FakeBridge extends RefCounted:
 							"bottom_panel_path": str(args.get("bottom_panel_path", "")),
 							"path": str(args.get("path", ""))
 						})
+					"list_menus":
+						return success({
+							"count": 1,
+							"menus": [{"path": "/root/Editor/MenuBar/Project", "text": "Project"}]
+						})
+					"open_menu":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"menu_title": str(args.get("menu_title", ""))
+						})
+					"select_menu_item":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"menu_title": str(args.get("menu_title", "")),
+							"item_text": str(args.get("item_text", "")),
+							"item_index": int(args.get("item_index", -1))
+						})
 					"get_control":
 						return success({
 							"control": {"path": str(args.get("target_path", "")), "class": "LineEdit"}
@@ -156,6 +173,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_control schema should expose tab_title/tab_index for TabContainer activation.")
 	if not editor_control_properties.has("bottom_panel_title") or not editor_control_properties.has("bottom_panel_path"):
 		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
+	if not editor_control_properties.has("menu_title") or not editor_control_properties.has("item_text") or not editor_control_properties.has("item_index"):
+		return _failure("editor_control schema should expose menu_title/item_text/item_index for top menu control.")
 	if not editor_control_properties.has("local_x") or not editor_control_properties.has("local_y"):
 		return _failure("editor_control schema should expose local_x/local_y for control-local mouse clicks.")
 	if not editor_control_properties.has("enabled"):
@@ -257,6 +276,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate bottom panel activate_ui.")
 	if str(activate_ui_bottom_result.get("data", {}).get("bottom_panel_title", "")) != "Output":
 		return _failure("system editor_control should preserve activate_ui bottom_panel_title.")
+
+	var list_menus_result: Dictionary = impl.execute("editor_control", {
+		"action": "list_menus",
+		"text_query": "Project"
+	})
+	if not bool(list_menus_result.get("success", false)):
+		return _failure("system editor_control should delegate list_menus.")
+	if int(list_menus_result.get("data", {}).get("count", 0)) != 1:
+		return _failure("system editor_control should preserve list_menus payload.")
+
+	var open_menu_result: Dictionary = impl.execute("editor_control", {
+		"action": "open_menu",
+		"menu_title": "Project"
+	})
+	if not bool(open_menu_result.get("success", false)):
+		return _failure("system editor_control should delegate open_menu.")
+	if str(open_menu_result.get("data", {}).get("menu_title", "")) != "Project":
+		return _failure("system editor_control should preserve open_menu menu_title.")
+
+	var select_menu_item_result: Dictionary = impl.execute("editor_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Project Settings...",
+		"item_index": 0
+	})
+	if not bool(select_menu_item_result.get("success", false)):
+		return _failure("system editor_control should delegate select_menu_item.")
+	if str(select_menu_item_result.get("data", {}).get("item_text", "")) != "Project Settings...":
+		return _failure("system editor_control should preserve select_menu_item item_text.")
 
 	var activate_dock_missing_title_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_dock_tab"
