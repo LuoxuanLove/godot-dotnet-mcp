@@ -105,9 +105,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 
 	var tool_count_label = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel") as Label
-	var expected_visible_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 1
+	var expected_visible_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 2
 	if tool_count_label == null or tool_count_label.text != "Enabled %d/%d" % [expected_visible_tool_count, expected_visible_tool_count]:
-		return _failure("Tools tab should count the current system and user roots exactly once.")
+		return _failure("Tools tab should count the current system, plugin, and user presentation tools exactly once.")
 
 	var tool_tree = _instance.get_node("ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree") as Tree
 	if tool_tree == null:

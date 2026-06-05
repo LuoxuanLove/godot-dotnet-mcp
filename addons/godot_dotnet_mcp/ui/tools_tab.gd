@@ -289,7 +289,8 @@ func _create_root_group_item(parent: TreeItem, model: Dictionary, category: Stri
 
 
 func _apply_localized_copy(localization, model: Dictionary) -> void:
-	_tool_count_label.text = localization.get_text("tools_enabled") % _count_enabled_tools(model)
+	var counts = _count_presentation_tools(model)
+	_tool_count_label.text = localization.get_text("tools_enabled") % [counts["enabled"], counts["total"]]
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
 
 
@@ -485,18 +486,25 @@ func _create_action_children(parent: TreeItem, parent_full_name: String, tool_de
 			_configure_action_item(action_item, str(action_name), parent_full_name)
 
 
-func _count_enabled_tools(model: Dictionary) -> Array:
+func _count_presentation_tools(model: Dictionary) -> Dictionary:
+	return _count_presentation_nodes(model.get("toolTree", []))
+
+
+func _count_presentation_nodes(nodes: Array) -> Dictionary:
 	var total = 0
 	var enabled = 0
-	for category in [SYSTEM_CATEGORY, "user"]:
-		for tool_def in _get_filtered_tool_definitions(model, category):
-			if bool(tool_def.get("compatibility_alias", false)):
-				continue
+	for entry in nodes:
+		if not (entry is Dictionary):
+			continue
+		var node := entry as Dictionary
+		if str(node.get("kind", "")) == "tool":
 			total += 1
-			var full_name = "%s_%s" % [category, tool_def.get("name", "")]
-			if not model.get("settings", {}).get("disabled_tools", []).has(full_name):
+			if bool(node.get("enabled", false)):
 				enabled += 1
-	return [enabled, total]
+		var child_counts = _count_presentation_nodes(node.get("children", []))
+		total += int(child_counts["total"])
+		enabled += int(child_counts["enabled"])
+	return {"total": total, "enabled": enabled}
 
 
 func _count_categories(model: Dictionary, categories: Array) -> Dictionary:

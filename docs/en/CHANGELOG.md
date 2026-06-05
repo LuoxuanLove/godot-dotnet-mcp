@@ -66,6 +66,7 @@ Target version: 1.2.0.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
+- Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
 - Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
 
 ## [1.1.2] - 2026-06-02
