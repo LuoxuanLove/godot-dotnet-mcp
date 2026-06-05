@@ -250,6 +250,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var refreshed_editor_log_tool = _find_child_by_metadata(refreshed_system_category, "tool", "system_editor_log")
 	if refreshed_editor_log_tool == null or refreshed_editor_log_tool.get_text(0) != "编辑器日志（刷新）":
 		return _failure("Tools tab should rebuild tree item text when the active language changes.")
+	var fallback_model := refreshed_model.duplicate(true)
+	fallback_model["toolTree"] = []
+	fallback_model["toolGroups"] = []
+	fallback_model["tool_presentation"] = {}
+	_instance.apply_model(fallback_model)
+	await tree.process_frame
+	var expected_legacy_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 1
+	if tool_count_label.text != "已启用 %d/%d" % [expected_legacy_tool_count, expected_legacy_tool_count]:
+		return _failure("Tools tab should preserve the legacy header count when the presentation tree is unavailable.")
 
 	return {
 		"name": "tools_tab_rendering_contracts",
