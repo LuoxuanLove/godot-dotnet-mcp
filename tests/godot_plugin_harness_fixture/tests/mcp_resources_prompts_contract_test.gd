@@ -6,6 +6,7 @@ const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -25,6 +26,10 @@ var _server = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var localization = LocalizationServiceScript.get_instance()
+	var previous_language := localization.get_language() if localization != null else "en"
+	if localization != null:
+		localization.set_language("zh_CN")
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
 
@@ -57,6 +62,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resources/list should expose the diagnostics summary resource.")
 	if not _has_resource(resources, TOOL_CATALOG_URI):
 		return _failure("resources/list should expose the tool catalog resource.")
+	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
+	if str(project_info_metadata.get("name", "")) != "项目信息":
+		return _failure("resources/list should localize resource metadata through the active locale.")
+	if str(project_info_metadata.get("description", "")).find("工具加载器状态") == -1:
+		return _failure("resources/list should localize resource descriptions through the active locale.")
 
 	var templates_response: Dictionary = await _json_rpc("resources/templates/list", {}, 3)
 	var templates_result = templates_response.get("result", {})
@@ -68,6 +78,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_template in ["godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
 		if not _has_template(templates, expected_template):
 			return _failure("resources/templates/list should expose template: %s" % expected_template)
+	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
+	if str(scene_template_metadata.get("name", "")) != "场景文本":
+		return _failure("resources/templates/list should localize template names through the active locale.")
 
 	var project_info := await _read_json_resource(PROJECT_INFO_URI, 4)
 	if not bool(project_info.get("ok", false)):
@@ -138,6 +151,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("prompts/list should describe when and why to use prompt: %s" % expected_prompt)
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
+	var orientation_metadata := _find_prompt(prompts, PROJECT_ORIENTATION_PROMPT)
+	if str(orientation_metadata.get("title", "")) != "项目定位工作流":
+		return _failure("prompts/list should localize prompt titles through the active locale.")
+	if str(orientation_metadata.get("description", "")).find("Godot 项目") == -1:
+		return _failure("prompts/list should localize prompt descriptions through the active locale.")
 
 	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
 	if not bool(orientation_prompt.get("ok", false)):
@@ -197,6 +215,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	stdio_server.free()
 	if int((invalid_stdio_params_response.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio resources/read should reject non-object params with -32602.")
+	if localization != null:
+		localization.set_language(previous_language)
 
 	return {
 		"name": "mcp_resources_prompts_contracts",
@@ -212,6 +232,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(tree: SceneTree) -> void:
+	var localization = LocalizationServiceScript.get_instance()
+	if localization != null:
+		localization.set_language("en")
 	if _server == null:
 		return
 	if _server.has_method("stop"):
@@ -280,6 +303,15 @@ func _has_resource(resources, uri: String) -> bool:
 	return false
 
 
+func _find_resource(resources, uri: String) -> Dictionary:
+	if not (resources is Array):
+		return {}
+	for resource in resources:
+		if resource is Dictionary and str((resource as Dictionary).get("uri", "")) == uri:
+			return resource as Dictionary
+	return {}
+
+
 func _has_template(templates, uri_template: String) -> bool:
 	if not (templates is Array):
 		return false
@@ -287,6 +319,15 @@ func _has_template(templates, uri_template: String) -> bool:
 		if template is Dictionary and str((template as Dictionary).get("uriTemplate", "")) == uri_template:
 			return true
 	return false
+
+
+func _find_template(templates, uri_template: String) -> Dictionary:
+	if not (templates is Array):
+		return {}
+	for template in templates:
+		if template is Dictionary and str((template as Dictionary).get("uriTemplate", "")) == uri_template:
+			return template as Dictionary
+	return {}
 
 
 func _has_prompt(prompts, name: String) -> bool:

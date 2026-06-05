@@ -19,6 +19,7 @@ Target version: 1.2.0.
 
 ### Added
 
+- Localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
@@ -35,6 +36,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended MCP resources/prompts harness coverage to verify localized resource metadata and prompt metadata under a non-English locale.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.
