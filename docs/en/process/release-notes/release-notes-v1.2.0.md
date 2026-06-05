@@ -1,6 +1,6 @@
 ## 🧩 Godot .NET MCP v1.2.0: Reconnect-Aware Agent Workflows
 
-This release makes the plugin easier to use from several MCP clients or agent sessions at once. It improves maintenance-window reporting, reconnect guidance, transport resilience, health diagnostics, and update-sync refresh behavior so clients can recover cleanly after plugin reloads or update syncs.
+This release makes the plugin easier to use from several MCP clients or agent sessions at once. It improves maintenance-window reporting, reconnect guidance, transport resilience, health diagnostics, update-sync refresh behavior, and editor UI control so clients can recover cleanly after plugin reloads or update syncs while still navigating registered editor main screens and visible Godot UI flows.
 
 ### ✨ Highlights
 
@@ -8,10 +8,15 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
 - Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
+- Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
+- Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.
+- Added docs i18n validation coverage for locale file parity, Markdown link targets, and cross-locale link leakage.
+- Kept the localized docs trees aligned with the current plugin UI, tool, and binding references.
 
 ### 🔧 Fixes
 
 - Refreshed the Godot editor file system after plugin update sync writes files, before scheduling the plugin lifecycle reload.
+- Guarded popup menu automation against hidden popups, disabled items, separators, submenu rows, conflicting selectors, and ambiguous duplicate text matches.
 - Corrected English and Japanese documentation facts around service routing, .NET support, UI flow, and tool-domain indexes.
 - Replaced broken or outdated localization draft fragments with current user-facing content.
 - Removed invalid screenshot references from the Japanese README.
@@ -24,5 +29,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Existing tool names remain compatible.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
-- No file layout or tool schema migration is required.
+- Switching to a plugin main screen requires that the current editor session has already registered that screen.
+- Popup menu selection adds a tool-schema action; reconnect and fetch tools again after upgrading.
+- No file layout migration is required.
 - Existing installs do not need migration.

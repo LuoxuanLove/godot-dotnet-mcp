@@ -27,7 +27,10 @@ func get_tools() -> Array[Dictionary]:
 					"action": {
 						"type": "string",
 						"enum": [
+							"list_main_screens",
 							"set_main_screen",
+							"get_distraction_free",
+							"set_distraction_free",
 							"capture_editor",
 							"list_controls",
 							"list_dock_tabs",
@@ -44,6 +47,7 @@ func get_tools() -> Array[Dictionary]:
 							"set_control_text",
 							"list_popups",
 							"press_popup_button",
+							"select_popup_menu_item",
 							"set_popup_text",
 							"close_popup"
 						],
@@ -51,8 +55,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
 						"description": "Main screen for set_main_screen"
+					},
+					"enabled": {
+						"type": "boolean",
+						"description": "Enable or disable distraction-free mode"
 					},
 					"path": {
 						"type": "string",
@@ -88,7 +95,15 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text for set_control_text/set_popup_text"
+						"description": "Text for set_control_text/set_popup_text, or PopupMenu item text for select_popup_menu_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_popup_menu_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_popup_menu_item"
 					},
 					"local_x": {
 						"type": "number",
@@ -165,6 +180,15 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_status", {
 				"action": "set_main_screen",
 				"screen": str(args.get("screen", "")).strip_edges()
+			})
+		"list_main_screens":
+			return bridge.call_atomic("editor_status", {"action": "list_main_screens"})
+		"get_distraction_free":
+			return bridge.call_atomic("editor_status", {"action": "get_distraction_free"})
+		"set_distraction_free":
+			return bridge.call_atomic("editor_status", {
+				"action": "set_distraction_free",
+				"enabled": bool(args.get("enabled", false))
 			})
 		"capture_editor":
 			return _capture_editor(args)
@@ -263,6 +287,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_popup", {
 				"action": "press_button",
 				"target_path": str(args.get("target_path", "")).strip_edges()
+			})
+		"select_popup_menu_item":
+			return bridge.call_atomic("editor_popup", {
+				"action": "select_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"index": args.get("index", null),
+				"id": args.get("id", null),
+				"text": args.get("text", null)
 			})
 		"set_popup_text":
 			return bridge.call_atomic("editor_popup", {

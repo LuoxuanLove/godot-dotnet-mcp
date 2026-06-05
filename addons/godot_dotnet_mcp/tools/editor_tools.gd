@@ -99,9 +99,10 @@ func get_tools() -> Array[Dictionary]:
 
 ACTIONS:
 - get_info: Get editor version and status info
-- get_main_screen: Get currently active main screen (2D, 3D, Script, AssetLib)
+- get_main_screen: Get currently active main screen and discovered top UI screen buttons
+- list_main_screens: List built-in and visible top UI main screen buttons, including plugin screens when registered
 - get_focus_context: Get current editor focus owner and selected scene nodes
-- set_main_screen: Switch to a different main screen
+- set_main_screen: Switch to a different main screen, including plugin screens registered in the current editor session
 - get_distraction_free: Get distraction-free mode status
 - set_distraction_free: Toggle distraction-free mode
 - get_godot_path: Get the current Godot executable path and project root
@@ -109,6 +110,7 @@ ACTIONS:
 EXAMPLES:
 - Get editor info: {"action": "get_info"}
 - Get main screen: {"action": "get_main_screen"}
+- List main screens: {"action": "list_main_screens"}
 - Get focus context: {"action": "get_focus_context"}
 - Switch to 3D: {"action": "set_main_screen", "screen": "3D"}
 - Toggle distraction-free: {"action": "set_distraction_free", "enabled": true}""",
@@ -117,13 +119,12 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_info", "get_main_screen", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
+						"enum": ["get_info", "get_main_screen", "list_main_screens", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
 						"description": "Status action"
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
-						"description": "Main screen to switch to"
+						"description": "Main screen to switch to, including plugin screens registered in the current editor session"
 					},
 					"enabled": {
 						"type": "boolean",
@@ -450,12 +451,14 @@ EXAMPLES:
 ACTIONS:
 - list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
 - press_button: Activate a popup button by target_path
+- select_item: Select a visible PopupMenu item by target_path plus index, id, or exact text
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
 - close_popup: Close a popup/window by target_path
 
 EXAMPLES:
 - List popups: {"action": "list_visible"}
 - Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
+- Select menu item: {"action": "select_item", "target_path": "/root/Editor/ContextMenu", "text": "Rename"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
 - Close popup: {"action": "close_popup", "target_path": "/root/Editor/SearchDialog"}""",
 			"inputSchema": {
@@ -463,7 +466,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "press_button", "set_text", "close_popup"],
+						"enum": ["list_visible", "press_button", "select_item", "set_text", "close_popup"],
 						"description": "Popup action"
 					},
 					"target_path": {
@@ -472,7 +475,15 @@ EXAMPLES:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text to write for set_text"
+						"description": "Text to write for set_text, or exact PopupMenu item text for select_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_item"
 					}
 				},
 				"required": ["action"]
