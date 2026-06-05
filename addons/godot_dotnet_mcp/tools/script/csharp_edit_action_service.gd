@@ -203,9 +203,7 @@ func _build_method_code(args: Dictionary) -> String:
 	var params_value = args.get("params", [])
 	var body = str(args.get("body", "")).strip_edges()
 	if body.is_empty():
-		body = "// TODO: implement"
-		if return_type != "void":
-			body += "\nreturn default;"
+		body = "throw new System.NotImplementedException(\"Method body must be provided before use.\");"
 
 	var signature_parts: Array[String] = []
 	signature_parts.append(access)

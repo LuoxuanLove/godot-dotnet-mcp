@@ -10,6 +10,7 @@ const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+const MAX_PROMPT_TEXT_BYTES := 32768
 
 var _get_tool_loader_status := Callable()
 
@@ -210,13 +211,26 @@ func _text(key: String, fallback: String) -> String:
 
 
 func _prompt_response(description: String, text: String) -> Dictionary:
-	return {
+	var limited := _limit_text_output(text, MAX_PROMPT_TEXT_BYTES)
+	var result := {
 		"description": description,
 		"messages": [{
 			"role": "user",
-			"content": {"type": "text", "text": text}
+			"content": {"type": "text", "text": str(limited.get("text", ""))}
 		}]
 	}
+	if bool(limited.get("truncated", false)):
+		result["_meta"] = {
+			"godotDotnetMcp": {
+				"output": {
+					"truncated": true,
+					"originalByteSize": int(limited.get("original_byte_size", 0)),
+					"returnedByteSize": int(limited.get("returned_byte_size", 0)),
+					"maxByteSize": int(limited.get("max_byte_size", MAX_PROMPT_TEXT_BYTES))
+				}
+			}
+		}
+	return result
 
 
 func _optional_res_path(arguments: Dictionary, key: String, allowed_extensions: Array[String]) -> Dictionary:
@@ -234,3 +248,35 @@ func _get_loader_status_safe() -> Dictionary:
 		if status is Dictionary:
 			return (status as Dictionary).duplicate(true)
 	return {}
+
+
+func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:
+	var original_byte_size := text.to_utf8_buffer().size()
+	if original_byte_size <= max_byte_size:
+		return {
+			"text": text,
+			"truncated": false,
+			"original_byte_size": original_byte_size,
+			"returned_byte_size": original_byte_size,
+			"max_byte_size": max_byte_size
+		}
+	var limited_text := _truncate_text_to_utf8_byte_limit(text, max_byte_size)
+	return {
+		"text": limited_text,
+		"truncated": true,
+		"original_byte_size": original_byte_size,
+		"returned_byte_size": limited_text.to_utf8_buffer().size(),
+		"max_byte_size": max_byte_size
+	}
+
+
+func _truncate_text_to_utf8_byte_limit(text: String, max_byte_size: int) -> String:
+	var low := 0
+	var high := text.length()
+	while low < high:
+		var mid := int(ceil(float(low + high + 1) / 2.0))
+		if text.substr(0, mid).to_utf8_buffer().size() <= max_byte_size:
+			low = mid
+		else:
+			high = mid - 1
+	return text.substr(0, low)

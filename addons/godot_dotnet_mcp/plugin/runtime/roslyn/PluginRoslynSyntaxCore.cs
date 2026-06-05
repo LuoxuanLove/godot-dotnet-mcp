@@ -668,7 +668,7 @@ internal static class PluginRoslynSyntaxCore
     {
         if (string.IsNullOrWhiteSpace(body))
         {
-            return string.Empty;
+            return indent + "throw new System.NotImplementedException(\"Method body must be provided before use.\");" + Environment.NewLine;
         }
 
         var normalizedBody = body.Replace("\r\n", "\n", StringComparison.Ordinal).Trim('\n', '\r');

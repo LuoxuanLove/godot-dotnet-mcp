@@ -2114,6 +2114,13 @@ func get_user_tool_compatibility_from_tools() -> Dictionary:
 	}
 
 
+func get_user_tool_runtime_diagnostics_from_tools(limit: int = 10, runtime_state: Array = []) -> Dictionary:
+	return {
+		"success": true,
+		"data": _user_tool_service.get_runtime_diagnostics(_get_user_tool_watch_status(), limit, runtime_state)
+	}
+
+
 func runtime_restart_server() -> Dictionary:
 	var operation = PluginSelfDiagnosticStore.begin_operation("runtime_restart_server", "runtime_restart_server")
 	if not _pending_runtime_reload_action.is_empty():
