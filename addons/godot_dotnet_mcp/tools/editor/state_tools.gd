@@ -282,7 +282,10 @@ func _build_main_screen_button_summary(control, current_name: String) -> Diction
 		return {}
 	var rect := _control_rect(control)
 	var builtin_names := ["2D", "3D", "Script", "AssetLib"]
-	if not label in builtin_names and not _is_plugin_main_screen_button(control, builtin_names):
+	if label in builtin_names:
+		if not _is_builtin_main_screen_button(control, builtin_names):
+			return {}
+	elif not _is_plugin_main_screen_button(control, builtin_names):
 		return {}
 	var source := "builtin" if label in builtin_names else "plugin"
 	var active_state_observable := _control_active_state_observable(control)
@@ -379,6 +382,14 @@ func _main_screen_summary_exists(screens: Array, name: String, control_path: Str
 
 
 func _is_plugin_main_screen_button(control, builtin_names: Array) -> bool:
+	if not _control_visible(control) or _control_disabled(control):
+		return false
+	if not _has_named_main_screen_ancestor(control):
+		return false
+	return _has_builtin_main_screen_group_sibling(control, builtin_names)
+
+
+func _is_builtin_main_screen_button(control, builtin_names: Array) -> bool:
 	if not _control_visible(control) or _control_disabled(control):
 		return false
 	if not _has_named_main_screen_ancestor(control):

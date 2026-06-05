@@ -570,6 +570,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
 	ordinary_top_bar_button.text = "Ordinary Action"
 	editor_top_bar.add_child(ordinary_top_bar_button)
+	var ordinary_script_button := FakeUiControl.new("OrdinaryScriptButton", "Button", Rect2(24, 124, 128, 24))
+	ordinary_script_button.text = "Script"
+	ordinary_script_button.pressed = true
+	editor_top_bar.add_child(ordinary_script_button)
 	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
 	var main_screen_group := RefCounted.new()
 	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
@@ -670,6 +674,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status list_main_screens should not treat a toolbar control text as a main screen label.")
 	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Ordinary Action"):
 		return _failure("Editor status list_main_screens should not treat ordinary top bar buttons as main screen labels.")
+	var listed_main_screens: Array = list_screens_result.get("data", {}).get("main_screens", [])
+	for listed_screen in listed_main_screens:
+		if listed_screen is Dictionary and str((listed_screen as Dictionary).get("control_path", "")).find("OrdinaryScriptButton") != -1:
+			return _failure("Editor status list_main_screens should ignore ordinary buttons whose text matches a built-in screen name.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):
