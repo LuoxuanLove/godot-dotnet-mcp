@@ -289,6 +289,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_add_autoload_name": "新增自動載入",
 	"tool_action_remove_autoload_name": "移除自動載入",
 	"tool_action_list_input_actions_name": "列出輸入動作",
+	"tool_action_list_export_presets_name": "列出匯出預設",
 	"tool_action_capture_editor_name": "截取編輯器",
 	"tool_action_list_controls_name": "列出控制項",
 	"tool_action_list_dock_tabs_name": "列出 Dock 分頁",

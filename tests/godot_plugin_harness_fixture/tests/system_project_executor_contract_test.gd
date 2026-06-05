@@ -612,6 +612,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
 		return _failure("project_configure bogus action should fail.")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://export_presets.cfg"))
+	var missing_export_presets: Dictionary = executor.execute("project_configure", {"action": "list_export_presets"})
+	if not bool(missing_export_presets.get("success", false)):
+		return _failure("project_configure list_export_presets should succeed when export_presets.cfg is absent.")
+	if bool((missing_export_presets.get("data", {}) as Dictionary).get("exists", true)):
+		return _failure("project_configure list_export_presets should report exists=false when no export_presets.cfg file exists.")
+	_write_text("res://export_presets.cfg", "[preset.0]\nname=\"Windows Desktop\"\nplatform=\"Windows Desktop\"\nrunnable=true\ndedicated_server=false\ncustom_features=\"\"\nexport_filter=\"all_resources\"\ninclude_filter=\"\"\nexclude_filter=\"\"\nexport_path=\"build/windows/game.exe\"\nscript_export_mode=2\n\n[preset.0.options]\ncodesign/password=\"secret\"\ntexture_format/s3tc=true\n")
+	var export_presets: Dictionary = executor.execute("project_configure", {"action": "list_export_presets"})
+	if not bool(export_presets.get("success", false)):
+		return _failure("project_configure list_export_presets should parse export_presets.cfg.")
+	var export_data: Dictionary = export_presets.get("data", {})
+	if int(export_data.get("preset_count", 0)) != 1:
+		return _failure("project_configure list_export_presets should report one preset.")
+	var presets: Array = export_data.get("presets", [])
+	var preset: Dictionary = presets[0] if not presets.is_empty() and presets[0] is Dictionary else {}
+	if str(preset.get("platform", "")) != "Windows Desktop" or not bool(preset.get("runnable", false)):
+		return _failure("project_configure list_export_presets should expose preset platform and runnable state.")
+	if str(preset.get("export_path", "")) != "build/windows/game.exe":
+		return _failure("project_configure list_export_presets should expose the preset export_path.")
+	if int(preset.get("options_key_count", 0)) != 2:
+		return _failure("project_configure list_export_presets should count option keys without returning option values.")
+	var option_keys: Array = preset.get("option_keys", [])
+	if not option_keys.has("codesign/password") or not option_keys.has("texture_format/s3tc"):
+		return _failure("project_configure list_export_presets should expose option key names.")
 
 	var project_files_list: Dictionary = executor.execute("project_files", {"action": "list_dir", "path": "res://", "filter": "*.gd"})
 	if not bool(project_files_list.get("success", false)):
@@ -938,6 +962,7 @@ func _has_diagnostic_code(diagnostics: Array, code: String) -> bool:
 
 func cleanup_case(_tree: SceneTree) -> void:
 	PluginSelfDiagnosticStore.clear()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://export_presets.cfg"))
 	_remove_tree(TEMP_ROOT)
 	MCPUserDataPaths.cleanup_capture_cache(false)
 

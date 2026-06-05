@@ -302,6 +302,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_list_autoloads_name": "Autoload 목록",
 	"tool_action_remove_autoload_name": "Autoload 제거",
 	"tool_action_list_input_actions_name": "입력 작업 목록",
+	"tool_action_list_export_presets_name": "내보내기 프리셋 목록",
 	"tool_action_capture_editor_name": "캡처 에디터",
 	"tool_action_list_controls_name": "컨트롤 목록",
 	"tool_action_list_dock_tabs_name": "Dock 탭 목록",

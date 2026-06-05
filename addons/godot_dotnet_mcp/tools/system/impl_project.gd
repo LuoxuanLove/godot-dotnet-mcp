@@ -14,6 +14,7 @@ const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/r
 var bridge
 var _runtime_context: Dictionary = {}
 
+const _EXPORT_PRESETS_PATH := "res://export_presets.cfg"
 const _PROJECT_FILE_SCAN_ROOT := "res://"
 const _RESOURCE_AUDIT_SCAN_GLOBS: Array[String] = ["*.tscn", "*.tres"]
 const _PROJECT_STATE_SCAN_GLOBS: Array[String] = ["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"]
@@ -123,13 +124,13 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_configure",
-			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, and input actions. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
+			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, input actions, and export preset summaries. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions, list_export_presets. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"],
+						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "list_export_presets"],
 						"description": "Configuration action to perform"
 					},
 					"setting": {"type": "string", "description": "Setting path for get_settings/set_setting"},
@@ -1497,8 +1498,66 @@ func _execute_project_configure(args: Dictionary) -> Dictionary:
 			})
 		"list_input_actions":
 			return bridge.call_atomic("project_input", {"action": "list_actions"})
+		"list_export_presets":
+			return _list_export_presets()
 		_:
-			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions" % action)
+			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions, list_export_presets" % action)
+
+
+func _list_export_presets() -> Dictionary:
+	if not FileAccess.file_exists(_EXPORT_PRESETS_PATH):
+		return bridge.success({
+			"path": _EXPORT_PRESETS_PATH,
+			"exists": false,
+			"preset_count": 0,
+			"presets": []
+		}, "No export presets file found")
+
+	var config := ConfigFile.new()
+	var err := config.load(_EXPORT_PRESETS_PATH)
+	if err != OK:
+		return bridge.error("Failed to read export presets", {
+			"path": _EXPORT_PRESETS_PATH,
+			"error_code": err,
+			"error_name": error_string(err)
+		})
+
+	var presets: Array[Dictionary] = []
+	var index := 0
+	while config.has_section("preset.%d" % index):
+		presets.append(_build_export_preset_summary(config, index))
+		index += 1
+	return bridge.success({
+		"path": _EXPORT_PRESETS_PATH,
+		"exists": true,
+		"preset_count": presets.size(),
+		"presets": presets
+	}, "Export presets listed")
+
+
+func _build_export_preset_summary(config: ConfigFile, index: int) -> Dictionary:
+	var section := "preset.%d" % index
+	var options_section := "preset.%d.options" % index
+	var option_keys: Array[String] = []
+	if config.has_section(options_section):
+		for key in config.get_section_keys(options_section):
+			option_keys.append(str(key))
+	option_keys.sort()
+	return {
+		"index": index,
+		"name": str(config.get_value(section, "name", "")),
+		"platform": str(config.get_value(section, "platform", "")),
+		"runnable": bool(config.get_value(section, "runnable", false)),
+		"dedicated_server": bool(config.get_value(section, "dedicated_server", false)),
+		"custom_features": str(config.get_value(section, "custom_features", "")),
+		"export_filter": str(config.get_value(section, "export_filter", "")),
+		"include_filter": str(config.get_value(section, "include_filter", "")),
+		"exclude_filter": str(config.get_value(section, "exclude_filter", "")),
+		"export_path": str(config.get_value(section, "export_path", "")),
+		"script_export_mode": int(config.get_value(section, "script_export_mode", 0)),
+		"options_key_count": option_keys.size(),
+		"option_keys": option_keys
+	}
 
 
 func _execute_project_files(args: Dictionary) -> Dictionary:

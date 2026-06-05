@@ -328,6 +328,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_add_autoload_name": "添加自动加载",
 	"tool_action_remove_autoload_name": "移除自动加载",
 	"tool_action_list_input_actions_name": "列出输入动作",
+	"tool_action_list_export_presets_name": "列出导出预设",
 	"tool_action_capture_editor_name": "截取编辑器",
 	"tool_action_list_controls_name": "列出控件",
 	"tool_action_list_dock_tabs_name": "列出 Dock 标签",

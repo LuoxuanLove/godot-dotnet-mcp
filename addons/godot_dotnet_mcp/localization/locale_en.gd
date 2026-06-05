@@ -328,6 +328,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_add_autoload_name": "Add Autoload",
 	"tool_action_remove_autoload_name": "Remove Autoload",
 	"tool_action_list_input_actions_name": "List Input Actions",
+	"tool_action_list_export_presets_name": "List Export Presets",
 	"tool_action_capture_editor_name": "Capture Editor",
 	"tool_action_list_controls_name": "List Controls",
 	"tool_action_list_dock_tabs_name": "List Dock Tabs",
