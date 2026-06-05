@@ -32,6 +32,8 @@ func detect(running_processes: PackedStringArray) -> Dictionary:
 	var config_entry_status = {}
 	if bool(_options.get("inspect_config_entry", false)) and _config_entry_inspector != null:
 		config_entry_status = _config_entry_inspector.inspect_config_entry(str(_options.get("config_path", "")), str(_options.get("config_type", "")))
+	var capability_value: Variant = _options.get("capability", {})
+	var capability: Dictionary = capability_value.duplicate(true) if capability_value is Dictionary else {}
 
 	return {
 		"id": _client_id,
@@ -47,7 +49,8 @@ func detect(running_processes: PackedStringArray) -> Dictionary:
 		"path_pick_supported": true,
 		"path_clear_supported": bool(resolved.get("has_manual_path", false)),
 		"runtime_state": runtime_state,
-		"config_entry_status": config_entry_status
+		"config_entry_status": config_entry_status,
+		"capability": capability
 	}
 
 

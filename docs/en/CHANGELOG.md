@@ -24,6 +24,7 @@ Target version: 1.2.0.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
 - Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added a stable Config client capability matrix with support levels, supported action metadata, and note keys for client cards.
 
 ### Fixed
 
@@ -43,6 +44,7 @@ Target version: 1.2.0.
 - Tightened localization CI contracts so every supported locale must expose the same key set and may not silently reuse English strings except for explicit shared product names, paths, identifiers, and technical abbreviations.
 - Fixed the refactor guardrail scan so the banned-source identifier audit no longer reports its own validation script as a violation.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
+- Extended Config client detector and presenter contract coverage for capability matrix projection, compatibility aliases, and fallback behavior.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
 

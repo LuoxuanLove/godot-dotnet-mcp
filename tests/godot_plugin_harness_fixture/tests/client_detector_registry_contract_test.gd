@@ -71,6 +71,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client detector registry should delegate config-file clients to the config detector path.")
 	if not bool(results.get("codex", {}).get("auto_add_supported", false)):
 		return _failure("Client detector registry should delegate CLI-managed clients to the executable detector path.")
+	var expected_support_levels := {
+		"claude_desktop": "full_write",
+		"claude_code": "launch_path",
+		"cursor": "full_write",
+		"trae": "full_write",
+		"codex_desktop": "launch_path",
+		"codex": "auto_add",
+		"gemini": "auto_add",
+		"opencode_desktop": "manual_guidance",
+		"opencode": "launch_path",
+		"windsurf": "full_write",
+		"cline": "full_write",
+		"roo_code": "full_write",
+		"qwen": "auto_add",
+		"cherry_studio": "manual_guidance"
+	}
+	var expected_core_actions := {
+		"full_write": ["write_config", "remove_config", "copy_config", "pick_path"],
+		"auto_add": ["auto_add", "remove_config", "copy_config", "open_terminal", "pick_path"],
+		"manual_guidance": ["open_config_dir", "copy_config", "pick_path"],
+		"launch_path": ["copy_config", "pick_path"]
+	}
+	for client_id in supported_ids:
+		var capability: Dictionary = results.get(client_id, {}).get("capability", {})
+		if capability.is_empty():
+			return _failure("Client detector registry should expose a capability matrix for %s." % client_id)
+		var support_level := str(capability.get("support_level", ""))
+		if support_level != str(expected_support_levels.get(client_id, "")):
+			return _failure("Client detector registry should expose the expected support_level for %s." % client_id)
+		if str(capability.get("kind", "")) != support_level:
+			return _failure("Client detector registry should keep capability.kind compatible with support_level for %s." % client_id)
+		var actions: Variant = capability.get("actions", [])
+		if not (actions is Array) or actions.is_empty():
+			return _failure("Client detector registry should expose supported actions for %s." % client_id)
+		for expected_action in expected_core_actions.get(support_level, []):
+			if not actions.has(expected_action):
+				return _failure("Client detector registry should expose %s for %s." % [expected_action, client_id])
+		if actions.has("clear_path"):
+			return _failure("Client detector registry should not expose clear_path before runtime manual-path detection for %s." % client_id)
+		var notes: Variant = capability.get("notes", [])
+		if not (notes is Array) or notes.is_empty():
+			return _failure("Client detector registry should expose capability notes for %s." % client_id)
 
 	return {
 		"name": "client_detector_registry_contracts",

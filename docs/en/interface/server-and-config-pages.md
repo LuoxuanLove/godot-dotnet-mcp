@@ -91,6 +91,8 @@ Button behavior:
 - Desktop clients: show `Write Config`, `Remove Config`, open client, path management, and copy actions depending on capability
 - CLI clients: show one-click install or uninstall, open terminal, path management, and copy actions depending on capability
 
+Client capability is projected as a stable matrix. `ClientDetectorRegistry` defines each client support level, the available Config-client `actions`, and note keys. The file and executable detectors pass that matrix through detection results, and `ClientConfigPresenter` exposes `capability.support_level`, `capability.actions`, and `capability.notes` in the card model while keeping `capability.kind` as the compatibility alias used by the existing guidance text.
+
 ### Platform Groups
 
 `Config` currently groups platforms into:
