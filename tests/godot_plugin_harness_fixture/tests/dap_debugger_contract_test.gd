@@ -17,7 +17,9 @@ class FakeDapServer extends Node:
 	var _buffer := PackedByteArray()
 	var _received_messages: Array[Dictionary] = []
 	var _queued_messages: Array[Dictionary] = []
+	var _queued_raw_frames: Array[PackedByteArray] = []
 	var _failed_commands: Dictionary = {}
+	var _oversized_commands: Dictionary = {}
 	var _output_on_connect := false
 	var _output_sent := false
 
@@ -36,6 +38,7 @@ class FakeDapServer extends Node:
 		_buffer = PackedByteArray()
 		_received_messages.clear()
 		_queued_messages.clear()
+		_queued_raw_frames.clear()
 
 	func _process(_delta: float) -> void:
 		tick()
@@ -65,6 +68,9 @@ class FakeDapServer extends Node:
 		while not _queued_messages.is_empty():
 			_send_message(_queued_messages[0])
 			_queued_messages.remove_at(0)
+		while not _queued_raw_frames.is_empty():
+			_send_raw_frame(_queued_raw_frames[0])
+			_queued_raw_frames.remove_at(0)
 
 	func drain_messages() -> Array[Dictionary]:
 		var copy := _received_messages.duplicate(true)
@@ -73,6 +79,9 @@ class FakeDapServer extends Node:
 
 	func fail_next_command(command: String, message: String = "contract failure") -> void:
 		_failed_commands[command] = message
+
+	func send_oversized_frame_for_command(command: String, declared_length: int) -> void:
+		_oversized_commands[command] = declared_length
 
 	func _queue_output(output: String) -> void:
 		_queue_message({
@@ -98,6 +107,11 @@ class FakeDapServer extends Node:
 			return
 		var command := str(message.get("command", ""))
 		var request_seq := int(message.get("seq", 0))
+		if _oversized_commands.has(command):
+			var declared_length := int(_oversized_commands.get(command, 1048577))
+			_oversized_commands.erase(command)
+			_queue_raw_frame(("Content-Length: %d\r\n\r\n" % declared_length).to_utf8_buffer())
+			return
 		if _failed_commands.has(command):
 			var failure_message := str(_failed_commands.get(command, "contract failure"))
 			_failed_commands.erase(command)
@@ -166,6 +180,9 @@ class FakeDapServer extends Node:
 	func _queue_message(message: Dictionary) -> void:
 		_queued_messages.append(message.duplicate(true))
 
+	func _queue_raw_frame(frame: PackedByteArray) -> void:
+		_queued_raw_frames.append(frame)
+
 	func _send_message(message: Dictionary) -> void:
 		if _client == null or _client.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 			return
@@ -175,6 +192,11 @@ class FakeDapServer extends Node:
 		var frame := PackedByteArray()
 		frame.append_array(header)
 		frame.append_array(body_bytes)
+		_client.put_data(frame)
+
+	func _send_raw_frame(frame: PackedByteArray) -> void:
+		if _client == null or _client.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+			return
 		_client.put_data(frame)
 
 	func _try_parse_frame() -> Dictionary:
@@ -286,6 +308,25 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Protocol facts should include the dap_invalid_session_state error code.")
 	if not ProtocolFactsScript.get_error_codes().has("dap_limit_exceeded"):
 		return _failure("Protocol facts should include the dap_limit_exceeded error code.")
+	var timeout_limit_settings_result: Dictionary = dap_executor.execute("debugger", {
+		"action": "set_settings",
+		"settings": {"timeout_ms": 30001}
+	})
+	if bool(timeout_limit_settings_result.get("success", false)):
+		return _failure("DAP set_settings should reject timeout_ms values above the maximum.")
+	if str(timeout_limit_settings_result.get("data", {}).get("error_type", "")) != "dap_limit_exceeded":
+		return _failure("DAP timeout_ms settings above the maximum should report dap_limit_exceeded.")
+	var timeout_limit_action_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "pause",
+		"host": "127.0.0.1",
+		"port": unavailable_port,
+		"thread_id": 1,
+		"timeout_ms": 30001
+	})
+	if bool(timeout_limit_action_result.get("success", false)):
+		return _failure("DAP async actions should reject timeout_ms values above the maximum before connecting.")
+	if str(timeout_limit_action_result.get("data", {}).get("error_type", "")) != "dap_limit_exceeded":
+		return _failure("DAP async timeout_ms values above the maximum should report dap_limit_exceeded.")
 	var seeded_sources := {}
 	for index in range(512):
 		seeded_sources["res://scripts/seeded_%d.gd" % index] = [1]
@@ -430,6 +471,22 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var request_server = _start_server(tree, request_port)
 	if request_server == null:
 		return _failure("Failed to start the fake DAP request server.")
+
+	request_server.send_oversized_frame_for_command("pause", 1048577)
+	var oversized_frame_result: Dictionary = await dap_executor.execute_async("debugger", {
+		"action": "pause",
+		"session_id": "oversized-frame",
+		"host": "127.0.0.1",
+		"port": request_port,
+		"timeout_ms": REQUEST_TIMEOUT_MS,
+		"thread_id": 1
+	})
+	if bool(oversized_frame_result.get("success", false)):
+		return _failure("DAP should reject oversized Content-Length frames instead of waiting for timeout.")
+	if str(oversized_frame_result.get("data", {}).get("error_type", "")) != "dap_limit_exceeded":
+		return _failure("DAP oversized Content-Length frames should report dap_limit_exceeded.")
+	if int(oversized_frame_result.get("data", {}).get("frame_bytes", 0)) <= int(oversized_frame_result.get("data", {}).get("limit", 0)):
+		return _failure("DAP oversized frame result should include the declared frame size and limit.")
 
 	var set_result: Dictionary = await dap_executor.execute_async("debugger", {
 		"action": "set_breakpoint",
