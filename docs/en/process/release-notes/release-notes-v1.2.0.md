@@ -7,6 +7,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
+- Let agents inspect a single input action from `system_project_configure`, including its deadzone and concrete key, mouse, or controller bindings.
 
 ### 🔧 Fixes
 

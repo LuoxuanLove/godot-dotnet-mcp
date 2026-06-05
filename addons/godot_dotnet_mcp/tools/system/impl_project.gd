@@ -123,18 +123,18 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_configure",
-			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, and input actions. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
+			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, and input actions. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions, get_input_action (requires: name). Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"],
+						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action"],
 						"description": "Configuration action to perform"
 					},
 					"setting": {"type": "string", "description": "Setting path for get_settings/set_setting"},
 					"value": {"description": "New value for set_setting"},
-					"name": {"type": "string", "description": "Autoload name for add/remove_autoload"},
+					"name": {"type": "string", "description": "Autoload name for add/remove_autoload, or input action name for get_input_action"},
 					"path": {"type": "string", "description": "Script path for add_autoload"}
 				},
 				"required": ["action"]
@@ -1497,8 +1497,13 @@ func _execute_project_configure(args: Dictionary) -> Dictionary:
 			})
 		"list_input_actions":
 			return bridge.call_atomic("project_input", {"action": "list_actions"})
+		"get_input_action":
+			var input_action_name := str(args.get("name", "")).strip_edges()
+			if input_action_name.is_empty():
+				return bridge.error("input action name is required for get_input_action")
+			return bridge.call_atomic("project_input", {"action": "get_action", "name": input_action_name})
 		_:
-			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions" % action)
+			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions, get_input_action" % action)
 
 
 func _execute_project_files(args: Dictionary) -> Dictionary:

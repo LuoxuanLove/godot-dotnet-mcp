@@ -46,7 +46,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "project_info",     "actions": ["get_settings"]},
 		{"tool": "project_settings", "actions": ["set"]},
 		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
-		{"tool": "project_input",    "actions": ["list_actions"]}
+		{"tool": "project_input",    "actions": ["list_actions", "get_action"]}
 	],
 	"system_project_files": [
 		{"tool": "filesystem_directory", "actions": ["get_files", "create", "delete"]},

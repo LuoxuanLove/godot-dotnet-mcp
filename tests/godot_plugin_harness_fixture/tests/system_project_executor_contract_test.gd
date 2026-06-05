@@ -105,6 +105,14 @@ class FakeBridge extends RefCounted:
 			"project_autoload":
 				return success({"count": 0, "entries": []})
 			"project_input":
+				if str(args.get("action", "")) == "get_action":
+					return success({
+						"name": str(args.get("name", "")),
+						"deadzone": 0.5,
+						"events": [
+							{"type": "InputEventKey", "key_name": "Space"}
+						]
+					})
 				return success({"count": 0, "actions": []})
 			"filesystem_directory":
 				match str(args.get("action", "")):
@@ -612,6 +620,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
 		return _failure("project_configure bogus action should fail.")
+	var input_action_detail: Dictionary = executor.execute("project_configure", {"action": "get_input_action", "name": "jump"})
+	if not bool(input_action_detail.get("success", false)):
+		return _failure("project_configure get_input_action should delegate to project_input.get_action.")
+	var input_action_data = input_action_detail.get("data", {})
+	if not (input_action_data is Dictionary) or str((input_action_data as Dictionary).get("name", "")) != "jump":
+		return _failure("project_configure get_input_action should preserve the action name.")
+	if ((input_action_data as Dictionary).get("events", []) as Array).is_empty():
+		return _failure("project_configure get_input_action should expose detailed input events.")
+	var missing_input_action_name: Dictionary = executor.execute("project_configure", {"action": "get_input_action"})
+	if bool(missing_input_action_name.get("success", false)):
+		return _failure("project_configure get_input_action should reject an empty action name before delegation.")
 
 	var project_files_list: Dictionary = executor.execute("project_files", {"action": "list_dir", "path": "res://", "filter": "*.gd"})
 	if not bool(project_files_list.get("success", false)):
