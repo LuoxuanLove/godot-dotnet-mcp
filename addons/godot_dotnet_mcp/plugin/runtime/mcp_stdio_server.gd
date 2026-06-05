@@ -28,6 +28,7 @@ var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
 var _processing_stdin := false
 var _transport_generation := 0
+var _last_written_response: Dictionary = {}
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
 const MAX_STDIN_BYTES_PER_TICK := 8192
@@ -152,12 +153,17 @@ func _handle_request(body: String, generation: int = -1) -> void:
 	var request_dict: Dictionary = request
 	var method: String = str(request_dict.get("method", ""))
 	var params: Variant = request_dict.get("params", {})
-	var signal_params: Dictionary = params if params is Dictionary else {}
 	var has_id: bool = request_dict.has("id")
 	var id: Variant = request_dict.get("id")
+	if not (params is Dictionary):
+		if not has_id:
+			return
+		_write_response(_create_json_rpc_error(-32602, "Invalid params: expected object", id))
+		return
+	var params_dict := params as Dictionary
 
 	_log("Method: %s" % method, "debug")
-	request_received.emit(method, signal_params)
+	request_received.emit(method, params_dict)
 
 	# Notifications (no id) get no response
 	if not has_id:
@@ -178,17 +184,17 @@ func _handle_request(body: String, generation: int = -1) -> void:
 		"tools/list":
 			response = _handle_tools_list(id)
 		"tools/call":
-			response = await _handle_tools_call_async(params, id)
+			response = await _handle_tools_call_async(params_dict, id)
 		"resources/list":
-			response = _handle_resources_list(params, id)
+			response = _handle_resources_list(params_dict, id)
 		"resources/templates/list":
-			response = _handle_resources_templates_list(params, id)
+			response = _handle_resources_templates_list(params_dict, id)
 		"resources/read":
-			response = _handle_resources_read(params, id)
+			response = _handle_resources_read(params_dict, id)
 		"prompts/list":
-			response = _handle_prompts_list(params, id)
+			response = _handle_prompts_list(params_dict, id)
 		"prompts/get":
-			response = _handle_prompts_get(params, id)
+			response = _handle_prompts_get(params_dict, id)
 		"ping":
 			response = _create_json_rpc_response({}, id)
 		_:
@@ -404,6 +410,7 @@ func _create_json_rpc_error(code: int, message: String, id) -> Dictionary:
 
 
 func _write_response(obj: Dictionary) -> void:
+	_last_written_response = obj.duplicate(true)
 	var body := JSON.stringify(_sanitize_for_json(obj))
 	var body_bytes := body.to_utf8_buffer()
 	# Content-Length frame; print() appends \n which is fine as inter-frame whitespace

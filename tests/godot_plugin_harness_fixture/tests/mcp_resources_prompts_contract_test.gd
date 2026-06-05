@@ -214,6 +214,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject invalid reference_integrity path arguments.")
 	var stdio_server = StdioServerScript.new()
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 22,
+		"method": "initialize",
+		"params": []
+	}))
+	var invalid_stdio_request_response = stdio_server.get("_last_written_response")
+	if not (invalid_stdio_request_response is Dictionary):
+		return _failure("stdio full request path should record the invalid params response.")
+	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio full request path should reject non-object params before method dispatch.")
+	stdio_server.set("_last_written_response", {})
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": "tools/list",
+		"params": []
+	}))
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("stdio notifications with non-object params should not write a response.")
 	var invalid_stdio_params_response: Dictionary = stdio_server._handle_resources_read([], 17)
 	if int((invalid_stdio_params_response.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio resources/read should reject non-object params with -32602.")
