@@ -99,9 +99,10 @@ func get_tools() -> Array[Dictionary]:
 
 ACTIONS:
 - get_info: Get editor version and status info
-- get_main_screen: Get currently active main screen (2D, 3D, Script, AssetLib)
+- get_main_screen: Get currently active main screen and discovered top UI screen buttons
+- list_main_screens: List built-in and visible top UI main screen buttons, including plugin screens when registered
 - get_focus_context: Get current editor focus owner and selected scene nodes
-- set_main_screen: Switch to a different main screen
+- set_main_screen: Switch to a different main screen, including plugin screens registered in the current editor session
 - get_distraction_free: Get distraction-free mode status
 - set_distraction_free: Toggle distraction-free mode
 - get_godot_path: Get the current Godot executable path and project root
@@ -109,6 +110,7 @@ ACTIONS:
 EXAMPLES:
 - Get editor info: {"action": "get_info"}
 - Get main screen: {"action": "get_main_screen"}
+- List main screens: {"action": "list_main_screens"}
 - Get focus context: {"action": "get_focus_context"}
 - Switch to 3D: {"action": "set_main_screen", "screen": "3D"}
 - Toggle distraction-free: {"action": "set_distraction_free", "enabled": true}""",
@@ -117,13 +119,12 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_info", "get_main_screen", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
+						"enum": ["get_info", "get_main_screen", "list_main_screens", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
 						"description": "Status action"
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
-						"description": "Main screen to switch to"
+						"description": "Main screen to switch to, including plugin screens registered in the current editor session"
 					},
 					"enabled": {
 						"type": "boolean",
@@ -335,19 +336,24 @@ EXAMPLES:
 		},
 		{
 			"name": "ui_control",
-			"description": """EDITOR UI CONTROL: Enumerate visible editor controls, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks, and write text into text-editing controls.
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls and top menus, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks and hover/leave pointer motion, select menu items, and write text into text-editing controls.
 
 ACTIONS:
 - list_visible: Enumerate visible editor controls
 - list_dock_tabs: Enumerate dock tabs by title/path, including hidden ones when requested
 - activate_dock_tab: Activate a dock tab by its title
 - activate_ui: Non-invasively activate dock/plugin/bottom-panel UI by semantic_path, dock title, bottom_panel_title/path, or TabContainer target_path plus tab_title/tab_index
+- list_menus: Enumerate visible MenuButton controls and their PopupMenu items
+- open_menu: Open a MenuButton by menu_title or target_path
+- select_menu_item: Open a MenuButton and select one PopupMenu item by item_text or item_index
 - get_control: Fetch one control summary by target_path
 - capture_control: Capture a screenshot cropped to one control
 - focus_control: Move editor focus to a control
 - activate_control: Activate a button-like control
 - click_control: Dispatch a left mouse click at local_x/local_y inside a control
 - right_click_control: Dispatch a right mouse click at local_x/local_y inside a control
+- hover_control: Dispatch mouse motion to local_x/local_y inside a control
+- leave_control: Dispatch mouse motion outside a control, or to explicit local_x/local_y when provided
 - set_text: Write text into a text-editing control
 
 EXAMPLES:
@@ -357,18 +363,23 @@ EXAMPLES:
 - Activate MCPDock config: {"action": "activate_ui", "semantic_path": "MCPDock/config", "path": "user://godot_dotnet_mcp/captures/editor_controls/mcpdock_config.png"}
 - Activate TabContainer tab: {"action": "activate_ui", "target_path": "/root/Editor/MCP/TabContainer", "tab_title": "ConfigTab"}
 - Activate bottom panel: {"action": "activate_ui", "bottom_panel_title": "Output"}
+- List menus: {"action": "list_menus", "text_query": "Project"}
+- Open Project menu: {"action": "open_menu", "menu_title": "Project"}
+- Select Project Settings: {"action": "select_menu_item", "menu_title": "Project", "item_text": "Project Settings..."}
 - Inspect one control: {"action": "get_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
 - Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Hover control row: {"action": "hover_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Leave control row: {"action": "leave_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -386,6 +397,18 @@ EXAMPLES:
 					"tab_index": {
 						"type": "integer",
 						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+					},
+					"menu_title": {
+						"type": "string",
+						"description": "Top menu title/text/name for open_menu/select_menu_item"
+					},
+					"item_text": {
+						"type": "string",
+						"description": "PopupMenu item text for select_menu_item"
+					},
+					"item_index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_menu_item"
 					},
 					"bottom_panel_title": {
 						"type": "string",
@@ -409,11 +432,11 @@ EXAMPLES:
 					},
 					"local_x": {
 						"type": "number",
-						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local X coordinate for click_control/right_click_control/hover_control/leave_control; defaults to the control center"
 					},
 					"local_y": {
 						"type": "number",
-						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local Y coordinate for click_control/right_click_control/hover_control/leave_control; defaults to the control center"
 					},
 					"class_name": {
 						"type": "string",
@@ -446,12 +469,14 @@ EXAMPLES:
 ACTIONS:
 - list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
 - press_button: Activate a popup button by target_path
+- select_item: Select a visible PopupMenu item by target_path plus index, id, or exact text
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
 - close_popup: Close a popup/window by target_path
 
 EXAMPLES:
 - List popups: {"action": "list_visible"}
 - Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
+- Select menu item: {"action": "select_item", "target_path": "/root/Editor/ContextMenu", "text": "Rename"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
 - Close popup: {"action": "close_popup", "target_path": "/root/Editor/SearchDialog"}""",
 			"inputSchema": {
@@ -459,7 +484,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "press_button", "set_text", "close_popup"],
+						"enum": ["list_visible", "press_button", "select_item", "set_text", "close_popup"],
 						"description": "Popup action"
 					},
 					"target_path": {
@@ -468,7 +493,15 @@ EXAMPLES:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text to write for set_text"
+						"description": "Text to write for set_text, or exact PopupMenu item text for select_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_item"
 					}
 				},
 				"required": ["action"]
@@ -549,16 +582,18 @@ EXAMPLES:
 		},
 		{
 			"name": "plugin",
-			"description": """PLUGIN MANAGEMENT: Enable/disable editor plugins.
+			"description": """PLUGIN MANAGEMENT: Inspect and toggle editor plugins.
 
 ACTIONS:
-- list: List all available plugins
-- is_enabled: Check if a plugin is enabled
-- enable: Enable a plugin
-- disable: Disable a plugin
+- list: List available plugins with project-setting, editor-session, and visible-UI diagnostics
+- inspect: Inspect one plugin's project-setting, editor-session, visible-UI, and restart/manual-activation hints
+- is_enabled: Check one plugin with the same diagnostics
+- enable: Enable a plugin, refusing to toggle this MCP plugin unless allow_self=true
+- disable: Disable a plugin, refusing to toggle this MCP plugin unless allow_self=true
 
 EXAMPLES:
 - List plugins: {"action": "list"}
+- Inspect plugin: {"action": "inspect", "plugin": "my_plugin"}
 - Check status: {"action": "is_enabled", "plugin": "my_plugin"}
 - Enable plugin: {"action": "enable", "plugin": "my_plugin"}
 - Disable plugin: {"action": "disable", "plugin": "my_plugin"}""",
@@ -567,12 +602,16 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list", "is_enabled", "enable", "disable"],
+						"enum": ["list", "inspect", "is_enabled", "enable", "disable"],
 						"description": "Plugin action"
 					},
 					"plugin": {
 						"type": "string",
 						"description": "Plugin name (folder name in addons/)"
+					},
+					"allow_self": {
+						"type": "boolean",
+						"description": "Allow toggling this MCP plugin despite reconnect/disconnect risk (default false)"
 					}
 				},
 				"required": ["action"]

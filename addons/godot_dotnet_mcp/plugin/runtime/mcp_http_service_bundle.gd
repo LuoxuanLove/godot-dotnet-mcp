@@ -20,6 +20,7 @@ const MCPToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/r
 const MCPHttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
 const MCPHttpTransportServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_service.gd")
 const MCPRuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/runtime_control_service.gd")
+const MCPToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var _server = null
@@ -42,6 +43,7 @@ var _tools_api_service = null
 var _http_response_service = null
 var _http_transport_service = null
 var _runtime_control_service = null
+var _tool_activity_registry = null
 
 
 func configure(server, connection_state) -> void:
@@ -131,6 +133,7 @@ func dispose() -> void:
 	_http_response_service = null
 	_http_transport_service = null
 	_runtime_control_service = null
+	_tool_activity_registry = null
 	_connection_state = null
 	_server = null
 
@@ -138,7 +141,10 @@ func dispose() -> void:
 func _ensure_tool_loader_supervisor() -> void:
 	if _tool_loader_supervisor == null:
 		_tool_loader_supervisor = MCPToolLoaderSupervisorScript.new()
+	_ensure_tool_activity_registry()
 	_tool_loader_supervisor.configure(_server, _context_builder.build_tool_loader_supervisor_context(_server))
+	if _tool_loader_supervisor.has_method("set_tool_activity_registry"):
+		_tool_loader_supervisor.set_tool_activity_registry(_tool_activity_registry)
 
 
 func _ensure_runtime_control_service() -> void:
@@ -161,7 +167,13 @@ func _ensure_tool_rpc_router() -> void:
 		_tool_rpc_router = MCPToolRpcRouterScript.new()
 	_ensure_tool_loader_supervisor()
 	_ensure_http_response_service()
-	_tool_rpc_router.configure(_context_builder.build_tool_rpc_router_context(_server, _tool_loader_supervisor, _http_response_service))
+	_ensure_tool_activity_registry()
+	_tool_rpc_router.configure(_context_builder.build_tool_rpc_router_context(_server, _tool_loader_supervisor, _http_response_service, _tool_activity_registry))
+
+
+func _ensure_tool_activity_registry() -> void:
+	if _tool_activity_registry == null:
+		_tool_activity_registry = MCPToolActivityRegistryScript.new()
 
 
 func _ensure_http_request_router() -> void:
