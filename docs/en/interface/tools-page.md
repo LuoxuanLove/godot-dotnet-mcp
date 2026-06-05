@@ -91,6 +91,9 @@ root
   │   │   │   └─ dap_debugger
   │   │   └─ ...
   │   └─ ... internal atomic categories
+  ├─ plugin
+  │   └─ plugin_runtime
+  │       └─ plugin_runtime_state
   └─ user
       └─ user
           ├─ user_tool_a
@@ -101,6 +104,7 @@ Notes:
 
 - the root first renders domain nodes and then category nodes. `system` and `user` are no longer hard-coded root nodes
 - `system_*` high-level tools expand through `SystemTreeCatalog` into their real atomic and action chains. For example, `system_editor_control` shows control-local click actions such as `click_control` and `right_click_control`
+- `plugin_*` tools live under the `plugin` domain, separate from core editor/project tools and user tools
 - `runtime_*` is an internal atomic category. It is only shown as a child chain of `system_runtime_*`, and it is not exposed as an MCP tool by itself
 - atomic tool nodes can keep expanding recursively
 - the check state for atomic tools follows the same logic as normal tool rows and still flows back through `tool_toggled`
