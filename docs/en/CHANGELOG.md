@@ -19,16 +19,26 @@ Target version: 1.2.0.
 
 ### Added
 
+- Added output size safeguards for MCP resources and prompts: oversized file-backed resources are rejected before full reads, and oversized prompt text is truncated with `_meta` byte-size details.
+- Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
+- Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
+- Added User-tool runtime diagnostics through `plugin_evolution_runtime_diagnostics` and `project_state(include_runtime_health=true)`, including discovery counts, load failures, watcher state, compatibility summary, and recent audit entries.
+- Added `system_editor_control(action=select_popup_menu_item)` so agents can select visible `PopupMenu` items by index, id, or exact text while rejecting hidden popups, disabled items, separators, submenu rows, and conflicting selectors.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
 - Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added `system_editor_control` hover and leave pointer-motion actions for validating tooltips, hover-only menus, and floating editor UI without OS mouse automation.
+- Added `system_editor_plugin_control` so clients can inspect third-party EditorPlugin project-setting state, editor-session state, visible UI hints, restart/manual-activation guidance, and guarded enable/disable behavior.
+- Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
 
 ### Fixed
 
 - Fixed malformed JSON-RPC parameter handling so HTTP and stdio requests reject non-object top-level `params` consistently with `-32602`, while non-object `tools/call.arguments` remains a tool-level `isError` result.
 - Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
+- Fixed C# empty-method generation so internal edit helpers no longer emit ambiguous fallback bodies when a body is missing.
+- Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
 - Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
 - Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
 - Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
@@ -37,6 +47,14 @@ Target version: 1.2.0.
 ### Internal
 
 - Extended JSON-RPC request, HTTP server, stdio resources/prompts, and tool router contracts to cover malformed `params` and `tools/call.arguments` boundaries with the `2026-06-05.6` tool schema facts update.
+- Extended `mcp_resources_prompts_contracts` to verify resource output limits, prompt truncation metadata, and the `2026-06-05.5` tool schema facts update.
+- Extended script edit service harness coverage to require explicit C# `NotImplementedException` guard bodies instead of ambiguous generated fallback bodies.
+- Extended User-tool service, runtime health, and project-state harness coverage for runtime diagnostics and failed custom-tool load reporting.
+- Extended plugin-evolution harness coverage so public runtime diagnostics keep forwarding the live user-tool runtime snapshot.
+- Bumped the tool schema facts version and extended editor UI harness coverage for `list_menus`, `open_menu`, and `select_menu_item`.
+- Added tool activity registry coverage to the router, stdio, registry, and tool-loader harness contracts so context stripping, response activity summaries, transport coverage, and the public `system_tool_activity` entry stay verified.
+- Updated the Tools page documentation with the `system_tool_activity` tree entry and `_mcp_context` protocol boundary.
+- Updated protocol facts with the new tool schema version for the public `system_tool_activity` surface.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.
@@ -47,6 +65,7 @@ Target version: 1.2.0.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
+- Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
 
 ## [1.1.2] - 2026-06-02
 

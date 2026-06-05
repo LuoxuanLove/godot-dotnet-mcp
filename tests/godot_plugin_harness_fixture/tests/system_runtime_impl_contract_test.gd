@@ -140,6 +140,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var status_data = status_result.get("data", {})
 	if not (status_data is Dictionary) or not bool((status_data as Dictionary).get("armed", false)):
 		return _failure("runtime_control status did not expose the armed runtime state.")
+	fake_bridge.configure_runtime({})
+	var stale_status_result: Dictionary = await fake_bridge.runtime_executor.execute_async("control", {"action": "status"})
+	var stale_status_data = stale_status_result.get("data", {})
+	if not (stale_status_data is Dictionary) or bool((stale_status_data as Dictionary).get("available", true)):
+		return _failure("runtime executor should clear stale runtime_control_service when reconfigured without one.")
+	fake_bridge.configure_runtime(runtime_context)
 
 	var enable_result: Dictionary = await impl.execute_async("runtime_control", {
 		"action": "enable",

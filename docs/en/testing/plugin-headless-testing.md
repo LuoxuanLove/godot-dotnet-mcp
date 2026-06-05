@@ -103,9 +103,9 @@ The harness discovers cases automatically. The following list shows representati
 | `runtime_fallback_store_contracts` | Verify persistence, trimming, and read semantics of `mcp_runtime_fallback_store` |
 | `runtime_reply_service_contracts` | Verify success and error payloads, `runtime_context`, `runtime_state`, and hints in `mcp_runtime_reply_service` |
 | `user_tool_watch_service_contracts` | Verify that `user_tool_watch_service.gd` refreshes external user tools through an explicit callback |
-| `user_tool_service_contracts` | Verify scaffold creation, directory scanning, compatibility reports, deletion, restore, and audit in `user_tool_service.gd` |
+| `user_tool_service_contracts` | Verify scaffold creation, directory scanning, compatibility reports, runtime diagnostics, failed-load reporting, deletion, restore, and audit in `user_tool_service.gd` |
 | `script_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `read / inspect / references / edit_gd` paths after the script domain split |
-| `script_edit_service_contracts` | Verify that script editing facade split keeps GDScript semantic requests routed through Godot LSP only, while the plugin keeps `*EditHelper` text-edit helpers; the official C# semantic source is plugin-local Roslyn |
+| `script_edit_service_contracts` | Verify that script editing facade split keeps GDScript semantic requests routed through Godot LSP only, while the plugin keeps `*EditHelper` text-edit helpers; the official C# semantic source is plugin-local Roslyn; empty C# method scaffolds use explicit `NotImplementedException` guard bodies |
 | `node_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `query / lifecycle / property / metadata / visibility` paths after the node domain split |
 | `animation_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `player / animation / track / tween / animation_tree / state_machine / blend_space / blend_tree` paths after the animation domain split |
 | `physics_tool_executor_contracts` | Verify the catalog, stable executor entry, and representative `physics_body / collision_shape / physics_joint / physics_query` paths after the physics domain split |
@@ -140,14 +140,17 @@ The harness discovers cases automatically. The following list shows representati
 | `http_response_service_contracts` | Verify JSON-RPC construction, `/health` projection, exact-Origin CORS responses, and JSON cleanup |
 | `json_rpc_router_contracts` | Verify `initialize`, notification no-response semantics, and method-not-found behavior |
 | `json_rpc_request_service_contracts` | Verify parse errors, request-object validation, non-object `params` rejection, request emission, and router forwarding |
+| `mcp_resources_prompts_contracts` | Verify MCP resources/prompts discovery, resource read safety, oversized resource rejection, prompt truncation metadata, and HTTP/stdio error boundaries |
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
 | `system_project_executor_contracts` | Verify the tool exposure, runtime-health aggregation, and project-level routing of `impl_project.gd` as the current project-level system aggregator |
-| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, `capture_control`, and `popup` actions to the correct atomic tools |
+| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, menu, `capture_control`, and `popup` actions to the correct atomic tools |
 | `system_script_executor_contracts` | Verify `impl_script.gd` as the current script-level system aggregator, and verify that `system_script_analyze` reads Godot LSP diagnostics through the real `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` path |
 | `system_runtime_impl_contracts` | Verify the state, capture annotations, and parameter handling in `impl_runtime.gd` |
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
 | `system_index_impl_contracts` | Verify the refresh path from built to `stale_refreshed` in `impl_index.gd` |
+| `stdio_tool_activity_contracts` | Verify stdio `tools/call` preserves loader activity summaries and strips top-level `_mcp_context` before concrete tool execution |
+| `tool_activity_registry_contracts` | Verify activity registry running/recent/get state transitions, execution order, scope hints, and agent-context sanitization |
 | `tool_loader_contracts` | Verify loader initialization and disabled-tool shrinking under the default tool access provider |
 | `tool_rpc_router_contracts` | Verify tool list presentation, successful tool calls, missing tool name errors, and non-object `arguments` validation |
 | `server_tab_model_projection_contracts` | Verify the status overview, self-diagnostic summary, runtime-state projection, and log and language option model |
