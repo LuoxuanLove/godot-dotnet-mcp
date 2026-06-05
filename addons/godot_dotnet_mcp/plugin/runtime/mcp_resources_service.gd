@@ -16,6 +16,24 @@ const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
 const REDACTED_VALUE := "[redacted]"
 const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
+const SENSITIVE_TEXT_MARKERS := [
+	"token=", "token:", "\"token\":", "'token':",
+	"password=", "password:", "\"password\":", "'password':",
+	"secret=", "secret:", "\"secret\":", "'secret':",
+	"api_key=", "api_key:", "\"api_key\":", "'api_key':",
+	"apikey=", "apikey:", "\"apikey\":", "'apikey':",
+	"api-key=", "api-key:", "\"api-key\":", "'api-key':",
+	"x-api-key=", "x-api-key:", "\"x-api-key\":", "'x-api-key':",
+	"authorization:", "authorization=", "\"authorization\":", "'authorization':",
+	"bearer ",
+	"credential=", "credential:", "\"credential\":", "'credential':",
+	"private_key=", "private_key:", "\"private_key\":", "'private_key':",
+	"private-key=", "private-key:", "\"private-key\":", "'private-key':",
+	"access_token=", "access_token:", "\"access_token\":", "'access_token':",
+	"access-token=", "access-token:", "\"access-token\":", "'access-token':",
+	"refresh_token=", "refresh_token:", "\"refresh_token\":", "'refresh_token':",
+	"refresh-token=", "refresh-token:", "\"refresh-token\":", "'refresh-token':"
+]
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -211,7 +229,7 @@ func _redact_sensitive_value(value):
 
 
 func _is_sensitive_key(key: String) -> bool:
-	var normalized := key.to_lower()
+	var normalized := key.to_lower().replace("-", "_").replace(".", "_").replace(" ", "_")
 	for marker in SENSITIVE_KEY_PARTS:
 		if normalized.find(str(marker)) != -1:
 			return true
@@ -219,8 +237,8 @@ func _is_sensitive_key(key: String) -> bool:
 
 
 func _redact_sensitive_text(text: String) -> String:
-	var redacted := text
-	for marker in ["token=", "password=", "secret=", "api_key=", "apikey=", "authorization:", "authorization="]:
+	var redacted := _redact_url_credentials(text)
+	for marker in SENSITIVE_TEXT_MARKERS:
 		redacted = _redact_after_marker(redacted, marker)
 	return redacted
 
@@ -236,18 +254,61 @@ func _redact_after_marker(text: String, marker: String) -> String:
 		var value_start := marker_index + marker.length()
 		while value_start < result.length():
 			var start_ch := result.substr(value_start, 1)
-			if start_ch != " " and start_ch != "\t":
+			if start_ch != " " and start_ch != "\t" and start_ch != "\"" and start_ch != "'":
 				break
 			value_start += 1
 		var value_end := value_start
 		while value_end < result.length():
 			var ch := result.substr(value_end, 1)
-			if ch == "\n" or ch == "\r" or ch == ";" or ch == ",":
+			if ch == "\n" or ch == "\r" or ch == ";" or ch == "," or ch == "&" or ch == "\"" or ch == "'":
 				break
 			value_end += 1
 		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
 		search_from = value_start + REDACTED_VALUE.length()
 	return result
+
+
+func _redact_url_credentials(text: String) -> String:
+	var result := text
+	var search_from := 0
+	while true:
+		var scheme_index := _find_next_url_scheme(result, search_from)
+		if scheme_index == -1:
+			return result
+		var scheme_sep := result.find("://", scheme_index)
+		if scheme_sep == -1:
+			return result
+		var authority_start := scheme_sep + 3
+		var authority_end := _find_url_authority_end(result, authority_start)
+		var authority := result.substr(authority_start, authority_end - authority_start)
+		var at_index := authority.rfind("@")
+		if at_index == -1:
+			search_from = authority_end
+			continue
+		var replacement := REDACTED_VALUE + "@"
+		result = result.substr(0, authority_start) + replacement + authority.substr(at_index + 1) + result.substr(authority_end)
+		search_from = authority_start + replacement.length()
+	return result
+
+
+func _find_next_url_scheme(text: String, from_index: int) -> int:
+	var http_index := text.find("http://", from_index)
+	var https_index := text.find("https://", from_index)
+	if http_index == -1:
+		return https_index
+	if https_index == -1:
+		return http_index
+	return mini(http_index, https_index)
+
+
+func _find_url_authority_end(text: String, from_index: int) -> int:
+	var index := from_index
+	while index < text.length():
+		var ch := text.substr(index, 1)
+		if ch == "/" or ch == "?" or ch == "#" or ch == " " or ch == "\t" or ch == "\n" or ch == "\r" or ch == "," or ch == ";":
+			return index
+		index += 1
+	return text.length()
 
 func _get_loader():
 	if _get_tool_loader.is_valid():
