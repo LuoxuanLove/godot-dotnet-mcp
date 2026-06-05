@@ -279,7 +279,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_param_system_dap_debugger_session_id_desc": "DAP 会话 ID，默认读取已保存设置，初始为 `default`。",
 	"tool_param_system_dap_debugger_host_desc": "DAP 主机，默认 127.0.0.1。",
 	"tool_param_system_dap_debugger_port_desc": "DAP 端口，默认 6006。",
-	"tool_param_system_dap_debugger_timeout_ms_desc": "超时时间，单位为毫秒。",
+	"tool_param_system_dap_debugger_timeout_ms_desc": "超时时间，单位为毫秒，上限为 30000。",
 	"tool_param_system_dap_debugger_settings_desc": "set_settings 使用的运行时 DAP 设置。",
 	"tool_param_system_dap_debugger_include_raw_desc": "在响应中包含脱敏后的原始 DAP 请求和消息。",
 	"tool_param_system_dap_debugger_adapter_args_desc": "发送给调试适配器的启动或附加参数。",

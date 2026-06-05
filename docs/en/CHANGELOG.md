@@ -67,6 +67,7 @@ Target version: 1.2.0.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+- Added DAP debugger limits for oversized `Content-Length` frames and `timeout_ms` values so abnormal debug endpoints fail fast with `dap_limit_exceeded` instead of waiting for long timeouts.
 - Extended plugin harness failure reports with `failureClasses`, `primaryFailureClass`, and `exitCleanupWarningFailure` so Godot exit cleanup warnings are visible without hiding runtime error markers.
 - Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
 

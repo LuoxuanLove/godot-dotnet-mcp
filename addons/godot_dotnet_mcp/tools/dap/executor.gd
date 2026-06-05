@@ -4,6 +4,7 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 const DEFAULT_HOST := "127.0.0.1"
 const DEFAULT_PORT := 6006
 const DEFAULT_TIMEOUT_MS := 1000
+const MAX_TIMEOUT_MS := 30000
 const DEFAULT_SESSION_ID := "default"
 const MAX_SESSIONS := 8
 const MAX_MESSAGES_PER_SESSION := 200
@@ -61,7 +62,7 @@ func get_tools() -> Array[Dictionary]:
 				"session_id": {"type": "string", "description": "DAP session id (default from settings, initially 'default')"},
 				"host": {"type": "string", "description": "DAP host (default 127.0.0.1)"},
 				"port": {"type": "integer", "description": "DAP port (default 6006)"},
-				"timeout_ms": {"type": "integer", "description": "Timeout in milliseconds"},
+				"timeout_ms": {"type": "integer", "description": "Timeout in milliseconds, capped at 30000"},
 				"settings": {"type": "object", "description": "Runtime DAP settings for set_settings"},
 				"include_raw": {"type": "boolean", "description": "Include sanitized raw DAP request/messages in responses"},
 				"adapter_args": {"type": "object", "description": "Launch/attach arguments sent to the adapter"},
@@ -97,6 +98,9 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 	if tool_name != "debugger":
 		return _error("Unknown tool: %s" % tool_name)
+	var timeout_error := _timeout_limit_error(args)
+	if not timeout_error.is_empty():
+		return timeout_error
 	match str(args.get("action", "")):
 		"status", "get_settings", "set_settings", "list_breakpoints":
 			return execute(tool_name, args)
@@ -257,7 +261,9 @@ func _collect_output(args: Dictionary) -> Dictionary:
 		return session_result
 	var session: Dictionary = session_result.get("session", {})
 	var message_start := (session.get("messages", []) as Array).size()
-	await _read_messages(session, _timeout_ms(args))
+	var read_result := await _read_messages(session, _timeout_ms(args))
+	if not bool(read_result.get("success", true)):
+		return read_result
 	var messages: Array = (session.get("messages", []) as Array).duplicate(true)
 	var new_messages := messages.slice(message_start)
 	var outputs: Array[Dictionary] = []
@@ -294,7 +300,9 @@ func _session_request(command: String, arguments: Dictionary, args: Dictionary, 
 	var write_result := _write_request(session, request)
 	if not bool(write_result.get("success", false)):
 		return write_result
-	await _read_messages(session, _timeout_ms(args), request_seq)
+	var read_result := await _read_messages(session, _timeout_ms(args), request_seq)
+	if not bool(read_result.get("success", true)):
+		return read_result
 	var messages: Array = (session.get("messages", []) as Array).duplicate(true)
 	var response := _find_response(messages, request_seq)
 	if response.is_empty():
@@ -381,7 +389,7 @@ func _write_request(session: Dictionary, request: Dictionary) -> Dictionary:
 	return _success({})
 
 
-func _read_messages(session: Dictionary, timeout_ms: int, request_seq: int = -1) -> void:
+func _read_messages(session: Dictionary, timeout_ms: int, request_seq: int = -1) -> Dictionary:
 	var peer: StreamPeerTCP = session.get("peer")
 	var buffer: PackedByteArray = session.get("buffer", PackedByteArray())
 	var messages: Array = session.get("messages", [])
@@ -391,23 +399,29 @@ func _read_messages(session: Dictionary, timeout_ms: int, request_seq: int = -1)
 		if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 			session["buffer"] = buffer
 			session["messages"] = messages
-			return
+			return _success({})
 		var available := peer.get_available_bytes()
 		if available > 0:
 			var packet := peer.get_data(available)
 			if int(packet[0]) == OK and packet[1] is PackedByteArray:
 				buffer.append_array(packet[1] as PackedByteArray)
 				if buffer.size() > MAX_BUFFER_BYTES:
+					var buffer_error := _dap_limit_error("DAP buffer exceeded maximum size", str(session.get("id", "")), "buffer_bytes", buffer.size(), MAX_BUFFER_BYTES)
 					_close_session(str(session.get("id", "")))
-					return
-				buffer = _drain_frames(buffer, messages)
+					return buffer_error
+				var drain_result := _drain_frames(buffer, messages, str(session.get("id", "")))
+				if not bool(drain_result.get("success", false)):
+					_close_session(str(session.get("id", "")))
+					return drain_result
+				buffer = drain_result.get("buffer", PackedByteArray())
 				if request_seq >= 0 and not _find_response(messages, request_seq).is_empty():
 					session["buffer"] = buffer
 					session["messages"] = messages
-					return
+					return _success({})
 		await _wait_frame()
 	session["buffer"] = buffer
 	session["messages"] = messages
+	return _success({})
 
 
 func _store_breakpoints(session_id: String, source_path: String, lines: Array) -> void:
@@ -429,27 +443,26 @@ func _with_breakpoint_list(result: Dictionary) -> Dictionary:
 	return result
 
 
-func _drain_frames(buffer: PackedByteArray, messages: Array) -> PackedByteArray:
+func _drain_frames(buffer: PackedByteArray, messages: Array, session_id: String) -> Dictionary:
 	while true:
 		var header_end := _find_header_end(buffer)
 		if header_end < 0:
-			return buffer
+			return {"success": true, "buffer": buffer}
 		var content_length := _content_length(buffer.slice(0, header_end).get_string_from_utf8())
 		if content_length < 0:
 			buffer.clear()
-			return buffer
+			return {"success": true, "buffer": buffer}
 		if content_length > MAX_FRAME_BYTES:
-			buffer.clear()
-			return buffer
+			return _dap_limit_error("DAP frame exceeded maximum size", session_id, "frame_bytes", content_length, MAX_FRAME_BYTES)
 		var body_start := header_end + 4
 		if buffer.size() < body_start + content_length:
-			return buffer
+			return {"success": true, "buffer": buffer}
 		var parsed = JSON.parse_string(buffer.slice(body_start, body_start + content_length).get_string_from_utf8())
 		if parsed is Dictionary:
 			messages.append(parsed as Dictionary)
 			_trim_messages(messages)
 		buffer = buffer.slice(body_start + content_length)
-	return buffer
+	return {"success": true, "buffer": buffer}
 
 
 func _find_header_end(buffer: PackedByteArray) -> int:
@@ -560,6 +573,8 @@ func _set_settings(args: Dictionary) -> Dictionary:
 				var timeout_ms := int(incoming_settings[key])
 				if timeout_ms <= 0:
 					return _error("DAP timeout_ms setting is invalid", {"error_type": "dap_invalid_settings"})
+				if timeout_ms > MAX_TIMEOUT_MS:
+					return _error("DAP timeout_ms setting exceeds the maximum", {"error_type": "dap_limit_exceeded", "limit": MAX_TIMEOUT_MS, "timeout_ms": timeout_ms})
 				else:
 					next_settings["timeout_ms"] = timeout_ms
 			"default_session_id":
@@ -663,6 +678,10 @@ func _dap_request_error(message: String, error_type: String, session_id: String,
 	return _error(message, data)
 
 
+func _dap_limit_error(message: String, session_id: String, size_key: String, size_value: int, limit: int) -> Dictionary:
+	return _error(message, {"error_type": "dap_limit_exceeded", "session_id": session_id, size_key: size_value, "limit": limit})
+
+
 func _sanitize_value(value):
 	if value is Dictionary:
 		var out := {}
@@ -713,6 +732,17 @@ func _dap_unavailable_data(args: Dictionary, transport_status: String) -> Dictio
 	}
 
 
+func _timeout_limit_error(args: Dictionary) -> Dictionary:
+	if not args.has("timeout_ms"):
+		return {}
+	var timeout_ms := int(args.get("timeout_ms", DEFAULT_TIMEOUT_MS))
+	if timeout_ms <= 0:
+		return {}
+	if timeout_ms > MAX_TIMEOUT_MS:
+		return _error("DAP timeout_ms exceeds the maximum", {"error_type": "dap_limit_exceeded", "limit": MAX_TIMEOUT_MS, "timeout_ms": timeout_ms})
+	return {}
+
+
 func _peer_status_name(status: int) -> String:
 	match status:
 		StreamPeerTCP.STATUS_NONE:
@@ -748,7 +778,9 @@ func _port(args: Dictionary) -> int:
 
 func _timeout_ms(args: Dictionary) -> int:
 	var value := int(args.get("timeout_ms", _settings.get("timeout_ms", DEFAULT_TIMEOUT_MS)))
-	return value if value > 0 else DEFAULT_TIMEOUT_MS
+	if value <= 0:
+		return DEFAULT_TIMEOUT_MS
+	return mini(value, MAX_TIMEOUT_MS)
 
 
 func _wait_frame() -> void:
