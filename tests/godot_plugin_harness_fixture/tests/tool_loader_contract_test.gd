@@ -183,6 +183,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var registry_context = (((registry_recent as Array)[0] as Dictionary).get("agent_context", {}) as Dictionary)
 	if str(registry_context.get("agent_id", "")) != "loader-contract-agent":
 		return _failure("Tool loader should retain sanitized _mcp_context in the activity registry.")
+	var plain_activity_record: Dictionary = _loader.call("_begin_tool_activity", "system", "project_state", {"summary": true}, {})
+	var plain_activity_result: Dictionary = _loader.call("_finish_tool_activity", {
+		"success": true,
+		"data": {"summary": true},
+		"activity": {
+			"user_supplied": true
+		},
+		"message": "ok"
+	}, plain_activity_record)
+	var injected_activity = plain_activity_result.get("activity", {})
+	if not (injected_activity is Dictionary) or str((injected_activity as Dictionary).get("call_id", "")).is_empty():
+		return _failure("Tool loader should keep protocol activity summaries at top level.")
+	var preserved_activity_data = plain_activity_result.get("data", {})
+	if not (preserved_activity_data is Dictionary) or not ((((preserved_activity_data as Dictionary).get("activity", {}) as Dictionary).get("user_supplied", false))):
+		return _failure("Tool loader should preserve non-protocol tool activity payloads inside data.")
 
 	var help_result: Dictionary = await _loader.execute_tool_async("system", "help", {"include_tools": true})
 	if not bool(help_result.get("success", false)):

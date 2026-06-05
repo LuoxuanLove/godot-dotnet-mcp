@@ -774,6 +774,7 @@ func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> D
 	if activity_record.is_empty() or _tool_activity_registry == null:
 		return result
 	var out := result.duplicate(true)
+	_preserve_non_protocol_activity_payload(out)
 	var error_message := ""
 	if not bool(out.get("success", true)):
 		error_message = str(out.get("error", out.get("message", "")))
@@ -783,6 +784,37 @@ func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> D
 	if _tool_activity_registry.has_method("summarize_record"):
 		out["activity"] = _tool_activity_registry.summarize_record(finished if not finished.is_empty() else activity_record)
 	return out
+
+
+func _preserve_non_protocol_activity_payload(out: Dictionary) -> void:
+	var existing_activity = out.get("activity", null)
+	if existing_activity == null or _is_protocol_activity_summary(existing_activity):
+		return
+	var existing_data = out.get("data", {})
+	if existing_data is Dictionary:
+		existing_data = (existing_data as Dictionary).duplicate(true)
+	elif out.has("data"):
+		existing_data = {"details": existing_data}
+	else:
+		existing_data = _extract_activity_extra_data(out)
+	(existing_data as Dictionary)["activity"] = existing_activity
+	out["data"] = existing_data
+
+
+func _extract_activity_extra_data(result: Dictionary) -> Dictionary:
+	var extra_data := {}
+	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true, "activity": true}
+	for key in result.keys():
+		if reserved.has(str(key)):
+			continue
+		extra_data[str(key)] = result[key]
+	return extra_data
+
+
+func _is_protocol_activity_summary(value) -> bool:
+	if not (value is Dictionary):
+		return false
+	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
 
 
 func _load_script_resource(path: String, force_reload: bool) -> Resource:
