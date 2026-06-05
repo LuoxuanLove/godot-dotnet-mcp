@@ -124,7 +124,7 @@ func _collect_runtime_failures(runtime_state: Array) -> Array[Dictionary]:
 			continue
 		var state_entry: Dictionary = (entry as Dictionary).duplicate(true)
 		var state := str(state_entry.get("state", ""))
-		var last_error := str(state_entry.get("last_error", ""))
+		var last_error := _string_or_empty(state_entry.get("last_error", ""))
 		if state != "reload_failed" and last_error.is_empty():
 			continue
 		var script_path := str(state_entry.get("script_path", ""))
@@ -157,7 +157,7 @@ func _summarize_runtime_state(runtime_state: Array) -> Dictionary:
 			continue
 		var state_entry: Dictionary = entry
 		var state := str(state_entry.get("state", ""))
-		var last_error := str(state_entry.get("last_error", ""))
+		var last_error := _string_or_empty(state_entry.get("last_error", ""))
 		if state == "reload_failed" or not last_error.is_empty():
 			summary["failed_count"] = int(summary.get("failed_count", 0)) + 1
 		if bool(state_entry.get("pending_reload", false)) or state in ["reload_pending", "waiting_quiesce"]:
@@ -172,6 +172,12 @@ func _duplicate_runtime_state(runtime_state: Array) -> Array[Dictionary]:
 		if entry is Dictionary:
 			snapshot.append((entry as Dictionary).duplicate(true))
 	return snapshot
+
+
+func _string_or_empty(value) -> String:
+	if value == null:
+		return ""
+	return str(value)
 
 
 func _count_registered_tools(user_tools: Array[Dictionary]) -> int:
