@@ -147,6 +147,8 @@ The harness discovers cases automatically. The following list shows representati
 | `system_runtime_impl_contracts` | Verify the state, capture annotations, and parameter handling in `impl_runtime.gd` |
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
 | `system_index_impl_contracts` | Verify the refresh path from built to `stale_refreshed` in `impl_index.gd` |
+| `stdio_tool_activity_contracts` | Verify stdio `tools/call` preserves loader activity summaries and strips top-level `_mcp_context` before concrete tool execution |
+| `tool_activity_registry_contracts` | Verify activity registry running/recent/get state transitions, execution order, scope hints, and agent-context sanitization |
 | `tool_loader_contracts` | Verify loader initialization and disabled-tool shrinking under the default tool access provider |
 | `server_tab_model_projection_contracts` | Verify the status overview, self-diagnostic summary, runtime-state projection, and log and language option model |
 | `tool_lsp_diagnostics_adapter_contracts` | Verify configure, tick, reset, release, and runtime bridge binding semantics in `tool_lsp_diagnostics_adapter.gd` |

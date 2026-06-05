@@ -20,11 +20,14 @@ Target version: 1.2.0.
 ### Added
 
 - Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
+- Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
+- Added `system_editor_control(action=select_popup_menu_item)` so agents can select visible `PopupMenu` items by index, id, or exact text while rejecting hidden popups, disabled items, separators, submenu rows, and conflicting selectors.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
 - Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
 
 ### Fixed
 
@@ -37,6 +40,9 @@ Target version: 1.2.0.
 ### Internal
 
 - Bumped the tool schema facts version and extended editor UI harness coverage for `list_menus`, `open_menu`, and `select_menu_item`.
+- Added tool activity registry coverage to the router, stdio, registry, and tool-loader harness contracts so context stripping, response activity summaries, transport coverage, and the public `system_tool_activity` entry stay verified.
+- Updated the Tools page documentation with the `system_tool_activity` tree entry and `_mcp_context` protocol boundary.
+- Updated protocol facts with the new tool schema version for the public `system_tool_activity` surface.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.
@@ -47,6 +53,7 @@ Target version: 1.2.0.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
+- Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
 
 ## [1.1.2] - 2026-06-02
 
