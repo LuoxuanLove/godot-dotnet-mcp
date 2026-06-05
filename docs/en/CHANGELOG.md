@@ -35,6 +35,7 @@ Target version: 1.2.0.
 
 ### Fixed
 
+- Fixed malformed JSON-RPC parameter handling so HTTP and stdio requests reject non-object top-level `params` consistently with `-32602`, while non-object `tools/call.arguments` remains a tool-level `isError` result.
 - Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
 - Fixed C# empty-method generation so internal edit helpers no longer emit ambiguous fallback bodies when a body is missing.
 - Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
@@ -46,6 +47,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended JSON-RPC request, HTTP server, stdio resources/prompts, and tool router contracts to cover malformed `params` and `tools/call.arguments` boundaries with the `2026-06-05.6` tool schema facts update.
 - Extended `mcp_resources_prompts_contracts` to verify resource output limits, prompt truncation metadata, and the `2026-06-05.5` tool schema facts update.
 - Extended script edit service harness coverage to require explicit C# `NotImplementedException` guard bodies instead of ambiguous generated fallback bodies.
 - Extended User-tool service, runtime health, and project-state harness coverage for runtime diagnostics and failed custom-tool load reporting.

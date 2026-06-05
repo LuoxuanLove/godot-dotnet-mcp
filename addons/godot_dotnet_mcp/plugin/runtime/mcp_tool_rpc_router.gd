@@ -63,10 +63,9 @@ func build_tool_call_result(params: Dictionary) -> Dictionary:
 func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var tool_name = params.get("name", "")
 	var arguments = params.get("arguments", {})
-	if not (arguments is Dictionary):
-		arguments = {}
-	else:
-		arguments = (arguments as Dictionary).duplicate(true)
+	if params.has("arguments") and not (arguments is Dictionary):
+		return _create_tool_result_payload({"success": false, "error": "Tool arguments must be an object"})
+	arguments = (arguments as Dictionary).duplicate(true)
 	_merge_agent_context(params, arguments)
 
 	_log_message("Tool call: %s" % tool_name, "debug")
