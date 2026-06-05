@@ -9,6 +9,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
 - Localized reconnect guidance across the supported Dock languages.
 - Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
+- Added editor plugin session diagnostics so clients can inspect third-party EditorPlugin project settings, live editor state, visible UI hints, and guarded enable/disable behavior.
 - Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
 - Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.
 - Added docs i18n validation coverage for locale file parity, Markdown link targets, and cross-locale link leakage.
@@ -28,6 +29,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✅ Compatibility and Upgrade Notes
 
 - Existing tool names remain compatible.
+- `system_editor_plugin_control` is additive; use dedicated plugin reload/update tools for this plugin instead of generic self-disable flows.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - Clients may pass a short `_mcp_context` object with tool calls for coordination; it is treated as self-reported context, not as authentication.

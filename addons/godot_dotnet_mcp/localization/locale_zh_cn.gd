@@ -937,6 +937,8 @@ const TRANSLATIONS: Dictionary = {
 	"prompt_editor_ui_control_body": "适用场景：当任务依赖当前 Godot 编辑器 UI 时使用，包括 Dock、插件面板、底部面板、弹窗、布局、焦点、按钮可见性、截图或控件本地文本/点击。推荐流程：1. 调用 system_editor_state 获取当前主屏幕、选择、检视器摘要、运行状态和编辑器能力上下文。2. 使用 system_editor_control(action=activate_ui)、activate_dock_tab 或 set_main_screen，在不使用 OS 窗口自动化的情况下显示相关编辑器界面。3. 判断布局或可见性前，用 system_editor_control(action=capture_editor) 捕获证据。4. 先用 include_hidden=false 调用 list_controls；可见枚举找不到目标时，再用 include_hidden=true；交互前使用 get_control 或 capture_control。5. 使用工具返回的 Control-local 坐标和弹窗路径，派发 focus_control、activate_control、click_control、right_click_control、set_control_text、list_popups、press_popup_button 或 close_popup。验证：UI 操作后截图或列出控件状态、弹窗状态或编辑器日志证据。避免事项：除非明确授权，不要使用 OS 鼠标或窗口自动化；不要猜屏幕坐标；当 scene_patch 或 script_patch 能安全完成文件级变更时，不要使用编辑器 UI 控制替代。",
 	"tool_system_editor_control_name": "编辑器控制",
 	"tool_system_editor_control_desc": "面向编辑器界面的高层入口，可切换主屏幕、通过 Godot API 激活 Dock/插件/底部面板界面、截取编辑器、枚举带坐标映射的控件、派发控件本地坐标点击并与弹窗交互。",
+	"tool_system_editor_plugin_control_name": "编辑器插件控制",
+	"tool_system_editor_plugin_control_desc": "检查并切换第三方 EditorPlugin 会话状态，返回 plugin.cfg 元数据、项目设置状态、当前编辑器会话状态、可见 UI 提示和自身插件保护。",
 	"tool_plugin_runtime_name": "运行时",
 	"tool_plugin_runtime_desc": "查看加载器状态、重载工具域并读取运行时摘要",
 	"tool_plugin_runtime_state_name": "状态",

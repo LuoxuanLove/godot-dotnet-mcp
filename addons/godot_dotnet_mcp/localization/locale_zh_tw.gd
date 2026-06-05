@@ -820,6 +820,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_editor_log_desc": "讀取目前編輯器 Output 面板、篩選錯誤/警告，或清空輸出內容。",
 	"tool_system_editor_control_name": "編輯器控制",
 	"tool_system_editor_control_desc": "面向編輯器介面的高層入口，可切換主畫面、透過 Godot API 啟用 Dock/插件/底部面板介面、截取編輯器、列舉含座標映射的控制項、派發控制項本地座標點擊並與彈窗互動。",
+	"tool_system_editor_plugin_control_name": "編輯器插件控制",
+	"tool_system_editor_plugin_control_desc": "檢查並切換第三方 EditorPlugin 會話狀態，回傳 plugin.cfg 中繼資料、專案設定狀態、目前編輯器會話狀態、可見 UI 提示和自身插件保護。",
 	"tool_system_runtime_control_name": "運行時控制",
 	"tool_system_runtime_control_desc": "檢查或啟用正在運行專案的除錯器會話控制。",
 	"tool_system_runtime_step_name": "運行時步進",
