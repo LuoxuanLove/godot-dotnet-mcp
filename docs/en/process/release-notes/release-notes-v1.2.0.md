@@ -9,6 +9,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
 - Localized reconnect guidance across the supported Dock languages.
+- Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
 - Added editor plugin session diagnostics so clients can inspect third-party EditorPlugin project settings, live editor state, visible UI hints, and guarded enable/disable behavior.
 - Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
 - Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.

@@ -86,9 +86,10 @@ class FakeBridge extends RefCounted:
 						return success({"target_path": str(args.get("target_path", ""))})
 					"activate_control":
 						return success({"target_path": str(args.get("target_path", ""))})
-					"click_control", "right_click_control":
+					"click_control", "right_click_control", "hover_control", "leave_control":
 						return success({
 							"target_path": str(args.get("target_path", "")),
+							"action": str(args.get("action", "")),
 							"local_x": args.get("local_x", null),
 							"local_y": args.get("local_y", null)
 						})
@@ -181,7 +182,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item", "hover_control", "leave_control"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
 
@@ -338,6 +339,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(right_click_control_result.get("success", false)):
 		return _failure("system editor_control should delegate right_click_control.")
+	var hover_control_result: Dictionary = impl.execute("editor_control", {
+		"action": "hover_control",
+		"target_path": "/root/Editor/SearchPanel/SearchField",
+		"local_x": 14,
+		"local_y": 10
+	})
+	if not bool(hover_control_result.get("success", false)):
+		return _failure("system editor_control should delegate hover_control.")
+	if str(hover_control_result.get("data", {}).get("action", "")) != "hover_control":
+		return _failure("system editor_control should preserve hover_control action.")
+	var leave_control_result: Dictionary = impl.execute("editor_control", {
+		"action": "leave_control",
+		"target_path": "/root/Editor/SearchPanel/SearchField"
+	})
+	if not bool(leave_control_result.get("success", false)):
+		return _failure("system editor_control should delegate leave_control.")
 
 	var popup_result: Dictionary = impl.execute("editor_control", {"action": "list_popups"})
 	if not bool(popup_result.get("success", false)):
