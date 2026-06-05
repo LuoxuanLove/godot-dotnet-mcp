@@ -202,17 +202,30 @@ internal static class Program
             var suiteSuccess = TryGetJsonBooleanProperty(suite, "success");
             var exitCleanupWarningMarkers = CollectLeakWarningMarkers(stderr);
             var exitCleanupWarningsDetected = exitCleanupWarningMarkers.Length > 0;
-            var leakWarningsDetected = !editorProbeMode && exitCleanupWarningsDetected;
+            var exitCleanupWarningFailure = !editorProbeMode && exitCleanupWarningsDetected;
+            var leakWarningsDetected = exitCleanupWarningFailure;
             var runtimeErrorMarkers = CollectRuntimeErrorMarkers(stdout, stderr);
             var runtimeErrorMarkersDetected = runtimeErrorMarkers.Length > 0;
-            var succeeded = process.ExitCode == 0 && !leakWarningsDetected && !runtimeErrorMarkersDetected;
+            var failureClasses = new List<string>();
+            if (runtimeErrorMarkersDetected)
+            {
+                failureClasses.Add("godot_runtime_error");
+            }
+
+            if (exitCleanupWarningFailure)
+            {
+                failureClasses.Add("exit_cleanup_warning");
+            }
+
+            var succeeded = process.ExitCode == 0 && failureClasses.Count == 0;
             preserveStageRoot = keepStageRoot && !succeeded;
-            var failureClass = runtimeErrorMarkersDetected
+            var primaryFailureClass = runtimeErrorMarkersDetected
                 ? "godot_runtime_error"
-                : (leakWarningsDetected ? "exit_cleanup_warning" : string.Empty);
+                : (exitCleanupWarningFailure ? "exit_cleanup_warning" : string.Empty);
+            var failureClass = primaryFailureClass;
             var reason = runtimeErrorMarkersDetected
                 ? "godot_runtime_error_detected"
-                : (leakWarningsDetected ? "godot_exit_leaks_detected" : string.Empty);
+                : (exitCleanupWarningFailure ? "godot_exit_leaks_detected" : string.Empty);
             var summary = new
             {
                 success = succeeded,
@@ -221,11 +234,14 @@ internal static class Program
                 suiteSuccess,
                 successMarkerDetected = suiteSuccess.HasValue,
                 leakWarningsDetected,
+                exitCleanupWarningFailure,
                 exitCleanupWarningsDetected,
                 exitCleanupWarningMarkers,
                 exitCleanupWarningPolicy = exitCleanupWarningsDetected ? (editorProbeMode ? "ignored_editor_probe" : "fail_harness") : "none",
                 runtimeErrorMarkersDetected,
                 runtimeErrorMarkers,
+                failureClasses,
+                primaryFailureClass,
                 failureClass,
                 reason,
                 godotPath = explicitGodotPath,
