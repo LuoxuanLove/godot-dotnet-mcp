@@ -90,6 +90,8 @@ const WRITE_ACTIONS := {
 	"save": true,
 	"save_as": true,
 	"scan": true,
+	"select_item": true,
+	"select_popup_menu_item": true,
 	"set": true,
 	"set_control_text": true,
 	"set_popup_text": true,

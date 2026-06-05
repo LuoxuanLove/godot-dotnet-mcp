@@ -24,7 +24,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "editor_status",      "actions": ["set_main_screen"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
 		{"tool": "editor_ui_control",  "actions": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"]},
-		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "set_text", "close_popup"]}
+		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "select_item", "set_text", "close_popup"]}
 	],
 	"system_editor_log": [
 		{"tool": "debug_editor_log", "actions": ["get_output", "get_errors", "clear"]}
