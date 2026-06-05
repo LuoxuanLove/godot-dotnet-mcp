@@ -43,6 +43,7 @@ Target version: 1.2.0.
 - Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
 - Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
 - Fixed lifecycle reload scheduling failures so failed schedule attempts no longer leave the plugin reload state marked as pending.
+- Fixed project file reimport handling so `project.godot`, text files, sidecar metadata, and unsupported paths return structured `not_importable_resource` errors instead of being passed to Godot's import pipeline.
 
 ### Internal
 

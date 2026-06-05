@@ -1285,6 +1285,47 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var selected_files_result: Dictionary = executor.execute("filesystem", {"action": "get_selected"})
 	if int(selected_files_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("Editor filesystem get_selected should report one selected file.")
+	var reimport_result: Dictionary = executor.execute("filesystem", {
+		"action": "reimport",
+		"paths": ["res://art/icon.png"]
+	})
+	if not bool(reimport_result.get("success", false)):
+		return _failure("Editor filesystem reimport should accept common importable resource paths.")
+	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != 1 or editor_interface.get_resource_filesystem().last_reimport_paths[0] != "res://art/icon.png":
+		return _failure("Editor filesystem reimport should pass normalized importable paths to EditorFileSystem.")
+	var reimport_call_count: int = editor_interface.get_resource_filesystem().last_reimport_paths.size()
+	var project_settings_reimport: Dictionary = executor.execute("filesystem", {
+		"action": "reimport",
+		"paths": ["res://project.godot"]
+	})
+	if bool(project_settings_reimport.get("success", false)):
+		return _failure("Editor filesystem reimport should reject project.godot as not importable.")
+	if str(project_settings_reimport.get("data", {}).get("error_code", "")) != "not_importable_resource":
+		return _failure("Editor filesystem reimport should expose not_importable_resource for project.godot.")
+	if str(project_settings_reimport.get("data", {}).get("reason", "")) != "project_settings_file":
+		return _failure("Editor filesystem reimport should explain that project.godot is project settings.")
+	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != reimport_call_count:
+		return _failure("Editor filesystem reimport should not call EditorFileSystem for project.godot.")
+	var text_reimport: Dictionary = executor.execute("filesystem", {
+		"action": "reimport",
+		"paths": ["notes.txt"]
+	})
+	if bool(text_reimport.get("success", false)):
+		return _failure("Editor filesystem reimport should reject text files as not importable.")
+	if str(text_reimport.get("data", {}).get("reason", "")) != "text_file":
+		return _failure("Editor filesystem reimport should report a stable reason for text files.")
+	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != reimport_call_count:
+		return _failure("Editor filesystem reimport should not call EditorFileSystem for rejected text files.")
+	var outside_project_reimport: Dictionary = executor.execute("filesystem", {
+		"action": "reimport",
+		"paths": ["user://cache/icon.png"]
+	})
+	if bool(outside_project_reimport.get("success", false)):
+		return _failure("Editor filesystem reimport should reject paths outside res://.")
+	if str(outside_project_reimport.get("data", {}).get("reason", "")) != "outside_project":
+		return _failure("Editor filesystem reimport should preserve outside_project for non-res schemes.")
+	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != reimport_call_count:
+		return _failure("Editor filesystem reimport should not call EditorFileSystem for paths outside res://.")
 
 	var screenshot_result: Dictionary = executor.execute("screenshot", {
 		"action": "capture",
