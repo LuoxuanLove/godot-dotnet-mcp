@@ -173,6 +173,8 @@ func _select_menu_item(ei, args: Dictionary) -> Dictionary:
 		return _error("Editor menu item is a separator: %s" % _read_popup_menu_item_label(popup, index))
 	if _is_popup_menu_item_disabled(popup, index):
 		return _error("Editor menu item is disabled: %s" % _read_popup_menu_item_label(popup, index))
+	if _is_popup_menu_item_submenu(popup, index):
+		return _error("Editor menu item opens a submenu: %s" % _read_popup_menu_item_label(popup, index))
 	_activate_popup_menu_item(popup, index)
 	return _success({
 		"target_path": _safe_control_path(menu),
@@ -525,7 +527,9 @@ func _collect_menu_popup_items(popup) -> Array[Dictionary]:
 			"id": _read_popup_menu_item_id(popup, index),
 			"text": _read_popup_menu_item_label(popup, index),
 			"disabled": _is_popup_menu_item_disabled(popup, index),
-			"separator": _is_popup_menu_item_separator(popup, index)
+			"separator": _is_popup_menu_item_separator(popup, index),
+			"has_submenu": _is_popup_menu_item_submenu(popup, index),
+			"submenu": _read_popup_menu_item_submenu(popup, index)
 		})
 	return items
 
@@ -558,6 +562,16 @@ func _is_popup_menu_item_separator(popup, index: int) -> bool:
 	if popup != null and popup.has_method("is_item_separator"):
 		return bool(popup.is_item_separator(index))
 	return false
+
+
+func _is_popup_menu_item_submenu(popup, index: int) -> bool:
+	return not _read_popup_menu_item_submenu(popup, index).is_empty()
+
+
+func _read_popup_menu_item_submenu(popup, index: int) -> String:
+	if popup != null and popup.has_method("get_item_submenu"):
+		return str(popup.get_item_submenu(index))
+	return ""
 
 
 func _activate_popup_menu_item(popup, index: int) -> void:
