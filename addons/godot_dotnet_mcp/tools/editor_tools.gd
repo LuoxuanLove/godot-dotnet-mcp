@@ -447,12 +447,14 @@ EXAMPLES:
 ACTIONS:
 - list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
 - press_button: Activate a popup button by target_path
+- select_item: Select a visible PopupMenu item by target_path plus index, id, or exact text
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
 - close_popup: Close a popup/window by target_path
 
 EXAMPLES:
 - List popups: {"action": "list_visible"}
 - Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
+- Select menu item: {"action": "select_item", "target_path": "/root/Editor/ContextMenu", "text": "Rename"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
 - Close popup: {"action": "close_popup", "target_path": "/root/Editor/SearchDialog"}""",
 			"inputSchema": {
@@ -460,7 +462,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "press_button", "set_text", "close_popup"],
+						"enum": ["list_visible", "press_button", "select_item", "set_text", "close_popup"],
 						"description": "Popup action"
 					},
 					"target_path": {
@@ -469,7 +471,15 @@ EXAMPLES:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text to write for set_text"
+						"description": "Text to write for set_text, or exact PopupMenu item text for select_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_item"
 					}
 				},
 				"required": ["action"]

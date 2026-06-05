@@ -45,6 +45,7 @@ func get_tools() -> Array[Dictionary]:
 							"set_control_text",
 							"list_popups",
 							"press_popup_button",
+							"select_popup_menu_item",
 							"set_popup_text",
 							"close_popup"
 						],
@@ -92,7 +93,15 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text for set_control_text/set_popup_text"
+						"description": "Text for set_control_text/set_popup_text, or PopupMenu item text for select_popup_menu_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_popup_menu_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_popup_menu_item"
 					},
 					"local_x": {
 						"type": "number",
@@ -262,6 +271,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_popup", {
 				"action": "press_button",
 				"target_path": str(args.get("target_path", "")).strip_edges()
+			})
+		"select_popup_menu_item":
+			return bridge.call_atomic("editor_popup", {
+				"action": "select_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"index": args.get("index", null),
+				"id": args.get("id", null),
+				"text": args.get("text", null)
 			})
 		"set_popup_text":
 			return bridge.call_atomic("editor_popup", {
