@@ -336,7 +336,7 @@ EXAMPLES:
 		},
 		{
 			"name": "ui_control",
-			"description": """EDITOR UI CONTROL: Enumerate visible editor controls and top menus, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks, select menu items, and write text into text-editing controls.
+			"description": """EDITOR UI CONTROL: Enumerate visible editor controls and top menus, inspect one control by path, activate editor/plugin UI through Godot APIs without OS mouse/window automation, capture control-local screenshots, focus a control, activate safe button-like controls, dispatch control-local left/right mouse clicks and hover/leave pointer motion, select menu items, and write text into text-editing controls.
 
 ACTIONS:
 - list_visible: Enumerate visible editor controls
@@ -352,6 +352,8 @@ ACTIONS:
 - activate_control: Activate a button-like control
 - click_control: Dispatch a left mouse click at local_x/local_y inside a control
 - right_click_control: Dispatch a right mouse click at local_x/local_y inside a control
+- hover_control: Dispatch mouse motion to local_x/local_y inside a control
+- leave_control: Dispatch mouse motion outside a control, or to explicit local_x/local_y when provided
 - set_text: Write text into a text-editing control
 
 EXAMPLES:
@@ -369,13 +371,15 @@ EXAMPLES:
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
 - Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Hover control row: {"action": "hover_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Leave control row: {"action": "leave_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -428,11 +432,11 @@ EXAMPLES:
 					},
 					"local_x": {
 						"type": "number",
-						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local X coordinate for click_control/right_click_control/hover_control/leave_control; defaults to the control center"
 					},
 					"local_y": {
 						"type": "number",
-						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local Y coordinate for click_control/right_click_control/hover_control/leave_control; defaults to the control center"
 					},
 					"class_name": {
 						"type": "string",

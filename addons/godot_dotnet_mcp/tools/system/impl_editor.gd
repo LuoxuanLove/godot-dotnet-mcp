@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -45,6 +45,8 @@ func get_tools() -> Array[Dictionary]:
 							"activate_control",
 							"click_control",
 							"right_click_control",
+							"hover_control",
+							"leave_control",
 							"set_control_text",
 							"list_popups",
 							"press_popup_button",
@@ -322,6 +324,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"right_click_control":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "right_click_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
+		"hover_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "hover_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
+		"leave_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "leave_control",
 				"target_path": str(args.get("target_path", "")).strip_edges(),
 				"local_x": args.get("local_x", null),
 				"local_y": args.get("local_y", null)
