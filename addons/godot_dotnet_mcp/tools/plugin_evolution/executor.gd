@@ -139,9 +139,13 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"Plugin evolution compatibility bridge is unavailable"
 			)
 		"runtime_diagnostics":
+			var runtime_state: Array = []
+			var tool_loader = _get_loader()
+			if tool_loader != null and tool_loader.has_method("get_user_tool_runtime_snapshot"):
+				runtime_state = tool_loader.get_user_tool_runtime_snapshot()
 			return _call_plugin_method(
 				"get_user_tool_runtime_diagnostics_from_tools",
-				[clamp(int(args.get("limit", 10)), 1, 50)],
+				[clamp(int(args.get("limit", 10)), 1, 50), runtime_state],
 				"Plugin evolution runtime diagnostics bridge is unavailable"
 			)
 		"usage_guide":
