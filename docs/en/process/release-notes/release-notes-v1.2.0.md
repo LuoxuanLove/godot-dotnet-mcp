@@ -10,6 +10,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added User-tool runtime diagnostics so clients can inspect discovered custom tools, load failures, watcher state, compatibility, and recent audit entries from the plugin evolution tools or project health.
 - Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
 - Localized reconnect guidance across the supported Dock languages.
+- Added output size safeguards for MCP resources and prompt guides so very large file-backed resources are rejected before expensive reads, while long generated prompt text reports byte-size truncation metadata.
 - Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
 - Added editor plugin session diagnostics so clients can inspect third-party EditorPlugin project settings, live editor state, visible UI hints, and guarded enable/disable behavior.
 - Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
@@ -44,3 +45,4 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Popup menu selection adds a tool-schema action; reconnect and fetch tools again after upgrading.
 - No file layout migration is required.
 - Existing installs do not need migration.
+- Clients that read resources should handle standard JSON-RPC errors for oversized file-backed resources and inspect `_meta` on prompt responses when prompt text is shortened.

@@ -139,6 +139,7 @@ The harness discovers cases automatically. The following list shows representati
 | `http_request_decoder_contracts` | Verify `Content-Length` and chunked body decoding, header retention, waiting states, and trailing data retention |
 | `http_response_service_contracts` | Verify JSON-RPC construction, `/health` projection, exact-Origin CORS responses, and JSON cleanup |
 | `json_rpc_router_contracts` | Verify `initialize`, notification no-response semantics, and method-not-found behavior |
+| `mcp_resources_prompts_contracts` | Verify MCP resources/prompts discovery, resource read safety, oversized resource rejection, prompt truncation metadata, and HTTP/stdio error boundaries |
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
 | `system_project_executor_contracts` | Verify the tool exposure, runtime-health aggregation, and project-level routing of `impl_project.gd` as the current project-level system aggregator |
