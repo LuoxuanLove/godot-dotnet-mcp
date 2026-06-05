@@ -379,13 +379,14 @@ class FakePopupMenuControl:
 		super(node_name, "PopupMenu", rect)
 		visible = false
 
-	func add_item(label: String, id: int = -1, disabled: bool = false, separator: bool = false, submenu: String = "") -> void:
+	func add_item(label: String, id: int = -1, disabled: bool = false, separator: bool = false, submenu: String = "", submenu_node = null) -> void:
 		_items.append({
 			"text": label,
 			"id": id if id >= 0 else _items.size(),
 			"disabled": disabled,
 			"separator": separator,
-			"submenu": submenu
+			"submenu": submenu,
+			"submenu_node": submenu_node
 		})
 
 	func get_item_count() -> int:
@@ -405,6 +406,9 @@ class FakePopupMenuControl:
 
 	func get_item_submenu(index: int) -> String:
 		return str(_items[index].get("submenu", ""))
+
+	func get_item_submenu_node(index: int):
+		return _items[index].get("submenu_node", null)
 
 	func popup() -> void:
 		visible = true
@@ -648,6 +652,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	project_menu.get_popup().add_item("Disabled Item", 103, true)
 	project_menu.get_popup().add_item("---", 104, false, true)
 	project_menu.get_popup().add_item("More Tools", 105, false, false, "MoreTools")
+	var node_backed_submenu := FakePopupMenuControl.new("NodeBackedTools", Rect2(0, 0, 160, 120))
+	project_menu.get_popup().add_item("Node Backed Tools", 106, false, false, "", node_backed_submenu)
 	var editor_top_bar := FakeUiControl.new("EditorTopBar", "HBoxContainer", Rect2(16, 88, 220, 28))
 	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
 	ordinary_top_bar_button.text = "Ordinary Action"
@@ -969,10 +975,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(list_menus_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("Editor ui_control list_menus should return the visible Project menu.")
 	var listed_menu: Dictionary = list_menus_result.get("data", {}).get("menus", [{}])[0]
-	if int(listed_menu.get("item_count", 0)) != 5:
+	if int(listed_menu.get("item_count", 0)) != 6:
 		return _failure("Editor ui_control list_menus should expose PopupMenu item metadata.")
 	var listed_menu_items: Array = listed_menu.get("items", [])
-	if listed_menu_items.size() < 5 or not bool((listed_menu_items[4] as Dictionary).get("has_submenu", false)):
+	if listed_menu_items.size() < 6 or not bool((listed_menu_items[4] as Dictionary).get("has_submenu", false)) or not bool((listed_menu_items[5] as Dictionary).get("has_submenu", false)):
 		return _failure("Editor ui_control list_menus should expose submenu item metadata.")
 
 	var open_menu_result: Dictionary = executor.execute("ui_control", {
@@ -1014,6 +1020,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
 		return _failure("Editor ui_control select_menu_item should reject submenu PopupMenu items without activating them.")
+	var node_submenu_menu_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_menu_item",
+		"menu_title": "Project",
+		"item_text": "Node Backed Tools"
+	})
+	if bool(node_submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
+		return _failure("Editor ui_control select_menu_item should reject node-backed submenu PopupMenu items without activating them.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",

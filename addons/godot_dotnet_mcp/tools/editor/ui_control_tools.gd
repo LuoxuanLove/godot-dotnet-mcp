@@ -570,8 +570,23 @@ func _is_popup_menu_item_submenu(popup, index: int) -> bool:
 
 func _read_popup_menu_item_submenu(popup, index: int) -> String:
 	if popup != null and popup.has_method("get_item_submenu"):
-		return str(popup.get_item_submenu(index))
+		var submenu := str(popup.get_item_submenu(index))
+		if not submenu.is_empty():
+			return submenu
+	var submenu_node = _read_popup_menu_item_submenu_node(popup, index)
+	if submenu_node != null:
+		if submenu_node.has_method("get_path"):
+			return str(submenu_node.get_path())
+		if _has_property(submenu_node, "name"):
+			return str(submenu_node.name)
+		return str(submenu_node)
 	return ""
+
+
+func _read_popup_menu_item_submenu_node(popup, index: int):
+	if popup != null and popup.has_method("get_item_submenu_node"):
+		return popup.get_item_submenu_node(index)
+	return null
 
 
 func _activate_popup_menu_item(popup, index: int) -> void:
