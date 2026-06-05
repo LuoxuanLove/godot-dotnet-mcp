@@ -147,7 +147,10 @@ function Test-MarkdownLinks {
     foreach ($file in $Files) {
         $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
         $relativeFile = Get-RelativePath -BasePath $RepositoryRoot -TargetPath $file.FullName
-        foreach ($link in Get-MarkdownLinks -Content $content) {
+        $localeRootName = Split-Path -Leaf $AllowedRoot
+        $relativeToLocale = Normalize-RelativePath (Get-RelativePath -BasePath $AllowedRoot -TargetPath $file.FullName)
+        $contentForLinks = Remove-AllowedReleaseNoteLanguageSwitch -Locale $localeRootName -RelativePath $relativeToLocale -Content $content
+        foreach ($link in Get-MarkdownLinks -Content $contentForLinks) {
             if (-not [string]::IsNullOrWhiteSpace($link.Label)) {
                 Test-LocalizedTextScript -Locale $ScopeName -Text $link.Label -Context $relativeFile
             }
@@ -282,10 +285,30 @@ function Test-PathScript {
     }
 }
 
+function Remove-AllowedReleaseNoteLanguageSwitch {
+    param([string]$Locale, [string]$RelativePath, [string]$Content)
+    $releaseNotePaths = @{
+        en = "process/release-notes/release-notes-v1.2.0.md"
+        "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"
+        ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"
+        ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md"
+    }
+    if (-not $releaseNotePaths.ContainsKey($Locale) -or $releaseNotePaths[$Locale] -ne $RelativePath) {
+        return $Content
+    }
+
+    return [regex]::Replace(
+        $Content,
+        '(?m)^<p align="center"><a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/en/process/release-notes/release-notes-v1\.2\.0\.md">English</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/zh-CN/流程/发布说明/发布说明-v1\.2\.0\.md">简体中文</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/ja/プロセス/リリースノート/リリースノート-v1\.2\.0\.md">日本語</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1\.2\.0\.md">한국어</a></p>\r?\n?',
+        ''
+    )
+}
+
 function Test-DocumentQuality {
     param([string]$Locale, [string]$RelativePath, [System.IO.FileInfo]$File)
     $content = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8
-    $naturalLanguageContent = [regex]::Replace($content, '(?ms)^```.*?^```', '')
+    $contentForQuality = Remove-AllowedReleaseNoteLanguageSwitch -Locale $Locale -RelativePath $RelativePath -Content $content
+    $naturalLanguageContent = [regex]::Replace($contentForQuality, '(?ms)^```.*?^```', '')
     $naturalLanguageContent = [regex]::Replace($naturalLanguageContent, '`[^`]*`', '')
     $lines = @($content -split "`r?`n")
     $relative = "$DocsRoot/$Locale/$RelativePath"
