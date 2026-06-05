@@ -99,9 +99,10 @@ func get_tools() -> Array[Dictionary]:
 
 ACTIONS:
 - get_info: Get editor version and status info
-- get_main_screen: Get currently active main screen (2D, 3D, Script, AssetLib)
+- get_main_screen: Get currently active main screen and discovered top UI screen buttons
+- list_main_screens: List built-in and visible top UI main screen buttons, including plugin screens when registered
 - get_focus_context: Get current editor focus owner and selected scene nodes
-- set_main_screen: Switch to a different main screen
+- set_main_screen: Switch to a different main screen, including plugin screens registered in the current editor session
 - get_distraction_free: Get distraction-free mode status
 - set_distraction_free: Toggle distraction-free mode
 - get_godot_path: Get the current Godot executable path and project root
@@ -109,6 +110,7 @@ ACTIONS:
 EXAMPLES:
 - Get editor info: {"action": "get_info"}
 - Get main screen: {"action": "get_main_screen"}
+- List main screens: {"action": "list_main_screens"}
 - Get focus context: {"action": "get_focus_context"}
 - Switch to 3D: {"action": "set_main_screen", "screen": "3D"}
 - Toggle distraction-free: {"action": "set_distraction_free", "enabled": true}""",
@@ -117,13 +119,12 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_info", "get_main_screen", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
+						"enum": ["get_info", "get_main_screen", "list_main_screens", "get_focus_context", "set_main_screen", "get_distraction_free", "set_distraction_free", "get_godot_path"],
 						"description": "Status action"
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
-						"description": "Main screen to switch to"
+						"description": "Main screen to switch to, including plugin screens registered in the current editor session"
 					},
 					"enabled": {
 						"type": "boolean",

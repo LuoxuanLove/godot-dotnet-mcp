@@ -1,12 +1,13 @@
 ## 🧩 Godot .NET MCP v1.2.0: Reconnect-Aware Agent Workflows
 
-This release makes the plugin easier to use from several MCP clients or agent sessions at once. It improves maintenance-window reporting, reconnect guidance, transport resilience, health diagnostics, update-sync refresh behavior, and editor popup control so clients can recover cleanly after plugin reloads or update syncs while still automating visible Godot UI flows.
+This release makes the plugin easier to use from several MCP clients or agent sessions at once. It improves maintenance-window reporting, reconnect guidance, transport resilience, health diagnostics, update-sync refresh behavior, and editor UI control so clients can recover cleanly after plugin reloads or update syncs while still navigating registered editor main screens and visible Godot UI flows.
 
 ### ✨ Highlights
 
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Localized reconnect guidance across the supported Dock languages.
+- Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
 - Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.
 - Added docs i18n validation coverage for locale file parity, Markdown link targets, and cross-locale link leakage.
 - Kept the localized docs trees aligned with the current plugin UI, tool, and binding references.
@@ -27,6 +28,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Existing tool names remain compatible.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
+- Switching to a plugin main screen requires that the current editor session has already registered that screen.
 - Popup menu selection adds a tool-schema action; reconnect and fetch tools again after upgrading.
 - No file layout migration is required.
 - Existing installs do not need migration.

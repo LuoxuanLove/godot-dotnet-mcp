@@ -9,9 +9,27 @@ class FakeBridge extends RefCounted:
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
 			"editor_status":
-				if str(args.get("action", "")) == "set_main_screen":
-					return success({"screen": str(args.get("screen", ""))})
-				return error("Unsupported editor_status action")
+				match str(args.get("action", "")):
+					"set_main_screen":
+						return success({
+							"screen": str(args.get("screen", "")),
+							"before_screen": "2D",
+							"after_screen": str(args.get("screen", "")),
+							"visible_button_found": str(args.get("screen", "")) == "Godex"
+						})
+					"list_main_screens":
+						return success({
+							"current_screen": "2D",
+							"count": 5,
+							"available": ["2D", "3D", "Script", "AssetLib", "Godex"],
+							"main_screens": [{"name": "Godex", "control_path": "/root/Editor/TopBar/Godex"}]
+						})
+					"get_distraction_free":
+						return success({"enabled": false})
+					"set_distraction_free":
+						return success({"enabled": bool(args.get("enabled", false))})
+					_:
+						return error("Unsupported editor_status action")
 			"editor_screenshot":
 				if str(args.get("action", "")) == "capture":
 					return success({"path": "user://editor.png"})
@@ -120,15 +138,39 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_control schema should expose bottom_panel_title/bottom_panel_path for bottom panel activation.")
 	if not editor_control_properties.has("local_x") or not editor_control_properties.has("local_y"):
 		return _failure("editor_control schema should expose local_x/local_y for control-local mouse clicks.")
+	if not editor_control_properties.has("enabled"):
+		return _failure("editor_control schema should expose enabled for distraction-free mode.")
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
+	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item"]:
+		if not editor_control_actions.has(expected_action):
+			return _failure("editor_control schema should expose %s." % expected_action)
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
-		"screen": "3D"
+		"screen": "Godex"
 	})
 	if not bool(set_screen_result.get("success", false)):
 		return _failure("system editor_control should delegate set_main_screen.")
+	if str(set_screen_result.get("data", {}).get("after_screen", "")) != "Godex":
+		return _failure("system editor_control should allow plugin main screen names.")
+
+	var list_screens_result: Dictionary = impl.execute("editor_control", {"action": "list_main_screens"})
+	if not bool(list_screens_result.get("success", false)):
+		return _failure("system editor_control should delegate list_main_screens.")
+	if not (list_screens_result.get("data", {}).get("available", []) as Array).has("Godex"):
+		return _failure("system editor_control list_main_screens should expose plugin main screens.")
+
+	var distraction_result: Dictionary = impl.execute("editor_control", {"action": "get_distraction_free"})
+	if not bool(distraction_result.get("success", false)):
+		return _failure("system editor_control should delegate get_distraction_free.")
+	var set_distraction_result: Dictionary = impl.execute("editor_control", {
+		"action": "set_distraction_free",
+		"enabled": true
+	})
+	if not bool(set_distraction_result.get("success", false)) or not bool(set_distraction_result.get("data", {}).get("enabled", false)):
+		return _failure("system editor_control should delegate set_distraction_free.")
 
 	var capture_editor_result: Dictionary = impl.execute("editor_control", {
 		"action": "capture_editor"
