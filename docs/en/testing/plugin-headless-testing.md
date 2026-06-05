@@ -240,7 +240,7 @@ Current output includes:
 - exit cleanup diagnostics
 - stderr summary
 
-If a regular headless suite sees `ObjectDB instances leaked at exit` or `resources still in use at exit`, the harness still fails and keeps `reason=godot_exit_leaks_detected`. The editor probe mode still ignores editor exit noise and marks it with `exitCleanupWarningPolicy=ignored_editor_probe`.
+If a regular headless suite sees `ObjectDB instances leaked at exit` or `resources still in use at exit`, the harness still fails and keeps the compatibility reason `reason=godot_exit_leaks_detected`. It also reports `suiteSuccess`, `successMarkerDetected`, `exitCleanupWarningMarkers`, `exitCleanupWarningPolicy`, `exitCleanupWarningFailure`, `failureClasses`, and `primaryFailureClass`, so exit cleanup warnings stay distinguishable from case-logic failures. The editor probe mode still ignores editor exit noise and marks it with `exitCleanupWarningPolicy=ignored_editor_probe`.
 
 ## Conclusion
 
