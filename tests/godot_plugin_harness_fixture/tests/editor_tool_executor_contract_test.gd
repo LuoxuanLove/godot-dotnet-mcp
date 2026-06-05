@@ -8,7 +8,7 @@ const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor
 class FakeMainScreen:
 	extends RefCounted
 
-	var name := "2D"
+	var name := "MainScreenContainer"
 
 
 class FakeEditorSettings:
@@ -442,6 +442,7 @@ class FakeEditorInterface:
 	var _edited_scene_root: Node = null
 	var _selected_paths: PackedStringArray = PackedStringArray()
 	var _plugin_states := {}
+	var _main_screen_buttons := {}
 	var last_edit_node = null
 	var last_inspected_resource = null
 
@@ -452,7 +453,13 @@ class FakeEditorInterface:
 		return _main_screen
 
 	func set_main_screen_editor(screen: String) -> void:
-		_main_screen.name = screen
+		for button_name in _main_screen_buttons.keys():
+			var button = _main_screen_buttons.get(button_name, null)
+			if button != null and button is Object:
+				button.pressed = str(button_name).to_lower() == screen.to_lower()
+
+	func register_main_screen_button(screen: String, button) -> void:
+		_main_screen_buttons[screen] = button
 
 	func is_distraction_free_mode_enabled() -> bool:
 		return _distraction_free
@@ -569,6 +576,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
 		builtin_button.text = builtin_screen
 		builtin_button.set_button_group(main_screen_group)
+		builtin_button.pressed = builtin_screen == "2D"
+		editor_interface.register_main_screen_button(builtin_screen, builtin_button)
 		main_screen_bar.add_child(builtin_button)
 	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
 	stray_toolbar_button.text = "Run Project"
@@ -576,6 +585,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
 	godex_button.text = "Godex"
 	godex_button.set_button_group(main_screen_group)
+	editor_interface.register_main_screen_button("Godex", godex_button)
 	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
@@ -630,9 +640,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status set_main_screen failed through the split service path.")
 	if str(set_screen_result.get("data", {}).get("matched_main_screen", {}).get("name", "")) != "Godex":
 		return _failure("Editor status set_main_screen should report the matched plugin main screen button.")
+	if str(set_screen_result.get("data", {}).get("main_screen_container", "")) == "Godex":
+		return _failure("Editor status set_main_screen should not depend on get_editor_main_screen() returning the selected screen name.")
 	var get_screen_result: Dictionary = executor.execute("status", {"action": "get_main_screen"})
 	if str(get_screen_result.get("data", {}).get("current_screen", "")) != "Godex":
 		return _failure("Editor status get_main_screen did not reflect the updated screen.")
+	if str(get_screen_result.get("data", {}).get("main_screen_container", "")) != "MainScreenContainer":
+		return _failure("Editor status get_main_screen should report the stable editor main-screen container separately.")
 	if not (get_screen_result.get("data", {}).get("available", []) as Array).has("Godex"):
 		return _failure("Editor status get_main_screen should include discovered plugin main screens.")
 	var lowercase_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "script"})
@@ -640,6 +654,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status set_main_screen should match screen names case-insensitively.")
 	if str(lowercase_screen_result.get("data", {}).get("after_screen", "")) != "Script":
 		return _failure("Editor status set_main_screen should switch using the discovered screen label, not the raw input.")
+	if str(lowercase_screen_result.get("data", {}).get("verification_source", "")) != "active_button_state":
+		return _failure("Editor status set_main_screen should verify observable active button state when available.")
 	var missing_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "NotARegisteredScreen"})
 	if bool(missing_screen_result.get("success", false)):
 		return _failure("Editor status set_main_screen should reject undiscovered screen names instead of using raw input.")

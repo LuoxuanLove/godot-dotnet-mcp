@@ -65,31 +65,27 @@ func _get_editor_info(ei) -> Dictionary:
 
 
 func _get_main_screen(ei) -> Dictionary:
-	var current_screen = ei.get_editor_main_screen()
-	var current_name = ""
-	if current_screen != null:
-		current_name = str(current_screen.name)
-		if current_name.is_empty():
-			current_name = str(current_screen.get_class())
+	var main_screen_container := _editor_main_screen_container_name(ei)
+	var main_screens := _collect_main_screens(ei, main_screen_container)
+	var current_name := _infer_current_main_screen_name(main_screens, main_screen_container)
 
-	var main_screens := _collect_main_screens(ei, current_name)
 	return _success({
 		"current_screen": current_name,
+		"current_screen_source": _current_screen_source(main_screens, current_name),
+		"main_screen_container": main_screen_container,
 		"available": _extract_main_screen_names(main_screens),
 		"main_screens": main_screens
 	})
 
 
 func _list_main_screens(ei) -> Dictionary:
-	var current_screen = ei.get_editor_main_screen()
-	var current_name := ""
-	if current_screen != null:
-		current_name = str(current_screen.name)
-		if current_name.is_empty() and current_screen.has_method("get_class"):
-			current_name = str(current_screen.get_class())
-	var main_screens := _collect_main_screens(ei, current_name)
+	var main_screen_container := _editor_main_screen_container_name(ei)
+	var main_screens := _collect_main_screens(ei, main_screen_container)
+	var current_name := _infer_current_main_screen_name(main_screens, main_screen_container)
 	return _success({
 		"current_screen": current_name,
+		"current_screen_source": _current_screen_source(main_screens, current_name),
+		"main_screen_container": main_screen_container,
 		"count": main_screens.size(),
 		"main_screens": main_screens,
 		"available": _extract_main_screen_names(main_screens)
@@ -142,8 +138,9 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 	if screen.is_empty():
 		return _error("Screen is required")
 
-	var before_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
-	var before_screens: Array = _collect_main_screens(ei, before_screen)
+	var before_data: Dictionary = _get_main_screen(ei).get("data", {})
+	var before_screen := str(before_data.get("current_screen", ""))
+	var before_screens: Array = before_data.get("main_screens", [])
 	var matched_screen := _find_main_screen_summary(before_screens, screen)
 	if matched_screen.is_empty():
 		return _error("Screen not found: %s" % screen, {
@@ -154,19 +151,44 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 		})
 	var resolved_screen := _main_screen_summary_label(matched_screen)
 	ei.set_main_screen_editor(resolved_screen)
-	var after_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
-	var after_screens: Array = _collect_main_screens(ei, after_screen)
-	if not _screen_names_equal(after_screen, resolved_screen):
+	var after_data: Dictionary = _get_main_screen(ei).get("data", {})
+	var after_screen := str(after_data.get("current_screen", ""))
+	var after_screens: Array = after_data.get("main_screens", [])
+	var after_matched_screen := _find_main_screen_summary(after_screens, resolved_screen)
+	if after_matched_screen.is_empty():
 		return _error("Screen switch did not take effect: %s" % resolved_screen, {
 			"screen": resolved_screen,
 			"requested_screen": screen,
 			"before_screen": before_screen,
 			"after_screen": after_screen,
 			"current_screen": after_screen,
+			"current_screen_source": str(after_data.get("current_screen_source", "")),
+			"main_screen_container": str(after_data.get("main_screen_container", "")),
 			"matched_main_screen": matched_screen,
 			"main_screens": after_screens,
 			"available": _extract_main_screen_names(after_screens),
-			"visible_button_found": not matched_screen.is_empty()
+			"visible_button_found": false,
+			"switch_requested": true,
+			"switch_verified": false,
+			"verification_source": "visible_target"
+		})
+	var active_state_observable := bool(after_matched_screen.get("active_state_observable", false))
+	if active_state_observable and not bool(after_matched_screen.get("active", false)):
+		return _error("Screen switch did not take effect: %s" % resolved_screen, {
+			"screen": resolved_screen,
+			"requested_screen": screen,
+			"before_screen": before_screen,
+			"after_screen": after_screen,
+			"current_screen": after_screen,
+			"current_screen_source": str(after_data.get("current_screen_source", "")),
+			"main_screen_container": str(after_data.get("main_screen_container", "")),
+			"matched_main_screen": after_matched_screen,
+			"main_screens": after_screens,
+			"available": _extract_main_screen_names(after_screens),
+			"visible_button_found": true,
+			"switch_requested": true,
+			"switch_verified": false,
+			"verification_source": "active_button_state"
 		})
 	return _success({
 		"screen": resolved_screen,
@@ -174,10 +196,15 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 		"before_screen": before_screen,
 		"after_screen": after_screen,
 		"current_screen": after_screen,
-		"matched_main_screen": matched_screen,
+		"current_screen_source": str(after_data.get("current_screen_source", "")),
+		"main_screen_container": str(after_data.get("main_screen_container", "")),
+		"matched_main_screen": after_matched_screen,
 		"main_screens": after_screens,
 		"available": _extract_main_screen_names(after_screens),
-		"visible_button_found": not matched_screen.is_empty()
+		"visible_button_found": true,
+		"switch_requested": true,
+		"switch_verified": active_state_observable and bool(after_matched_screen.get("active", false)),
+		"verification_source": "active_button_state" if active_state_observable else "visible_target"
 	}, "Switched to %s editor" % resolved_screen)
 
 
@@ -199,10 +226,25 @@ func _get_godot_path() -> Dictionary:
 	})
 
 
+func _editor_main_screen_container_name(ei) -> String:
+	var current_screen = ei.get_editor_main_screen() if ei != null and ei.has_method("get_editor_main_screen") else null
+	if current_screen == null:
+		return ""
+	var container_name := str(current_screen.name)
+	if container_name.is_empty() and current_screen.has_method("get_class"):
+		container_name = str(current_screen.get_class())
+	return container_name
+
+
 func _collect_main_screens(ei, current_name: String) -> Array[Dictionary]:
 	var builtin_names := ["2D", "3D", "Script", "AssetLib"]
 	var collected: Array[Dictionary] = []
+	var base_control = ei.get_base_control() if ei != null and ei.has_method("get_base_control") else null
+	if base_control != null:
+		_collect_main_screen_buttons(base_control, collected, current_name, 0)
 	for builtin_name in builtin_names:
+		if _main_screen_summary_name_exists(collected, builtin_name):
+			continue
 		collected.append({
 			"name": builtin_name,
 			"title": builtin_name,
@@ -212,13 +254,10 @@ func _collect_main_screens(ei, current_name: String) -> Array[Dictionary]:
 			"disabled": false,
 			"active": builtin_name == current_name,
 			"inferred_active": builtin_name == current_name,
+			"active_state_observable": false,
 			"rect": {},
 			"source": "builtin"
 		})
-	var base_control = ei.get_base_control() if ei != null and ei.has_method("get_base_control") else null
-	if base_control == null:
-		return collected
-	_collect_main_screen_buttons(base_control, collected, current_name, 0)
 	return collected
 
 
@@ -246,6 +285,8 @@ func _build_main_screen_button_summary(control, current_name: String) -> Diction
 	if not label in builtin_names and not _is_plugin_main_screen_button(control, builtin_names):
 		return {}
 	var source := "builtin" if label in builtin_names else "plugin"
+	var active_state_observable := _control_active_state_observable(control)
+	var active := _control_active(control) if active_state_observable else label == current_name
 	return {
 		"name": label,
 		"title": label,
@@ -253,8 +294,9 @@ func _build_main_screen_button_summary(control, current_name: String) -> Diction
 		"control_path": _control_path(control),
 		"visible": _control_visible(control),
 		"disabled": _control_disabled(control),
-		"active": label == current_name,
-		"inferred_active": label == current_name,
+		"active": active,
+		"inferred_active": active,
+		"active_state_observable": active_state_observable,
 		"rect": rect,
 		"source": source
 	}
@@ -281,6 +323,31 @@ func _screen_names_equal(left: String, right: String) -> bool:
 	return left.strip_edges().to_lower() == right.strip_edges().to_lower()
 
 
+func _infer_current_main_screen_name(screens: Array, fallback_name: String) -> String:
+	for item in screens:
+		if item is Dictionary:
+			var data: Dictionary = item
+			if bool(data.get("active", false)):
+				return _main_screen_summary_label(data)
+	for item in screens:
+		if item is Dictionary:
+			var label := _main_screen_summary_label(item as Dictionary)
+			if _screen_names_equal(label, fallback_name):
+				return label
+	return ""
+
+
+func _current_screen_source(screens: Array, current_name: String) -> String:
+	if current_name.is_empty():
+		return "unavailable"
+	for item in screens:
+		if item is Dictionary:
+			var data: Dictionary = item
+			if _screen_names_equal(_main_screen_summary_label(data), current_name) and bool(data.get("active", false)) and bool(data.get("active_state_observable", false)):
+				return "active_button_state"
+	return "fallback"
+
+
 func _extract_main_screen_names(screens: Array) -> Array[String]:
 	var names: Array[String] = []
 	for item in screens:
@@ -289,6 +356,15 @@ func _extract_main_screen_names(screens: Array) -> Array[String]:
 			if not name.is_empty() and not names.has(name):
 				names.append(name)
 	return names
+
+
+func _main_screen_summary_name_exists(screens: Array, name: String) -> bool:
+	for item in screens:
+		if item is Dictionary:
+			var label := _main_screen_summary_label(item as Dictionary)
+			if _screen_names_equal(label, name):
+				return true
+	return false
 
 
 func _main_screen_summary_exists(screens: Array, name: String, control_path: String) -> bool:
@@ -373,6 +449,29 @@ func _control_button_group(control):
 	if control != null and control.has_method("get_button_group"):
 		return control.get_button_group()
 	return null
+
+
+func _control_active_state_observable(control) -> bool:
+	if control == null:
+		return false
+	if control.has_method("is_pressed"):
+		return true
+	if control is Object:
+		for property_name in ["button_pressed", "pressed", "selected"]:
+			if control.get(property_name) != null:
+				return true
+	return false
+
+
+func _control_active(control) -> bool:
+	if control != null and control.has_method("is_pressed"):
+		return bool(control.is_pressed())
+	if control is Object:
+		for property_name in ["button_pressed", "pressed", "selected"]:
+			var value = control.get(property_name)
+			if value != null:
+				return bool(value)
+	return false
 
 
 func _control_path(control) -> String:
