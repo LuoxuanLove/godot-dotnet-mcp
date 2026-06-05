@@ -552,6 +552,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
+	var editor_top_bar := FakeUiControl.new("EditorTopBar", "HBoxContainer", Rect2(16, 88, 220, 28))
+	var ordinary_top_bar_button := FakeUiControl.new("OrdinaryTopBarButton", "Button", Rect2(24, 92, 128, 24))
+	ordinary_top_bar_button.text = "Ordinary Action"
+	editor_top_bar.add_child(ordinary_top_bar_button)
 	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
 	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
 		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
@@ -582,6 +586,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(hidden_popup_root)
 	editor_interface.get_base_control().add_popup_child(non_popup_button)
 	editor_interface.get_base_control().add_popup_child(non_popup_input)
+	editor_interface.get_base_control().add_popup_child(editor_top_bar)
 	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
@@ -634,6 +639,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
 	if (list_screens_result.get("data", {}).get("available", []) as Array).has("RunProjectButton"):
 		return _failure("Editor status list_main_screens should not treat a toolbar control name as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Ordinary Action"):
+		return _failure("Editor status list_main_screens should not treat ordinary top bar buttons as main screen labels.")
 
 	var path_result: Dictionary = executor.execute("status", {"action": "get_godot_path"})
 	if not bool(path_result.get("success", false)):

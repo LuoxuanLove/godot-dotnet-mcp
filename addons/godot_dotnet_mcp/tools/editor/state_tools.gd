@@ -156,6 +156,18 @@ func _set_main_screen(ei, screen: String) -> Dictionary:
 	ei.set_main_screen_editor(resolved_screen)
 	var after_screen := str(_get_main_screen(ei).get("data", {}).get("current_screen", ""))
 	var after_screens: Array = _collect_main_screens(ei, after_screen)
+	if not _screen_names_equal(after_screen, resolved_screen):
+		return _error("Screen switch did not take effect: %s" % resolved_screen, {
+			"screen": resolved_screen,
+			"requested_screen": screen,
+			"before_screen": before_screen,
+			"after_screen": after_screen,
+			"current_screen": after_screen,
+			"matched_main_screen": matched_screen,
+			"main_screens": after_screens,
+			"available": _extract_main_screen_names(after_screens),
+			"visible_button_found": not matched_screen.is_empty()
+		})
 	return _success({
 		"screen": resolved_screen,
 		"requested_screen": screen,
@@ -265,6 +277,10 @@ func _main_screen_summary_label(screen: Dictionary) -> String:
 	return ""
 
 
+func _screen_names_equal(left: String, right: String) -> bool:
+	return left.strip_edges().to_lower() == right.strip_edges().to_lower()
+
+
 func _extract_main_screen_names(screens: Array) -> Array[String]:
 	var names: Array[String] = []
 	for item in screens:
@@ -325,8 +341,6 @@ func _has_named_main_screen_ancestor(control) -> bool:
 			node_name = str(current.get("name")).to_lower()
 		var combined := "%s %s" % [node_name, path_label]
 		if combined.find("main_screen") != -1 or combined.find("mainscreen") != -1 or combined.find("main screen") != -1:
-			return true
-		if combined.find("editor_title_bar") != -1 or combined.find("top_bar") != -1 or combined.find("topbar") != -1:
 			return true
 		if not current.has_method("get_parent"):
 			return false
