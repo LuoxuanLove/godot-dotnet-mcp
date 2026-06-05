@@ -19,6 +19,7 @@ Target version: 1.2.0.
 
 ### Added
 
+- Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
 - Added `system_editor_control(action=select_popup_menu_item)` so agents can select visible `PopupMenu` items by index, id, or exact text while rejecting hidden popups, disabled items, separators, submenu rows, and conflicting selectors.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
@@ -38,6 +39,9 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Added tool activity registry coverage to the router, stdio, registry, and tool-loader harness contracts so context stripping, response activity summaries, transport coverage, and the public `system_tool_activity` entry stay verified.
+- Updated the Tools page documentation with the `system_tool_activity` tree entry and `_mcp_context` protocol boundary.
+- Updated protocol facts with the new tool schema version for the public `system_tool_activity` surface.
 - Added a docs i18n validation workflow that checks tree-shape hashes, localized path mappings, Markdown links, draft wording, and cross-locale path leakage.
 - Extended docs i18n validation to reject redundant root documentation files that should live in localized docs.
 - Extended docs i18n validation to catch wrong-locale README presentation assets and duplicate path keys in file-responsibility tables.

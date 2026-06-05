@@ -14,6 +14,7 @@ const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/
 const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
+const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
@@ -229,6 +230,12 @@ func _handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
 	var tool_name := str(params.get("name", ""))
 	var arguments = params.get("arguments", {})
+	if not (arguments is Dictionary):
+		arguments = {}
+	else:
+		arguments = (arguments as Dictionary).duplicate(true)
+	if not (arguments as Dictionary).has("_mcp_context") and params.get("_mcp_context", null) is Dictionary:
+		(arguments as Dictionary)["_mcp_context"] = (params.get("_mcp_context", {}) as Dictionary).duplicate(true)
 
 	if tool_name.is_empty():
 		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
@@ -360,6 +367,8 @@ func _normalize_tool_result(result) -> Dictionary:
 	var normalized: Dictionary = result.duplicate(true)
 	normalized["success"] = bool(normalized.get("success", true))
 	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true}
+	if MCPToolActivityRegistry.is_protocol_activity_summary(normalized.get("activity", null)):
+		reserved["activity"] = true
 	var extra := {}
 	for key in normalized.keys():
 		if not reserved.has(key):

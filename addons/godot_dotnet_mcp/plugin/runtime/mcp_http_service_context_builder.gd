@@ -58,7 +58,7 @@ func build_tool_loader_supervisor_context(server):
 			)
 	return context
 
-func build_tool_rpc_router_context(server, tool_loader_supervisor, http_response_service):
+func build_tool_rpc_router_context(server, tool_loader_supervisor, http_response_service, tool_activity_registry = null):
 	var context = MCPToolRpcRouterContextScript.new()
 	context.get_tool_loader = Callable(tool_loader_supervisor, "get_tool_loader")
 	context.is_tool_enabled = Callable(tool_loader_supervisor, "is_tool_enabled")
@@ -68,6 +68,7 @@ func build_tool_rpc_router_context(server, tool_loader_supervisor, http_response
 		if bool(server.get("_debug_mode")):
 			print("[MCP] " + message)
 	context.sanitize_for_json = Callable(http_response_service, "sanitize_for_json")
+	context.tool_activity_registry = tool_activity_registry
 	return context
 
 func build_http_request_router_context(json_rpc_request_service, http_response_service, tools_api_service, editor_lifecycle_endpoint):
