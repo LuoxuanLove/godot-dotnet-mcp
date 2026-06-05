@@ -891,6 +891,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_editor_plugin_desc": "Query and manage editor plugins",
 	"tool_system_help_name": "Help",
 	"tool_system_help_desc": "Return the agent-facing MCP capability guide, prompt guide discovery, visual verification hints, hidden-control guidance, and schema facts.",
+	"tool_system_tool_catalog_name": "Tool Catalog",
+	"tool_system_tool_catalog_desc": "Search the current tool catalog by query, category, or domain and return match reasons, actions, parameters, visibility, and enabled state.",
 	"prompt_project_orientation_title": "Project orientation workflow",
 	"prompt_project_orientation_desc": "Orient an agent in a Godot project with read-only state, health, file, symbol, and scene dependency evidence before choosing an editing or debugging workflow.",
 	"prompt_content_authoring_title": "Content authoring workflow",

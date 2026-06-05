@@ -17,7 +17,7 @@ func _init() -> void:
 		return
 	_bridge = bridge_script.new()
 
-	for impl_name in ["impl_help", "impl_project", "impl_editor", "impl_scene", "impl_script", "impl_index", "impl_runtime", "impl_dap"]:
+	for impl_name in ["impl_help", "impl_catalog", "impl_project", "impl_editor", "impl_scene", "impl_script", "impl_index", "impl_runtime", "impl_dap"]:
 		var path = _BASE + impl_name + ".gd"
 		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var can_inst = script != null and (script as Script).can_instantiate()

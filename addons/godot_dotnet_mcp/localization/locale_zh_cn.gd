@@ -891,6 +891,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_editor_plugin_desc": "查询和管理编辑器插件",
 	"tool_system_help_name": "帮助",
 	"tool_system_help_desc": "返回面向 Agent 的 MCP 能力说明、Prompt Guide 发现入口、视觉验证提示、隐藏控件提示与 schema 信息。",
+	"tool_system_tool_catalog_name": "工具目录",
+	"tool_system_tool_catalog_desc": "按关键词、分类或域搜索当前工具目录，并返回匹配原因、动作、参数、可见性与启用状态。",
 	"prompt_project_orientation_title": "项目定位工作流",
 	"prompt_project_orientation_desc": "在选择编辑或调试工作流前，用只读的项目状态、健康、文件、符号和场景依赖证据帮助 Agent 理解 Godot 项目。",
 	"prompt_content_authoring_title": "内容创作工作流",

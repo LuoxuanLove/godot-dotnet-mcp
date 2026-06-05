@@ -683,6 +683,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_project_state_desc": "彙總當前項目狀態，包括文件計數、最近錯誤與運行狀態。",
 	"tool_system_help_name": "說明",
 	"tool_system_help_desc": "返回面向 Agent 的 MCP 能力說明、Prompt Guide 發現入口、視覺驗證提示、隱藏控件提示與 schema 資訊。",
+	"tool_system_tool_catalog_name": "工具目錄",
+	"tool_system_tool_catalog_desc": "依關鍵字、分類或域搜尋目前工具目錄，並返回匹配原因、動作、參數、可見性與啟用狀態。",
 	"tool_system_project_configure_name": "項目配置",
 	"tool_system_project_configure_desc": "讀取或修改項目設置、輸入動作與自動載入配置。",
 	"tool_system_resource_reference_audit_name": "資源引用審計",

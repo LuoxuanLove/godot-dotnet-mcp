@@ -6,6 +6,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
+- Added `system_tool_catalog`, a searchable tool directory that helps clients find available tools by name, description, action, parameter, category, or domain.
 - Localized reconnect guidance across the supported Dock languages.
 
 ### 🔧 Fixes
@@ -21,6 +22,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✅ Compatibility and Upgrade Notes
 
 - Existing tool names remain compatible.
+- `system_tool_catalog` is additive and read-only; clients that do not call it need no migration.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - No file layout or tool schema migration is required.
