@@ -1033,6 +1033,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_param_system_dap_debugger_timeout_ms_desc": "Timeout in milliseconds.",
 	"tool_system_editor_control_desc": "High-level editor UI workflow entry for switching main screens, activating dock/plugin/bottom-panel UI through Godot APIs, capturing the editor, enumerating controls with coordinate mapping, dispatching control-local clicks, and interacting with popups.",
 	"tool_system_editor_control_name": "Editor Control",
+	"tool_system_editor_plugin_control_desc": "Inspect and toggle third-party EditorPlugin session state with plugin.cfg metadata, project-setting state, editor-session state, visible UI hints, and self-plugin protection.",
+	"tool_system_editor_plugin_control_name": "Editor Plugin Control",
 	"tool_system_editor_log_desc": "Read the current editor Output panel, filter errors or warnings, or clear the output.",
 	"tool_system_editor_log_name": "Editor Log",
 	"tool_system_editor_state_desc": "Summarize the current editor UI, Inspector, FileSystem, project runtime, and runtime control state.",

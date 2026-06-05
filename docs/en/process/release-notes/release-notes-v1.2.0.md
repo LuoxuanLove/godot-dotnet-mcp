@@ -9,6 +9,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
 - Localized reconnect guidance across the supported Dock languages.
+- Added editor plugin session diagnostics so clients can inspect third-party EditorPlugin project settings, live editor state, visible UI hints, and guarded enable/disable behavior.
 - Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
 - Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.
 - Added docs i18n validation coverage for locale file parity, Markdown link targets, and cross-locale link leakage.
@@ -29,6 +30,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 
 - Existing tool names remain compatible.
 - The tool schema version changed because `system_editor_control` gained `list_menus`, `open_menu`, and `select_menu_item`.
+- `system_editor_plugin_control` is additive; use dedicated plugin reload/update tools for this plugin instead of generic self-disable flows.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
 - Clients may pass a short `_mcp_context` object with tool calls for coordination; it is treated as self-reported context, not as authentication.

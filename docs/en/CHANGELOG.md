@@ -27,6 +27,7 @@ Target version: 1.2.0.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
 - Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
 - Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added `system_editor_plugin_control` so clients can inspect third-party EditorPlugin project-setting state, editor-session state, visible UI hints, restart/manual-activation guidance, and guarded enable/disable behavior.
 - Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
 
 ### Fixed

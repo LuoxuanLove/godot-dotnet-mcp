@@ -578,16 +578,18 @@ EXAMPLES:
 		},
 		{
 			"name": "plugin",
-			"description": """PLUGIN MANAGEMENT: Enable/disable editor plugins.
+			"description": """PLUGIN MANAGEMENT: Inspect and toggle editor plugins.
 
 ACTIONS:
-- list: List all available plugins
-- is_enabled: Check if a plugin is enabled
-- enable: Enable a plugin
-- disable: Disable a plugin
+- list: List available plugins with project-setting, editor-session, and visible-UI diagnostics
+- inspect: Inspect one plugin's project-setting, editor-session, visible-UI, and restart/manual-activation hints
+- is_enabled: Check one plugin with the same diagnostics
+- enable: Enable a plugin, refusing to toggle this MCP plugin unless allow_self=true
+- disable: Disable a plugin, refusing to toggle this MCP plugin unless allow_self=true
 
 EXAMPLES:
 - List plugins: {"action": "list"}
+- Inspect plugin: {"action": "inspect", "plugin": "my_plugin"}
 - Check status: {"action": "is_enabled", "plugin": "my_plugin"}
 - Enable plugin: {"action": "enable", "plugin": "my_plugin"}
 - Disable plugin: {"action": "disable", "plugin": "my_plugin"}""",
@@ -596,12 +598,16 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list", "is_enabled", "enable", "disable"],
+						"enum": ["list", "inspect", "is_enabled", "enable", "disable"],
 						"description": "Plugin action"
 					},
 					"plugin": {
 						"type": "string",
 						"description": "Plugin name (folder name in addons/)"
+					},
+					"allow_self": {
+						"type": "boolean",
+						"description": "Allow toggling this MCP plugin despite reconnect/disconnect risk (default false)"
 					}
 				},
 				"required": ["action"]
