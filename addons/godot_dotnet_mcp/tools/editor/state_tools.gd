@@ -305,15 +305,16 @@ func _main_screen_summary_exists(screens: Array, name: String, control_path: Str
 func _is_plugin_main_screen_button(control, builtin_names: Array) -> bool:
 	if not _control_visible(control) or _control_disabled(control):
 		return false
-	if _has_builtin_main_screen_sibling(control, builtin_names):
-		return true
-	if _has_named_main_screen_ancestor(control):
-		return true
-	return false
+	if not _has_named_main_screen_ancestor(control):
+		return false
+	return _has_builtin_main_screen_group_sibling(control, builtin_names)
 
 
-func _has_builtin_main_screen_sibling(control, builtin_names: Array) -> bool:
+func _has_builtin_main_screen_group_sibling(control, builtin_names: Array) -> bool:
 	if control == null or not control.has_method("get_parent"):
+		return false
+	var button_group = _control_button_group(control)
+	if button_group == null:
 		return false
 	var parent = control.get_parent()
 	if parent == null or not parent.has_method("get_children"):
@@ -324,7 +325,7 @@ func _has_builtin_main_screen_sibling(control, builtin_names: Array) -> bool:
 		var sibling_class := _control_class_name(sibling)
 		if sibling_class.find("Button") == -1:
 			continue
-		if builtin_names.has(_control_label(sibling)):
+		if _control_button_group(sibling) == button_group and builtin_names.has(_control_label(sibling)):
 			return true
 	return false
 
@@ -366,6 +367,12 @@ func _control_label(control) -> String:
 		if not label.is_empty():
 			return label
 	return ""
+
+
+func _control_button_group(control):
+	if control != null and control.has_method("get_button_group"):
+		return control.get_button_group()
+	return null
 
 
 func _control_path(control) -> String:

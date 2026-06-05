@@ -314,6 +314,7 @@ class FakeUiControl:
 	var _parent_ref: WeakRef = null
 	var _children: Array = []
 	var _rect := Rect2(0, 0, 100, 24)
+	var _button_group = null
 
 	func _init(node_name: String = "", ui_class: String = "Control", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
 		name = node_name
@@ -351,6 +352,12 @@ class FakeUiControl:
 
 	func get_ui_class() -> String:
 		return _ui_class
+
+	func get_button_group():
+		return _button_group
+
+	func set_button_group(group) -> void:
+		_button_group = group
 
 	func grab_focus() -> void:
 		focused = true
@@ -557,14 +564,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	ordinary_top_bar_button.text = "Ordinary Action"
 	editor_top_bar.add_child(ordinary_top_bar_button)
 	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
+	var main_screen_group := RefCounted.new()
 	for builtin_screen in ["2D", "3D", "Script", "AssetLib"]:
 		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
 		builtin_button.text = builtin_screen
+		builtin_button.set_button_group(main_screen_group)
 		main_screen_bar.add_child(builtin_button)
 	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
+	stray_toolbar_button.text = "Run Project"
 	main_screen_bar.add_child(stray_toolbar_button)
 	var godex_button := FakeUiControl.new("GodexButton", "Button", Rect2(520, 96, 72, 24))
 	godex_button.text = "Godex"
+	godex_button.set_button_group(main_screen_group)
 	main_screen_bar.add_child(godex_button)
 	var mcp_dock := FakeUiControl.new("MCP", "VBoxContainer", Rect2(220, 16, 200, 160))
 	var mcp_tabs := FakeTabContainer.new("TabContainer", Rect2(220, 16, 200, 160))
@@ -639,6 +650,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor status list_main_screens should include builtin and plugin screens.")
 	if (list_screens_result.get("data", {}).get("available", []) as Array).has("RunProjectButton"):
 		return _failure("Editor status list_main_screens should not treat a toolbar control name as a main screen label.")
+	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Run Project"):
+		return _failure("Editor status list_main_screens should not treat a toolbar control text as a main screen label.")
 	if (list_screens_result.get("data", {}).get("available", []) as Array).has("Ordinary Action"):
 		return _failure("Editor status list_main_screens should not treat ordinary top bar buttons as main screen labels.")
 
