@@ -969,6 +969,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "读取用户工具变更的近期审计记录",
 	"tool_plugin_evolution_check_compatibility_name": "兼容检查",
 	"tool_plugin_evolution_check_compatibility_desc": "对比现有 User 工具与当前脚手架版本，标记兼容性风险",
+	"tool_plugin_evolution_runtime_diagnostics_name": "运行时诊断",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "汇总 User 工具发现、加载失败、监视器状态、兼容性与近期审计记录",
 	"tool_plugin_evolution_usage_guide_name": "使用指南",
 	"tool_plugin_evolution_usage_guide_desc": "返回当前插件的推荐授权与 User 工具工作流",
 	"tool_plugin_developer_settings_name": "设置",

@@ -687,6 +687,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_evolution_user_tool_audit_desc": "Leia entradas de auditoria recentes para alterações nas ferramentas do usuário",
 	"tool_plugin_evolution_check_compatibility_name": "Compatibilidade",
 	"tool_plugin_evolution_check_compatibility_desc": "Compare as ferramentas do usuário com a versão atual do scaffold e sinalize riscos de compatibilidade",
+	"tool_plugin_evolution_runtime_diagnostics_name": "Diagnóstico de execução",
+	"tool_plugin_evolution_runtime_diagnostics_desc": "Resume descoberta de ferramentas do usuário, falhas de carregamento, estado do monitor, compatibilidade e auditorias recentes",
 	"tool_plugin_evolution_usage_guide_name": "Guia de uso",
 	"tool_plugin_evolution_usage_guide_desc": "Retorne a autorização recomendada e o fluxo de trabalho da ferramenta do usuário para este plugin",
 	"tool_plugin_developer_settings_name": "Configurações",

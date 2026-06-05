@@ -22,6 +22,7 @@ Target version: 1.2.0.
 - Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
 - Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
+- Added User-tool runtime diagnostics through `plugin_evolution_runtime_diagnostics` and `project_state(include_runtime_health=true)`, including discovery counts, load failures, watcher state, compatibility summary, and recent audit entries.
 - Added `system_editor_control(action=select_popup_menu_item)` so agents can select visible `PopupMenu` items by index, id, or exact text while rejecting hidden popups, disabled items, separators, submenu rows, and conflicting selectors.
 - Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
 - Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
@@ -34,6 +35,7 @@ Target version: 1.2.0.
 ### Fixed
 
 - Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
+- Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
 - Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
 - Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
 - Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
@@ -41,6 +43,8 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended User-tool service, runtime health, and project-state harness coverage for runtime diagnostics and failed custom-tool load reporting.
+- Extended plugin-evolution harness coverage so public runtime diagnostics keep forwarding the live user-tool runtime snapshot.
 - Bumped the tool schema facts version and extended editor UI harness coverage for `list_menus`, `open_menu`, and `select_menu_item`.
 - Added tool activity registry coverage to the router, stdio, registry, and tool-loader harness contracts so context stripping, response activity summaries, transport coverage, and the public `system_tool_activity` entry stay verified.
 - Updated the Tools page documentation with the `system_tool_activity` tree entry and `_mcp_context` protocol boundary.
