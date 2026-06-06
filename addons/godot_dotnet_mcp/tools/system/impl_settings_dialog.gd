@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -91,7 +91,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search for focus_result"
+						"description": "Control path returned by status/search/list_rows for focus_result"
+					},
+					"include_raw_controls": {
+						"type": "boolean",
+						"description": "Include raw observed control rows in list_rows for diagnostics (default false)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -136,6 +140,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _status(surface, args)
 		"search":
 			return bridge.error("search requires asynchronous execution")
+		"list_rows":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _list_rows(surface, args)
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -228,6 +237,33 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(payload, args)
 	return bridge.success(payload, "Settings result focused")
+
+
+func _list_rows(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, args, query_values)
+	var rows: Array[Dictionary] = _settings_row_models(observation.get("all_controls", []), surface, query_values, _result_limit(args))
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"current_tab": str(observation.get("current_tab", "")),
+		"rows": rows,
+		"row_count": rows.size(),
+		"model_quality": _row_model_quality(rows),
+		"workflow": _workflow_with_step(observation.get("workflow", []), {
+			"step": "list_rows",
+			"queries": query_values,
+			"row_count": rows.size(),
+			"success": true
+		})
+	}
+	if bool(args.get("include_raw_controls", false)):
+		payload["raw_controls"] = observation.get("all_controls", [])
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings rows listed")
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
@@ -323,7 +359,7 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 		popup_rows = popup_result.get("data", {}).get("popups", [])
 	var surface_matches: Array[Dictionary] = _matching_rows(control_rows, spec.get("match_queries", []))
 	var popup_matches: Array[Dictionary] = _matching_rows(popup_rows, spec.get("match_queries", []))
-	var results: Array[Dictionary] = _candidate_results(control_rows, query_values, _result_limit(args))
+	var results: Array[Dictionary] = _candidate_results(control_rows, query_values, _result_limit(args), surface)
 	var search_field_path: String = _first_path(_matching_rows(control_rows, spec.get("search_queries", []), ["LineEdit", "TextEdit", "SearchBox"]), "path")
 	return {
 		"surface": surface,
@@ -336,6 +372,7 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 		"current_tab": _current_tab_hint(control_rows, spec),
 		"results": results,
 		"result_count": results.size(),
+		"all_controls": control_rows,
 		"visible_popup_count": popup_rows.size(),
 		"surface_matches": surface_matches,
 		"popup_matches": popup_matches,
@@ -344,7 +381,7 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 	}
 
 
-func _candidate_results(rows: Array, query_values: Array[String], limit: int) -> Array[Dictionary]:
+func _candidate_results(rows: Array, query_values: Array[String], limit: int, surface: String) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	for row in rows:
 		if not (row is Dictionary):
@@ -364,7 +401,8 @@ func _candidate_results(rows: Array, query_values: Array[String], limit: int) ->
 			"enabled": bool(dict.get("enabled", true)),
 			"section_hint": _section_hint(dict),
 			"setting_path_hint": _setting_path_hint(dict),
-			"value_text_hint": _value_text_hint(dict)
+			"value_text_hint": _value_text_hint(dict),
+			"row_model": _build_row_model(dict, surface, "")
 		})
 		if results.size() >= limit:
 			break
@@ -596,3 +634,140 @@ func _value_text_hint(row: Dictionary) -> String:
 		if not value.is_empty():
 			return value
 	return ""
+
+
+func _settings_row_models(rows: Array, surface: String, query_values: Array[String], limit: int) -> Array[Dictionary]:
+	var models: Array[Dictionary] = []
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		if not _is_settings_row_candidate(dict):
+			continue
+		if not query_values.is_empty() and not _haystack_matches(dict, query_values):
+			continue
+		models.append(_build_row_model(dict, surface, ""))
+		if models.size() >= limit:
+			break
+	return models
+
+
+func _is_settings_row_candidate(row: Dictionary) -> bool:
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	var text := _label_text_hint(row)
+	if path.is_empty() and text.is_empty():
+		return false
+	if bool(row.get("editable_text", false)):
+		return true
+	var control_class := str(row.get("class", "")).strip_edges()
+	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
+		return true
+	if path.contains("/") and (path.contains("Settings") or path.contains("General") or path.contains("Interface")):
+		return true
+	return false
+
+
+func _build_row_model(row: Dictionary, surface: String, row_id_override: String) -> Dictionary:
+	var model: Dictionary = {
+		"surface": surface,
+		"row_id": row_id_override,
+		"row_control_path": str(row.get("path", row.get("node_path", ""))).strip_edges(),
+		"label_control_path": str(row.get("path", "")),
+		"value_control_path": _value_control_path_hint(row),
+		"control_class": str(row.get("class", "")),
+		"label": _label_text_hint(row),
+		"setting_path": _setting_path_hint(row),
+		"category_path": _category_path_hint(row),
+		"section": _section_hint(row),
+		"value_text": _value_text_hint(row),
+		"value_editor_type": _value_editor_type_hint(row),
+		"visible": bool(row.get("visible", true)),
+		"enabled": not bool(row.get("disabled", false)) and bool(row.get("enabled", true)),
+		"editable_text": bool(row.get("editable_text", false)),
+		"confidence": "low",
+		"evidence": _row_model_evidence(row)
+	}
+	if str(model.get("row_id", "")).is_empty():
+		model["row_id"] = _row_model_id(model)
+	model["confidence"] = _row_model_confidence(model)
+	return model
+
+
+func _label_text_hint(row: Dictionary) -> String:
+	for key in ["label_text", "text", "title", "name"]:
+		var value := str(row.get(key, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	return ""
+
+
+func _value_editor_type_hint(row: Dictionary) -> String:
+	var control_class := str(row.get("class", "")).strip_edges()
+	if bool(row.get("editable_text", false)):
+		return "text"
+	if control_class in ["CheckBox", "CheckButton"]:
+		return "bool"
+	if control_class in ["OptionButton"]:
+		return "enum"
+	if control_class in ["SpinBox", "EditorSpinSlider", "HSlider", "VSlider"]:
+		return "number"
+	if control_class in ["ColorPickerButton", "ColorPicker"]:
+		return "color"
+	if control_class in ["LineEdit", "TextEdit", "CodeEdit"]:
+		return "text"
+	if not str(row.get("value_text", row.get("value", ""))).strip_edges().is_empty():
+		return "display_text"
+	return "unknown"
+
+
+func _value_control_path_hint(row: Dictionary) -> String:
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	if _value_editor_type_hint(row) != "unknown":
+		return path
+	return ""
+
+
+func _category_path_hint(row: Dictionary) -> String:
+	var parent_path := str(row.get("parent_path", "")).strip_edges()
+	if not parent_path.is_empty():
+		return parent_path
+	return _section_hint(row)
+
+
+func _row_model_evidence(row: Dictionary) -> Array[String]:
+	var keys: Array[String] = []
+	for key in ["path", "parent_path", "node_path", "class", "text", "title", "name", "editable_text", "actionable", "rect", "child_count"]:
+		if row.has(key):
+			keys.append(key)
+	return keys
+
+
+func _row_model_id(model: Dictionary) -> String:
+	var setting_path := str(model.get("setting_path", "")).strip_edges()
+	if not setting_path.is_empty():
+		return setting_path
+	var row_path := str(model.get("row_control_path", "")).strip_edges()
+	if not row_path.is_empty():
+		return row_path
+	return str(model.get("label", "")).strip_edges()
+
+
+func _row_model_confidence(model: Dictionary) -> String:
+	if not str(model.get("setting_path", "")).is_empty() and str(model.get("value_editor_type", "unknown")) != "unknown":
+		return "high"
+	if not str(model.get("label", "")).is_empty() and not str(model.get("row_control_path", "")).is_empty():
+		return "medium"
+	return "low"
+
+
+func _row_model_quality(rows: Array[Dictionary]) -> Dictionary:
+	var counts: Dictionary = {"high": 0, "medium": 0, "low": 0}
+	for row in rows:
+		var confidence := str(row.get("confidence", "low"))
+		if not counts.has(confidence):
+			confidence = "low"
+		counts[confidence] = int(counts[confidence]) + 1
+	return {
+		"row_count": rows.size(),
+		"confidence_counts": counts
+	}

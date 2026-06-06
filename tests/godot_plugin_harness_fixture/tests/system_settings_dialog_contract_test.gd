@@ -98,12 +98,13 @@ class FakeBridge extends RefCounted:
 			rows.append({"path": "/root/ProjectSettings", "class": "AcceptDialog", "title": "Project Settings", "visible": true, "enabled": true})
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
 			if project_filter_text.contains("application/config/name"):
-				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "enabled": true, "tooltip": "application/config/name", "value_text": "Example"})
+				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
+			rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": "Example", "visible": true, "disabled": false, "editable_text": true})
 		if editor_visible:
 			rows.append({"path": "/root/EditorSettings", "class": "AcceptDialog", "title": "Editor Settings", "visible": true, "enabled": true})
 			rows.append({"path": "/root/EditorSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": editor_filter_text, "visible": true, "enabled": true})
 			if editor_filter_text.contains("interface/editor/editor_language"):
-				rows.append({"path": "/root/EditorSettings/Interface/Editor/Language", "class": "HBoxContainer", "text": "Editor Language", "visible": true, "enabled": true, "tooltip": "interface/editor/editor_language", "value_text": "Auto"})
+				rows.append({"path": "/root/EditorSettings/Interface/Editor/Language", "parent_path": "/root/EditorSettings/Interface/Editor", "class": "HBoxContainer", "text": "Editor Language", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 		return rows
 
 
@@ -120,7 +121,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_rows", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
@@ -162,6 +163,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_call(fake.calls, "editor_ui_control", "set_text"):
 		return _failure("search should write the query into the settings search field.")
 
+	var calls_before_list_rows := fake.calls.size()
+	var listed_rows := impl.execute("settings_dialog", {
+		"action": "list_rows",
+		"surface": "project_settings",
+		"query": "Application Config Name",
+		"limit": 10
+	})
+	if not bool(listed_rows.get("success", false)):
+		return _failure("list_rows should succeed against visible controls.")
+	if int(listed_rows.get("data", {}).get("row_count", 0)) < 1:
+		return _failure("list_rows should return conservative read-only row models.")
+	var first_row := ((listed_rows.get("data", {}).get("rows", []) as Array)[0]) as Dictionary
+	if str(first_row.get("confidence", "")) != "medium":
+		return _failure("list_rows should assign medium confidence when row has label/path but no stable setting path.")
+	if str(first_row.get("row_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name":
+		return _failure("list_rows should preserve the row_control_path evidence.")
+	if _has_call_since(fake.calls, calls_before_list_rows, "editor_ui_control", "set_text"):
+		return _failure("list_rows must not write the settings search field.")
+
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
 		"surface": "project_settings",
@@ -201,6 +221,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 func _has_call(calls: Array, tool_name: String, action: String) -> bool:
 	for call in calls:
+		if str(call.get("tool", "")) == tool_name and str(call.get("action", "")) == action:
+			return true
+	return false
+
+
+func _has_call_since(calls: Array, start_index: int, tool_name: String, action: String) -> bool:
+	for index in range(start_index, calls.size()):
+		var call: Dictionary = calls[index]
 		if str(call.get("tool", "")) == tool_name and str(call.get("action", "")) == action:
 			return true
 	return false
