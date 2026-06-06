@@ -11,7 +11,7 @@ const SURFACES := {
 	"project_settings": {
 		"label": "Project Settings",
 		"menu_title": "Project",
-		"menu_titles": ["Project", "项目", "專案", "Proyecto", "Projet", "Projekt", "Progetto", "プロジェクト", "프로젝트"],
+		"menu_titles": ["Project", "项目", "專案", "Proyecto", "Projet", "Projekt", "Progetto", "Projeto", "Проект", "プロジェクト", "프로젝트"],
 		"menu_items": [
 			"Project Settings...", "Project Settings",
 			"项目设置...", "项目设置", "專案設定...", "專案設定",
@@ -19,6 +19,8 @@ const SURFACES := {
 			"Paramètres du projet...", "Paramètres du projet",
 			"Projekteinstellungen...", "Projekteinstellungen",
 			"Impostazioni progetto...", "Impostazioni progetto",
+			"Configurações do Projeto...", "Configurações do Projeto",
+			"Настройки проекта...", "Настройки проекта",
 			"プロジェクト設定...", "プロジェクト設定",
 			"프로젝트 설정...", "프로젝트 설정"
 		],
@@ -29,7 +31,7 @@ const SURFACES := {
 	"editor_settings": {
 		"label": "Editor Settings",
 		"menu_title": "Editor",
-		"menu_titles": ["Editor", "编辑器", "編輯器", "Editor", "Éditeur", "Editor", "Editor", "エディター", "에디터"],
+		"menu_titles": ["Editor", "编辑器", "編輯器", "Editor", "Éditeur", "Editor", "Editor", "Editor", "Редактор", "エディター", "에디터"],
 		"menu_items": [
 			"Editor Settings...", "Editor Settings",
 			"编辑器设置...", "编辑器设置", "編輯器設定...", "編輯器設定",
@@ -37,6 +39,8 @@ const SURFACES := {
 			"Paramètres de l'éditeur...", "Paramètres de l'éditeur",
 			"Editoreinstellungen...", "Editoreinstellungen",
 			"Impostazioni editor...", "Impostazioni editor",
+			"Configurações do Editor...", "Configurações do Editor",
+			"Настройки редактора...", "Настройки редактора",
 			"エディター設定...", "エディター設定",
 			"에디터 설정...", "에디터 설정"
 		],
@@ -180,19 +184,19 @@ func _resolve_surface(args: Dictionary) -> String:
 
 
 func _status(surface: String, args: Dictionary) -> Dictionary:
-	var observation := _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, args, [])
 	return bridge.success(observation, "Settings surface status observed")
 
 
 func _search(surface: String, args: Dictionary) -> Dictionary:
-	var query_values := _search_terms(args)
+	var query_values: Array[String] = _search_terms(args)
 	var search_text := _primary_search_text(query_values)
 	var search_write: Dictionary = {}
 	if not search_text.is_empty():
 		search_write = await _write_search_field(surface, args, search_text)
 		if not bool(search_write.get("success", false)):
 			return search_write
-	var observation := _observe(surface, args, query_values)
+	var observation: Dictionary = _observe(surface, args, query_values)
 	observation["workflow"].append({"step": "search", "queries": query_values, "result_count": int(observation.get("result_count", 0))})
 	if not search_write.is_empty():
 		observation["search_field_write"] = search_write.get("data", {})
@@ -205,13 +209,13 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var workflow: Array[Dictionary] = []
 	if target_path.is_empty():
-		var query_values := _search_terms(args)
-		var observation := _observe(surface, args, query_values)
+		var query_values: Array[String] = _search_terms(args)
+		var observation: Dictionary = _observe(surface, args, query_values)
 		workflow.assign(observation.get("workflow", []))
 		target_path = _first_result_path(observation.get("results", []))
 	if target_path.is_empty():
 		return bridge.error("target_path or a matching search result is required", {"surface": surface, "workflow": workflow})
-	var focus_result := bridge.call_atomic("editor_ui_control", {
+	var focus_result: Dictionary = bridge.call_atomic("editor_ui_control", {
 		"action": "focus_control",
 		"target_path": target_path
 	})
@@ -227,19 +231,19 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
-	var observation := _observe(surface, args, _search_terms(args))
+	var observation: Dictionary = _observe(surface, args, _search_terms(args))
 	_attach_capture(observation, args)
 	return bridge.success(observation, "Settings surface captured")
 
 
 func _close(surface: String, args: Dictionary) -> Dictionary:
-	var observation := _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, args, [])
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	if target_path.is_empty():
 		target_path = str(observation.get("primary_popup_path", "")).strip_edges()
 	if target_path.is_empty():
 		return bridge.error("No closable popup found for settings surface: %s" % surface, observation)
-	var close_result := bridge.call_atomic("editor_popup", {
+	var close_result: Dictionary = bridge.call_atomic("editor_popup", {
 		"action": "close_popup",
 		"target_path": target_path
 	})
@@ -252,7 +256,7 @@ func _close(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _open(surface: String, args: Dictionary) -> Dictionary:
-	var current := _observe(surface, args, [])
+	var current: Dictionary = _observe(surface, args, [])
 	if bool(current.get("dialog_found", false)):
 		current["opened"] = true
 		current["already_open"] = true
@@ -263,7 +267,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 	var attempts: Array[Dictionary] = []
 	for menu_title in _surface_menu_titles(spec):
 		for item_text in spec.get("menu_items", []):
-			var select_result := bridge.call_atomic("editor_ui_control", {
+			var select_result: Dictionary = bridge.call_atomic("editor_ui_control", {
 				"action": "select_menu_item",
 				"menu_title": menu_title,
 				"item_text": str(item_text)
@@ -276,14 +280,14 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 				"message": str(select_result.get("message", select_result.get("error", "")))
 			})
 			if bool(select_result.get("success", false)):
-				var wait_result := await _wait_for_surface(surface, args)
+				var wait_result: Dictionary = await _wait_for_surface(surface, args)
 				attempts.append({
 					"step": "wait_for_ui",
 					"success": bool(wait_result.get("success", false)),
 					"message": str(wait_result.get("message", wait_result.get("error", "")))
 				})
 				if bool(wait_result.get("success", false)):
-					var observation := _observe(surface, args, _search_terms(args))
+					var observation: Dictionary = _observe(surface, args, _search_terms(args))
 					observation["opened"] = true
 					observation["workflow"] = _merge_workflow(attempts, observation.get("workflow", []))
 					observation["verification"] = wait_result.get("data", {})
@@ -296,7 +300,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 
 func _observe(surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
 	var spec: Dictionary = SURFACES.get(surface, {})
-	var controls_result := bridge.call_atomic("editor_ui_control", {
+	var controls_result: Dictionary = bridge.call_atomic("editor_ui_control", {
 		"action": "list_visible",
 		"include_hidden": bool(args.get("include_hidden", false)),
 		"limit": _observation_limit(args),
@@ -309,7 +313,7 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 	var control_rows: Array = []
 	if bool(controls_result.get("success", false)):
 		control_rows = controls_result.get("data", {}).get("controls", [])
-	var popup_result := bridge.call_atomic("editor_popup", {"action": "list_visible"})
+	var popup_result: Dictionary = bridge.call_atomic("editor_popup", {"action": "list_visible"})
 	workflow.append({
 		"step": "list_popups",
 		"success": bool(popup_result.get("success", false))
@@ -317,10 +321,10 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 	var popup_rows: Array = []
 	if bool(popup_result.get("success", false)):
 		popup_rows = popup_result.get("data", {}).get("popups", [])
-	var surface_matches := _matching_rows(control_rows, spec.get("match_queries", []))
-	var popup_matches := _matching_rows(popup_rows, spec.get("match_queries", []))
-	var results := _candidate_results(control_rows, query_values, _result_limit(args))
-	var search_field_path := _first_path(_matching_rows(control_rows, spec.get("search_queries", []), ["LineEdit", "TextEdit", "SearchBox"]), "path")
+	var surface_matches: Array[Dictionary] = _matching_rows(control_rows, spec.get("match_queries", []))
+	var popup_matches: Array[Dictionary] = _matching_rows(popup_rows, spec.get("match_queries", []))
+	var results: Array[Dictionary] = _candidate_results(control_rows, query_values, _result_limit(args))
+	var search_field_path: String = _first_path(_matching_rows(control_rows, spec.get("search_queries", []), ["LineEdit", "TextEdit", "SearchBox"]), "path")
 	return {
 		"surface": surface,
 		"title": str(spec.get("label", surface)),
@@ -388,11 +392,11 @@ func _primary_search_text(query_values: Array[String]) -> String:
 
 
 func _write_search_field(surface: String, args: Dictionary, text: String) -> Dictionary:
-	var observation := _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, args, [])
 	var search_field_path := str(observation.get("search_field_path", "")).strip_edges()
 	if search_field_path.is_empty():
 		return bridge.error("No search field found for settings surface: %s" % surface, observation)
-	var set_result := bridge.call_atomic("editor_ui_control", {
+	var set_result: Dictionary = bridge.call_atomic("editor_ui_control", {
 		"action": "set_text",
 		"target_path": search_field_path,
 		"text": text
@@ -450,8 +454,8 @@ func _append_workflow_entries(target: Array[Dictionary], entries) -> void:
 
 func _matching_rows(rows: Array, queries: Array, class_filters: Array = []) -> Array[Dictionary]:
 	var matches: Array[Dictionary] = []
-	var normalized_queries := _normalize_queries(queries)
-	var normalized_classes := _normalize_queries(class_filters)
+	var normalized_queries: Array[String] = _normalize_queries(queries)
+	var normalized_classes: Array[String] = _normalize_queries(class_filters)
 	for row in rows:
 		if not (row is Dictionary):
 			continue
@@ -544,7 +548,7 @@ func _attach_capture(payload: Dictionary, args: Dictionary) -> void:
 	var output_path := str(args.get("path", "")).strip_edges()
 	if not output_path.is_empty():
 		capture_args["path"] = output_path
-	var capture_result := bridge.call_atomic("editor_screenshot", capture_args)
+	var capture_result: Dictionary = bridge.call_atomic("editor_screenshot", capture_args)
 	payload["capture"] = capture_result.get("data", {}) if bool(capture_result.get("success", false)) else {}
 	payload["capture_path"] = str(capture_result.get("data", {}).get("path", ""))
 	if not bool(capture_result.get("success", false)):

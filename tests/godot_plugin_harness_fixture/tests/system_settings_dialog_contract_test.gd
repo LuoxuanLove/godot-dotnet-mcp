@@ -10,8 +10,8 @@ class FakeBridge extends RefCounted:
 	var editor_visible := false
 	var project_filter_text := ""
 	var editor_filter_text := ""
-	var localized_project_item := "プロジェクト設定..."
-	var localized_editor_item := "エディター設定..."
+	var localized_project_item := "Настройки проекта..."
+	var localized_editor_item := "Настройки редактора..."
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
