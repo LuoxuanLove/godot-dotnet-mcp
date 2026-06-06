@@ -10,6 +10,8 @@ class FakeBridge extends RefCounted:
 	var editor_visible := false
 	var project_filter_text := ""
 	var editor_filter_text := ""
+	var localized_project_item := "プロジェクト設定..."
+	var localized_editor_item := "エディター設定..."
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -22,10 +24,10 @@ class FakeBridge extends RefCounted:
 						return success({"count": _visible_controls().size(), "controls": _visible_controls()})
 					"select_menu_item":
 						var item_text := str(args.get("item_text", ""))
-						if item_text.begins_with("Project Settings"):
+						if item_text == localized_project_item:
 							project_visible = true
 							return success({"menu_title": str(args.get("menu_title", "")), "item_text": item_text})
-						if item_text.begins_with("Editor Settings"):
+						if item_text == localized_editor_item:
 							editor_visible = true
 							return success({"menu_title": str(args.get("menu_title", "")), "item_text": item_text})
 						return error("Menu item not found")
@@ -141,6 +143,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open should delegate to editor_ui_control.select_menu_item.")
 	if not _has_async_call(fake.calls, "editor_ui_control", "wait_for_ui"):
 		return _failure("open should delegate to editor_ui_control.wait_for_ui.")
+	if not _has_menu_item_call(fake.calls, fake.localized_project_item):
+		return _failure("open should try localized Project Settings menu item candidates.")
 
 	var searched := await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -189,6 +193,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open should also support editor_settings.")
 	if str(editor_opened.get("data", {}).get("surface", "")) != "editor_settings":
 		return _failure("editor_settings open should preserve the requested surface.")
+	if not _has_menu_item_call(fake.calls, fake.localized_editor_item):
+		return _failure("open should try localized Editor Settings menu item candidates.")
 
 	return {"name": "system_settings_dialog_contracts", "status": "passed"}
 
@@ -204,6 +210,14 @@ func _has_async_call(calls: Array, tool_name: String, action: String) -> bool:
 	for call in calls:
 		if str(call.get("tool", "")) == tool_name and str(call.get("action", "")) == action and bool(call.get("async", false)):
 			return true
+	return false
+
+
+func _has_menu_item_call(calls: Array, item_text: String) -> bool:
+	for call in calls:
+		if str(call.get("tool", "")) == "editor_ui_control" and str(call.get("action", "")) == "select_menu_item":
+			if str(call.get("args", {}).get("item_text", "")) == item_text:
+				return true
 	return false
 
 

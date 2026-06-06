@@ -12,7 +12,16 @@ const SURFACES := {
 		"label": "Project Settings",
 		"menu_title": "Project",
 		"menu_titles": ["Project", "项目", "專案", "Proyecto", "Projet", "Projekt", "Progetto", "プロジェクト", "프로젝트"],
-		"menu_items": ["Project Settings...", "Project Settings", "项目设置...", "项目设置"],
+		"menu_items": [
+			"Project Settings...", "Project Settings",
+			"项目设置...", "项目设置", "專案設定...", "專案設定",
+			"Configuración del Proyecto...", "Configuración del Proyecto",
+			"Paramètres du projet...", "Paramètres du projet",
+			"Projekteinstellungen...", "Projekteinstellungen",
+			"Impostazioni progetto...", "Impostazioni progetto",
+			"プロジェクト設定...", "プロジェクト設定",
+			"프로젝트 설정...", "프로젝트 설정"
+		],
 		"match_queries": ["Project Settings", "ProjectSettings", "项目设置"],
 		"search_queries": ["filter", "search", "筛选", "搜索"],
 		"tabs": ["General", "Plugins", "Input Map", "Localization", "AutoLoad"]
@@ -21,7 +30,16 @@ const SURFACES := {
 		"label": "Editor Settings",
 		"menu_title": "Editor",
 		"menu_titles": ["Editor", "编辑器", "編輯器", "Editor", "Éditeur", "Editor", "Editor", "エディター", "에디터"],
-		"menu_items": ["Editor Settings...", "Editor Settings", "编辑器设置...", "编辑器设置"],
+		"menu_items": [
+			"Editor Settings...", "Editor Settings",
+			"编辑器设置...", "编辑器设置", "編輯器設定...", "編輯器設定",
+			"Configuración del Editor...", "Configuración del Editor",
+			"Paramètres de l'éditeur...", "Paramètres de l'éditeur",
+			"Editoreinstellungen...", "Editoreinstellungen",
+			"Impostazioni editor...", "Impostazioni editor",
+			"エディター設定...", "エディター設定",
+			"에디터 설정...", "에디터 설정"
+		],
 		"match_queries": ["Editor Settings", "EditorSettings", "编辑器设置"],
 		"search_queries": ["filter", "search", "筛选", "搜索"],
 		"tabs": ["General", "Shortcuts"]
@@ -455,9 +473,9 @@ func _normalize_queries(queries: Array) -> Array[String]:
 
 
 func _class_matches(row: Dictionary, class_filters: Array[String]) -> bool:
-	var class_name := str(row.get("class", "")).to_lower()
+	var control_class := str(row.get("class", "")).to_lower()
 	for class_filter in class_filters:
-		if class_name.contains(class_filter.to_lower()):
+		if control_class.contains(class_filter.to_lower()):
 			return true
 	return false
 
