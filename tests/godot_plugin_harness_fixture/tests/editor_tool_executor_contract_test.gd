@@ -510,6 +510,23 @@ class FakeEditorInterface:
 	var _main_screen_buttons := {}
 	var last_edit_node = null
 	var last_inspected_resource = null
+	var project_settings_popup_count := 0
+	var project_settings_window = null
+	var project_settings_tabs = null
+
+	func _init() -> void:
+		project_settings_window = FakeUiControl.new("ProjectSettingsEditor", "ProjectSettingsEditor", Rect2(32, 32, 260, 160))
+		project_settings_tabs = FakeTabContainer.new("ProjectSettingsTabs", Rect2(40, 56, 240, 120))
+		var general_tab := FakeUiControl.new("GeneralSettings", "VBoxContainer", Rect2(40, 80, 240, 96))
+		var plugins_tab := FakeUiControl.new("PluginsSettings", "VBoxContainer", Rect2(40, 80, 240, 96))
+		var input_map_tab := FakeUiControl.new("InputMapSettings", "VBoxContainer", Rect2(40, 80, 240, 96))
+		project_settings_window.title = "Project Settings"
+		project_settings_window.visible = false
+		project_settings_tabs.add_tab(general_tab, "General")
+		project_settings_tabs.add_tab(plugins_tab, "Plugins")
+		project_settings_tabs.add_tab(input_map_tab, "Input Map")
+		project_settings_window.add_child(project_settings_tabs)
+		_base_control.add_popup_child(project_settings_window)
 
 	func get_editor_scale() -> float:
 		return 1.5
@@ -540,6 +557,10 @@ class FakeEditorInterface:
 
 	func get_base_control():
 		return _base_control
+
+	func popup_project_settings() -> void:
+		project_settings_popup_count += 1
+		project_settings_window.visible = true
 
 	func get_selection():
 		return _selection
@@ -1074,6 +1095,31 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(node_submenu_menu_result.get("success", false)) or int(project_menu.get_popup().activated_index) != 0:
 		return _failure("Editor ui_control select_menu_item should reject node-backed submenu PopupMenu items without activating them.")
+
+	var open_project_settings_result: Dictionary = executor.execute("ui_control", {
+		"action": "open_project_settings"
+	})
+	if not bool(open_project_settings_result.get("success", false)):
+		return _failure("Editor ui_control open_project_settings should open Project Settings.")
+	if editor_interface.project_settings_popup_count != 1 or not editor_interface.project_settings_window.visible:
+		return _failure("Editor ui_control open_project_settings should call the editor Project Settings popup path.")
+	if editor_interface.project_settings_tabs.current_tab != 1:
+		return _failure("Editor ui_control open_project_settings should default to the Plugins tab.")
+	if str(open_project_settings_result.get("data", {}).get("opened_via", "")) != "editor_interface":
+		return _failure("Editor ui_control open_project_settings should report the editor_interface open path.")
+	if str(open_project_settings_result.get("data", {}).get("project_settings_path", "")) != str(editor_interface.project_settings_window.get_path()):
+		return _failure("Editor ui_control open_project_settings should report the Project Settings window path.")
+
+	var activate_project_settings_tab_result: Dictionary = executor.execute("ui_control", {
+		"action": "activate_project_settings_tab",
+		"tab_title": "Input Map"
+	})
+	if not bool(activate_project_settings_tab_result.get("success", false)):
+		return _failure("Editor ui_control activate_project_settings_tab should activate an existing Project Settings tab.")
+	if editor_interface.project_settings_tabs.current_tab != 2:
+		return _failure("Editor ui_control activate_project_settings_tab should switch the Project Settings tab.")
+	if str(activate_project_settings_tab_result.get("data", {}).get("active_path", "")) != str(editor_interface.project_settings_tabs.get_tab_control(2).get_path()):
+		return _failure("Editor ui_control activate_project_settings_tab should report the active Project Settings tab path.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",

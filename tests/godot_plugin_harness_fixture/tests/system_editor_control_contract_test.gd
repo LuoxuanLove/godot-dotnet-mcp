@@ -76,6 +76,14 @@ class FakeBridge extends RefCounted:
 							"item_text": str(args.get("item_text", "")),
 							"item_index": int(args.get("item_index", -1))
 						})
+					"open_project_settings", "activate_project_settings_tab":
+						return success({
+							"action": str(args.get("action", "")),
+							"tab_title": str(args.get("tab_title", "")),
+							"tab_index": int(args.get("tab_index", -1)),
+							"path": str(args.get("path", "")),
+							"project_settings_found": true
+						})
 					"get_control":
 						return success({
 							"control": {"path": str(args.get("target_path", "")), "class": "LineEdit"}
@@ -182,7 +190,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item", "hover_control", "leave_control"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item", "hover_control", "leave_control", "open_project_settings", "activate_project_settings_tab"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
 
@@ -305,6 +313,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate select_menu_item.")
 	if str(select_menu_item_result.get("data", {}).get("item_text", "")) != "Project Settings...":
 		return _failure("system editor_control should preserve select_menu_item item_text.")
+
+	var open_project_settings_result: Dictionary = impl.execute("editor_control", {
+		"action": "open_project_settings",
+		"tab_title": "Plugins",
+		"path": "user://project_settings_plugins.png"
+	})
+	if not bool(open_project_settings_result.get("success", false)):
+		return _failure("system editor_control should delegate open_project_settings.")
+	if str(open_project_settings_result.get("data", {}).get("tab_title", "")) != "Plugins":
+		return _failure("system editor_control should preserve open_project_settings tab_title.")
+	if str(open_project_settings_result.get("data", {}).get("path", "")) != "user://project_settings_plugins.png":
+		return _failure("system editor_control should preserve open_project_settings capture path.")
+
+	var activate_project_settings_tab_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_project_settings_tab",
+		"tab_index": 2
+	})
+	if not bool(activate_project_settings_tab_result.get("success", false)):
+		return _failure("system editor_control should delegate activate_project_settings_tab.")
+	if int(activate_project_settings_tab_result.get("data", {}).get("tab_index", -1)) != 2:
+		return _failure("system editor_control should preserve activate_project_settings_tab tab_index.")
 
 	var activate_dock_missing_title_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_dock_tab"

@@ -10,6 +10,10 @@ const DEFAULT_MAX_DEPTH := 6
 const SEMANTIC_DOCK_ROOTS := ["mcpdock", "mcp"]
 const DOCK_VISIBLE_NAME := "MCP"
 const DOCK_LEGACY_NAME := "MCPDock"
+const PROJECT_SETTINGS_DEFAULT_TAB := "Plugins"
+const PROJECT_SETTINGS_MENU_TITLES := ["Project", "项目", "專案", "プロジェクト", "프로젝트", "Proyecto", "Projet", "Projeto", "Проект"]
+const PROJECT_SETTINGS_ITEM_TEXTS := ["Project Settings...", "Project Settings", "项目设置...", "项目设置", "專案設定...", "專案設定", "プロジェクト設定...", "プロジェクト設定", "프로젝트 설정...", "프로젝트 설정", "Configuración del proyecto...", "Configuración del proyecto", "Paramètres du projet...", "Paramètres du projet", "Configurações do projeto...", "Configurações do projeto", "Настройки проекта...", "Настройки проекта"]
+const PROJECT_SETTINGS_PLUGIN_TAB_TITLES := ["Plugins", "插件", "プラグイン", "플러그인", "Plugins", "Extensions", "Erweiterungen", "Расширения"]
 
 
 func execute(ei, args: Dictionary) -> Dictionary:
@@ -32,6 +36,10 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _open_menu(ei, args)
 		"select_menu_item":
 			return _select_menu_item(ei, args)
+		"open_project_settings":
+			return _open_project_settings(ei, args)
+		"activate_project_settings_tab":
+			return _activate_project_settings_tab(ei, args)
 		"get_control":
 			return _get_control(ei, str(args.get("target_path", "")).strip_edges())
 		"capture_control":
@@ -188,6 +196,147 @@ func _select_menu_item(ei, args: Dictionary) -> Dictionary:
 		"menu": _describe_menu_button(menu),
 		"popup": _describe_menu_popup(popup),
 	}, "Editor menu item selected")
+
+
+func _open_project_settings(ei, args: Dictionary) -> Dictionary:
+	var opened_via := ""
+	var open_details := {}
+	if ei != null and ei.has_method("popup_project_settings"):
+		ei.call("popup_project_settings")
+		opened_via = "editor_interface"
+	else:
+		var menu_result := _open_project_settings_from_menu(ei)
+		if not bool(menu_result.get("success", false)):
+			return menu_result
+		opened_via = "project_menu"
+		open_details = menu_result.get("data", {})
+
+	var project_settings = _find_project_settings_control(ei)
+	var tab_title := str(args.get("tab_title", "")).strip_edges()
+	var tab_index := int(args.get("tab_index", -1))
+	if tab_title.is_empty() and tab_index < 0:
+		tab_title = PROJECT_SETTINGS_DEFAULT_TAB
+	if project_settings != null and (not tab_title.is_empty() or tab_index >= 0):
+		var activation_result := _activate_project_settings_tab_control(ei, project_settings, tab_title, tab_index, args)
+		var activation_data: Dictionary = activation_result.get("data", {})
+		activation_data["opened_via"] = opened_via
+		activation_data["open_details"] = open_details
+		activation_data["project_settings_found"] = true
+		activation_result["data"] = activation_data
+		return activation_result
+
+	return _success({
+		"opened_via": opened_via,
+		"open_details": open_details,
+		"project_settings_found": project_settings != null,
+		"project_settings_path": _safe_control_path(project_settings) if project_settings != null else "",
+	}, "Project Settings opened")
+
+
+func _activate_project_settings_tab(ei, args: Dictionary) -> Dictionary:
+	var project_settings = _find_project_settings_control(ei)
+	if project_settings == null:
+		return _error("Project Settings window not found")
+	var tab_title := str(args.get("tab_title", "")).strip_edges()
+	var tab_index := int(args.get("tab_index", -1))
+	if tab_title.is_empty() and tab_index < 0:
+		tab_title = PROJECT_SETTINGS_DEFAULT_TAB
+	return _activate_project_settings_tab_control(ei, project_settings, tab_title, tab_index, args)
+
+
+func _open_project_settings_from_menu(ei) -> Dictionary:
+	for menu_title in PROJECT_SETTINGS_MENU_TITLES:
+		for item_text in PROJECT_SETTINGS_ITEM_TEXTS:
+			var result := _select_menu_item(ei, {
+				"menu_title": menu_title,
+				"item_text": item_text
+			})
+			if bool(result.get("success", false)):
+				var data: Dictionary = result.get("data", {})
+				data["matched_menu_title"] = menu_title
+				data["matched_item_text"] = item_text
+				return _success(data, "Project Settings menu item selected")
+	return _error("Project Settings menu item not found")
+
+
+func _activate_project_settings_tab_control(ei, project_settings, tab_title: String, tab_index: int, args: Dictionary) -> Dictionary:
+	var tab_match := _find_project_settings_tab_container(project_settings, tab_title, tab_index)
+	var tab_container = tab_match.get("tab_container", null)
+	var resolved_index := int(tab_match.get("tab_index", -1))
+	if tab_container == null or resolved_index < 0:
+		return _error("Project Settings tab not found: %s" % (tab_title if not tab_title.is_empty() else str(tab_index)))
+	var result := _activate_tab_container_at_index(ei, tab_container, resolved_index, args, "")
+	if not bool(result.get("success", false)):
+		return result
+	var data: Dictionary = result.get("data", {})
+	data["project_settings_path"] = _safe_control_path(project_settings)
+	data["project_settings"] = _describe_control(project_settings, _resolve_parent_path(project_settings), 0)
+	data["project_settings_found"] = true
+	result["data"] = data
+	return result
+
+
+func _find_project_settings_tab_container(node, tab_title: String, tab_index: int) -> Dictionary:
+	if node == null:
+		return {}
+	if node.has_method("get_tab_count"):
+		var resolved_index := _resolve_project_settings_tab_index(node, tab_title, tab_index)
+		if resolved_index >= 0:
+			return {
+				"tab_container": node,
+				"tab_index": resolved_index
+			}
+	if not node.has_method("get_children"):
+		return {}
+	for child in node.get_children():
+		var nested = _find_project_settings_tab_container(child, tab_title, tab_index)
+		if not nested.is_empty():
+			return nested
+	return {}
+
+
+func _resolve_project_settings_tab_index(tab_container, tab_title: String, tab_index: int) -> int:
+	var resolved_index := _resolve_requested_tab_index(tab_container, tab_title, tab_index)
+	if resolved_index >= 0:
+		return resolved_index
+	if tab_title.is_empty() or tab_title == PROJECT_SETTINGS_DEFAULT_TAB:
+		for alias in PROJECT_SETTINGS_PLUGIN_TAB_TITLES:
+			resolved_index = _resolve_requested_tab_index(tab_container, str(alias), -1)
+			if resolved_index >= 0:
+				return resolved_index
+	return -1
+
+
+func _find_project_settings_control(ei):
+	var root = _get_editor_root(ei)
+	if root == null:
+		return null
+	return _find_project_settings_control_recursive(root)
+
+
+func _find_project_settings_control_recursive(node):
+	if node == null:
+		return null
+	if _is_project_settings_control(node):
+		return node
+	if not node.has_method("get_children"):
+		return null
+	for child in node.get_children():
+		var nested = _find_project_settings_control_recursive(child)
+		if nested != null:
+			return nested
+	return null
+
+
+func _is_project_settings_control(control) -> bool:
+	var control_class := _control_class_name(control)
+	var node_name := _read_node_name(control)
+	var title := _read_control_title(control)
+	for value in [control_class, node_name, title]:
+		var normalized := str(value).strip_edges().to_lower()
+		if normalized in ["projectsettingseditor", "projectsettings", "project settings", "project settings...", "项目设置", "專案設定"]:
+			return true
+	return false
 
 
 func _get_control(ei, target_path: String) -> Dictionary:

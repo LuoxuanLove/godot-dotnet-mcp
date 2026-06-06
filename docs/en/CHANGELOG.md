@@ -8,8 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.2.1.
 
+### Added
+
+- Added `system_editor_control` Project Settings helpers so clients can open Project Settings and activate tabs such as Plugins without coordinate-based menu automation.
+
 ### Internal
 
+- Bumped tool schema facts to `2026-06-06.1` and extended editor UI harness coverage for Project Settings opening and tab activation.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
 
 ## [1.2.0] - 2026-06-06

@@ -39,6 +39,8 @@ func get_tools() -> Array[Dictionary]:
 							"list_menus",
 							"open_menu",
 							"select_menu_item",
+							"open_project_settings",
+							"activate_project_settings_tab",
 							"get_control",
 							"capture_control",
 							"focus_control",
@@ -82,11 +84,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"tab_title": {
 						"type": "string",
-						"description": "Tab title or child name for activate_ui when target_path points to a TabContainer"
+						"description": "Tab title or child name for activate_ui/project settings tab activation"
 					},
 					"tab_index": {
 						"type": "integer",
-						"description": "Tab index for activate_ui when target_path points to a TabContainer"
+						"description": "Tab index for activate_ui/project settings tab activation"
 					},
 					"menu_title": {
 						"type": "string",
@@ -292,6 +294,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"menu_title": str(args.get("menu_title", "")).strip_edges(),
 				"item_text": str(args.get("item_text", "")).strip_edges(),
 				"item_index": int(args.get("item_index", -1))
+			})
+		"open_project_settings":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "open_project_settings",
+				"tab_title": str(args.get("tab_title", "")).strip_edges(),
+				"tab_index": int(args.get("tab_index", -1)),
+				"path": str(args.get("path", "")).strip_edges()
+			})
+		"activate_project_settings_tab":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "activate_project_settings_tab",
+				"tab_title": str(args.get("tab_title", "")).strip_edges(),
+				"tab_index": int(args.get("tab_index", -1)),
+				"path": str(args.get("path", "")).strip_edges()
 			})
 		"get_control":
 			return bridge.call_atomic("editor_ui_control", {

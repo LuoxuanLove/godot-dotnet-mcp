@@ -144,7 +144,7 @@ The harness discovers cases automatically. The following list shows representati
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
 | `system_project_executor_contracts` | Verify the tool exposure, runtime-health aggregation, and project-level routing of `impl_project.gd` as the current project-level system aggregator |
-| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, menu, `capture_control`, and `popup` actions to the correct atomic tools |
+| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, menu, Project Settings, `capture_control`, and `popup` actions to the correct atomic tools |
 | `system_script_executor_contracts` | Verify `impl_script.gd` as the current script-level system aggregator, and verify that `system_script_analyze` reads Godot LSP diagnostics through the real `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` path |
 | `system_runtime_impl_contracts` | Verify the state, capture annotations, and parameter handling in `impl_runtime.gd` |
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
