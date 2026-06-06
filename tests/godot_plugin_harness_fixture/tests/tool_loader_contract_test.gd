@@ -115,6 +115,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
+	if not exposed_names.has("system_project_run"):
+		return _failure("Tool loader did not expose the unified system_project_run entry.")
+	if exposed_names.has("system_project_stop"):
+		return _failure("Tool loader should keep project stopping under system_project_run(action=stop), not expose system_project_stop separately.")
+	if not _loader.is_tool_exposed("system_project_stop"):
+		return _failure("Tool loader should keep system_project_stop callable as a hidden compatibility alias.")
 	for merged_runtime_tool_name in ["system_runtime_capture", "system_runtime_input"]:
 		if exposed_names.has(merged_runtime_tool_name):
 			return _failure("Tool loader should merge runtime I/O into system_runtime_step, not expose '%s'." % merged_runtime_tool_name)
@@ -224,6 +230,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_status: Dictionary = _loader.get_tool_loader_status()
 	if int(disabled_status.get("exposed_tool_count", 0)) >= int(status.get("exposed_tool_count", 0)):
 		return _failure("Disabling system_project_state did not reduce the exposed tool count.")
+
+	_loader.set_disabled_tools(["system_project_run"])
+	if _loader.is_tool_exposed("system_project_stop"):
+		return _failure("Disabling system_project_run should also disable the hidden system_project_stop compatibility alias.")
+
+	_loader.set_disabled_tools(["system_project_stop"])
+	if _loader.is_tool_exposed("system_project_stop"):
+		return _failure("Disabled compatibility alias system_project_stop should no longer be callable.")
 
 	return {
 		"name": "tool_loader_contracts",

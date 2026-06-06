@@ -391,7 +391,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 11:
-		return _failure("System project implementation should expose 11 tool definitions including plugin_reload, plugin_update, project_files, resource_reference_audit and userdata_maintenance.")
+		return _failure("System project implementation should keep 11 tool definitions including plugin_reload, plugin_update, project_files, resource_reference_audit, userdata_maintenance and the project_stop compatibility alias.")
 	if not _has_tool(tool_defs, "plugin_reload"):
 		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
 	if not _has_tool(tool_defs, "plugin_update"):
@@ -402,6 +402,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
 	if not _has_tool(tool_defs, "resource_reference_audit"):
 		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
+	var project_run_tool := _find_tool(tool_defs, "project_run")
+	var project_run_schema: Dictionary = project_run_tool.get("inputSchema", {})
+	var project_run_properties: Dictionary = project_run_schema.get("properties", {})
+	var project_run_action_schema: Dictionary = project_run_properties.get("action", {})
+	if project_run_action_schema.get("enum", []) != ["run", "stop"]:
+		return _failure("project_run should expose action=run|stop in its public schema.")
+	if not _is_compatibility_alias(tool_defs, "project_stop"):
+		return _failure("project_stop should remain executable only as a compatibility alias.")
+	var project_stop_tool := _find_tool(tool_defs, "project_stop")
+	if str(project_stop_tool.get("compatibility_replacement", "")) != "system_project_run":
+		return _failure("project_stop compatibility alias should inherit disabled state from system_project_run.")
 
 	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
 	if not bool(reference_audit.get("success", false)):
@@ -654,6 +665,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
+	var run_stop_action_count_before := int(executor.bridge.scene_run_actions.size())
+	var project_run_stop: Dictionary = executor.execute("project_run", {"action": "stop"})
+	if not bool(project_run_stop.get("success", false)):
+		return _failure("project_run(action=stop) should stop the running project through the unified entry.")
+	if not bool(project_run_stop.get("data", {}).get("stopped", false)):
+		return _failure("project_run(action=stop) should preserve the stopped=true payload.")
+	if executor.bridge.scene_run_actions.size() != run_stop_action_count_before + 1 or executor.bridge.scene_run_actions[executor.bridge.scene_run_actions.size() - 1] != "stop":
+		return _failure("project_run(action=stop) should call scene_run stop exactly once.")
+	var legacy_project_stop: Dictionary = executor.execute("project_stop", {})
+	if not bool(legacy_project_stop.get("success", false)) or executor.bridge.scene_run_actions[executor.bridge.scene_run_actions.size() - 1] != "stop":
+		return _failure("project_stop compatibility alias should remain executable.")
+	var invalid_project_run_action: Dictionary = executor.execute("project_run", {"action": "pause"})
+	if bool(invalid_project_run_action.get("success", false)):
+		return _failure("project_run should reject unknown actions.")
+	var async_stop_executor = SystemProjectExecutorScript.new()
+	var async_stop_bridge = FakeBridge.new(FakeToolLoader.new())
+	async_stop_executor.bridge = async_stop_bridge
+	async_stop_executor.configure_runtime({})
+	var async_project_run_stop: Dictionary = await async_stop_executor.execute_async("project_run", {
+		"action": "stop",
+		"success_markers": ["SHOULD_NOT_START"],
+		"timeout_ms": 10
+	})
+	if not bool(async_project_run_stop.get("success", false)):
+		return _failure("project_run(action=stop) should bypass marker validation on the async execution path.")
+	if async_stop_bridge.scene_run_actions != ["stop"]:
+		return _failure("project_run(action=stop) async path should stop without starting marker validation.")
 	var run_action_count_before_no_focus := int(executor.bridge.scene_run_actions.size())
 	var no_focus_run: Dictionary = executor.execute("project_run", {"no_focus": true})
 	if bool(no_focus_run.get("success", false)):
@@ -940,6 +978,18 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 		if str(tool_def.get("name", "")) == name:
 			return true
 	return false
+
+
+func _find_tool(tool_defs: Array[Dictionary], name: String) -> Dictionary:
+	for tool_def in tool_defs:
+		if str(tool_def.get("name", "")) == name:
+			return tool_def
+	return {}
+
+
+func _is_compatibility_alias(tool_defs: Array[Dictionary], name: String) -> bool:
+	var tool_def := _find_tool(tool_defs, name)
+	return not tool_def.is_empty() and bool(tool_def.get("compatibility_alias", false))
 
 
 func _has_issue_type(issues: Array, issue_type: String) -> bool:

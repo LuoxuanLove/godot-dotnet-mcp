@@ -11,21 +11,36 @@ class FakeToolLoader:
 
 	var activity_registry = ToolActivityRegistryScript.new()
 	var executed_arguments: Dictionary = {}
+	var disabled_tools: Dictionary = {}
 
 	func get_tool_definitions() -> Array:
 		return [{
 			"name": "system_project_state",
 			"category": "system",
 			"inputSchema": {"type": "object", "properties": {}}
+		}, {
+			"name": "system_project_stop",
+			"category": "system",
+			"compatibility_alias": true,
+			"compatibility_replacement": "system_project_run",
+			"inputSchema": {"type": "object", "properties": {}}
 		}]
 
 	func get_exposed_tool_definitions() -> Array:
-		return get_tool_definitions()
+		return [{
+			"name": "system_project_state",
+			"category": "system",
+			"inputSchema": {"type": "object", "properties": {}}
+		}]
 
 	func get_domain_states() -> Array:
 		return [{"category": "system", "status": "ready"}]
 
 	func is_tool_exposed(tool_name: String) -> bool:
+		if disabled_tools.has(tool_name):
+			return false
+		if tool_name == "system_project_stop":
+			return not disabled_tools.has("system_project_run")
 		return tool_name == "system_project_state"
 
 	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
@@ -89,6 +104,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var agent_context = (((recent as Array)[0] as Dictionary).get("agent_context", {}) as Dictionary)
 	if str(agent_context.get("agent_id", "")) != "stdio-contract-agent":
 		return _failure("Stdio tools/call should retain top-level _mcp_context in activity.")
+
+	var alias_response: Dictionary = await stdio_server.call("_handle_tools_call", {
+		"name": "system_project_stop",
+		"arguments": {}
+	}, 43)
+	var alias_result = alias_response.get("result", {})
+	if not (alias_result is Dictionary) or bool((alias_result as Dictionary).get("isError", true)):
+		return _failure("Stdio tools/call should allow hidden compatibility aliases.")
+	var alias_content = (alias_result as Dictionary).get("content", [])
+	if not (alias_content is Array) or (alias_content as Array).is_empty():
+		return _failure("Stdio compatibility alias call should include text content.")
+	var alias_payload = JSON.parse_string(str(((alias_content as Array)[0] as Dictionary).get("text", "")))
+	if not (alias_payload is Dictionary):
+		return _failure("Stdio compatibility alias call should serialize a JSON object payload.")
+	var alias_data = (alias_payload as Dictionary).get("data", {})
+	if not (alias_data is Dictionary) or str((alias_data as Dictionary).get("tool", "")) != "project_stop":
+		return _failure("Stdio compatibility alias call should resolve system_project_stop to project_stop.")
+
+	loader.disabled_tools["system_project_run"] = true
+	var disabled_alias_response: Dictionary = await stdio_server.call("_handle_tools_call", {
+		"name": "system_project_stop",
+		"arguments": {}
+	}, 44)
+	var disabled_alias_result = disabled_alias_response.get("result", {})
+	if not (disabled_alias_result is Dictionary) or not bool((disabled_alias_result as Dictionary).get("isError", false)):
+		return _failure("Stdio tools/call should reject hidden compatibility aliases when their replacement tool is disabled.")
+	loader.disabled_tools.clear()
 
 	var plain_activity_result: Dictionary = stdio_server.call("_normalize_tool_result", {
 		"success": true,

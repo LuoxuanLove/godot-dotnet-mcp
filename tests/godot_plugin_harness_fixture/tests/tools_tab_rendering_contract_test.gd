@@ -159,11 +159,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var dap_tool = _find_child_by_metadata(system_category, "tool", "system_dap_debugger")
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
+	var project_run_tool = _find_child_by_metadata(system_category, "tool", "system_project_run")
+	var project_stop_tool = _find_child_by_metadata(system_category, "tool", "system_project_stop")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_run_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
+	if project_stop_tool != null:
+		return _failure("Tools tab should not render system_project_stop as a separate high-level system tool.")
+	var project_run_stop_action = _find_child_by_metadata(project_run_tool, "action", "scene_run.stop")
+	if project_run_stop_action == null:
+		return _failure("Tools tab should keep the scene_run stop child under the unified project run tool.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
@@ -357,6 +364,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"]
+		"system_project_run":
+			return ["run", "stop"]
 		"system_plugin_update":
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 	return []

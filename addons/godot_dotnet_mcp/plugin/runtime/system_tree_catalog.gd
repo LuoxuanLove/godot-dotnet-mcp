@@ -64,7 +64,6 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "scene_run", "actions": ["play_main", "play_custom", "stop"]},
 		{"tool": "debug_runtime_bridge", "actions": ["get_recent", "get_recent_filtered"]}
 	],
-	"system_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
 	"system_bindings_audit": [
 		{"tool": "script_inspect",       "actions": ["path"]},
 		{"tool": "script_references",    "actions": ["get_scene_refs", "get_base_type"]},
