@@ -223,6 +223,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_search_name": "搜尋",
 	"tool_action_list_rows_name": "列出設定列",
 	"tool_action_list_rows_desc": "從可見設定介面列出保守的唯讀設定列模型，不寫入搜尋框。",
+	"tool_action_resolve_row_name": "解析設定列",
+	"tool_action_resolve_row_desc": "解析唯一可見設定列，不讀取或寫入其值。",
 	"tool_action_read_value_name": "讀取值",
 	"tool_action_read_value_desc": "讀取唯一設定列的目前可見值，不寫入設定值。",
 	"tool_action_path_name": "讀取路徑",

@@ -139,7 +139,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_rows", "resolve_row", "read_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
@@ -212,6 +212,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("list_rows should not return filter or value child controls as setting rows.")
 	if _has_call_since(fake.calls, calls_before_list_rows, "editor_ui_control", "set_text"):
 		return _failure("list_rows must not write the settings search field.")
+
+	var calls_before_resolve_row := fake.calls.size()
+	var resolved_row := impl.execute("settings_dialog", {
+		"action": "resolve_row",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"limit": 10
+	})
+	if not bool(resolved_row.get("success", false)):
+		return _failure("resolve_row should succeed for a uniquely visible row.")
+	var resolved_row_data: Dictionary = resolved_row.get("data", {})
+	if str(resolved_row_data.get("row_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name":
+		return _failure("resolve_row should return the unique row control path.")
+	if str(resolved_row_data.get("value_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name/Value":
+		return _failure("resolve_row should expose the matching value control path.")
+	if str(resolved_row_data.get("resolution", {}).get("selector", {}).get("setting_path", "")) != "application/config/name":
+		return _failure("resolve_row should preserve selector evidence.")
+	if _has_call_since(fake.calls, calls_before_resolve_row, "editor_ui_control", "set_text"):
+		return _failure("resolve_row must not write the settings search field.")
+
+	var resolved_by_value_path := impl.execute("settings_dialog", {
+		"action": "resolve_row",
+		"surface": "project_settings",
+		"target_path": "/root/ProjectSettings/General/Application/Config/Name/Value",
+		"limit": 10
+	})
+	if not bool(resolved_by_value_path.get("success", false)):
+		return _failure("resolve_row should resolve a value child target_path back to its setting row.")
+	if str(resolved_by_value_path.get("data", {}).get("row_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name":
+		return _failure("resolve_row value child resolution should return the row path.")
 
 	var calls_before_read_value := fake.calls.size()
 	var read_value := impl.execute("settings_dialog", {
@@ -342,6 +372,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("read_value ambiguous failure should report the ambiguous_row reason.")
+
+	var ambiguous_resolve := impl.execute("settings_dialog", {
+		"action": "resolve_row",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"limit": 1
+	})
+	if bool(ambiguous_resolve.get("success", false)):
+		return _failure("resolve_row should fail when multiple rows match the selector even if the requested limit is small.")
+	if str(ambiguous_resolve.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("resolve_row ambiguous failure should report the ambiguous_row reason.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",

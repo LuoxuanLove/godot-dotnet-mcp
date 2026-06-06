@@ -236,6 +236,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_search_name": "搜索",
 	"tool_action_list_rows_name": "列出设置行",
 	"tool_action_list_rows_desc": "从可见设置界面列出保守的只读设置行模型，不写入搜索框。",
+	"tool_action_resolve_row_name": "解析设置行",
+	"tool_action_resolve_row_desc": "解析唯一可见设置行，不读取或写入其值。",
 	"tool_action_read_value_name": "读取值",
 	"tool_action_read_value_desc": "读取唯一设置行的当前可见值，不写入设置值。",
 	"tool_action_path_name": "读取路径",

@@ -20,6 +20,8 @@ The workflow now also exposes read-only row models through `list_rows`, summariz
 
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
+Clients can now resolve a unique visible settings row through `resolve_row` before reading a value or choosing a follow-up UI action. The response carries row paths, confidence, selector evidence, and ambiguity diagnostics while staying read-only.
+
 ### ✅ Compatibility and Upgrade Notes
 
 This change only extends the public tool schema. Existing `system_editor_control` actions remain available, and clients that do not call `wait_for_ui` do not need to change their requests.

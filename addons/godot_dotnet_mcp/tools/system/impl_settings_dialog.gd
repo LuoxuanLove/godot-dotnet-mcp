@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, resolve a unique visible row, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "resolve_row", "read_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -91,7 +91,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value"
+						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by resolve_row/read_value"
 					},
 					"include_raw_controls": {
 						"type": "boolean",
@@ -150,6 +150,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _list_rows(surface, args)
+		"resolve_row":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _resolve_row(surface, args)
 		"read_value":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -330,6 +335,73 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(value_payload, args)
 	return bridge.success(value_payload, "Settings row value read")
+
+
+func _resolve_row(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for resolve_row: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before resolve_row.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_read(all_controls, surface, args, query_values)
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched resolve_row.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var value_control: Dictionary = _value_control_for_row(row, all_controls)
+	var resolved_value_path := str(row.get("value_control_path", "")).strip_edges()
+	if resolved_value_path.is_empty() and not value_control.is_empty():
+		resolved_value_path = str(value_control.get("path", value_control.get("node_path", ""))).strip_edges()
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"row": row,
+		"row_id": str(row.get("row_id", "")),
+		"row_control_path": str(row.get("row_control_path", "")),
+		"label_control_path": str(row.get("label_control_path", "")),
+		"value_control_path": resolved_value_path,
+		"value_control": value_control,
+		"setting_path": str(row.get("setting_path", "")),
+		"confidence": str(row.get("confidence", "low")),
+		"resolution": row_resolution.get("resolution", {}),
+		"verification": {
+			"unique_row": true,
+			"require_confidence": _required_confidence(args),
+			"row_confidence": str(row.get("confidence", "low"))
+		},
+		"workflow": _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"target_path": str(args.get("target_path", "")),
+			"setting_path": str(args.get("setting_path", "")),
+			"queries": query_values,
+			"success": true
+		})
+	}
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings row resolved")
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
