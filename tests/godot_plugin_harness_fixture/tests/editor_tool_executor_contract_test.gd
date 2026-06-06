@@ -373,6 +373,7 @@ class FakePopupMenuControl:
 	extends FakeUiControl
 
 	var activated_index := -1
+	var activated_callback := Callable()
 	var _items: Array[Dictionary] = []
 
 	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 160, 120)) -> void:
@@ -415,6 +416,8 @@ class FakePopupMenuControl:
 
 	func activate_item(index: int) -> void:
 		activated_index = index
+		if activated_callback.is_valid():
+			activated_callback.call(index)
 
 
 class FakeMenuButton:
@@ -614,6 +617,33 @@ class FakeEditorInterface:
 		elif updated.has(plugin_cfg):
 			updated.remove_at(updated.find(plugin_cfg))
 		ProjectSettings.set_setting("editor_plugins/enabled", updated)
+
+
+class FakeMenuOnlyEditorInterface:
+	extends RefCounted
+
+	var _base_control := FakeEditorBaseControl.new()
+	var project_settings_window = null
+	var project_settings_tabs = null
+
+	func _init(include_project_settings: bool = true) -> void:
+		if include_project_settings:
+			project_settings_window = FakeUiControl.new("ProjectSettingsEditor", "ProjectSettingsEditor", Rect2(32, 32, 260, 160))
+			project_settings_tabs = FakeTabContainer.new("ProjectSettingsTabs", Rect2(40, 56, 240, 120))
+			project_settings_window.title = "Project Settings"
+			project_settings_window.visible = false
+			project_settings_tabs.add_tab(FakeUiControl.new("GeneralSettings", "VBoxContainer", Rect2(40, 80, 240, 96)), "General")
+			project_settings_tabs.add_tab(FakeUiControl.new("PluginsSettings", "VBoxContainer", Rect2(40, 80, 240, 96)), "Plugins")
+			project_settings_tabs.add_tab(FakeUiControl.new("InputMapSettings", "VBoxContainer", Rect2(40, 80, 240, 96)), "Input Map")
+			project_settings_window.add_child(project_settings_tabs)
+			_base_control.add_popup_child(project_settings_window)
+
+	func get_base_control():
+		return _base_control
+
+	func show_project_settings(_index: int = -1) -> void:
+		if project_settings_window != null:
+			project_settings_window.visible = true
 
 
 class FakeEditorPlugin:
@@ -1120,6 +1150,43 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_project_settings_tab should switch the Project Settings tab.")
 	if str(activate_project_settings_tab_result.get("data", {}).get("active_path", "")) != str(editor_interface.project_settings_tabs.get_tab_control(2).get_path()):
 		return _failure("Editor ui_control activate_project_settings_tab should report the active Project Settings tab path.")
+
+	var fallback_executor = EditorExecutorScript.new()
+	var fallback_interface := FakeMenuOnlyEditorInterface.new()
+	var fallback_project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
+	fallback_project_menu.get_popup().add_item("Project Settings...", 301)
+	fallback_project_menu.get_popup().activated_callback = Callable(fallback_interface, "show_project_settings")
+	fallback_interface.get_base_control().add_popup_child(fallback_project_menu)
+	fallback_executor.configure_context({
+		"editor_interface": fallback_interface,
+		"plugin_host": FakeEditorPlugin.new(fallback_interface),
+	})
+	var fallback_project_settings_result: Dictionary = fallback_executor.execute("ui_control", {
+		"action": "open_project_settings"
+	})
+	if not bool(fallback_project_settings_result.get("success", false)):
+		return _failure("Editor ui_control open_project_settings should fall back to the Project menu when the editor API is unavailable.")
+	if str(fallback_project_settings_result.get("data", {}).get("opened_via", "")) != "project_menu":
+		return _failure("Editor ui_control open_project_settings should report the menu fallback path.")
+	if int(fallback_project_menu.get_popup().activated_index) != 0 or not fallback_interface.project_settings_window.visible:
+		return _failure("Editor ui_control open_project_settings menu fallback should select the Project Settings menu item.")
+	if fallback_interface.project_settings_tabs.current_tab != 1:
+		return _failure("Editor ui_control open_project_settings menu fallback should activate the Plugins tab.")
+
+	var missing_window_executor = EditorExecutorScript.new()
+	var missing_window_interface := FakeMenuOnlyEditorInterface.new(false)
+	var missing_window_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
+	missing_window_menu.get_popup().add_item("Project Settings...", 401)
+	missing_window_interface.get_base_control().add_popup_child(missing_window_menu)
+	missing_window_executor.configure_context({
+		"editor_interface": missing_window_interface,
+		"plugin_host": FakeEditorPlugin.new(missing_window_interface),
+	})
+	var missing_window_result: Dictionary = missing_window_executor.execute("ui_control", {
+		"action": "open_project_settings"
+	})
+	if bool(missing_window_result.get("success", false)):
+		return _failure("Editor ui_control open_project_settings should fail clearly when the Project Settings window cannot be found after opening.")
 
 	var activate_bottom_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",

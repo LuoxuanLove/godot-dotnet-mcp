@@ -216,6 +216,12 @@ func _open_project_settings(ei, args: Dictionary) -> Dictionary:
 	var tab_index := int(args.get("tab_index", -1))
 	if tab_title.is_empty() and tab_index < 0:
 		tab_title = PROJECT_SETTINGS_DEFAULT_TAB
+	if project_settings == null:
+		return _error("Project Settings window not found after open", {
+			"opened_via": opened_via,
+			"open_details": open_details,
+			"project_settings_found": false
+		})
 	if project_settings != null and (not tab_title.is_empty() or tab_index >= 0):
 		var activation_result := _activate_project_settings_tab_control(ei, project_settings, tab_title, tab_index, args)
 		var activation_data: Dictionary = activation_result.get("data", {})
@@ -228,8 +234,8 @@ func _open_project_settings(ei, args: Dictionary) -> Dictionary:
 	return _success({
 		"opened_via": opened_via,
 		"open_details": open_details,
-		"project_settings_found": project_settings != null,
-		"project_settings_path": _safe_control_path(project_settings) if project_settings != null else "",
+		"project_settings_found": true,
+		"project_settings_path": _safe_control_path(project_settings),
 	}, "Project Settings opened")
 
 
