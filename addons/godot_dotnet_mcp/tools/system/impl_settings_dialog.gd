@@ -387,6 +387,8 @@ func _candidate_results(rows: Array, query_values: Array[String], limit: int, su
 		if not (row is Dictionary):
 			continue
 		var dict := row as Dictionary
+		if not _is_settings_search_result_candidate(dict):
+			continue
 		if not query_values.is_empty() and not _haystack_matches(dict, query_values):
 			continue
 		var path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
@@ -625,6 +627,12 @@ func _setting_path_hint(row: Dictionary) -> String:
 	var tooltip := str(row.get("tooltip", "")).strip_edges()
 	if tooltip.contains("/") or tooltip.contains("."):
 		return tooltip
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	var settings_index := path.find("Settings/")
+	if settings_index >= 0:
+		var tail := path.substr(settings_index + "Settings/".length()).strip_edges()
+		if not tail.is_empty():
+			return _path_tail_to_setting_path(tail)
 	return ""
 
 
@@ -634,6 +642,28 @@ func _value_text_hint(row: Dictionary) -> String:
 		if not value.is_empty():
 			return value
 	return ""
+
+
+func _path_tail_to_setting_path(path_tail: String) -> String:
+	var segments := path_tail.split("/", false)
+	var normalized: Array[String] = []
+	for segment in segments:
+		var cleaned := _camel_to_snake(str(segment).strip_edges())
+		if not cleaned.is_empty():
+			normalized.append(cleaned)
+	return "/".join(normalized)
+
+
+func _camel_to_snake(value: String) -> String:
+	var result := ""
+	for index in range(value.length()):
+		var character := value.substr(index, 1)
+		var lower := character.to_lower()
+		var upper := character.to_upper()
+		if index > 0 and character == upper and character != lower:
+			result += "_"
+		result += lower
+	return result
 
 
 func _settings_row_models(rows: Array, surface: String, query_values: Array[String], limit: int) -> Array[Dictionary]:
@@ -665,6 +695,19 @@ func _is_settings_row_candidate(row: Dictionary) -> bool:
 	if path.contains("/") and (path.contains("Settings") or path.contains("General") or path.contains("Interface")):
 		return true
 	return false
+
+
+func _is_settings_search_result_candidate(row: Dictionary) -> bool:
+	if not _is_settings_row_candidate(row):
+		return false
+	var control_class := str(row.get("class", "")).strip_edges()
+	if bool(row.get("editable_text", false)) or control_class in ["LineEdit", "TextEdit", "CodeEdit"]:
+		return false
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	var lower_path := path.to_lower()
+	if lower_path.contains("/filter") or lower_path.ends_with("/value"):
+		return false
+	return true
 
 
 func _build_row_model(row: Dictionary, surface: String, row_id_override: String) -> Dictionary:
