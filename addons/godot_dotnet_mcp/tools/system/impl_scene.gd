@@ -1,12 +1,12 @@
 @tool
 extends RefCounted
 
-## System implementation: scene_validate, scene_analyze, scene_tree, scene_patch
+## System implementation: scene_inspect, scene_validate, scene_analyze, scene_tree, scene_patch
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
-const HANDLED_TOOLS := ["scene_validate", "scene_analyze", "scene_tree", "scene_patch"]
+const HANDLED_TOOLS := ["scene_inspect", "scene_validate", "scene_analyze", "scene_tree", "scene_patch"]
 
 
 func handles(tool_name: String) -> bool:
@@ -15,6 +15,18 @@ func handles(tool_name: String) -> bool:
 
 func get_tools() -> Array[Dictionary]:
 	return [
+		{
+			"name": "scene_inspect",
+			"description": "SCENE INSPECT: Unified read-only scene inspection entry. Actions: validate, analyze, full. validate performs the quick integrity check used by system_scene_validate; analyze performs the deeper structural inspection used by system_scene_analyze; full returns both results as separate validation and analysis payloads without flattening fields. Requires: scene (.tscn path).",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["validate", "analyze", "full"], "description": "Scene inspection action"},
+					"scene": {"type": "string", "description": "Scene path (res://..., .tscn)"}
+				},
+				"required": ["action", "scene"]
+			}
+		},
 		{
 			"name": "scene_validate",
 			"description": "SCENE VALIDATE: Quick integrity check of a .tscn file — structural errors, missing file references, and UID/fallback path consistency hints. Lighter than scene_analyze; use first to confirm a scene is loadable. Returns: valid, issues[]{severity, type, message}, missing_dependencies[], dependency_reference_issues[]. Requires: scene (.tscn path).",
@@ -103,6 +115,7 @@ func get_tools() -> Array[Dictionary]:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
+		"scene_inspect":  return _execute_scene_inspect(args)
 		"scene_validate": return _execute_scene_validate(args)
 		"scene_analyze":  return _execute_scene_analyze(args)
 		"scene_tree":     return _execute_scene_tree(args)
@@ -212,6 +225,53 @@ func _execute_scene_tree(args: Dictionary) -> Dictionary:
 
 
 # --- tool implementations ---
+
+func _execute_scene_inspect(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"validate":
+			return _execute_scene_validate(args)
+		"analyze":
+			return _execute_scene_analyze(args)
+		"full":
+			return _execute_scene_inspect_full(args)
+		_:
+			return bridge.error("Unknown scene_inspect action: %s" % action)
+
+
+func _execute_scene_inspect_full(args: Dictionary) -> Dictionary:
+	var validation_result: Dictionary = _execute_scene_validate(args)
+	var validation_data: Dictionary = bridge.extract_data(validation_result).duplicate(true)
+	if not bool(validation_result.get("success", false)):
+		return bridge.error("Scene validation failed before analysis.", {
+			"scene": str(validation_data.get("scene", args.get("scene", ""))),
+			"valid": false,
+			"validation_issue_count": int(validation_data.get("issue_count", 0)),
+			"analysis_issue_count": 0,
+			"validation": validation_data,
+			"analysis": {},
+			"validation_error": str(validation_result.get("error", validation_result.get("message", "")))
+		})
+	var analysis_result: Dictionary = _execute_scene_analyze(args)
+	var analysis_data: Dictionary = bridge.extract_data(analysis_result).duplicate(true)
+	if not bool(analysis_result.get("success", false)):
+		return bridge.error("Scene analysis failed after validation.", {
+			"scene": str(validation_data.get("scene", args.get("scene", ""))),
+			"valid": bool(validation_data.get("valid", false)),
+			"validation_issue_count": int(validation_data.get("issue_count", 0)),
+			"analysis_issue_count": int(analysis_data.get("issue_count", 0)),
+			"validation": validation_data,
+			"analysis": analysis_data,
+			"analysis_error": str(analysis_result.get("error", analysis_result.get("message", "")))
+		})
+	return bridge.success({
+		"scene": str(validation_data.get("scene", args.get("scene", ""))),
+		"valid": bool(validation_data.get("valid", false)),
+		"validation_issue_count": int(validation_data.get("issue_count", 0)),
+		"analysis_issue_count": int(analysis_data.get("issue_count", 0)),
+		"validation": validation_data,
+		"analysis": analysis_data
+	})
 
 func _execute_scene_validate(args: Dictionary) -> Dictionary:
 	var scene_path := str(args.get("scene", "")).strip_edges()

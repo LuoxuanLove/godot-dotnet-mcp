@@ -359,6 +359,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"]
 		"system_plugin_update":
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
+		"system_scene_inspect":
+			return ["validate", "analyze", "full"]
 	return []
 
 

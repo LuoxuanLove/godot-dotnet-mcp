@@ -20,6 +20,7 @@ Target version: 1.2.0.
 ### Added
 
 - Added output size safeguards for MCP resources and prompts: oversized file-backed resources are rejected before full reads, and oversized prompt text is truncated with `_meta` byte-size details.
+- Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while keeping the existing scene validation and analysis tools compatible.
 - Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
 - Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
 - Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
@@ -47,6 +48,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended scene executor, tool loader, Tools tree rendering, locale inventory, and protocol facts coverage for the `2026-06-06.1` `system_scene_inspect` schema surface.
 - Extended JSON-RPC request, HTTP server, stdio resources/prompts, and tool router contracts to cover malformed `params` and `tools/call.arguments` boundaries with the `2026-06-05.6` tool schema facts update.
 - Extended `mcp_resources_prompts_contracts` to verify resource output limits, prompt truncation metadata, and the `2026-06-05.5` tool schema facts update.
 - Extended script edit service harness coverage to require explicit C# `NotImplementedException` guard bodies instead of ambiguous generated fallback bodies.

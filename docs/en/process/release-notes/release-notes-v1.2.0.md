@@ -5,6 +5,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✨ Highlights
 
 - Added top menu control to `system_editor_control`, so agents can list editor menus, open a `MenuButton`, and choose a `PopupMenu` item by text or index before continuing with popup inspection or text/button actions.
+- Added `system_scene_inspect` so clients can request quick validation, deeper analysis, or a combined read-only scene inspection result from one high-level entry.
 - Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Added User-tool runtime diagnostics so clients can inspect discovered custom tools, load failures, watcher state, compatibility, and recent audit entries from the plugin evolution tools or project health.
@@ -38,6 +39,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✅ Compatibility and Upgrade Notes
 
 - Existing tool names remain compatible.
+- Existing scene validation and analysis tool names remain compatible; `system_scene_inspect` is an additive combined route.
 - The tool schema version changed because editor control gained new UI actions and user-tool runtime diagnostics now expose live runtime-state fields.
 - `system_editor_plugin_control` is additive; use dedicated plugin reload/update tools for this plugin instead of generic self-disable flows.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.

@@ -81,6 +81,12 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "scene_audit",    "actions": ["from_path"]},
 		{"tool": "script_inspect", "actions": ["path"]}
 	],
+	"system_scene_inspect": [
+		{"tool": "scene_audit",    "actions": ["from_path"]},
+		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]},
+		{"tool": "scene_bindings", "actions": ["from_path"]},
+		{"tool": "script_inspect", "actions": ["path"]}
+	],
 	"system_scene_patch": [
 		{"tool": "scene_management", "actions": ["get_current", "open", "save"]},
 		{"tool": "node_lifecycle",   "actions": ["create", "delete", "attach_script", "rename"]},
