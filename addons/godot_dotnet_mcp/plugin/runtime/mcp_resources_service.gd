@@ -34,6 +34,7 @@ const SENSITIVE_TEXT_MARKERS := [
 	"refresh_token=", "refresh_token:", "\"refresh_token\":", "'refresh_token':",
 	"refresh-token=", "refresh-token:", "\"refresh-token\":", "'refresh-token':"
 ]
+const MAX_RESOURCE_TEXT_BYTES := 524288
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -120,12 +121,28 @@ func build_server_capabilities() -> Dictionary:
 
 func _build_text_resource(uri: String, payload, mime_type: String) -> Dictionary:
 	var text := JSON.stringify(_sanitize(payload)) if mime_type == "application/json" else str(payload)
+	var limited := _limit_text_output(text, MAX_RESOURCE_TEXT_BYTES)
+	var returned_text := str(limited.get("text", ""))
+	if mime_type == "application/json" and bool(limited.get("truncated", false)):
+		returned_text = JSON.stringify({
+			"truncated": true,
+			"originalByteSize": int(limited.get("original_byte_size", 0)),
+			"returnedByteSize": returned_text.to_utf8_buffer().size(),
+			"maxByteSize": int(limited.get("max_byte_size", MAX_RESOURCE_TEXT_BYTES)),
+			"message": "JSON resource output exceeded the byte limit."
+		})
+	var content := {
+		"uri": uri,
+		"mimeType": mime_type,
+		"text": returned_text
+	}
+	if bool(limited.get("truncated", false)):
+		content["truncated"] = true
+		content["originalByteSize"] = int(limited.get("original_byte_size", 0))
+		content["returnedByteSize"] = int(limited.get("returned_byte_size", 0))
+		content["maxByteSize"] = int(limited.get("max_byte_size", MAX_RESOURCE_TEXT_BYTES))
 	return {
-		"contents": [{
-			"uri": uri,
-			"mimeType": mime_type,
-			"text": text
-		}]
+		"contents": [content]
 	}
 
 
@@ -191,6 +208,18 @@ func _read_template_resource(uri: String) -> Dictionary:
 	var res_path := str(res_path_result.get("path", ""))
 	if not FileAccess.file_exists(res_path):
 		return {"success": false, "error": "Resource file not found: %s" % res_path}
+	var file := FileAccess.open(res_path, FileAccess.READ)
+	if file == null:
+		return {"success": false, "error": "Resource file could not be opened: %s" % res_path}
+	var file_size := file.get_length()
+	file.close()
+	if file_size > MAX_RESOURCE_TEXT_BYTES:
+		return {
+			"success": false,
+			"error": "Resource output exceeds the %d byte limit: %s (%d bytes)" % [MAX_RESOURCE_TEXT_BYTES, res_path, file_size],
+			"maxByteSize": MAX_RESOURCE_TEXT_BYTES,
+			"originalByteSize": file_size
+		}
 	var text := FileAccess.get_file_as_string(res_path)
 	return _build_text_resource(uri, text, _mime_type_for_path(res_path))
 func _mime_type_for_path(path: String) -> String:
@@ -329,3 +358,35 @@ func _sanitize(value):
 	if _sanitize_for_json.is_valid():
 		return _sanitize_for_json.call(value)
 	return value
+
+
+func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:
+	var original_byte_size := text.to_utf8_buffer().size()
+	if original_byte_size <= max_byte_size:
+		return {
+			"text": text,
+			"truncated": false,
+			"original_byte_size": original_byte_size,
+			"returned_byte_size": original_byte_size,
+			"max_byte_size": max_byte_size
+		}
+	var limited_text := _truncate_text_to_utf8_byte_limit(text, max_byte_size)
+	return {
+		"text": limited_text,
+		"truncated": true,
+		"original_byte_size": original_byte_size,
+		"returned_byte_size": limited_text.to_utf8_buffer().size(),
+		"max_byte_size": max_byte_size
+	}
+
+
+func _truncate_text_to_utf8_byte_limit(text: String, max_byte_size: int) -> String:
+	var low := 0
+	var high := text.length()
+	while low < high:
+		var mid := int(ceil(float(low + high + 1) / 2.0))
+		if text.substr(0, mid).to_utf8_buffer().size() <= max_byte_size:
+			low = mid
+		else:
+			high = mid - 1
+	return text.substr(0, low)

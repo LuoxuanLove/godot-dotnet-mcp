@@ -90,6 +90,8 @@ const WRITE_ACTIONS := {
 	"save": true,
 	"save_as": true,
 	"scan": true,
+	"select_item": true,
+	"select_popup_menu_item": true,
 	"set": true,
 	"set_control_text": true,
 	"set_popup_text": true,
@@ -110,7 +112,7 @@ func success(data = null, message: String = "") -> Dictionary:
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 	_atomic_executors.clear()
 
 
@@ -305,7 +307,7 @@ func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 
 
 func _configure_executor(executor, category: String) -> void:
-	var context := _runtime_context.duplicate(true)
+	var context := _runtime_context.duplicate()
 	context["category"] = category
 	var plugin = _resolve_plugin_host(context)
 	if plugin != null:
@@ -313,9 +315,9 @@ func _configure_executor(executor, category: String) -> void:
 		if not context.has("editor_interface") and plugin.has_method("get_editor_interface"):
 			context["editor_interface"] = plugin.get_editor_interface()
 	if executor.has_method("configure_runtime"):
-		executor.configure_runtime(context.duplicate(true))
+		executor.configure_runtime(context.duplicate())
 	if executor.has_method("configure_context"):
-		executor.configure_context(context.duplicate(true))
+		executor.configure_context(context.duplicate())
 
 
 func _resolve_plugin_host(context: Dictionary):

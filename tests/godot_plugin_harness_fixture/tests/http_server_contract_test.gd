@@ -141,6 +141,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if rpc_error_text.find("Missing tool name") == -1:
 		return _failure("JSON-RPC tools/call missing-name response did not preserve the router error text.")
 
+	var rpc_invalid_params: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 3,
+		"method": "tools/call",
+		"params": []
+	}))
+	if int((rpc_invalid_params.get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("JSON-RPC tools/call should reject non-object params with -32602.")
+
+	var rpc_invalid_arguments: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 4,
+		"method": "tools/call",
+		"params": {
+			"name": "system_help",
+			"arguments": []
+		}
+	}))
+	var rpc_invalid_arguments_result = rpc_invalid_arguments.get("result", {})
+	if not (rpc_invalid_arguments_result is Dictionary) or not bool((rpc_invalid_arguments_result as Dictionary).get("isError", false)):
+		return _failure("JSON-RPC tools/call should return isError=true for non-object arguments.")
+	var rpc_invalid_arguments_content = (rpc_invalid_arguments_result as Dictionary).get("content", [])
+	if not (rpc_invalid_arguments_content is Array) or (rpc_invalid_arguments_content as Array).is_empty():
+		return _failure("JSON-RPC tools/call non-object arguments should include text content.")
+	var rpc_invalid_arguments_text := str(((rpc_invalid_arguments_content as Array)[0] as Dictionary).get("text", ""))
+	if rpc_invalid_arguments_text.find("Tool arguments must be an object") == -1:
+		return _failure("JSON-RPC tools/call non-object arguments should preserve the router error text.")
+
 	return {
 		"name": "http_server_contracts",
 		"success": true,
