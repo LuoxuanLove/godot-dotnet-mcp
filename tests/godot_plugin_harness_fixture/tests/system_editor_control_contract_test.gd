@@ -110,6 +110,19 @@ class FakeBridge extends RefCounted:
 				match str(args.get("action", "")):
 					"list_visible":
 						return success({"count": 1, "popups": [{"node_path": "/root/Editor/SearchDialog"}]})
+					"get_popup":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"popup_path": "/root/Editor/SearchDialog",
+							"popup": {"node_path": "/root/Editor/SearchDialog", "class": "AcceptDialog"}
+						})
+					"capture_popup":
+						return success({
+							"path": str(args.get("path", "")),
+							"target_path": str(args.get("target_path", "")),
+							"popup_path": "/root/Editor/SearchDialog",
+							"capture_mode": "popup"
+						})
 					"select_item":
 						return success({
 							"target_path": str(args.get("target_path", "")),
@@ -195,7 +208,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "wait_for_ui", "select_popup_menu_item", "hover_control", "leave_control"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "wait_for_ui", "get_popup", "capture_popup", "select_popup_menu_item", "hover_control", "leave_control"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
 	for expected_property in ["condition", "timeout_ms", "poll_interval_ms"]:
@@ -389,6 +402,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var popup_result: Dictionary = impl.execute("editor_control", {"action": "list_popups"})
 	if not bool(popup_result.get("success", false)):
 		return _failure("system editor_control should delegate list_popups.")
+
+	var get_popup_result: Dictionary = impl.execute("editor_control", {
+		"action": "get_popup",
+		"target_path": "/root/Editor/SearchDialog/SearchInput"
+	})
+	if not bool(get_popup_result.get("success", false)):
+		return _failure("system editor_control should delegate get_popup.")
+	if str(get_popup_result.get("data", {}).get("popup_path", "")) != "/root/Editor/SearchDialog":
+		return _failure("system editor_control should preserve get_popup popup_path.")
+
+	var capture_popup_result: Dictionary = impl.execute("editor_control", {
+		"action": "capture_popup",
+		"target_path": "/root/Editor/SearchDialog/SearchInput",
+		"path": "user://search_dialog.png"
+	})
+	if not bool(capture_popup_result.get("success", false)):
+		return _failure("system editor_control should delegate capture_popup.")
+	if str(capture_popup_result.get("data", {}).get("capture_mode", "")) != "popup":
+		return _failure("system editor_control should preserve capture_popup capture mode.")
 
 	var popup_select_result: Dictionary = impl.execute("editor_control", {
 		"action": "select_popup_menu_item",

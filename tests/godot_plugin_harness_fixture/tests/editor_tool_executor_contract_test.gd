@@ -725,11 +725,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "ui_control", "popup", "inspector", "filesystem", "plugin"]
 	var actual_names: Array[String] = []
+	var popup_tool_schema: Dictionary = {}
 	for tool_def in tool_defs:
-		actual_names.append(str(tool_def.get("name", "")))
+		var tool_name := str(tool_def.get("name", ""))
+		actual_names.append(tool_name)
+		if tool_name == "popup":
+			popup_tool_schema = tool_def.get("inputSchema", {})
 	for expected_name in expected_names:
 		if not actual_names.has(expected_name):
 			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
+	var popup_actions: Array = popup_tool_schema.get("properties", {}).get("action", {}).get("enum", [])
+	for expected_popup_action in ["get_popup", "capture_popup"]:
+		if not popup_actions.has(expected_popup_action):
+			return _failure("Editor popup schema should expose %s." % expected_popup_action)
 
 	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "Godex"})
 	if not bool(set_screen_result.get("success", false)):
@@ -1176,6 +1184,35 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
 	var popup_button_path := "%s/ConfirmButton" % popup_root_path
 	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var get_popup_result: Dictionary = executor.execute("popup", {
+		"action": "get_popup",
+		"target_path": popup_input_path
+	})
+	if not bool(get_popup_result.get("success", false)):
+		return _failure("Editor popup get_popup should fetch a visible popup root from a child target path.")
+	if str(get_popup_result.get("data", {}).get("popup_path", "")) != popup_root_path:
+		return _failure("Editor popup get_popup should resolve the visible popup root path.")
+	if str(get_popup_result.get("data", {}).get("popup", {}).get("node_path", "")) != popup_root_path:
+		return _failure("Editor popup get_popup should return the popup root summary.")
+
+	var capture_popup_result: Dictionary = executor.execute("popup", {
+		"action": "capture_popup",
+		"target_path": popup_input_path,
+		"path": "user://editor_executor_contract_popup.png"
+	})
+	if not bool(capture_popup_result.get("success", false)):
+		return _failure("Editor popup capture_popup should capture a visible popup root from a child target path.")
+	var capture_popup_data: Dictionary = capture_popup_result.get("data", {})
+	var capture_popup_path := ProjectSettings.globalize_path(str(capture_popup_data.get("path", "")))
+	if not FileAccess.file_exists(capture_popup_path):
+		return _failure("Editor popup capture_popup did not create the PNG file.")
+	if not str(capture_popup_data.get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor popup capture_popup should normalize root-level user:// PNG paths into the managed control capture directory.")
+	if str(capture_popup_data.get("capture_mode", "")) != "popup":
+		return _failure("Editor popup capture_popup should report capture_mode=popup.")
+	if int(capture_popup_data.get("width", 0)) != 100 or int(capture_popup_data.get("height", 0)) != 24:
+		return _failure("Editor popup capture_popup should crop to the visible popup root rect.")
 
 	var popup_select_by_text_result: Dictionary = executor.execute("popup", {
 		"action": "select_item",

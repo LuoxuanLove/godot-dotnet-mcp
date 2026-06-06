@@ -464,10 +464,12 @@ EXAMPLES:
 		},
 		{
 			"name": "popup",
-			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups, including popup rect/text/parent metadata and PopupMenu items, and perform minimal safe interactions.
+			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups, fetch one popup summary, capture a popup screenshot, and perform minimal safe interactions.
 
 ACTIONS:
 - list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
+- get_popup: Read one visible popup/window root summary by target_path
+- capture_popup: Capture a screenshot cropped to one visible popup/window root
 - press_button: Activate a popup button by target_path
 - select_item: Select a visible PopupMenu item by target_path plus index, id, or exact text
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
@@ -475,6 +477,8 @@ ACTIONS:
 
 EXAMPLES:
 - List popups: {"action": "list_visible"}
+- Get popup: {"action": "get_popup", "target_path": "/root/Editor/SearchDialog"}
+- Capture popup: {"action": "capture_popup", "target_path": "/root/Editor/SearchDialog"}
 - Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
 - Select menu item: {"action": "select_item", "target_path": "/root/Editor/ContextMenu", "text": "Rename"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
@@ -484,7 +488,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "press_button", "select_item", "set_text", "close_popup"],
+						"enum": ["list_visible", "get_popup", "capture_popup", "press_button", "select_item", "set_text", "close_popup"],
 						"description": "Popup action"
 					},
 					"target_path": {
@@ -502,6 +506,10 @@ EXAMPLES:
 					"id": {
 						"type": "integer",
 						"description": "PopupMenu item id for select_item"
+					},
+					"path": {
+						"type": "string",
+						"description": "Output screenshot path for capture_popup"
 					}
 				},
 				"required": ["action"]

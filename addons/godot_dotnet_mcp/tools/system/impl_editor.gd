@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control or popup, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -50,6 +50,8 @@ func get_tools() -> Array[Dictionary]:
 							"leave_control",
 							"set_control_text",
 							"list_popups",
+							"get_popup",
+							"capture_popup",
 							"press_popup_button",
 							"select_popup_menu_item",
 							"set_popup_text",
@@ -67,11 +69,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"path": {
 						"type": "string",
-						"description": "Output screenshot path for capture_editor/capture_control"
+						"description": "Output screenshot path for capture_editor/capture_control/capture_popup"
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Editor control path returned from list_controls/list_popups"
+						"description": "Editor control or popup path returned from list_controls/list_popups"
 					},
 					"title": {
 						"type": "string",
@@ -387,6 +389,17 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			})
 		"list_popups":
 			return bridge.call_atomic("editor_popup", {"action": "list_visible"})
+		"get_popup":
+			return bridge.call_atomic("editor_popup", {
+				"action": "get_popup",
+				"target_path": str(args.get("target_path", "")).strip_edges()
+			})
+		"capture_popup":
+			return bridge.call_atomic("editor_popup", {
+				"action": "capture_popup",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"path": str(args.get("path", "")).strip_edges()
+			})
 		"press_popup_button":
 			return bridge.call_atomic("editor_popup", {
 				"action": "press_button",
