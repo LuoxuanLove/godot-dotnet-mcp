@@ -168,9 +168,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	if project_stop_tool != null:
 		return _failure("Tools tab should not render system_project_stop as a separate high-level system tool.")
-	var project_run_stop_action = _find_child_by_metadata(project_run_tool, "action", "scene_run.stop")
-	if project_run_stop_action == null:
-		return _failure("Tools tab should keep the scene_run stop child under the unified project run tool.")
+	var project_run_stop_action = _find_child_by_metadata(project_run_tool, "action", "system_project_run.stop")
+	var project_run_scene_atomic = _find_child_by_metadata(project_run_tool, "atomic", "scene_run")
+	if project_run_stop_action == null or project_run_scene_atomic == null:
+		return _failure("Tools tab should keep run/stop actions and scene_run atomic children under the unified project run tool.")
+	if _find_child_by_metadata(project_run_scene_atomic, "action", "scene_run.stop") == null:
+		return _failure("Tools tab should keep the scene_run stop child under the unified project run atomic child.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
