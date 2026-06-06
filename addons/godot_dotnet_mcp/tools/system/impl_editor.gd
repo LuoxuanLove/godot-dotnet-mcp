@@ -5,7 +5,7 @@ extends RefCounted
 
 var bridge
 
-const HANDLED_TOOLS := ["editor_control", "editor_log"]
+const HANDLED_TOOLS := ["editor_control", "editor_log", "editor_plugin_control"]
 
 
 func handles(tool_name: String) -> bool:
@@ -20,28 +20,37 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
 						"enum": [
+							"list_main_screens",
 							"set_main_screen",
+							"get_distraction_free",
+							"set_distraction_free",
 							"capture_editor",
 							"list_controls",
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
+							"list_menus",
+							"open_menu",
+							"select_menu_item",
 							"get_control",
 							"capture_control",
 							"focus_control",
 							"activate_control",
 							"click_control",
 							"right_click_control",
+							"hover_control",
+							"leave_control",
 							"set_control_text",
 							"list_popups",
 							"press_popup_button",
+							"select_popup_menu_item",
 							"set_popup_text",
 							"close_popup"
 						],
@@ -49,8 +58,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"screen": {
 						"type": "string",
-						"enum": ["2D", "3D", "Script", "AssetLib"],
 						"description": "Main screen for set_main_screen"
+					},
+					"enabled": {
+						"type": "boolean",
+						"description": "Enable or disable distraction-free mode"
 					},
 					"path": {
 						"type": "string",
@@ -76,6 +88,18 @@ func get_tools() -> Array[Dictionary]:
 						"type": "integer",
 						"description": "Tab index for activate_ui when target_path points to a TabContainer"
 					},
+					"menu_title": {
+						"type": "string",
+						"description": "Top menu title/text/name for open_menu/select_menu_item"
+					},
+					"item_text": {
+						"type": "string",
+						"description": "PopupMenu item text for select_menu_item"
+					},
+					"item_index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_menu_item"
+					},
 					"bottom_panel_title": {
 						"type": "string",
 						"description": "Bottom panel control title/name/text for activate_ui"
@@ -86,7 +110,15 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text for set_control_text/set_popup_text"
+						"description": "Text for set_control_text/set_popup_text, or PopupMenu item text for select_popup_menu_item"
+					},
+					"index": {
+						"type": "integer",
+						"description": "PopupMenu item index for select_popup_menu_item"
+					},
+					"id": {
+						"type": "integer",
+						"description": "PopupMenu item id for select_popup_menu_item"
 					},
 					"local_x": {
 						"type": "number",
@@ -115,6 +147,34 @@ func get_tools() -> Array[Dictionary]:
 					"max_depth": {
 						"type": "integer",
 						"description": "Maximum traversal depth for list_controls"
+					}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "editor_plugin_control",
+			"description": "EDITOR PLUGIN CONTROL: Inspect and toggle third-party EditorPlugin session state. Reports plugin.cfg metadata, project-setting state, current editor-session state, visible UI/main-screen hints, and restart/manual-activation guidance. Refuses to toggle this MCP plugin by default; use dedicated plugin reload/update tools for this plugin.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {
+						"type": "string",
+						"enum": [
+							"list",
+							"get_status",
+							"enable",
+							"disable"
+						],
+						"description": "Editor plugin control action"
+					},
+					"plugin": {
+						"type": "string",
+						"description": "Plugin folder name under res://addons/"
+					},
+					"allow_self": {
+						"type": "boolean",
+						"description": "Allow toggling this MCP plugin despite reconnect/disconnect risk (default false)"
 					}
 				},
 				"required": ["action"]
@@ -156,6 +216,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 	if tool_name == "editor_log":
 		return _execute_editor_log(args)
+	if tool_name == "editor_plugin_control":
+		return _execute_editor_plugin_control(args)
 
 	var action := str(args.get("action", "")).strip_edges()
 	match action:
@@ -163,6 +225,15 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_status", {
 				"action": "set_main_screen",
 				"screen": str(args.get("screen", "")).strip_edges()
+			})
+		"list_main_screens":
+			return bridge.call_atomic("editor_status", {"action": "list_main_screens"})
+		"get_distraction_free":
+			return bridge.call_atomic("editor_status", {"action": "get_distraction_free"})
+		"set_distraction_free":
+			return bridge.call_atomic("editor_status", {
+				"action": "set_distraction_free",
+				"enabled": bool(args.get("enabled", false))
 			})
 		"capture_editor":
 			return _capture_editor(args)
@@ -200,6 +271,28 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
 				"path": str(args.get("path", "")).strip_edges()
 			})
+		"list_menus":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "list_menus",
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200)),
+				"max_depth": int(args.get("max_depth", 6))
+			})
+		"open_menu":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "open_menu",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"menu_title": str(args.get("menu_title", "")).strip_edges()
+			})
+		"select_menu_item":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "select_menu_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"menu_title": str(args.get("menu_title", "")).strip_edges(),
+				"item_text": str(args.get("item_text", "")).strip_edges(),
+				"item_index": int(args.get("item_index", -1))
+			})
 		"get_control":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "get_control",
@@ -235,6 +328,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"local_x": args.get("local_x", null),
 				"local_y": args.get("local_y", null)
 			})
+		"hover_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "hover_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
+		"leave_control":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "leave_control",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"local_x": args.get("local_x", null),
+				"local_y": args.get("local_y", null)
+			})
 		"set_control_text":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "set_text",
@@ -247,6 +354,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_popup", {
 				"action": "press_button",
 				"target_path": str(args.get("target_path", "")).strip_edges()
+			})
+		"select_popup_menu_item":
+			return bridge.call_atomic("editor_popup", {
+				"action": "select_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"index": args.get("index", null),
+				"id": args.get("id", null),
+				"text": args.get("text", null)
 			})
 		"set_popup_text":
 			return bridge.call_atomic("editor_popup", {
@@ -282,6 +397,26 @@ func _capture_editor(args: Dictionary) -> Dictionary:
 		data["visible_popups"] = popup_data.get("popups", [])
 		capture_result["data"] = data
 	return capture_result
+
+
+func _execute_editor_plugin_control(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"list":
+			return bridge.call_atomic("editor_plugin", {"action": "list"})
+		"get_status":
+			return bridge.call_atomic("editor_plugin", {
+				"action": "inspect",
+				"plugin": str(args.get("plugin", "")).strip_edges()
+			})
+		"enable", "disable":
+			return bridge.call_atomic("editor_plugin", {
+				"action": action,
+				"plugin": str(args.get("plugin", "")).strip_edges(),
+				"allow_self": bool(args.get("allow_self", false))
+			})
+		_:
+			return bridge.error("Unknown action: %s" % action)
 
 
 func _execute_editor_log(args: Dictionary) -> Dictionary:

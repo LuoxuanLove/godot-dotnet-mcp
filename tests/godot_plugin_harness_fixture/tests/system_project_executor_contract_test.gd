@@ -136,7 +136,17 @@ class FakeBridge extends RefCounted:
 						return success({"paths": ["res://Player.gd"], "count": 1})
 					"get_current_path":
 						return success({"current_path": "res://Player.gd", "current_directory": "res://"})
-					"scan", "reimport":
+					"scan":
+						return success({"ok": true})
+					"reimport":
+						for path in args.get("paths", []):
+							if str(path) == "res://project.godot":
+								return error("Path is not importable: res://project.godot", {
+									"error_code": "not_importable_resource",
+									"error_type": "not_importable_resource",
+									"path": "res://project.godot",
+									"reason": "project_settings_file"
+								})
 						return success({"ok": true})
 					_:
 						return error("Unsupported editor_filesystem action")
@@ -464,6 +474,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_health = runtime_health_dict.get("tool_loader", {})
 	if not (tool_loader_health is Dictionary):
 		return _failure("project_state runtime_health.tool_loader did not return a dictionary payload.")
+	var user_tools_health = runtime_health_dict.get("user_tools", {})
+	if not (user_tools_health is Dictionary):
+		return _failure("project_state runtime_health.user_tools did not return a dictionary payload.")
 	var runtime_capabilities = (project_state_data as Dictionary).get("runtime_capabilities", {})
 	if not (runtime_capabilities is Dictionary):
 		return _failure("project_state should return runtime_capabilities.")
@@ -529,6 +542,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_state files section should expose path arrays on demand.")
 	if not ((section_dict.get("health", {}) as Dictionary).get("self_diagnostics", {}) is Dictionary):
 		return _failure("project_state health section should include runtime health even without include_runtime_health.")
+	if not ((section_dict.get("health", {}) as Dictionary).get("user_tools", {}) is Dictionary):
+		return _failure("project_state health section should include User Tool runtime diagnostics.")
 	bridge.reset_collection_counters()
 	var project_state_summary_section: Dictionary = executor.execute("project_state", {"sections": ["summary"]})
 	if not bool(project_state_summary_section.get("success", false)):
@@ -641,6 +656,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_files_select: Dictionary = executor.execute("project_files", {"action": "select_file", "path": "res://Player.gd"})
 	if not bool(project_files_select.get("success", false)):
 		return _failure("project_files select_file should delegate to the editor filesystem atomic tool.")
+	var project_settings_reimport: Dictionary = executor.execute("project_files", {"action": "reimport", "paths": ["res://project.godot"]})
+	if bool(project_settings_reimport.get("success", false)):
+		return _failure("project_files reimport should expose not_importable_resource errors from the editor filesystem tool.")
+	if str(project_settings_reimport.get("data", {}).get("error_code", "")) != "not_importable_resource":
+		return _failure("project_files reimport should preserve not_importable_resource error data.")
 
 	var project_run: Dictionary = executor.execute("project_run", {})
 	if not bool(project_run.get("success", false)):
