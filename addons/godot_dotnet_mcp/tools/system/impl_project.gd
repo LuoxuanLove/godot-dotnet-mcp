@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-## System implementation: project_state, editor_state, plugin_reload, plugin_update,
+## System implementation: project_state, editor_state, plugin_reload, plugin_update, plugin_maintenance,
 ## project_configure, userdata_maintenance, project_files, project_run,
 ## project_stop, runtime_diagnose
 
@@ -36,7 +36,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
+	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "plugin_maintenance", "resource_reference_audit"
 ]
 
 
@@ -117,6 +117,20 @@ func get_tools() -> Array[Dictionary]:
 					"custom_branch": {"type": "string", "description": "Branch name used when source is custom_branch"},
 					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"},
 					"force_refresh": {"type": "boolean", "description": "Force ref discovery refresh for discover_refs (default: true)"}
+				},
+				"required": ["action"]
+			}
+		},
+		{
+			"name": "plugin_maintenance",
+			"description": "PLUGIN MAINTENANCE: High-level maintenance workflow entry that groups common plugin reload and update paths without replacing system_plugin_reload or system_plugin_update. Actions: status summarizes freshness and update status; reload schedules a plugin lifecycle reload; update_status reads update progress; set_update_source selects the update source; start_update starts async archive sync and reload scheduling.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "start_update"], "description": "Plugin maintenance action"},
+					"source": {"type": "string", "enum": ["latest_stable", "latest_release", "custom_branch", "latest_dev", "branch", "release_tag"], "description": "Update source for set_update_source"},
+					"custom_branch": {"type": "string", "description": "Branch name used when source is custom_branch"},
+					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"}
 				},
 				"required": ["action"]
 			}
@@ -232,6 +246,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"editor_state":      return _execute_editor_state(args)
 		"plugin_reload":     return _execute_plugin_reload(args)
 		"plugin_update":     return _execute_plugin_update(args)
+		"plugin_maintenance": return _execute_plugin_maintenance(args)
 		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
@@ -739,6 +754,49 @@ func _execute_plugin_update(args: Dictionary) -> Dictionary:
 			return _normalize_plugin_update_result(plugin.start_plugin_update_sync_from_tools(), "Plugin update sync requested")
 		_:
 			return bridge.error("Unknown plugin_update action: %s" % action)
+
+
+func _execute_plugin_maintenance(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"status":
+			return _execute_plugin_maintenance_status()
+		"reload":
+			return _execute_plugin_reload({"action": "full_reload_plugin"})
+		"update_status":
+			return _execute_plugin_update({"action": "get_status"})
+		"set_update_source":
+			return _execute_plugin_update({
+				"action": "set_source",
+				"source": args.get("source", ""),
+				"custom_branch": args.get("custom_branch", args.get("branch", "")),
+				"release_tag": args.get("release_tag", args.get("tag", ""))
+			})
+		"start_update":
+			return _execute_plugin_update({"action": "start_sync"})
+		_:
+			return bridge.error("Unknown plugin_maintenance action: %s" % action)
+
+
+func _execute_plugin_maintenance_status() -> Dictionary:
+	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
+	var current_result: Dictionary = _execute_plugin_update({"action": "get_current"})
+	var status_result: Dictionary = _execute_plugin_update({"action": "get_status"})
+	return bridge.success({
+		"freshness": freshness,
+		"current": _plugin_maintenance_payload(current_result),
+		"update_status": _plugin_maintenance_payload(status_result),
+		"current_result": current_result,
+		"update_status_result": status_result,
+		"current_success": bool(current_result.get("success", false)),
+		"update_status_success": bool(status_result.get("success", false))
+	}, "Plugin maintenance status fetched")
+
+
+func _plugin_maintenance_payload(result: Dictionary) -> Dictionary:
+	if result.has("data") and result.get("data") is Dictionary:
+		return result.get("data", {})
+	return result
 
 
 func _normalize_plugin_update_result(result, fallback_message: String) -> Dictionary:

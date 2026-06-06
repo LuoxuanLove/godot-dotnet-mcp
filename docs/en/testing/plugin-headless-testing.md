@@ -148,6 +148,7 @@ The harness discovers cases automatically. The following list shows representati
 | `system_script_executor_contracts` | Verify `impl_script.gd` as the current script-level system aggregator, and verify that `system_script_analyze` reads Godot LSP diagnostics through the real `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` path |
 | `system_runtime_impl_contracts` | Verify the state, capture annotations, and parameter handling in `impl_runtime.gd` |
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
+| `system_plugin_maintenance_contracts` | Verify the grouped plugin maintenance entry for status, reload, update status, source selection, and update start routing |
 | `system_index_impl_contracts` | Verify the refresh path from built to `stale_refreshed` in `impl_index.gd` |
 | `stdio_tool_activity_contracts` | Verify stdio `tools/call` preserves loader activity summaries and strips top-level `_mcp_context` before concrete tool execution |
 | `tool_activity_registry_contracts` | Verify activity registry running/recent/get state transitions, execution order, scope hints, and agent-context sanitization |

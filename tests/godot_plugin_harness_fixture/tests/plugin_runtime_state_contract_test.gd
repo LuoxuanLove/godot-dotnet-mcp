@@ -39,6 +39,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"system_editor_log",
 		"system_editor_state",
 		"system_help",
+		"system_plugin_maintenance",
 		"system_plugin_reload",
 		"system_plugin_update",
 		"system_project_configure",

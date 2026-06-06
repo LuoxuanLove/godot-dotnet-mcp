@@ -32,6 +32,7 @@ Target version: 1.2.0.
 - Added `system_editor_control` hover and leave pointer-motion actions for validating tooltips, hover-only menus, and floating editor UI without OS mouse automation.
 - Added `system_editor_plugin_control` so clients can inspect third-party EditorPlugin project-setting state, editor-session state, visible UI hints, restart/manual-activation guidance, and guarded enable/disable behavior.
 - Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
+- Added `system_plugin_maintenance` as a grouped plugin maintenance entry for status, reload, update-status, source-selection, and update-start workflows while keeping `system_plugin_reload` and `system_plugin_update` available.
 
 ### Fixed
 
@@ -69,6 +70,7 @@ Target version: 1.2.0.
 - Added DAP debugger limits for oversized `Content-Length` frames and `timeout_ms` values so abnormal debug endpoints fail fast with `dap_limit_exceeded` instead of waiting for long timeouts.
 - Extended plugin harness failure reports with `failureClasses`, `primaryFailureClass`, and `exitCleanupWarningFailure` so Godot exit cleanup warnings are visible without hiding runtime error markers.
 - Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
+- Updated tool schema facts to `2026-06-05.7` and added `system_plugin_maintenance_contracts` coverage for the grouped maintenance entry and Tools tree localization.
 
 ## [1.1.2] - 2026-06-02
 
