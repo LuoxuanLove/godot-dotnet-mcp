@@ -149,8 +149,8 @@ function Test-MarkdownLinks {
         $relativeFile = Get-RelativePath -BasePath $RepositoryRoot -TargetPath $file.FullName
         $localeRootName = Split-Path -Leaf $AllowedRoot
         $relativeToLocale = Normalize-RelativePath (Get-RelativePath -BasePath $AllowedRoot -TargetPath $file.FullName)
-        $contentForLinks = Remove-AllowedReleaseNoteLanguageSwitch -Locale $localeRootName -RelativePath $relativeToLocale -Content $content
-        foreach ($link in Get-MarkdownLinks -Content $contentForLinks) {
+        Test-ReleaseNoteLanguageSwitch -Locale $localeRootName -RelativePath $relativeToLocale -Content $content -Context $relativeFile
+        foreach ($link in Get-MarkdownLinks -Content $content) {
             if (-not [string]::IsNullOrWhiteSpace($link.Label)) {
                 Test-LocalizedTextScript -Locale $ScopeName -Text $link.Label -Context $relativeFile
             }
@@ -168,6 +168,30 @@ function Test-MarkdownLinks {
                 $errors.Add("Cross-language Markdown link in ${relativeFile} (${ScopeName}): $($link.Target) -> $relativeTarget")
             }
         }
+    }
+}
+
+function Get-ReleaseNoteLanguageSwitchLine {
+    return '<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/en/process/release-notes/release-notes-v1.2.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/zh-CN/流程/发布说明/发布说明-v1.2.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ja/プロセス/リリースノート/リリースノート-v1.2.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.2.0.md">한국어</a></p>'
+}
+
+function Test-ReleaseNoteLanguageSwitch {
+    param([string]$Locale, [string]$RelativePath, [string]$Content, [string]$Context)
+    $releaseNotePaths = @{
+        en = "process/release-notes/release-notes-v1.2.0.md"
+        "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"
+        ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"
+        ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md"
+    }
+    if (-not $releaseNotePaths.ContainsKey($Locale) -or $releaseNotePaths[$Locale] -ne $RelativePath) {
+        return
+    }
+
+    $expectedLine = Get-ReleaseNoteLanguageSwitchLine
+    $lines = @($Content -split "`r?`n")
+    $matches = @($lines | Where-Object { $_ -eq $expectedLine })
+    if ($matches.Count -ne 1) {
+        $errors.Add("Release note language switcher must appear exactly once with the expected four links in ${Context}")
     }
 }
 
@@ -297,11 +321,8 @@ function Remove-AllowedReleaseNoteLanguageSwitch {
         return $Content
     }
 
-    return [regex]::Replace(
-        $Content,
-        '(?m)^<p align="center"><a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/en/process/release-notes/release-notes-v1\.2\.0\.md">English</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/zh-CN/流程/发布说明/发布说明-v1\.2\.0\.md">简体中文</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/ja/プロセス/リリースノート/リリースノート-v1\.2\.0\.md">日本語</a> \| <a href="https://github\.com/LuoxuanLove/godot-dotnet-mcp/blob/v1\.2\.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1\.2\.0\.md">한국어</a></p>\r?\n?',
-        ''
-    )
+    $expectedLine = [regex]::Escape((Get-ReleaseNoteLanguageSwitchLine))
+    return [regex]::Replace($Content, "(?m)^$expectedLine`r?`n?", '')
 }
 
 function Test-DocumentQuality {

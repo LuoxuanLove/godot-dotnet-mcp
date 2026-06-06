@@ -36,6 +36,37 @@ jobs:
           $title = "Upcoming Changes"
           $notesFile = Join-Path $env:RUNNER_TEMP "next-release-notes.md"
 
+          $versionMentionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($version))(?![0-9A-Za-z.-])"
+          $changelogPaths = @(
+            "docs/en/CHANGELOG.md",
+            "docs/zh-CN/变更日志.md",
+            "docs/ja/変更履歴.md",
+            "docs/ko/변경-로그.md"
+          )
+          foreach ($path in $changelogPaths) {
+            $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+            if ($content -notmatch $versionMentionPattern) {
+              throw "$path does not mention release version $version"
+            }
+          }
+
+          $releaseNotePaths = @(
+            "docs/en/process/release-notes/release-notes-v$version.md",
+            "docs/zh-CN/流程/发布说明/发布说明-v$version.md",
+            "docs/ja/プロセス/リリースノート/リリースノート-v$version.md",
+            "docs/ko/프로세스/릴리스-노트/릴리스-노트-v$version.md"
+          )
+          foreach ($releaseNotesPath in $releaseNotePaths) {
+            if (-not (Test-Path -LiteralPath $releaseNotesPath)) {
+              throw "Manual release notes file $releaseNotesPath is required for the next release draft."
+            }
+
+            $releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw -Encoding UTF8
+            if ($releaseNotes -notmatch $versionMentionPattern) {
+              throw "$releaseNotesPath does not mention release version $version"
+            }
+          }
+
           .\scripts\render_release_notes.ps1 `
             -Version $version `
             -OutputPath $notesFile `
