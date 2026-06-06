@@ -877,6 +877,47 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if search_field.text != "Player":
 		return _failure("Editor ui_control set_text should update the target control text.")
 
+	var wait_exists_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": search_field_path,
+		"condition": "exists",
+		"timeout_ms": 0
+	})
+	if not bool(wait_exists_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy exists for a known control path.")
+	if not bool(wait_exists_result.get("data", {}).get("condition_met", false)):
+		return _failure("Editor ui_control wait_for_ui should mark the satisfied condition.")
+	if str(wait_exists_result.get("data", {}).get("matched", {}).get("path", "")) != search_field_path:
+		return _failure("Editor ui_control wait_for_ui should return the matched control summary.")
+	var wait_text_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"class_name": "LineEdit",
+		"text_query": "Player",
+		"condition": "text_contains",
+		"text": "Player",
+		"timeout_ms": 0
+	})
+	if not bool(wait_text_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy text_contains against observed controls.")
+	var wait_not_exists_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/MissingDialog",
+		"condition": "not_exists",
+		"timeout_ms": 0
+	})
+	if not bool(wait_not_exists_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy not_exists for a missing control.")
+	var wait_timeout_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/MissingDialog",
+		"condition": "exists",
+		"timeout_ms": 0
+	})
+	if bool(wait_timeout_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should fail when the condition is not satisfied before timeout.")
+	if not wait_timeout_result.has("data") or str(wait_timeout_result.get("data", {}).get("condition", "")) != "exists":
+		return _failure("Editor ui_control wait_for_ui timeout should return the final observed condition payload.")
+
 	var activate_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_control",
 		"target_path": refresh_button_path

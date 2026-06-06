@@ -33,6 +33,7 @@ func get_tools() -> Array[Dictionary]:
 							"set_distraction_free",
 							"capture_editor",
 							"list_controls",
+							"wait_for_ui",
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
@@ -110,7 +111,29 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"text": {
 						"type": "string",
-						"description": "Text for set_control_text/set_popup_text, or PopupMenu item text for select_popup_menu_item"
+						"description": "Text for set_control_text/set_popup_text, PopupMenu item text for select_popup_menu_item, or expected text for wait_for_ui"
+					},
+					"condition": {
+						"type": "string",
+						"enum": [
+							"exists",
+							"not_exists",
+							"visible",
+							"hidden",
+							"text_contains",
+							"text_equals",
+							"enabled",
+							"disabled"
+						],
+						"description": "Condition for wait_for_ui (default: exists)"
+					},
+					"timeout_ms": {
+						"type": "integer",
+						"description": "Maximum wait time for wait_for_ui in milliseconds (default 1000, capped by the plugin)"
+					},
+					"poll_interval_ms": {
+						"type": "integer",
+						"description": "Polling interval for wait_for_ui in milliseconds (default 50, capped by the plugin)"
 					},
 					"index": {
 						"type": "integer",
@@ -245,6 +268,20 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"include_hidden": bool(args.get("include_hidden", false)),
 				"limit": int(args.get("limit", 200)),
 				"max_depth": int(args.get("max_depth", 6))
+			})
+		"wait_for_ui":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "wait_for_ui",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"class_name": str(args.get("class_name", "")).strip_edges(),
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200)),
+				"max_depth": int(args.get("max_depth", 6)),
+				"condition": str(args.get("condition", "exists")).strip_edges(),
+				"text": str(args.get("text", "")),
+				"timeout_ms": int(args.get("timeout_ms", 1000)),
+				"poll_interval_ms": int(args.get("poll_interval_ms", 50))
 			})
 		"list_dock_tabs":
 			return bridge.call_atomic("editor_ui_control", {

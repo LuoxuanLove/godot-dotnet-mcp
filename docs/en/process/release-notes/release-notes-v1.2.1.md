@@ -1,11 +1,17 @@
-## 🧩 Godot .NET MCP v1.2.1: Development Line Initialized
+## 🧩 Godot .NET MCP v1.2.1: Verified Editor UI Automation
 
-This development line has been initialized. Before the formal release, this note will be completed from the actual user-visible changes since `v1.2.0`.
+This release line improves editor UI automation by letting clients wait for visible Godot editor state before continuing a workflow. Agents can now act through existing editor controls and then verify that the expected UI condition actually appeared.
 
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.1/docs/en/process/release-notes/release-notes-v1.2.1.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.1/docs/zh-CN/流程/发布说明/发布说明-v1.2.1.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.1/docs/ja/プロセス/リリースノート/リリースノート-v1.2.1.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.1/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.2.1.md">한국어</a></p>
 
-### ✨ Highlights Reserved
+### ✨ Wait for Real UI State
 
-### 🔧 Fixes Reserved
+`system_editor_control` now includes `wait_for_ui`, a bounded polling action for control existence, visibility, text matching, and enabled / disabled state. Successful waits return the matched control summary and timing details; timeouts return the final observed payload so clients can adjust their locator or next action.
+
+### 🔧 Safer Automation Loops
+
+The new wait action complements menu, popup, click, hover, and text-entry controls without requiring OS mouse automation. This makes workflows such as opening editor dialogs, filtering settings, and confirming transient panels easier to verify from inside Godot.
 
 ### ✅ Compatibility and Upgrade Notes
+
+This change only extends the public tool schema. Existing `system_editor_control` actions remain available, and clients that do not call `wait_for_ui` do not need to change their requests.
