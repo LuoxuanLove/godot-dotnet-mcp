@@ -189,6 +189,16 @@ function Test-ReleaseNoteLanguageSwitch {
     $matches = @($lines | Where-Object { $_ -eq $expectedLine })
     if ($matches.Count -ne 1) {
         $errors.Add("Release note language switcher must appear exactly once with the expected four links in ${Context}")
+        return
+    }
+
+    $nonEmptyLines = @($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($nonEmptyLines.Count -lt 3 -or
+        $nonEmptyLines[0] -notmatch '^##\s+' -or
+        $nonEmptyLines[1] -match '^<p align="center">' -or
+        $nonEmptyLines[1] -match '^#{1,6}\s+' -or
+        $nonEmptyLines[2] -ne $expectedLine) {
+        $errors.Add("Release note language switcher must appear after the title and introduction in ${Context}")
     }
 }
 
