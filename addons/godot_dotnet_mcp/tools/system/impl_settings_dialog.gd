@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative row models, read current visible row values, set supported visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "read_value", "set_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,7 +83,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value only filter currently observed visible rows."
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/set_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
@@ -91,7 +91,10 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value"
+						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value/set_value"
+					},
+					"value": {
+						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
 					},
 					"include_raw_controls": {
 						"type": "boolean",
@@ -100,7 +103,7 @@ func get_tools() -> Array[Dictionary]:
 					"require_confidence": {
 						"type": "string",
 						"enum": ["low", "medium", "high"],
-						"description": "Minimum row model confidence accepted by read_value (default medium)"
+						"description": "Minimum row model confidence accepted by read_value/set_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -155,6 +158,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _read_value(surface, args)
+		"set_value":
+			return bridge.error("set_value requires asynchronous execution")
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -191,6 +196,11 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return await _search(surface, args)
+		"set_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return await _set_value(surface, args)
 		_:
 			return execute(tool_name, args)
 
@@ -330,6 +340,99 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(value_payload, args)
 	return bridge.success(value_payload, "Settings row value read")
+
+
+func _set_value(surface: String, args: Dictionary) -> Dictionary:
+	if not args.has("value"):
+		return bridge.error("value is required for set_value")
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for set_value: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before set_value.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_action(all_controls, surface, args, query_values, "set_value")
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched set_value.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var before_value: Dictionary = _read_row_value(row, all_controls)
+	var write_result: Dictionary = _write_row_value(row, before_value, args.get("value"), all_controls)
+	if not bool(write_result.get("success", false)):
+		var write_payload := observation.duplicate(true)
+		write_payload["row"] = row
+		write_payload["before"] = before_value
+		write_payload["write"] = write_result
+		write_payload["resolution"] = row_resolution.get("resolution", {})
+		write_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": str(write_result.get("reason", "write_failed"))
+		})
+		return bridge.error(str(write_result.get("message", "Settings row value write failed.")), write_payload)
+	await _wait_one_frame()
+	var verification_observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var after_value: Dictionary = {}
+	var verification: Dictionary = {
+		"success": false,
+		"reason": "verification_unavailable"
+	}
+	if bool(verification_observation.get("dialog_found", false)):
+		var verify_resolution: Dictionary = _resolve_row_for_value_action(verification_observation.get("all_controls", []), surface, args, query_values, "set_value")
+		if bool(verify_resolution.get("success", false)):
+			after_value = _read_row_value(verify_resolution.get("row", {}), verification_observation.get("all_controls", []))
+			verification = _verify_written_value(after_value, write_result.get("data", {}).get("expected_value"), str(write_result.get("data", {}).get("value_editor_type", before_value.get("value_editor_type", "unknown"))))
+		else:
+			verification = {
+				"success": false,
+				"reason": str(verify_resolution.get("reason", "row_not_found")),
+				"resolution": verify_resolution
+			}
+	var workflow := _workflow_with_step(observation.get("workflow", []), {
+		"step": "set_value",
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"queries": query_values,
+		"write_action": str(write_result.get("data", {}).get("write_action", "")),
+		"success": bool(verification.get("success", false))
+	})
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(verification_observation.get("dialog_found", false)),
+		"dialog_path": str(verification_observation.get("dialog_path", observation.get("dialog_path", ""))),
+		"primary_popup_path": str(verification_observation.get("primary_popup_path", observation.get("primary_popup_path", ""))),
+		"row": row,
+		"resolution": row_resolution.get("resolution", {}),
+		"before": before_value,
+		"after": after_value,
+		"write": write_result.get("data", {}),
+		"verification": verification,
+		"workflow": workflow
+	}
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	if bool(verification.get("success", false)):
+		return bridge.success(payload, "Settings row value set")
+	return bridge.error("Settings row value write could not be verified.", payload)
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
@@ -867,6 +970,10 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 
 
 func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
+	return _resolve_row_for_value_action(rows, surface, args, query_values, "read_value")
+
+
+func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String) -> Dictionary:
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var required := _required_confidence(args)
 	var candidates: Array[Dictionary] = []
@@ -880,7 +987,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "row_not_found",
-			"message": "No settings row matched read_value with the requested selector and confidence.",
+			"message": "No settings row matched %s with the requested selector and confidence." % action_name,
 			"candidate_count": 0,
 			"candidates": []
 		}
@@ -888,7 +995,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "ambiguous_row",
-			"message": "Multiple settings rows matched read_value; pass target_path or a more specific setting_path.",
+			"message": "Multiple settings rows matched %s; pass target_path or a more specific setting_path." % action_name,
 			"candidate_count": candidates.size(),
 			"candidates": candidates
 		}
@@ -897,7 +1004,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		"row": candidates[0],
 		"resolution": {
 			"candidate_count": 1,
-			"selector": _read_value_selector_summary(args),
+			"selector": _value_action_selector_summary(args),
 			"require_confidence": required
 		}
 	}
@@ -921,6 +1028,159 @@ func _read_row_value(row: Dictionary, rows: Array) -> Dictionary:
 		"value_control_path": source_path,
 		"confidence": str(row.get("confidence", "low"))
 	}
+
+
+func _write_row_value(row: Dictionary, before_value: Dictionary, requested_value, rows: Array) -> Dictionary:
+	var value_control: Dictionary = _value_control_for_row(row, rows)
+	if value_control.is_empty():
+		return {
+			"success": false,
+			"reason": "value_control_not_found",
+			"message": "No writable value control was found for the settings row."
+		}
+	var editor_type := str(before_value.get("value_editor_type", row.get("value_editor_type", "unknown")))
+	if editor_type == "unknown":
+		editor_type = _value_editor_type_hint(value_control)
+	var value_path := str(before_value.get("value_control_path", value_control.get("path", value_control.get("node_path", "")))).strip_edges()
+	if value_path.is_empty():
+		return {
+			"success": false,
+			"reason": "value_control_not_found",
+			"message": "The settings row value control does not expose a path."
+		}
+	match editor_type:
+		"text":
+			var text_value := str(requested_value)
+			var set_text_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "set_text",
+				"target_path": value_path,
+				"text": text_value
+			})
+			return _wrap_write_result(set_text_result, editor_type, value_path, "set_text", text_value)
+		"number":
+			var numeric_result := _coerce_number_value(requested_value)
+			if not bool(numeric_result.get("success", false)):
+				return numeric_result
+			var number_value = numeric_result.get("value")
+			var set_value_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "set_value",
+				"target_path": value_path,
+				"value": number_value
+			})
+			return _wrap_write_result(set_value_result, editor_type, value_path, "set_value", number_value)
+		"bool":
+			if not (requested_value is bool):
+				return {
+					"success": false,
+					"reason": "invalid_value_type",
+					"message": "Bool settings rows require a boolean value."
+				}
+			var before_bool = before_value.get("value")
+			if not (before_bool is bool):
+				return {
+					"success": false,
+					"reason": "bool_state_unavailable",
+					"message": "The bool settings row does not expose an explicit current pressed state."
+				}
+			if bool(before_bool) == bool(requested_value):
+				return {
+					"success": true,
+					"data": {
+						"value_editor_type": editor_type,
+						"value_control_path": value_path,
+						"write_action": "noop",
+						"expected_value": requested_value,
+						"already_set": true
+					}
+				}
+			var activate_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "activate_control",
+				"target_path": value_path
+			})
+			return _wrap_write_result(activate_result, editor_type, value_path, "activate_control", requested_value)
+		_:
+			return {
+				"success": false,
+				"reason": "unsupported_value_editor_type",
+				"message": "set_value does not support settings value editor type: %s" % editor_type,
+				"data": {
+					"value_editor_type": editor_type,
+					"value_control_path": value_path
+				}
+			}
+
+
+func _wrap_write_result(result: Dictionary, editor_type: String, value_path: String, write_action: String, expected_value) -> Dictionary:
+	if bool(result.get("success", false)):
+		var data: Dictionary = result.get("data", {}).duplicate(true)
+		data["value_editor_type"] = editor_type
+		data["value_control_path"] = value_path
+		data["write_action"] = write_action
+		data["expected_value"] = expected_value
+		return {"success": true, "data": data}
+	return {
+		"success": false,
+		"reason": "write_failed",
+		"message": str(result.get("message", result.get("error", "Settings row value write failed."))),
+		"data": result.get("data", {})
+	}
+
+
+func _coerce_number_value(value) -> Dictionary:
+	if value is int or value is float:
+		return {"success": true, "value": value}
+	var text := str(value).strip_edges()
+	if text.is_valid_float():
+		return {"success": true, "value": text.to_float()}
+	return {
+		"success": false,
+		"reason": "invalid_value_type",
+		"message": "Number settings rows require a numeric value."
+	}
+
+
+func _verify_written_value(after_value: Dictionary, expected_value, editor_type: String) -> Dictionary:
+	var actual_value = after_value.get("value")
+	match editor_type:
+		"number":
+			var expected_number := _coerce_number_value(expected_value)
+			if bool(expected_number.get("success", false)) and (actual_value is int or actual_value is float):
+				var delta := abs(float(actual_value) - float(expected_number.get("value")))
+				return {
+					"success": delta <= 0.00001,
+					"expected_value": expected_number.get("value"),
+					"actual_value": actual_value,
+					"reason": "matched" if delta <= 0.00001 else "value_mismatch"
+				}
+		"bool":
+			if actual_value is bool and expected_value is bool:
+				return {
+					"success": bool(actual_value) == bool(expected_value),
+					"expected_value": expected_value,
+					"actual_value": actual_value,
+					"reason": "matched" if bool(actual_value) == bool(expected_value) else "value_mismatch"
+				}
+		_:
+			var expected_text := str(expected_value)
+			var actual_text := str(actual_value)
+			return {
+				"success": actual_text == expected_text,
+				"expected_value": expected_text,
+				"actual_value": actual_text,
+				"reason": "matched" if actual_text == expected_text else "value_mismatch"
+			}
+	return {
+		"success": false,
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"reason": "value_mismatch"
+	}
+
+
+func _wait_one_frame() -> void:
+	var main_loop = Engine.get_main_loop()
+	if main_loop != null:
+		await main_loop.process_frame
 
 
 func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
@@ -997,7 +1257,7 @@ func _confidence_meets(actual: String, required: String) -> bool:
 	return int(ranks.get(actual, 0)) >= int(ranks.get(required, 1))
 
 
-func _read_value_selector_summary(args: Dictionary) -> Dictionary:
+func _value_action_selector_summary(args: Dictionary) -> Dictionary:
 	return {
 		"target_path": str(args.get("target_path", "")),
 		"setting_path": str(args.get("setting_path", "")),

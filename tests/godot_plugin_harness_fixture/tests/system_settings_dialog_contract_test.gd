@@ -12,6 +12,10 @@ class FakeBridge extends RefCounted:
 	var editor_filter_text := ""
 	var localized_project_item := "Настройки проекта..."
 	var localized_editor_item := "Настройки редактора..."
+	var project_name_value := "Example"
+	var use_custom_user_dir := true
+	var snap_2d_transforms_to_pixel := false
+	var max_renderable_elements := 128000.0
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -37,10 +41,28 @@ class FakeBridge extends RefCounted:
 						var target_path := str(args.get("target_path", ""))
 						var text := str(args.get("text", ""))
 						if target_path.contains("ProjectSettings"):
-							project_filter_text = text
+							if target_path.ends_with("/Filter"):
+								project_filter_text = text
+							elif target_path.ends_with("/Name/Value"):
+								project_name_value = text
 						if target_path.contains("EditorSettings"):
 							editor_filter_text = text
 						return success({"target_path": target_path, "text": text})
+					"set_value":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.ends_with("/MaxRenderableElements/Value"):
+							max_renderable_elements = float(args.get("value", 0.0))
+							return success({"target_path": target_path, "value": max_renderable_elements})
+						return error("Value target not found")
+					"activate_control":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.ends_with("/UseCustomUserDir/Value"):
+							use_custom_user_dir = not use_custom_user_dir
+							return success({"target_path": target_path})
+						if target_path.ends_with("/Snap2DTransformsToPixel/Value"):
+							snap_2d_transforms_to_pixel = not snap_2d_transforms_to_pixel
+							return success({"target_path": target_path})
+						return error("Activation target not found")
 					_:
 						return error("Unsupported editor_ui_control action: %s" % action)
 			"editor_popup":
@@ -99,19 +121,19 @@ class FakeBridge extends RefCounted:
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": "Example", "visible": true, "disabled": false, "editable_text": true})
+				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": project_name_value, "visible": true, "disabled": false, "editable_text": true})
 			if project_filter_text.contains("application/config/use_custom_user_dir"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Use Custom User Dir", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "class": "CheckBox", "text": "Enabled", "pressed": true, "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "class": "CheckBox", "text": "Enabled", "pressed": use_custom_user_dir, "visible": true, "disabled": false})
 			if project_filter_text.contains("application/config/display_enabled_label"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Display Enabled Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel", "class": "CheckBox", "text": "Enabled", "visible": true, "disabled": false})
 			if project_filter_text.contains("rendering/2d/snap/snap_2d_transforms_to_pixel"):
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap", "class": "HBoxContainer", "text": "Snap 2D Transforms To Pixel", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel/Value", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "class": "CheckButton", "button_pressed": false, "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel/Value", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "class": "CheckButton", "button_pressed": snap_2d_transforms_to_pixel, "visible": true, "disabled": false})
 			if project_filter_text.contains("rendering/limits/rendering/max_renderable_elements"):
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering", "class": "HBoxContainer", "text": "Max Renderable Elements", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": 128000, "text": "128000", "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": max_renderable_elements, "text": str(max_renderable_elements), "visible": true, "disabled": false})
 			if project_filter_text.contains("application/run/main_scene"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene", "parent_path": "/root/ProjectSettings/General/Application/Run", "class": "HBoxContainer", "text": "Main Scene", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene/Value", "parent_path": "/root/ProjectSettings/General/Application/Run/MainScene", "class": "OptionButton", "text": "res://Main.tscn", "selected": 2, "visible": true, "disabled": false})
@@ -139,7 +161,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_rows", "read_value", "set_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
@@ -239,6 +261,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(read_value_by_value_path.get("success", false)):
 		return _failure("read_value should resolve a value child target_path back to its setting row.")
+	var set_text_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "Renamed Project",
+		"limit": 10
+	})
+	if not bool(set_text_value.get("success", false)):
+		return _failure("set_value should update a unique text row.")
+	if str(set_text_value.get("data", {}).get("before", {}).get("value", "")) != "Example":
+		return _failure("set_value should report the previous text value.")
+	if str(set_text_value.get("data", {}).get("after", {}).get("value", "")) != "Renamed Project":
+		return _failure("set_value should verify the updated text value.")
+	if str(set_text_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_text":
+		return _failure("set_value should use editor_ui_control.set_text for text rows.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -256,6 +293,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return a typed true value for CheckBox rows.")
 	if str(bool_value.get("data", {}).get("value_editor_type", "")) != "bool":
 		return _failure("read_value should classify CheckBox value controls as bool.")
+	var set_bool_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"value": false,
+		"limit": 10
+	})
+	if not bool(set_bool_value.get("success", false)):
+		return _failure("set_value should update a unique bool row.")
+	if bool(set_bool_value.get("data", {}).get("after", {}).get("value", true)) != false:
+		return _failure("set_value should verify the updated bool value.")
+	if str(set_bool_value.get("data", {}).get("write", {}).get("write_action", "")) != "activate_control":
+		return _failure("set_value should use editor_ui_control.activate_control when a bool row changes.")
+	var set_bool_noop := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"value": false,
+		"limit": 10
+	})
+	if not bool(set_bool_noop.get("success", false)) or str(set_bool_noop.get("data", {}).get("write", {}).get("write_action", "")) != "noop":
+		return _failure("set_value should no-op when a bool row already has the requested value.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -275,6 +334,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value must not infer bool true/false from label text without explicit pressed/button_pressed/value state.")
 	if str(bool_text_only_value.get("data", {}).get("value", "")) != "Enabled":
 		return _failure("read_value should preserve raw text for bool-like controls without explicit state fields.")
+	var set_bool_text_only := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/display_enabled_label",
+		"value": false,
+		"limit": 10
+	})
+	if bool(set_bool_text_only.get("success", false)):
+		return _failure("set_value should fail when a bool-like row lacks explicit current state.")
+	if str(set_bool_text_only.get("data", {}).get("write", {}).get("reason", "")) != "bool_state_unavailable":
+		return _failure("set_value bool text-only failure should report bool_state_unavailable.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -307,6 +377,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(number_value.get("success", false)) or float(number_value.get("data", {}).get("value", 0.0)) != 128000.0:
 		return _failure("read_value should return a typed number value for SpinBox rows.")
+	var set_number_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "rendering/limits/rendering/max_renderable_elements",
+		"value": 64000,
+		"limit": 10
+	})
+	if not bool(set_number_value.get("success", false)):
+		return _failure("set_value should update a unique number row.")
+	if float(set_number_value.get("data", {}).get("after", {}).get("value", 0.0)) != 64000.0:
+		return _failure("set_value should verify the updated number value.")
+	if str(set_number_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_value":
+		return _failure("set_value should use editor_ui_control.set_value for number rows.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -325,6 +408,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return structured enum value data for OptionButton rows.")
 	if str((enum_payload as Dictionary).get("text", "")) != "res://Main.tscn" or int((enum_payload as Dictionary).get("selected", -1)) != 2:
 		return _failure("read_value should preserve enum selected text and index.")
+	var set_enum_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"value": "res://Other.tscn",
+		"limit": 10
+	})
+	if bool(set_enum_value.get("success", false)):
+		return _failure("set_value should not claim support for enum rows yet.")
+	if str(set_enum_value.get("data", {}).get("write", {}).get("reason", "")) != "unsupported_value_editor_type":
+		return _failure("set_value enum failure should report unsupported_value_editor_type.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -342,6 +436,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("read_value ambiguous failure should report the ambiguous_row reason.")
+	var ambiguous_set_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"value": "x",
+		"limit": 1
+	})
+	if bool(ambiguous_set_value.get("success", false)):
+		return _failure("set_value should fail when multiple rows match the selector even if the requested limit is small.")
+	if str(ambiguous_set_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("set_value ambiguous failure should report the ambiguous_row reason.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
