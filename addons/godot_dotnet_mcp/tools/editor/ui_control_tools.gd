@@ -34,6 +34,10 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _activate_dock_tab(ei, str(args.get("title", "")).strip_edges())
 		"activate_ui":
 			return _activate_ui(ei, args)
+		"list_tree_items":
+			return _list_tree_items(ei, args)
+		"select_tree_item":
+			return _select_tree_item(ei, args)
 		"list_menus":
 			return _list_menus(ei, args)
 		"open_menu":
@@ -310,6 +314,68 @@ func _activate_ui(ei, args: Dictionary) -> Dictionary:
 			return dock_result
 		return _maybe_capture_activation_result(ei, dock_result, str(dock_result.get("data", {}).get("target_path", "")), args)
 	return _error("semantic_path, title, or target_path with tab_title/tab_index is required")
+
+
+func _list_tree_items(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var tree = _find_control(ei, target_path)
+	if tree == null:
+		return _error("Editor tree control not found: %s" % target_path)
+	if _control_class_name(tree) != "Tree":
+		return _error("Editor control is not a Tree: %s" % target_path)
+	var text_query := str(args.get("text_query", "")).strip_edges().to_lower()
+	var include_hidden := bool(args.get("include_hidden", false))
+	var limit := maxi(int(args.get("limit", DEFAULT_LIST_LIMIT)), 1)
+	var items: Array[Dictionary] = []
+	_collect_tree_items(tree, text_query, include_hidden, limit, items)
+	return _success({
+		"target_path": target_path,
+		"tree": _describe_control(tree, _resolve_parent_path(tree), 0),
+		"count": items.size(),
+		"items": items
+	}, "Editor tree items listed")
+
+
+func _select_tree_item(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var tree = _find_control(ei, target_path)
+	if tree == null:
+		return _error("Editor tree control not found: %s" % target_path)
+	if _control_class_name(tree) != "Tree":
+		return _error("Editor control is not a Tree: %s" % target_path)
+	var resolution := _resolve_tree_item(tree, args)
+	if not bool(resolution.get("success", false)):
+		return resolution
+	var resolution_data: Dictionary = resolution.get("data", {})
+	var item = resolution_data.get("item")
+	if item == null:
+		return _error("Editor tree item not found")
+	if tree.has_method("set_selected"):
+		tree.call("set_selected", item, 0)
+	elif item.has_method("select"):
+		item.call("select", 0)
+	else:
+		return _error("Editor tree item cannot be selected")
+	if tree.has_method("scroll_to_item"):
+		tree.call("scroll_to_item", item, true)
+	if tree.has_method("grab_focus"):
+		tree.grab_focus()
+	var selected_source = (resolution_data.get("resolution", {}) as Dictionary).get("matched", _describe_tree_item(tree, item, int(resolution_data.get("index", -1))))
+	var selected := {}
+	if selected_source is Dictionary:
+		selected = (selected_source as Dictionary).duplicate(true)
+	else:
+		selected = _describe_tree_item(tree, item, int(resolution_data.get("index", -1)))
+	selected["selected"] = true
+	return _success({
+		"target_path": target_path,
+		"selected_item": selected,
+		"resolution": resolution_data.get("resolution", {})
+	}, "Editor tree item selected")
 
 
 func _list_menus(ei, args: Dictionary) -> Dictionary:
@@ -635,6 +701,46 @@ func _collect_menu_buttons_recursive(node, depth: int, max_depth: int, include_h
 			return
 
 
+func _collect_tree_items(tree, text_query: String, include_hidden: bool, limit: int, out: Array[Dictionary]) -> void:
+	var root = _tree_root_item(tree)
+	if root == null:
+		return
+	var start_items: Array = []
+	if _tree_root_hidden(tree):
+		var child = _tree_item_first_child(root)
+		while child != null:
+			start_items.append(child)
+			child = _tree_item_next(child)
+	else:
+		start_items.append(root)
+	var index := 0
+	for item in start_items:
+		index = _collect_tree_items_recursive(tree, item, [], 0, text_query, include_hidden, limit, out, index)
+		if out.size() >= limit:
+			return
+
+
+func _collect_tree_items_recursive(tree, item, parent_labels: Array[String], depth: int, text_query: String, include_hidden: bool, limit: int, out: Array[Dictionary], start_index: int) -> int:
+	if item == null or out.size() >= limit:
+		return start_index
+	var current_index := start_index
+	var label := _tree_item_text(item)
+	var labels := parent_labels.duplicate()
+	if not label.is_empty():
+		labels.append(label)
+	var summary := _describe_tree_item(tree, item, current_index, labels, depth)
+	if (include_hidden or bool(summary.get("visible", true))) and _tree_item_matches(summary, text_query):
+		out.append(summary)
+	current_index += 1
+	var child = _tree_item_first_child(item)
+	while child != null:
+		current_index = _collect_tree_items_recursive(tree, child, labels, depth + 1, text_query, include_hidden, limit, out, current_index)
+		if out.size() >= limit:
+			return current_index
+		child = _tree_item_next(child)
+	return current_index
+
+
 func _resolve_menu_button(ei, args: Dictionary):
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var menu_title := str(args.get("menu_title", "")).strip_edges()
@@ -726,6 +832,102 @@ func _describe_menu_popup(popup) -> Dictionary:
 	}
 
 
+func _describe_tree_item(tree, item, index: int, labels: Array[String] = [], depth: int = 0) -> Dictionary:
+	var label := _tree_item_text(item)
+	var item_labels := labels.duplicate()
+	if item_labels.is_empty() and not label.is_empty():
+		item_labels.append(label)
+	return {
+		"index": index,
+		"text": label,
+		"item_path": "/".join(item_labels),
+		"depth": depth,
+		"tree_control_path": _safe_control_path(tree),
+		"visible": _tree_item_visible(item),
+		"selected": _tree_item_selected(item),
+		"collapsed": _tree_item_collapsed(item),
+		"child_count": _tree_item_child_count(item)
+	}
+
+
+func _tree_item_matches(summary: Dictionary, text_query: String) -> bool:
+	if text_query.is_empty():
+		return true
+	var query := text_query.to_lower()
+	return str(summary.get("text", "")).to_lower().contains(query) or str(summary.get("item_path", "")).to_lower().contains(query)
+
+
+func _tree_item_selector_summary(args: Dictionary) -> Dictionary:
+	return {
+		"item_path": str(args.get("item_path", "")),
+		"item_text": str(args.get("item_text", "")),
+		"item_index": int(args.get("item_index", -1))
+	}
+
+
+func _tree_root_item(tree):
+	if tree != null and tree.has_method("get_root"):
+		return tree.call("get_root")
+	return null
+
+
+func _tree_root_hidden(tree) -> bool:
+	if tree != null and tree.has_method("is_root_hidden"):
+		return bool(tree.call("is_root_hidden"))
+	if _has_property(tree, "hide_root"):
+		return bool(tree.get("hide_root"))
+	return false
+
+
+func _tree_item_first_child(item):
+	if item != null and item.has_method("get_first_child"):
+		return item.call("get_first_child")
+	return null
+
+
+func _tree_item_next(item):
+	if item != null and item.has_method("get_next"):
+		return item.call("get_next")
+	return null
+
+
+func _tree_item_text(item) -> String:
+	if item != null and item.has_method("get_text"):
+		return str(item.call("get_text", 0)).strip_edges()
+	return ""
+
+
+func _tree_item_visible(item) -> bool:
+	if item != null and item.has_method("is_visible"):
+		return bool(item.call("is_visible"))
+	return true
+
+
+func _tree_item_selected(item) -> bool:
+	if item != null and item.has_method("is_selected"):
+		return bool(item.call("is_selected", 0))
+	return false
+
+
+func _tree_item_collapsed(item) -> bool:
+	if item != null and item.has_method("is_collapsed"):
+		return bool(item.call("is_collapsed"))
+	return false
+
+
+func _tree_item_child_count(item) -> int:
+	var count := 0
+	var child = _tree_item_first_child(item)
+	while child != null:
+		count += 1
+		child = _tree_item_next(child)
+	return count
+
+
+func _normalize_tree_item_path(value: String) -> String:
+	return value.strip_edges().replace("\\", "/").to_lower()
+
+
 func _get_menu_popup(menu):
 	if menu != null and menu.has_method("get_popup"):
 		return menu.get_popup()
@@ -779,6 +981,85 @@ func _collect_menu_popup_items(popup) -> Array[Dictionary]:
 			"submenu": _read_popup_menu_item_submenu(popup, index)
 		})
 	return items
+
+
+func _resolve_tree_item(tree, args: Dictionary) -> Dictionary:
+	var item_path := _normalize_tree_item_path(str(args.get("item_path", "")))
+	var item_text := str(args.get("item_text", "")).strip_edges().to_lower()
+	var item_index := int(args.get("item_index", -1))
+	if item_path.is_empty() and item_text.is_empty() and item_index < 0:
+		return _error("item_path, item_text, or item_index is required")
+	var items: Array[Dictionary] = []
+	_collect_tree_items(tree, "", true, DEFAULT_LIST_LIMIT, items)
+	var matches: Array[Dictionary] = []
+	for summary in items:
+		if not (summary is Dictionary):
+			continue
+		var dict := summary as Dictionary
+		if item_index >= 0 and int(dict.get("index", -1)) == item_index:
+			matches.append(dict)
+			continue
+		if not item_path.is_empty() and _normalize_tree_item_path(str(dict.get("item_path", ""))) == item_path:
+			matches.append(dict)
+			continue
+		if not item_text.is_empty() and str(dict.get("text", "")).strip_edges().to_lower() == item_text:
+			matches.append(dict)
+	if matches.is_empty():
+		return _error("Editor tree item not found", {"candidate_count": 0, "selector": _tree_item_selector_summary(args)})
+	if matches.size() > 1:
+		return _error("Multiple editor tree items matched", {"candidate_count": matches.size(), "candidates": matches, "selector": _tree_item_selector_summary(args)})
+	var matched := matches[0]
+	var item = _tree_item_by_index(tree, int(matched.get("index", -1)))
+	if item == null:
+		return _error("Editor tree item index could not be resolved", {"matched": matched})
+	return _success({
+		"item": item,
+		"index": int(matched.get("index", -1)),
+		"resolution": {
+			"candidate_count": 1,
+			"selector": _tree_item_selector_summary(args),
+			"matched": matched
+		}
+	})
+
+
+func _tree_item_by_index(tree, wanted_index: int):
+	if wanted_index < 0:
+		return null
+	var root = _tree_root_item(tree)
+	if root == null:
+		return null
+	var start_items: Array = []
+	if _tree_root_hidden(tree):
+		var child = _tree_item_first_child(root)
+		while child != null:
+			start_items.append(child)
+			child = _tree_item_next(child)
+	else:
+		start_items.append(root)
+	var index := 0
+	for item in start_items:
+		var result: Dictionary = _tree_item_by_index_recursive(item, wanted_index, index)
+		index = int(result.get("next_index", index))
+		if result.get("item") != null:
+			return result.get("item")
+	return null
+
+
+func _tree_item_by_index_recursive(item, wanted_index: int, start_index: int) -> Dictionary:
+	if item == null:
+		return {"item": null, "next_index": start_index}
+	if start_index == wanted_index:
+		return {"item": item, "next_index": start_index + 1}
+	var index := start_index + 1
+	var child = _tree_item_first_child(item)
+	while child != null:
+		var result: Dictionary = _tree_item_by_index_recursive(child, wanted_index, index)
+		index = int(result.get("next_index", index))
+		if result.get("item") != null:
+			return {"item": result.get("item"), "next_index": index}
+		child = _tree_item_next(child)
+	return {"item": null, "next_index": index}
 
 
 func _get_popup_menu_item_count(popup) -> int:

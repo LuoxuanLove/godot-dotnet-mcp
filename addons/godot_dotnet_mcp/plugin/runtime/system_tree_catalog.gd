@@ -27,7 +27,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "select_item", "set_text", "close_popup"]}
 	],
 	"system_settings_dialog": [
-		{"tool": "editor_ui_control", "actions": ["list_visible", "wait_for_ui", "select_menu_item", "focus_control", "set_text"]},
+		{"tool": "editor_ui_control", "actions": ["list_visible", "wait_for_ui", "select_menu_item", "focus_control", "set_text", "list_tree_items", "select_tree_item"]},
 		{"tool": "editor_screenshot", "actions": ["capture"]},
 		{"tool": "editor_popup",      "actions": ["list_visible", "close_popup"]}
 	],

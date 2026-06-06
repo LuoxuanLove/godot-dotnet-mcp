@@ -472,6 +472,99 @@ class FakeTabContainer:
 				child.visible = index == current_tab
 
 
+class FakeTreeItem:
+	extends RefCounted
+
+	var text := ""
+	var visible := true
+	var selected := false
+	var collapsed := false
+	var _parent_ref: WeakRef = null
+	var _children: Array = []
+
+	func _init(label: String = "") -> void:
+		text = label
+
+	func add_child(child) -> void:
+		_children.append(child)
+		if child != null and child.has_method("set_parent"):
+			child.set_parent(self)
+
+	func set_parent(parent) -> void:
+		_parent_ref = weakref(parent)
+
+	func get_first_child():
+		if _children.is_empty():
+			return null
+		return _children[0]
+
+	func get_next():
+		var parent = _parent_ref.get_ref() if _parent_ref != null else null
+		if parent == null or not parent.has_method("child_index"):
+			return null
+		var next_index := int(parent.child_index(self)) + 1
+		if next_index < 0 or next_index >= parent.child_count():
+			return null
+		return parent.child_at(next_index)
+
+	func child_index(child) -> int:
+		return _children.find(child)
+
+	func child_count() -> int:
+		return _children.size()
+
+	func child_at(index: int):
+		if index < 0 or index >= _children.size():
+			return null
+		return _children[index]
+
+	func get_text(_column: int) -> String:
+		return text
+
+	func is_visible() -> bool:
+		return visible
+
+	func is_selected(_column: int) -> bool:
+		return selected
+
+	func is_collapsed() -> bool:
+		return collapsed
+
+	func select(_column: int) -> void:
+		selected = true
+
+
+class FakeTreeControl:
+	extends FakeUiControl
+
+	var hide_root := true
+	var selected_item = null
+	var scrolled_item = null
+	var _root = null
+
+	func _init(node_name: String = "", rect: Rect2 = Rect2(0, 0, 160, 240)) -> void:
+		super(node_name, "Tree", rect)
+
+	func set_root(item) -> void:
+		_root = item
+
+	func get_root():
+		return _root
+
+	func is_root_hidden() -> bool:
+		return hide_root
+
+	func set_selected(item, _column: int) -> void:
+		if selected_item != null and selected_item.has_method("select"):
+			selected_item.selected = false
+		selected_item = item
+		if item != null:
+			item.selected = true
+
+	func scroll_to_item(item, _center_on_item: bool = false) -> void:
+		scrolled_item = item
+
+
 class FakeFocusOwner:
 	extends RefCounted
 
@@ -646,6 +739,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
+	var category_tree := FakeTreeControl.new("CategoryTree", Rect2(16, 184, 180, 160))
+	var category_root := FakeTreeItem.new("Settings")
+	var application_item := FakeTreeItem.new("Application")
+	var app_config_item := FakeTreeItem.new("Config")
+	var app_run_item := FakeTreeItem.new("Run")
+	var rendering_item := FakeTreeItem.new("Rendering")
+	application_item.add_child(app_config_item)
+	application_item.add_child(app_run_item)
+	category_root.add_child(application_item)
+	category_root.add_child(rendering_item)
+	category_tree.set_root(category_root)
 	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
 	project_menu.get_popup().add_item("Project Settings...", 101)
 	project_menu.get_popup().add_item("Export...", 102)
@@ -705,6 +809,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_interface.get_base_control().add_popup_child(editor_top_bar)
 	editor_interface.get_base_control().add_popup_child(main_screen_bar)
 	editor_interface.get_base_control().add_popup_child(search_panel)
+	editor_interface.get_base_control().add_popup_child(category_tree)
 	editor_interface.get_base_control().add_popup_child(mcp_dock)
 	editor_interface.get_base_control().add_popup_child(diagnostic_plugin_button)
 	editor_interface.get_base_control().add_popup_child(output_panel)
@@ -876,6 +981,52 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control set_text failed through the split service path.")
 	if search_field.text != "Player":
 		return _failure("Editor ui_control set_text should update the target control text.")
+
+	var category_tree_path := str(category_tree.get_path())
+	var list_tree_items_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_tree_items",
+		"target_path": category_tree_path,
+		"limit": 10
+	})
+	if not bool(list_tree_items_result.get("success", false)):
+		return _failure("Editor ui_control list_tree_items should list a visible Tree control.")
+	var tree_items: Array = list_tree_items_result.get("data", {}).get("items", [])
+	if tree_items.size() != 4:
+		return _failure("Editor ui_control list_tree_items should return visible TreeItem rows below a hidden root.")
+	if str((tree_items[0] as Dictionary).get("item_path", "")) != "Application":
+		return _failure("Editor ui_control list_tree_items should preserve top-level tree item paths.")
+	if str((tree_items[1] as Dictionary).get("item_path", "")) != "Application/Config":
+		return _failure("Editor ui_control list_tree_items should preserve nested tree item paths.")
+	var filtered_tree_items_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_tree_items",
+		"target_path": category_tree_path,
+		"text_query": "config",
+		"limit": 10
+	})
+	if not bool(filtered_tree_items_result.get("success", false)):
+		return _failure("Editor ui_control list_tree_items should support text filtering.")
+	var filtered_tree_items: Array = filtered_tree_items_result.get("data", {}).get("items", [])
+	if filtered_tree_items.size() != 1 or str((filtered_tree_items[0] as Dictionary).get("item_path", "")) != "Application/Config":
+		return _failure("Editor ui_control list_tree_items should match nested item paths with text_query.")
+	var select_tree_item_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_tree_item",
+		"target_path": category_tree_path,
+		"item_path": "Application/Config"
+	})
+	if not bool(select_tree_item_result.get("success", false)):
+		return _failure("Editor ui_control select_tree_item should select a TreeItem by item_path.")
+	if category_tree.selected_item != app_config_item or category_tree.scrolled_item != app_config_item or not bool(category_tree.focused):
+		return _failure("Editor ui_control select_tree_item should select, scroll to, and focus the Tree control.")
+	var selected_tree_item: Dictionary = select_tree_item_result.get("data", {}).get("selected_item", {})
+	if str(selected_tree_item.get("item_path", "")) != "Application/Config" or not bool(selected_tree_item.get("selected", false)):
+		return _failure("Editor ui_control select_tree_item should return the selected TreeItem metadata.")
+	var missing_tree_item_result: Dictionary = executor.execute("ui_control", {
+		"action": "select_tree_item",
+		"target_path": category_tree_path,
+		"item_path": "Application/Missing"
+	})
+	if bool(missing_tree_item_result.get("success", false)):
+		return _failure("Editor ui_control select_tree_item should reject missing TreeItem paths.")
 
 	var wait_exists_result: Dictionary = executor.execute("ui_control", {
 		"action": "wait_for_ui",
