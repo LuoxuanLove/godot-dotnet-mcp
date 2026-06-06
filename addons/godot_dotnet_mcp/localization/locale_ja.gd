@@ -1048,6 +1048,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_list_rows_desc": "List conservative read-only row models from the visible settings surface without writing the search field.",
 	"tool_action_read_value_name": "Read Value",
 	"tool_action_read_value_desc": "Read the current visible value for a unique settings row without writing setting values.",
+	"tool_action_focus_value_name": "Focus Value",
+	"tool_action_focus_value_desc": "Focus the value editor for a unique visible settings row without writing setting values.",
 	"tool_action_focus_result_name": "Focus Result",
 	"tool_action_close_name": "Close",
 	"tool_action_search_desc": "Search the current surface and return matching structured results.",

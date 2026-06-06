@@ -225,6 +225,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_list_rows_desc": "從可見設定介面列出保守的唯讀設定列模型，不寫入搜尋框。",
 	"tool_action_read_value_name": "讀取值",
 	"tool_action_read_value_desc": "讀取唯一設定列的目前可見值，不寫入設定值。",
+	"tool_action_focus_value_name": "聚焦值控制項",
+	"tool_action_focus_value_desc": "聚焦唯一可見設定列的值編輯控制項，不寫入設定值。",
 	"tool_action_path_name": "讀取路徑",
 	"tool_action_play_custom_name": "執行自訂場景",
 	"tool_action_play_main_name": "執行主場景",

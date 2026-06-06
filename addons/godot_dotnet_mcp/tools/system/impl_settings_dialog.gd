@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a unique row's value editor, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,7 +83,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value only filter currently observed visible rows."
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/focus_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
@@ -91,7 +91,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value"
+						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value/focus_value"
 					},
 					"include_raw_controls": {
 						"type": "boolean",
@@ -100,7 +100,7 @@ func get_tools() -> Array[Dictionary]:
 					"require_confidence": {
 						"type": "string",
 						"enum": ["low", "medium", "high"],
-						"description": "Minimum row model confidence accepted by read_value (default medium)"
+						"description": "Minimum row model confidence accepted by read_value/focus_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -155,6 +155,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _read_value(surface, args)
+		"focus_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _focus_value(surface, args)
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -330,6 +335,95 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(value_payload, args)
 	return bridge.success(value_payload, "Settings row value read")
+
+
+func _focus_value(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for focus_value: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before focus_value.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_action(all_controls, surface, args, query_values, "focus_value")
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched focus_value.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var value_payload: Dictionary = _read_row_value(row, all_controls)
+	var value_path := str(value_payload.get("value_control_path", value_payload.get("value_source", ""))).strip_edges()
+	if value_path.is_empty():
+		var missing_value_payload := observation.duplicate(true)
+		missing_value_payload["row"] = row
+		missing_value_payload["value"] = value_payload
+		missing_value_payload["resolution"] = row_resolution.get("resolution", {})
+		missing_value_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "value_control_not_found"
+		})
+		return bridge.error("No value control path was found for focus_value.", missing_value_payload)
+	var focus_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+		"action": "focus_control",
+		"target_path": value_path
+	})
+	if not bool(focus_result.get("success", false)):
+		var focus_payload := observation.duplicate(true)
+		focus_payload["row"] = row
+		focus_payload["value"] = value_payload
+		focus_payload["focus"] = focus_result
+		focus_payload["resolution"] = row_resolution.get("resolution", {})
+		focus_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"target_path": value_path,
+			"success": false,
+			"reason": "focus_failed"
+		})
+		return bridge.error(str(focus_result.get("message", focus_result.get("error", "Settings row value focus failed."))), focus_payload)
+	var payload: Dictionary = focus_result.get("data", {}).duplicate(true)
+	payload["surface"] = surface
+	payload["dialog_found"] = bool(observation.get("dialog_found", false))
+	payload["dialog_path"] = str(observation.get("dialog_path", ""))
+	payload["primary_popup_path"] = str(observation.get("primary_popup_path", ""))
+	payload["row"] = row
+	payload["focused_value"] = {
+		"path": value_path,
+		"editor_type": str(value_payload.get("value_editor_type", "unknown")),
+		"confidence": str(value_payload.get("confidence", row.get("confidence", "low")))
+	}
+	payload["value_control"] = value_payload.get("value_control", {})
+	payload["value_control_path"] = value_path
+	payload["value_editor_type"] = str(value_payload.get("value_editor_type", "unknown"))
+	payload["value_text"] = str(value_payload.get("value_text", ""))
+	payload["resolution"] = row_resolution.get("resolution", {})
+	payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "focus_value",
+		"target_path": value_path,
+		"setting_path": str(args.get("setting_path", "")),
+		"queries": query_values,
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings row value focused")
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
@@ -867,6 +961,10 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 
 
 func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
+	return _resolve_row_for_value_action(rows, surface, args, query_values, "read_value")
+
+
+func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String) -> Dictionary:
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var required := _required_confidence(args)
 	var candidates: Array[Dictionary] = []
@@ -880,7 +978,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "row_not_found",
-			"message": "No settings row matched read_value with the requested selector and confidence.",
+			"message": "No settings row matched %s with the requested selector and confidence." % action_name,
 			"candidate_count": 0,
 			"candidates": []
 		}
@@ -888,7 +986,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "ambiguous_row",
-			"message": "Multiple settings rows matched read_value; pass target_path or a more specific setting_path.",
+			"message": "Multiple settings rows matched %s; pass target_path or a more specific setting_path." % action_name,
 			"candidate_count": candidates.size(),
 			"candidates": candidates
 		}
@@ -897,7 +995,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		"row": candidates[0],
 		"resolution": {
 			"candidate_count": 1,
-			"selector": _read_value_selector_summary(args),
+			"selector": _value_action_selector_summary(args),
 			"require_confidence": required
 		}
 	}
@@ -998,6 +1096,10 @@ func _confidence_meets(actual: String, required: String) -> bool:
 
 
 func _read_value_selector_summary(args: Dictionary) -> Dictionary:
+	return _value_action_selector_summary(args)
+
+
+func _value_action_selector_summary(args: Dictionary) -> Dictionary:
 	return {
 		"target_path": str(args.get("target_path", "")),
 		"setting_path": str(args.get("setting_path", "")),

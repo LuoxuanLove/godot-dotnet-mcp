@@ -139,7 +139,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_rows", "read_value", "focus_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
@@ -163,6 +163,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing_read_step: Dictionary = missing_read_workflow[missing_read_workflow.size() - 1] if not missing_read_workflow.is_empty() else {}
 	if str(missing_read_step.get("reason", "")) != "surface_not_visible":
 		return _failure("read_value missing-surface failure should report surface_not_visible.")
+	var missing_focus_value := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name"
+	})
+	if bool(missing_focus_value.get("success", false)):
+		return _failure("focus_value should fail when the requested settings surface is not visible.")
+	var missing_focus_value_workflow: Array = missing_focus_value.get("data", {}).get("workflow", [])
+	var missing_focus_value_step: Dictionary = missing_focus_value_workflow[missing_focus_value_workflow.size() - 1] if not missing_focus_value_workflow.is_empty() else {}
+	if str(missing_focus_value_step.get("reason", "")) != "surface_not_visible":
+		return _failure("focus_value missing-surface failure should report surface_not_visible.")
 
 	var opened := await impl.execute_async("settings_dialog", {"action": "open", "surface": "project_settings", "timeout_ms": 500})
 	if not bool(opened.get("success", false)):
@@ -239,6 +250,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(read_value_by_value_path.get("success", false)):
 		return _failure("read_value should resolve a value child target_path back to its setting row.")
+
+	var calls_before_focus_value := fake.calls.size()
+	var focused_value := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"limit": 10
+	})
+	if not bool(focused_value.get("success", false)):
+		return _failure("focus_value should succeed for a uniquely visible row.")
+	if str(focused_value.get("data", {}).get("value_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name/Value":
+		return _failure("focus_value should focus the value child control path, not the row container.")
+	if str(focused_value.get("data", {}).get("focused_value", {}).get("editor_type", "")) != "text":
+		return _failure("focus_value should report the focused value editor type.")
+	if not _has_call_since_with_target(fake.calls, calls_before_focus_value, "editor_ui_control", "focus_control", "/root/ProjectSettings/General/Application/Config/Name/Value"):
+		return _failure("focus_value should delegate focus_control to the value child control.")
+	if _has_call_since(fake.calls, calls_before_focus_value, "editor_ui_control", "set_text"):
+		return _failure("focus_value must not write the settings search field.")
+	var focused_value_by_value_path := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"target_path": "/root/ProjectSettings/General/Application/Config/Name/Value",
+		"limit": 10
+	})
+	if not bool(focused_value_by_value_path.get("success", false)):
+		return _failure("focus_value should resolve a value child target_path back to its setting row.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -342,6 +379,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("read_value ambiguous failure should report the ambiguous_row reason.")
+	var ambiguous_focus_value := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"limit": 1
+	})
+	if bool(ambiguous_focus_value.get("success", false)):
+		return _failure("focus_value should fail when multiple rows match the selector even if the requested limit is small.")
+	if str(ambiguous_focus_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("focus_value ambiguous failure should report the ambiguous_row reason.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
@@ -413,6 +460,16 @@ func _has_call_since(calls: Array, start_index: int, tool_name: String, action: 
 	for index in range(start_index, calls.size()):
 		var call: Dictionary = calls[index]
 		if str(call.get("tool", "")) == tool_name and str(call.get("action", "")) == action:
+			return true
+	return false
+
+
+func _has_call_since_with_target(calls: Array, start_index: int, tool_name: String, action: String, target_path: String) -> bool:
+	for index in range(start_index, calls.size()):
+		var call: Dictionary = calls[index]
+		if str(call.get("tool", "")) != tool_name or str(call.get("action", "")) != action:
+			continue
+		if str(call.get("args", {}).get("target_path", "")) == target_path:
 			return true
 	return false
 

@@ -18,7 +18,7 @@ The new wait action complements menu, popup, click, hover, and text-entry contro
 
 The workflow now also exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before any future value-editing layer is added.
 
-It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
+It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes. The companion `focus_value` action moves focus directly to that row's value editor, giving clients a safer handoff point before any lower-level interaction.
 
 ### ✅ Compatibility and Upgrade Notes
 
