@@ -167,18 +167,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var listed_rows := impl.execute("settings_dialog", {
 		"action": "list_rows",
 		"surface": "project_settings",
-		"query": "Application Config Name",
+		"setting_path": "application/config/name",
 		"limit": 10
 	})
 	if not bool(listed_rows.get("success", false)):
 		return _failure("list_rows should succeed against visible controls.")
-	if int(listed_rows.get("data", {}).get("row_count", 0)) < 1:
+	if int(listed_rows.get("data", {}).get("row_count", 0)) != 1:
 		return _failure("list_rows should return conservative read-only row models.")
 	var first_row := ((listed_rows.get("data", {}).get("rows", []) as Array)[0]) as Dictionary
 	if str(first_row.get("confidence", "")) != "medium":
 		return _failure("list_rows should assign medium confidence when row has label/path but no stable setting path.")
 	if str(first_row.get("row_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name":
 		return _failure("list_rows should preserve the row_control_path evidence.")
+	if str(first_row.get("row_control_path", "")).ends_with("/Filter") or str(first_row.get("row_control_path", "")).ends_with("/Value"):
+		return _failure("list_rows should not return filter or value child controls as setting rows.")
 	if _has_call_since(fake.calls, calls_before_list_rows, "editor_ui_control", "set_text"):
 		return _failure("list_rows must not write the settings search field.")
 

@@ -704,9 +704,14 @@ func _is_settings_row_candidate(row: Dictionary) -> bool:
 	var text := _label_text_hint(row)
 	if path.is_empty() and text.is_empty():
 		return false
+	var lower_path := path.to_lower()
+	var control_class := str(row.get("class", "")).strip_edges()
+	if lower_path.ends_with("/filter") or lower_path.ends_with("/value"):
+		return false
+	if control_class in ["AcceptDialog", "Window", "PopupPanel"]:
+		return false
 	if bool(row.get("editable_text", false)):
 		return true
-	var control_class := str(row.get("class", "")).strip_edges()
 	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
 		return true
 	if path.contains("/") and (path.contains("Settings") or path.contains("General") or path.contains("Interface")):
