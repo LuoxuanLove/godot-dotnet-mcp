@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.2.1.
 
+### Added
+
+- Added `system_editor_control(action="wait_for_ui")`, a bounded wait-and-verify action that polls editor controls for existence, visibility, text, and enabled/disabled conditions before returning matched UI evidence or a timeout payload.
+
 ### Internal
 
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.

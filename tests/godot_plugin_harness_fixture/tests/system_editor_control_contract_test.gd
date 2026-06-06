@@ -41,6 +41,15 @@ class FakeBridge extends RefCounted:
 							"count": 1,
 							"controls": [{"path": "/root/Editor/SearchPanel/SearchField", "class": "LineEdit"}]
 						})
+					"wait_for_ui":
+						return success({
+							"condition": str(args.get("condition", "")),
+							"condition_met": true,
+							"target_path": str(args.get("target_path", "")),
+							"text": str(args.get("text", "")),
+							"timeout_ms": int(args.get("timeout_ms", 0)),
+							"poll_interval_ms": int(args.get("poll_interval_ms", 0))
+						})
 					"list_dock_tabs":
 						return success({
 							"count": 1,
@@ -135,6 +144,10 @@ class FakeBridge extends RefCounted:
 			_:
 				return error("Unsupported atomic tool: %s" % tool_name)
 
+	func call_atomic_async(tool_name: String, args: Dictionary) -> Dictionary:
+		await Engine.get_main_loop().process_frame
+		return call_atomic(tool_name, args)
+
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
 
@@ -182,9 +195,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item", "hover_control", "leave_control"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "wait_for_ui", "select_popup_menu_item", "hover_control", "leave_control"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
+	for expected_property in ["condition", "timeout_ms", "poll_interval_ms"]:
+		if not editor_control_properties.has(expected_property):
+			return _failure("editor_control schema should expose %s for wait_for_ui." % expected_property)
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
@@ -229,6 +245,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate list_controls.")
 	if int(list_controls_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("system editor_control should preserve the list_controls payload.")
+	var wait_result: Dictionary = await impl.execute_async("editor_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/SearchPanel/SearchField",
+		"condition": "text_contains",
+		"text": "Search",
+		"timeout_ms": 250,
+		"poll_interval_ms": 25
+	})
+	if not bool(wait_result.get("success", false)):
+		return _failure("system editor_control should delegate wait_for_ui.")
+	if str(wait_result.get("data", {}).get("condition", "")) != "text_contains":
+		return _failure("system editor_control should preserve wait_for_ui condition.")
+	if int(wait_result.get("data", {}).get("timeout_ms", 0)) != 250:
+		return _failure("system editor_control should preserve wait_for_ui timeout_ms.")
 
 	var list_dock_tabs_result: Dictionary = impl.execute("editor_control", {
 		"action": "list_dock_tabs",
