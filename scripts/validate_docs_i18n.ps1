@@ -20,6 +20,7 @@ $docMap = @(
     @{ Id = "process-agent-bot"; Paths = @{ en = "process/agent-and-bot-workflow.md"; "zh-CN" = "流程/智能体与机器人流程.md"; ja = "プロセス/エージェントとボットの流れ.md"; ko = "프로세스/에이전트와-봇-흐름.md" } },
     @{ Id = "process-release-runbook"; Paths = @{ en = "process/release-runbook.md"; "zh-CN" = "流程/发布运行手册.md"; ja = "プロセス/リリース運用手順.md"; ko = "프로세스/릴리스-운영-절차.md" } },
     @{ Id = "process-release-notes-v1.2.0"; Paths = @{ en = "process/release-notes/release-notes-v1.2.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md" } },
+    @{ Id = "process-release-notes-v1.2.1"; Paths = @{ en = "process/release-notes/release-notes-v1.2.1.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.1.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.1.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.1.md" } },
     @{ Id = "testing-overview"; Paths = @{ en = "testing/overview.md"; "zh-CN" = "测试/总览.md"; ja = "テスト/概要.md"; ko = "테스트/개요.md" } },
     @{ Id = "testing-smoke-ci"; Paths = @{ en = "testing/smoke-and-ci.md"; "zh-CN" = "测试/冒烟测试与持续集成.md"; ja = "テスト/スモークテストと継続的インテグレーション.md"; ko = "테스트/스모크-테스트와-지속적-통합.md" } },
     @{ Id = "testing-headless"; Paths = @{ en = "testing/plugin-headless-testing.md"; "zh-CN" = "测试/插件无头测试.md"; ja = "テスト/プラグインヘッドレステスト.md"; ko = "테스트/플러그인-헤드리스-테스트.md" } },
@@ -172,26 +173,32 @@ function Test-MarkdownLinks {
 }
 
 function Get-ReleaseNoteLanguageSwitchLine {
-    return '<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/en/process/release-notes/release-notes-v1.2.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/zh-CN/流程/发布说明/发布说明-v1.2.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ja/プロセス/リリースノート/リリースノート-v1.2.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.2.0.md">한국어</a></p>'
+    param([string]$Version)
+    return "<p align=`"center`"><a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/en/process/release-notes/release-notes-v$Version.md`">English</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/zh-CN/流程/发布说明/发布说明-v$Version.md`">简体中文</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/ja/プロセス/リリースノート/リリースノート-v$Version.md`">日本語</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/ko/프로세스/릴리스-노트/릴리스-노트-v$Version.md`">한국어</a></p>"
 }
 
 function Test-ReleaseNoteLanguageSwitch {
     param([string]$Locale, [string]$RelativePath, [string]$Content, [string]$Context)
-    $releaseNotePaths = @{
-        en = "process/release-notes/release-notes-v1.2.0.md"
-        "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"
-        ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"
-        ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md"
-    }
-    if (-not $releaseNotePaths.ContainsKey($Locale) -or $releaseNotePaths[$Locale] -ne $RelativePath) {
+    $versionMatch = [regex]::Match($RelativePath, 'v(\d+\.\d+\.\d+)\.md$')
+    if (-not $versionMatch.Success) {
         return
     }
 
-    $expectedLine = Get-ReleaseNoteLanguageSwitchLine
+    $expectedLine = Get-ReleaseNoteLanguageSwitchLine -Version $versionMatch.Groups[1].Value
     $lines = @($Content -split "`r?`n")
     $matches = @($lines | Where-Object { $_ -eq $expectedLine })
     if ($matches.Count -ne 1) {
         $errors.Add("Release note language switcher must appear exactly once with the expected four links in ${Context}")
+        return
+    }
+
+    $nonEmptyLines = @($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($nonEmptyLines.Count -lt 3 -or
+        $nonEmptyLines[0] -notmatch '^##\s+' -or
+        $nonEmptyLines[1] -match '^<p align="center">' -or
+        $nonEmptyLines[1] -match '^#{1,6}\s+' -or
+        $nonEmptyLines[2] -ne $expectedLine) {
+        $errors.Add("Release note language switcher must appear after the title and introduction in ${Context}")
     }
 }
 
@@ -311,17 +318,12 @@ function Test-PathScript {
 
 function Remove-AllowedReleaseNoteLanguageSwitch {
     param([string]$Locale, [string]$RelativePath, [string]$Content)
-    $releaseNotePaths = @{
-        en = "process/release-notes/release-notes-v1.2.0.md"
-        "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"
-        ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"
-        ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md"
-    }
-    if (-not $releaseNotePaths.ContainsKey($Locale) -or $releaseNotePaths[$Locale] -ne $RelativePath) {
+    $versionMatch = [regex]::Match($RelativePath, 'v(\d+\.\d+\.\d+)\.md$')
+    if (-not $versionMatch.Success) {
         return $Content
     }
 
-    $expectedLine = [regex]::Escape((Get-ReleaseNoteLanguageSwitchLine))
+    $expectedLine = [regex]::Escape((Get-ReleaseNoteLanguageSwitchLine -Version $versionMatch.Groups[1].Value))
     return [regex]::Replace($Content, "(?m)^$expectedLine`r?`n?", '')
 }
 
