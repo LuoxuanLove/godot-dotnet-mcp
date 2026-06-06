@@ -390,8 +390,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 11:
-		return _failure("System project implementation should expose 11 tool definitions including plugin_reload, plugin_update, project_files, resource_reference_audit and userdata_maintenance.")
+	if tool_defs.size() != 12:
+		return _failure("System project implementation should expose 12 tool definitions including project_execution, plugin_reload, plugin_update, project_files, resource_reference_audit and userdata_maintenance.")
 	if not _has_tool(tool_defs, "plugin_reload"):
 		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
 	if not _has_tool(tool_defs, "plugin_update"):
@@ -402,6 +402,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
 	if not _has_tool(tool_defs, "resource_reference_audit"):
 		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
+	if not _has_tool(tool_defs, "project_execution"):
+		return _failure("System project implementation should expose project_execution as the unified run/stop lifecycle entry.")
 
 	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
 	if not bool(reference_audit.get("success", false)):
@@ -646,13 +648,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_run: Dictionary = executor.execute("project_run", {})
 	if not bool(project_run.get("success", false)):
 		return _failure("project_run did not succeed through the split runtime service.")
+	var project_execution_run: Dictionary = executor.execute("project_execution", {"action": "run", "scene": "res://tests/project_contract_fixture/Main.tscn"})
+	if not bool(project_execution_run.get("success", false)):
+		return _failure("project_execution action=run should delegate to project_run successfully.")
+	var execution_run_data: Dictionary = project_execution_run.get("data", {})
+	if str(execution_run_data.get("scene", "")) != "res://tests/project_contract_fixture/Main.tscn":
+		return _failure("project_execution action=run should preserve the requested custom scene in the project_run payload.")
+	var project_execution_stop: Dictionary = executor.execute("project_execution", {"action": "stop"})
+	if not bool(project_execution_stop.get("success", false)) or not bool(project_execution_stop.get("data", {}).get("stopped", false)):
+		return _failure("project_execution action=stop should delegate to project_stop successfully.")
+	var invalid_project_execution: Dictionary = executor.execute("project_execution", {"action": "pause"})
+	if bool(invalid_project_execution.get("success", false)):
+		return _failure("project_execution should reject unknown actions.")
+	var timed_project_run_start_index := int(executor.bridge.scene_run_actions.size())
 	var timed_project_run: Dictionary = executor.execute("project_run", {"timeout_ms": 1})
 	if not bool(timed_project_run.get("success", false)):
 		return _failure("project_run with timeout_ms did not succeed.")
 	await (Engine.get_main_loop() as SceneTree).create_timer(0.05).timeout
-	if executor.bridge.scene_run_actions.size() < 3:
+	if executor.bridge.scene_run_actions.size() < timed_project_run_start_index + 2:
 		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
-	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
+	if executor.bridge.scene_run_actions[timed_project_run_start_index] != "play_main" or executor.bridge.scene_run_actions[timed_project_run_start_index + 1] != "stop":
 		return _failure("project_run timeout should emit play_main followed by stop.")
 	var run_action_count_before_no_focus := int(executor.bridge.scene_run_actions.size())
 	var no_focus_run: Dictionary = executor.execute("project_run", {"no_focus": true})
@@ -667,6 +682,44 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run no_focus rejection should expose requires_foreground_window.")
 	if bool((no_focus_data as Dictionary).get("can_run_without_focus", true)):
 		return _failure("project_run no_focus rejection should report can_run_without_focus=false.")
+	var run_action_count_before_execution_no_focus := int(executor.bridge.scene_run_actions.size())
+	var execution_no_focus_run: Dictionary = executor.execute("project_execution", {"action": "run", "no_focus": true})
+	if bool(execution_no_focus_run.get("success", false)):
+		return _failure("project_execution action=run should reject unsupported no_focus launches instead of starting the project.")
+	if executor.bridge.scene_run_actions.size() != run_action_count_before_execution_no_focus:
+		return _failure("project_execution action=run should not call scene_run when no_focus launch is unsupported.")
+	var execution_no_focus_data = execution_no_focus_run.get("data", {})
+	if not (execution_no_focus_data is Dictionary) or str((execution_no_focus_data as Dictionary).get("error_code", "")) != "requires_foreground_window":
+		return _failure("project_execution action=run should preserve requires_foreground_window rejection data.")
+	var execution_marker_sync: Dictionary = executor.execute("project_execution", {"action": "run", "success_markers": ["BOOT READY"]})
+	if bool(execution_marker_sync.get("success", false)):
+		return _failure("project_execution marker validation should require async execution just like project_run.")
+	if not str(execution_marker_sync.get("data", {}).get("hint", "")).contains("system_project_execution"):
+		return _failure("project_execution marker validation sync error should point callers at the system_project_execution async path.")
+
+	var execution_timeout_executor = SystemProjectExecutorScript.new()
+	var execution_timeout_bridge = FakeBridge.new(FakeToolLoader.new())
+	execution_timeout_executor.bridge = execution_timeout_bridge
+	execution_timeout_executor.configure_runtime({})
+	var execution_timed_run: Dictionary = execution_timeout_executor.execute("project_execution", {"action": "run", "timeout_ms": 1})
+	if not bool(execution_timed_run.get("success", false)):
+		return _failure("project_execution action=run with timeout_ms should succeed.")
+	await (Engine.get_main_loop() as SceneTree).create_timer(0.05).timeout
+	if execution_timeout_bridge.scene_run_actions != ["play_main", "stop"]:
+		return _failure("project_execution action=run timeout should emit play_main followed by stop.")
+	var execution_cancel_executor = SystemProjectExecutorScript.new()
+	var execution_cancel_bridge = FakeBridge.new(FakeToolLoader.new())
+	execution_cancel_executor.bridge = execution_cancel_bridge
+	execution_cancel_executor.configure_runtime({})
+	var execution_cancel_run: Dictionary = execution_cancel_executor.execute("project_execution", {"action": "run", "timeout_ms": 25})
+	if not bool(execution_cancel_run.get("success", false)):
+		return _failure("project_execution action=run with cancellable timeout should succeed.")
+	var execution_cancel_stop: Dictionary = execution_cancel_executor.execute("project_execution", {"action": "stop"})
+	if not bool(execution_cancel_stop.get("success", false)):
+		return _failure("project_execution action=stop should succeed after a timed run.")
+	await (Engine.get_main_loop() as SceneTree).create_timer(0.06).timeout
+	if execution_cancel_bridge.scene_run_actions != ["play_main", "stop"]:
+		return _failure("project_execution action=stop should cancel the pending auto-stop token instead of emitting a second stop.")
 
 	var marker_success_executor = SystemProjectExecutorScript.new()
 	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
@@ -688,6 +741,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_run marker validation should report passed status and matched success marker details.")
 	if marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
 		return _failure("project_run marker validation should auto-stop through scene_run stop by default.")
+	var execution_marker_success_executor = SystemProjectExecutorScript.new()
+	var execution_marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
+	execution_marker_success_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "EXECUTION READY", "level": "info"}}]
+	execution_marker_success_executor.bridge = execution_marker_success_bridge
+	execution_marker_success_executor.configure_runtime({})
+	var execution_marker_success: Dictionary = await execution_marker_success_executor.execute_async("project_execution", {
+		"action": "run",
+		"success_markers": ["EXECUTION READY"],
+		"timeout_ms": 50,
+		"poll_interval_ms": 1,
+		"log_tail": 10
+	})
+	if not bool(execution_marker_success.get("success", false)):
+		return _failure("project_execution action=run should preserve async marker validation.")
+	if execution_marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
+		return _failure("project_execution marker validation should preserve default auto-stop behavior.")
 
 	var repeated_marker_executor = SystemProjectExecutorScript.new()
 	var repeated_marker_bridge = FakeBridge.new(FakeToolLoader.new())

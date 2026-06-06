@@ -29,6 +29,8 @@ class FakeLocalization extends RefCounted:
 		"tool_action_get_output_name": "读取输出",
 		"tool_action_get_errors_name": "读取错误",
 		"tool_action_clear_name": "清空",
+		"tool_action_run_name": "运行",
+		"tool_action_stop_name": "停止",
 		"tool_action_ensure_layout_name": "确保目录结构",
 		"tool_action_list_capture_cache_name": "列出截图缓存",
 		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
@@ -55,6 +57,7 @@ class FakeLocalization extends RefCounted:
 		"tool_system_editor_state_name": "编辑器状态",
 		"tool_system_editor_log_name": "编辑器日志",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
+		"tool_system_project_execution_name": "项目运行控制",
 		"tool_system_runtime_step_name": "运行时步进",
 		"tool_runtime_step_name": "步进",
 		"tool_runtime_step_desc": "内部运行时步进：应用可选运行时输入、等待指定帧数，并按需捕获一帧画面。",
@@ -161,13 +164,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
+	var project_execution_tool = _find_child_by_metadata(system_category, "tool", "system_project_execution")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or project_execution_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
-	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or userdata_tool.get_text(0) != "用户数据维护":
+	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or userdata_tool.get_text(0) != "用户数据维护" or project_execution_tool.get_text(0) != "项目运行控制":
 		return _failure("Tools tab should localize newly added system tool rows.")
 	var runtime_step_atomic = _find_child_by_metadata(runtime_step_tool, "atomic", "runtime_step")
 	var runtime_capture_atomic = _find_child_by_metadata(runtime_step_tool, "atomic", "runtime_capture")
@@ -192,9 +196,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should keep the atomic child chain for system tools after tree rendering refactor.")
 	var editor_log_action = _find_child_by_metadata(editor_log_tool, "action", "system_editor_log.get_output")
 	var userdata_action = _find_child_by_metadata(userdata_tool, "action", "system_userdata_maintenance.ensure_layout")
-	if editor_log_action == null or userdata_action == null:
+	var project_execution_run_action = _find_child_by_metadata(project_execution_tool, "action", "system_project_execution.run")
+	var project_execution_stop_action = _find_child_by_metadata(project_execution_tool, "action", "system_project_execution.stop")
+	if editor_log_action == null or userdata_action == null or project_execution_run_action == null or project_execution_stop_action == null:
 		return _failure("Tools tab should render high-level system tool action children.")
-	if editor_log_action.get_text(0) != "读取输出" or userdata_action.get_text(0) != "确保目录结构":
+	if editor_log_action.get_text(0) != "读取输出" or userdata_action.get_text(0) != "确保目录结构" or project_execution_run_action.get_text(0) != "运行" or project_execution_stop_action.get_text(0) != "停止":
 		return _failure("Tools tab should localize high-level system tool action children.")
 	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
 	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
@@ -359,6 +365,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"]
 		"system_plugin_update":
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
+		"system_project_execution":
+			return ["run", "stop"]
 	return []
 
 

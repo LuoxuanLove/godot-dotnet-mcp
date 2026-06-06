@@ -42,6 +42,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"system_plugin_reload",
 		"system_plugin_update",
 		"system_project_configure",
+		"system_project_execution",
 		"system_project_files",
 		"system_project_index_build",
 		"system_project_run",

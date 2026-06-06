@@ -9,6 +9,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 - Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
 - Added User-tool runtime diagnostics so clients can inspect discovered custom tools, load failures, watcher state, compatibility, and recent audit entries from the plugin evolution tools or project health.
 - Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
+- Added `system_project_execution(action=run|stop)` as one project lifecycle entry for launching with marker validation, timeouts, foreground-policy checks, auto-stop, or stopping the current run while the older direct run and stop tools remain compatible.
 - Localized reconnect guidance across the supported Dock languages.
 - Added output size safeguards for MCP resources and prompt guides so very large file-backed resources are rejected before expensive reads, while long generated prompt text reports byte-size truncation metadata.
 - Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
@@ -38,7 +39,7 @@ This release makes the plugin easier to use from several MCP clients or agent se
 ### ✅ Compatibility and Upgrade Notes
 
 - Existing tool names remain compatible.
-- The tool schema version changed because editor control gained new UI actions and user-tool runtime diagnostics now expose live runtime-state fields.
+- The tool schema version changed because editor control gained new UI actions, user-tool runtime diagnostics expose live runtime-state fields, and project run/stop now have a unified high-level lifecycle entry.
 - `system_editor_plugin_control` is additive; use dedicated plugin reload/update tools for this plugin instead of generic self-disable flows.
 - Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
 - Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.

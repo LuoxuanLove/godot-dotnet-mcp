@@ -2,8 +2,8 @@
 extends RefCounted
 
 ## System implementation: project_state, editor_state, plugin_reload, plugin_update,
-## project_configure, userdata_maintenance, project_files, project_run,
-## project_stop, runtime_diagnose
+## project_configure, userdata_maintenance, project_files, project_execution,
+## project_run, project_stop, runtime_diagnose
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -36,7 +36,7 @@ var _project_run_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
+	"project_files", "project_execution", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
 ]
 
 
@@ -171,6 +171,27 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
+			"name": "project_execution",
+			"description": "PROJECT EXECUTION: Unified high-level entry for project runtime lifecycle. action=run launches the main scene or a custom scene with the same marker wait, timeout, foreground-policy, and auto-stop behavior as project_run. action=stop stops the currently running project with the same behavior as project_stop. Existing project_run and project_stop remain available for compatibility.",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["run", "stop"], "description": "Project execution action"},
+					"scene": {"type": "string", "description": "Run action only: custom scene to run (optional, runs main scene if omitted)"},
+					"timeout_ms": {"type": "integer", "description": "Run action only. Without markers: optional auto-stop timeout in milliseconds. With markers: marker wait timeout in milliseconds (default 10000)."},
+					"success_markers": {"type": "array", "items": {"type": "string"}, "description": "Run action only: structured runtime bridge event text markers that indicate validation success."},
+					"failure_markers": {"type": "array", "items": {"type": "string"}, "description": "Run action only: structured runtime bridge event text markers that indicate validation failure. Failure markers take precedence over success markers."},
+					"auto_stop": {"type": "boolean", "description": "Run marker wait mode only: stop the running scene through scene_run stop after success, failure, or timeout (default true). Does not kill processes."},
+					"poll_interval_ms": {"type": "integer", "description": "Run marker wait mode only: runtime bridge poll interval in milliseconds (default 100)."},
+					"log_tail": {"type": "integer", "description": "Run marker wait mode only: number of recent structured runtime bridge events to inspect per poll (default 100, max 500)."},
+					"background": {"type": "boolean", "description": "Run action only: request non-foreground launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"minimized": {"type": "boolean", "description": "Run action only: request minimized launch. Currently unsupported; returns requires_foreground_window instead of starting."},
+					"no_focus": {"type": "boolean", "description": "Run action only: request launch without taking focus. Currently unsupported; returns requires_foreground_window instead of starting."}
+				},
+				"required": ["action"]
+			}
+		},
+		{
 			"name": "project_run",
 			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_run waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
 			"inputSchema": {
@@ -235,7 +256,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
-		"project_run":       return _execute_project_run(args)
+		"project_execution": return _execute_project_execution(args)
+		"project_run":       return _execute_project_run(args, "system_project_run")
 		"project_stop":      return _execute_project_stop(args)
 		"runtime_diagnose":  return _execute_runtime_diagnose(args)
 		"userdata_maintenance": return _execute_userdata_maintenance(args)
@@ -245,6 +267,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool_async: %s" % tool_name)
 	if tool_name == "project_run" and _has_run_log_markers(args):
+		return await _execute_project_run_with_log_markers(args)
+	if tool_name == "project_execution" and _is_project_execution_run(args) and _has_run_log_markers(args):
 		return await _execute_project_run_with_log_markers(args)
 	return execute(tool_name, args)
 
@@ -1590,11 +1614,26 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown project_files action: %s" % action)
 
 
-func _execute_project_run(args: Dictionary) -> Dictionary:
+func _execute_project_execution(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"run":
+			return _execute_project_run(args, "system_project_execution")
+		"stop":
+			return _execute_project_stop(args)
+		_:
+			return bridge.error("Unknown project_execution action: %s" % action)
+
+
+func _is_project_execution_run(args: Dictionary) -> bool:
+	return str(args.get("action", "")).strip_edges() == "run"
+
+
+func _execute_project_run(args: Dictionary, public_tool_name: String = "system_project_run") -> Dictionary:
 	if _has_run_log_markers(args):
 		return bridge.error("project_run marker validation requires async tool execution", {
 			"error_code": "project_run_marker_validation_requires_async",
-			"hint": "Call system_project_run through the async MCP tool path when success_markers or failure_markers are supplied."
+			"hint": "Call %s through the async MCP tool path when success_markers or failure_markers are supplied." % public_tool_name
 		})
 	var custom_scene := str(args.get("scene", "")).strip_edges()
 	var timeout_ms := int(args.get("timeout_ms", 0))

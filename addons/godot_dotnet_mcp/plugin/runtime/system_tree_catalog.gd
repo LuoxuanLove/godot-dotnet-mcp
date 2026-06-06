@@ -60,9 +60,13 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "editor_filesystem", "actions": ["select_file", "get_selected", "get_current_path", "scan", "reimport"]}
 	],
 	"system_userdata_maintenance": [],
+	"system_project_execution": [
+		{"tool": "scene_run", "actions": ["play_main", "play_custom", "stop"]},
+		{"tool": "debug_runtime_bridge", "actions": ["get_recent", "get_recent_filtered", "get_since_event_id"]}
+	],
 	"system_project_run":  [
 		{"tool": "scene_run", "actions": ["play_main", "play_custom", "stop"]},
-		{"tool": "debug_runtime_bridge", "actions": ["get_recent", "get_recent_filtered"]}
+		{"tool": "debug_runtime_bridge", "actions": ["get_recent", "get_recent_filtered", "get_since_event_id"]}
 	],
 	"system_project_stop": [{"tool": "scene_run", "actions": ["stop"]}],
 	"system_bindings_audit": [

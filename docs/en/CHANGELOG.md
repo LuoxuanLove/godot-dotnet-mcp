@@ -19,6 +19,7 @@ Target version: 1.2.0.
 
 ### Added
 
+- Added `system_project_execution(action=run|stop)` as a unified high-level project lifecycle entry that reuses the existing project-run marker validation, foreground-policy, timeout, auto-stop, and stop behavior while keeping `system_project_run` and `system_project_stop` compatible.
 - Added output size safeguards for MCP resources and prompts: oversized file-backed resources are rejected before full reads, and oversized prompt text is truncated with `_meta` byte-size details.
 - Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
 - Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
@@ -47,6 +48,7 @@ Target version: 1.2.0.
 
 ### Internal
 
+- Extended system project executor, tool loader, Tools page, runtime-state, localization, and tool-tree harness coverage for `system_project_execution`, and updated tool schema facts to `2026-06-06.2`.
 - Extended JSON-RPC request, HTTP server, stdio resources/prompts, and tool router contracts to cover malformed `params` and `tools/call.arguments` boundaries with the `2026-06-05.6` tool schema facts update.
 - Extended `mcp_resources_prompts_contracts` to verify resource output limits, prompt truncation metadata, and the `2026-06-05.5` tool schema facts update.
 - Extended script edit service harness coverage to require explicit C# `NotImplementedException` guard bodies instead of ambiguous generated fallback bodies.

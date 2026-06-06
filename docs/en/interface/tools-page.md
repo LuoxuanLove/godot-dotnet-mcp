@@ -77,6 +77,10 @@ root
   │   │   │   ├─ filesystem_directory
   │   │   │   ├─ script_inspect
   │   │   │   └─ resource_query
+  │   │   ├─ system_project_execution
+  │   │   │   ├─ run / stop
+  │   │   │   ├─ scene_run
+  │   │   │   └─ debug_runtime_bridge
   │   │   ├─ system_runtime_control
   │   │   │   ├─ status / enable / disable
   │   │   │   └─ runtime_control
@@ -104,6 +108,7 @@ Notes:
 
 - the root first renders domain nodes and then category nodes. `system` and `user` are no longer hard-coded root nodes
 - `system_*` high-level tools expand through `SystemTreeCatalog` into their real atomic and action chains. For example, `system_editor_control` shows control-local click and pointer-motion actions such as `click_control`, `right_click_control`, `hover_control`, and `leave_control`, top menu actions such as `list_menus`, `open_menu`, and `select_menu_item`, and `system_editor_plugin_control` shows the underlying `editor_plugin` status and toggle actions
+- `system_project_execution` is the unified high-level project lifecycle entry. It keeps `run` and `stop` together in the tree while `system_project_run` and `system_project_stop` remain available as compatible direct entries
 - `system_tool_activity` reports activity recorded at the shared execution layer. Optional `_mcp_context` is stripped before concrete tool execution and treated as self-reported coordination metadata, not as authentication or a per-tool schema field
 - `runtime_*` is an internal atomic category. It is only shown as a child chain of `system_runtime_*`, and it is not exposed as an MCP tool by itself
 - atomic tool nodes can keep expanding recursively
