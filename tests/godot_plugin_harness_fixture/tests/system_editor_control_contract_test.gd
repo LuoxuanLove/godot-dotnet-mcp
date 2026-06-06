@@ -144,6 +144,10 @@ class FakeBridge extends RefCounted:
 			_:
 				return error("Unsupported atomic tool: %s" % tool_name)
 
+	func call_atomic_async(tool_name: String, args: Dictionary) -> Dictionary:
+		await Engine.get_main_loop().process_frame
+		return call_atomic(tool_name, args)
+
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
 
@@ -241,7 +245,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate list_controls.")
 	if int(list_controls_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("system editor_control should preserve the list_controls payload.")
-	var wait_result: Dictionary = impl.execute("editor_control", {
+	var wait_result: Dictionary = await impl.execute_async("editor_control", {
 		"action": "wait_for_ui",
 		"target_path": "/root/Editor/SearchPanel/SearchField",
 		"condition": "text_contains",

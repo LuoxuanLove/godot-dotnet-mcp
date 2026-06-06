@@ -415,6 +415,24 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown action: %s" % action)
 
 
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	if tool_name == "editor_control" and str(args.get("action", "")).strip_edges() == "wait_for_ui":
+		return await bridge.call_atomic_async("editor_ui_control", {
+			"action": "wait_for_ui",
+			"target_path": str(args.get("target_path", "")).strip_edges(),
+			"class_name": str(args.get("class_name", "")).strip_edges(),
+			"text_query": str(args.get("text_query", "")).strip_edges(),
+			"include_hidden": bool(args.get("include_hidden", false)),
+			"limit": int(args.get("limit", 200)),
+			"max_depth": int(args.get("max_depth", 6)),
+			"condition": str(args.get("condition", "exists")).strip_edges(),
+			"text": str(args.get("text", "")),
+			"timeout_ms": int(args.get("timeout_ms", 1000)),
+			"poll_interval_ms": int(args.get("poll_interval_ms", 50))
+		})
+	return execute(tool_name, args)
+
+
 func _capture_editor(args: Dictionary) -> Dictionary:
 	var capture_result: Dictionary = bridge.call_atomic("editor_screenshot", {
 		"action": "capture",

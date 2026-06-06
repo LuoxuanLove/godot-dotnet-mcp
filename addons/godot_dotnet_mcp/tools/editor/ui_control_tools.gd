@@ -25,7 +25,9 @@ func execute(ei, args: Dictionary) -> Dictionary:
 		"list_visible":
 			return _list_visible_controls(ei, args)
 		"wait_for_ui":
-			return _wait_for_ui(ei, args)
+			if int(args.get("timeout_ms", DEFAULT_WAIT_TIMEOUT_MS)) > 0:
+				return _error("wait_for_ui with timeout_ms > 0 requires async execution")
+			return _wait_for_ui_once(ei, args)
 		"list_dock_tabs":
 			return _list_dock_tabs(ei, bool(args.get("include_hidden", true)))
 		"activate_dock_tab":
@@ -60,6 +62,18 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s" % action)
 
 
+func execute_async(ei, args: Dictionary) -> Dictionary:
+	if not ei:
+		return _error("Editor interface not available")
+
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"wait_for_ui":
+			return await _wait_for_ui_async(ei, args)
+		_:
+			return execute(ei, args)
+
+
 func _list_visible_controls(ei, args: Dictionary) -> Dictionary:
 	var root = _get_editor_root(ei)
 	if root == null:
@@ -79,16 +93,37 @@ func _list_visible_controls(ei, args: Dictionary) -> Dictionary:
 	}, "Visible editor controls listed")
 
 
-func _wait_for_ui(ei, args: Dictionary) -> Dictionary:
+func _wait_for_ui_once(ei, args: Dictionary) -> Dictionary:
 	var root = _get_editor_root(ei)
 	if root == null:
 		return _error("Editor base control not available")
 
-	var condition := str(args.get("condition", "exists")).strip_edges().to_lower()
-	var supported_conditions := ["exists", "not_exists", "visible", "hidden", "text_contains", "text_equals", "enabled", "disabled"]
-	if not supported_conditions.has(condition):
-		return _error("Unsupported wait_for_ui condition: %s" % condition)
+	var validation := _validate_wait_args(args)
+	if not bool(validation.get("success", false)):
+		return validation
+	var validation_data: Dictionary = validation.get("data", {})
+	var condition := str(validation_data.get("condition", "exists"))
+	var timeout_ms := 0
+	var started_ms := Time.get_ticks_msec()
+	var snapshot := _build_wait_snapshot(ei, args, condition)
+	snapshot["elapsed_ms"] = Time.get_ticks_msec() - started_ms
+	snapshot["poll_count"] = 1
+	snapshot["timeout_ms"] = timeout_ms
+	snapshot["poll_interval_ms"] = 0
+	if bool(snapshot.get("condition_met", false)):
+		return _success(snapshot, "Editor UI condition satisfied")
+	return _error("Timed out waiting for editor UI condition: %s" % condition, snapshot)
 
+func _wait_for_ui_async(ei, args: Dictionary) -> Dictionary:
+	var root = _get_editor_root(ei)
+	if root == null:
+		return _error("Editor base control not available")
+
+	var validation := _validate_wait_args(args)
+	if not bool(validation.get("success", false)):
+		return validation
+	var validation_data: Dictionary = validation.get("data", {})
+	var condition := str(validation_data.get("condition", "exists"))
 	var timeout_ms := clampi(int(args.get("timeout_ms", DEFAULT_WAIT_TIMEOUT_MS)), 0, MAX_WAIT_TIMEOUT_MS)
 	var poll_interval_ms := clampi(int(args.get("poll_interval_ms", DEFAULT_WAIT_POLL_INTERVAL_MS)), 10, MAX_WAIT_POLL_INTERVAL_MS)
 	var started_ms := Time.get_ticks_msec()
@@ -110,7 +145,9 @@ func _wait_for_ui(ei, args: Dictionary) -> Dictionary:
 
 		if Time.get_ticks_msec() >= deadline_ms:
 			break
-		OS.delay_msec(mini(poll_interval_ms, maxi(deadline_ms - Time.get_ticks_msec(), 0)))
+		var sleep_ms := mini(poll_interval_ms, maxi(deadline_ms - Time.get_ticks_msec(), 0))
+		if not await _wait_poll_interval(sleep_ms):
+			return _error("SceneTree is required for async wait_for_ui polling")
 
 	var final_elapsed_ms := Time.get_ticks_msec() - started_ms
 	last_snapshot["elapsed_ms"] = final_elapsed_ms
@@ -118,6 +155,28 @@ func _wait_for_ui(ei, args: Dictionary) -> Dictionary:
 	last_snapshot["timeout_ms"] = timeout_ms
 	last_snapshot["poll_interval_ms"] = poll_interval_ms
 	return _error("Timed out waiting for editor UI condition: %s" % condition, last_snapshot)
+
+
+func _validate_wait_args(args: Dictionary) -> Dictionary:
+	var condition := str(args.get("condition", "exists")).strip_edges().to_lower()
+	var supported_conditions := ["exists", "not_exists", "visible", "hidden", "text_contains", "text_equals", "enabled", "disabled"]
+	if not supported_conditions.has(condition):
+		return _error("Unsupported wait_for_ui condition: %s" % condition)
+	if condition in ["text_contains", "text_equals"] and str(args.get("text", "")).is_empty():
+		return _error("text is required for wait_for_ui condition: %s" % condition)
+	return _success({"condition": condition})
+
+
+func _wait_poll_interval(delay_ms: int) -> bool:
+	var main_loop = Engine.get_main_loop()
+	if main_loop == null or not main_loop.has_method("create_timer"):
+		return false
+	if delay_ms <= 0:
+		await main_loop.process_frame
+		return true
+	var timer = main_loop.create_timer(float(delay_ms) / 1000.0)
+	await timer.timeout
+	return true
 
 
 func _build_wait_snapshot(ei, args: Dictionary, condition: String) -> Dictionary:
