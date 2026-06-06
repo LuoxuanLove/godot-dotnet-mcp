@@ -216,6 +216,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_menu_item_call(fake.calls, fake.localized_editor_item):
 		return _failure("open should try localized Editor Settings menu item candidates.")
 
+	var editor_searched := await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "editor_settings",
+		"setting_path": "interface/editor/editor_language",
+		"limit": 10
+	})
+	if not bool(editor_searched.get("success", false)):
+		return _failure("search should also support editor_settings rows.")
+	var editor_result := ((editor_searched.get("data", {}).get("results", []) as Array)[0]) as Dictionary
+	if str(editor_result.get("setting_path_hint", "")) != "interface/editor/language":
+		return _failure("editor_settings search should derive the setting path without dropping the interface prefix.")
+
 	return {"name": "system_settings_dialog_contracts", "status": "passed"}
 
 

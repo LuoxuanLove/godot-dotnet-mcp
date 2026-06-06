@@ -631,6 +631,7 @@ func _setting_path_hint(row: Dictionary) -> String:
 	var settings_index := path.find("Settings/")
 	if settings_index >= 0:
 		var tail := path.substr(settings_index + "Settings/".length()).strip_edges()
+		tail = _strip_settings_ui_prefix(tail)
 		if not tail.is_empty():
 			return _path_tail_to_setting_path(tail)
 	return ""
@@ -652,6 +653,22 @@ func _path_tail_to_setting_path(path_tail: String) -> String:
 		if not cleaned.is_empty():
 			normalized.append(cleaned)
 	return "/".join(normalized)
+
+
+func _strip_settings_ui_prefix(path_tail: String) -> String:
+	var segments := path_tail.split("/", false)
+	if segments.is_empty():
+		return path_tail
+	var first := str(segments[0]).strip_edges().to_lower()
+	if first in ["general", "advanced"]:
+		segments.remove_at(0)
+	elif first == "interface":
+		pass
+	elif first in ["plugins", "input_map", "localization", "autoload", "shortcuts"]:
+		pass
+	if segments.is_empty():
+		return ""
+	return "/".join(segments)
 
 
 func _camel_to_snake(value: String) -> String:
