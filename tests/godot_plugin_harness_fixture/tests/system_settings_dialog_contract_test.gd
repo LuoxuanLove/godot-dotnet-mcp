@@ -139,7 +139,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_rows", "read_value", "verify_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
@@ -231,6 +231,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should report the value child control as value_source.")
 	if _has_call_since(fake.calls, calls_before_read_value, "editor_ui_control", "set_text"):
 		return _failure("read_value must not write the settings search field.")
+	var calls_before_verify_value := fake.calls.size()
+	var verified_text_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Example",
+		"limit": 10
+	})
+	if not bool(verified_text_value.get("success", false)):
+		return _failure("verify_value should succeed when a visible text row matches expected_value.")
+	if not bool(verified_text_value.get("data", {}).get("verification", {}).get("success", false)):
+		return _failure("verify_value should return verification.success=true for matching text.")
+	if str(verified_text_value.get("data", {}).get("workflow", [])[-1].get("step", "")) != "verify_value":
+		return _failure("verify_value should append a verify_value workflow step.")
+	if _has_call_since(fake.calls, calls_before_verify_value, "editor_ui_control", "set_text"):
+		return _failure("verify_value must not write the settings search field.")
+	var mismatched_text_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Other",
+		"limit": 10
+	})
+	if bool(mismatched_text_value.get("success", false)):
+		return _failure("verify_value should fail when the visible text row differs from expected_value.")
+	if str(mismatched_text_value.get("data", {}).get("verification", {}).get("reason", "")) != "value_mismatch":
+		return _failure("verify_value mismatch should report value_mismatch.")
 	var read_value_by_value_path := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "project_settings",
@@ -256,6 +283,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return a typed true value for CheckBox rows.")
 	if str(bool_value.get("data", {}).get("value_editor_type", "")) != "bool":
 		return _failure("read_value should classify CheckBox value controls as bool.")
+	var verified_bool_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"expected_value": true,
+		"limit": 10
+	})
+	if not bool(verified_bool_value.get("success", false)):
+		return _failure("verify_value should succeed when a visible bool row matches expected_value.")
+	var bool_type_mismatch := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"expected_value": "true",
+		"limit": 10
+	})
+	if bool(bool_type_mismatch.get("success", false)):
+		return _failure("verify_value should fail when a bool row is compared with non-bool expected_value.")
+	if str(bool_type_mismatch.get("data", {}).get("verification", {}).get("reason", "")) != "type_mismatch":
+		return _failure("verify_value bool type mismatch should report type_mismatch.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -307,6 +354,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(number_value.get("success", false)) or float(number_value.get("data", {}).get("value", 0.0)) != 128000.0:
 		return _failure("read_value should return a typed number value for SpinBox rows.")
+	var verified_number_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "rendering/limits/rendering/max_renderable_elements",
+		"expected_value": "128000",
+		"limit": 10
+	})
+	if not bool(verified_number_value.get("success", false)):
+		return _failure("verify_value should compare numeric strings against number rows.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -325,6 +381,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return structured enum value data for OptionButton rows.")
 	if str((enum_payload as Dictionary).get("text", "")) != "res://Main.tscn" or int((enum_payload as Dictionary).get("selected", -1)) != 2:
 		return _failure("read_value should preserve enum selected text and index.")
+	var verified_enum_text := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"expected_value": "res://Main.tscn",
+		"limit": 10
+	})
+	if not bool(verified_enum_text.get("success", false)):
+		return _failure("verify_value should compare enum text against string expected_value.")
+	var verified_enum_selected := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"expected_value": {"text": "res://Main.tscn", "selected": 2},
+		"limit": 10
+	})
+	if not bool(verified_enum_selected.get("success", false)):
+		return _failure("verify_value should compare enum text and selected index from dictionary expected_value.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -342,6 +416,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("read_value ambiguous failure should report the ambiguous_row reason.")
+	var ambiguous_verified_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"expected_value": "x",
+		"limit": 1
+	})
+	if bool(ambiguous_verified_value.get("success", false)):
+		return _failure("verify_value should fail when multiple rows match the selector.")
+	if str(ambiguous_verified_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("verify_value ambiguous failure should preserve ambiguous_row resolution.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
