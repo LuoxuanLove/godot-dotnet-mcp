@@ -12,6 +12,10 @@ This release line improves editor UI automation by letting clients wait for visi
 
 The new wait action complements menu, popup, click, hover, and text-entry controls without requiring OS mouse automation. This makes workflows such as opening editor dialogs, filtering settings, and confirming transient panels easier to verify from inside Godot.
 
+### 🧭 Settings Dialog Navigation
+
+`system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.
+
 ### ✅ Compatibility and Upgrade Notes
 
 This change only extends the public tool schema. Existing `system_editor_control` actions remain available, and clients that do not call `wait_for_ui` do not need to change their requests.

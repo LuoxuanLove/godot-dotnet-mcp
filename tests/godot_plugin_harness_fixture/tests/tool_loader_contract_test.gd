@@ -104,6 +104,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose system_editor_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_plugin_control"):
 		return _failure("Tool loader did not expose system_editor_plugin_control under the default tool access provider.")
+	if not exposed_names.has("system_settings_dialog"):
+		return _failure("Tool loader did not expose system_settings_dialog under the default tool access provider.")
 	if not exposed_names.has("system_plugin_reload"):
 		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
 	if not exposed_names.has("system_plugin_update"):
@@ -140,6 +142,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_editor_state should include the editor section.")
 	if bool((editor_section as Dictionary).get("available", true)):
 		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
+
+	var settings_dialog_result: Dictionary = await _loader.execute_tool_async("system", "settings_dialog", {
+		"action": "status",
+		"surface": "project_settings"
+	})
+	if not bool(settings_dialog_result.get("success", false)):
+		return _failure("Tool loader should route system_settings_dialog status successfully.")
+	var settings_dialog_data = settings_dialog_result.get("data", {})
+	if not (settings_dialog_data is Dictionary) or str((settings_dialog_data as Dictionary).get("surface", "")) != "project_settings":
+		return _failure("Tool loader system_settings_dialog should return a settings surface payload.")
 
 	var project_state_result: Dictionary = await _loader.execute_tool_async("system", "project_state", {"include_runtime_health": true})
 	if not bool(project_state_result.get("success", false)):
