@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,7 +83,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment to search for"
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
@@ -91,11 +91,16 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result"
+						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value"
 					},
 					"include_raw_controls": {
 						"type": "boolean",
 						"description": "Include raw observed control rows in list_rows for diagnostics (default false)"
+					},
+					"require_confidence": {
+						"type": "string",
+						"enum": ["low", "medium", "high"],
+						"description": "Minimum row model confidence accepted by read_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -145,6 +150,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _list_rows(surface, args)
+		"read_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _read_value(surface, args)
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -266,6 +276,62 @@ func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 	return bridge.success(payload, "Settings rows listed")
 
 
+func _read_value(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "read_value",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for read_value: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "read_value",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before read_value.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_read(all_controls, surface, args, query_values)
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "read_value",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched read_value.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var value_payload: Dictionary = _read_row_value(row, all_controls)
+	value_payload["surface"] = surface
+	value_payload["dialog_found"] = bool(observation.get("dialog_found", false))
+	value_payload["dialog_path"] = str(observation.get("dialog_path", ""))
+	value_payload["primary_popup_path"] = str(observation.get("primary_popup_path", ""))
+	value_payload["row"] = row
+	value_payload["resolution"] = row_resolution.get("resolution", {})
+	value_payload["verification"] = {
+		"unique_row": true,
+		"require_confidence": _required_confidence(args),
+		"row_confidence": str(row.get("confidence", "low")),
+		"value_source": str(value_payload.get("value_source", ""))
+	}
+	value_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "read_value",
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"queries": query_values,
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(value_payload, args)
+	return bridge.success(value_payload, "Settings row value read")
+
+
 func _capture(surface: String, args: Dictionary) -> Dictionary:
 	var observation: Dictionary = _observe(surface, args, _search_terms(args))
 	_attach_capture(observation, args)
@@ -336,10 +402,11 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 
 func _observe(surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
 	var spec: Dictionary = SURFACES.get(surface, {})
+	var observation_limit := _observation_limit(args)
 	var controls_result: Dictionary = bridge.call_atomic("editor_ui_control", {
 		"action": "list_visible",
 		"include_hidden": bool(args.get("include_hidden", false)),
-		"limit": _observation_limit(args),
+		"limit": observation_limit,
 		"max_depth": int(args.get("max_depth", 10))
 	})
 	var workflow: Array[Dictionary] = [{
@@ -359,8 +426,12 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 		popup_rows = popup_result.get("data", {}).get("popups", [])
 	var surface_matches: Array[Dictionary] = _matching_rows(control_rows, spec.get("match_queries", []))
 	var popup_matches: Array[Dictionary] = _matching_rows(popup_rows, spec.get("match_queries", []))
-	var results: Array[Dictionary] = _candidate_results(control_rows, query_values, _result_limit(args), surface)
-	var search_field_path: String = _first_path(_matching_rows(control_rows, spec.get("search_queries", []), ["LineEdit", "TextEdit", "SearchBox"]), "path")
+	var surface_roots := _surface_root_paths(surface_matches, popup_matches)
+	var scoped_control_rows := _controls_under_roots(control_rows, surface_roots)
+	var results: Array[Dictionary] = _candidate_results(scoped_control_rows, query_values, _result_limit(args), surface)
+	var search_field_path: String = _first_path(_matching_rows(scoped_control_rows, spec.get("search_queries", []), ["LineEdit", "TextEdit", "SearchBox"]), "path")
+	var total_control_count := int(controls_result.get("data", {}).get("count", control_rows.size()))
+	var control_truncated := control_rows.size() >= observation_limit
 	return {
 		"surface": surface,
 		"title": str(spec.get("label", surface)),
@@ -369,14 +440,17 @@ func _observe(surface: String, args: Dictionary, query_values: Array[String]) ->
 		"dialog_path": _first_path(surface_matches, "path"),
 		"primary_popup_path": _first_path(popup_matches, "node_path"),
 		"search_field_path": search_field_path,
-		"current_tab": _current_tab_hint(control_rows, spec),
+		"current_tab": _current_tab_hint(scoped_control_rows, spec),
 		"results": results,
 		"result_count": results.size(),
-		"all_controls": control_rows,
+		"all_controls": scoped_control_rows,
 		"visible_popup_count": popup_rows.size(),
 		"surface_matches": surface_matches,
 		"popup_matches": popup_matches,
-		"observed_control_count": control_rows.size(),
+		"observed_control_count": scoped_control_rows.size(),
+		"total_control_count": total_control_count,
+		"control_limit": observation_limit,
+		"control_truncated": control_truncated,
 		"workflow": workflow
 	}
 
@@ -525,6 +599,7 @@ func _class_matches(row: Dictionary, class_filters: Array[String]) -> bool:
 
 
 func _haystack_matches(row: Dictionary, queries: Array[String]) -> bool:
+	var setting_hint := _setting_path_hint(row)
 	var haystack := " ".join([
 		str(row.get("path", "")),
 		str(row.get("node_path", "")),
@@ -532,7 +607,14 @@ func _haystack_matches(row: Dictionary, queries: Array[String]) -> bool:
 		str(row.get("title", "")),
 		str(row.get("text", "")),
 		str(row.get("class", "")),
-		str(row.get("tooltip", ""))
+		str(row.get("tooltip", "")),
+		str(row.get("parent_path", "")),
+		str(row.get("setting_path", "")),
+		str(row.get("path_hint", "")),
+		str(row.get("value_text", "")),
+		str(row.get("value", "")),
+		setting_hint,
+		" ".join(_setting_path_aliases(setting_hint))
 	]).to_lower()
 	for query in queries:
 		if haystack.contains(query.to_lower()):
@@ -599,8 +681,40 @@ func _observation_limit(args: Dictionary) -> int:
 	return max(1, int(args.get("limit", 100)))
 
 
+func _read_value_observation_args(args: Dictionary) -> Dictionary:
+	var observed_args := args.duplicate(true)
+	observed_args["limit"] = max(_observation_limit(args), 500)
+	return observed_args
+
+
 func _result_limit(args: Dictionary) -> int:
 	return max(1, int(args.get("limit", 100)))
+
+
+func _surface_root_paths(surface_matches: Array, popup_matches: Array) -> Array[String]:
+	var roots: Array[String] = []
+	for row in surface_matches:
+		if row is Dictionary:
+			_append_search_term(roots, str((row as Dictionary).get("path", (row as Dictionary).get("node_path", ""))))
+	for row in popup_matches:
+		if row is Dictionary:
+			_append_search_term(roots, str((row as Dictionary).get("node_path", (row as Dictionary).get("path", ""))))
+	return roots
+
+
+func _controls_under_roots(rows: Array, roots: Array[String]) -> Array:
+	if roots.is_empty():
+		return []
+	var scoped: Array = []
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var path := str((row as Dictionary).get("path", (row as Dictionary).get("node_path", ""))).strip_edges()
+		for root in roots:
+			if path == root or path.begins_with("%s/" % root):
+				scoped.append(row)
+				break
+	return scoped
 
 
 func _current_tab_hint(rows: Array, spec: Dictionary) -> String:
@@ -628,13 +742,38 @@ func _setting_path_hint(row: Dictionary) -> String:
 	if tooltip.contains("/") or tooltip.contains("."):
 		return tooltip
 	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
-	var settings_index := path.find("Settings/")
-	if settings_index >= 0:
-		var tail := path.substr(settings_index + "Settings/".length()).strip_edges()
+	var tail := _settings_path_tail(path)
+	if not tail.is_empty():
 		tail = _strip_settings_ui_prefix(tail)
 		if not tail.is_empty():
 			return _path_tail_to_setting_path(tail)
 	return ""
+
+
+func _settings_path_tail(path: String) -> String:
+	for marker in ["ProjectSettings/", "EditorSettings/", "Settings/"]:
+		var index := path.find(marker)
+		if index >= 0:
+			return path.substr(index + marker.length()).strip_edges()
+	return ""
+
+
+func _setting_path_aliases(setting_path: String) -> Array[String]:
+	var aliases: Array[String] = []
+	var segments := setting_path.split("/", false)
+	if segments.size() >= 2:
+		var prefix: Array[String] = []
+		for index in range(0, segments.size() - 1):
+			prefix.append(str(segments[index]))
+		var previous := str(segments[segments.size() - 2])
+		var leaf := str(segments[segments.size() - 1])
+		var nested_prefix := prefix.duplicate()
+		nested_prefix.append("%s_%s" % [previous, leaf])
+		aliases.append("/".join(nested_prefix))
+		prefix.remove_at(prefix.size() - 1)
+		prefix.append("%s_%s" % [previous, leaf])
+		aliases.append("/".join(prefix))
+	return aliases
 
 
 func _value_text_hint(row: Dictionary) -> String:
@@ -675,12 +814,40 @@ func _camel_to_snake(value: String) -> String:
 	var result := ""
 	for index in range(value.length()):
 		var character := value.substr(index, 1)
-		var lower := character.to_lower()
-		var upper := character.to_upper()
-		if index > 0 and character == upper and character != lower:
+		if index > 0 and _should_insert_snake_separator(value, index):
 			result += "_"
-		result += lower
+		result += character.to_lower()
 	return result
+
+
+func _should_insert_snake_separator(value: String, index: int) -> bool:
+	var character := value.substr(index, 1)
+	var previous := value.substr(index - 1, 1)
+	var next := value.substr(index + 1, 1) if index + 1 < value.length() else ""
+	if _is_ascii_digit(character):
+		return _is_ascii_letter(previous)
+	if _is_uppercase_letter(character):
+		if _is_lowercase_letter(previous):
+			return true
+		if _is_uppercase_letter(previous) and _is_lowercase_letter(next):
+			return true
+	return false
+
+
+func _is_ascii_digit(character: String) -> bool:
+	return character >= "0" and character <= "9"
+
+
+func _is_ascii_letter(character: String) -> bool:
+	return character.to_lower() != character.to_upper()
+
+
+func _is_uppercase_letter(character: String) -> bool:
+	return _is_ascii_letter(character) and character == character.to_upper()
+
+
+func _is_lowercase_letter(character: String) -> bool:
+	return _is_ascii_letter(character) and character == character.to_lower()
 
 
 func _settings_row_models(rows: Array, surface: String, query_values: Array[String], limit: int) -> Array[Dictionary]:
@@ -697,6 +864,146 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 		if models.size() >= limit:
 			break
 	return models
+
+
+func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	var required := _required_confidence(args)
+	var candidates: Array[Dictionary] = []
+	for model in _settings_row_models(rows, surface, query_values, max(1, rows.size())):
+		if not target_path.is_empty() and not _row_matches_target_path(model, target_path):
+			continue
+		if not _confidence_meets(str(model.get("confidence", "low")), required):
+			continue
+		candidates.append(model)
+	if candidates.is_empty():
+		return {
+			"success": false,
+			"reason": "row_not_found",
+			"message": "No settings row matched read_value with the requested selector and confidence.",
+			"candidate_count": 0,
+			"candidates": []
+		}
+	if candidates.size() > 1:
+		return {
+			"success": false,
+			"reason": "ambiguous_row",
+			"message": "Multiple settings rows matched read_value; pass target_path or a more specific setting_path.",
+			"candidate_count": candidates.size(),
+			"candidates": candidates
+		}
+	return {
+		"success": true,
+		"row": candidates[0],
+		"resolution": {
+			"candidate_count": 1,
+			"selector": _read_value_selector_summary(args),
+			"require_confidence": required
+		}
+	}
+
+
+func _read_row_value(row: Dictionary, rows: Array) -> Dictionary:
+	var value_control: Dictionary = _value_control_for_row(row, rows)
+	var source_row: Dictionary = value_control if not value_control.is_empty() else row
+	var editor_type := str(row.get("value_editor_type", "unknown"))
+	if editor_type == "unknown":
+		editor_type = _value_editor_type_hint(source_row)
+	var raw_text := _value_text_hint(source_row)
+	var typed_value = _typed_value_from_row(source_row, editor_type, raw_text)
+	var source_path := str(source_row.get("path", source_row.get("node_path", row.get("value_control_path", "")))).strip_edges()
+	return {
+		"value": typed_value,
+		"value_text": raw_text,
+		"value_editor_type": editor_type,
+		"value_source": source_path,
+		"value_control": source_row.duplicate(true),
+		"value_control_path": source_path,
+		"confidence": str(row.get("confidence", "low"))
+	}
+
+
+func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
+	var value_path := str(row.get("value_control_path", "")).strip_edges()
+	if not value_path.is_empty() and value_path != str(row.get("row_control_path", "")):
+		for candidate in rows:
+			if candidate is Dictionary:
+				var candidate_path := str((candidate as Dictionary).get("path", (candidate as Dictionary).get("node_path", ""))).strip_edges()
+				if candidate_path == value_path:
+					return (candidate as Dictionary).duplicate(true)
+	var row_path := str(row.get("row_control_path", "")).strip_edges()
+	if row_path.is_empty():
+		return {}
+	for candidate in rows:
+		if not (candidate is Dictionary):
+			continue
+		var dict := candidate as Dictionary
+		if str(dict.get("parent_path", "")).strip_edges() != row_path:
+			continue
+		var candidate_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges().to_lower()
+		if candidate_path.ends_with("/value") or _value_editor_type_hint(dict) != "unknown":
+			return dict.duplicate(true)
+	return {}
+
+
+func _typed_value_from_row(row: Dictionary, editor_type: String, raw_text: String):
+	match editor_type:
+		"bool":
+			if row.has("pressed"):
+				return bool(row.get("pressed", false))
+			if row.has("button_pressed"):
+				return bool(row.get("button_pressed", false))
+			if row.has("value"):
+				var raw_value = row.get("value")
+				if raw_value is bool:
+					return raw_value
+			return raw_text
+		"number":
+			var number_value = row.get("value", raw_text)
+			if number_value is int or number_value is float:
+				return number_value
+			var number_text := str(number_value).strip_edges()
+			if number_text.is_valid_float():
+				return number_text.to_float()
+			return raw_text
+		"enum":
+			return {
+				"text": raw_text,
+				"selected": row.get("selected", row.get("selected_index", null))
+			}
+		_:
+			return raw_text
+
+
+func _row_matches_target_path(row: Dictionary, target_path: String) -> bool:
+	for key in ["row_control_path", "label_control_path", "value_control_path"]:
+		if str(row.get(key, "")).strip_edges() == target_path:
+			return true
+	var row_path := str(row.get("row_control_path", "")).strip_edges()
+	if not row_path.is_empty() and target_path.begins_with("%s/" % row_path):
+		return true
+	return false
+
+
+func _required_confidence(args: Dictionary) -> String:
+	var required := str(args.get("require_confidence", "medium")).strip_edges().to_lower()
+	if required in ["low", "medium", "high"]:
+		return required
+	return "medium"
+
+
+func _confidence_meets(actual: String, required: String) -> bool:
+	var ranks := {"low": 0, "medium": 1, "high": 2}
+	return int(ranks.get(actual, 0)) >= int(ranks.get(required, 1))
+
+
+func _read_value_selector_summary(args: Dictionary) -> Dictionary:
+	return {
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"query": str(args.get("query", "")),
+		"tab": str(args.get("tab", ""))
+	}
 
 
 func _is_settings_row_candidate(row: Dictionary) -> bool:
