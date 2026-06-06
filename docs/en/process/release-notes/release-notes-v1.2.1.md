@@ -18,6 +18,8 @@ The new wait action complements menu, popup, click, hover, and text-entry contro
 
 The workflow now also exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before any future value-editing layer is added.
 
+It can list and activate settings tabs through `list_tabs` and `activate_tab`, including `open(tab=...)`, so clients can move between Project Settings or Editor Settings tabs without coordinate clicks.
+
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
 ### ✅ Compatibility and Upgrade Notes

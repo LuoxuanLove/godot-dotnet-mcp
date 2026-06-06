@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "read_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_rows", "read_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -87,7 +87,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"tab": {
 						"type": "string",
-						"description": "Optional tab title or category hint to include in the search"
+						"description": "Optional tab title or category hint. open/activate_tab use it as the requested tab title when tab_index is not provided; search/list_rows/read_value use it as a query term."
+					},
+					"tab_index": {
+						"type": "integer",
+						"description": "Optional tab index for activate_tab"
 					},
 					"target_path": {
 						"type": "string",
@@ -145,6 +149,16 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _status(surface, args)
 		"search":
 			return bridge.error("search requires asynchronous execution")
+		"list_tabs":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _list_tabs(surface, args)
+		"activate_tab":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _activate_tab(surface, args)
 		"list_rows":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -276,6 +290,75 @@ func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 	return bridge.success(payload, "Settings rows listed")
 
 
+func _list_tabs(surface: String, args: Dictionary) -> Dictionary:
+	var observation: Dictionary = _observe(surface, args, [])
+	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
+	tabs_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "list_tabs",
+		"tab_count": int(tabs_payload.get("tab_count", 0)),
+		"success": true
+	})
+	if bool(args.get("include_raw_controls", false)):
+		tabs_payload["raw_controls"] = observation.get("all_controls", [])
+	if bool(args.get("capture", false)):
+		_attach_capture(tabs_payload, args)
+	return bridge.success(tabs_payload, "Settings tabs listed")
+
+
+func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
+	var requested_title := str(args.get("tab", "")).strip_edges()
+	var requested_index := int(args.get("tab_index", -1))
+	if requested_title.is_empty() and requested_index < 0:
+		return bridge.error("tab or tab_index is required for activate_tab")
+	var observation: Dictionary = _observe(surface, args, [])
+	if not bool(observation.get("dialog_found", false)):
+		return bridge.error("Settings surface is not visible for activate_tab: %s" % surface, observation)
+	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
+	var tab_container_path := str(tabs_payload.get("tab_container_path", "")).strip_edges()
+	if tab_container_path.is_empty():
+		return bridge.error("No tab container found for settings surface: %s" % surface, tabs_payload)
+	var tab_resolution := _resolve_settings_tab(tabs_payload.get("tabs", []), requested_title, requested_index)
+	if not bool(tab_resolution.get("success", false)):
+		var error_payload := tabs_payload.duplicate(true)
+		error_payload["resolution"] = tab_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "activate_tab",
+			"tab": requested_title,
+			"tab_index": requested_index,
+			"success": false,
+			"reason": str(tab_resolution.get("reason", "tab_not_found"))
+		})
+		return bridge.error(str(tab_resolution.get("message", "No settings tab matched activate_tab.")), error_payload)
+	var selected_tab: Dictionary = tab_resolution.get("tab", {})
+	var activate_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+		"action": "activate_ui",
+		"target_path": tab_container_path,
+		"tab_title": str(selected_tab.get("title", "")),
+		"tab_index": int(selected_tab.get("index", -1)),
+		"path": str(args.get("path", "")).strip_edges()
+	})
+	if not bool(activate_result.get("success", false)):
+		return activate_result
+	var payload: Dictionary = activate_result.get("data", {}).duplicate(true)
+	payload["surface"] = surface
+	payload["tab_container_path"] = tab_container_path
+	payload["requested_tab"] = requested_title
+	payload["requested_tab_index"] = requested_index
+	payload["selected_tab"] = selected_tab
+	payload["tabs"] = tabs_payload.get("tabs", [])
+	payload["tab_count"] = int(tabs_payload.get("tab_count", 0))
+	payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "activate_tab",
+		"tab": requested_title,
+		"tab_index": requested_index,
+		"target_path": tab_container_path,
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings tab activated")
+
+
 func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _search_terms(args)
 	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
@@ -362,9 +445,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 	if bool(current.get("dialog_found", false)):
 		current["opened"] = true
 		current["already_open"] = true
-		if bool(args.get("capture", false)):
-			_attach_capture(current, args)
-		return bridge.success(current, "Settings surface already open")
+		return _finish_open(surface, args, current, "Settings surface already open")
 	var spec: Dictionary = SURFACES.get(surface, {})
 	var attempts: Array[Dictionary] = []
 	for menu_title in _surface_menu_titles(spec):
@@ -393,11 +474,38 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 					observation["opened"] = true
 					observation["workflow"] = _merge_workflow(attempts, observation.get("workflow", []))
 					observation["verification"] = wait_result.get("data", {})
-					if bool(args.get("capture", false)):
-						_attach_capture(observation, args)
-					return bridge.success(observation, "Settings surface opened")
+					return _finish_open(surface, args, observation, "Settings surface opened")
 				return bridge.error("Timed out waiting for settings surface: %s" % surface, {"surface": surface, "opened": false, "workflow": attempts, "verification": wait_result.get("data", {})})
 	return bridge.error("Failed to open settings surface: %s" % surface, {"surface": surface, "opened": false, "workflow": attempts})
+
+
+func _finish_open(surface: String, args: Dictionary, payload: Dictionary, message: String) -> Dictionary:
+	var output := payload.duplicate(true)
+	if _has_tab_selector(args):
+		var activation_args := args.duplicate(true)
+		activation_args["capture"] = false
+		activation_args.erase("path")
+		var activation_result := _activate_tab(surface, activation_args)
+		if not bool(activation_result.get("success", false)):
+			return activation_result
+		var activation_payload: Dictionary = activation_result.get("data", {})
+		var selected_tab: Dictionary = activation_payload.get("selected_tab", {})
+		output["tab_activation"] = activation_payload
+		output["current_tab"] = str(selected_tab.get("title", output.get("current_tab", "")))
+		output["current_tab_index"] = int(selected_tab.get("index", output.get("current_tab_index", -1)))
+		output["workflow"] = _workflow_with_step(output.get("workflow", []), {
+			"step": "open_activate_tab",
+			"tab": str(args.get("tab", "")),
+			"tab_index": int(args.get("tab_index", -1)),
+			"success": true
+		})
+	if bool(args.get("capture", false)):
+		_attach_capture(output, args)
+	return bridge.success(output, message)
+
+
+func _has_tab_selector(args: Dictionary) -> bool:
+	return not str(args.get("tab", "")).strip_edges().is_empty() or int(args.get("tab_index", -1)) >= 0
 
 
 func _observe(surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
@@ -718,16 +826,117 @@ func _controls_under_roots(rows: Array, roots: Array[String]) -> Array:
 
 
 func _current_tab_hint(rows: Array, spec: Dictionary) -> String:
-	var tabs: Array = spec.get("tabs", [])
+	var payload := _settings_tabs_payload("", {"all_controls": rows, "dialog_path": "", "primary_popup_path": ""})
+	for tab in payload.get("tabs", []):
+		if tab is Dictionary and bool((tab as Dictionary).get("current", false)):
+			return str((tab as Dictionary).get("title", ""))
+	var known_tabs: Array = spec.get("tabs", [])
 	for row in rows:
 		if not (row is Dictionary):
 			continue
 		var dict := row as Dictionary
 		var text := str(dict.get("text", dict.get("title", dict.get("name", ""))))
-		for tab in tabs:
+		for tab in known_tabs:
 			if text.to_lower().contains(str(tab).to_lower()):
 				return str(tab)
 	return ""
+
+
+func _settings_tabs_payload(surface: String, observation: Dictionary) -> Dictionary:
+	var controls: Array = observation.get("all_controls", [])
+	var tab_containers: Array[Dictionary] = []
+	for row in controls:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		if not dict.has("tabs"):
+			continue
+		var tabs: Array = dict.get("tabs", [])
+		if tabs.is_empty():
+			continue
+		tab_containers.append(dict.duplicate(true))
+	var selected_container := _select_settings_tab_container(tab_containers)
+	var tabs: Array[Dictionary] = []
+	if not selected_container.is_empty():
+		for tab in selected_container.get("tabs", []):
+			if tab is Dictionary:
+				tabs.append((tab as Dictionary).duplicate(true))
+	return {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"tab_container_path": str(selected_container.get("path", "")),
+		"tab_container_class": str(selected_container.get("class", "")),
+		"current_tab": _current_tab_title(tabs),
+		"current_tab_index": int(selected_container.get("current_tab_index", -1)),
+		"tabs": tabs,
+		"tab_count": tabs.size()
+	}
+
+
+func _select_settings_tab_container(tab_containers: Array[Dictionary]) -> Dictionary:
+	if tab_containers.is_empty():
+		return {}
+	var best := tab_containers[0]
+	for candidate in tab_containers:
+		if int(candidate.get("tab_count", 0)) > int(best.get("tab_count", 0)):
+			best = candidate
+	return best.duplicate(true)
+
+
+func _current_tab_title(tabs: Array[Dictionary]) -> String:
+	for tab in tabs:
+		if bool(tab.get("current", false)):
+			return str(tab.get("title", ""))
+	return ""
+
+
+func _resolve_settings_tab(tabs: Array, requested_title: String, requested_index: int) -> Dictionary:
+	var candidates: Array[Dictionary] = []
+	for tab in tabs:
+		if not (tab is Dictionary):
+			continue
+		var dict := (tab as Dictionary).duplicate(true)
+		if requested_index >= 0 and int(dict.get("index", -1)) == requested_index:
+			candidates.append(dict)
+			continue
+		if not requested_title.is_empty() and _tab_title_matches(dict, requested_title):
+			candidates.append(dict)
+	if candidates.is_empty():
+		return {
+			"success": false,
+			"reason": "tab_not_found",
+			"message": "No settings tab matched the requested selector.",
+			"candidate_count": 0,
+			"candidates": []
+		}
+	if candidates.size() > 1:
+		return {
+			"success": false,
+			"reason": "ambiguous_tab",
+			"message": "Multiple settings tabs matched the requested selector.",
+			"candidate_count": candidates.size(),
+			"candidates": candidates
+		}
+	return {
+		"success": true,
+		"tab": candidates[0],
+		"candidate_count": 1
+	}
+
+
+func _tab_title_matches(tab: Dictionary, requested_title: String) -> bool:
+	var query := requested_title.strip_edges().to_lower()
+	if query.is_empty():
+		return false
+	for key in ["title", "control_name"]:
+		var value := str(tab.get(key, "")).strip_edges().to_lower()
+		if value == query:
+			return true
+		if value.contains(query):
+			return true
+	return false
 
 
 func _section_hint(row: Dictionary) -> String:

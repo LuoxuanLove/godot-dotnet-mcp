@@ -1209,7 +1209,29 @@ func _describe_control(control, parent_path: String, depth: int) -> Dictionary:
 		summary["child_count"] = int(control.get_child_count())
 	elif control != null and control.has_method("get_children"):
 		summary["child_count"] = control.get_children().size()
+	_add_tab_summary(control, summary)
 	return summary
+
+
+func _add_tab_summary(control, summary: Dictionary) -> void:
+	if control == null or not control.has_method("get_tab_count"):
+		return
+	var tab_count := int(control.get_tab_count())
+	var current_tab := int(control.get("current_tab")) if _has_property(control, "current_tab") else -1
+	var tabs: Array[Dictionary] = []
+	for index in range(tab_count):
+		var tab_control = _get_tab_control(control, index)
+		tabs.append({
+			"index": index,
+			"title": _get_tab_title(control, index),
+			"control_path": _safe_control_path(tab_control) if tab_control != null else "",
+			"control_name": str(tab_control.name) if tab_control != null else "",
+			"current": index == current_tab,
+			"visible": _is_activation_target_visible(tab_control, control) if tab_control != null else _is_control_visible(control)
+		})
+	summary["tab_count"] = tab_count
+	summary["current_tab_index"] = current_tab
+	summary["tabs"] = tabs
 
 
 func _build_actionable_actions(control) -> Array[String]:
