@@ -4,9 +4,50 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.2.0])
+## [Unreleased] ([1.2.1])
 
-Target version: 1.2.0.
+Target version: 1.2.1.
+
+### Internal
+
+- Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
+- Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
+- Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+
+## [1.2.0] - 2026-06-06
+
+### Added
+
+- Added output size safeguards for MCP resources and prompts: oversized file-backed resources are rejected before full reads, and oversized prompt text is truncated with `_meta` byte-size details.
+- Added top menu, popup selection, hover/leave, main-screen switching, and distraction-free control actions to `system_editor_control`, giving agents more Godot editor UI coverage without OS mouse automation.
+- Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
+- Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
+- Added User-tool runtime diagnostics through `plugin_evolution_runtime_diagnostics` and `project_state(include_runtime_health=true)`, including discovery counts, load failures, watcher state, compatibility summary, and recent audit entries.
+- Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
+- Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
+- Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
+- Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
+- Added `system_editor_plugin_control` so clients can inspect third-party EditorPlugin project-setting state, editor-session state, visible UI hints, restart/manual-activation guidance, and guarded enable/disable behavior.
+
+### Changed
+
+- Changed plugin update sync to refresh and wait for the Godot editor file-system scan after writing addon files and before scheduling the plugin lifecycle reload.
+- Changed the public documentation entry points to live in localized documentation trees with locale-specific directory and file names.
+- Changed release rendering so GitHub Release bodies are generated from the English `v1.2.0` release note while the persisted release notes link to English, Simplified Chinese, Japanese, and Korean versions.
+
+### Fixed
+
+- Fixed malformed JSON-RPC parameter handling so HTTP and stdio requests reject non-object top-level `params` consistently with `-32602`, while non-object `tools/call.arguments` remains a tool-level `isError` result.
+- Fixed C# empty-method generation so internal edit helpers no longer emit ambiguous fallback bodies when a body is missing.
+- Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
+- Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
+- Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
+- Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
+- Fixed lifecycle reload scheduling failures so failed schedule attempts no longer leave the plugin reload state marked as pending.
+- Fixed project file reimport handling so `project.godot`, text files, sidecar metadata, and unsupported paths return structured `not_importable_resource` errors instead of being passed to Godot's import pipeline.
+- Fixed popup menu automation guardrails so hidden popups, disabled items, separators, submenu rows, duplicate text, and conflicting selectors fail clearly instead of selecting the wrong entry.
+- Fixed DAP debugger size and timeout guardrails so abnormal endpoints return clear `dap_limit_exceeded` errors instead of occupying long agent requests.
+- Fixed localized documentation facts, links, encoding examples, release-note wording, UI/config references, obsolete draft fragments, and invalid Japanese README screenshot references.
 
 ### Documentation
 
@@ -14,35 +55,8 @@ Target version: 1.2.0.
 - Added complete English, Simplified Chinese, Japanese, and Korean documentation trees under `docs/`, with each locale using localized directory and file names.
 - Moved public docs navigation to the localized documentation trees and removed the old root technical-structure documentation pages from the public docs set.
 - Removed redundant root-level localized README and changelog copies after moving those entries into the localized docs tree.
-- Corrected localized Japanese and Korean documentation links, encoding examples, release-note wording, and UI/config implementation references.
-- Initialized the `v1.2.0` release notes source with the pending-theme template and removed the obsolete `v1.1.2` source after advancing plugin metadata.
-
-### Added
-
-- Added output size safeguards for MCP resources and prompts: oversized file-backed resources are rejected before full reads, and oversized prompt text is truncated with `_meta` byte-size details.
-- Added top menu control actions to `system_editor_control`, allowing agents to list editor menus, open a `MenuButton`, and select a `PopupMenu` item by text or index before using the existing popup-control workflow.
-- Added `system_tool_activity` and optional `_mcp_context` metadata for MCP tool calls, giving clients a lightweight view of running calls, recent completions, execution order, and self-reported agent coordination context without changing individual tool schemas.
-- Added HTTP client session identity and request audit fields to `/health`, including per-connection IDs, request IDs, client summaries, active sessions, and recent disconnected sessions for multi-client diagnostics.
-- Added User-tool runtime diagnostics through `plugin_evolution_runtime_diagnostics` and `project_state(include_runtime_health=true)`, including discovery counts, load failures, watcher state, compatibility summary, and recent audit entries.
-- Added `system_editor_control(action=select_popup_menu_item)` so agents can select visible `PopupMenu` items by index, id, or exact text while rejecting hidden popups, disabled items, separators, submenu rows, and conflicting selectors.
-- Added Korean as a selectable Dock UI language with localized labels for key Home, Tools, Config, Settings, tool preview, category, and plugin-developer surfaces.
-- Completed supported-language Dock localization coverage so visible labels, tool metadata, client configuration guidance, prompt guides, and fallback entries no longer rely on English text outside approved product names and technical tokens.
-- Added a maintenance window contract to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, reconnect requirements, tool-list refresh requirements, and retry guidance during lifecycle reloads or update sync.
-- Localized reconnect guidance emitted by maintenance-window responses across every supported Dock language.
-- Added `system_editor_control` hover and leave pointer-motion actions for validating tooltips, hover-only menus, and floating editor UI without OS mouse automation.
-- Added `system_editor_plugin_control` so clients can inspect third-party EditorPlugin project-setting state, editor-session state, visible UI hints, restart/manual-activation guidance, and guarded enable/disable behavior.
-- Added high-level editor control actions to list current main-screen buttons, switch to registered plugin main screens, and read or toggle distraction-free mode from `system_editor_control`.
-
-### Fixed
-
-- Fixed malformed JSON-RPC parameter handling so HTTP and stdio requests reject non-object top-level `params` consistently with `-32602`, while non-object `tools/call.arguments` remains a tool-level `isError` result.
-- Fixed plugin update sync so the editor file system is explicitly refreshed after addon files are written and before the plugin lifecycle reload is scheduled.
-- Fixed C# empty-method generation so internal edit helpers no longer emit ambiguous fallback bodies when a body is missing.
-- Fixed plugin evolution runtime diagnostics so the public `runtime_diagnostics` entry forwards the live user-tool runtime snapshot, keeping the report aligned with project health diagnostics.
-- Fixed HTTP transport pipelining so multiple requests already buffered on a keep-alive connection continue draining after an async route completes instead of waiting for more socket bytes.
-- Added HTTP reconnect backpressure safeguards for multi-client recovery by accepting several pending connections per frame, rejecting oversized pending request buffers, and closing clients after response write failures.
-- Guarded stdio frame processing against async reentry, stop/restart response writes, and one-frame request bursts while preserving tool-loader ticking, improving stability for consecutive stdio requests.
-- Fixed lifecycle reload scheduling failures so failed schedule attempts no longer leave the plugin reload state marked as pending.
+- Finalized persistent `v1.2.0` release notes in English, Simplified Chinese, Japanese, and Korean, including cross-language release-note links below the title and introduction.
+- Updated the release runbook and release-note renderer documentation so formal GitHub Releases use the English release note and changelog as the rendered body source.
 
 ### Internal
 
@@ -65,11 +79,9 @@ Target version: 1.2.0.
 - Extended HTTP transport and health harness coverage to verify stable connection IDs, per-request audit IDs, client summaries, and recent disconnected session reporting.
 - Guarded headless HTTP server runtime-control setup so standalone harness servers do not pass non-plugin parents into the runtime-control service.
 - Extended HTTP transport, health, plugin reload, plugin update, and maintenance-contract harness coverage to cover pipelined requests, localized reconnect hints, stale-schema state precedence, and maintenance-window response fields for reconnect-aware clients.
-- Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
-- Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
-- Added DAP debugger limits for oversized `Content-Length` frames and `timeout_ms` values so abnormal debug endpoints fail fast with `dap_limit_exceeded` instead of waiting for long timeouts.
 - Extended plugin harness failure reports with `failureClasses`, `primaryFailureClass`, and `exitCleanupWarningFailure` so Godot exit cleanup warnings are visible without hiding runtime error markers.
 - Extended editor-control harness and tool-tree coverage for dynamic main-screen discovery, plugin main-screen activation, and distraction-free actions.
+- Updated release workflows to validate all four localized changelogs and release-note sources while rendering GitHub Release bodies from the English source file.
 
 ## [1.1.2] - 2026-06-02
 
@@ -465,8 +477,8 @@ Target version: 1.2.0.
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
-[1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.0.1...v1.1.0
