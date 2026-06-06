@@ -248,7 +248,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should refresh localized header copy when language changes.")
 	var refreshed_root = tool_tree.get_root()
 	var refreshed_core_domain = _find_child_by_metadata(refreshed_root, "domain", "core")
+	var refreshed_user_domain = _find_child_by_metadata(refreshed_root, "domain", "user")
 	var refreshed_system_category = _find_child_by_metadata(refreshed_core_domain, "category", "system")
+	var refreshed_user_category = _find_child_by_metadata(refreshed_user_domain, "category", "user")
 	var refreshed_editor_log_tool = _find_child_by_metadata(refreshed_system_category, "tool", "system_editor_log")
 	if refreshed_editor_log_tool == null or refreshed_editor_log_tool.get_text(0) != "编辑器日志（刷新）":
 		return _failure("Tools tab should rebuild tree item text when the active language changes.")
@@ -258,9 +260,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"success": true,
 		"error": "",
 		"details": {
-			"top_level_domain_count": root.get_child_count(),
-			"system_tool_count": system_category.get_child_count(),
-			"user_tool_count": user_category.get_child_count(),
+			"top_level_domain_count": refreshed_root.get_child_count(),
+			"system_tool_count": refreshed_system_category.get_child_count(),
+			"user_tool_count": refreshed_user_category.get_child_count(),
 			"catalog_tool_count": SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size()
 		}
 	}
