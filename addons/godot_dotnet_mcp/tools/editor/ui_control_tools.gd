@@ -11,9 +11,9 @@ const SEMANTIC_DOCK_ROOTS := ["mcpdock", "mcp"]
 const DOCK_VISIBLE_NAME := "MCP"
 const DOCK_LEGACY_NAME := "MCPDock"
 const PROJECT_SETTINGS_DEFAULT_TAB := "Plugins"
-const PROJECT_SETTINGS_MENU_TITLES := ["Project", "项目", "專案", "プロジェクト", "프로젝트", "Proyecto", "Projet", "Projeto", "Проект"]
-const PROJECT_SETTINGS_ITEM_TEXTS := ["Project Settings...", "Project Settings", "项目设置...", "项目设置", "專案設定...", "專案設定", "プロジェクト設定...", "プロジェクト設定", "프로젝트 설정...", "프로젝트 설정", "Configuración del proyecto...", "Configuración del proyecto", "Paramètres du projet...", "Paramètres du projet", "Configurações do projeto...", "Configurações do projeto", "Настройки проекта...", "Настройки проекта"]
-const PROJECT_SETTINGS_PLUGIN_TAB_TITLES := ["Plugins", "插件", "プラグイン", "플러그인", "Plugins", "Extensions", "Erweiterungen", "Расширения"]
+const PROJECT_SETTINGS_MENU_TITLES := ["Project", "项目", "專案", "プロジェクト", "프로젝트", "Proyecto", "Projet", "Projeto", "Проект", "Projekt"]
+const PROJECT_SETTINGS_ITEM_TEXTS := ["Project Settings...", "Project Settings", "项目设置...", "项目设置", "專案設定...", "專案設定", "プロジェクト設定...", "プロジェクト設定", "프로젝트 설정...", "프로젝트 설정", "Configuración del proyecto...", "Configuración del proyecto", "Paramètres du projet...", "Paramètres du projet", "Configurações do projeto...", "Configurações do projeto", "Настройки проекта...", "Настройки проекта", "Projekteinstellungen...", "Projekteinstellungen"]
+const PROJECT_SETTINGS_PLUGIN_TAB_TITLES := ["Plugins", "插件", "プラグイン", "플러그인", "Plugins", "Extensions", "Erweiterungen", "Расширения", "Erweiterungen"]
 
 
 func execute(ei, args: Dictionary) -> Dictionary:

@@ -1173,6 +1173,24 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if fallback_interface.project_settings_tabs.current_tab != 1:
 		return _failure("Editor ui_control open_project_settings menu fallback should activate the Plugins tab.")
 
+	var german_fallback_executor = EditorExecutorScript.new()
+	var german_fallback_interface := FakeMenuOnlyEditorInterface.new()
+	var german_project_menu := FakeMenuButton.new("ProjektMenu", "Projekt", Rect2(0, 0, 96, 24))
+	german_project_menu.get_popup().add_item("Projekteinstellungen...", 302)
+	german_project_menu.get_popup().activated_callback = Callable(german_fallback_interface, "show_project_settings")
+	german_fallback_interface.get_base_control().add_popup_child(german_project_menu)
+	german_fallback_executor.configure_context({
+		"editor_interface": german_fallback_interface,
+		"plugin_host": FakeEditorPlugin.new(german_fallback_interface),
+	})
+	var german_fallback_result: Dictionary = german_fallback_executor.execute("ui_control", {
+		"action": "open_project_settings"
+	})
+	if not bool(german_fallback_result.get("success", false)):
+		return _failure("Editor ui_control open_project_settings should support the German Project Settings menu fallback.")
+	if int(german_project_menu.get_popup().activated_index) != 0 or german_fallback_interface.project_settings_tabs.current_tab != 1:
+		return _failure("Editor ui_control open_project_settings German menu fallback should activate the Plugins tab.")
+
 	var missing_window_executor = EditorExecutorScript.new()
 	var missing_window_interface := FakeMenuOnlyEditorInterface.new(false)
 	var missing_window_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
