@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, read, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, read, focus, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,11 +83,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/set_value/verify_value only filter currently observed visible rows."
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/focus_value/set_value/verify_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
-						"description": "Optional tab title or category hint. open/activate_tab use it as the requested tab title when tab_index is not provided; search/list_rows/read_value/set_value/verify_value use it as a query term."
+						"description": "Optional tab title or category hint. open/activate_tab use it as the requested tab title when tab_index is not provided; search/list_rows/read_value/focus_value/set_value/verify_value use it as a query term."
 					},
 					"tab_index": {
 						"type": "integer",
@@ -107,7 +107,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value/set_value/verify_value, or a tree/category control path used by focus_category"
+						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value/focus_value/set_value/verify_value, or a tree/category control path used by focus_category"
 					},
 					"value": {
 						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
@@ -122,7 +122,7 @@ func get_tools() -> Array[Dictionary]:
 					"require_confidence": {
 						"type": "string",
 						"enum": ["low", "medium", "high"],
-						"description": "Minimum row model confidence accepted by read_value/set_value/verify_value (default medium)"
+						"description": "Minimum row model confidence accepted by read_value/focus_value/set_value/verify_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -197,6 +197,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _read_value(surface, args)
+		"focus_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _focus_value(surface, args)
 		"set_value":
 			return bridge.error("set_value requires asynchronous execution")
 		"verify_value":
@@ -526,6 +531,96 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(value_payload, args)
 	return bridge.success(value_payload, "Settings row value read")
+
+
+func _focus_value(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for focus_value: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before focus_value.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_action(all_controls, surface, args, query_values, "focus_value")
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched focus_value.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var value_payload: Dictionary = _read_row_value(row, all_controls)
+	var focus_control: Dictionary = _focusable_value_control_for_row(row, all_controls)
+	var value_path := str(focus_control.get("path", focus_control.get("node_path", focus_control.get("row_control_path", "")))).strip_edges()
+	if value_path.is_empty():
+		var missing_value_payload := observation.duplicate(true)
+		missing_value_payload["row"] = row
+		missing_value_payload["value"] = value_payload
+		missing_value_payload["resolution"] = row_resolution.get("resolution", {})
+		missing_value_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"success": false,
+			"reason": "value_control_not_found"
+		})
+		return bridge.error("No value control path was found for focus_value.", missing_value_payload)
+	var focus_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+		"action": "focus_control",
+		"target_path": value_path
+	})
+	if not bool(focus_result.get("success", false)):
+		var focus_payload := observation.duplicate(true)
+		focus_payload["row"] = row
+		focus_payload["value"] = value_payload
+		focus_payload["focus"] = focus_result
+		focus_payload["resolution"] = row_resolution.get("resolution", {})
+		focus_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_value",
+			"target_path": value_path,
+			"success": false,
+			"reason": "focus_failed"
+		})
+		return bridge.error(str(focus_result.get("message", focus_result.get("error", "Settings row value focus failed."))), focus_payload)
+	var payload: Dictionary = focus_result.get("data", {}).duplicate(true)
+	payload["surface"] = surface
+	payload["dialog_found"] = bool(observation.get("dialog_found", false))
+	payload["dialog_path"] = str(observation.get("dialog_path", ""))
+	payload["primary_popup_path"] = str(observation.get("primary_popup_path", ""))
+	payload["row"] = row
+	payload["focused_value"] = {
+		"path": value_path,
+		"editor_type": str(value_payload.get("value_editor_type", "unknown")),
+		"confidence": str(value_payload.get("confidence", row.get("confidence", "low")))
+	}
+	payload["value_control"] = focus_control
+	payload["value_control_path"] = value_path
+	payload["value_editor_type"] = str(value_payload.get("value_editor_type", "unknown"))
+	payload["value_text"] = str(value_payload.get("value_text", ""))
+	payload["resolution"] = row_resolution.get("resolution", {})
+	payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "focus_value",
+		"target_path": value_path,
+		"setting_path": str(args.get("setting_path", "")),
+		"queries": query_values,
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings row value focused")
 
 
 func _set_value(surface: String, args: Dictionary) -> Dictionary:
@@ -1556,6 +1651,18 @@ func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
 		var candidate_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges().to_lower()
 		if candidate_path.ends_with("/value") or _value_editor_type_hint(dict) != "unknown":
 			return dict.duplicate(true)
+	return {}
+
+
+func _focusable_value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
+	var value_control := _value_control_for_row(row, rows)
+	if value_control.is_empty():
+		return {}
+	var editor_type := str(value_control.get("value_editor_type", "unknown"))
+	if editor_type == "unknown":
+		editor_type = _value_editor_type_hint(value_control)
+	if editor_type in ["text", "bool", "number", "enum", "color"]:
+		return value_control
 	return {}
 
 
