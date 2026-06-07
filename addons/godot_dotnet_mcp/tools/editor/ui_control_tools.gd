@@ -58,6 +58,8 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _leave_control(ei, args)
 		"set_text":
 			return _set_control_text(ei, str(args.get("target_path", "")).strip_edges(), str(args.get("text", "")))
+		"set_value":
+			return _set_control_value(ei, str(args.get("target_path", "")).strip_edges(), args.get("value"))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -573,6 +575,28 @@ func _set_control_text(ei, target_path: String, text: String) -> Dictionary:
 		"class": _control_class_name(control),
 		"text": text
 	}, "Editor control text updated")
+
+
+func _set_control_value(ei, target_path: String, value) -> Dictionary:
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var control = _find_control(ei, target_path)
+	if control == null:
+		return _error("Editor control not found: %s" % target_path)
+	if not _has_property(control, "value"):
+		return _error("Editor control does not expose a value property: %s" % target_path)
+	var numeric_value = value
+	if not (numeric_value is int or numeric_value is float):
+		var value_text := str(value).strip_edges()
+		if not value_text.is_valid_float():
+			return _error("value must be numeric for value controls: %s" % target_path)
+		numeric_value = value_text.to_float()
+	control.set("value", numeric_value)
+	return _success({
+		"target_path": target_path,
+		"class": _control_class_name(control),
+		"value": control.get("value")
+	}, "Editor control value updated")
 
 
 func _collect_controls_recursive(node, parent_path: String, depth: int, max_depth: int, include_hidden: bool, class_filter: String, text_query: String, limit: int, out: Array[Dictionary]) -> void:
@@ -1227,6 +1251,8 @@ func _build_actionable_actions(control) -> Array[String]:
 		actions.append("leave_control")
 	if _supports_text_input(control):
 		actions.append("set_text")
+	if _supports_value_input(control):
+		actions.append("set_value")
 	return actions
 
 
@@ -1546,6 +1572,12 @@ func _supports_text_input(control) -> bool:
 	if control_class in ["LineEdit", "TextEdit", "CodeEdit"]:
 		return true
 	return control.has_method("set_text") or _has_property(control, "text")
+
+
+func _supports_value_input(control) -> bool:
+	if control == null:
+		return false
+	return _has_property(control, "value")
 
 
 func _control_class_name(control) -> String:
