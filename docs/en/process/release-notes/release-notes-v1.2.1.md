@@ -20,6 +20,12 @@ The workflow now also exposes read-only row models through `list_rows`, summariz
 
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
+### 🧰 Clearer User Tool Names
+
+User-tool listings and compatibility reports now show the script-declared name, the normalized internal name, and the public MCP tool name. Scaffolding previews also show the public name up front, while legacy `user_`-prefixed declarations receive a review warning instead of leaving clients to guess how the tool will appear.
+
+New scaffolds also load more reliably during headless catalog scans because they no longer depend on global script-class registration for the base tool type.
+
 ### ✅ Compatibility and Upgrade Notes
 
 This change only extends the public tool schema. Existing `system_editor_control` actions remain available, and clients that do not call `wait_for_ui` do not need to change their requests.

@@ -39,8 +39,12 @@ func get_compatibility_report() -> Dictionary:
 		var item := tool.duplicate(true)
 		var scaffold_version = str(item.get("scaffold_version", "unknown"))
 		var status = _get_compatibility_status(scaffold_version)
+		var naming_warning_count := _count_array_items(item.get("tool_name_warnings", []))
+		if status == "compatible" and naming_warning_count > 0:
+			status = "needs_review"
 		item["compatibility_status"] = status
 		item["recommendation"] = _get_compatibility_recommendation(status)
+		item["naming_warning_count"] = naming_warning_count
 		if status == "compatible":
 			compatible.append(item)
 		else:
@@ -91,11 +95,15 @@ func _inspect_script(script_path: String) -> Dictionary:
 		"category": _user_category,
 		"domain_key": _user_domain,
 		"tool_names": [],
+		"declared_tool_names": [],
+		"normalized_tool_names": [],
+		"public_tool_names": [],
+		"tool_name_warnings": [],
 		"scaffold_version": _extract_scaffold_version(file_content),
 		"loadable": false
 	}
 
-	if not ClassDB.class_exists("MCPBaseTool"):
+	if MCPBaseToolScript == null:
 		inspected["load_error"] = "missing_mcp_base_tool"
 		return inspected
 
@@ -121,14 +129,53 @@ func _inspect_script(script_path: String) -> Dictionary:
 		registration = executor.get_registration()
 
 	var tool_names: Array[String] = []
+	var declared_tool_names: Array[String] = []
+	var normalized_tool_names: Array[String] = []
+	var public_tool_names: Array[String] = []
+	var tool_name_warnings: Array[Dictionary] = []
+	var seen_logical_names := {}
 	for tool_def in executor.get_tools():
 		if tool_def is Dictionary:
-			var logical_name = _normalize_runtime_tool_name(str(tool_def.get("name", "")))
+			var declared_name := str(tool_def.get("name", "")).strip_edges()
+			declared_tool_names.append(declared_name)
+			var logical_name = _normalize_runtime_tool_name(declared_name)
 			if not logical_name.is_empty():
-				tool_names.append("%s_%s" % [_user_category, logical_name])
+				var public_tool_name := _build_public_tool_name(logical_name)
+				tool_names.append(public_tool_name)
+				normalized_tool_names.append(logical_name)
+				public_tool_names.append(public_tool_name)
+				if declared_name != logical_name:
+					tool_name_warnings.append(_build_tool_name_warning(
+						"user_prefix_normalized",
+						declared_name,
+						logical_name,
+						public_tool_name,
+						"Declared tool name includes the public user_ prefix; runtime strips it before exposing the tool through the User domain."
+					))
+				if seen_logical_names.has(logical_name):
+					tool_name_warnings.append(_build_tool_name_warning(
+						"duplicate_normalized_name",
+						declared_name,
+						logical_name,
+						public_tool_name,
+						"Multiple declared tool names normalize to the same User-domain tool name."
+					))
+				seen_logical_names[logical_name] = true
+			else:
+				tool_name_warnings.append(_build_tool_name_warning(
+					"empty_tool_name",
+					declared_name,
+					logical_name,
+					"",
+					"Tool definitions should declare a non-empty name."
+				))
 
 	inspected["display_name"] = str(registration.get("display_name", default_display_name))
 	inspected["tool_names"] = tool_names
+	inspected["declared_tool_names"] = declared_tool_names
+	inspected["normalized_tool_names"] = normalized_tool_names
+	inspected["public_tool_names"] = public_tool_names
+	inspected["tool_name_warnings"] = tool_name_warnings
 	inspected["loadable"] = true
 	return inspected
 
@@ -178,6 +225,8 @@ func _get_compatibility_recommendation(status: String) -> String:
 			return "Rescaffold from the current template and migrate custom logic manually."
 		"newer":
 			return "Current plugin template is older than this user tool; verify plugin compatibility before editing."
+		"needs_review":
+			return "Review tool name warnings before relying on this user tool in automated workflows."
 		_:
 			return "Add or verify the _SCAFFOLD_VERSION constant before relying on compatibility checks."
 
@@ -203,6 +252,25 @@ func _normalize_runtime_tool_name(tool_name: String) -> String:
 	if normalized.begins_with("user_"):
 		normalized = normalized.trim_prefix("user_")
 	return normalized
+
+
+func _build_public_tool_name(logical_name: String) -> String:
+	return "%s_%s" % [_user_category, logical_name]
+
+
+func _build_tool_name_warning(code: String, declared_name: String, normalized_name: String, public_tool_name: String, message: String) -> Dictionary:
+	return {
+		"severity": "warning",
+		"code": code,
+		"declared_name": declared_name,
+		"normalized_name": normalized_name,
+		"public_tool_name": public_tool_name,
+		"message": message
+	}
+
+
+func _count_array_items(value) -> int:
+	return (value as Array).size() if value is Array else 0
 
 
 func _normalize_script_path(script_path: String) -> String:

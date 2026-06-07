@@ -17,7 +17,7 @@ For plugin-side runtime introspection, use `plugin_runtime_state` instead of a s
 
 For GDScript diagnostics, `system_script_analyze(include_diagnostics=true)` returns structure data immediately and fills LSP diagnostics in the background from the saved file content on disk. The first call may return `pending`; later calls return the cached result. Unsaved editor buffer changes are excluded.
 
-To extend the tool set: place a `.gd` file in `custom_tools/` implementing `handles / get_tools / execute`, with all tool names prefixed `user_`. The plugin picks it up automatically. `plugin_evolution` tools handle scaffolding, auditing, and removal from the Dock or via MCP.
+To extend the tool set: place a `.gd` file in `custom_tools/` implementing `handles / get_tools / execute`. User tools are exposed publicly with the `user_` MCP prefix; inside `get_tools()`, prefer declaring the logical name without that public domain prefix. The plugin picks it up automatically. `plugin_evolution` tools handle scaffolding, auditing, and removal from the Dock or via MCP.
 
 ## Why This Plugin
 

@@ -14,12 +14,18 @@ Target version: 1.2.1.
 - Added `system_settings_dialog`, a high-level settings-like dialog workflow that opens Project Settings or Editor Settings, waits for visibility, searches candidate setting rows, focuses results, captures evidence, and closes the surface without writing setting values.
 - Added read-only `system_settings_dialog(action=list_rows)` row models that summarize visible settings-like controls with conservative confidence and evidence fields without writing the settings search field.
 - Added read-only `system_settings_dialog(action=read_value)` value inspection for unique visible settings rows, returning typed text, bool, number, and enum payloads with row/value evidence without writing setting values.
+- Added User-tool naming diagnostics that report declared, normalized, and public MCP tool names in User-tool listings and compatibility reports.
+
+### Fixed
+
+- Fixed generated User-tool scaffolds so they extend the base tool script by resource path, keeping headless catalog scans from depending on global script-class registration.
 
 ### Internal
 
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+- Extended User-tool service contract coverage for scaffold public-name previews and legacy `user_` prefix normalization warnings.
 
 ## [1.2.0] - 2026-06-06
 
