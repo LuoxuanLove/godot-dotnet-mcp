@@ -20,6 +20,9 @@ class FakeBridge extends RefCounted:
 	var snap_2d_transforms_to_pixel := false
 	var max_renderable_elements := 128000.0
 	var direct_spin_value := 3.0
+	var popup_capture_enabled := true
+	var control_capture_enabled := true
+	var editor_capture_enabled := true
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -93,6 +96,13 @@ class FakeBridge extends RefCounted:
 							snap_2d_transforms_to_pixel = not snap_2d_transforms_to_pixel
 							return success({"target_path": target_path})
 						return error("Activation target not found")
+					"capture_control":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.contains("ProjectSettings") and project_visible and control_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "capture_mode": "control"})
+						if target_path.contains("EditorSettings") and editor_visible and control_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "capture_mode": "control"})
+						return error("Control capture target not found")
 					_:
 						return error("Unsupported editor_ui_control action: %s" % action)
 			"editor_popup":
@@ -104,6 +114,13 @@ class FakeBridge extends RefCounted:
 						if editor_visible:
 							popups.append({"node_path": "/root/EditorSettings", "title": "Editor Settings", "class": "AcceptDialog"})
 						return success({"count": popups.size(), "popups": popups})
+					"capture_popup":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.contains("ProjectSettings") and project_visible and popup_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "popup_path": "/root/ProjectSettings", "capture_mode": "popup"})
+						if target_path.contains("EditorSettings") and editor_visible and popup_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "popup_path": "/root/EditorSettings", "capture_mode": "popup"})
+						return error("Popup capture target not found")
 					"close_popup":
 						var target_path := str(args.get("target_path", ""))
 						if target_path.contains("ProjectSettings"):
@@ -114,7 +131,7 @@ class FakeBridge extends RefCounted:
 					_:
 						return error("Unsupported editor_popup action: %s" % action)
 			"editor_screenshot":
-				if action == "capture":
+				if action == "capture" and editor_capture_enabled:
 					return success({"path": str(args.get("path", "user://settings_dialog.png")), "capture_mode": "full"})
 				return error("Unsupported editor_screenshot action: %s" % action)
 			_:
@@ -1001,6 +1018,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_call(fake.calls, "editor_ui_control", "focus_control"):
 		return _failure("focus_result should delegate to editor_ui_control.focus_control.")
 
+	var calls_before_capture := fake.calls.size()
 	var captured := impl.execute("settings_dialog", {
 		"action": "capture",
 		"surface": "project_settings",
@@ -1008,8 +1026,87 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(captured.get("success", false)):
 		return _failure("capture should succeed for a visible settings surface.")
-	if str(captured.get("data", {}).get("capture_path", "")) != "user://custom_settings.png":
-		return _failure("capture should return the screenshot path from editor_screenshot.")
+	var captured_data: Dictionary = captured.get("data", {})
+	if str(captured_data.get("capture_path", "")) != "user://custom_settings.png":
+		return _failure("capture should return the screenshot path from the selected capture backend.")
+	if str(captured_data.get("capture_surface", "")) != "project_settings":
+		return _failure("capture should preserve the requested settings surface.")
+	if str(captured_data.get("capture_backend", "")) != "popup":
+		return _failure("capture should prefer the visible settings popup backend.")
+	if str(captured_data.get("capture_target_path", "")) != "/root/ProjectSettings":
+		return _failure("capture should target the observed Project Settings popup path.")
+	if str(captured_data.get("capture", {}).get("capture_mode", "")) != "popup":
+		return _failure("capture should preserve popup capture payload metadata.")
+	if not _has_call_since_with_target(fake.calls, calls_before_capture, "editor_popup", "capture_popup", "/root/ProjectSettings"):
+		return _failure("capture should delegate to editor_popup.capture_popup for visible settings popups.")
+
+	var calls_before_focused_capture := fake.calls.size()
+	var focused_with_capture := impl.execute("settings_dialog", {
+		"action": "focus_result",
+		"surface": "project_settings",
+		"target_path": str(first_result.get("path", "")),
+		"capture": true
+	})
+	if not bool(focused_with_capture.get("success", false)):
+		return _failure("focus_result(capture=true) should focus a returned result path.")
+	var focused_capture_data: Dictionary = focused_with_capture.get("data", {})
+	if str(focused_capture_data.get("capture_backend", "")) != "popup":
+		return _failure("focus_result(capture=true) should recover settings surface context and prefer popup capture.")
+	if not _has_call_since_with_target(fake.calls, calls_before_focused_capture, "editor_popup", "capture_popup", "/root/ProjectSettings"):
+		return _failure("focus_result(capture=true) should delegate capture to the current settings popup.")
+
+	fake.popup_capture_enabled = false
+	var control_fallback := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"path": "user://control_fallback.png"
+	})
+	fake.popup_capture_enabled = true
+	if not bool(control_fallback.get("success", false)):
+		return _failure("capture should still succeed when popup capture is unavailable and control capture works.")
+	var control_fallback_data: Dictionary = control_fallback.get("data", {})
+	if str(control_fallback_data.get("capture_backend", "")) != "control":
+		return _failure("capture should fall back from popup capture to control capture.")
+	if str(control_fallback_data.get("capture_target_path", "")) != "/root/ProjectSettings":
+		return _failure("control fallback should target the observed settings dialog control path.")
+	if not (control_fallback_data.get("capture_fallback_reasons", []) as Array).has("popup_capture_failed"):
+		return _failure("control fallback should report the failed popup capture attempt.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	var editor_fallback := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"path": "user://editor_fallback.png"
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	if not bool(editor_fallback.get("success", false)):
+		return _failure("capture should still succeed when only the full-editor screenshot backend works.")
+	var editor_fallback_data: Dictionary = editor_fallback.get("data", {})
+	if str(editor_fallback_data.get("capture_backend", "")) != "editor":
+		return _failure("capture should fall back to full-editor screenshots after narrower targets fail.")
+	var editor_fallback_reasons: Array = editor_fallback_data.get("capture_fallback_reasons", [])
+	if not editor_fallback_reasons.has("popup_capture_failed") or not editor_fallback_reasons.has("control_capture_failed"):
+		return _failure("editor fallback should report both narrower capture failures.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var failed_capture := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings"
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if not bool(failed_capture.get("success", false)):
+		return _failure("capture action should return a settings workflow payload even when evidence backends fail.")
+	var failed_capture_data: Dictionary = failed_capture.get("data", {})
+	if str(failed_capture_data.get("capture_backend", "")) != "none":
+		return _failure("failed capture should report capture_backend=none.")
+	if str(failed_capture_data.get("capture_error", "")).is_empty():
+		return _failure("failed capture should preserve an error message from the final capture backend.")
 
 	var closed := impl.execute("settings_dialog", {"action": "close", "surface": "project_settings"})
 	if not bool(closed.get("success", false)):
@@ -1046,6 +1143,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open(tab) should delegate to activate_tab for an already visible settings surface.")
 	if str(editor_opened_with_tab.get("data", {}).get("tab_activation", {}).get("selected_tab", {}).get("title", "")) != "Shortcuts":
 		return _failure("open(tab) should return the selected tab activation payload.")
+	var calls_before_editor_capture := fake.calls.size()
+	var editor_captured := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "editor_settings",
+		"path": "user://editor_settings.png"
+	})
+	if not bool(editor_captured.get("success", false)):
+		return _failure("capture should also support editor_settings surfaces.")
+	var editor_capture_data: Dictionary = editor_captured.get("data", {})
+	if str(editor_capture_data.get("capture_surface", "")) != "editor_settings":
+		return _failure("editor_settings capture should preserve the requested surface.")
+	if str(editor_capture_data.get("capture_backend", "")) != "popup":
+		return _failure("editor_settings capture should use the same popup-first capture path.")
+	if str(editor_capture_data.get("capture_target_path", "")) != "/root/EditorSettings":
+		return _failure("editor_settings capture should target the observed Editor Settings popup path.")
+	if not _has_call_since_with_target(fake.calls, calls_before_editor_capture, "editor_popup", "capture_popup", "/root/EditorSettings"):
+		return _failure("editor_settings capture should delegate to editor_popup.capture_popup without Project Settings special cases.")
 	var editor_wrong_surface_read := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "editor_settings",

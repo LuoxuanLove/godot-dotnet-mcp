@@ -766,7 +766,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_editor_control_name": "에디터 제어",
 	"tool_system_editor_control_desc": "High-level editor UI workflow entry that prefers semantic workflow/navigation actions first, control-level focus/activation/text/value/popup actions second, and control-local mouse or pointer events only as fallback for unsupported UI, context menus, tooltips, or pointer-event validation.",
 	"tool_system_settings_dialog_name": "Settings Dialog",
-	"tool_system_settings_dialog_desc": "Project Settings 또는 Editor Settings를 열고, 표시를 기다리고, setting row를 검색하고, settings tab을 list / activate하고, category tree item을 list / focus하고, read-only row model을 나열하고, 현재 표시된 row value를 읽고, 값 편집기에 focus하고, 지원되는 visible row value를 설정하고, expected visible row value를 검증하고, 결과를 focus하고, evidence를 capture하고, surface를 닫는 high-level settings-like editor dialog workflow입니다.",
+	"tool_system_settings_dialog_desc": "Project Settings 또는 Editor Settings를 열고, 표시를 기다리고, setting row를 검색하고, settings tab을 list / activate하고, category tree item을 list / focus하고, read-only row model을 나열하고, 현재 표시된 row value를 읽고, 값 편집기에 focus하고, 지원되는 visible row value를 설정하고, expected visible row value를 검증하고, 결과를 focus하고, full-editor screenshot보다 visible settings surface의 popup/window bounds를 우선해 evidence를 capture하고, surface를 닫는 high-level settings-like editor dialog workflow입니다.",
 	"tool_system_editor_plugin_control_name": "에디터 플러그인 제어",
 	"tool_system_editor_plugin_control_desc": "plugin.cfg 메타데이터, 프로젝트 설정 상태, 에디터 세션 상태, 보이는 UI 힌트, 자체 플러그인 보호와 함께 타사 EditorPlugin 세션 상태를 검사하고 전환합니다.",
 	"tool_plugin_runtime_name": "플러그인 런타임",

@@ -63,7 +63,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, resolve unique visible rows, read, focus, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, resolve unique visible rows, read, focus, set, or verify current visible row values, focus a returned result, capture the visible settings surface with popup/window bounds preferred over full-editor screenshots, and close the surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -142,11 +142,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"capture": {
 						"type": "boolean",
-						"description": "Capture editor evidence after open/search/focus when supported"
+						"description": "Capture settings surface evidence after open/search/focus when supported, preferring visible popup/window bounds before broader editor screenshots"
 					},
 					"path": {
 						"type": "string",
-						"description": "Optional output screenshot path for capture"
+						"description": "Optional output path for the settings surface capture"
 					}
 				},
 				"required": ["action"]
@@ -1212,15 +1212,66 @@ func _wait_for_surface(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _attach_capture(payload: Dictionary, args: Dictionary) -> void:
-	var capture_args := {"action": "capture"}
 	var output_path := str(args.get("path", "")).strip_edges()
+	var surface := str(payload.get("surface", "")).strip_edges()
+	payload["capture_surface"] = surface
+
+	var fallback_reasons: Array[String] = []
+	var primary_popup_path := str(payload.get("primary_popup_path", "")).strip_edges()
+	var dialog_path := str(payload.get("dialog_path", "")).strip_edges()
+	if primary_popup_path.is_empty() and dialog_path.is_empty() and SURFACES.has(surface):
+		_apply_capture_surface_context(payload, _observe(surface, _deep_observation_args(args), _search_terms(args)))
+		primary_popup_path = str(payload.get("primary_popup_path", "")).strip_edges()
+		dialog_path = str(payload.get("dialog_path", "")).strip_edges()
+	if not primary_popup_path.is_empty():
+		var popup_result := _call_capture_backend("editor_popup", "capture_popup", primary_popup_path, output_path)
+		if _apply_capture_result(payload, popup_result, "popup", primary_popup_path, fallback_reasons):
+			return
+		fallback_reasons.append("popup_capture_failed")
+
+	if not dialog_path.is_empty():
+		var control_result := _call_capture_backend("editor_ui_control", "capture_control", dialog_path, output_path)
+		if _apply_capture_result(payload, control_result, "control", dialog_path, fallback_reasons):
+			return
+		fallback_reasons.append("control_capture_failed")
+
+	var editor_result := _call_capture_backend("editor_screenshot", "capture", "", output_path)
+	if _apply_capture_result(payload, editor_result, "editor", "", fallback_reasons):
+		return
+
+	payload["capture"] = {}
+	payload["capture_path"] = ""
+	payload["capture_backend"] = "none"
+	payload["capture_target_path"] = ""
+	payload["capture_fallback_reasons"] = fallback_reasons
+	payload["capture_error"] = str(editor_result.get("message", editor_result.get("error", "")))
+
+
+func _apply_capture_surface_context(payload: Dictionary, observation: Dictionary) -> void:
+	for key in ["dialog_found", "dialog_path", "primary_popup_path", "visible_popup_count", "observed_control_count", "total_control_count", "control_limit", "control_truncated"]:
+		if observation.has(key):
+			payload[key] = observation.get(key)
+
+
+func _call_capture_backend(tool_name: String, action: String, target_path: String, output_path: String) -> Dictionary:
+	var capture_args := {"action": action}
+	if not target_path.is_empty():
+		capture_args["target_path"] = target_path
 	if not output_path.is_empty():
 		capture_args["path"] = output_path
-	var capture_result: Dictionary = bridge.call_atomic("editor_screenshot", capture_args)
-	payload["capture"] = capture_result.get("data", {}) if bool(capture_result.get("success", false)) else {}
-	payload["capture_path"] = str(capture_result.get("data", {}).get("path", ""))
+	return bridge.call_atomic(tool_name, capture_args)
+
+
+func _apply_capture_result(payload: Dictionary, capture_result: Dictionary, backend: String, target_path: String, fallback_reasons: Array[String]) -> bool:
 	if not bool(capture_result.get("success", false)):
-		payload["capture_error"] = str(capture_result.get("message", capture_result.get("error", "")))
+		return false
+	payload["capture"] = capture_result.get("data", {})
+	payload["capture_path"] = str(capture_result.get("data", {}).get("path", ""))
+	payload["capture_backend"] = backend
+	payload["capture_target_path"] = target_path
+	if not fallback_reasons.is_empty():
+		payload["capture_fallback_reasons"] = fallback_reasons.duplicate()
+	return true
 
 
 func _observation_limit(args: Dictionary) -> int:

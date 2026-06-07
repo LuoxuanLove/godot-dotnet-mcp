@@ -991,7 +991,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_editor_control_name": "编辑器控制",
 	"tool_system_editor_control_desc": "面向编辑器界面的高层入口，优先使用语义工作流与导航动作，其次使用控件级聚焦、激活、文本、数值与弹窗动作，仅在不支持的 UI、上下文菜单、tooltip 或指针事件验证场景中把控件本地鼠标 / 指针事件作为 fallback。",
 	"tool_system_settings_dialog_name": "设置对话框",
-	"tool_system_settings_dialog_desc": "面向设置类编辑器对话框的高层工作流，可打开 Project Settings 或 Editor Settings、等待可见、搜索设置行、列出或激活设置标签页、列出或聚焦分类树项、列出只读设置行模型、调用 resolve_row 解析唯一可见行、读取当前可见行值、聚焦值编辑控件、设置受支持的可见行值、验证预期可见行值、聚焦结果、截图取证并关闭界面。",
+	"tool_system_settings_dialog_desc": "面向设置类编辑器对话框的高层工作流，可打开 Project Settings 或 Editor Settings、等待可见、搜索设置行、列出或激活设置标签页、列出或聚焦分类树项、列出只读设置行模型、调用 resolve_row 解析唯一可见行、读取当前可见行值、聚焦值编辑控件、设置受支持的可见行值、验证预期可见行值、聚焦结果、优先按可见设置界面的弹窗 / 窗口边界而非整编辑器截图进行取证，并关闭界面。",
 	"tool_system_editor_plugin_control_name": "编辑器插件控制",
 	"tool_system_editor_plugin_control_desc": "检查并切换第三方 EditorPlugin 会话状态，返回 plugin.cfg 元数据、项目设置状态、当前编辑器会话状态、可见 UI 提示和自身插件保护。",
 	"tool_plugin_runtime_name": "运行时",

@@ -874,7 +874,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_editor_control_name": "編輯器控制",
 	"tool_system_editor_control_desc": "面向編輯器介面的高層入口，優先使用語意工作流程與導覽動作，其次使用控制項級聚焦、啟用、文字、數值與彈窗動作，僅在不支援的 UI、上下文選單、tooltip 或指標事件驗證場景中把控制項本地滑鼠 / 指標事件作為 fallback。",
 	"tool_system_settings_dialog_name": "設定對話框",
-	"tool_system_settings_dialog_desc": "面向設定類編輯器對話框的高階工作流程，可打開 Project Settings 或 Editor Settings、等待可見、搜尋設定列、列出或啟用設定分頁、列出或聚焦分類樹項、列出唯讀設定列模型、呼叫 resolve_row 解析唯一可見列、讀取目前可見列值、聚焦值編輯控制項、設定受支援的可見列值、驗證預期可見列值、聚焦結果、截圖取證並關閉介面。",
+	"tool_system_settings_dialog_desc": "面向設定類編輯器對話框的高階工作流程，可打開 Project Settings 或 Editor Settings、等待可見、搜尋設定列、列出或啟用設定分頁、列出或聚焦分類樹項、列出唯讀設定列模型、呼叫 resolve_row 解析唯一可見列、讀取目前可見列值、聚焦值編輯控制項、設定受支援的可見列值、驗證預期可見列值、聚焦結果、優先依可見設定介面的彈窗 / 視窗邊界而非整個編輯器截圖進行取證，並關閉介面。",
 	"tool_system_editor_plugin_control_name": "編輯器插件控制",
 	"tool_system_editor_plugin_control_desc": "檢查並切換第三方 EditorPlugin 會話狀態，回傳 plugin.cfg 中繼資料、專案設定狀態、目前編輯器會話狀態、可見 UI 提示和自身插件保護。",
 	"tool_system_runtime_control_name": "運行時控制",

@@ -20,6 +20,8 @@ Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/AP
 
 `system_editor_control` can now read and crop visible floating popup/window surfaces through `get_popup` and `capture_popup`. That gives clients a direct evidence path for modal editor windows and popup menus before choosing a button, menu item, text field, or close action.
 
+`system_settings_dialog` uses that evidence path automatically when capturing settings surfaces. If the current settings workflow can see a popup or editor window for Project Settings or Editor Settings, capture results now identify the selected backend and target path, and fall back to broader editor screenshots only when narrower surfaces are unavailable.
+
 ### 🧭 Configuration Navigation and Evidence
 
 `system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.
