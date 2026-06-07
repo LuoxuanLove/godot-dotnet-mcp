@@ -257,7 +257,7 @@ func _resolve_surface(args: Dictionary) -> String:
 
 
 func _status(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	return bridge.success(observation, "Settings surface status observed")
 
 
@@ -269,7 +269,7 @@ func _search(surface: String, args: Dictionary) -> Dictionary:
 		search_write = await _write_search_field(surface, args, search_text)
 		if not bool(search_write.get("success", false)):
 			return search_write
-	var observation: Dictionary = _observe(surface, args, query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	observation["workflow"].append({"step": "search", "queries": query_values, "result_count": int(observation.get("result_count", 0))})
 	if not search_write.is_empty():
 		observation["search_field_write"] = search_write.get("data", {})
@@ -283,7 +283,7 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 	var workflow: Array[Dictionary] = []
 	if target_path.is_empty():
 		var query_values: Array[String] = _search_terms(args)
-		var observation: Dictionary = _observe(surface, args, query_values)
+		var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 		workflow.assign(observation.get("workflow", []))
 		target_path = _first_result_path(observation.get("results", []))
 	if target_path.is_empty():
@@ -305,7 +305,7 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 
 func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, args, query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	var rows: Array[Dictionary] = _settings_row_models(observation.get("all_controls", []), surface, query_values, _result_limit(args))
 	var payload: Dictionary = {
 		"surface": surface,
@@ -331,7 +331,7 @@ func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _list_tabs(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
 	tabs_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
 		"step": "list_tabs",
@@ -350,7 +350,7 @@ func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
 	var requested_index := int(args.get("tab_index", -1))
 	if requested_title.is_empty() and requested_index < 0:
 		return bridge.error("tab or tab_index is required for activate_tab")
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	if not bool(observation.get("dialog_found", false)):
 		return bridge.error("Settings surface is not visible for activate_tab: %s" % surface, observation)
 	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
@@ -401,7 +401,7 @@ func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
 
 func _list_categories(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _category_terms(args)
-	var observation: Dictionary = _observe(surface, _category_observation_args(args), [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, query_values, _result_limit(args))
 	var payload: Dictionary = {
 		"surface": surface,
@@ -428,7 +428,7 @@ func _list_categories(surface: String, args: Dictionary) -> Dictionary:
 
 func _focus_category(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _category_terms(args)
-	var observation: Dictionary = _observe(surface, _category_observation_args(args), [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -474,7 +474,7 @@ func _focus_category(surface: String, args: Dictionary) -> Dictionary:
 
 func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -532,7 +532,7 @@ func _set_value(surface: String, args: Dictionary) -> Dictionary:
 	if not args.has("value"):
 		return bridge.error("value is required for set_value")
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -576,7 +576,7 @@ func _set_value(surface: String, args: Dictionary) -> Dictionary:
 		})
 		return bridge.error(str(write_result.get("message", "Settings row value write failed.")), write_payload)
 	await _wait_one_frame()
-	var verification_observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var verification_observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	var after_value: Dictionary = {}
 	var verification: Dictionary = {
 		"success": false,
@@ -647,13 +647,13 @@ func _verify_value(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, _search_terms(args))
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), _search_terms(args))
 	_attach_capture(observation, args)
 	return bridge.success(observation, "Settings surface captured")
 
 
 func _close(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	if target_path.is_empty():
 		target_path = str(observation.get("primary_popup_path", "")).strip_edges()
@@ -672,7 +672,7 @@ func _close(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _open(surface: String, args: Dictionary) -> Dictionary:
-	var current: Dictionary = _observe(surface, args, [])
+	var current: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	if bool(current.get("dialog_found", false)):
 		current["opened"] = true
 		current["already_open"] = true
@@ -701,7 +701,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 					"message": str(wait_result.get("message", wait_result.get("error", "")))
 				})
 				if bool(wait_result.get("success", false)):
-					var observation: Dictionary = _observe(surface, args, _search_terms(args))
+					var observation: Dictionary = _observe(surface, _deep_observation_args(args), _search_terms(args))
 					observation["opened"] = true
 					observation["workflow"] = _merge_workflow(attempts, observation.get("workflow", []))
 					observation["verification"] = wait_result.get("data", {})
@@ -852,7 +852,7 @@ func _primary_search_text(query_values: Array[String]) -> String:
 
 
 func _write_search_field(surface: String, args: Dictionary, text: String) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var search_field_path := str(observation.get("search_field_path", "")).strip_edges()
 	if search_field_path.is_empty():
 		return bridge.error("No search field found for settings surface: %s" % surface, observation)
@@ -1027,13 +1027,7 @@ func _observation_limit(args: Dictionary) -> int:
 	return max(1, int(args.get("limit", 100)))
 
 
-func _read_value_observation_args(args: Dictionary) -> Dictionary:
-	var observed_args := args.duplicate(true)
-	observed_args["limit"] = max(_observation_limit(args), 500)
-	return observed_args
-
-
-func _category_observation_args(args: Dictionary) -> Dictionary:
+func _deep_observation_args(args: Dictionary) -> Dictionary:
 	var observed_args := args.duplicate(true)
 	observed_args["limit"] = max(_observation_limit(args), 500)
 	return observed_args
@@ -1806,12 +1800,12 @@ func _settings_category_tree_rows(rows: Array) -> Array[Dictionary]:
 			continue
 		if not bool(dict.get("visible", true)):
 			continue
-		if _is_settings_category_tree_row(dict):
+		if _is_settings_category_tree_row(dict, rows):
 			trees.append(dict.duplicate(true))
 	return trees
 
 
-func _is_settings_category_tree_row(row: Dictionary) -> bool:
+func _is_settings_category_tree_row(row: Dictionary, rows: Array) -> bool:
 	var hints: Array[String] = [
 		str(row.get("path", row.get("node_path", ""))),
 		str(row.get("name", "")),
@@ -1826,6 +1820,100 @@ func _is_settings_category_tree_row(row: Dictionary) -> bool:
 		if normalized.is_empty():
 			continue
 		if normalized.contains("category") or normalized.contains("categories"):
+			return true
+	if _has_sectioned_inspector_context(row, rows):
+		return true
+	return false
+
+
+func _has_sectioned_inspector_context(row: Dictionary, rows: Array) -> bool:
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	var parent_path := str(row.get("parent_path", "")).strip_edges()
+	if path.is_empty():
+		return false
+	if _is_under_editor_inspector(path, rows):
+		return false
+	var sectioned_root := _nearest_sectioned_inspector_path(path, parent_path, rows)
+	if sectioned_root.is_empty():
+		return false
+	return _sectioned_inspector_has_editor_inspector(sectioned_root, rows)
+
+
+func _nearest_sectioned_inspector_path(path: String, parent_path: String, rows: Array) -> String:
+	var candidate_paths: Array[String] = [path, parent_path]
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty():
+			continue
+		if not (path == row_path or path.begins_with("%s/" % row_path) or parent_path == row_path or parent_path.begins_with("%s/" % row_path)):
+			continue
+		candidate_paths.append(row_path)
+	candidate_paths.sort_custom(func(a: String, b: String) -> bool: return a.length() > b.length())
+	for candidate in candidate_paths:
+		if _path_or_row_mentions_sectioned_inspector(candidate, rows):
+			return candidate
+	return ""
+
+
+func _path_or_row_mentions_sectioned_inspector(path: String, rows: Array) -> bool:
+	var normalized := path.to_lower()
+	if normalized.ends_with("/sectionedinspector") or normalized.ends_with("/sectioned_inspector") or normalized == "sectionedinspector" or normalized == "sectioned_inspector":
+		return true
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path != path:
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("sectionedinspector") or hints.contains("sectioned_inspector"):
+			return true
+	return false
+
+
+func _sectioned_inspector_has_editor_inspector(sectioned_root: String, rows: Array) -> bool:
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty() or not (row_path == sectioned_root or row_path.begins_with("%s/" % sectioned_root)):
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("editorinspector") or hints.contains("editor_inspector"):
+			return true
+	return false
+
+
+func _is_under_editor_inspector(path: String, rows: Array) -> bool:
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty() or not path.begins_with("%s/" % row_path):
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("editorinspector") or hints.contains("editor_inspector"):
 			return true
 	return false
 

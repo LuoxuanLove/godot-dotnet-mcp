@@ -152,7 +152,12 @@ class FakeBridge extends RefCounted:
 			if project_filter_text.is_empty():
 				for index in range(12):
 					rows.append({"path": "/root/ProjectSettings/General/VisibleRow%s" % index, "parent_path": "/root/ProjectSettings/General", "class": "HBoxContainer", "text": "Visible Row %s" % index, "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
-			rows.append({"path": "/root/ProjectSettings/CategoryTree", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Category Tree", "visible": true, "enabled": true, "child_count": 3})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector", "parent_path": "/root/ProjectSettings", "class": "SectionedInspector", "name": "SectionedInspector", "visible": true, "enabled": true, "child_count": 2})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Left", "parent_path": "/root/ProjectSettings/SectionedInspector", "class": "VBoxContainer", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Left/Sections", "parent_path": "/root/ProjectSettings/SectionedInspector/Left", "class": "Tree", "visible": true, "enabled": true, "child_count": 3})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right", "parent_path": "/root/ProjectSettings/SectionedInspector", "class": "VBoxContainer", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/Inspector", "parent_path": "/root/ProjectSettings/SectionedInspector/Right", "class": "EditorInspector", "name": "EditorInspector", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/Inspector/SettingsTree", "parent_path": "/root/ProjectSettings/SectionedInspector/Right/Inspector", "class": "Tree", "name": "Settings Tree", "visible": true, "enabled": true, "child_count": 1})
 			rows.append({"path": "/root/ProjectSettings/SettingsList", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Settings List", "visible": true, "enabled": true, "child_count": 2})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
@@ -187,7 +192,7 @@ class FakeBridge extends RefCounted:
 		return rows
 
 	func _visible_tree_items(target_path: String) -> Array[Dictionary]:
-		if target_path == "/root/ProjectSettings/CategoryTree":
+		if target_path == "/root/ProjectSettings/SectionedInspector/Left/Sections":
 			return [
 				{"index": 0, "text": "Application", "item_path": "Application", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 2},
 				{"index": 1, "text": "Config", "item_path": "Application/Config", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
@@ -199,6 +204,10 @@ class FakeBridge extends RefCounted:
 			return [
 				{"index": 0, "text": "Advanced Settings", "item_path": "Advanced Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
 				{"index": 1, "text": "Project Settings", "item_path": "Project Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		if target_path == "/root/ProjectSettings/SectionedInspector/Right/Inspector/SettingsTree":
+			return [
+				{"index": 0, "text": "Inspector Settings", "item_path": "Inspector Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
 			]
 		if target_path == "/root/EditorSettings/CategoryTree":
 			return [
@@ -425,11 +434,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var category_data: Dictionary = listed_categories.get("data", {})
 	if int(category_data.get("category_count", 0)) != 3:
 		return _failure("list_categories should return matching visible category tree items.")
-	if str(category_data.get("tree_control_path", "")) != "/root/ProjectSettings/CategoryTree":
-		return _failure("list_categories should report the category tree control path.")
+	if str(category_data.get("tree_control_path", "")) != "/root/ProjectSettings/SectionedInspector/Left/Sections":
+		return _failure("list_categories should report the SectionedInspector category tree control path.")
 	var project_categories: Array = category_data.get("categories", [])
 	if _find_category_by_path(project_categories, "Advanced Settings").is_empty() == false:
 		return _failure("list_categories must not include items from non-category settings Tree controls.")
+	if _find_category_by_path(project_categories, "Inspector Settings").is_empty() == false:
+		return _failure("list_categories must not include Tree items nested under the settings EditorInspector.")
 	var config_category := _find_category_by_path(project_categories, "Application/Config")
 	if config_category.is_empty():
 		return _failure("list_categories should preserve nested category_path evidence.")
