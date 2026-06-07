@@ -21,7 +21,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "tool_activity",
-			"description": "TOOL ACTIVITY: Inspect current and recent MCP tool calls. ACTIONS: status, recent, get. Reports running calls, recent completions, execution order, lightweight scheduling state, and optional self-reported agent context supplied through _mcp_context.",
+			"description": "TOOL ACTIVITY: Inspect current and recent MCP tool calls. ACTIONS: status, recent, get. Reports running calls, recent completions, execution order, query filters, slow-call and failure diagnostics, lightweight scheduling state, and optional self-reported agent context supplied through _mcp_context.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -37,6 +37,23 @@ func get_tools() -> Array[Dictionary]:
 					"limit": {
 						"type": "integer",
 						"description": "Maximum recent calls to return for action=recent."
+					},
+					"state": {
+						"type": "string",
+						"enum": ["running", "completed", "failed"],
+						"description": "Optional state filter for action=status or action=recent."
+					},
+					"tool": {
+						"type": "string",
+						"description": "Optional case-insensitive tool, category, action, or tool_name filter for action=status or action=recent."
+					},
+					"threshold_ms": {
+						"type": "number",
+						"description": "Optional slow-call threshold in milliseconds for action=status or action=recent diagnostics."
+					},
+					"failure_limit": {
+						"type": "integer",
+						"description": "Maximum recent failed calls to include in action=status or action=recent diagnostics."
 					}
 				}
 			}
@@ -55,10 +72,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		action = "status"
 	match action:
 		"status":
-			return _success(registry.get_status(), "Tool activity status fetched")
+			return _success(registry.get_status(_query_options(args)), "Tool activity status fetched")
 		"recent":
 			var limit := int(args.get("limit", 20))
-			return _success(registry.get_recent(limit), "Recent tool activity fetched")
+			return _success(registry.get_recent(limit, _query_options(args)), "Recent tool activity fetched")
 		"get":
 			var call_id := str(args.get("call_id", "")).strip_edges()
 			if call_id.is_empty():
@@ -68,6 +85,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _error("invalid_argument", "Unknown tool_activity action: %s" % action, {
 				"valid_actions": ["status", "recent", "get"]
 			})
+
+
+func _query_options(args: Dictionary) -> Dictionary:
+	var options := {}
+	for key in ["state", "tool", "threshold_ms", "failure_limit"]:
+		if args.has(key):
+			options[key] = args[key]
+	return options
 
 
 func _get_registry():

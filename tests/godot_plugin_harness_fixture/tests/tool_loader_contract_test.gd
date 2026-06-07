@@ -228,6 +228,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var activity_data = activity_result.get("data", {})
 	if not (activity_data is Dictionary) or not (activity_data as Dictionary).has("running_count"):
 		return _failure("Tool loader system_tool_activity should return activity counts.")
+	var filtered_activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {
+		"action": "recent",
+		"state": "completed",
+		"tool": "project_state",
+		"threshold_ms": 0.0,
+		"failure_limit": 1,
+		"limit": 5
+	})
+	if not bool(filtered_activity_result.get("success", false)):
+		return _failure("Tool loader should route filtered system_tool_activity queries successfully.")
+	var filtered_activity_data = filtered_activity_result.get("data", {})
+	if not (filtered_activity_data is Dictionary) or int((filtered_activity_data as Dictionary).get("filtered_recent_count", 0)) <= 0:
+		return _failure("Tool loader filtered system_tool_activity should return matching recent calls.")
+	var filtered_activity_filters = (filtered_activity_data as Dictionary).get("filters", {})
+	if not (filtered_activity_filters is Dictionary) or str((filtered_activity_filters as Dictionary).get("state", "")) != "completed":
+		return _failure("Tool loader filtered system_tool_activity should echo applied filters.")
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):

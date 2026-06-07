@@ -21,6 +21,7 @@ Target version: 1.2.1.
 - Added read-only `system_settings_dialog(action=focus_value)` value-editor focusing for unique visible settings rows, moving editor focus to the value control without writing setting values.
 - Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
 - Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
+- Added `system_tool_activity` query filters and slow/failure diagnostics so clients can inspect running or recent calls by state, tool, and slow-call threshold without fetching unrelated activity records.
 
 ### Internal
 
@@ -28,6 +29,7 @@ Target version: 1.2.1.
 - Extended the editor UI control atomic layer with Tree item listing/selection coverage for settings-dialog category navigation.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+- Extended tool activity registry and loader contracts to cover filtered status/recent queries, live running durations, slow-call summaries, and bounded recent failure summaries.
 
 ## [1.2.0] - 2026-06-06
 
