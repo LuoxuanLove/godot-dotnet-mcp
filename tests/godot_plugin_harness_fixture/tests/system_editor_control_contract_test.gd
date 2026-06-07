@@ -422,6 +422,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate set_value.")
 	if int(set_value_result.get("data", {}).get("value", 0)) != 42:
 		return _failure("system editor_control should preserve set_value numeric payload.")
+	var missing_value_result: Dictionary = impl.execute("editor_control", {
+		"action": "set_value",
+		"target_path": "/root/Editor/SearchPanel/NumericValue"
+	})
+	if bool(missing_value_result.get("success", false)):
+		return _failure("system editor_control set_value should reject missing value instead of defaulting to zero.")
+	if not str(missing_value_result.get("message", "")).contains("value is required"):
+		return _failure("system editor_control set_value missing value should report a required value error.")
 
 	var plugin_list_result: Dictionary = impl.execute("editor_plugin_control", {"action": "list"})
 	if not bool(plugin_list_result.get("success", false)) or int(plugin_list_result.get("data", {}).get("count", 0)) != 1:

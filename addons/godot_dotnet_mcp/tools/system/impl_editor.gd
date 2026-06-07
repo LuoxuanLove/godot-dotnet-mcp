@@ -391,10 +391,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"text": str(args.get("text", ""))
 			})
 		"set_value":
+			if not args.has("value"):
+				return bridge.error("value is required for set_value")
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "set_value",
 				"target_path": str(args.get("target_path", "")).strip_edges(),
-				"value": args.get("value", 0)
+				"value": args.get("value")
 			})
 		"list_popups":
 			return bridge.call_atomic("editor_popup", {"action": "list_visible"})

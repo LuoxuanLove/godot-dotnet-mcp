@@ -1191,6 +1191,11 @@ func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
 				var candidate_path := str((candidate as Dictionary).get("path", (candidate as Dictionary).get("node_path", ""))).strip_edges()
 				if candidate_path == value_path:
 					return (candidate as Dictionary).duplicate(true)
+	var row_editor_type := str(row.get("value_editor_type", "unknown"))
+	if row_editor_type == "unknown":
+		row_editor_type = _value_editor_type_hint(row)
+	if row_editor_type in ["text", "bool", "number", "enum", "color"]:
+		return row.duplicate(true)
 	var row_path := str(row.get("row_control_path", "")).strip_edges()
 	if row_path.is_empty():
 		return {}

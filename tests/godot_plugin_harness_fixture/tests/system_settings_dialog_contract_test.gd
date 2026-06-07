@@ -16,6 +16,7 @@ class FakeBridge extends RefCounted:
 	var use_custom_user_dir := true
 	var snap_2d_transforms_to_pixel := false
 	var max_renderable_elements := 128000.0
+	var direct_spin_value := 3.0
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -53,6 +54,9 @@ class FakeBridge extends RefCounted:
 						if target_path.ends_with("/MaxRenderableElements/Value"):
 							max_renderable_elements = float(args.get("value", 0.0))
 							return success({"target_path": target_path, "value": max_renderable_elements})
+						if target_path.ends_with("/DirectSpin"):
+							direct_spin_value = float(args.get("value", 0.0))
+							return success({"target_path": target_path, "value": direct_spin_value})
 						return error("Value target not found")
 					"activate_control":
 						var target_path := str(args.get("target_path", ""))
@@ -134,6 +138,8 @@ class FakeBridge extends RefCounted:
 			if project_filter_text.contains("rendering/limits/rendering/max_renderable_elements"):
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering", "class": "HBoxContainer", "text": "Max Renderable Elements", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": max_renderable_elements, "text": str(max_renderable_elements), "visible": true, "disabled": false})
+			if project_filter_text.contains("editor/direct_spin"):
+				rows.append({"path": "/root/ProjectSettings/General/Editor/DirectSpin", "parent_path": "/root/ProjectSettings/General/Editor", "class": "SpinBox", "setting_path": "editor/direct_spin", "value": direct_spin_value, "text": str(direct_spin_value), "visible": true, "disabled": false})
 			if project_filter_text.contains("application/run/main_scene"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene", "parent_path": "/root/ProjectSettings/General/Application/Run", "class": "HBoxContainer", "text": "Main Scene", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene/Value", "parent_path": "/root/ProjectSettings/General/Application/Run/MainScene", "class": "OptionButton", "text": "res://Main.tscn", "selected": 2, "visible": true, "disabled": false})
@@ -390,6 +396,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("set_value should verify the updated number value.")
 	if str(set_number_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_value":
 		return _failure("set_value should use editor_ui_control.set_value for number rows.")
+	await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "project_settings",
+		"setting_path": "editor/direct_spin",
+		"limit": 10
+	})
+	var set_direct_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "editor/direct_spin",
+		"value": 7,
+		"limit": 10
+	})
+	if not bool(set_direct_value.get("success", false)):
+		return _failure("set_value should update a unique row that is itself a writable value control.")
+	if str(set_direct_value.get("data", {}).get("write", {}).get("value_control_path", "")) != "/root/ProjectSettings/General/Editor/DirectSpin":
+		return _failure("set_value should target the direct value row when no child value control exists.")
+	if float(set_direct_value.get("data", {}).get("after", {}).get("value", 0.0)) != 7.0:
+		return _failure("set_value should verify direct value row updates.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
