@@ -369,6 +369,15 @@ class FakeUiControl:
 		text = value
 
 
+class FakeNumericUiControl:
+	extends FakeUiControl
+
+	var value := 0.0
+
+	func _init(node_name: String = "", ui_class: String = "SpinBox", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		super(node_name, ui_class, rect)
+
+
 class FakePopupMenuControl:
 	extends FakeUiControl
 
@@ -646,6 +655,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
+	var numeric_value := FakeNumericUiControl.new("NumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	numeric_value.value = 5.0
 	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
 	project_menu.get_popup().add_item("Project Settings...", 101)
 	project_menu.get_popup().add_item("Export...", 102)
@@ -695,6 +706,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	mcp_dock.add_child(mcp_tabs)
 	search_panel.add_child(search_field)
 	search_panel.add_child(refresh_button)
+	search_panel.add_child(numeric_value)
 	popup_root.add_child(popup_button)
 	popup_root.add_child(popup_input)
 	editor_interface.get_base_control().add_popup_child(popup_root)
@@ -848,6 +860,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var search_field_path := str(search_field.get_path())
 	var refresh_button_path := str(refresh_button.get_path())
+	var numeric_value_path := str(numeric_value.get_path())
 	var list_controls_result: Dictionary = executor.execute("ui_control", {
 		"action": "list_visible",
 		"class_name": "LineEdit"
@@ -884,6 +897,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control set_text failed through the split service path.")
 	if search_field.text != "Player":
 		return _failure("Editor ui_control set_text should update the target control text.")
+	var numeric_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "get_control",
+		"target_path": numeric_value_path
+	})
+	if not bool(numeric_control_result.get("success", false)):
+		return _failure("Editor ui_control get_control should inspect numeric controls.")
+	if not (numeric_control_result.get("data", {}).get("control", {}).get("actionable", []) as Array).has("set_value"):
+		return _failure("Editor ui_control actionable metadata should expose set_value for value controls.")
+	var set_value_result: Dictionary = executor.execute("ui_control", {
+		"action": "set_value",
+		"target_path": numeric_value_path,
+		"value": 12
+	})
+	if not bool(set_value_result.get("success", false)):
+		return _failure("Editor ui_control set_value failed through the split service path.")
+	if float(numeric_value.value) != 12.0:
+		return _failure("Editor ui_control set_value should update the target control value.")
 
 	var wait_exists_result: Dictionary = executor.execute("ui_control", {
 		"action": "wait_for_ui",
@@ -1067,6 +1097,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_ui should capture the activated tab when path is provided.")
 	if not str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
 		return _failure("Editor ui_control activate_ui should normalize root-level user:// PNG paths into the managed control capture directory.")
+	var tab_summary_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_visible",
+		"class_name": "TabContainer",
+		"include_hidden": true
+	})
+	if not bool(tab_summary_result.get("success", false)):
+		return _failure("Editor ui_control list_visible should enumerate TabContainer controls.")
+	var tab_summary := _find_control_summary(tab_summary_result.get("data", {}).get("controls", []), tab_container_path)
+	if tab_summary.is_empty():
+		return _failure("Editor ui_control list_visible should include the MCP TabContainer.")
+	if int(tab_summary.get("tab_count", 0)) != 3 or int(tab_summary.get("current_tab_index", -1)) != 2:
+		return _failure("Editor ui_control list_visible should expose TabContainer count and current index metadata.")
+	var tab_entries: Array = tab_summary.get("tabs", [])
+	if tab_entries.size() != 3 or not bool((tab_entries[2] as Dictionary).get("current", false)) or str((tab_entries[2] as Dictionary).get("title", "")) != "配置":
+		return _failure("Editor ui_control list_visible should expose TabContainer tab title/current metadata.")
 
 	var activate_semantic_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",
@@ -1552,6 +1597,13 @@ func _has_plugin_summary(plugins: Array, plugin_name: String) -> bool:
 		if plugin is Dictionary and str((plugin as Dictionary).get("plugin", (plugin as Dictionary).get("name", ""))) == plugin_name:
 			return (plugin as Dictionary).has("editor_enabled") and (plugin as Dictionary).has("setting_enabled")
 	return false
+
+
+func _find_control_summary(controls: Array, path: String) -> Dictionary:
+	for control in controls:
+		if control is Dictionary and str((control as Dictionary).get("path", "")) == path:
+			return control as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:

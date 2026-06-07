@@ -355,6 +355,7 @@ ACTIONS:
 - hover_control: Dispatch mouse motion to local_x/local_y inside a control
 - leave_control: Dispatch mouse motion outside a control, or to explicit local_x/local_y when provided
 - set_text: Write text into a text-editing control
+- set_value: Write a numeric value into a value-editing control
 
 EXAMPLES:
 - List controls: {"action": "list_visible", "class_name": "LineEdit"}
@@ -373,13 +374,14 @@ EXAMPLES:
 - Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Hover control row: {"action": "hover_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Leave control row: {"action": "leave_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree"}
-- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
+- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}
+- Set numeric value: {"action": "set_value", "target_path": "/root/Editor/Settings/Row/Value", "value": 42}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text", "set_value"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -429,6 +431,10 @@ EXAMPLES:
 					"text": {
 						"type": "string",
 						"description": "Text for set_text"
+					},
+					"value": {
+						"type": "number",
+						"description": "Numeric value for set_value"
 					},
 					"local_x": {
 						"type": "number",
