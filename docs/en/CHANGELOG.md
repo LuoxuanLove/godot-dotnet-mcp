@@ -30,6 +30,10 @@ Target version: 1.2.1.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
 
+### Fixed
+
+- Hardened MCP resource diagnostics redaction so mixed-case URL credentials and sensitive text markers are masked before resource outputs are reported.
+
 ## [1.2.0] - 2026-06-06
 
 ### Added
