@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "system_settings_dialog_contracts"}
 
 const SettingsDialogImplScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_settings_dialog.gd")
+const VALUE_PAYLOAD_KEYS = ["text", "value", "value_text", "value_editor_type", "value_source", "pressed", "button_pressed", "selected", "selected_index"]
 
 
 class FakeBridge extends RefCounted:
@@ -229,6 +230,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resolve_row should expose the matching value control path.")
 	if str(resolved_row_data.get("resolution", {}).get("selector", {}).get("setting_path", "")) != "application/config/name":
 		return _failure("resolve_row should preserve selector evidence.")
+	if _has_value_payload_key(resolved_row_data.get("row", {})):
+		return _failure("resolve_row should not expose value-bearing fields through the row payload.")
+	if _has_value_payload_key(resolved_row_data.get("value_control", {})):
+		return _failure("resolve_row should not expose value-bearing fields through the value control payload.")
 	if _has_call_since(fake.calls, calls_before_resolve_row, "editor_ui_control", "set_text"):
 		return _failure("resolve_row must not write the settings search field.")
 
@@ -242,6 +247,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resolve_row should resolve a value child target_path back to its setting row.")
 	if str(resolved_by_value_path.get("data", {}).get("row_control_path", "")) != "/root/ProjectSettings/General/Application/Config/Name":
 		return _failure("resolve_row value child resolution should return the row path.")
+	var resolved_by_value_text := impl.execute("settings_dialog", {
+		"action": "resolve_row",
+		"surface": "project_settings",
+		"query": "Example",
+		"limit": 10
+	})
+	if bool(resolved_by_value_text.get("success", false)):
+		return _failure("resolve_row should not match rows by current value text.")
+	if str(resolved_by_value_text.get("message", "")).contains("read_value"):
+		return _failure("resolve_row value-text miss should not mention read_value in the public message.")
 
 	var calls_before_read_value := fake.calls.size()
 	var read_value := impl.execute("settings_dialog", {
@@ -383,6 +398,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resolve_row should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_resolve.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("resolve_row ambiguous failure should report the ambiguous_row reason.")
+	if str(ambiguous_resolve.get("message", "")).contains("read_value"):
+		return _failure("resolve_row ambiguous failure should not mention read_value in the public message.")
+	var ambiguous_resolve_data: Dictionary = ambiguous_resolve.get("data", {})
+	if ambiguous_resolve_data.has("all_controls") or ambiguous_resolve_data.has("results"):
+		return _failure("resolve_row ambiguous failure should not expose raw observed controls or results.")
+	if _has_value_payload_key(ambiguous_resolve_data.get("resolution", {})):
+		return _failure("resolve_row ambiguous failure should not expose value-bearing fields through resolution candidates.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
@@ -469,6 +491,22 @@ func _has_menu_item_call(calls: Array, item_text: String) -> bool:
 	for call in calls:
 		if str(call.get("tool", "")) == "editor_ui_control" and str(call.get("action", "")) == "select_menu_item":
 			if str(call.get("args", {}).get("item_text", "")) == item_text:
+				return true
+	return false
+
+
+func _has_value_payload_key(value) -> bool:
+	if value is Dictionary:
+		var dict := value as Dictionary
+		for key in dict.keys():
+			if VALUE_PAYLOAD_KEYS.has(str(key)):
+				return true
+			if _has_value_payload_key(dict.get(key)):
+				return true
+		return false
+	if value is Array:
+		for item in value:
+			if _has_value_payload_key(item):
 				return true
 	return false
 
