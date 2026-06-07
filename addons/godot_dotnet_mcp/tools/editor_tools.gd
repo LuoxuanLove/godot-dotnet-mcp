@@ -355,6 +355,7 @@ ACTIONS:
 - hover_control: Dispatch mouse motion to local_x/local_y inside a control
 - leave_control: Dispatch mouse motion outside a control, or to explicit local_x/local_y when provided
 - set_text: Write text into a text-editing control
+- set_value: Write a numeric value into a value-editing control
 
 EXAMPLES:
 - List controls: {"action": "list_visible", "class_name": "LineEdit"}
@@ -373,13 +374,14 @@ EXAMPLES:
 - Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Hover control row: {"action": "hover_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Leave control row: {"action": "leave_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree"}
-- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}""",
+- Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}
+- Set numeric value: {"action": "set_value", "target_path": "/root/Editor/Settings/Row/Value", "value": 42}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text"],
+						"enum": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text", "set_value"],
 						"description": "UI control action"
 					},
 					"title": {
@@ -430,6 +432,10 @@ EXAMPLES:
 						"type": "string",
 						"description": "Text for set_text"
 					},
+					"value": {
+						"type": "number",
+						"description": "Numeric value for set_value"
+					},
 					"local_x": {
 						"type": "number",
 						"description": "Control-local X coordinate for click_control/right_click_control/hover_control/leave_control; defaults to the control center"
@@ -464,10 +470,12 @@ EXAMPLES:
 		},
 		{
 			"name": "popup",
-			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups, including popup rect/text/parent metadata and PopupMenu items, and perform minimal safe interactions.
+			"description": """EDITOR POPUP CONTROL: Enumerate visible floating editor popups, fetch one popup summary, capture a popup screenshot, and perform minimal safe interactions.
 
 ACTIONS:
 - list_visible: List visible popup/window roots and actionable children with rect/text/parent metadata
+- get_popup: Read one visible popup/window root summary by target_path
+- capture_popup: Capture a screenshot cropped to one visible popup/window root
 - press_button: Activate a popup button by target_path
 - select_item: Select a visible PopupMenu item by target_path plus index, id, or exact text
 - set_text: Set text on a popup LineEdit/TextEdit by target_path
@@ -475,6 +483,8 @@ ACTIONS:
 
 EXAMPLES:
 - List popups: {"action": "list_visible"}
+- Get popup: {"action": "get_popup", "target_path": "/root/Editor/SearchDialog"}
+- Capture popup: {"action": "capture_popup", "target_path": "/root/Editor/SearchDialog"}
 - Press button: {"action": "press_button", "target_path": "/root/Editor/ConfirmDialog/OkButton"}
 - Select menu item: {"action": "select_item", "target_path": "/root/Editor/ContextMenu", "text": "Rename"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchDialog/Input", "text": "Player"}
@@ -484,7 +494,7 @@ EXAMPLES:
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["list_visible", "press_button", "select_item", "set_text", "close_popup"],
+						"enum": ["list_visible", "get_popup", "capture_popup", "press_button", "select_item", "set_text", "close_popup"],
 						"description": "Popup action"
 					},
 					"target_path": {
@@ -502,6 +512,10 @@ EXAMPLES:
 					"id": {
 						"type": "integer",
 						"description": "PopupMenu item id for select_item"
+					},
+					"path": {
+						"type": "string",
+						"description": "Output screenshot path for capture_popup"
 					}
 				},
 				"required": ["action"]
