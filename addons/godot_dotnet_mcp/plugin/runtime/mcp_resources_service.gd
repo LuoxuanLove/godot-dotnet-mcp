@@ -18,11 +18,12 @@ const REDACTED_VALUE := "[redacted]"
 const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
 const SENSITIVE_TEXT_KEYS := [
 	"token", "password", "secret",
-	"api_key", "apikey", "api-key", "x-api-key", "x.api.key",
+	"api_key", "apikey", "api-key", "apiKey", "x-api-key", "x.api.key", "xApiKey",
 	"authorization", "credential",
-	"private_key", "private-key",
-	"access_token", "access-token",
-	"refresh_token", "refresh-token"
+	"private_key", "private-key", "privateKey",
+	"access_token", "access-token", "accessToken",
+	"refresh_token", "refresh-token", "refreshToken",
+	"client_secret", "client-secret", "clientSecret"
 ]
 const URL_SCHEME_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
 const URL_SCHEME_FIRST_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

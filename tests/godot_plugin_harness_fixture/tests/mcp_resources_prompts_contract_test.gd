@@ -90,6 +90,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	MCPDebugBufferScript.record("warning", "contract", "x-api-key : header-secret", "", {})
 	MCPDebugBufferScript.record("warning", "contract", "api-key = hyphen-secret", "", {})
 	MCPDebugBufferScript.record("warning", "contract", "{\"access-token\" : \"json-secret\"}", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "{accessToken:camel-access-secret}", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "refreshToken = camel-refresh-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "apiKey=camel-api-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "privateKey : camel-private-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "clientSecret=camel-client-secret", "", {})
 	MCPDebugBufferScript.record(
 		"warning",
 		"contract",
@@ -113,7 +118,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
 	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2") or diagnostics_text.contains("top-secret-bearer"):
 		return _failure("diagnostics summary resource should redact sensitive log content.")
-	for leaked_secret in ["super-url-secret", "upper-url-secret", "ws-url-secret", "postgres-url-secret", "redis-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
+	for leaked_secret in ["super-url-secret", "upper-url-secret", "ws-url-secret", "postgres-url-secret", "redis-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "camel-access-secret", "camel-refresh-secret", "camel-api-secret", "camel-private-secret", "camel-client-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
 		if diagnostics_text.contains(leaked_secret):
 			return _failure("diagnostics summary resource should redact extended sensitive pattern: %s." % leaked_secret)
 	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("still-visible") or not diagnostics_text.contains("[redacted]"):
