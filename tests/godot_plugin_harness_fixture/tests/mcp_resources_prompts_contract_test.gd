@@ -24,12 +24,13 @@ const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 
 var _server = null
 var _temp_paths: Array[String] = []
+var _previous_language := ""
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var localization = LocalizationServiceScript.get_instance()
-	var previous_language := localization.get_language() if localization != null else "en"
 	if localization != null:
+		_previous_language = localization.get_language()
 		localization.set_language("zh_CN")
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
@@ -301,8 +302,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(((invalid_stdio_tool_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
 		return _failure("stdio tools/call non-object arguments should preserve the validation message.")
 	stdio_server.free()
-	if localization != null:
-		localization.set_language(previous_language)
+	_restore_language()
 
 	return {
 		"name": "mcp_resources_prompts_contracts",
@@ -318,9 +318,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(tree: SceneTree) -> void:
-	var localization = LocalizationServiceScript.get_instance()
-	if localization != null:
-		localization.set_language("en")
+	_restore_language()
 	for path in _temp_paths:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
@@ -340,6 +338,15 @@ func cleanup_case(tree: SceneTree) -> void:
 	_server = null
 	await tree.process_frame
 	await tree.process_frame
+
+
+func _restore_language() -> void:
+	if _previous_language.is_empty():
+		return
+	var localization = LocalizationServiceScript.get_instance()
+	if localization != null:
+		localization.set_language(_previous_language)
+	_previous_language = ""
 
 
 func _json_rpc(method: String, params: Dictionary, id: int) -> Dictionary:
