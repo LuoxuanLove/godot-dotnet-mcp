@@ -178,6 +178,9 @@ class FakeBridge extends RefCounted:
 				rows.append({"path": "/root/ProjectSettings/General/Editor/DirectSpin", "parent_path": "/root/ProjectSettings/General/Editor", "class": "SpinBox", "setting_path": "editor/direct_spin", "value": direct_spin_value, "text": str(direct_spin_value), "visible": true, "disabled": false})
 			if project_filter_text.contains("editor/plain_label"):
 				rows.append({"path": "/root/ProjectSettings/General/Editor/PlainLabel", "parent_path": "/root/ProjectSettings/General/Editor", "class": "HBoxContainer", "setting_path": "editor/plain_label", "text": "Plain Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
+			if project_filter_text.contains("editor/display_value_label"):
+				rows.append({"path": "/root/ProjectSettings/General/Editor/DisplayValueLabel", "parent_path": "/root/ProjectSettings/General/Editor", "class": "HBoxContainer", "setting_path": "editor/display_value_label", "text": "Display Value Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 1})
+				rows.append({"path": "/root/ProjectSettings/General/Editor/DisplayValueLabel/Value", "parent_path": "/root/ProjectSettings/General/Editor/DisplayValueLabel", "class": "Label", "text": "Read only", "visible": true, "disabled": false})
 			if project_filter_text.contains("application/run/main_scene"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene", "parent_path": "/root/ProjectSettings/General/Application/Run", "class": "HBoxContainer", "text": "Main Scene", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene/Value", "parent_path": "/root/ProjectSettings/General/Application/Run/MainScene", "class": "OptionButton", "text": "res://Main.tscn", "selected": 2, "visible": true, "disabled": false})
@@ -809,6 +812,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var focus_plain_label_step: Dictionary = focus_plain_label_workflow[focus_plain_label_workflow.size() - 1] if not focus_plain_label_workflow.is_empty() else {}
 	if str(focus_plain_label_step.get("reason", "")) != "value_control_not_found":
 		return _failure("focus_value plain-row failure should report value_control_not_found.")
+
+	await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "project_settings",
+		"setting_path": "editor/display_value_label",
+		"limit": 10
+	})
+	var focus_display_value_label := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "editor/display_value_label",
+		"limit": 10
+	})
+	if bool(focus_display_value_label.get("success", false)):
+		return _failure("focus_value should not focus a display-only /Value label.")
+	var focus_display_value_workflow: Array = focus_display_value_label.get("data", {}).get("workflow", [])
+	var focus_display_value_step: Dictionary = focus_display_value_workflow[focus_display_value_workflow.size() - 1] if not focus_display_value_workflow.is_empty() else {}
+	if str(focus_display_value_step.get("reason", "")) != "value_control_not_found":
+		return _failure("focus_value display-only value failure should report value_control_not_found.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",

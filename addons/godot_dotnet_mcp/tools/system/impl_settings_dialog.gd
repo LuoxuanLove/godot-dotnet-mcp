@@ -565,7 +565,7 @@ func _focus_value(surface: String, args: Dictionary) -> Dictionary:
 		return bridge.error(str(row_resolution.get("message", "No unique settings row matched focus_value.")), error_payload)
 	var row: Dictionary = row_resolution.get("row", {})
 	var value_payload: Dictionary = _read_row_value(row, all_controls)
-	var focus_control: Dictionary = _value_control_for_row(row, all_controls)
+	var focus_control: Dictionary = _focusable_value_control_for_row(row, all_controls)
 	var value_path := str(focus_control.get("path", focus_control.get("node_path", focus_control.get("row_control_path", "")))).strip_edges()
 	if value_path.is_empty():
 		var missing_value_payload := observation.duplicate(true)
@@ -1651,6 +1651,18 @@ func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
 		var candidate_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges().to_lower()
 		if candidate_path.ends_with("/value") or _value_editor_type_hint(dict) != "unknown":
 			return dict.duplicate(true)
+	return {}
+
+
+func _focusable_value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
+	var value_control := _value_control_for_row(row, rows)
+	if value_control.is_empty():
+		return {}
+	var editor_type := str(value_control.get("value_editor_type", "unknown"))
+	if editor_type == "unknown":
+		editor_type = _value_editor_type_hint(value_control)
+	if editor_type in ["text", "bool", "number", "enum", "color"]:
+		return value_control
 	return {}
 
 
