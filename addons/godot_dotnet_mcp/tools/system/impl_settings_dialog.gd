@@ -147,7 +147,7 @@ func get_tools() -> Array[Dictionary]:
 					"capture_policy": {
 						"type": "string",
 						"enum": ["none", "final", "on_failure", "always"],
-						"description": "Capture policy for run_task: none disables evidence capture, final captures the final task payload, on_failure captures only failed tasks, and always currently captures final evidence while requiring the task to be capture-ready"
+						"description": "Capture policy for run_task: none disables evidence capture, final attempts capture on successful completion, on_failure attempts capture only for failed tasks, and always attempts capture for both success and failure. Use require_capture=true when missing capture evidence should fail the task."
 					},
 					"require_capture": {
 						"type": "boolean",

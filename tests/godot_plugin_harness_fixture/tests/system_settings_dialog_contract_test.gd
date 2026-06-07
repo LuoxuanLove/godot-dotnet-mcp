@@ -1179,6 +1179,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(capture_required_task.get("data", {}).get("failed_step", "")) != "capture" or str(capture_required_task.get("data", {}).get("capture_backend", "")) != "none":
 		return _failure("run_task require_capture failure should report capture as the failed step.")
 
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var always_capture_best_effort_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"capture_policy": "always",
+		"limit": 10
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if not bool(always_capture_best_effort_task.get("success", false)):
+		return _failure("run_task capture_policy=always should remain best-effort unless require_capture=true.")
+	if str(always_capture_best_effort_task.get("data", {}).get("capture_backend", "")) != "none":
+		return _failure("run_task capture_policy=always should report capture_backend=none when best-effort capture is unavailable.")
+
 	fake.project_name_value = "Example"
 	fake.popup_capture_enabled = false
 	fake.control_capture_enabled = false
