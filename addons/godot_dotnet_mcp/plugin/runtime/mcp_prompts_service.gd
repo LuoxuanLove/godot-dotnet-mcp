@@ -10,6 +10,7 @@ const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+const MAX_PROMPT_TEXT_BYTES := 32768
 
 var _get_tool_loader_status := Callable()
 
@@ -77,7 +78,7 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			"description": _text("prompt_editor_ui_control_desc", "Control Godot editor docks, panels, popups, screenshots, visible and hidden controls, and control-local input through editor APIs."),
 			"arguments": [
 				{"name": "ui_goal", "description": _text("prompt_arg_ui_goal_desc", "Optional editor UI outcome such as opening a dock, clicking a button, entering text, or verifying layout."), "required": false},
-				{"name": "target_path", "description": _text("prompt_arg_target_path_desc", "Optional control path returned by list_controls/list_popups that should receive focused inspection or interaction."), "required": false}
+				{"name": "target_path", "description": _text("prompt_arg_target_path_desc", "Optional control or popup path returned by list_controls/list_popups that should receive focused inspection, capture, or interaction."), "required": false}
 			]
 		}]
 	}
@@ -193,7 +194,7 @@ func _build_runtime_validation_prompt(arguments: Dictionary) -> Dictionary:
 func _build_editor_ui_control_prompt(arguments: Dictionary) -> Dictionary:
 	var ui_goal := str(arguments.get("ui_goal", "")).strip_edges()
 	var target_path := str(arguments.get("target_path", "")).strip_edges()
-	var text := _text("prompt_editor_ui_control_body", "Use when: Start here when a task depends on the current Godot editor UI, including docks, plugin panels, bottom panels, popups, layout, focus, button visibility, screenshots, or control-local text and clicks. Recommended workflow: 1. Call system_editor_state to capture the current main screen, selections, inspector summary, runtime state, and editor capability context. 2. Use system_editor_control(action=activate_ui), activate_dock_tab, or set_main_screen to bring the relevant editor surface into view without OS window automation. 3. Capture evidence with system_editor_control(action=capture_editor) before judging layout or visibility. 4. Call list_controls with include_hidden=false first, then retry include_hidden=true when the visible enumeration misses the target; use get_control or capture_control before interacting. 5. Dispatch focus_control, activate_control, click_control, right_click_control, set_control_text, list_popups, press_popup_button, or close_popup using Control-local coordinates and popup paths returned by the tools. Validation: capture or list the resulting control state, popup state, or editor log evidence after the UI action. Avoid: do not use OS mouse or window automation unless explicitly authorized, do not guess screen coordinates, and do not use editor UI control when scene_patch or script_patch can safely make the file-level change.")
+	var text := _text("prompt_editor_ui_control_body", "Use when: Start here when a task depends on the current Godot editor UI, including docks, plugin panels, bottom panels, popups, settings dialogs, layout, focus, button visibility, screenshots, or control-local text and value edits. Recommended workflow: 1. Call system_editor_state to capture the current main screen, selections, inspector summary, runtime state, and editor capability context. 2. For Project Settings or Editor Settings, use system_settings_dialog to open, observe, search, list or activate settings tabs, list or focus category tree items, list read-only row models, resolve a unique visible row, read current visible row values, focus unique visible row value editors, set supported visible row values, verify expected visible row values, focus, capture, or close the settings surface before falling back to raw controls. 3. Use system_editor_control(action=activate_ui), activate_dock_tab, or set_main_screen to bring other editor surfaces into view without OS window automation. 4. Capture evidence with system_editor_control(action=capture_editor) before judging layout or visibility. 5. Call list_controls with include_hidden=false first, then retry include_hidden=true when the visible enumeration misses the target; use get_control or capture_control before interacting with ordinary controls. 6. Call list_popups, get_popup, or capture_popup when the target is a floating popup/window, then dispatch focus_control, activate_control, click_control, right_click_control, set_control_text, set_value, press_popup_button, select_popup_menu_item, set_popup_text, or close_popup using Control-local coordinates and popup paths returned by the tools. Validation: capture or list the resulting control state, popup state, settings dialog status, or editor log evidence after the UI action. Avoid: do not use OS mouse or window automation unless explicitly authorized, do not guess screen coordinates, and do not use editor UI control when scene_patch or script_patch can safely make the file-level change.")
 	if not ui_goal.is_empty():
 		text += " UI goal: %s." % ui_goal
 	if not target_path.is_empty():
@@ -210,13 +211,26 @@ func _text(key: String, fallback: String) -> String:
 
 
 func _prompt_response(description: String, text: String) -> Dictionary:
-	return {
+	var limited := _limit_text_output(text, MAX_PROMPT_TEXT_BYTES)
+	var result := {
 		"description": description,
 		"messages": [{
 			"role": "user",
-			"content": {"type": "text", "text": text}
+			"content": {"type": "text", "text": str(limited.get("text", ""))}
 		}]
 	}
+	if bool(limited.get("truncated", false)):
+		result["_meta"] = {
+			"godotDotnetMcp": {
+				"output": {
+					"truncated": true,
+					"originalByteSize": int(limited.get("original_byte_size", 0)),
+					"returnedByteSize": int(limited.get("returned_byte_size", 0)),
+					"maxByteSize": int(limited.get("max_byte_size", MAX_PROMPT_TEXT_BYTES))
+				}
+			}
+		}
+	return result
 
 
 func _optional_res_path(arguments: Dictionary, key: String, allowed_extensions: Array[String]) -> Dictionary:
@@ -234,3 +248,35 @@ func _get_loader_status_safe() -> Dictionary:
 		if status is Dictionary:
 			return (status as Dictionary).duplicate(true)
 	return {}
+
+
+func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:
+	var original_byte_size := text.to_utf8_buffer().size()
+	if original_byte_size <= max_byte_size:
+		return {
+			"text": text,
+			"truncated": false,
+			"original_byte_size": original_byte_size,
+			"returned_byte_size": original_byte_size,
+			"max_byte_size": max_byte_size
+		}
+	var limited_text := _truncate_text_to_utf8_byte_limit(text, max_byte_size)
+	return {
+		"text": limited_text,
+		"truncated": true,
+		"original_byte_size": original_byte_size,
+		"returned_byte_size": limited_text.to_utf8_buffer().size(),
+		"max_byte_size": max_byte_size
+	}
+
+
+func _truncate_text_to_utf8_byte_limit(text: String, max_byte_size: int) -> String:
+	var low := 0
+	var high := text.length()
+	while low < high:
+		var mid := int(ceil(float(low + high + 1) / 2.0))
+		if text.substr(0, mid).to_utf8_buffer().size() <= max_byte_size:
+			low = mid
+		else:
+			high = mid - 1
+	return text.substr(0, low)

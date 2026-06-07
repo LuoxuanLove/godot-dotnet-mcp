@@ -121,7 +121,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (runtime_health is Dictionary):
 		return _failure("project_state should return runtime_health when include_runtime_health=true.")
 	var runtime_health_dict: Dictionary = runtime_health
-	for key in ["self_diagnostics", "lsp_diagnostics", "tool_loader"]:
+	for key in ["self_diagnostics", "lsp_diagnostics", "tool_loader", "user_tools"]:
 		if not runtime_health_dict.has(key) or not (runtime_health_dict.get(key) is Dictionary):
 			return _failure("runtime_health is missing dictionary section '%s'." % key)
 	if not (runtime_health_dict.get("capabilities", {}) is Dictionary):
@@ -142,6 +142,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("runtime_health.self_diagnostics should surface the recorded warning status.")
 	if int(self_diagnostics.get("active_incident_count", 0)) <= 0:
 		return _failure("runtime_health.self_diagnostics should report active incidents.")
+	var user_tools: Dictionary = runtime_health_dict.get("user_tools", {})
+	if not user_tools.has("available") or not user_tools.has("failed_load_count") or not user_tools.has("last_error"):
+		return _failure("runtime_health.user_tools should expose availability, failed load count, and last_error.")
 
 	return {
 		"name": "system_runtime_health_contracts",
