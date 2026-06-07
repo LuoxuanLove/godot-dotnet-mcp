@@ -71,16 +71,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client detector registry should delegate config-file clients to the config detector path.")
 	if not bool(results.get("codex", {}).get("auto_add_supported", false)):
 		return _failure("Client detector registry should delegate CLI-managed clients to the executable detector path.")
+	if not bool(results.get("opencode", {}).get("write_supported", false)):
+		return _failure("Client detector registry should expose config-write support for OpenCode CLI.")
 	var expected_support_levels := {
 		"claude_desktop": "full_write",
-		"claude_code": "launch_path",
+		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",
 		"opencode_desktop": "manual_guidance",
-		"opencode": "launch_path",
+		"opencode": "full_write",
 		"windsurf": "full_write",
 		"cline": "full_write",
 		"roo_code": "full_write",

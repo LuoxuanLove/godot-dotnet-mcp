@@ -30,7 +30,7 @@ Target version: 1.2.1.
 ### Internal
 
 - Extended MCP resources/prompts harness coverage to verify localized resource and resource-template metadata under a non-English locale.
-- Extended Config client detector and presenter contract coverage for capability matrix projection, compatibility aliases, and fallback behavior.
+- Extended Config client registry, production detection, and presenter contract coverage for capability matrix projection, compatibility aliases, and fallback behavior.
 - Added system project executor and Tools tab rendering coverage for export preset summary discovery, including sensitive option-key redaction and absolute export-path redaction.
 - Added tool-catalog search harness coverage for public exposure, internal visible lookups, schema opt-in, filter handling, and match-reason reporting.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.

@@ -44,6 +44,8 @@ func detect(running_processes: PackedStringArray) -> Dictionary:
 		"has_manual_path": bool(resolved.get("has_manual_path", false)),
 		"manual_path_invalid": bool(resolved.get("manual_path_invalid", false)),
 		"manual_path": str(resolved.get("manual_path", "")),
+		"config_path": str(_options.get("config_path", "")),
+		"write_supported": bool(_options.get("write_supported", false)),
 		"auto_add_supported": bool(_options.get("auto_add_supported", false)),
 		"launch_supported": bool(_options.get("launch_supported", false)),
 		"path_pick_supported": true,
