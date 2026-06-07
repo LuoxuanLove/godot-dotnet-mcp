@@ -61,7 +61,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
 			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
-			"Use system_settings_dialog for Project Settings or Editor Settings open/status/search/list_rows/resolve_row/read_value/focus/capture/close workflows before falling back to raw editor control enumeration.",
+			"Use system_settings_dialog for Project Settings or Editor Settings open/status/search/list_tabs/activate_tab/list_categories/focus_category/list_rows/resolve_row/read_value/focus_value/set_value/verify_value/focus/capture/close workflows before falling back to raw editor control enumeration.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Use system_editor_plugin_control to inspect or toggle third-party EditorPlugin session state; use dedicated plugin reload/update tools for this plugin itself.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
@@ -71,7 +71,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
 			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided project orientation", "content authoring", "debug triage", "reference integrity", "runtime validation", "editor UI control"],
-			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
+			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "popup capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
