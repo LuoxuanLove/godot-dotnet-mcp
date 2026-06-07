@@ -15,6 +15,8 @@ Target version: 1.2.1.
 - Added `system_settings_dialog(action=list_tabs/activate_tab)` settings tab navigation, including `open(tab=...)`, so clients can list and switch Project Settings or Editor Settings tabs without coordinate clicks.
 - Added read-only `system_settings_dialog(action=list_rows)` row models that summarize visible settings-like controls with conservative confidence and evidence fields without writing the settings search field.
 - Added read-only `system_settings_dialog(action=read_value)` value inspection for unique visible settings rows, returning typed text, bool, number, and enum payloads with row/value evidence without writing setting values.
+- Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
+- Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
 
 ### Internal
 
