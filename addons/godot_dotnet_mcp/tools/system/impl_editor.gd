@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit control text or numeric values, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -49,6 +49,7 @@ func get_tools() -> Array[Dictionary]:
 							"hover_control",
 							"leave_control",
 							"set_control_text",
+							"set_value",
 							"list_popups",
 							"press_popup_button",
 							"select_popup_menu_item",
@@ -112,6 +113,10 @@ func get_tools() -> Array[Dictionary]:
 					"text": {
 						"type": "string",
 						"description": "Text for set_control_text/set_popup_text, PopupMenu item text for select_popup_menu_item, or expected text for wait_for_ui"
+					},
+					"value": {
+						"type": "number",
+						"description": "Numeric value for set_value"
 					},
 					"condition": {
 						"type": "string",
@@ -384,6 +389,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"action": "set_text",
 				"target_path": str(args.get("target_path", "")).strip_edges(),
 				"text": str(args.get("text", ""))
+			})
+		"set_value":
+			if not args.has("value"):
+				return bridge.error("value is required for set_value")
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "set_value",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"value": args.get("value")
 			})
 		"list_popups":
 			return bridge.call_atomic("editor_popup", {"action": "list_visible"})
