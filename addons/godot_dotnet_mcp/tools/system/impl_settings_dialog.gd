@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, read, focus, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, resolve unique visible rows, read, focus, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -107,7 +107,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value/focus_value/set_value/verify_value, or a tree/category control path used by focus_category"
+						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by resolve_row/read_value/focus_value/set_value/verify_value, or a tree/category control path used by focus_category"
 					},
 					"value": {
 						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
@@ -192,6 +192,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _list_rows(surface, args)
+		"resolve_row":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _resolve_row(surface, args)
 		"read_value":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -531,6 +536,73 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(value_payload, args)
 	return bridge.success(value_payload, "Settings row value read")
+
+
+func _resolve_row(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := _resolve_row_observation_payload(observation)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for resolve_row: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := _resolve_row_observation_payload(observation)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before resolve_row.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_read(all_controls, surface, args, query_values, "resolve_row", true)
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := _resolve_row_observation_payload(observation)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched resolve_row.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var value_control: Dictionary = _value_control_for_row(row, all_controls)
+	var resolved_value_path := str(row.get("value_control_path", "")).strip_edges()
+	if resolved_value_path.is_empty() and not value_control.is_empty():
+		resolved_value_path = str(value_control.get("path", value_control.get("node_path", ""))).strip_edges()
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"row": row,
+		"row_id": str(row.get("row_id", "")),
+		"row_control_path": str(row.get("row_control_path", "")),
+		"label_control_path": str(row.get("label_control_path", "")),
+		"value_control_path": resolved_value_path,
+		"value_control": _resolve_row_control_payload(value_control),
+		"setting_path": str(row.get("setting_path", "")),
+		"confidence": str(row.get("confidence", "low")),
+		"resolution": row_resolution.get("resolution", {}),
+		"verification": {
+			"unique_row": true,
+			"require_confidence": _required_confidence(args),
+			"row_confidence": str(row.get("confidence", "low"))
+		},
+		"workflow": _workflow_with_step(observation.get("workflow", []), {
+			"step": "resolve_row",
+			"target_path": str(args.get("target_path", "")),
+			"setting_path": str(args.get("setting_path", "")),
+			"queries": query_values,
+			"success": true
+		})
+	}
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings row resolved")
 
 
 func _focus_value(surface: String, args: Dictionary) -> Dictionary:
@@ -999,6 +1071,15 @@ func _workflow_with_step(workflow, step: Dictionary) -> Array[Dictionary]:
 	return merged
 
 
+func _resolve_row_observation_payload(observation: Dictionary) -> Dictionary:
+	var payload: Dictionary = {}
+	for key in ["surface", "title", "opened", "dialog_found", "dialog_path", "primary_popup_path", "search_field_path", "current_tab", "result_count", "visible_popup_count", "observed_control_count", "total_control_count", "control_limit", "control_truncated"]:
+		if observation.has(key):
+			payload[key] = observation.get(key)
+	payload["workflow"] = _merge_workflow(observation.get("workflow", []), [])
+	return payload
+
+
 func _append_workflow_entries(target: Array[Dictionary], entries) -> void:
 	if not (entries is Array):
 		return
@@ -1057,6 +1138,30 @@ func _haystack_matches(row: Dictionary, queries: Array[String]) -> bool:
 		setting_hint,
 		" ".join(_setting_path_aliases(setting_hint))
 	]).to_lower()
+	for query in queries:
+		if haystack.contains(query.to_lower()):
+			return true
+	return false
+
+
+func _resolve_row_haystack_matches(row: Dictionary, queries: Array[String]) -> bool:
+	var setting_hint := _setting_path_hint(row)
+	var parts: Array[String] = [
+		str(row.get("path", "")),
+		str(row.get("node_path", "")),
+		str(row.get("name", "")),
+		str(row.get("title", "")),
+		str(row.get("class", "")),
+		str(row.get("tooltip", "")),
+		str(row.get("parent_path", "")),
+		str(row.get("setting_path", "")),
+		str(row.get("path_hint", "")),
+		setting_hint,
+		" ".join(_setting_path_aliases(setting_hint))
+	]
+	if _value_editor_type_hint(row) == "unknown":
+		parts.append(str(row.get("label_text", row.get("text", ""))))
+	var haystack := " ".join(parts).to_lower()
 	for query in queries:
 		if haystack.contains(query.to_lower()):
 			return true
@@ -1396,7 +1501,7 @@ func _is_lowercase_letter(character: String) -> bool:
 	return _is_ascii_letter(character) and character == character.to_lower()
 
 
-func _settings_row_models(rows: Array, surface: String, query_values: Array[String], limit: int) -> Array[Dictionary]:
+func _settings_row_models(rows: Array, surface: String, query_values: Array[String], limit: int, include_value_hints: bool = true) -> Array[Dictionary]:
 	var models: Array[Dictionary] = []
 	for row in rows:
 		if not (row is Dictionary):
@@ -1404,7 +1509,8 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 		var dict := row as Dictionary
 		if not _is_settings_row_candidate(dict):
 			continue
-		if not query_values.is_empty() and not _haystack_matches(dict, query_values):
+		var matched := _haystack_matches(dict, query_values) if include_value_hints else _resolve_row_haystack_matches(dict, query_values)
+		if not query_values.is_empty() and not matched:
 			continue
 		models.append(_build_row_model(dict, surface, ""))
 		if models.size() >= limit:
@@ -1412,15 +1518,15 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 	return models
 
 
-func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
-	return _resolve_row_for_value_action(rows, surface, args, query_values, "read_value")
+func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String = "read_value", sanitize_for_resolve: bool = false) -> Dictionary:
+	return _resolve_row_for_value_action(rows, surface, args, query_values, action_name, sanitize_for_resolve)
 
 
-func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String) -> Dictionary:
+func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String, sanitize_for_resolve: bool = false) -> Dictionary:
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var required := _required_confidence(args)
 	var candidates: Array[Dictionary] = []
-	for model in _settings_row_models(rows, surface, query_values, max(1, rows.size())):
+	for model in _settings_row_models(rows, surface, query_values, max(1, rows.size()), not sanitize_for_resolve):
 		if not target_path.is_empty() and not _row_matches_target_path(model, target_path):
 			continue
 		if not _confidence_meets(str(model.get("confidence", "low")), required):
@@ -1440,17 +1546,82 @@ func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionar
 			"reason": "ambiguous_row",
 			"message": "Multiple settings rows matched %s; pass target_path or a more specific setting_path." % action_name,
 			"candidate_count": candidates.size(),
-			"candidates": candidates
+			"candidates": _resolve_row_models(candidates) if sanitize_for_resolve else candidates
 		}
+	var resolved_row := _resolve_row_model(candidates[0]) if sanitize_for_resolve else candidates[0]
 	return {
 		"success": true,
-		"row": candidates[0],
+		"row": resolved_row,
 		"resolution": {
 			"candidate_count": 1,
 			"selector": _value_action_selector_summary(args),
 			"require_confidence": required
 		}
 	}
+
+
+func _resolve_row_models(rows: Array[Dictionary]) -> Array[Dictionary]:
+	var sanitized: Array[Dictionary] = []
+	for row in rows:
+		sanitized.append(_resolve_row_model(row))
+	return sanitized
+
+
+func _resolve_row_model(row: Dictionary) -> Dictionary:
+	var model: Dictionary = {
+		"surface": str(row.get("surface", "")),
+		"row_id": _resolve_row_safe_id(row),
+		"row_control_path": str(row.get("row_control_path", "")),
+		"label_control_path": str(row.get("label_control_path", "")),
+		"value_control_path": str(row.get("value_control_path", "")),
+		"control_class": str(row.get("control_class", "")),
+		"setting_path": str(row.get("setting_path", "")),
+		"category_path": str(row.get("category_path", "")),
+		"section": str(row.get("section", "")),
+		"visible": bool(row.get("visible", true)),
+		"enabled": bool(row.get("enabled", true)),
+		"editable_text": bool(row.get("editable_text", false)),
+		"confidence": str(row.get("confidence", "low")),
+		"evidence": _safe_string_array(row.get("evidence", []))
+	}
+	return model
+
+
+func _resolve_row_control_payload(control: Dictionary) -> Dictionary:
+	if control.is_empty():
+		return {}
+	return {
+		"path": str(control.get("path", control.get("node_path", ""))),
+		"node_path": str(control.get("node_path", control.get("path", ""))),
+		"parent_path": str(control.get("parent_path", "")),
+		"class": str(control.get("class", "")),
+		"visible": bool(control.get("visible", true)),
+		"enabled": not bool(control.get("disabled", false)) and bool(control.get("enabled", true)),
+		"editable_text": bool(control.get("editable_text", false)),
+		"actionable": bool(control.get("actionable", false)),
+		"child_count": int(control.get("child_count", 0))
+	}
+
+
+func _resolve_row_safe_id(row: Dictionary) -> String:
+	var setting_path := str(row.get("setting_path", "")).strip_edges()
+	if not setting_path.is_empty():
+		return setting_path
+	var row_path := str(row.get("row_control_path", "")).strip_edges()
+	if not row_path.is_empty():
+		return row_path
+	return ""
+
+
+func _safe_string_array(values) -> Array[String]:
+	var strings: Array[String] = []
+	if not (values is Array):
+		return strings
+	for value in values:
+		var text := str(value).strip_edges()
+		if not text.is_empty():
+			strings.append(text)
+	return strings
 
 
 func _read_row_value(row: Dictionary, rows: Array) -> Dictionary:
