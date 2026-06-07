@@ -59,6 +59,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var capabilities = help_data.get("capabilities", {})
 	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
 		return _failure("system help capabilities should include prompts as an explicit category.")
+	var help_text := JSON.stringify(help_data)
+	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1:
+		return _failure("system help should mention current settings_dialog action names.")
 
 	var compact_result: Dictionary = impl.execute("help", {"include_tools": false})
 	if not bool(compact_result.get("success", false)):

@@ -1,6 +1,8 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
+const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+
 ## Editor notification tools for Godot MCP
 
 const POPUP_ROOT_CLASSES := {
@@ -48,6 +50,10 @@ func execute_popup(ei, args: Dictionary) -> Dictionary:
 	match action:
 		"list_visible":
 			return _list_visible_popups(ei)
+		"get_popup":
+			return _get_popup(ei, str(args.get("target_path", "")).strip_edges())
+		"capture_popup":
+			return _capture_popup(ei, args)
 		"press_button":
 			return _press_popup_button(ei, str(args.get("target_path", "")).strip_edges())
 		"select_item":
@@ -105,6 +111,50 @@ func _list_visible_popups(ei) -> Dictionary:
 	var popups: Array[Dictionary] = []
 	_collect_visible_popups(base_control, popups)
 	return _success({"count": popups.size(), "popups": popups})
+
+
+func _get_popup(ei, target_path: String) -> Dictionary:
+	var popup_root = _resolve_visible_popup_for_target(ei, target_path)
+	if popup_root == null:
+		return _error("Popup target not found or not inside a visible popup: %s" % target_path)
+	return _success({
+		"target_path": target_path,
+		"popup_path": _safe_control_path(popup_root),
+		"popup": _describe_popup_root(popup_root)
+	}, "Popup fetched")
+
+
+func _capture_popup(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	var popup_root = _resolve_visible_popup_for_target(ei, target_path)
+	if popup_root == null:
+		return _error("Popup target not found or not inside a visible popup: %s" % target_path)
+
+	var image = _get_editor_viewport_image(ei)
+	if image == null:
+		return _error("Editor screenshot image is unavailable")
+
+	var rect: Rect2i = _normalize_capture_rect(_read_node_rect(popup_root), image)
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		return _error("Popup rect is empty or outside the editor viewport: %s" % target_path)
+
+	var cropped = image.get_region(rect)
+	var output_path := str(args.get("path", "")).strip_edges()
+	output_path = MCPUserDataPaths.normalize_editor_control_capture_output_path(output_path, "popup_%s_%s.png" % [
+		MCPUserDataPaths.sanitize_filename(str(popup_root.name)),
+		str(Time.get_unix_time_from_system())
+	])
+	var save_result := _save_image_png(cropped, output_path)
+	if not bool(save_result.get("success", false)):
+		return save_result
+
+	var payload: Dictionary = save_result.get("data", {})
+	payload["target_path"] = target_path
+	payload["popup_path"] = _safe_control_path(popup_root)
+	payload["capture_mode"] = "popup"
+	payload["capture_rect"] = _rect2i_to_dict(rect)
+	payload["popup"] = _describe_popup_root(popup_root)
+	return _success(payload, "Popup screenshot captured")
 
 
 func _press_popup_button(ei, target_path: String) -> Dictionary:
@@ -262,6 +312,18 @@ func _find_popup_target(ei, target_path: String):
 	if base_control == null:
 		return null
 	return _find_popup_target_recursive(base_control, target_path)
+
+
+func _resolve_visible_popup_for_target(ei, target_path: String):
+	if target_path.is_empty():
+		return null
+	var target = _find_popup_target(ei, target_path)
+	if target == null:
+		return null
+	var popup_root = _resolve_popup_root(target)
+	if popup_root == null or not _is_visible_popup_root(popup_root):
+		return null
+	return popup_root
 
 
 func _find_popup_target_recursive(node, target_path: String):
@@ -494,6 +556,10 @@ func _rect2_to_dict(rect: Rect2) -> Dictionary:
 	return {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y}
 
 
+func _rect2i_to_dict(rect: Rect2i) -> Dictionary:
+	return {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y}
+
+
 func _is_control_visible(node) -> bool:
 	if node == null:
 		return false
@@ -514,3 +580,47 @@ func _is_control_disabled(node) -> bool:
 		if disabled != null:
 			return bool(disabled)
 	return false
+
+
+func _get_editor_viewport_image(ei):
+	var base_control = ei.get_base_control()
+	if base_control == null or not base_control.has_method("get_viewport"):
+		return null
+	var viewport = base_control.get_viewport()
+	if viewport == null or not viewport.has_method("get_texture"):
+		return null
+	var texture = viewport.get_texture()
+	if texture == null or not texture.has_method("get_image"):
+		return null
+	var image = texture.get_image()
+	if image == null or image.is_empty():
+		return null
+	return image
+
+
+func _normalize_capture_rect(rect: Rect2, image) -> Rect2i:
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return Rect2i()
+	var x := maxi(int(floor(rect.position.x)), 0)
+	var y := maxi(int(floor(rect.position.y)), 0)
+	if x >= image.get_width() or y >= image.get_height():
+		return Rect2i()
+	var width := mini(int(ceil(rect.size.x)), image.get_width() - x)
+	var height := mini(int(ceil(rect.size.y)), image.get_height() - y)
+	return Rect2i(x, y, width, height)
+
+
+func _save_image_png(image, target_path: String) -> Dictionary:
+	var absolute_path = ProjectSettings.globalize_path(target_path)
+	var dir_error = DirAccess.make_dir_recursive_absolute(absolute_path.get_base_dir())
+	if dir_error != OK:
+		return _error("Failed to create screenshot directory: %s" % absolute_path.get_base_dir())
+	var save_error = image.save_png(absolute_path)
+	if save_error != OK:
+		return _error("Failed to save popup screenshot: %s" % error_string(save_error))
+	return _success({
+		"path": target_path,
+		"absolute_path": absolute_path,
+		"width": image.get_width(),
+		"height": image.get_height()
+	})
