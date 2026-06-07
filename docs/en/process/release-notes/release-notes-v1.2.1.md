@@ -40,6 +40,12 @@ Supported unique visible rows can now be edited through `set_value` for text, nu
 
 Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
 
+### 🔎 Searchable Tool Discovery
+
+`system_tool_catalog` gives clients a read-only search surface for the current tool catalog. Clients can search by query, category, or domain and inspect why each tool matched, which actions and parameters it exposes, whether it is visible, and whether it is currently enabled.
+
+This makes configuration and editor workflows easier to re-enter after profiles, plugin-domain tools, or user-tool state change: agents can rediscover the right system, project, editor, runtime, script, or user-facing tool before choosing the next verified action.
+
 ### ✅ Compatibility and Upgrade Notes
 
-This change only extends the public tool schema. Existing `system_editor_control`, `system_settings_dialog`, and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.
+These changes only extend the public tool schema. Existing `system_editor_control`, `system_settings_dialog`, and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.

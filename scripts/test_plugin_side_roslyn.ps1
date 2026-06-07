@@ -443,6 +443,7 @@ $RequiredCases = @(
     "home_tab_localization_contracts"
     "server_tab_model_projection_contracts"
     "mcp_debug_buffer_contracts"
+    "tool_catalog_search_service_contracts"
     "tool_presentation_service_contracts"
     "tools_api_service_contracts"
     "tool_rpc_router_contracts"

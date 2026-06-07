@@ -729,6 +729,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_editor_ui_control_desc": "Enumerate visible editor controls, inspect them, capture control-local screenshots, focus safe controls, activate 버튼-like controls, and edit text inputs.",
 	"tool_editor_inspector_desc": "컨트롤 the inspector panel",
 	"tool_system_help_name": "도움말",
+	"tool_system_tool_catalog_name": "도구 카탈로그",
+	"tool_system_tool_catalog_desc": "현재 tool catalog를 query, category, domain으로 검색하고 match reason, action, parameter, visibility, enabled state를 반환합니다.",
 	"prompt_project_orientation_title": "프로젝트 orientation workflow",
 	"prompt_project_orientation_desc": "Orient an agent in a Godot project with read-only 상태, health, file, symbol, and scene dependency evidence before choosing an editing or debugging 워크플로.",
 	"prompt_content_authoring_title": "Content authoring 워크플로",

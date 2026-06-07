@@ -98,6 +98,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Public MCP exposure should remain high-level system-only, not permission-filtered atomic exposure: %s" % exposed_name)
 	if not exposed_names.has("system_help"):
 		return _failure("Tool loader did not expose system_help under the default tool access provider.")
+	if not exposed_names.has("system_tool_catalog"):
+		return _failure("Tool loader did not expose system_tool_catalog under the default tool access provider.")
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_state"):
@@ -222,6 +224,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visual_guidance = (help_data as Dictionary).get("visual_guidance", {})
 	if not (visual_guidance is Dictionary) or not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
 		return _failure("Tool loader system_help should expose hidden-control guidance.")
+	var catalog_result: Dictionary = await _loader.execute_tool_async("system", "tool_catalog", {"query": "runtime", "limit": 5})
+	if not bool(catalog_result.get("success", false)):
+		return _failure("Tool loader should route system_tool_catalog successfully.")
+	var catalog_data = catalog_result.get("data", {})
+	if not (catalog_data is Dictionary) or not ((catalog_data as Dictionary).get("matches", []) is Array):
+		return _failure("Tool loader system_tool_catalog should return a matches array.")
 	var activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {"action": "status"})
 	if not bool(activity_result.get("success", false)):
 		return _failure("Tool loader should route system_tool_activity successfully.")
