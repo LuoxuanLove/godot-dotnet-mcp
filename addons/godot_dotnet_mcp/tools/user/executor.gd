@@ -292,7 +292,7 @@ func _reload_slot(script_path: String, reason: String) -> void:
 	if instance != null and instance.has_method("restore_state") and state_snapshot != null:
 		instance.restore_state(state_snapshot)
 	if instance != null and instance.has_method("after_load"):
-		instance.after_load(_runtime_context.duplicate(true))
+		instance.after_load(_runtime_context.duplicate())
 
 	slot["instance"] = instance
 	slot["tool_defs"] = load_result.get("tool_defs", []).duplicate(true)
@@ -333,7 +333,7 @@ func _instantiate_user_tool(script_path: String, force_reload: bool) -> Dictiona
 		executor_target = script
 		executor_mode = "static"
 	if executor_target.has_method("configure_runtime"):
-		executor_target.configure_runtime(_runtime_context.duplicate(true))
+		executor_target.configure_runtime(_runtime_context.duplicate())
 
 	var normalized_defs: Array[Dictionary] = []
 	var raw_defs = executor_target.get_tools()

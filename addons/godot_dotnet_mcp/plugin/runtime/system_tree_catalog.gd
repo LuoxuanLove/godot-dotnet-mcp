@@ -3,6 +3,7 @@ extends RefCounted
 
 const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_help": [],
+	"system_tool_activity": [],
 	"system_project_state": [
 		{"tool": "project_info",         "actions": ["get_info"]},
 		{"tool": "project_dotnet",       "actions": []},
@@ -20,10 +21,18 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_plugin_reload": [],
 	"system_plugin_update": [],
 	"system_editor_control": [
-		{"tool": "editor_status",      "actions": ["set_main_screen"]},
+		{"tool": "editor_status",      "actions": ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
-		{"tool": "editor_ui_control",  "actions": ["list_visible", "list_dock_tabs", "activate_dock_tab", "activate_ui", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "set_text"]},
-		{"tool": "editor_popup",       "actions": ["list_visible", "press_button", "set_text", "close_popup"]}
+		{"tool": "editor_ui_control",  "actions": ["list_visible", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text", "set_value"]},
+		{"tool": "editor_popup",       "actions": ["list_visible", "get_popup", "capture_popup", "press_button", "select_item", "set_text", "close_popup"]}
+	],
+	"system_settings_dialog": [
+		{"tool": "editor_ui_control", "actions": ["list_visible", "wait_for_ui", "select_menu_item", "activate_ui", "list_tree_items", "select_tree_item", "focus_control", "activate_control", "set_text", "set_value"]},
+		{"tool": "editor_screenshot", "actions": ["capture"]},
+		{"tool": "editor_popup",      "actions": ["list_visible", "close_popup"]}
+	],
+	"system_editor_plugin_control": [
+		{"tool": "editor_plugin",      "actions": ["list", "inspect", "is_enabled", "enable", "disable"]}
 	],
 	"system_editor_log": [
 		{"tool": "debug_editor_log", "actions": ["get_output", "get_errors", "clear"]}
@@ -46,7 +55,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "project_info",     "actions": ["get_settings"]},
 		{"tool": "project_settings", "actions": ["set"]},
 		{"tool": "project_autoload", "actions": ["list", "add", "remove"]},
-		{"tool": "project_input",    "actions": ["list_actions"]}
+		{"tool": "project_input",    "actions": ["list_actions", "get_action"]}
 	],
 	"system_project_files": [
 		{"tool": "filesystem_directory", "actions": ["get_files", "create", "delete"]},
