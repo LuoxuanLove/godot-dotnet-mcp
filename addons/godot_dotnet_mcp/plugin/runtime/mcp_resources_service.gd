@@ -15,7 +15,7 @@ const SCENE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
 const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
 const REDACTED_VALUE := "[redacted]"
-const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
+const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key", "privatekey"]
 const SENSITIVE_TEXT_KEYS := [
 	"token", "password", "secret",
 	"api_key", "apikey", "api-key", "apiKey", "x-api-key", "x.api.key", "xApiKey",
@@ -393,7 +393,7 @@ func _find_url_authority_end(text: String, from_index: int) -> int:
 	var index := from_index
 	while index < text.length():
 		var ch := text.substr(index, 1)
-		if ch == "/" or ch == "?" or ch == "#" or ch == " " or ch == "\t" or ch == "\n" or ch == "\r" or ch == "," or ch == ";":
+		if ch == "/" or ch == "?" or ch == "#" or ch == " " or ch == "\t" or ch == "\n" or ch == "\r":
 			return index
 		index += 1
 	return text.length()
