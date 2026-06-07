@@ -262,6 +262,60 @@ function Get-LastJsonObject {
     throw "Unable to parse JSON output for $Description."
 }
 
+function Format-HarnessJsonValue {
+    param(
+        [object]$Value
+    )
+
+    if ($Value -eq $null) {
+        return "<none>"
+    }
+
+    if ($Value -is [array]) {
+        $items = @($Value | ForEach-Object { [string]$_ }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        if ($items.Count -eq 0) {
+            return "<none>"
+        }
+
+        return ($items -join ",")
+    }
+
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return "<none>"
+    }
+
+    return $text
+}
+
+function Format-HarnessFailureSummary {
+    param(
+        [object]$HarnessJson
+    )
+
+    if ($HarnessJson -eq $null) {
+        return "Harness failure summary: json=<none>"
+    }
+
+    $propertyNames = @($HarnessJson.PSObject.Properties.Name)
+    $failureClasses = if ($propertyNames -contains "failureClasses") {
+        Format-HarnessJsonValue -Value @($HarnessJson.failureClasses)
+    } elseif ($propertyNames -contains "failureClass") {
+        Format-HarnessJsonValue -Value $HarnessJson.failureClass
+    } else {
+        "<none>"
+    }
+    $primaryFailureClass = if ($propertyNames -contains "primaryFailureClass") { Format-HarnessJsonValue -Value $HarnessJson.primaryFailureClass } else { Format-HarnessJsonValue -Value $HarnessJson.failureClass }
+    $exitCleanupPolicy = if ($propertyNames -contains "exitCleanupWarningPolicy") { Format-HarnessJsonValue -Value $HarnessJson.exitCleanupWarningPolicy } else { "<unknown>" }
+    $exitCleanupWarnings = if ($propertyNames -contains "exitCleanupWarningsDetected") { [string][bool]$HarnessJson.exitCleanupWarningsDetected } else { "unknown" }
+    $runtimeMarkers = if ($propertyNames -contains "runtimeErrorMarkersDetected") { [string][bool]$HarnessJson.runtimeErrorMarkersDetected } else { "unknown" }
+    $suiteSuccess = if ($propertyNames -contains "suiteSuccess") { Format-HarnessJsonValue -Value $HarnessJson.suiteSuccess } else { "<unknown>" }
+    $exitCode = if ($propertyNames -contains "exitCode") { Format-HarnessJsonValue -Value $HarnessJson.exitCode } else { "<unknown>" }
+    $reason = if ($propertyNames -contains "reason") { Format-HarnessJsonValue -Value $HarnessJson.reason } else { "<none>" }
+
+    return "Harness failure summary: failureClasses=$failureClasses; primaryFailureClass=$primaryFailureClass; reason=$reason; exitCode=$exitCode; suiteSuccess=$suiteSuccess; runtimeErrorMarkersDetected=$runtimeMarkers; exitCleanupWarningsDetected=$exitCleanupWarnings; exitCleanupWarningPolicy=$exitCleanupPolicy"
+}
+
 function Invoke-Harness {
     param(
         [string]$Description,
@@ -292,11 +346,13 @@ function Invoke-Harness {
 
         if ($exitCode -ne 0) {
             $details = if ([string]::IsNullOrWhiteSpace($outputText)) { "<no output>" } else { $outputText }
-            throw "$Description failed with exit code $exitCode.`n$details"
+            $summary = Format-HarnessFailureSummary -HarnessJson $json
+            throw "$Description failed with exit code $exitCode.`n$summary`n$details"
         }
 
         if ($json -ne $null -and ($json.PSObject.Properties.Name -contains "success") -and -not [bool]$json.success) {
-            throw "$Description reported success=false.`n$($outputText)"
+            $summary = Format-HarnessFailureSummary -HarnessJson $json
+            throw "$Description reported success=false.`n$summary`n$($outputText)"
         }
     }
     finally {

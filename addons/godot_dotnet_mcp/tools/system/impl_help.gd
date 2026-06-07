@@ -5,6 +5,7 @@ extends RefCounted
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
+const LocalizationService = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 var bridge
 var _runtime_context: Dictionary = {}
@@ -17,7 +18,7 @@ func handles(tool_name: String) -> bool:
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 
 
 func get_tools() -> Array[Dictionary]:
@@ -58,8 +59,11 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"recommended_start": [
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
+			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
+			"Use system_settings_dialog for Project Settings or Editor Settings open/status/search/list_rows/read_value/focus/capture/close workflows before falling back to raw editor control enumeration.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
+			"Use system_editor_plugin_control to inspect or toggle third-party EditorPlugin session state; use dedicated plugin reload/update tools for this plugin itself.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
 			"Use system_userdata_maintenance(action=list_capture_cache) to inspect managed screenshot caches, cleanup_capture_cache with dry_run=true to preview removal, and cleanup_legacy_cache for stale root-level MCP files; cleanup skips symlinks/junctions/reparse points and must only be applied by explicit Agent/user action.",
 			"If a target UI is not found, retry system_editor_control(action=list_controls) with include_hidden=true."
@@ -67,12 +71,13 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
 			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided project orientation", "content authoring", "debug triage", "reference integrity", "runtime validation", "editor UI control"],
-			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control"],
+			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
 			"analysis": ["scene validation", "scene analysis", "script analysis", "C# binding audit", "Godot LSP diagnostics", "project symbol search", "scene dependency graph"],
-			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"]
+			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"],
+			"coordination": ["running tool call activity", "recent tool call history", "self-reported agent context", "execution order visibility"]
 		},
 		"runtime_capability_guidance": {
 			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
@@ -87,6 +92,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"prefer_editor_screenshot": true,
 			"screenshot_tool": "system_editor_control",
 			"screenshot_action": "capture_editor",
+			"settings_dialog_tool": "system_settings_dialog",
 			"non_invasive_activation_action": "activate_ui",
 			"avoid_os_mouse_window_automation": true,
 			"hidden_controls_supported": true,
