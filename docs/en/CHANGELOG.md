@@ -11,6 +11,7 @@ Target version: 1.2.1.
 ### Added
 
 - Added `system_editor_control(action="wait_for_ui")`, a bounded wait-and-verify action that polls editor controls for existence, visibility, text, and enabled/disabled conditions before returning matched UI evidence or a timeout payload.
+- Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` so clients can inspect and crop evidence from visible floating editor popups or windows by returned popup paths.
 - Added `system_settings_dialog`, a high-level settings-like dialog workflow that opens Project Settings or Editor Settings, waits for visibility, searches candidate setting rows, focuses results, captures evidence, and closes the surface without writing setting values.
 - Added `system_settings_dialog(action=list_tabs/activate_tab)` settings tab navigation, including `open(tab=...)`, so clients can list and switch Project Settings or Editor Settings tabs without coordinate clicks.
 - Added `system_settings_dialog(action=list_categories/focus_category)` for settings category tree discovery and unique category focusing before row inspection without writing setting values.
