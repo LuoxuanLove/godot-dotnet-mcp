@@ -20,6 +20,7 @@ class FakeBridge extends RefCounted:
 	var snap_2d_transforms_to_pixel := false
 	var max_renderable_elements := 128000.0
 	var direct_spin_value := 3.0
+	var popup_capture_should_fail := false
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -111,6 +112,27 @@ class FakeBridge extends RefCounted:
 						if target_path.contains("EditorSettings"):
 							editor_visible = false
 						return success({"target_path": target_path})
+					"capture_popup":
+						var target_path := str(args.get("target_path", ""))
+						if popup_capture_should_fail:
+							return error("Popup capture failed", {"target_path": target_path})
+						if target_path.contains("ProjectSettings") and project_visible:
+							return success({
+								"path": str(args.get("path", "user://project_settings_popup.png")),
+								"capture_mode": "popup",
+								"target_path": target_path,
+								"popup_path": "/root/ProjectSettings",
+								"capture_rect": {"x": 12, "y": 24, "width": 640, "height": 480}
+							})
+						if target_path.contains("EditorSettings") and editor_visible:
+							return success({
+								"path": str(args.get("path", "user://editor_settings_popup.png")),
+								"capture_mode": "popup",
+								"target_path": target_path,
+								"popup_path": "/root/EditorSettings",
+								"capture_rect": {"x": 16, "y": 32, "width": 620, "height": 460}
+							})
+						return error("Popup target not found", {"target_path": target_path})
 					_:
 						return error("Unsupported editor_popup action: %s" % action)
 			"editor_screenshot":
@@ -316,6 +338,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for property_name in ["category", "category_path", "category_index"]:
 		if not properties.has(property_name):
 			return _failure("settings_dialog schema should expose %s for category workflows." % property_name)
+	var capture_modes: Array = properties.get("capture_mode", {}).get("enum", [])
+	for capture_mode in ["auto", "editor", "popup"]:
+		if not capture_modes.has(capture_mode):
+			return _failure("settings_dialog schema should expose capture_mode: %s." % capture_mode)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
 	for surface in ["project_settings", "editor_settings"]:
 		if not surfaces.has(surface):
@@ -326,6 +352,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("status should succeed even when a settings surface is not open.")
 	if bool(missing_status.get("data", {}).get("dialog_found", true)):
 		return _failure("status should report dialog_found=false before open.")
+	var calls_before_missing_capture := fake.calls.size()
+	var missing_auto_capture := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings"
+	})
+	if not bool(missing_auto_capture.get("success", false)):
+		return _failure("capture auto mode should still produce editor evidence when no settings popup is visible.")
+	var missing_auto_surface: Dictionary = missing_auto_capture.get("data", {}).get("capture_surface", {})
+	if str(missing_auto_surface.get("actual_mode", "")) != "editor" or not bool(missing_auto_surface.get("fallback_used", false)):
+		return _failure("capture auto mode should report editor fallback when no settings popup is visible.")
+	if str(missing_auto_surface.get("fallback_reason", "")) != "no_popup_detected":
+		return _failure("capture auto no-popup fallback should report no_popup_detected.")
+	if _has_call_since(fake.calls, calls_before_missing_capture, "editor_popup", "capture_popup") or not _has_call_since(fake.calls, calls_before_missing_capture, "editor_screenshot", "capture"):
+		return _failure("capture auto no-popup fallback should skip popup capture and call editor_screenshot.capture.")
+	var calls_before_missing_popup_capture := fake.calls.size()
+	var missing_popup_capture := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"capture_mode": "popup"
+	})
+	if bool(missing_popup_capture.get("success", false)):
+		return _failure("capture_mode=popup should fail when no settings popup is visible.")
+	var missing_popup_surface: Dictionary = missing_popup_capture.get("data", {}).get("capture_surface", {})
+	if str(missing_popup_surface.get("actual_mode", "")) != "popup" or str(missing_popup_surface.get("selection_reason", "")) != "no_popup_detected":
+		return _failure("capture_mode=popup no-popup failure should report the attempted popup surface and no_popup_detected.")
+	if _has_call_since(fake.calls, calls_before_missing_popup_capture, "editor_screenshot", "capture"):
+		return _failure("capture_mode=popup no-popup failure must not fall back to editor_screenshot.capture.")
 	var missing_categories := impl.execute("settings_dialog", {"action": "list_categories", "surface": "project_settings"})
 	if not bool(missing_categories.get("success", false)):
 		return _failure("list_categories should succeed even when the requested settings surface is not visible.")
@@ -1001,6 +1054,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_call(fake.calls, "editor_ui_control", "focus_control"):
 		return _failure("focus_result should delegate to editor_ui_control.focus_control.")
 
+	var calls_before_capture := fake.calls.size()
 	var captured := impl.execute("settings_dialog", {
 		"action": "capture",
 		"surface": "project_settings",
@@ -1009,7 +1063,64 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(captured.get("success", false)):
 		return _failure("capture should succeed for a visible settings surface.")
 	if str(captured.get("data", {}).get("capture_path", "")) != "user://custom_settings.png":
-		return _failure("capture should return the screenshot path from editor_screenshot.")
+		return _failure("capture should return the selected screenshot path.")
+	var capture_surface: Dictionary = captured.get("data", {}).get("capture_surface", {})
+	if str(capture_surface.get("requested_mode", "")) != "auto" or str(capture_surface.get("actual_mode", "")) != "popup":
+		return _failure("capture should default to popup surface evidence when the settings popup is visible.")
+	if bool(capture_surface.get("fallback_used", true)):
+		return _failure("capture should not mark fallback_used when popup capture succeeds.")
+	if str(capture_surface.get("primary_popup_path", "")) != "/root/ProjectSettings":
+		return _failure("capture should report the primary settings popup path.")
+	if str(captured.get("data", {}).get("capture", {}).get("capture_mode", "")) != "popup":
+		return _failure("capture should attach popup capture metadata in auto mode.")
+	if not _has_call_since(fake.calls, calls_before_capture, "editor_popup", "capture_popup"):
+		return _failure("capture should delegate auto mode to editor_popup.capture_popup before falling back.")
+	if _has_call_since(fake.calls, calls_before_capture, "editor_screenshot", "capture"):
+		return _failure("capture auto mode should not take a full editor screenshot when popup capture succeeds.")
+
+	var calls_before_editor_capture := fake.calls.size()
+	var editor_captured := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"capture_mode": "editor"
+	})
+	if not bool(editor_captured.get("success", false)):
+		return _failure("capture_mode=editor should force a full editor capture.")
+	if str(editor_captured.get("data", {}).get("capture_surface", {}).get("actual_mode", "")) != "editor":
+		return _failure("capture_mode=editor should report actual_mode=editor.")
+	if not _has_call_since(fake.calls, calls_before_editor_capture, "editor_screenshot", "capture"):
+		return _failure("capture_mode=editor should delegate to editor_screenshot.capture.")
+	if _has_call_since(fake.calls, calls_before_editor_capture, "editor_popup", "capture_popup"):
+		return _failure("capture_mode=editor should not attempt popup capture.")
+
+	fake.popup_capture_should_fail = true
+	var calls_before_fallback_capture := fake.calls.size()
+	var fallback_captured := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings"
+	})
+	if not bool(fallback_captured.get("success", false)):
+		return _failure("capture auto mode should fall back to editor capture when popup capture fails.")
+	var fallback_surface: Dictionary = fallback_captured.get("data", {}).get("capture_surface", {})
+	if str(fallback_surface.get("actual_mode", "")) != "editor" or not bool(fallback_surface.get("fallback_used", false)):
+		return _failure("capture auto fallback should report actual_mode=editor and fallback_used=true.")
+	if str(fallback_surface.get("fallback_reason", "")).find("Popup capture failed") == -1:
+		return _failure("capture auto fallback should preserve the popup failure reason.")
+	if not _has_call_since(fake.calls, calls_before_fallback_capture, "editor_popup", "capture_popup") or not _has_call_since(fake.calls, calls_before_fallback_capture, "editor_screenshot", "capture"):
+		return _failure("capture auto fallback should attempt popup capture before editor capture.")
+	var calls_before_popup_failure := fake.calls.size()
+	var popup_failure := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"capture_mode": "popup"
+	})
+	if bool(popup_failure.get("success", false)):
+		return _failure("capture_mode=popup should fail when popup capture fails instead of falling back.")
+	if str(popup_failure.get("data", {}).get("capture_surface", {}).get("actual_mode", "")) != "popup":
+		return _failure("capture_mode=popup failure should still report the attempted popup surface.")
+	if _has_call_since(fake.calls, calls_before_popup_failure, "editor_screenshot", "capture"):
+		return _failure("capture_mode=popup failure must not fall back to editor_screenshot.capture.")
+	fake.popup_capture_should_fail = false
 
 	var closed := impl.execute("settings_dialog", {"action": "close", "surface": "project_settings"})
 	if not bool(closed.get("success", false)):

@@ -36,6 +36,8 @@ Supported unique visible rows can now be edited through `set_value` for text, nu
 
 Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
 
+Settings captures now expose a `capture_mode` choice and `capture_surface` metadata. The default `auto` mode prefers the active settings popup/window, `editor` forces a full editor screenshot, and `popup` requires a visible Godot editor popup/window without silently falling back.
+
 ### ✅ Compatibility and Upgrade Notes
 
 This change only extends the public tool schema. Existing `system_editor_control` and `system_settings_dialog` actions remain available, and clients that do not call the new actions do not need to change their requests.

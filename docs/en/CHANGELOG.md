@@ -21,6 +21,7 @@ Target version: 1.2.1.
 - Added read-only `system_settings_dialog(action=focus_value)` value-editor focusing for unique visible settings rows, moving editor focus to the value control without writing setting values.
 - Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
 - Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
+- Added `system_settings_dialog(action=capture, capture_mode=auto|editor|popup)` so settings evidence can prefer the active popup/window, force a full editor capture, or require popup-only capture while returning `capture_surface` metadata and explicit fallback details.
 
 ### Internal
 

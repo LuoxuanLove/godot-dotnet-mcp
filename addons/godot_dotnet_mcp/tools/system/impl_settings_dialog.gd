@@ -144,6 +144,11 @@ func get_tools() -> Array[Dictionary]:
 						"type": "boolean",
 						"description": "Capture editor evidence after open/search/focus when supported"
 					},
+					"capture_mode": {
+						"type": "string",
+						"enum": ["auto", "editor", "popup"],
+						"description": "Capture action only: auto prefers the current settings popup/window and falls back to the editor surface; editor forces a full editor capture; popup requires a visible Godot editor popup/window and does not fall back."
+					},
 					"path": {
 						"type": "string",
 						"description": "Optional output screenshot path for capture"
@@ -815,7 +820,15 @@ func _verify_value(surface: String, args: Dictionary) -> Dictionary:
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
 	var observation: Dictionary = _observe(surface, _deep_observation_args(args), _search_terms(args))
-	_attach_capture(observation, args)
+	var capture_result := _capture_settings_surface(observation, args)
+	observation["capture_surface"] = capture_result.get("capture_surface", {})
+	if not bool(capture_result.get("success", false)):
+		observation["capture"] = {}
+		observation["capture_path"] = ""
+		observation["capture_error"] = str(capture_result.get("message", ""))
+		return bridge.error(str(capture_result.get("message", "Settings surface capture failed")), observation)
+	observation["capture"] = capture_result.get("capture", {})
+	observation["capture_path"] = str(capture_result.get("capture", {}).get("path", ""))
 	return bridge.success(observation, "Settings surface captured")
 
 
@@ -1221,6 +1234,106 @@ func _attach_capture(payload: Dictionary, args: Dictionary) -> void:
 	payload["capture_path"] = str(capture_result.get("data", {}).get("path", ""))
 	if not bool(capture_result.get("success", false)):
 		payload["capture_error"] = str(capture_result.get("message", capture_result.get("error", "")))
+
+
+func _capture_settings_surface(observation: Dictionary, args: Dictionary) -> Dictionary:
+	var requested_mode := str(args.get("capture_mode", "auto")).strip_edges().to_lower()
+	if not ["auto", "editor", "popup"].has(requested_mode):
+		requested_mode = "auto"
+	var requested_target_path := str(args.get("target_path", "")).strip_edges()
+	var primary_popup_path := str(observation.get("primary_popup_path", "")).strip_edges()
+	var popup_target_path := requested_target_path if not requested_target_path.is_empty() else primary_popup_path
+	var metadata := {
+		"surface": str(observation.get("surface", "")),
+		"requested_mode": requested_mode,
+		"actual_mode": "",
+		"target_path": popup_target_path,
+		"primary_popup_path": primary_popup_path,
+		"fallback_used": false,
+		"fallback_reason": "",
+		"selection_reason": "",
+		"boundary": "godot_editor_ui_popup_only"
+	}
+	if requested_mode == "editor":
+		return _capture_editor_surface(args, metadata, "requested_editor")
+	if popup_target_path.is_empty():
+		metadata["selection_reason"] = "no_popup_detected"
+		if requested_mode == "popup":
+			metadata["actual_mode"] = "popup"
+			return {
+				"success": false,
+				"message": "No visible Godot editor popup/window found for settings surface capture.",
+				"capture_surface": metadata
+			}
+		metadata["fallback_used"] = true
+		metadata["fallback_reason"] = "no_popup_detected"
+		return _capture_editor_surface(args, metadata, "no_popup_detected")
+	var popup_capture := _capture_popup_surface(args, metadata, popup_target_path)
+	if bool(popup_capture.get("success", false)):
+		return popup_capture
+	if requested_mode == "popup":
+		return popup_capture
+	metadata["fallback_used"] = true
+	metadata["fallback_reason"] = str(popup_capture.get("message", "popup_capture_failed"))
+	return _capture_editor_surface(args, metadata, "popup_capture_failed")
+
+
+func _capture_popup_surface(args: Dictionary, metadata: Dictionary, target_path: String) -> Dictionary:
+	var capture_args := {
+		"action": "capture_popup",
+		"target_path": target_path
+	}
+	var output_path := str(args.get("path", "")).strip_edges()
+	if not output_path.is_empty():
+		capture_args["path"] = output_path
+	var capture_result: Dictionary = bridge.call_atomic("editor_popup", capture_args)
+	var output_metadata := metadata.duplicate(true)
+	output_metadata["actual_mode"] = "popup"
+	output_metadata["target_path"] = target_path
+	output_metadata["selection_reason"] = "popup_target_available"
+	if bool(capture_result.get("success", false)):
+		var capture_data: Dictionary = capture_result.get("data", {}).duplicate(true)
+		output_metadata["popup_path"] = str(capture_data.get("popup_path", capture_data.get("target_path", target_path)))
+		if capture_data.has("capture_rect"):
+			output_metadata["capture_rect"] = capture_data.get("capture_rect")
+		return {
+			"success": true,
+			"capture": capture_data,
+			"capture_surface": output_metadata
+		}
+	output_metadata["error"] = str(capture_result.get("message", capture_result.get("error", "popup_capture_failed")))
+	return {
+		"success": false,
+		"message": output_metadata["error"],
+		"capture_surface": output_metadata
+	}
+
+
+func _capture_editor_surface(args: Dictionary, metadata: Dictionary, reason: String) -> Dictionary:
+	var capture_args := {"action": "capture"}
+	var output_path := str(args.get("path", "")).strip_edges()
+	if not output_path.is_empty():
+		capture_args["path"] = output_path
+	var capture_result: Dictionary = bridge.call_atomic("editor_screenshot", capture_args)
+	var output_metadata := metadata.duplicate(true)
+	output_metadata["actual_mode"] = "editor"
+	output_metadata["target_path"] = ""
+	output_metadata["selection_reason"] = reason
+	if bool(capture_result.get("success", false)):
+		var capture_data: Dictionary = capture_result.get("data", {}).duplicate(true)
+		if capture_data.has("visible_popup_count"):
+			output_metadata["visible_popup_count"] = int(capture_data.get("visible_popup_count", 0))
+		return {
+			"success": true,
+			"capture": capture_data,
+			"capture_surface": output_metadata
+		}
+	output_metadata["error"] = str(capture_result.get("message", capture_result.get("error", "editor_capture_failed")))
+	return {
+		"success": false,
+		"message": output_metadata["error"],
+		"capture_surface": output_metadata
+	}
 
 
 func _observation_limit(args: Dictionary) -> int:
