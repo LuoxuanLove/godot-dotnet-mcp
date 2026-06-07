@@ -34,6 +34,8 @@ Project configuration evidence now also covers input maps: agents can inspect a 
 
 Project configuration can also list export presets through `system_project_configure(action="list_export_presets")`. The response summarizes preset names, platforms, runnable state, filters, script export mode, and export-path shape while redacting sensitive option keys and absolute local export paths.
 
+The Settings update source and branch selectors now keep long option lists inside a bounded popup, so agents can inspect every available ref without the menu covering the editor workspace.
+
 Clients can now resolve a unique visible settings row through `resolve_row` before reading a value or choosing a follow-up UI action. The response carries row paths, confidence, selector evidence, and ambiguity diagnostics while staying read-only.
 
 When an agent only needs to move keyboard focus to the matched value editor, `focus_value` focuses the value control and returns focused editor evidence without changing the setting.
