@@ -10,6 +10,8 @@ class FakeBridge extends RefCounted:
 	var editor_visible := false
 	var project_filter_text := ""
 	var editor_filter_text := ""
+	var project_current_tab_index := 0
+	var editor_current_tab_index := 0
 	var localized_project_item := "Настройки проекта..."
 	var localized_editor_item := "Настройки редактора..."
 	var project_name_value := "Example"
@@ -38,6 +40,23 @@ class FakeBridge extends RefCounted:
 						return error("Menu item not found")
 					"focus_control":
 						return success({"target_path": str(args.get("target_path", ""))})
+					"activate_ui":
+						var target_path := str(args.get("target_path", ""))
+						var tab_index := int(args.get("tab_index", -1))
+						var tab_title := str(args.get("tab_title", ""))
+						if target_path.contains("ProjectSettings"):
+							var resolved_project_index := _resolve_project_tab(tab_index, tab_title)
+							if resolved_project_index < 0:
+								return error("Project Settings tab not found")
+							project_current_tab_index = resolved_project_index
+							return success({"target_path": target_path, "active_path": _project_tab_path(resolved_project_index), "tab_index": resolved_project_index, "tab_title": _project_tab_title(resolved_project_index)})
+						if target_path.contains("EditorSettings"):
+							var resolved_editor_index := _resolve_editor_tab(tab_index, tab_title)
+							if resolved_editor_index < 0:
+								return error("Editor Settings tab not found")
+							editor_current_tab_index = resolved_editor_index
+							return success({"target_path": target_path, "active_path": _editor_tab_path(resolved_editor_index), "tab_index": resolved_editor_index, "tab_title": _editor_tab_title(resolved_editor_index)})
+						return error("Unsupported activate_ui target")
 					"set_text":
 						var target_path := str(args.get("target_path", ""))
 						var text := str(args.get("text", ""))
@@ -122,6 +141,7 @@ class FakeBridge extends RefCounted:
 		var rows: Array[Dictionary] = []
 		if project_visible:
 			rows.append({"path": "/root/ProjectSettings", "class": "AcceptDialog", "title": "Project Settings", "visible": true, "enabled": true})
+			rows.append(_tab_container_row("ProjectSettings", "/root/ProjectSettings/Tabs", project_current_tab_index, _project_tab_titles()))
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
@@ -148,10 +168,72 @@ class FakeBridge extends RefCounted:
 				rows.append({"path": "/root/ProjectSettings/General/Ambiguous/ExampleB", "parent_path": "/root/ProjectSettings/General/Ambiguous", "class": "HBoxContainer", "text": "Ambiguous Example", "setting_path": "ambiguous/example", "visible": true, "disabled": false, "editable_text": false, "child_count": 1})
 		if editor_visible:
 			rows.append({"path": "/root/EditorSettings", "class": "AcceptDialog", "title": "Editor Settings", "visible": true, "enabled": true})
+			rows.append(_tab_container_row("EditorSettings", "/root/EditorSettings/Tabs", editor_current_tab_index, _editor_tab_titles()))
 			rows.append({"path": "/root/EditorSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": editor_filter_text, "visible": true, "enabled": true})
 			if editor_filter_text.contains("interface/editor/editor_language"):
 				rows.append({"path": "/root/EditorSettings/Interface/Editor/Language", "parent_path": "/root/EditorSettings/Interface/Editor", "class": "HBoxContainer", "text": "Editor Language", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 		return rows
+
+	func _tab_container_row(surface_prefix: String, path: String, current_index: int, titles: Array[String]) -> Dictionary:
+		var tabs: Array[Dictionary] = []
+		for index in range(titles.size()):
+			tabs.append({
+				"index": index,
+				"title": titles[index],
+				"control_path": "%s/%s" % [path, titles[index].replace(" ", "")],
+				"control_name": titles[index].replace(" ", ""),
+				"current": index == current_index,
+				"visible": index == current_index
+			})
+		return {
+			"path": path,
+			"parent_path": "/root/%s" % surface_prefix,
+			"class": "TabContainer",
+			"name": "Tabs",
+			"visible": true,
+			"enabled": true,
+			"tab_count": tabs.size(),
+			"current_tab_index": current_index,
+			"tabs": tabs
+		}
+
+	func _project_tab_titles() -> Array[String]:
+		return ["General", "Input Map", "Localization", "Plugins", "Globals"]
+
+	func _editor_tab_titles() -> Array[String]:
+		return ["General", "Shortcuts"]
+
+	func _project_tab_title(index: int) -> String:
+		var titles := _project_tab_titles()
+		return titles[index] if index >= 0 and index < titles.size() else ""
+
+	func _editor_tab_title(index: int) -> String:
+		var titles := _editor_tab_titles()
+		return titles[index] if index >= 0 and index < titles.size() else ""
+
+	func _project_tab_path(index: int) -> String:
+		return "/root/ProjectSettings/Tabs/%s" % _project_tab_title(index).replace(" ", "")
+
+	func _editor_tab_path(index: int) -> String:
+		return "/root/EditorSettings/Tabs/%s" % _editor_tab_title(index).replace(" ", "")
+
+	func _resolve_project_tab(tab_index: int, tab_title: String) -> int:
+		return _resolve_tab(_project_tab_titles(), tab_index, tab_title)
+
+	func _resolve_editor_tab(tab_index: int, tab_title: String) -> int:
+		return _resolve_tab(_editor_tab_titles(), tab_index, tab_title)
+
+	func _resolve_tab(titles: Array[String], tab_index: int, tab_title: String) -> int:
+		if tab_index >= 0 and tab_index < titles.size():
+			return tab_index
+		var query := tab_title.strip_edges().to_lower()
+		if query.is_empty():
+			return -1
+		for index in range(titles.size()):
+			var title := titles[index].to_lower()
+			if title == query or title.contains(query):
+				return index
+		return -1
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -167,9 +249,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
+	if not properties.has("tab_index"):
+		return _failure("settings_dialog schema should expose tab_index for activate_tab.")
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
 	for surface in ["project_settings", "editor_settings"]:
 		if not surfaces.has(surface):
@@ -191,6 +275,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing_read_step: Dictionary = missing_read_workflow[missing_read_workflow.size() - 1] if not missing_read_workflow.is_empty() else {}
 	if str(missing_read_step.get("reason", "")) != "surface_not_visible":
 		return _failure("read_value missing-surface failure should report surface_not_visible.")
+	var missing_activate_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Plugins"
+	})
+	if bool(missing_activate_tab.get("success", false)):
+		return _failure("activate_tab should fail when the requested settings surface is not visible.")
 
 	var opened := await impl.execute_async("settings_dialog", {"action": "open", "surface": "project_settings", "timeout_ms": 500})
 	if not bool(opened.get("success", false)):
@@ -203,6 +294,61 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open should delegate to editor_ui_control.wait_for_ui.")
 	if not _has_menu_item_call(fake.calls, fake.localized_project_item):
 		return _failure("open should try localized Project Settings menu item candidates.")
+
+	var calls_before_list_tabs := fake.calls.size()
+	var listed_tabs := impl.execute("settings_dialog", {
+		"action": "list_tabs",
+		"surface": "project_settings"
+	})
+	if not bool(listed_tabs.get("success", false)):
+		return _failure("list_tabs should succeed against a visible settings surface.")
+	var listed_tabs_data: Dictionary = listed_tabs.get("data", {})
+	if int(listed_tabs_data.get("tab_count", 0)) != 5:
+		return _failure("list_tabs should return the settings TabContainer tabs.")
+	if str(listed_tabs_data.get("current_tab", "")) != "General" or int(listed_tabs_data.get("current_tab_index", -1)) != 0:
+		return _failure("list_tabs should report the current settings tab.")
+	if not _has_tab_title(listed_tabs_data.get("tabs", []), "Plugins"):
+		return _failure("list_tabs should expose Project Settings tab titles.")
+	if _has_call_since(fake.calls, calls_before_list_tabs, "editor_ui_control", "set_text"):
+		return _failure("list_tabs must not write the settings search field.")
+
+	var calls_before_activate_tab := fake.calls.size()
+	var activated_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Plugins"
+	})
+	if not bool(activated_tab.get("success", false)):
+		return _failure("activate_tab should activate a visible settings tab by title.")
+	if fake.project_current_tab_index != 3:
+		return _failure("activate_tab should delegate tab switching through editor_ui_control.activate_ui.")
+	if str(activated_tab.get("data", {}).get("selected_tab", {}).get("title", "")) != "Plugins":
+		return _failure("activate_tab should report the selected tab metadata.")
+	if not _has_call_since(fake.calls, calls_before_activate_tab, "editor_ui_control", "activate_ui"):
+		return _failure("activate_tab should call editor_ui_control.activate_ui.")
+	if _has_call_since(fake.calls, calls_before_activate_tab, "editor_ui_control", "set_text"):
+		return _failure("activate_tab must not write the settings search field.")
+
+	var activated_tab_by_index := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab_index": 0
+	})
+	if not bool(activated_tab_by_index.get("success", false)) or fake.project_current_tab_index != 0:
+		return _failure("activate_tab should activate a visible settings tab by index.")
+	var missing_selector_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings"
+	})
+	if bool(missing_selector_tab.get("success", false)):
+		return _failure("activate_tab should require either tab or tab_index.")
+	var unknown_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Missing"
+	})
+	if bool(unknown_tab.get("success", false)) or str(unknown_tab.get("data", {}).get("resolution", {}).get("reason", "")) != "tab_not_found":
+		return _failure("activate_tab should fail with tab_not_found for unknown tabs.")
 
 	var searched := await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -592,6 +738,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_settings open should preserve the requested surface.")
 	if not _has_menu_item_call(fake.calls, fake.localized_editor_item):
 		return _failure("open should try localized Editor Settings menu item candidates.")
+	var editor_tabs := impl.execute("settings_dialog", {"action": "list_tabs", "surface": "editor_settings"})
+	if not bool(editor_tabs.get("success", false)) or not _has_tab_title(editor_tabs.get("data", {}).get("tabs", []), "Shortcuts"):
+		return _failure("list_tabs should also support editor_settings tabs.")
+	var editor_opened_with_tab := await impl.execute_async("settings_dialog", {"action": "open", "surface": "editor_settings", "tab": "Shortcuts"})
+	if not bool(editor_opened_with_tab.get("success", false)):
+		return _failure("open should activate a requested tab when the settings surface is already visible.")
+	if fake.editor_current_tab_index != 1:
+		return _failure("open(tab) should delegate to activate_tab for an already visible settings surface.")
+	if str(editor_opened_with_tab.get("data", {}).get("tab_activation", {}).get("selected_tab", {}).get("title", "")) != "Shortcuts":
+		return _failure("open(tab) should return the selected tab activation payload.")
 	var editor_wrong_surface_read := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "editor_settings",
@@ -645,6 +801,13 @@ func _has_menu_item_call(calls: Array, item_text: String) -> bool:
 		if str(call.get("tool", "")) == "editor_ui_control" and str(call.get("action", "")) == "select_menu_item":
 			if str(call.get("args", {}).get("item_text", "")) == item_text:
 				return true
+	return false
+
+
+func _has_tab_title(tabs: Array, title: String) -> bool:
+	for tab in tabs:
+		if tab is Dictionary and str((tab as Dictionary).get("title", "")) == title:
+			return true
 	return false
 
 

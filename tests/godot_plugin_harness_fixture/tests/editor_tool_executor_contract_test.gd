@@ -1089,6 +1089,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_ui should capture the activated tab when path is provided.")
 	if not str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
 		return _failure("Editor ui_control activate_ui should normalize root-level user:// PNG paths into the managed control capture directory.")
+	var tab_summary_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_visible",
+		"class_name": "TabContainer",
+		"include_hidden": true
+	})
+	if not bool(tab_summary_result.get("success", false)):
+		return _failure("Editor ui_control list_visible should enumerate TabContainer controls.")
+	var tab_summary := _find_control_summary(tab_summary_result.get("data", {}).get("controls", []), tab_container_path)
+	if tab_summary.is_empty():
+		return _failure("Editor ui_control list_visible should include the MCP TabContainer.")
+	if int(tab_summary.get("tab_count", 0)) != 3 or int(tab_summary.get("current_tab_index", -1)) != 2:
+		return _failure("Editor ui_control list_visible should expose TabContainer count and current index metadata.")
+	var tab_entries: Array = tab_summary.get("tabs", [])
+	if tab_entries.size() != 3 or not bool((tab_entries[2] as Dictionary).get("current", false)) or str((tab_entries[2] as Dictionary).get("title", "")) != "配置":
+		return _failure("Editor ui_control list_visible should expose TabContainer tab title/current metadata.")
 
 	var activate_semantic_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",
@@ -1545,6 +1560,13 @@ func _has_plugin_summary(plugins: Array, plugin_name: String) -> bool:
 		if plugin is Dictionary and str((plugin as Dictionary).get("plugin", (plugin as Dictionary).get("name", ""))) == plugin_name:
 			return (plugin as Dictionary).has("editor_enabled") and (plugin as Dictionary).has("setting_enabled")
 	return false
+
+
+func _find_control_summary(controls: Array, path: String) -> Dictionary:
+	for control in controls:
+		if control is Dictionary and str((control as Dictionary).get("path", "")) == path:
+			return control as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:
