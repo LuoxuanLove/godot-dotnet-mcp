@@ -81,10 +81,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	MCPDebugBufferScript.clear()
 	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value Authorization: Bearer top-secret-bearer", "", {"password": "hunter2", "safe": "visible"})
+	MCPDebugBufferScript.record("warning", "contract", "https://agent:super-url-secret@example.test/path", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "HTTPS://agent:upper-url-secret@example.test/path", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "ws://agent:ws-url-secret@example.test/socket", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "postgres://agent:postgres-url-secret@db.example/app", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "redis://:redis-url-secret@cache.example/0", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "bearer loose-bearer-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "x-api-key : header-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "api-key = hyphen-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "{\"access-token\" : \"json-secret\"}", "", {})
 	MCPDebugBufferScript.record(
 		"warning",
 		"contract",
-		"https://agent:super-url-secret@example.test/path HTTPS://agent:upper-url-secret@example.test/path bearer loose-bearer-secret x-api-key: header-secret api-key=hyphen-secret {\"access-token\":\"json-secret\"}",
+		"safe metadata record",
 		"",
 		{
 			"api-key": "metadata-secret",
@@ -104,7 +113,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
 	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2") or diagnostics_text.contains("top-secret-bearer"):
 		return _failure("diagnostics summary resource should redact sensitive log content.")
-	for leaked_secret in ["super-url-secret", "upper-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
+	for leaked_secret in ["super-url-secret", "upper-url-secret", "ws-url-secret", "postgres-url-secret", "redis-url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "metadata-secret", "dot-key-secret", "refresh-secret"]:
 		if diagnostics_text.contains(leaked_secret):
 			return _failure("diagnostics summary resource should redact extended sensitive pattern: %s." % leaked_secret)
 	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("still-visible") or not diagnostics_text.contains("[redacted]"):

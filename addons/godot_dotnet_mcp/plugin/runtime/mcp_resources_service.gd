@@ -16,24 +16,16 @@ const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
 const REDACTED_VALUE := "[redacted]"
 const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
-const SENSITIVE_TEXT_MARKERS := [
-	"token=", "token:", "\"token\":", "'token':",
-	"password=", "password:", "\"password\":", "'password':",
-	"secret=", "secret:", "\"secret\":", "'secret':",
-	"api_key=", "api_key:", "\"api_key\":", "'api_key':",
-	"apikey=", "apikey:", "\"apikey\":", "'apikey':",
-	"api-key=", "api-key:", "\"api-key\":", "'api-key':",
-	"x-api-key=", "x-api-key:", "\"x-api-key\":", "'x-api-key':",
-	"authorization:", "authorization=", "\"authorization\":", "'authorization':",
-	"bearer ",
-	"credential=", "credential:", "\"credential\":", "'credential':",
-	"private_key=", "private_key:", "\"private_key\":", "'private_key':",
-	"private-key=", "private-key:", "\"private-key\":", "'private-key':",
-	"access_token=", "access_token:", "\"access_token\":", "'access_token':",
-	"access-token=", "access-token:", "\"access-token\":", "'access-token':",
-	"refresh_token=", "refresh_token:", "\"refresh_token\":", "'refresh_token':",
-	"refresh-token=", "refresh-token:", "\"refresh-token\":", "'refresh-token':"
+const SENSITIVE_TEXT_KEYS := [
+	"token", "password", "secret",
+	"api_key", "apikey", "api-key", "x-api-key", "x.api.key",
+	"authorization", "credential",
+	"private_key", "private-key",
+	"access_token", "access-token",
+	"refresh_token", "refresh-token"
 ]
+const URL_SCHEME_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
+const URL_SCHEME_FIRST_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const MAX_RESOURCE_TEXT_BYTES := 524288
 
 var _get_tool_loader := Callable()
@@ -267,12 +259,13 @@ func _is_sensitive_key(key: String) -> bool:
 
 func _redact_sensitive_text(text: String) -> String:
 	var redacted := _redact_url_credentials(text)
-	for marker in SENSITIVE_TEXT_MARKERS:
-		redacted = _redact_after_marker(redacted, marker)
+	redacted = _redact_after_marker(redacted, "bearer ", true)
+	for key in SENSITIVE_TEXT_KEYS:
+		redacted = _redact_after_key_delimiter(redacted, str(key))
 	return redacted
 
 
-func _redact_after_marker(text: String, marker: String) -> String:
+func _redact_after_marker(text: String, marker: String, stop_on_space: bool = false) -> String:
 	var search_from := 0
 	var result := text
 	while true:
@@ -289,12 +282,66 @@ func _redact_after_marker(text: String, marker: String) -> String:
 		var value_end := value_start
 		while value_end < result.length():
 			var ch := result.substr(value_end, 1)
+			if ch == "\n" or ch == "\r" or ch == ";" or ch == "," or ch == "&" or ch == "\"" or ch == "'" or (stop_on_space and (ch == " " or ch == "\t")):
+				break
+			value_end += 1
+		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
+		search_from = value_start + REDACTED_VALUE.length()
+	return result
+
+
+func _redact_after_key_delimiter(text: String, key: String) -> String:
+	var search_from := 0
+	var result := text
+	var lower_key := key.to_lower()
+	while true:
+		var lower_result := result.to_lower()
+		var key_index := lower_result.find(lower_key, search_from)
+		if key_index == -1:
+			return result
+		if not _is_sensitive_text_key_match(result, key_index, key.length()):
+			search_from = key_index + key.length()
+			continue
+		var delimiter_index := key_index + key.length()
+		while delimiter_index < result.length():
+			var delimiter_ch := result.substr(delimiter_index, 1)
+			if delimiter_ch != " " and delimiter_ch != "\t" and delimiter_ch != "\"" and delimiter_ch != "'":
+				break
+			delimiter_index += 1
+		if delimiter_index >= result.length():
+			return result
+		var delimiter := result.substr(delimiter_index, 1)
+		if delimiter != ":" and delimiter != "=":
+			search_from = key_index + key.length()
+			continue
+		var value_start := delimiter_index + 1
+		while value_start < result.length():
+			var start_ch := result.substr(value_start, 1)
+			if start_ch != " " and start_ch != "\t" and start_ch != "\"" and start_ch != "'":
+				break
+			value_start += 1
+		var value_end := value_start
+		while value_end < result.length():
+			var ch := result.substr(value_end, 1)
 			if ch == "\n" or ch == "\r" or ch == ";" or ch == "," or ch == "&" or ch == "\"" or ch == "'":
 				break
 			value_end += 1
 		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
 		search_from = value_start + REDACTED_VALUE.length()
 	return result
+
+
+func _is_sensitive_text_key_match(text: String, key_index: int, key_length: int) -> bool:
+	if key_index > 0 and _is_key_token_char(text.substr(key_index - 1, 1)):
+		return false
+	var after_index := key_index + key_length
+	if after_index < text.length() and _is_key_token_char(text.substr(after_index, 1)):
+		return false
+	return true
+
+
+func _is_key_token_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_CHARS.find(ch) != -1
 
 
 func _redact_url_credentials(text: String) -> String:
@@ -321,14 +368,24 @@ func _redact_url_credentials(text: String) -> String:
 
 
 func _find_next_url_scheme(text: String, from_index: int) -> int:
-	var lower_text := text.to_lower()
-	var http_index := lower_text.find("http://", from_index)
-	var https_index := lower_text.find("https://", from_index)
-	if http_index == -1:
-		return https_index
-	if https_index == -1:
-		return http_index
-	return mini(http_index, https_index)
+	var sep_index := text.find("://", from_index)
+	while sep_index != -1:
+		var scheme_start := sep_index - 1
+		while scheme_start >= 0 and _is_url_scheme_char(text.substr(scheme_start, 1)):
+			scheme_start -= 1
+		scheme_start += 1
+		if scheme_start < sep_index and _is_url_scheme_first_char(text.substr(scheme_start, 1)):
+			return scheme_start
+		sep_index = text.find("://", sep_index + 3)
+	return -1
+
+
+func _is_url_scheme_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_CHARS.find(ch) != -1
+
+
+func _is_url_scheme_first_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_FIRST_CHARS.find(ch) != -1
 
 
 func _find_url_authority_end(text: String, from_index: int) -> int:
