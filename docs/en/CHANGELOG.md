@@ -28,6 +28,7 @@ Target version: 1.2.1.
 - Extended the editor UI control atomic layer with Tree item listing/selection coverage for settings-dialog category navigation.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+- Fixed the Settings tab plugin update branch selector popup so large discovered branch lists stay height-bounded and scrollable instead of covering the editor.
 
 ## [1.2.0] - 2026-06-06
 

@@ -440,6 +440,7 @@ $RequiredCases = @(
     "config_tab_action_service_contracts"
     "client_config_presenter_contracts"
     "config_tab_rendering_contracts"
+    "settings_tab_rendering_contracts"
     "home_tab_localization_contracts"
     "server_tab_model_projection_contracts"
     "mcp_debug_buffer_contracts"

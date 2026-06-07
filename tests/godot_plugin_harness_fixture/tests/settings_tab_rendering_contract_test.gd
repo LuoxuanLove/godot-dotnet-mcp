@@ -1,6 +1,7 @@
 extends RefCounted
 
 const SettingsPanelScene = preload("res://addons/godot_dotnet_mcp/ui/settings_panel.tscn")
+const UPDATE_REF_POPUP_MAX_HEIGHT := 360
 
 var _instance: VBoxContainer = null
 
@@ -105,6 +106,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.update_custom_branch_changed.connect(Callable(recorder, "on_update_custom_branch_changed"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
+	var discovered_branches := _build_branch_values(80)
 
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
@@ -118,7 +120,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"current_log_level": "error",
 		"current_language": "zh_CN",
 		"log_levels": ["debug", "info", "warning", "error"],
-		"update_refs_branches": ["dev", "feature/settings"],
+		"update_refs_branches": discovered_branches,
 		"update_refs_releases": ["v1.0.0", "v1.2.3"],
 		"update_refs_state": "success",
 		"update_refs_latest_release": "v1.2.3",
@@ -155,6 +157,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render latest stable, latest release, then custom branch sources without adding Config-tab UI.")
 	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
+	var branch_popup := custom_branch.get_popup()
+	if branch_popup == null or int(branch_popup.max_size.y) <= 0 or int(branch_popup.max_size.y) > UPDATE_REF_POPUP_MAX_HEIGHT:
+		return _failure("Settings tab custom branch popup should keep a bounded max height when many branches are discovered.")
 	if custom_branch_row.visible:
 		return _failure("Settings tab should hide manual target selectors for latest release source.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_check_count != 0:
@@ -217,6 +222,13 @@ func _find_label_containing(labels: Array, text: String) -> Label:
 		if label is Label and (label as Label).text.contains(text):
 			return label as Label
 	return null
+
+
+func _build_branch_values(count: int) -> Array[String]:
+	var values: Array[String] = ["dev", "feature/settings"]
+	for index in range(count):
+		values.append("feature/settings-contract-%02d" % index)
+	return values
 
 func _failure(message: String) -> Dictionary:
 	return {"name": "settings_tab_rendering_contracts", "success": false, "error": message}

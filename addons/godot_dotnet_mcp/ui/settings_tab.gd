@@ -13,6 +13,7 @@ const SettingsTabModelProjectionServiceScript = preload("res://addons/godot_dotn
 const LAYOUT_WIDTH_BUCKET := 48.0
 const SETTING_LABEL_WIDTH := 112.0
 const SETTING_FIELD_WIDTH := 150.0
+const UPDATE_REF_POPUP_MAX_HEIGHT := 360.0
 const UPDATE_APPLY_FALLBACK_TEXT := "同步"
 const UPDATE_DESCRIPTION_FALLBACK_ZH := "选择更新方式后会自动发现 GitHub 分支、发布版和标签，然后可同步选中目标。"
 const UPDATE_DESCRIPTION_FALLBACK_EN := "Choose an update mode; branches, releases, and tags are discovered automatically."
@@ -75,6 +76,7 @@ func _ready() -> void:
 	_apply_button.text = UPDATE_APPLY_FALLBACK_TEXT
 	_apply_button.disabled = true
 	_apply_fill_width_flags()
+	_apply_update_ref_popup_limits()
 
 
 func apply_model(model: Dictionary) -> void:
@@ -120,6 +122,7 @@ func apply_model(model: Dictionary) -> void:
 	_custom_branch_syncing = true
 	_apply_projected_options(_custom_branch_value, options.get("update_branches", []))
 	_custom_branch_syncing = false
+	_apply_update_ref_popup_limits()
 
 	_updates_status.text = str(updates.get("status_text", ""))
 	var update_source := str(updates.get("source", "latest_stable"))
@@ -215,6 +218,16 @@ func _apply_projected_options(option_button: OptionButton, projected_items: Arra
 		option_button.select(selected_index)
 	elif option_button.get_item_count() > 0:
 		option_button.select(0)
+
+
+func _apply_update_ref_popup_limits() -> void:
+	if _custom_branch_value == null:
+		return
+	var popup := _custom_branch_value.get_popup()
+	if popup == null:
+		return
+	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
+	popup.max_size.y = int(round(UPDATE_REF_POPUP_MAX_HEIGHT * scale))
 
 
 func _on_port_spin_changed(value: float) -> void:

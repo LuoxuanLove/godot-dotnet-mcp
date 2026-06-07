@@ -12,6 +12,8 @@ This release line improves editor UI automation by letting clients wait for visi
 
 The new wait action complements menu, popup, click, hover, and text-entry controls without requiring OS mouse automation. This makes workflows such as opening editor dialogs, filtering settings, and confirming transient panels easier to verify from inside Godot.
 
+The Dock Settings update branch picker now keeps long discovered branch lists height-bounded and scrollable, so choosing a development branch no longer covers the editor when many refs are available.
+
 ### 🪟 Floating Window Evidence
 
 `system_editor_control` can now read and crop visible floating popup/window surfaces through `get_popup` and `capture_popup`. That gives clients a direct evidence path for modal editor windows and popup menus before choosing a button, menu item, text field, or close action.
