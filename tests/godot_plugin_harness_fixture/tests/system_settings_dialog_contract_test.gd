@@ -176,6 +176,8 @@ class FakeBridge extends RefCounted:
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": max_renderable_elements, "text": str(max_renderable_elements), "visible": true, "disabled": false})
 			if project_filter_text.contains("editor/direct_spin"):
 				rows.append({"path": "/root/ProjectSettings/General/Editor/DirectSpin", "parent_path": "/root/ProjectSettings/General/Editor", "class": "SpinBox", "setting_path": "editor/direct_spin", "value": direct_spin_value, "text": str(direct_spin_value), "visible": true, "disabled": false})
+			if project_filter_text.contains("editor/plain_label"):
+				rows.append({"path": "/root/ProjectSettings/General/Editor/PlainLabel", "parent_path": "/root/ProjectSettings/General/Editor", "class": "HBoxContainer", "setting_path": "editor/plain_label", "text": "Plain Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
 			if project_filter_text.contains("application/run/main_scene"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene", "parent_path": "/root/ProjectSettings/General/Application/Run", "class": "HBoxContainer", "text": "Main Scene", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene/Value", "parent_path": "/root/ProjectSettings/General/Application/Run/MainScene", "class": "OptionButton", "text": "res://Main.tscn", "selected": 2, "visible": true, "disabled": false})
@@ -778,6 +780,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("set_value should target the direct value row when no child value control exists.")
 	if float(set_direct_value.get("data", {}).get("after", {}).get("value", 0.0)) != 7.0:
 		return _failure("set_value should verify direct value row updates.")
+	var focus_direct_value := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "editor/direct_spin",
+		"limit": 10
+	})
+	if not bool(focus_direct_value.get("success", false)):
+		return _failure("focus_value should focus a direct value row when the row itself is a value editor.")
+	if str(focus_direct_value.get("data", {}).get("value_control_path", "")) != "/root/ProjectSettings/General/Editor/DirectSpin":
+		return _failure("focus_value should target the direct value row itself when no child value control exists.")
+
+	await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "project_settings",
+		"setting_path": "editor/plain_label",
+		"limit": 10
+	})
+	var focus_plain_label := impl.execute("settings_dialog", {
+		"action": "focus_value",
+		"surface": "project_settings",
+		"setting_path": "editor/plain_label",
+		"limit": 10
+	})
+	if bool(focus_plain_label.get("success", false)):
+		return _failure("focus_value should not focus a plain settings row with no value control.")
+	var focus_plain_label_workflow: Array = focus_plain_label.get("data", {}).get("workflow", [])
+	var focus_plain_label_step: Dictionary = focus_plain_label_workflow[focus_plain_label_workflow.size() - 1] if not focus_plain_label_workflow.is_empty() else {}
+	if str(focus_plain_label_step.get("reason", "")) != "value_control_not_found":
+		return _failure("focus_value plain-row failure should report value_control_not_found.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",

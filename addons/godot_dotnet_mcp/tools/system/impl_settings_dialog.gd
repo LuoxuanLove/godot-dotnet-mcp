@@ -565,7 +565,8 @@ func _focus_value(surface: String, args: Dictionary) -> Dictionary:
 		return bridge.error(str(row_resolution.get("message", "No unique settings row matched focus_value.")), error_payload)
 	var row: Dictionary = row_resolution.get("row", {})
 	var value_payload: Dictionary = _read_row_value(row, all_controls)
-	var value_path := str(value_payload.get("value_control_path", value_payload.get("value_source", ""))).strip_edges()
+	var focus_control: Dictionary = _value_control_for_row(row, all_controls)
+	var value_path := str(focus_control.get("path", focus_control.get("node_path", focus_control.get("row_control_path", "")))).strip_edges()
 	if value_path.is_empty():
 		var missing_value_payload := observation.duplicate(true)
 		missing_value_payload["row"] = row
@@ -605,7 +606,7 @@ func _focus_value(surface: String, args: Dictionary) -> Dictionary:
 		"editor_type": str(value_payload.get("value_editor_type", "unknown")),
 		"confidence": str(value_payload.get("confidence", row.get("confidence", "low")))
 	}
-	payload["value_control"] = value_payload.get("value_control", {})
+	payload["value_control"] = focus_control
 	payload["value_control_path"] = value_path
 	payload["value_editor_type"] = str(value_payload.get("value_editor_type", "unknown"))
 	payload["value_text"] = str(value_payload.get("value_text", ""))
