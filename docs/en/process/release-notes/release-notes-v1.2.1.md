@@ -48,6 +48,8 @@ Agents can also use read-only `verify_value` checks to compare expected text, bo
 
 This makes configuration and editor workflows easier to re-enter after profiles, plugin-domain tools, or user-tool state change: agents can rediscover the right system, project, editor, runtime, script, or user-facing tool before choosing the next verified action.
 
+Native MCP discovery now localizes resource and resource-template metadata too. When clients call `resources/list` or `resources/templates/list`, resource names and descriptions follow the active plugin language while URIs and templates remain stable.
+
 ### ✅ Compatibility and Upgrade Notes
 
 These changes only extend the public tool schema. Existing `system_editor_control`, `system_settings_dialog`, and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.

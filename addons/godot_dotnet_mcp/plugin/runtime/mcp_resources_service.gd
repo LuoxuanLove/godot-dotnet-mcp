@@ -7,6 +7,7 @@ const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/p
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -53,18 +54,18 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 	return {
 		"resources": [{
 			"uri": PROJECT_INFO_URI,
-			"name": "Project info",
-			"description": "Current Godot project path, protocol facts, server info, and loader status.",
+			"name": _text("mcp_resource_project_info_name", "Project info"),
+			"description": _text("mcp_resource_project_info_desc", "Current Godot project path, protocol facts, server info, and loader status."),
 			"mimeType": "application/json"
 		}, {
 			"uri": DIAGNOSTICS_SUMMARY_URI,
-			"name": "Diagnostics summary",
-			"description": "Plugin self-diagnostics and recent MCP log records.",
+			"name": _text("mcp_resource_diagnostics_summary_name", "Diagnostics summary"),
+			"description": _text("mcp_resource_diagnostics_summary_desc", "Plugin self-diagnostics and recent MCP log records."),
 			"mimeType": "application/json"
 		}, {
 			"uri": TOOL_CATALOG_URI,
-			"name": "Tool catalog",
-			"description": "Current MCP tool catalog with grouping metadata used by tools/list.",
+			"name": _text("mcp_resource_tool_catalog_name", "Tool catalog"),
+			"description": _text("mcp_resource_tool_catalog_desc", "Current MCP tool catalog with grouping metadata used by tools/list."),
 			"mimeType": "application/json"
 		}]
 	}
@@ -74,18 +75,18 @@ func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionar
 	return {
 		"resourceTemplates": [{
 			"uriTemplate": SCENE_TEMPLATE_URI,
-			"name": "Scene text",
-			"description": "Read a .tscn scene file by project-relative path.",
+			"name": _text("mcp_resource_template_scene_name", "Scene text"),
+			"description": _text("mcp_resource_template_scene_desc", "Read a .tscn scene file by project-relative path."),
 			"mimeType": "text/plain"
 		}, {
 			"uriTemplate": SCRIPT_TEMPLATE_URI,
-			"name": "Script text",
-			"description": "Read a .gd or .cs script file by project-relative path.",
+			"name": _text("mcp_resource_template_script_name", "Script text"),
+			"description": _text("mcp_resource_template_script_desc", "Read a .gd or .cs script file by project-relative path."),
 			"mimeType": "text/plain"
 		}, {
 			"uriTemplate": RESOURCE_TEMPLATE_URI,
-			"name": "Resource text",
-			"description": "Read a .tres or .res resource file by project-relative path.",
+			"name": _text("mcp_resource_template_resource_name", "Resource text"),
+			"description": _text("mcp_resource_template_resource_desc", "Read a .tres or .res resource file by project-relative path."),
 			"mimeType": "text/plain"
 		}]
 	}
@@ -416,6 +417,14 @@ func _sanitize(value):
 	if _sanitize_for_json.is_valid():
 		return _sanitize_for_json.call(value)
 	return value
+
+
+func _text(key: String, fallback: String) -> String:
+	var localization = LocalizationServiceScript.get_instance()
+	var text := str(localization.get_text(key)) if localization != null else key
+	if text == key or text.is_empty():
+		return fallback
+	return text
 
 
 func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:

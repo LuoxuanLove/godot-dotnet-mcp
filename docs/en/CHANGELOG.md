@@ -10,6 +10,7 @@ Target version: 1.2.1.
 
 ### Added
 
+- Localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
 - Added `system_tool_catalog` so clients can search the currently exposed tool catalog by query, category, or domain and inspect match reasons, actions, parameters, visibility, and enabled state.
 - Added `system_project_configure(action="list_export_presets")` to inspect `export_presets.cfg` as a read-only preset summary with redacted sensitive option keys and absolute export paths.
 - Added `system_project_configure(action="get_input_action")` so agents can inspect a specific input action's deadzone and concrete event bindings from the high-level project configuration tool.
@@ -27,6 +28,7 @@ Target version: 1.2.1.
 
 ### Internal
 
+- Extended MCP resources/prompts harness coverage to verify localized resource and resource-template metadata under a non-English locale.
 - Added system project executor and Tools tab rendering coverage for export preset summary discovery, including sensitive option-key redaction and absolute export-path redaction.
 - Added tool-catalog search harness coverage for public exposure, internal visible lookups, schema opt-in, filter handling, and match-reason reporting.
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
