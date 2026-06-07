@@ -261,8 +261,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_control"]):
 		return _failure("editor UI control prompt should provide actionable editor UI workflow sections.")
 	var editor_prompt_text := str(editor_prompt.get("text", ""))
-	if editor_prompt_text.find("resolve_row") == -1:
-		return _failure("editor UI control prompt should mention settings_dialog resolve_row in the localized prompt text.")
+	if editor_prompt_text.find("run_task") == -1 or editor_prompt_text.find("resolve_row") == -1:
+		return _failure("editor UI control prompt should mention settings_dialog run_task and resolve_row in the localized prompt text.")
 	if not _fragment_order_is_increasing(editor_prompt_text, ["system_settings_dialog", "system_editor_control(action=activate_ui)", "focus_control", "click_control"]):
 		return _failure("editor UI control prompt should order semantic settings/UI actions before control-level focus and click fallback.")
 	if not _fragment_order_is_increasing(editor_prompt_text, ["activate_control", "set_control_text", "set_value", "click_control"]):

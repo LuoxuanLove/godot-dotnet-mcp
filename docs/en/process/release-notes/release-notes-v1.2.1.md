@@ -44,6 +44,8 @@ When an agent only needs to move keyboard focus to the matched value editor, `fo
 
 Supported unique visible rows can now be edited through `set_value` for text, number, and bool controls. The workflow writes through editor UI controls and then observes the row again so agents can verify the value they changed instead of assuming the click or text edit worked.
 
+`run_task` now wraps that settings chain into one trusted operation. It can open and narrow the settings surface, resolve a unique row, read the before value, optionally write a supported value, verify the expected result, and attach capture evidence. Risky writes are refused before interaction when the selector is ambiguous, hidden controls are requested, confidence is too low, or required capture evidence cannot be produced before the value changes.
+
 Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
 
 ### 🔎 Searchable Tool Discovery

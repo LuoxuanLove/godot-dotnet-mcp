@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, resolve unique visible rows, read, focus, set, or verify current visible row values, focus a returned result, capture the visible settings surface with popup/window bounds preferred over full-editor screenshots, and close the surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, resolve unique visible rows, read, focus, set, or verify current visible row values, focus a returned result, run a trusted locate/read/set/verify/capture task, capture the visible settings surface with popup/window bounds preferred over full-editor screenshots, and close the surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "run_task", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -144,6 +144,15 @@ func get_tools() -> Array[Dictionary]:
 						"type": "boolean",
 						"description": "Capture settings surface evidence after open/search/focus when supported, preferring visible popup/window bounds before broader editor screenshots"
 					},
+					"capture_policy": {
+						"type": "string",
+						"enum": ["none", "final", "on_failure", "always"],
+						"description": "Capture policy for run_task: none disables evidence capture, final captures the final task payload, on_failure captures only failed tasks, and always currently captures final evidence while requiring the task to be capture-ready"
+					},
+					"require_capture": {
+						"type": "boolean",
+						"description": "When true, run_task fails if final evidence capture cannot use any backend"
+					},
 					"path": {
 						"type": "string",
 						"description": "Optional output path for the settings surface capture"
@@ -209,6 +218,8 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _focus_value(surface, args)
 		"set_value":
 			return bridge.error("set_value requires asynchronous execution")
+		"run_task":
+			return bridge.error("run_task requires asynchronous execution")
 		"verify_value":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -255,6 +266,11 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return await _set_value(surface, args)
+		"run_task":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return await _run_task(surface, args)
 		_:
 			return execute(tool_name, args)
 
@@ -811,6 +827,346 @@ func _verify_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(verification.get("success", false)):
 		return bridge.success(payload, "Settings row value verified")
 	return bridge.error("Settings row value did not match expected_value.", payload)
+
+
+func _run_task(surface: String, args: Dictionary) -> Dictionary:
+	var mode := _task_mode(args)
+	var payload := _task_base_payload(surface, args, mode)
+	var capture_policy := _task_capture_policy(args)
+	var task_args := args.duplicate(true)
+	task_args["capture"] = false
+	if _task_requires_capture(task_args) and capture_policy == "none":
+		return _finish_task_failure(payload, task_args, "preflight", "capture_policy_refused", "run_task requires capture evidence, but capture_policy=none disables evidence capture.", "none")
+	if bool(task_args.get("include_hidden", false)) and args.has("value"):
+		return _finish_task_failure(payload, task_args, "preflight", "hidden_write_refused", "run_task refuses hidden-control writes.", capture_policy)
+	if args.has("value") and str(task_args.get("require_confidence", "medium")).strip_edges().to_lower() == "low":
+		return _finish_task_failure(payload, task_args, "preflight", "low_confidence_write_refused", "run_task refuses low-confidence writes.", capture_policy)
+	if args.has("value") and args.get("value") == null:
+		return _finish_task_failure(payload, task_args, "preflight", "null_value_refused", "run_task requires a non-null value for writes.", capture_policy)
+	if not _has_row_selector(args):
+		return _finish_task_failure(payload, task_args, "preflight", "row_selector_required", "run_task requires target_path, setting_path, or query.", capture_policy)
+
+	var open_result: Dictionary = await _open(surface, task_args)
+	_record_task_step(payload, "open", open_result)
+	_merge_task_surface_context(payload, open_result.get("data", {}))
+	if not bool(open_result.get("success", false)):
+		return _finish_task_failure(payload, task_args, "open", _result_reason(open_result, "open_failed"), str(open_result.get("message", "Settings surface could not be opened.")), capture_policy, open_result)
+
+	if _has_category_selector(args):
+		var category_result: Dictionary = _focus_category(surface, task_args)
+		_record_task_step(payload, "focus_category", category_result)
+		_merge_task_surface_context(payload, category_result.get("data", {}))
+		if not bool(category_result.get("success", false)):
+			return _finish_task_failure(payload, task_args, "focus_category", _result_reason(category_result, "category_not_found"), str(category_result.get("message", "Settings category could not be focused.")), capture_policy, category_result)
+
+	if _should_search_for_task(args):
+		var search_result: Dictionary = await _search(surface, task_args)
+		_record_task_step(payload, "search", search_result)
+		_merge_task_surface_context(payload, search_result.get("data", {}))
+		if not bool(search_result.get("success", false)):
+			return _finish_task_failure(payload, task_args, "search", _result_reason(search_result, "search_failed"), str(search_result.get("message", "Settings search failed.")), capture_policy, search_result)
+
+	var resolve_result: Dictionary = _resolve_row(surface, task_args)
+	_record_task_step(payload, "resolve_row", resolve_result)
+	_merge_task_surface_context(payload, resolve_result.get("data", {}))
+	if not bool(resolve_result.get("success", false)):
+		return _finish_task_failure(payload, task_args, "resolve_row", _result_reason(resolve_result, "row_not_found"), str(resolve_result.get("message", "Settings row could not be resolved.")), capture_policy, resolve_result)
+	_merge_task_row(payload, resolve_result.get("data", {}))
+
+	var read_result: Dictionary = _read_value(surface, task_args)
+	_record_task_step(payload, "read_before", read_result)
+	_merge_task_surface_context(payload, read_result.get("data", {}))
+	if not bool(read_result.get("success", false)):
+		return _finish_task_failure(payload, task_args, "read_before", _result_reason(read_result, "read_failed"), str(read_result.get("message", "Settings row value could not be read.")), capture_policy, read_result)
+	payload["before"] = read_result.get("data", {})
+
+	if args.has("value"):
+		if _task_requires_capture(task_args):
+			var capture_probe_result := _probe_task_capture(payload, task_args)
+			_record_task_step(payload, "capture_preflight", capture_probe_result)
+			if not bool(capture_probe_result.get("success", false)):
+				return _finish_task_failure(payload, task_args, "capture", "capture_required", "run_task required capture evidence before writing, but no capture backend succeeded.", "none", capture_probe_result)
+		var set_result: Dictionary = await _set_value(surface, task_args)
+		_record_task_step(payload, "set_value", set_result)
+		_merge_task_surface_context(payload, set_result.get("data", {}))
+		_merge_task_write(payload, set_result.get("data", {}))
+		if not bool(set_result.get("success", false)):
+			return _finish_task_failure(payload, task_args, "set_value", _result_reason(set_result, "write_failed"), str(set_result.get("message", "Settings row value could not be set.")), capture_policy, set_result)
+
+	var expected_source := ""
+	var verify_args := task_args.duplicate(true)
+	if args.has("expected_value"):
+		expected_source = "expected_value"
+	elif args.has("value"):
+		expected_source = "value"
+		verify_args["expected_value"] = args.get("value")
+	if not expected_source.is_empty():
+		var verify_result: Dictionary = _verify_value(surface, verify_args)
+		_record_task_step(payload, "verify_after", verify_result)
+		_merge_task_surface_context(payload, verify_result.get("data", {}))
+		payload["verification"] = verify_result.get("data", {}).get("verification", {})
+		if payload["verification"] is Dictionary:
+			(payload["verification"] as Dictionary)["performed"] = true
+			(payload["verification"] as Dictionary)["expected_source"] = expected_source
+		if not bool(verify_result.get("success", false)):
+			payload["write_attempted"] = args.has("value")
+			payload["write_verified"] = false
+			if payload.get("after", {}) is Dictionary and (payload.get("after", {}) as Dictionary).is_empty():
+				payload["after"] = verify_result.get("data", {})
+			return _finish_task_failure(payload, task_args, "verify_after", _result_reason(verify_result, "value_mismatch"), str(verify_result.get("message", "Settings row value did not match the expected value.")), capture_policy, verify_result)
+		if not args.has("value"):
+			payload["after"] = verify_result.get("data", {})
+	else:
+		payload["verification"] = {"performed": false, "reason": "not_requested"}
+
+	return _finish_task_success(payload, task_args, capture_policy)
+
+
+func _task_mode(args: Dictionary) -> String:
+	if args.has("value") and args.has("expected_value"):
+		return "set_and_verify"
+	if args.has("value"):
+		return "set"
+	if args.has("expected_value"):
+		return "verify"
+	return "read"
+
+
+func _task_base_payload(surface: String, args: Dictionary, mode: String) -> Dictionary:
+	return {
+		"surface": surface,
+		"task_action": "run_task",
+		"mode": mode,
+		"selectors": _task_selectors(args),
+		"opened": false,
+		"dialog_found": false,
+		"dialog_path": "",
+		"primary_popup_path": "",
+		"row": {},
+		"row_id": "",
+		"row_control_path": "",
+		"value_control_path": "",
+		"resolution": {},
+		"before": {},
+		"write": {},
+		"after": {},
+		"verification": {},
+		"write_attempted": args.has("value"),
+		"write_verified": false,
+		"steps": {},
+		"workflow": []
+	}
+
+
+func _task_selectors(args: Dictionary) -> Dictionary:
+	var selectors := {}
+	for key in ["tab", "tab_index", "category", "category_path", "category_index", "query", "setting_path", "target_path"]:
+		if args.has(key):
+			selectors[key] = args.get(key)
+	return selectors
+
+
+func _has_row_selector(args: Dictionary) -> bool:
+	return not str(args.get("target_path", "")).strip_edges().is_empty() or not str(args.get("setting_path", "")).strip_edges().is_empty() or not str(args.get("query", "")).strip_edges().is_empty()
+
+
+func _has_category_selector(args: Dictionary) -> bool:
+	return not str(args.get("category", "")).strip_edges().is_empty() or not str(args.get("category_path", "")).strip_edges().is_empty() or int(args.get("category_index", -1)) >= 0
+
+
+func _should_search_for_task(args: Dictionary) -> bool:
+	if not str(args.get("target_path", "")).strip_edges().is_empty():
+		return false
+	return not str(args.get("query", "")).strip_edges().is_empty() or not str(args.get("setting_path", "")).strip_edges().is_empty()
+
+
+func _task_capture_policy(args: Dictionary) -> String:
+	var policy := str(args.get("capture_policy", "final")).strip_edges().to_lower()
+	if ["none", "final", "on_failure", "always"].has(policy):
+		return policy
+	return "final"
+
+
+func _task_requires_capture(args: Dictionary) -> bool:
+	return bool(args.get("require_capture", false))
+
+
+func _record_task_step(payload: Dictionary, step_name: String, result: Dictionary) -> void:
+	var step_payload: Dictionary = {
+		"success": bool(result.get("success", false)),
+		"message": str(result.get("message", "")),
+		"data": _task_step_summary(result.get("data", {}))
+	}
+	if result.has("error"):
+		step_payload["error"] = result.get("error")
+	if not bool(result.get("success", false)):
+		step_payload["reason"] = _result_reason(result, "failed")
+	payload.get("steps", {})[step_name] = step_payload
+	_append_task_workflow(payload, step_name, result)
+
+
+func _task_step_summary(data) -> Dictionary:
+	var summary := {}
+	if not (data is Dictionary):
+		return summary
+	var dict := data as Dictionary
+	for key in [
+		"surface",
+		"opened",
+		"already_open",
+		"dialog_found",
+		"dialog_path",
+		"primary_popup_path",
+		"selected_tab",
+		"focused_category",
+		"row",
+		"row_id",
+		"row_control_path",
+		"value_control_path",
+		"setting_path",
+		"resolution",
+		"before",
+		"write",
+		"after",
+		"verification",
+		"capture_surface",
+		"capture_backend",
+		"capture_target_path",
+		"capture_path",
+		"capture_fallback_reasons",
+		"capture_error"
+	]:
+		if dict.has(key):
+			summary[key] = dict.get(key)
+	return summary
+
+
+func _task_result_summary(result: Dictionary) -> Dictionary:
+	var summary: Dictionary = {
+		"success": bool(result.get("success", false)),
+		"message": str(result.get("message", ""))
+	}
+	if result.has("error"):
+		summary["error"] = result.get("error")
+	if result.has("data"):
+		summary["data"] = _task_step_summary(result.get("data", {}))
+	return summary
+
+
+func _append_task_workflow(payload: Dictionary, step_name: String, result: Dictionary) -> void:
+	var workflow: Array = payload.get("workflow", [])
+	workflow.append({
+		"step": "run_task.%s" % step_name,
+		"success": bool(result.get("success", false)),
+		"reason": _result_reason(result, "") if not bool(result.get("success", false)) else ""
+	})
+	payload["workflow"] = workflow
+
+
+func _merge_task_surface_context(payload: Dictionary, data) -> void:
+	if not (data is Dictionary):
+		return
+	var dict := data as Dictionary
+	for key in ["opened", "already_open", "dialog_found", "dialog_path", "primary_popup_path"]:
+		if dict.has(key):
+			payload[key] = dict.get(key)
+
+
+func _merge_task_row(payload: Dictionary, data) -> void:
+	if not (data is Dictionary):
+		return
+	var dict := data as Dictionary
+	for key in ["row", "row_id", "row_control_path", "value_control_path", "resolution"]:
+		if dict.has(key):
+			payload[key] = dict.get(key)
+
+
+func _merge_task_write(payload: Dictionary, data) -> void:
+	if not (data is Dictionary):
+		return
+	var dict := data as Dictionary
+	for key in ["before", "write", "after", "verification"]:
+		if dict.has(key):
+			payload[key] = dict.get(key)
+	payload["write_attempted"] = true
+	payload["write_verified"] = bool(dict.get("verification", {}).get("success", false))
+
+
+func _probe_task_capture(payload: Dictionary, args: Dictionary) -> Dictionary:
+	var capture_payload := {
+		"surface": str(payload.get("surface", "")),
+		"dialog_found": bool(payload.get("dialog_found", false)),
+		"dialog_path": str(payload.get("dialog_path", "")),
+		"primary_popup_path": str(payload.get("primary_popup_path", ""))
+	}
+	_attach_capture(capture_payload, args)
+	payload["capture_preflight"] = _task_step_summary(capture_payload)
+	_copy_task_capture_fields(payload, capture_payload)
+	if str(capture_payload.get("capture_backend", "none")) == "none":
+		return bridge.error("Settings task capture preflight failed.", capture_payload)
+	return bridge.success(capture_payload, "Settings task capture evidence is available")
+
+
+func _copy_task_capture_fields(payload: Dictionary, capture_payload: Dictionary) -> void:
+	for key in ["capture", "capture_surface", "capture_path", "capture_backend", "capture_target_path", "capture_fallback_reasons", "capture_error"]:
+		if capture_payload.has(key):
+			payload[key] = capture_payload.get(key)
+
+
+func _finish_task_success(payload: Dictionary, args: Dictionary, capture_policy: String) -> Dictionary:
+	payload["write_verified"] = bool(payload.get("verification", {}).get("success", false)) if bool(payload.get("write_attempted", false)) else false
+	if _should_capture_task(capture_policy, false):
+		_attach_capture(payload, args)
+	if bool(args.get("require_capture", false)) and str(payload.get("capture_backend", "none")) == "none":
+		return _finish_task_failure(payload, args, "capture", "capture_required", "run_task required capture evidence, but no capture backend succeeded.", "none")
+	return bridge.success(payload, "Settings task completed")
+
+
+func _finish_task_failure(payload: Dictionary, args: Dictionary, failed_step: String, reason: String, message: String, capture_policy: String, failure_result: Dictionary = {}) -> Dictionary:
+	payload["failed_step"] = failed_step
+	payload["reason"] = reason
+	if not failure_result.is_empty():
+		payload["failure_result"] = _task_result_summary(failure_result)
+	if failed_step != "preflight" and _should_capture_task(capture_policy, true):
+		_attach_capture(payload, args)
+	if _task_requires_capture(args) and failed_step != "preflight" and str(payload.get("capture_backend", "none")) == "none" and reason != "capture_required":
+		payload["failed_step"] = "capture"
+		payload["reason"] = "capture_required"
+		message = "run_task required capture evidence, but no capture backend succeeded."
+	return bridge.error(message, payload)
+
+
+func _should_capture_task(capture_policy: String, failed: bool) -> bool:
+	match capture_policy:
+		"none":
+			return false
+		"on_failure":
+			return failed
+		"always":
+			return true
+		_:
+			return true
+
+
+func _result_reason(result: Dictionary, default_reason: String) -> String:
+	var data = result.get("data", {})
+	if data is Dictionary:
+		var dict := data as Dictionary
+		var workflow = dict.get("workflow", [])
+		if workflow is Array and not (workflow as Array).is_empty():
+			var last = (workflow as Array)[(workflow as Array).size() - 1]
+			if last is Dictionary and not str((last as Dictionary).get("reason", "")).strip_edges().is_empty():
+				return str((last as Dictionary).get("reason", ""))
+		var verification = dict.get("verification", {})
+		if verification is Dictionary and not str((verification as Dictionary).get("reason", "")).strip_edges().is_empty():
+			return str((verification as Dictionary).get("reason", ""))
+		var resolution = dict.get("resolution", {})
+		if resolution is Dictionary and not str((resolution as Dictionary).get("reason", "")).strip_edges().is_empty():
+			return str((resolution as Dictionary).get("reason", ""))
+		var write = dict.get("write", {})
+		if write is Dictionary and not str((write as Dictionary).get("reason", "")).strip_edges().is_empty():
+			return str((write as Dictionary).get("reason", ""))
+	return default_reason
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:

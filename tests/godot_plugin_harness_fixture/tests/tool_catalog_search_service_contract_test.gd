@@ -22,6 +22,19 @@ class FakeToolLoader:
 				}
 			}
 		}, {
+			"name": "system_settings_dialog",
+			"description": "Settings dialog workflow with trusted task orchestration",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["open", "resolve_row", "run_task"], "description": "Settings dialog workflow action"},
+					"capture_policy": {"type": "string", "description": "Capture policy for run_task"}
+				}
+			}
+		}, {
 			"name": "system_runtime_step",
 			"description": "Apply runtime input and capture a frame",
 			"category": "system",
@@ -69,6 +82,19 @@ class FakeToolLoader:
 					}
 				}
 			}, {
+				"name": "settings_dialog",
+				"full_name": "system_settings_dialog",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["open", "resolve_row", "run_task"], "description": "Settings dialog workflow action"},
+						"capture_policy": {"type": "string", "description": "Capture policy for run_task"}
+					}
+				}
+			}, {
 				"name": "runtime_step",
 				"full_name": "system_runtime_step",
 				"category": "system",
@@ -106,12 +132,12 @@ class FakeToolLoader:
 		]
 
 	func get_tool_loader_status() -> Dictionary:
-		return {"healthy": true, "status": "ready", "tool_count": 3, "exposed_tool_count": 2}
+		return {"healthy": true, "status": "ready", "tool_count": 4, "exposed_tool_count": 3}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var loader := FakeToolLoader.new()
-	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "capture", "limit": 10})
+	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "input", "limit": 10})
 	if not bool(exposed_search.get("success", false)):
 		return _failure("Exposed catalog search should succeed.")
 	var exposed_data: Dictionary = exposed_search.get("data", {})
@@ -122,6 +148,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Catalog search should omit full schemas unless include_schema=true.")
 	if not ((exposed_matches[0] as Dictionary).get("match_reasons", []) as Array).has("action"):
 		return _failure("Catalog search should report action match reasons.")
+
+	var settings_task_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "run_task", "limit": 10})
+	var settings_task_matches: Array = (settings_task_search.get("data", {}) as Dictionary).get("matches", [])
+	if settings_task_matches.size() != 1 or str((settings_task_matches[0] as Dictionary).get("name", "")) != "system_settings_dialog":
+		return _failure("Catalog search should expose system_settings_dialog run_task action discovery.")
+	if not ((settings_task_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
+		return _failure("Catalog search should report run_task as a parameter enum match.")
 
 	var visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
 		"query": "get_action",

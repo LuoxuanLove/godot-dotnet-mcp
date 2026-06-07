@@ -36,6 +36,8 @@ class FakeLocalization extends RefCounted:
 		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
 		"tool_action_cleanup_legacy_cache_name": "清理旧缓存",
 		"tool_action_set_settings_name": "写入设置",
+		"tool_action_run_task_name": "运行任务",
+		"tool_action_run_task_desc": "编排可信的设置行定位、读取、可选写入、验证与截图取证任务。",
 		"tool_action_initialize_name": "初始化",
 		"tool_action_launch_name": "启动",
 		"tool_action_attach_name": "附加",
@@ -210,6 +212,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should render high-level system tool action children.")
 	if editor_log_action.get_text(0) != "读取输出" or userdata_action.get_text(0) != "确保目录结构":
 		return _failure("Tools tab should localize high-level system tool action children.")
+	var settings_dialog_tool := _find_child_by_metadata(system_category, "tool", "system_settings_dialog")
+	var run_task_action := _find_child_by_metadata(settings_dialog_tool, "action", "system_settings_dialog.run_task") if settings_dialog_tool != null else null
+	if run_task_action == null or run_task_action.get_text(0) != "运行任务":
+		return _failure("Tools tab should render the localized run_task action for system_settings_dialog.")
 	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
 	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
 		return _failure("Tools tab should localize DAP debugger action children instead of humanizing snake_case action names.")
@@ -390,7 +396,7 @@ func _system_actions_for(full_name: String) -> Array:
 		"system_editor_control":
 			return ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free", "capture_editor", "list_controls", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_control_text", "set_value", "list_popups", "get_popup", "capture_popup", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
 		"system_settings_dialog":
-			return ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"]
+			return ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "run_task", "capture", "close"]
 		"system_editor_plugin_control":
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
