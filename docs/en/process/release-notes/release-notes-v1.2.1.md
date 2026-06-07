@@ -12,18 +12,32 @@ This release line improves editor UI automation by letting clients wait for visi
 
 The new wait action complements menu, popup, click, hover, and text-entry controls without requiring OS mouse automation. This makes workflows such as opening editor dialogs, filtering settings, and confirming transient panels easier to verify from inside Godot.
 
-### 🧭 Settings Dialog Navigation
+### 🪟 Floating Window Evidence
+
+`system_editor_control` can now read and crop visible floating popup/window surfaces through `get_popup` and `capture_popup`. That gives clients a direct evidence path for modal editor windows and popup menus before choosing a button, menu item, text field, or close action.
+
+### 🧭 Configuration Navigation and Evidence
 
 `system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.
 
-The workflow now also exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before any future value-editing layer is added.
+The workflow exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before optional value reads, writes, or assertions.
+
+It can list and activate settings tabs through `list_tabs` and `activate_tab`, including `open(tab=...)`, so clients can move between Project Settings or Editor Settings tabs without coordinate clicks.
+
+The settings workflow can list visible category tree items and focus a unique category before row inspection, making Project Settings and Editor Settings navigation less dependent on raw control enumeration.
 
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
-### 🎮 Input Action Evidence
+Project configuration evidence now also covers input maps: agents can inspect a single project input action through `system_project_configure`, including its deadzone and concrete key, mouse, or controller bindings. This makes input-map reviews easier to ground in the actual project configuration before changing gameplay or editor shortcuts.
 
-Agents can now inspect a single project input action through `system_project_configure`, including its deadzone and concrete key, mouse, or controller bindings. This makes input-map reviews easier to ground in the actual project configuration before changing gameplay or editor shortcuts.
+Clients can now resolve a unique visible settings row through `resolve_row` before reading a value or choosing a follow-up UI action. The response carries row paths, confidence, selector evidence, and ambiguity diagnostics while staying read-only.
+
+When an agent only needs to move keyboard focus to the matched value editor, `focus_value` focuses the value control and returns focused editor evidence without changing the setting.
+
+Supported unique visible rows can now be edited through `set_value` for text, number, and bool controls. The workflow writes through editor UI controls and then observes the row again so agents can verify the value they changed instead of assuming the click or text edit worked.
+
+Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
 
 ### ✅ Compatibility and Upgrade Notes
 
-This change only extends the public tool schema. Existing `system_editor_control` and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.
+This change only extends the public tool schema. Existing `system_editor_control`, `system_settings_dialog`, and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.

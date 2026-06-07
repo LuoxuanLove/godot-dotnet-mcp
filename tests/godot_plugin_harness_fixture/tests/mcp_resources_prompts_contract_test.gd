@@ -209,6 +209,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(editor_prompt.get("error", "editor UI control prompt failed")))
 	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_control"]):
 		return _failure("editor UI control prompt should provide actionable editor UI workflow sections.")
+	if str(editor_prompt.get("text", "")).find("resolve_row") == -1:
+		return _failure("editor UI control prompt should mention settings_dialog resolve_row in the localized prompt text.")
 
 	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 15)
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
