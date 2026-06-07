@@ -401,7 +401,7 @@ func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
 
 func _list_categories(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _category_terms(args)
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _category_observation_args(args), [])
 	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, query_values, _result_limit(args))
 	var payload: Dictionary = {
 		"surface": surface,
@@ -428,7 +428,7 @@ func _list_categories(surface: String, args: Dictionary) -> Dictionary:
 
 func _focus_category(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _category_terms(args)
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _category_observation_args(args), [])
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -437,7 +437,7 @@ func _focus_category(surface: String, args: Dictionary) -> Dictionary:
 			"reason": "surface_not_visible"
 		})
 		return bridge.error("Settings surface is not visible for focus_category: %s" % surface, missing_payload)
-	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, [], max(1, _observation_limit(args)))
+	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, [], _category_resolution_limit(args))
 	var resolution: Dictionary = _resolve_category(categories, args, query_values)
 	if not bool(resolution.get("success", false)):
 		var error_payload := observation.duplicate(true)
@@ -1031,6 +1031,16 @@ func _read_value_observation_args(args: Dictionary) -> Dictionary:
 	var observed_args := args.duplicate(true)
 	observed_args["limit"] = max(_observation_limit(args), 500)
 	return observed_args
+
+
+func _category_observation_args(args: Dictionary) -> Dictionary:
+	var observed_args := args.duplicate(true)
+	observed_args["limit"] = max(_observation_limit(args), 500)
+	return observed_args
+
+
+func _category_resolution_limit(args: Dictionary) -> int:
+	return max(_result_limit(args), 500)
 
 
 func _result_limit(args: Dictionary) -> int:
@@ -1796,11 +1806,28 @@ func _settings_category_tree_rows(rows: Array) -> Array[Dictionary]:
 			continue
 		if not bool(dict.get("visible", true)):
 			continue
-		var path := str(dict.get("path", dict.get("node_path", ""))).to_lower()
-		var text := _label_text_hint(dict).to_lower()
-		if path.contains("category") or path.contains("categories") or path.contains("settings") or text.contains("category"):
+		if _is_settings_category_tree_row(dict):
 			trees.append(dict.duplicate(true))
 	return trees
+
+
+func _is_settings_category_tree_row(row: Dictionary) -> bool:
+	var hints: Array[String] = [
+		str(row.get("path", row.get("node_path", ""))),
+		str(row.get("name", "")),
+		str(row.get("text", "")),
+		str(row.get("title", "")),
+		str(row.get("tooltip", "")),
+		str(row.get("tooltip_text", "")),
+		str(row.get("accessible_name", ""))
+	]
+	for hint in hints:
+		var normalized := hint.strip_edges().to_lower()
+		if normalized.is_empty():
+			continue
+		if normalized.contains("category") or normalized.contains("categories"):
+			return true
+	return false
 
 
 func _build_category_model(item: Dictionary, tree_row: Dictionary, surface: String) -> Dictionary:

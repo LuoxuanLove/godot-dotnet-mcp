@@ -28,7 +28,9 @@ class FakeBridge extends RefCounted:
 			"editor_ui_control":
 				match action:
 					"list_visible":
-						return success({"count": _visible_controls().size(), "controls": _visible_controls()})
+						var visible_controls := _visible_controls()
+						var limit := maxi(int(args.get("limit", visible_controls.size())), 1)
+						return success({"count": visible_controls.size(), "controls": visible_controls.slice(0, mini(limit, visible_controls.size()))})
 					"list_tree_items":
 						return success({"target_path": str(args.get("target_path", "")), "count": _visible_tree_items(str(args.get("target_path", ""))).size(), "items": _visible_tree_items(str(args.get("target_path", "")))})
 					"select_tree_item":
@@ -147,7 +149,11 @@ class FakeBridge extends RefCounted:
 			rows.append({"path": "/root/ProjectSettings", "class": "AcceptDialog", "title": "Project Settings", "visible": true, "enabled": true})
 			rows.append(_tab_container_row("ProjectSettings", "/root/ProjectSettings/Tabs", project_current_tab_index, _project_tab_titles()))
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
+			if project_filter_text.is_empty():
+				for index in range(12):
+					rows.append({"path": "/root/ProjectSettings/General/VisibleRow%s" % index, "parent_path": "/root/ProjectSettings/General", "class": "HBoxContainer", "text": "Visible Row %s" % index, "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
 			rows.append({"path": "/root/ProjectSettings/CategoryTree", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Category Tree", "visible": true, "enabled": true, "child_count": 3})
+			rows.append({"path": "/root/ProjectSettings/SettingsList", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Settings List", "visible": true, "enabled": true, "child_count": 2})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": project_name_value, "visible": true, "disabled": false, "editable_text": true})
@@ -188,6 +194,11 @@ class FakeBridge extends RefCounted:
 				{"index": 2, "text": "Run", "item_path": "Application/Run", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
 				{"index": 3, "text": "Rendering", "item_path": "Rendering", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 1},
 				{"index": 4, "text": "2D", "item_path": "Rendering/2D", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		if target_path == "/root/ProjectSettings/SettingsList":
+			return [
+				{"index": 0, "text": "Advanced Settings", "item_path": "Advanced Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
+				{"index": 1, "text": "Project Settings", "item_path": "Project Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
 			]
 		if target_path == "/root/EditorSettings/CategoryTree":
 			return [
@@ -417,6 +428,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(category_data.get("tree_control_path", "")) != "/root/ProjectSettings/CategoryTree":
 		return _failure("list_categories should report the category tree control path.")
 	var project_categories: Array = category_data.get("categories", [])
+	if _find_category_by_path(project_categories, "Advanced Settings").is_empty() == false:
+		return _failure("list_categories must not include items from non-category settings Tree controls.")
 	var config_category := _find_category_by_path(project_categories, "Application/Config")
 	if config_category.is_empty():
 		return _failure("list_categories should preserve nested category_path evidence.")
