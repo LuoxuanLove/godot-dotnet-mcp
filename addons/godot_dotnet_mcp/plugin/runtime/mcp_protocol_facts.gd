@@ -89,7 +89,7 @@ static func _load_facts() -> Dictionary:
 static func _default_facts() -> Dictionary:
 	return {
 		"protocol_version": "2025-06-18",
-		"tool_schema_version": "2026-06-05.7",
+		"tool_schema_version": "2026-06-07.3",
 		"server_name": "godot-dotnet-mcp",
 		"server_version": "1.2.1",
 		"error_codes": {

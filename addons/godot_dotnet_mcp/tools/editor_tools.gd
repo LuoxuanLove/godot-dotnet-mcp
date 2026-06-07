@@ -660,3 +660,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _plugin_tools.execute(_get_editor_interface(), args)
 		_:
 			return _error("Unknown tool: %s" % tool_name)
+
+
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	if tool_name == "ui_control" and str(args.get("action", "")).strip_edges() == "wait_for_ui":
+		_configure_subtool(_ui_control_tools)
+		return await _ui_control_tools.execute_async(_get_editor_interface(), args)
+	return execute(tool_name, args)
