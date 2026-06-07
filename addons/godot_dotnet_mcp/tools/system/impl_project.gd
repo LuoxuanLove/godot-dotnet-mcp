@@ -17,7 +17,7 @@ var _runtime_context: Dictionary = {}
 const _EXPORT_PRESETS_PATH := "res://export_presets.cfg"
 const _EXPORT_PRESET_SENSITIVE_KEY_PARTS: Array[String] = [
 	"token", "password", "secret", "api_key", "apikey", "api-key",
-	"authorization", "credential", "private_key", "privatekey", "codesign"
+	"authorization", "credential", "private_key", "privatekey", "codesign", "keystore"
 ]
 const _PROJECT_FILE_SCAN_ROOT := "res://"
 const _RESOURCE_AUDIT_SCAN_GLOBS: Array[String] = ["*.tscn", "*.tres"]
