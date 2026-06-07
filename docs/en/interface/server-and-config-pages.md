@@ -45,7 +45,7 @@ These controls need to switch into a tighter arrangement at different widths.
 The data shown in the top self-diagnostic card on the Home page comes from:
 
 - `plugin_runtime_state(action=get_lsp_diagnostics_status)`: detailed runtime self-check snapshot
-- `project_state(include_runtime_health=true)`: lightweight health summary
+- `project_state(include_runtime_health=true)`: lightweight health summary, including User-tool discovery and load-failure diagnostics
 
 This content stays on the Home page so the service state, service address, reload entry, and plugin self-diagnostics remain on the front page instead of living in a separate service flow.
 

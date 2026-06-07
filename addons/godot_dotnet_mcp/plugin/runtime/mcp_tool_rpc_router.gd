@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolRpcRouter
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 var _get_tool_loader := Callable()
@@ -62,6 +63,10 @@ func build_tool_call_result(params: Dictionary) -> Dictionary:
 func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var tool_name = params.get("name", "")
 	var arguments = params.get("arguments", {})
+	if params.has("arguments") and not (arguments is Dictionary):
+		return _create_tool_result_payload({"success": false, "error": "Tool arguments must be an object"})
+	arguments = (arguments as Dictionary).duplicate(true)
+	_merge_agent_context(params, arguments)
 
 	_log_message("Tool call: %s" % tool_name, "debug")
 
@@ -88,12 +93,14 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)
 	if not result.get("success", false):
+		var logged_arguments: Dictionary = arguments.duplicate(true)
+		logged_arguments.erase("_mcp_context")
 		MCPDebugBuffer.record(
 			"warning",
 			"server",
 			"Tool failed: %s — %s" % [tool_name, str(result.get("error", "execution failed"))],
 			tool_name,
-			{"arguments": _sanitize(arguments)}
+			{"arguments": _sanitize(logged_arguments)}
 		)
 	elif tool_name.begins_with("scene_run_"):
 		MCPDebugBuffer.record(
@@ -104,6 +111,13 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 		)
 
 	return _create_tool_result_payload(result)
+
+
+func _merge_agent_context(params: Dictionary, arguments: Dictionary) -> void:
+	if arguments.has("_mcp_context"):
+		return
+	if params.get("_mcp_context", null) is Dictionary:
+		arguments["_mcp_context"] = (params.get("_mcp_context", {}) as Dictionary).duplicate(true)
 
 
 func _resolve_tool_call_name(tool_name: String) -> Dictionary:
@@ -188,6 +202,8 @@ func _normalize_tool_result(result) -> Dictionary:
 		"error": true,
 		"hints": true
 	}
+	if MCPToolActivityRegistry.is_protocol_activity_summary(normalized.get("activity", null)):
+		reserved_keys["activity"] = true
 	var extra_data := {}
 	for key in normalized.keys():
 		if reserved_keys.has(str(key)):

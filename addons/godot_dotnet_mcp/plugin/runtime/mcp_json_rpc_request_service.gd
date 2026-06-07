@@ -43,10 +43,12 @@ func handle_request_async(body: String) -> Dictionary:
 	var request_dict: Dictionary = request
 	var method = str(request_dict.get("method", ""))
 	var params = request_dict.get("params", {})
-	if not (params is Dictionary):
-		params = {}
 	var has_id = request_dict.has("id")
 	var id = request_dict.get("id")
+	if not (params is Dictionary):
+		if not has_id:
+			return {"status": 202, "_no_body": true}
+		return _build_error(-32602, "Invalid params: expected object", id)
 
 	_log_message("Method: %s, ID: %s" % [method, id], "debug")
 	if _emit_request_received.is_valid():

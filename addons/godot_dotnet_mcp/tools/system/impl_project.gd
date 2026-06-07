@@ -14,6 +14,11 @@ const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/r
 var bridge
 var _runtime_context: Dictionary = {}
 
+const _EXPORT_PRESETS_PATH := "res://export_presets.cfg"
+const _EXPORT_PRESET_SENSITIVE_KEY_PARTS: Array[String] = [
+	"token", "password", "secret", "api_key", "apikey", "api-key",
+	"authorization", "credential", "private_key", "privatekey", "codesign", "keystore"
+]
 const _PROJECT_FILE_SCAN_ROOT := "res://"
 const _RESOURCE_AUDIT_SCAN_GLOBS: Array[String] = ["*.tscn", "*.tres"]
 const _PROJECT_STATE_SCAN_GLOBS: Array[String] = ["*.gd", "*.cs", "*.tscn", "*.tres", "*.res"]
@@ -41,7 +46,7 @@ const HANDLED_TOOLS := [
 
 
 func configure_runtime(context: Dictionary) -> void:
-	_runtime_context = context.duplicate(true)
+	_runtime_context = context.duplicate()
 
 
 func handles(tool_name: String) -> bool:
@@ -123,18 +128,18 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_configure",
-			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, and input actions. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
+			"description": "PROJECT CONFIGURE: Read or modify project settings, autoloads, input actions, and export preset summaries. Read actions: get_settings (requires: setting), list_autoloads, list_input_actions, get_input_action (requires: name), list_export_presets. Write actions: set_setting (requires: setting, value), add_autoload (requires: name, path), remove_autoload (requires: name). Call get_settings to inspect a path before modifying.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions"],
+						"enum": ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action", "list_export_presets"],
 						"description": "Configuration action to perform"
 					},
 					"setting": {"type": "string", "description": "Setting path for get_settings/set_setting"},
 					"value": {"description": "New value for set_setting"},
-					"name": {"type": "string", "description": "Autoload name for add/remove_autoload"},
+					"name": {"type": "string", "description": "Autoload name for add/remove_autoload, or input action name for get_input_action"},
 					"path": {"type": "string", "description": "Script path for add_autoload"}
 				},
 				"required": ["action"]
@@ -762,6 +767,8 @@ func _get_plugin_from_runtime_context():
 	var server = _runtime_context.get("server", null)
 	if server == null or not is_instance_valid(server):
 		return null
+	if not server.has_method("get_parent"):
+		return null
 	return server.get_parent()
 
 
@@ -1180,6 +1187,41 @@ func _get_self_diagnostics_health_summary() -> Dictionary:
 	}, 3)
 
 
+func _get_user_tool_runtime_health_summary() -> Dictionary:
+	var unavailable := {
+		"available": false,
+		"runtime_loading_enabled": false,
+		"discovered_script_count": 0,
+		"loadable_count": 0,
+		"failed_load_count": 0,
+		"tool_count": 0,
+		"last_error": "User Tool runtime diagnostics bridge is unavailable"
+	}
+	var plugin = _get_plugin_from_runtime_context()
+	if plugin == null or not plugin.has_method("get_user_tool_runtime_diagnostics_from_tools"):
+		return unavailable
+	var runtime_state: Array = []
+	var tool_loader = _runtime_context.get("tool_loader", null)
+	if tool_loader != null and tool_loader.has_method("get_user_tool_runtime_snapshot"):
+		runtime_state = tool_loader.get_user_tool_runtime_snapshot()
+	var result = plugin.get_user_tool_runtime_diagnostics_from_tools(5, runtime_state)
+	if not (result is Dictionary):
+		return unavailable
+	var result_dict: Dictionary = result
+	if not bool(result_dict.get("success", false)):
+		unavailable["last_error"] = str(result_dict.get("error", result_dict.get("message", unavailable.get("last_error", ""))))
+		return unavailable
+	var data = result_dict.get("data", {})
+	if not (data is Dictionary):
+		return unavailable
+	var diagnostics: Dictionary = (data as Dictionary).duplicate(true)
+	diagnostics["available"] = true
+	if not diagnostics.has("last_error"):
+		var watch = diagnostics.get("watch", {})
+		diagnostics["last_error"] = str((watch as Dictionary).get("last_error", "")) if watch is Dictionary else ""
+	return diagnostics
+
+
 func _is_runtime_running(summary: Dictionary) -> bool:
 	var sessions = summary.get("sessions", {})
 	if sessions is Dictionary:
@@ -1314,6 +1356,7 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 			"self_diagnostics": _get_self_diagnostics_health_summary(),
 			"lsp_diagnostics": _get_lsp_runtime_health_summary(),
 			"tool_loader": _get_tool_loader_health_summary(),
+			"user_tools": _get_user_tool_runtime_health_summary(),
 			"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 			"capabilities": runtime_capabilities
 		}
@@ -1451,6 +1494,7 @@ func _build_project_state_health_section(full_data: Dictionary) -> Dictionary:
 		"self_diagnostics": _get_self_diagnostics_health_summary(),
 		"lsp_diagnostics": _get_lsp_runtime_health_summary(),
 		"tool_loader": _get_tool_loader_health_summary(),
+		"user_tools": _get_user_tool_runtime_health_summary(),
 		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
 		"capabilities": full_data.get("runtime_capabilities", {})
 	}
@@ -1497,8 +1541,107 @@ func _execute_project_configure(args: Dictionary) -> Dictionary:
 			})
 		"list_input_actions":
 			return bridge.call_atomic("project_input", {"action": "list_actions"})
+		"get_input_action":
+			var input_action_name := str(args.get("name", "")).strip_edges()
+			if input_action_name.is_empty():
+				return bridge.error("input action name is required for get_input_action")
+			return bridge.call_atomic("project_input", {"action": "get_action", "name": input_action_name})
+		"list_export_presets":
+			return _list_export_presets()
 		_:
-			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions" % action)
+			return bridge.error("Unknown action: %s. Valid: get_settings, set_setting, list_autoloads, add_autoload, remove_autoload, list_input_actions, get_input_action, list_export_presets" % action)
+
+
+func _list_export_presets() -> Dictionary:
+	if not FileAccess.file_exists(_EXPORT_PRESETS_PATH):
+		return bridge.success({
+			"path": _EXPORT_PRESETS_PATH,
+			"exists": false,
+			"preset_count": 0,
+			"presets": []
+		}, "No export presets file found")
+
+	var config := ConfigFile.new()
+	var err := config.load(_EXPORT_PRESETS_PATH)
+	if err != OK:
+		return bridge.error("Failed to read export presets", {
+			"path": _EXPORT_PRESETS_PATH,
+			"error_code": err,
+			"error_name": error_string(err)
+		})
+
+	var presets: Array[Dictionary] = []
+	var index := 0
+	while config.has_section("preset.%d" % index):
+		presets.append(_build_export_preset_summary(config, index))
+		index += 1
+	return bridge.success({
+		"path": _EXPORT_PRESETS_PATH,
+		"exists": true,
+		"preset_count": presets.size(),
+		"presets": presets
+	}, "Export presets listed")
+
+
+func _build_export_preset_summary(config: ConfigFile, index: int) -> Dictionary:
+	var section := "preset.%d" % index
+	var options_section := "preset.%d.options" % index
+	var option_keys: Array[String] = []
+	var redacted_option_key_count := 0
+	if config.has_section(options_section):
+		for key in config.get_section_keys(options_section):
+			var summarized_key := _summarize_export_option_key(str(key))
+			option_keys.append(summarized_key)
+			if summarized_key == "[redacted]":
+				redacted_option_key_count += 1
+	option_keys.sort()
+	var export_path_summary := _summarize_export_path(str(config.get_value(section, "export_path", "")))
+	return {
+		"index": index,
+		"name": str(config.get_value(section, "name", "")),
+		"platform": str(config.get_value(section, "platform", "")),
+		"runnable": bool(config.get_value(section, "runnable", false)),
+		"dedicated_server": bool(config.get_value(section, "dedicated_server", false)),
+		"custom_features": str(config.get_value(section, "custom_features", "")),
+		"export_filter": str(config.get_value(section, "export_filter", "")),
+		"include_filter": str(config.get_value(section, "include_filter", "")),
+		"exclude_filter": str(config.get_value(section, "exclude_filter", "")),
+		"export_path": str(export_path_summary.get("path", "")),
+		"export_path_kind": str(export_path_summary.get("kind", "")),
+		"export_path_file": str(export_path_summary.get("file", "")),
+		"script_export_mode": int(config.get_value(section, "script_export_mode", 0)),
+		"options_key_count": option_keys.size(),
+		"redacted_option_key_count": redacted_option_key_count,
+		"option_keys": option_keys
+	}
+
+
+func _summarize_export_option_key(key: String) -> String:
+	var normalized := key.to_lower()
+	for part in _EXPORT_PRESET_SENSITIVE_KEY_PARTS:
+		if normalized.find(part) >= 0:
+			return "[redacted]"
+	return key
+
+
+func _summarize_export_path(path: String) -> Dictionary:
+	var file_name := path.replace("\\", "/").get_file()
+	if path.is_empty():
+		return {"path": "", "kind": "empty", "file": ""}
+	if path.begins_with("res://"):
+		return {"path": path, "kind": "resource", "file": file_name}
+	if path.begins_with("user://"):
+		return {"path": path, "kind": "user", "file": file_name}
+	if _is_absolute_export_path(path):
+		return {"path": "[absolute_path_redacted]", "kind": "absolute", "file": file_name}
+	return {"path": path, "kind": "relative", "file": file_name}
+
+
+func _is_absolute_export_path(path: String) -> bool:
+	var normalized := path.replace("\\", "/")
+	if normalized.begins_with("/") or normalized.begins_with("//"):
+		return true
+	return normalized.length() >= 3 and normalized.substr(1, 2) == ":/"
 
 
 func _execute_project_files(args: Dictionary) -> Dictionary:

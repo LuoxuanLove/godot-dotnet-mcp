@@ -7,6 +7,7 @@ var is_tool_enabled := Callable()
 var is_tool_exposed := Callable()
 var log := Callable()
 var sanitize_for_json := Callable()
+var tool_activity_registry = null
 
 
 func dispose() -> void:
@@ -15,3 +16,4 @@ func dispose() -> void:
 	is_tool_exposed = Callable()
 	log = Callable()
 	sanitize_for_json = Callable()
+	tool_activity_registry = null

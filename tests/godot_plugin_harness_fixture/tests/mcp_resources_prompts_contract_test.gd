@@ -6,6 +6,7 @@ const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -22,9 +23,15 @@ const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 
 var _server = null
+var _temp_paths: Array[String] = []
+var _previous_language := ""
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var localization = LocalizationServiceScript.get_instance()
+	if localization != null:
+		_previous_language = localization.get_language()
+		localization.set_language("zh_CN")
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
 
@@ -57,6 +64,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resources/list should expose the diagnostics summary resource.")
 	if not _has_resource(resources, TOOL_CATALOG_URI):
 		return _failure("resources/list should expose the tool catalog resource.")
+	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
+	if str(project_info_metadata.get("name", "")) != "项目信息":
+		return _failure("resources/list should localize resource metadata through the active locale.")
+	if str(project_info_metadata.get("description", "")).find("工具加载器状态") == -1:
+		return _failure("resources/list should localize resource descriptions through the active locale.")
 
 	var templates_response: Dictionary = await _json_rpc("resources/templates/list", {}, 3)
 	var templates_result = templates_response.get("result", {})
@@ -68,6 +80,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_template in ["godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
 		if not _has_template(templates, expected_template):
 			return _failure("resources/templates/list should expose template: %s" % expected_template)
+	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
+	if str(scene_template_metadata.get("name", "")) != "场景文本":
+		return _failure("resources/templates/list should localize template names through the active locale.")
 
 	var project_info := await _read_json_resource(PROJECT_INFO_URI, 4)
 	if not bool(project_info.get("ok", false)):
@@ -80,6 +95,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	MCPDebugBufferScript.clear()
 	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value Authorization: Bearer top-secret-bearer", "", {"password": "hunter2", "safe": "visible"})
+	MCPDebugBufferScript.record("warning", "contract", "https://agent:super-url-secret@example.test/path", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "HTTPS://agent:upper-url-secret@example.test/path", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "ws://agent:ws-url-secret@example.test/socket", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "postgres://agent:postgres-url-secret@db.example/app", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "redis://:redis-url-secret@cache.example/0", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "postgres://agent:comma,url-secret@db.example/app", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "https://agent:semicolon;url-secret@example.test/path", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "bearer loose-bearer-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "x-api-key : header-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "api-key = hyphen-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "{\"access-token\" : \"json-secret\"}", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "{accessToken:camel-access-secret}", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "refreshToken = camel-refresh-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "apiKey=camel-api-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "privateKey : camel-private-secret", "", {})
+	MCPDebugBufferScript.record("warning", "contract", "clientSecret=camel-client-secret", "", {})
+	MCPDebugBufferScript.record(
+		"warning",
+		"contract",
+		"safe metadata record",
+		"",
+		{
+			"api-key": "metadata-secret",
+			"x.api.key": "dot-key-secret",
+			"privateKey": "metadata-private-key-secret",
+			"nested": {"refresh-token": "refresh-secret"},
+			"safe": "still-visible"
+		}
+	)
 	var diagnostics := await _read_json_resource(DIAGNOSTICS_SUMMARY_URI, 5)
 	if not bool(diagnostics.get("ok", false)):
 		return _failure(str(diagnostics.get("error", "diagnostics resource failed")))
@@ -91,7 +135,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var diagnostics_text := JSON.stringify(diagnostics_payload.get("recentLogs", []))
 	if diagnostics_text.contains("super-secret-value") or diagnostics_text.contains("hunter2") or diagnostics_text.contains("top-secret-bearer"):
 		return _failure("diagnostics summary resource should redact sensitive log content.")
-	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("[redacted]"):
+	for leaked_secret in ["super-url-secret", "upper-url-secret", "ws-url-secret", "postgres-url-secret", "redis-url-secret", "comma,url-secret", "semicolon;url-secret", "loose-bearer-secret", "header-secret", "hyphen-secret", "json-secret", "camel-access-secret", "camel-refresh-secret", "camel-api-secret", "camel-private-secret", "camel-client-secret", "metadata-secret", "dot-key-secret", "metadata-private-key-secret", "refresh-secret"]:
+		if diagnostics_text.contains(leaked_secret):
+			return _failure("diagnostics summary resource should redact extended sensitive pattern: %s." % leaked_secret)
+	if not diagnostics_text.contains("visible") or not diagnostics_text.contains("still-visible") or not diagnostics_text.contains("[redacted]"):
 		return _failure("diagnostics summary resource should preserve safe log metadata while redacting sensitive fields.")
 
 	var tool_catalog := await _read_json_resource(TOOL_CATALOG_URI, 15)
@@ -118,6 +165,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(resource_read.get("error", "resource read failed")))
 	if str(resource_read.get("text", "")).find("resource_name") == -1:
 		return _failure("resource template resource should read resource text.")
+	var large_script_path := "res://tests_tmp/mcp_resources_prompts_contracts/large_script.gd"
+	_write_large_text_file(large_script_path, 600000)
+	var large_resource_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://script/tests_tmp/mcp_resources_prompts_contracts/large_script.gd"}, 20)
+	if not (large_resource_response.get("error", null) is Dictionary):
+		return _failure("resources/read should reject oversized template file resources with a JSON-RPC error.")
+	var large_resource_error: Dictionary = large_resource_response.get("error", {})
+	if int(large_resource_error.get("code", 0)) != -32602 or str(large_resource_error.get("message", "")).find("exceeds") == -1:
+		return _failure("resources/read oversized template resource errors should use -32602 and describe the output limit.")
 
 	var traversal_response: Dictionary = await _json_rpc("resources/read", {"uri": TRAVERSAL_URI}, 9)
 	if not (traversal_response.get("error", null) is Dictionary):
@@ -138,12 +193,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("prompts/list should describe when and why to use prompt: %s" % expected_prompt)
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
+	var orientation_metadata := _find_prompt(prompts, PROJECT_ORIENTATION_PROMPT)
+	if str(orientation_metadata.get("title", "")) != "项目定位工作流":
+		return _failure("prompts/list should localize prompt titles through the active locale.")
+	if str(orientation_metadata.get("description", "")).find("Godot 项目") == -1:
+		return _failure("prompts/list should localize prompt descriptions through the active locale.")
 
 	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
 	if not bool(orientation_prompt.get("ok", false)):
 		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
 	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
 		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
+	var long_goal_prompt: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "G".repeat(40000)}}, 21)
+	var long_goal_result = long_goal_prompt.get("result", {})
+	if not (long_goal_result is Dictionary):
+		return _failure("prompts/get should return a result object when prompt text is oversized.")
+	var long_goal_meta = (long_goal_result as Dictionary).get("_meta", {})
+	if not (long_goal_meta is Dictionary):
+		return _failure("prompts/get should include _meta when prompt text is truncated.")
+	var output_meta = ((long_goal_meta as Dictionary).get("godotDotnetMcp", {}) as Dictionary).get("output", {})
+	if not (output_meta is Dictionary) or not bool((output_meta as Dictionary).get("truncated", false)):
+		return _failure("prompts/get output metadata should mark oversized prompt text as truncated.")
+	if int((output_meta as Dictionary).get("returnedByteSize", 0)) > int((output_meta as Dictionary).get("maxByteSize", 0)):
+		return _failure("prompts/get truncated output should not exceed maxByteSize.")
 
 	var content_prompt := await _get_prompt_text(CONTENT_AUTHORING_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "script_path": "tests/headless_case_support.gd", "goal": "add a menu"}, 12)
 	if not bool(content_prompt.get("ok", false)):
@@ -188,15 +260,49 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(editor_prompt.get("error", "editor UI control prompt failed")))
 	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_control"]):
 		return _failure("editor UI control prompt should provide actionable editor UI workflow sections.")
+	if str(editor_prompt.get("text", "")).find("resolve_row") == -1:
+		return _failure("editor UI control prompt should mention settings_dialog resolve_row in the localized prompt text.")
 
 	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 15)
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject invalid reference_integrity path arguments.")
 	var stdio_server = StdioServerScript.new()
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 22,
+		"method": "initialize",
+		"params": []
+	}))
+	var invalid_stdio_request_response = stdio_server.get("_last_written_response")
+	if not (invalid_stdio_request_response is Dictionary):
+		return _failure("stdio full request path should record the invalid params response.")
+	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio full request path should reject non-object params before method dispatch.")
+	stdio_server.set("_last_written_response", {})
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": "tools/list",
+		"params": []
+	}))
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("stdio notifications with non-object params should not write a response.")
 	var invalid_stdio_params_response: Dictionary = stdio_server._handle_resources_read([], 17)
-	stdio_server.free()
 	if int((invalid_stdio_params_response.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio resources/read should reject non-object params with -32602.")
+	var invalid_stdio_tool_params: Dictionary = await stdio_server._handle_tools_call_async([], 20)
+	if int((invalid_stdio_tool_params.get("error", {}) as Dictionary).get("code", 0)) != -32602:
+		return _failure("stdio tools/call should reject non-object params with -32602.")
+	var invalid_stdio_tool_arguments: Dictionary = await stdio_server._handle_tools_call_async({"name": "system_help", "arguments": []}, 21)
+	var invalid_stdio_tool_arguments_result = invalid_stdio_tool_arguments.get("result", {})
+	if not (invalid_stdio_tool_arguments_result is Dictionary) or not bool((invalid_stdio_tool_arguments_result as Dictionary).get("isError", false)):
+		return _failure("stdio tools/call should return isError=true for non-object arguments.")
+	var invalid_stdio_tool_arguments_content = (invalid_stdio_tool_arguments_result as Dictionary).get("content", [])
+	if not (invalid_stdio_tool_arguments_content is Array) or (invalid_stdio_tool_arguments_content as Array).is_empty():
+		return _failure("stdio tools/call non-object arguments should include text content.")
+	if str(((invalid_stdio_tool_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
+		return _failure("stdio tools/call non-object arguments should preserve the validation message.")
+	stdio_server.free()
+	_restore_language()
 
 	return {
 		"name": "mcp_resources_prompts_contracts",
@@ -212,6 +318,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 
 func cleanup_case(tree: SceneTree) -> void:
+	_restore_language()
+	for path in _temp_paths:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	for i in range(_temp_paths.size() - 1, -1, -1):
+		var path := _temp_paths[i]
+		var absolute_path := ProjectSettings.globalize_path(path)
+		if DirAccess.dir_exists_absolute(absolute_path):
+			DirAccess.remove_absolute(absolute_path)
+	_temp_paths.clear()
 	if _server == null:
 		return
 	if _server.has_method("stop"):
@@ -224,6 +340,15 @@ func cleanup_case(tree: SceneTree) -> void:
 	await tree.process_frame
 
 
+func _restore_language() -> void:
+	if _previous_language.is_empty():
+		return
+	var localization = LocalizationServiceScript.get_instance()
+	if localization != null:
+		localization.set_language(_previous_language)
+	_previous_language = ""
+
+
 func _json_rpc(method: String, params: Dictionary, id: int) -> Dictionary:
 	return await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -231,6 +356,21 @@ func _json_rpc(method: String, params: Dictionary, id: int) -> Dictionary:
 		"method": method,
 		"params": params
 	}))
+
+
+func _write_large_text_file(path: String, size: int) -> void:
+	var dir_path := path.get_base_dir()
+	var absolute_dir := ProjectSettings.globalize_path(dir_path)
+	if not DirAccess.dir_exists_absolute(absolute_dir):
+		DirAccess.make_dir_recursive_absolute(absolute_dir)
+		_temp_paths.append(dir_path)
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string("# oversized contract fixture\n")
+	file.store_string("A".repeat(size))
+	file.close()
+	_temp_paths.append(path)
 
 
 func _read_json_resource(uri: String, id: int) -> Dictionary:
@@ -280,6 +420,15 @@ func _has_resource(resources, uri: String) -> bool:
 	return false
 
 
+func _find_resource(resources, uri: String) -> Dictionary:
+	if not (resources is Array):
+		return {}
+	for resource in resources:
+		if resource is Dictionary and str((resource as Dictionary).get("uri", "")) == uri:
+			return resource as Dictionary
+	return {}
+
+
 func _has_template(templates, uri_template: String) -> bool:
 	if not (templates is Array):
 		return false
@@ -287,6 +436,15 @@ func _has_template(templates, uri_template: String) -> bool:
 		if template is Dictionary and str((template as Dictionary).get("uriTemplate", "")) == uri_template:
 			return true
 	return false
+
+
+func _find_template(templates, uri_template: String) -> Dictionary:
+	if not (templates is Array):
+		return {}
+	for template in templates:
+		if template is Dictionary and str((template as Dictionary).get("uriTemplate", "")) == uri_template:
+			return template as Dictionary
+	return {}
 
 
 func _has_prompt(prompts, name: String) -> bool:

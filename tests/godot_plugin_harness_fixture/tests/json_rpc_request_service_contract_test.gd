@@ -66,6 +66,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (invalid_request_error is Dictionary) or int((invalid_request_error as Dictionary).get("code", 0)) != -32600:
 		return _failure("JSON-RPC request service did not reject a non-object request body.")
 
+	var invalid_params: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 8,
+		"method": "tools/list",
+		"params": []
+	}))
+	var invalid_params_error = invalid_params.get("error", {})
+	if not (invalid_params_error is Dictionary) or int((invalid_params_error as Dictionary).get("code", 0)) != -32602:
+		return _failure("JSON-RPC request service should reject non-object params with -32602.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for invalid params.")
+
+	var invalid_notification_params: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": "tools/list",
+		"params": []
+	}))
+	if not bool(invalid_notification_params.get("_no_body", false)):
+		return _failure("JSON-RPC request service should not respond to notifications with invalid params.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for invalid notification params.")
+
 	var response: Dictionary = await service.handle_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 7,

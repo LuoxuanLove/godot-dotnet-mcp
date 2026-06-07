@@ -122,6 +122,7 @@ The docs are part of the project and must stay in sync with the code.
 | `plugin_runtime_state_service.gd` | Load and save orchestration for runtime state, including default settings, custom-profile loading, and state normalization |
 | `tool_profile_catalog.gd` | Builtin profile source and profile storage directory |
 | `tool_catalog_service.gd` | Profile matching, counts, and category helpers |
+| `tool_catalog_search_service.gd` | Searchable tool catalog summaries for `system_tool_catalog` |
 | `user_tool_service.gd` | Facade for user-tool discovery and management, delegating to catalog and maintenance helpers |
 | `user_tool_catalog_service.gd` | User-tool directory scanning and compatibility reporting |
 | `user_tool_maintenance_service.gd` | User-tool scaffold, delete, restore, and audit operations |
@@ -212,6 +213,7 @@ The `system` domain is more complex than the others. It has been split into exec
 | `executor.gd` | Scheduler. It initializes the system subdomain executors, scans and loads `custom_tools/`, and routes `execute` and `execute_async` calls |
 | `atomic_bridge.gd` | Atomic bridge. `call_atomic(executor_name, tool_name, args)` loads lower-level executors dynamically and includes write protection that blocks changes to `res://addons/godot_dotnet_mcp/`, except for `custom_tools/` |
 | `impl_editor.gd` | Implements `system_editor_control`, aggregating main-screen switching, editor screenshots, control enumeration, coordinate mapping, local clicks on controls, and popup interaction |
+| `impl_settings_dialog.gd` | Implements `system_settings_dialog`, orchestrating settings-like dialog open/status/search/list_tabs/activate_tab/list_categories/focus_category/list_rows/read_value/focus_value/set_value/verify_value/focus/capture/close workflows through editor UI, screenshot, popup, and Tree-item atomic tools with tab navigation, category navigation, read-only value assertions, value-editor focus, and verified UI-scoped value writes |
 | `impl_runtime.gd` | Implements `runtime_control` and the unified runtime I/O entry `runtime_step(action=step|capture|input)` |
 | `impl_scene.gd` | Implements `scene_validate`, `scene_analyze`, and `scene_patch` |
 | `impl_index.gd` | Implements internal index cache, `project_symbol_search`, and `scene_dependency_graph` |

@@ -13,6 +13,7 @@ var _tool_loader_last_summary: Dictionary = {}
 var _disabled_tools: Dictionary = {}
 var _log := Callable()
 var _record_registration_issue := Callable()
+var _tool_activity_registry = null
 
 
 func configure(server_context, context = null) -> void:
@@ -81,6 +82,12 @@ func get_tool_loader() -> MCPToolLoader:
 	return _tool_loader
 
 
+func set_tool_activity_registry(registry) -> void:
+	_tool_activity_registry = registry
+	if _tool_loader != null and _tool_loader.has_method("set_tool_activity_registry"):
+		_tool_loader.set_tool_activity_registry(registry)
+
+
 func tick(delta: float) -> void:
 	if _tool_loader != null and _tool_loader.has_method("tick"):
 		_tool_loader.tick(delta)
@@ -124,6 +131,7 @@ func dispose() -> void:
 	_disabled_tools.clear()
 	_log = Callable()
 	_record_registration_issue = Callable()
+	_tool_activity_registry = null
 
 
 func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Dictionary:
@@ -143,6 +151,8 @@ func _replace_tool_loader() -> void:
 	_tool_loader = MCPToolLoader.new()
 	if _server_context != null:
 		_tool_loader.configure(_server_context)
+	if _tool_activity_registry != null and _tool_loader.has_method("set_tool_activity_registry"):
+		_tool_loader.set_tool_activity_registry(_tool_activity_registry)
 	if not _disabled_tools.is_empty():
 		_tool_loader.set_disabled_tools(get_disabled_tools())
 
