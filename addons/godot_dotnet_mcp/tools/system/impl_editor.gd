@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit control text or numeric values, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -37,6 +37,8 @@ func get_tools() -> Array[Dictionary]:
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
+							"list_tree_items",
+							"select_tree_item",
 							"list_menus",
 							"open_menu",
 							"select_menu_item",
@@ -49,6 +51,7 @@ func get_tools() -> Array[Dictionary]:
 							"hover_control",
 							"leave_control",
 							"set_control_text",
+							"set_value",
 							"list_popups",
 							"press_popup_button",
 							"select_popup_menu_item",
@@ -101,6 +104,10 @@ func get_tools() -> Array[Dictionary]:
 						"type": "integer",
 						"description": "PopupMenu item index for select_menu_item"
 					},
+					"item_path": {
+						"type": "string",
+						"description": "Tree item path for select_tree_item"
+					},
 					"bottom_panel_title": {
 						"type": "string",
 						"description": "Bottom panel control title/name/text for activate_ui"
@@ -112,6 +119,10 @@ func get_tools() -> Array[Dictionary]:
 					"text": {
 						"type": "string",
 						"description": "Text for set_control_text/set_popup_text, PopupMenu item text for select_popup_menu_item, or expected text for wait_for_ui"
+					},
+					"value": {
+						"type": "number",
+						"description": "Numeric value for set_value"
 					},
 					"condition": {
 						"type": "string",
@@ -308,6 +319,21 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
 				"path": str(args.get("path", "")).strip_edges()
 			})
+		"list_tree_items":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "list_tree_items",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200))
+			})
+		"select_tree_item":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "select_tree_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"item_path": str(args.get("item_path", "")).strip_edges(),
+				"item_index": int(args.get("item_index", -1))
+			})
 		"list_menus":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "list_menus",
@@ -384,6 +410,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"action": "set_text",
 				"target_path": str(args.get("target_path", "")).strip_edges(),
 				"text": str(args.get("text", ""))
+			})
+		"set_value":
+			if not args.has("value"):
+				return bridge.error("value is required for set_value")
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "set_value",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"value": args.get("value")
 			})
 		"list_popups":
 			return bridge.call_atomic("editor_popup", {"action": "list_visible"})

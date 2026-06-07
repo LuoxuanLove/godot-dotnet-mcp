@@ -16,12 +16,18 @@ The new wait action complements menu, popup, click, hover, and text-entry contro
 
 `system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.
 
-The settings workflow can now list visible category tree items and focus a unique category before row inspection, making Project Settings and Editor Settings navigation less dependent on raw control enumeration.
+The workflow exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before optional value reads, writes, or assertions.
 
-The workflow now also exposes read-only row models through `list_rows`, summarizing visible settings-like controls with conservative confidence and evidence fields before any future value-editing layer is added.
+It can list and activate settings tabs through `list_tabs` and `activate_tab`, including `open(tab=...)`, so clients can move between Project Settings or Editor Settings tabs without coordinate clicks.
+
+The settings workflow can list visible category tree items and focus a unique category before row inspection, making Project Settings and Editor Settings navigation less dependent on raw control enumeration.
 
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
+Supported unique visible rows can now be edited through `set_value` for text, number, and bool controls. The workflow writes through editor UI controls and then observes the row again so agents can verify the value they changed instead of assuming the click or text edit worked.
+
+Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
+
 ### ✅ Compatibility and Upgrade Notes
 
-This change only extends the public tool schema. Existing `system_editor_control` actions remain available, and clients that do not call `wait_for_ui` do not need to change their requests.
+This change only extends the public tool schema. Existing `system_editor_control` and `system_settings_dialog` actions remain available, and clients that do not call the new actions do not need to change their requests.

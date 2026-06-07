@@ -10,8 +10,15 @@ class FakeBridge extends RefCounted:
 	var editor_visible := false
 	var project_filter_text := ""
 	var editor_filter_text := ""
+	var project_current_tab_index := 0
+	var editor_current_tab_index := 0
 	var localized_project_item := "Настройки проекта..."
 	var localized_editor_item := "Настройки редактора..."
+	var project_name_value := "Example"
+	var use_custom_user_dir := true
+	var snap_2d_transforms_to_pixel := false
+	var max_renderable_elements := 128000.0
+	var direct_spin_value := 3.0
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -37,14 +44,52 @@ class FakeBridge extends RefCounted:
 						return error("Menu item not found")
 					"focus_control":
 						return success({"target_path": str(args.get("target_path", ""))})
+					"activate_ui":
+						var target_path := str(args.get("target_path", ""))
+						var tab_index := int(args.get("tab_index", -1))
+						var tab_title := str(args.get("tab_title", ""))
+						if target_path.contains("ProjectSettings"):
+							var resolved_project_index := _resolve_project_tab(tab_index, tab_title)
+							if resolved_project_index < 0:
+								return error("Project Settings tab not found")
+							project_current_tab_index = resolved_project_index
+							return success({"target_path": target_path, "active_path": _project_tab_path(resolved_project_index), "tab_index": resolved_project_index, "tab_title": _project_tab_title(resolved_project_index)})
+						if target_path.contains("EditorSettings"):
+							var resolved_editor_index := _resolve_editor_tab(tab_index, tab_title)
+							if resolved_editor_index < 0:
+								return error("Editor Settings tab not found")
+							editor_current_tab_index = resolved_editor_index
+							return success({"target_path": target_path, "active_path": _editor_tab_path(resolved_editor_index), "tab_index": resolved_editor_index, "tab_title": _editor_tab_title(resolved_editor_index)})
+						return error("Unsupported activate_ui target")
 					"set_text":
 						var target_path := str(args.get("target_path", ""))
 						var text := str(args.get("text", ""))
 						if target_path.contains("ProjectSettings"):
-							project_filter_text = text
+							if target_path.ends_with("/Filter"):
+								project_filter_text = text
+							elif target_path.ends_with("/Name/Value"):
+								project_name_value = text
 						if target_path.contains("EditorSettings"):
 							editor_filter_text = text
 						return success({"target_path": target_path, "text": text})
+					"set_value":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.ends_with("/MaxRenderableElements/Value"):
+							max_renderable_elements = float(args.get("value", 0.0))
+							return success({"target_path": target_path, "value": max_renderable_elements})
+						if target_path.ends_with("/DirectSpin"):
+							direct_spin_value = float(args.get("value", 0.0))
+							return success({"target_path": target_path, "value": direct_spin_value})
+						return error("Value target not found")
+					"activate_control":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.ends_with("/UseCustomUserDir/Value"):
+							use_custom_user_dir = not use_custom_user_dir
+							return success({"target_path": target_path})
+						if target_path.ends_with("/Snap2DTransformsToPixel/Value"):
+							snap_2d_transforms_to_pixel = not snap_2d_transforms_to_pixel
+							return success({"target_path": target_path})
+						return error("Activation target not found")
 					_:
 						return error("Unsupported editor_ui_control action: %s" % action)
 			"editor_popup":
@@ -100,23 +145,26 @@ class FakeBridge extends RefCounted:
 		var rows: Array[Dictionary] = []
 		if project_visible:
 			rows.append({"path": "/root/ProjectSettings", "class": "AcceptDialog", "title": "Project Settings", "visible": true, "enabled": true})
+			rows.append(_tab_container_row("ProjectSettings", "/root/ProjectSettings/Tabs", project_current_tab_index, _project_tab_titles()))
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
 			rows.append({"path": "/root/ProjectSettings/CategoryTree", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Category Tree", "visible": true, "enabled": true, "child_count": 3})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": "Example", "visible": true, "disabled": false, "editable_text": true})
+				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": project_name_value, "visible": true, "disabled": false, "editable_text": true})
 			if project_filter_text.contains("application/config/use_custom_user_dir"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Use Custom User Dir", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "class": "CheckBox", "text": "Enabled", "pressed": true, "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/UseCustomUserDir", "class": "CheckBox", "text": "Enabled", "pressed": use_custom_user_dir, "visible": true, "disabled": false})
 			if project_filter_text.contains("application/config/display_enabled_label"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Display Enabled Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/DisplayEnabledLabel", "class": "CheckBox", "text": "Enabled", "visible": true, "disabled": false})
 			if project_filter_text.contains("rendering/2d/snap/snap_2d_transforms_to_pixel"):
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap", "class": "HBoxContainer", "text": "Snap 2D Transforms To Pixel", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel/Value", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "class": "CheckButton", "button_pressed": false, "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel/Value", "parent_path": "/root/ProjectSettings/General/Rendering/2D/Snap/Snap2DTransformsToPixel", "class": "CheckButton", "button_pressed": snap_2d_transforms_to_pixel, "visible": true, "disabled": false})
 			if project_filter_text.contains("rendering/limits/rendering/max_renderable_elements"):
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering", "class": "HBoxContainer", "text": "Max Renderable Elements", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
-				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": 128000, "text": "128000", "visible": true, "disabled": false})
+				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": max_renderable_elements, "text": str(max_renderable_elements), "visible": true, "disabled": false})
+			if project_filter_text.contains("editor/direct_spin"):
+				rows.append({"path": "/root/ProjectSettings/General/Editor/DirectSpin", "parent_path": "/root/ProjectSettings/General/Editor", "class": "SpinBox", "setting_path": "editor/direct_spin", "value": direct_spin_value, "text": str(direct_spin_value), "visible": true, "disabled": false})
 			if project_filter_text.contains("application/run/main_scene"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene", "parent_path": "/root/ProjectSettings/General/Application/Run", "class": "HBoxContainer", "text": "Main Scene", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Run/MainScene/Value", "parent_path": "/root/ProjectSettings/General/Application/Run/MainScene", "class": "OptionButton", "text": "res://Main.tscn", "selected": 2, "visible": true, "disabled": false})
@@ -125,6 +173,7 @@ class FakeBridge extends RefCounted:
 				rows.append({"path": "/root/ProjectSettings/General/Ambiguous/ExampleB", "parent_path": "/root/ProjectSettings/General/Ambiguous", "class": "HBoxContainer", "text": "Ambiguous Example", "setting_path": "ambiguous/example", "visible": true, "disabled": false, "editable_text": false, "child_count": 1})
 		if editor_visible:
 			rows.append({"path": "/root/EditorSettings", "class": "AcceptDialog", "title": "Editor Settings", "visible": true, "enabled": true})
+			rows.append(_tab_container_row("EditorSettings", "/root/EditorSettings/Tabs", editor_current_tab_index, _editor_tab_titles()))
 			rows.append({"path": "/root/EditorSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": editor_filter_text, "visible": true, "enabled": true})
 			rows.append({"path": "/root/EditorSettings/CategoryTree", "parent_path": "/root/EditorSettings", "class": "Tree", "name": "Category Tree", "visible": true, "enabled": true, "child_count": 2})
 			if editor_filter_text.contains("interface/editor/editor_language"):
@@ -158,6 +207,67 @@ class FakeBridge extends RefCounted:
 				return success({"target_path": target_path, "selected_item": selected, "resolution": {"candidate_count": 1}})
 		return error("Tree item not found", {"target_path": target_path, "item_path": item_path, "item_index": item_index})
 
+	func _tab_container_row(surface_prefix: String, path: String, current_index: int, titles: Array[String]) -> Dictionary:
+		var tabs: Array[Dictionary] = []
+		for index in range(titles.size()):
+			tabs.append({
+				"index": index,
+				"title": titles[index],
+				"control_path": "%s/%s" % [path, titles[index].replace(" ", "")],
+				"control_name": titles[index].replace(" ", ""),
+				"current": index == current_index,
+				"visible": index == current_index
+			})
+		return {
+			"path": path,
+			"parent_path": "/root/%s" % surface_prefix,
+			"class": "TabContainer",
+			"name": "Tabs",
+			"visible": true,
+			"enabled": true,
+			"tab_count": tabs.size(),
+			"current_tab_index": current_index,
+			"tabs": tabs
+		}
+
+	func _project_tab_titles() -> Array[String]:
+		return ["General", "Input Map", "Localization", "Plugins", "Globals"]
+
+	func _editor_tab_titles() -> Array[String]:
+		return ["General", "Shortcuts"]
+
+	func _project_tab_title(index: int) -> String:
+		var titles := _project_tab_titles()
+		return titles[index] if index >= 0 and index < titles.size() else ""
+
+	func _editor_tab_title(index: int) -> String:
+		var titles := _editor_tab_titles()
+		return titles[index] if index >= 0 and index < titles.size() else ""
+
+	func _project_tab_path(index: int) -> String:
+		return "/root/ProjectSettings/Tabs/%s" % _project_tab_title(index).replace(" ", "")
+
+	func _editor_tab_path(index: int) -> String:
+		return "/root/EditorSettings/Tabs/%s" % _editor_tab_title(index).replace(" ", "")
+
+	func _resolve_project_tab(tab_index: int, tab_title: String) -> int:
+		return _resolve_tab(_project_tab_titles(), tab_index, tab_title)
+
+	func _resolve_editor_tab(tab_index: int, tab_title: String) -> int:
+		return _resolve_tab(_editor_tab_titles(), tab_index, tab_title)
+
+	func _resolve_tab(titles: Array[String], tab_index: int, tab_title: String) -> int:
+		if tab_index >= 0 and tab_index < titles.size():
+			return tab_index
+		var query := tab_title.strip_edges().to_lower()
+		if query.is_empty():
+			return -1
+		for index in range(titles.size()):
+			var title := titles[index].to_lower()
+			if title == query or title.contains(query):
+				return index
+		return -1
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var impl = SettingsDialogImplScript.new()
@@ -172,9 +282,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_categories", "focus_category", "list_rows", "read_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
+	if not properties.has("tab_index"):
+		return _failure("settings_dialog schema should expose tab_index for activate_tab.")
+	for property_name in ["category", "category_path", "category_index"]:
+		if not properties.has(property_name):
+			return _failure("settings_dialog schema should expose %s for category workflows." % property_name)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
 	for surface in ["project_settings", "editor_settings"]:
 		if not surfaces.has(surface):
@@ -212,6 +327,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing_read_step: Dictionary = missing_read_workflow[missing_read_workflow.size() - 1] if not missing_read_workflow.is_empty() else {}
 	if str(missing_read_step.get("reason", "")) != "surface_not_visible":
 		return _failure("read_value missing-surface failure should report surface_not_visible.")
+	var missing_activate_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Plugins"
+	})
+	if bool(missing_activate_tab.get("success", false)):
+		return _failure("activate_tab should fail when the requested settings surface is not visible.")
 
 	var opened := await impl.execute_async("settings_dialog", {"action": "open", "surface": "project_settings", "timeout_ms": 500})
 	if not bool(opened.get("success", false)):
@@ -224,6 +346,61 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open should delegate to editor_ui_control.wait_for_ui.")
 	if not _has_menu_item_call(fake.calls, fake.localized_project_item):
 		return _failure("open should try localized Project Settings menu item candidates.")
+
+	var calls_before_list_tabs := fake.calls.size()
+	var listed_tabs := impl.execute("settings_dialog", {
+		"action": "list_tabs",
+		"surface": "project_settings"
+	})
+	if not bool(listed_tabs.get("success", false)):
+		return _failure("list_tabs should succeed against a visible settings surface.")
+	var listed_tabs_data: Dictionary = listed_tabs.get("data", {})
+	if int(listed_tabs_data.get("tab_count", 0)) != 5:
+		return _failure("list_tabs should return the settings TabContainer tabs.")
+	if str(listed_tabs_data.get("current_tab", "")) != "General" or int(listed_tabs_data.get("current_tab_index", -1)) != 0:
+		return _failure("list_tabs should report the current settings tab.")
+	if not _has_tab_title(listed_tabs_data.get("tabs", []), "Plugins"):
+		return _failure("list_tabs should expose Project Settings tab titles.")
+	if _has_call_since(fake.calls, calls_before_list_tabs, "editor_ui_control", "set_text"):
+		return _failure("list_tabs must not write the settings search field.")
+
+	var calls_before_activate_tab := fake.calls.size()
+	var activated_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Plugins"
+	})
+	if not bool(activated_tab.get("success", false)):
+		return _failure("activate_tab should activate a visible settings tab by title.")
+	if fake.project_current_tab_index != 3:
+		return _failure("activate_tab should delegate tab switching through editor_ui_control.activate_ui.")
+	if str(activated_tab.get("data", {}).get("selected_tab", {}).get("title", "")) != "Plugins":
+		return _failure("activate_tab should report the selected tab metadata.")
+	if not _has_call_since(fake.calls, calls_before_activate_tab, "editor_ui_control", "activate_ui"):
+		return _failure("activate_tab should call editor_ui_control.activate_ui.")
+	if _has_call_since(fake.calls, calls_before_activate_tab, "editor_ui_control", "set_text"):
+		return _failure("activate_tab must not write the settings search field.")
+
+	var activated_tab_by_index := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab_index": 0
+	})
+	if not bool(activated_tab_by_index.get("success", false)) or fake.project_current_tab_index != 0:
+		return _failure("activate_tab should activate a visible settings tab by index.")
+	var missing_selector_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings"
+	})
+	if bool(missing_selector_tab.get("success", false)):
+		return _failure("activate_tab should require either tab or tab_index.")
+	var unknown_tab := impl.execute("settings_dialog", {
+		"action": "activate_tab",
+		"surface": "project_settings",
+		"tab": "Missing"
+	})
+	if bool(unknown_tab.get("success", false)) or str(unknown_tab.get("data", {}).get("resolution", {}).get("reason", "")) != "tab_not_found":
+		return _failure("activate_tab should fail with tab_not_found for unknown tabs.")
 
 	var calls_before_list_categories := fake.calls.size()
 	var listed_categories := impl.execute("settings_dialog", {
@@ -327,6 +504,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should report the value child control as value_source.")
 	if _has_call_since(fake.calls, calls_before_read_value, "editor_ui_control", "set_text"):
 		return _failure("read_value must not write the settings search field.")
+	var calls_before_verify_value := fake.calls.size()
+	var verified_text_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Example",
+		"limit": 10
+	})
+	if not bool(verified_text_value.get("success", false)):
+		return _failure("verify_value should succeed when a visible text row matches expected_value.")
+	if not bool(verified_text_value.get("data", {}).get("verification", {}).get("success", false)):
+		return _failure("verify_value should return verification.success=true for matching text.")
+	var verified_text_workflow: Array = verified_text_value.get("data", {}).get("workflow", [])
+	if verified_text_workflow.is_empty() or str(verified_text_workflow[verified_text_workflow.size() - 1].get("step", "")) != "verify_value":
+		return _failure("verify_value should append a verify_value workflow step.")
+	if _has_call_since(fake.calls, calls_before_verify_value, "editor_ui_control", "set_text"):
+		return _failure("verify_value must not write the settings search field.")
+	var mismatched_text_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Other",
+		"limit": 10
+	})
+	if bool(mismatched_text_value.get("success", false)):
+		return _failure("verify_value should fail when the visible text row differs from expected_value.")
+	if str(mismatched_text_value.get("data", {}).get("verification", {}).get("reason", "")) != "value_mismatch":
+		return _failure("verify_value mismatch should report value_mismatch.")
 	var read_value_by_value_path := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "project_settings",
@@ -335,6 +540,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(read_value_by_value_path.get("success", false)):
 		return _failure("read_value should resolve a value child target_path back to its setting row.")
+	var set_text_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "Renamed Project",
+		"limit": 10
+	})
+	if not bool(set_text_value.get("success", false)):
+		return _failure("set_value should update a unique text row.")
+	if str(set_text_value.get("data", {}).get("before", {}).get("value", "")) != "Example":
+		return _failure("set_value should report the previous text value.")
+	if str(set_text_value.get("data", {}).get("after", {}).get("value", "")) != "Renamed Project":
+		return _failure("set_value should verify the updated text value.")
+	if str(set_text_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_text":
+		return _failure("set_value should use editor_ui_control.set_text for text rows.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -352,6 +572,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return a typed true value for CheckBox rows.")
 	if str(bool_value.get("data", {}).get("value_editor_type", "")) != "bool":
 		return _failure("read_value should classify CheckBox value controls as bool.")
+	var verified_bool_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"expected_value": true,
+		"limit": 10
+	})
+	if not bool(verified_bool_value.get("success", false)):
+		return _failure("verify_value should succeed when a visible bool row matches expected_value.")
+	var bool_type_mismatch := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"expected_value": "true",
+		"limit": 10
+	})
+	if bool(bool_type_mismatch.get("success", false)):
+		return _failure("verify_value should fail when a bool row is compared with non-bool expected_value.")
+	if str(bool_type_mismatch.get("data", {}).get("verification", {}).get("reason", "")) != "type_mismatch":
+		return _failure("verify_value bool type mismatch should report type_mismatch.")
+	var set_bool_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"value": false,
+		"limit": 10
+	})
+	if not bool(set_bool_value.get("success", false)):
+		return _failure("set_value should update a unique bool row.")
+	if bool(set_bool_value.get("data", {}).get("after", {}).get("value", true)) != false:
+		return _failure("set_value should verify the updated bool value.")
+	if str(set_bool_value.get("data", {}).get("write", {}).get("write_action", "")) != "activate_control":
+		return _failure("set_value should use editor_ui_control.activate_control when a bool row changes.")
+	var set_bool_noop := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/use_custom_user_dir",
+		"value": false,
+		"limit": 10
+	})
+	if not bool(set_bool_noop.get("success", false)) or str(set_bool_noop.get("data", {}).get("write", {}).get("write_action", "")) != "noop":
+		return _failure("set_value should no-op when a bool row already has the requested value.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -371,6 +633,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value must not infer bool true/false from label text without explicit pressed/button_pressed/value state.")
 	if str(bool_text_only_value.get("data", {}).get("value", "")) != "Enabled":
 		return _failure("read_value should preserve raw text for bool-like controls without explicit state fields.")
+	var set_bool_text_only := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/display_enabled_label",
+		"value": false,
+		"limit": 10
+	})
+	if bool(set_bool_text_only.get("success", false)):
+		return _failure("set_value should fail when a bool-like row lacks explicit current state.")
+	if str(set_bool_text_only.get("data", {}).get("write", {}).get("reason", "")) != "bool_state_unavailable":
+		return _failure("set_value bool text-only failure should report bool_state_unavailable.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -403,6 +676,47 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(number_value.get("success", false)) or float(number_value.get("data", {}).get("value", 0.0)) != 128000.0:
 		return _failure("read_value should return a typed number value for SpinBox rows.")
+	var verified_number_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "rendering/limits/rendering/max_renderable_elements",
+		"expected_value": "128000",
+		"limit": 10
+	})
+	if not bool(verified_number_value.get("success", false)):
+		return _failure("verify_value should compare numeric strings against number rows.")
+	var set_number_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "rendering/limits/rendering/max_renderable_elements",
+		"value": 64000,
+		"limit": 10
+	})
+	if not bool(set_number_value.get("success", false)):
+		return _failure("set_value should update a unique number row.")
+	if float(set_number_value.get("data", {}).get("after", {}).get("value", 0.0)) != 64000.0:
+		return _failure("set_value should verify the updated number value.")
+	if str(set_number_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_value":
+		return _failure("set_value should use editor_ui_control.set_value for number rows.")
+	await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "project_settings",
+		"setting_path": "editor/direct_spin",
+		"limit": 10
+	})
+	var set_direct_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "editor/direct_spin",
+		"value": 7,
+		"limit": 10
+	})
+	if not bool(set_direct_value.get("success", false)):
+		return _failure("set_value should update a unique row that is itself a writable value control.")
+	if str(set_direct_value.get("data", {}).get("write", {}).get("value_control_path", "")) != "/root/ProjectSettings/General/Editor/DirectSpin":
+		return _failure("set_value should target the direct value row when no child value control exists.")
+	if float(set_direct_value.get("data", {}).get("after", {}).get("value", 0.0)) != 7.0:
+		return _failure("set_value should verify direct value row updates.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -421,6 +735,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should return structured enum value data for OptionButton rows.")
 	if str((enum_payload as Dictionary).get("text", "")) != "res://Main.tscn" or int((enum_payload as Dictionary).get("selected", -1)) != 2:
 		return _failure("read_value should preserve enum selected text and index.")
+	var verified_enum_text := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"expected_value": "res://Main.tscn",
+		"limit": 10
+	})
+	if not bool(verified_enum_text.get("success", false)):
+		return _failure("verify_value should compare enum text against string expected_value.")
+	var verified_enum_selected := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"expected_value": {"text": "res://Main.tscn", "selected": 2},
+		"limit": 10
+	})
+	if not bool(verified_enum_selected.get("success", false)):
+		return _failure("verify_value should compare enum text and selected index from dictionary expected_value.")
+	var set_enum_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/run/main_scene",
+		"value": "res://Other.tscn",
+		"limit": 10
+	})
+	if bool(set_enum_value.get("success", false)):
+		return _failure("set_value should not claim support for enum rows yet.")
+	if str(set_enum_value.get("data", {}).get("write", {}).get("reason", "")) != "unsupported_value_editor_type":
+		return _failure("set_value enum failure should report unsupported_value_editor_type.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -438,6 +781,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("read_value should fail when multiple rows match the selector even if the requested limit is small.")
 	if str(ambiguous_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
 		return _failure("read_value ambiguous failure should report the ambiguous_row reason.")
+	var ambiguous_verified_value := impl.execute("settings_dialog", {
+		"action": "verify_value",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"expected_value": "x",
+		"limit": 1
+	})
+	if bool(ambiguous_verified_value.get("success", false)):
+		return _failure("verify_value should fail when multiple rows match the selector.")
+	if str(ambiguous_verified_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("verify_value ambiguous failure should preserve ambiguous_row resolution.")
+	var ambiguous_set_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"value": "x",
+		"limit": 1
+	})
+	if bool(ambiguous_set_value.get("success", false)):
+		return _failure("set_value should fail when multiple rows match the selector even if the requested limit is small.")
+	if str(ambiguous_set_value.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_row":
+		return _failure("set_value ambiguous failure should report the ambiguous_row reason.")
 
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
@@ -472,6 +837,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("editor_settings open should preserve the requested surface.")
 	if not _has_menu_item_call(fake.calls, fake.localized_editor_item):
 		return _failure("open should try localized Editor Settings menu item candidates.")
+	var editor_tabs := impl.execute("settings_dialog", {"action": "list_tabs", "surface": "editor_settings"})
+	if not bool(editor_tabs.get("success", false)) or not _has_tab_title(editor_tabs.get("data", {}).get("tabs", []), "Shortcuts"):
+		return _failure("list_tabs should also support editor_settings tabs.")
+	var editor_categories := impl.execute("settings_dialog", {
+		"action": "list_categories",
+		"surface": "editor_settings",
+		"category_path": "Interface/Editor",
+		"limit": 10
+	})
+	if not bool(editor_categories.get("success", false)):
+		return _failure("list_categories should also support editor_settings category trees.")
+	if int(editor_categories.get("data", {}).get("category_count", 0)) != 1:
+		return _failure("editor_settings list_categories should return only matching editor categories.")
+	if str(((editor_categories.get("data", {}).get("categories", []) as Array)[0]).get("category_path", "")) != "Interface/Editor":
+		return _failure("editor_settings list_categories should preserve editor category paths.")
+	var editor_opened_with_tab := await impl.execute_async("settings_dialog", {"action": "open", "surface": "editor_settings", "tab": "Shortcuts"})
+	if not bool(editor_opened_with_tab.get("success", false)):
+		return _failure("open should activate a requested tab when the settings surface is already visible.")
+	if fake.editor_current_tab_index != 1:
+		return _failure("open(tab) should delegate to activate_tab for an already visible settings surface.")
+	if str(editor_opened_with_tab.get("data", {}).get("tab_activation", {}).get("selected_tab", {}).get("title", "")) != "Shortcuts":
+		return _failure("open(tab) should return the selected tab activation payload.")
 	var editor_wrong_surface_read := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "editor_settings",
@@ -494,18 +881,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_result := ((editor_searched.get("data", {}).get("results", []) as Array)[0]) as Dictionary
 	if str(editor_result.get("setting_path_hint", "")) != "interface/editor/language":
 		return _failure("editor_settings search should derive the setting path without dropping the interface prefix.")
-	var editor_categories := impl.execute("settings_dialog", {
-		"action": "list_categories",
-		"surface": "editor_settings",
-		"category_path": "Interface/Editor",
-		"limit": 10
-	})
-	if not bool(editor_categories.get("success", false)):
-		return _failure("list_categories should also support editor_settings category trees.")
-	if int(editor_categories.get("data", {}).get("category_count", 0)) != 1:
-		return _failure("editor_settings list_categories should return only matching editor categories.")
-	if str(((editor_categories.get("data", {}).get("categories", []) as Array)[0]).get("category_path", "")) != "Interface/Editor":
-		return _failure("editor_settings list_categories should preserve editor category paths.")
 
 	return {"name": "system_settings_dialog_contracts", "success": true}
 
@@ -537,6 +912,13 @@ func _has_menu_item_call(calls: Array, item_text: String) -> bool:
 		if str(call.get("tool", "")) == "editor_ui_control" and str(call.get("action", "")) == "select_menu_item":
 			if str(call.get("args", {}).get("item_text", "")) == item_text:
 				return true
+	return false
+
+
+func _has_tab_title(tabs: Array, title: String) -> bool:
+	for tab in tabs:
+		if tab is Dictionary and str((tab as Dictionary).get("title", "")) == title:
+			return true
 	return false
 
 

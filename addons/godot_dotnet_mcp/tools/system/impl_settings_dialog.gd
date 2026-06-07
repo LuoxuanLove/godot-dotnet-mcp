@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and focus visible category tree items, list conservative read-only row models, read current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; it does not write project/editor setting values.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, read, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_categories", "focus_category", "list_rows", "read_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,11 +83,15 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value only filter currently observed visible rows."
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/set_value/verify_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
-						"description": "Optional tab title or category hint to include in the search"
+						"description": "Optional tab title or category hint. open/activate_tab use it as the requested tab title when tab_index is not provided; search/list_rows/read_value/set_value/verify_value use it as a query term."
+					},
+					"tab_index": {
+						"type": "integer",
+						"description": "Optional tab index for activate_tab"
 					},
 					"category": {
 						"type": "string",
@@ -103,7 +107,13 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value, or a tree/category control path used by focus_category"
+						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value/set_value/verify_value, or a tree/category control path used by focus_category"
+					},
+					"value": {
+						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
+					},
+					"expected_value": {
+						"description": "Expected value for verify_value. Text and number rows accept string/number values, bool rows require a boolean value, and enum rows accept a string text or dictionary with text/selected."
 					},
 					"include_raw_controls": {
 						"type": "boolean",
@@ -112,7 +122,7 @@ func get_tools() -> Array[Dictionary]:
 					"require_confidence": {
 						"type": "string",
 						"enum": ["low", "medium", "high"],
-						"description": "Minimum row model confidence accepted by read_value (default medium)"
+						"description": "Minimum row model confidence accepted by read_value/set_value/verify_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -157,11 +167,16 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _status(surface, args)
 		"search":
 			return bridge.error("search requires asynchronous execution")
-		"list_rows":
+		"list_tabs":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
 				return bridge.error("surface is required")
-			return _list_rows(surface, args)
+			return _list_tabs(surface, args)
+		"activate_tab":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _activate_tab(surface, args)
 		"list_categories":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -172,11 +187,23 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _focus_category(surface, args)
+		"list_rows":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _list_rows(surface, args)
 		"read_value":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _read_value(surface, args)
+		"set_value":
+			return bridge.error("set_value requires asynchronous execution")
+		"verify_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _verify_value(surface, args)
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -213,6 +240,11 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return await _search(surface, args)
+		"set_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return await _set_value(surface, args)
 		_:
 			return execute(tool_name, args)
 
@@ -296,6 +328,75 @@ func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 	if bool(args.get("capture", false)):
 		_attach_capture(payload, args)
 	return bridge.success(payload, "Settings rows listed")
+
+
+func _list_tabs(surface: String, args: Dictionary) -> Dictionary:
+	var observation: Dictionary = _observe(surface, args, [])
+	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
+	tabs_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "list_tabs",
+		"tab_count": int(tabs_payload.get("tab_count", 0)),
+		"success": true
+	})
+	if bool(args.get("include_raw_controls", false)):
+		tabs_payload["raw_controls"] = observation.get("all_controls", [])
+	if bool(args.get("capture", false)):
+		_attach_capture(tabs_payload, args)
+	return bridge.success(tabs_payload, "Settings tabs listed")
+
+
+func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
+	var requested_title := str(args.get("tab", "")).strip_edges()
+	var requested_index := int(args.get("tab_index", -1))
+	if requested_title.is_empty() and requested_index < 0:
+		return bridge.error("tab or tab_index is required for activate_tab")
+	var observation: Dictionary = _observe(surface, args, [])
+	if not bool(observation.get("dialog_found", false)):
+		return bridge.error("Settings surface is not visible for activate_tab: %s" % surface, observation)
+	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
+	var tab_container_path := str(tabs_payload.get("tab_container_path", "")).strip_edges()
+	if tab_container_path.is_empty():
+		return bridge.error("No tab container found for settings surface: %s" % surface, tabs_payload)
+	var tab_resolution := _resolve_settings_tab(tabs_payload.get("tabs", []), requested_title, requested_index)
+	if not bool(tab_resolution.get("success", false)):
+		var error_payload := tabs_payload.duplicate(true)
+		error_payload["resolution"] = tab_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "activate_tab",
+			"tab": requested_title,
+			"tab_index": requested_index,
+			"success": false,
+			"reason": str(tab_resolution.get("reason", "tab_not_found"))
+		})
+		return bridge.error(str(tab_resolution.get("message", "No settings tab matched activate_tab.")), error_payload)
+	var selected_tab: Dictionary = tab_resolution.get("tab", {})
+	var activate_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+		"action": "activate_ui",
+		"target_path": tab_container_path,
+		"tab_title": str(selected_tab.get("title", "")),
+		"tab_index": int(selected_tab.get("index", -1)),
+		"path": str(args.get("path", "")).strip_edges()
+	})
+	if not bool(activate_result.get("success", false)):
+		return activate_result
+	var payload: Dictionary = activate_result.get("data", {}).duplicate(true)
+	payload["surface"] = surface
+	payload["tab_container_path"] = tab_container_path
+	payload["requested_tab"] = requested_title
+	payload["requested_tab_index"] = requested_index
+	payload["selected_tab"] = selected_tab
+	payload["tabs"] = tabs_payload.get("tabs", [])
+	payload["tab_count"] = int(tabs_payload.get("tab_count", 0))
+	payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "activate_tab",
+		"tab": requested_title,
+		"tab_index": requested_index,
+		"target_path": tab_container_path,
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings tab activated")
 
 
 func _list_categories(surface: String, args: Dictionary) -> Dictionary:
@@ -427,6 +528,124 @@ func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	return bridge.success(value_payload, "Settings row value read")
 
 
+func _set_value(surface: String, args: Dictionary) -> Dictionary:
+	if not args.has("value"):
+		return bridge.error("value is required for set_value")
+	var query_values: Array[String] = _search_terms(args)
+	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for set_value: %s" % surface, missing_payload)
+	if bool(observation.get("control_truncated", false)) and str(args.get("target_path", "")).strip_edges().is_empty():
+		var truncated_payload := observation.duplicate(true)
+		truncated_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": "control_enumeration_truncated"
+		})
+		return bridge.error("Settings controls were truncated; pass target_path or increase limit before set_value.", truncated_payload)
+	var all_controls: Array = observation.get("all_controls", [])
+	var row_resolution: Dictionary = _resolve_row_for_value_action(all_controls, surface, args, query_values, "set_value")
+	if not bool(row_resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["resolution"] = row_resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": str(row_resolution.get("reason", "row_not_found"))
+		})
+		return bridge.error(str(row_resolution.get("message", "No unique settings row matched set_value.")), error_payload)
+	var row: Dictionary = row_resolution.get("row", {})
+	var before_value: Dictionary = _read_row_value(row, all_controls)
+	var write_result: Dictionary = _write_row_value(row, before_value, args.get("value"), all_controls)
+	if not bool(write_result.get("success", false)):
+		var write_payload := observation.duplicate(true)
+		write_payload["row"] = row
+		write_payload["before"] = before_value
+		write_payload["write"] = write_result
+		write_payload["resolution"] = row_resolution.get("resolution", {})
+		write_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "set_value",
+			"success": false,
+			"reason": str(write_result.get("reason", "write_failed"))
+		})
+		return bridge.error(str(write_result.get("message", "Settings row value write failed.")), write_payload)
+	await _wait_one_frame()
+	var verification_observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var after_value: Dictionary = {}
+	var verification: Dictionary = {
+		"success": false,
+		"reason": "verification_unavailable"
+	}
+	if bool(verification_observation.get("dialog_found", false)):
+		var verify_resolution: Dictionary = _resolve_row_for_value_action(verification_observation.get("all_controls", []), surface, args, query_values, "set_value")
+		if bool(verify_resolution.get("success", false)):
+			after_value = _read_row_value(verify_resolution.get("row", {}), verification_observation.get("all_controls", []))
+			verification = _verify_written_value(after_value, write_result.get("data", {}).get("expected_value"), str(write_result.get("data", {}).get("value_editor_type", before_value.get("value_editor_type", "unknown"))))
+		else:
+			verification = {
+				"success": false,
+				"reason": str(verify_resolution.get("reason", "row_not_found")),
+				"resolution": verify_resolution
+			}
+	var workflow := _workflow_with_step(observation.get("workflow", []), {
+		"step": "set_value",
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"queries": query_values,
+		"write_action": str(write_result.get("data", {}).get("write_action", "")),
+		"success": bool(verification.get("success", false))
+	})
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(verification_observation.get("dialog_found", false)),
+		"dialog_path": str(verification_observation.get("dialog_path", observation.get("dialog_path", ""))),
+		"primary_popup_path": str(verification_observation.get("primary_popup_path", observation.get("primary_popup_path", ""))),
+		"row": row,
+		"resolution": row_resolution.get("resolution", {}),
+		"before": before_value,
+		"after": after_value,
+		"write": write_result.get("data", {}),
+		"verification": verification,
+		"workflow": workflow
+	}
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	if bool(verification.get("success", false)):
+		return bridge.success(payload, "Settings row value set")
+	return bridge.error("Settings row value write could not be verified.", payload)
+
+
+func _verify_value(surface: String, args: Dictionary) -> Dictionary:
+	if not args.has("expected_value"):
+		return bridge.error("expected_value is required for verify_value")
+	var read_result: Dictionary = _read_value(surface, args)
+	if not bool(read_result.get("success", false)):
+		return read_result
+	var payload: Dictionary = read_result.get("data", {}).duplicate(true)
+	var verification: Dictionary = _verify_expected_value(payload, args.get("expected_value"))
+	verification["unique_row"] = true
+	verification["require_confidence"] = _required_confidence(args)
+	verification["row_confidence"] = str(payload.get("row", {}).get("confidence", payload.get("confidence", "low")))
+	verification["value_source"] = str(payload.get("value_source", ""))
+	payload["verification"] = verification
+	payload["workflow"] = _workflow_with_step(payload.get("workflow", []), {
+		"step": "verify_value",
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"expected_value": args.get("expected_value"),
+		"success": bool(verification.get("success", false))
+	})
+	if bool(verification.get("success", false)):
+		return bridge.success(payload, "Settings row value verified")
+	return bridge.error("Settings row value did not match expected_value.", payload)
+
+
 func _capture(surface: String, args: Dictionary) -> Dictionary:
 	var observation: Dictionary = _observe(surface, args, _search_terms(args))
 	_attach_capture(observation, args)
@@ -457,9 +676,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 	if bool(current.get("dialog_found", false)):
 		current["opened"] = true
 		current["already_open"] = true
-		if bool(args.get("capture", false)):
-			_attach_capture(current, args)
-		return bridge.success(current, "Settings surface already open")
+		return _finish_open(surface, args, current, "Settings surface already open")
 	var spec: Dictionary = SURFACES.get(surface, {})
 	var attempts: Array[Dictionary] = []
 	for menu_title in _surface_menu_titles(spec):
@@ -488,11 +705,38 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 					observation["opened"] = true
 					observation["workflow"] = _merge_workflow(attempts, observation.get("workflow", []))
 					observation["verification"] = wait_result.get("data", {})
-					if bool(args.get("capture", false)):
-						_attach_capture(observation, args)
-					return bridge.success(observation, "Settings surface opened")
+					return _finish_open(surface, args, observation, "Settings surface opened")
 				return bridge.error("Timed out waiting for settings surface: %s" % surface, {"surface": surface, "opened": false, "workflow": attempts, "verification": wait_result.get("data", {})})
 	return bridge.error("Failed to open settings surface: %s" % surface, {"surface": surface, "opened": false, "workflow": attempts})
+
+
+func _finish_open(surface: String, args: Dictionary, payload: Dictionary, message: String) -> Dictionary:
+	var output := payload.duplicate(true)
+	if _has_tab_selector(args):
+		var activation_args := args.duplicate(true)
+		activation_args["capture"] = false
+		activation_args.erase("path")
+		var activation_result := _activate_tab(surface, activation_args)
+		if not bool(activation_result.get("success", false)):
+			return activation_result
+		var activation_payload: Dictionary = activation_result.get("data", {})
+		var selected_tab: Dictionary = activation_payload.get("selected_tab", {})
+		output["tab_activation"] = activation_payload
+		output["current_tab"] = str(selected_tab.get("title", output.get("current_tab", "")))
+		output["current_tab_index"] = int(selected_tab.get("index", output.get("current_tab_index", -1)))
+		output["workflow"] = _workflow_with_step(output.get("workflow", []), {
+			"step": "open_activate_tab",
+			"tab": str(args.get("tab", "")),
+			"tab_index": int(args.get("tab_index", -1)),
+			"success": true
+		})
+	if bool(args.get("capture", false)):
+		_attach_capture(output, args)
+	return bridge.success(output, message)
+
+
+func _has_tab_selector(args: Dictionary) -> bool:
+	return not str(args.get("tab", "")).strip_edges().is_empty() or int(args.get("tab_index", -1)) >= 0
 
 
 func _observe(surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
@@ -820,6 +1064,10 @@ func _controls_under_roots(rows: Array, roots: Array[String]) -> Array:
 
 
 func _current_tab_hint(rows: Array, spec: Dictionary) -> String:
+	var payload := _settings_tabs_payload("", {"all_controls": rows, "dialog_path": "", "primary_popup_path": ""})
+	for tab in payload.get("tabs", []):
+		if tab is Dictionary and bool((tab as Dictionary).get("current", false)):
+			return str((tab as Dictionary).get("title", ""))
 	var tabs: Array = spec.get("tabs", [])
 	for row in rows:
 		if not (row is Dictionary):
@@ -830,6 +1078,103 @@ func _current_tab_hint(rows: Array, spec: Dictionary) -> String:
 			if text.to_lower().contains(str(tab).to_lower()):
 				return str(tab)
 	return ""
+
+
+func _settings_tabs_payload(surface: String, observation: Dictionary) -> Dictionary:
+	var controls: Array = observation.get("all_controls", [])
+	var tab_containers: Array[Dictionary] = []
+	for row in controls:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		if not dict.has("tabs"):
+			continue
+		var tabs: Array = dict.get("tabs", [])
+		if tabs.is_empty():
+			continue
+		tab_containers.append(dict.duplicate(true))
+	var selected_container := _select_settings_tab_container(tab_containers)
+	var tabs: Array[Dictionary] = []
+	if not selected_container.is_empty():
+		for tab in selected_container.get("tabs", []):
+			if tab is Dictionary:
+				tabs.append((tab as Dictionary).duplicate(true))
+	return {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"tab_container_path": str(selected_container.get("path", "")),
+		"tab_container_class": str(selected_container.get("class", "")),
+		"current_tab": _current_tab_title(tabs),
+		"current_tab_index": int(selected_container.get("current_tab_index", -1)),
+		"tabs": tabs,
+		"tab_count": tabs.size()
+	}
+
+
+func _select_settings_tab_container(tab_containers: Array[Dictionary]) -> Dictionary:
+	if tab_containers.is_empty():
+		return {}
+	var best := tab_containers[0]
+	for candidate in tab_containers:
+		if int(candidate.get("tab_count", 0)) > int(best.get("tab_count", 0)):
+			best = candidate
+	return best.duplicate(true)
+
+
+func _current_tab_title(tabs: Array[Dictionary]) -> String:
+	for tab in tabs:
+		if bool(tab.get("current", false)):
+			return str(tab.get("title", ""))
+	return ""
+
+
+func _resolve_settings_tab(tabs: Array, requested_title: String, requested_index: int) -> Dictionary:
+	var candidates: Array[Dictionary] = []
+	for tab in tabs:
+		if not (tab is Dictionary):
+			continue
+		var dict := (tab as Dictionary).duplicate(true)
+		if requested_index >= 0 and int(dict.get("index", -1)) == requested_index:
+			candidates.append(dict)
+			continue
+		if not requested_title.is_empty() and _tab_title_matches(dict, requested_title):
+			candidates.append(dict)
+	if candidates.is_empty():
+		return {
+			"success": false,
+			"reason": "tab_not_found",
+			"message": "No settings tab matched the requested selector.",
+			"candidate_count": 0,
+			"candidates": []
+		}
+	if candidates.size() > 1:
+		return {
+			"success": false,
+			"reason": "ambiguous_tab",
+			"message": "Multiple settings tabs matched the requested selector.",
+			"candidate_count": candidates.size(),
+			"candidates": candidates
+		}
+	return {
+		"success": true,
+		"tab": candidates[0],
+		"candidate_count": 1
+	}
+
+
+func _tab_title_matches(tab: Dictionary, requested_title: String) -> bool:
+	var query := requested_title.strip_edges().to_lower()
+	if query.is_empty():
+		return false
+	for key in ["title", "control_name"]:
+		var value := str(tab.get(key, "")).strip_edges().to_lower()
+		if value == query:
+			return true
+		if value.contains(query):
+			return true
+	return false
 
 
 func _section_hint(row: Dictionary) -> String:
@@ -969,6 +1314,10 @@ func _settings_row_models(rows: Array, surface: String, query_values: Array[Stri
 
 
 func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary, query_values: Array[String]) -> Dictionary:
+	return _resolve_row_for_value_action(rows, surface, args, query_values, "read_value")
+
+
+func _resolve_row_for_value_action(rows: Array, surface: String, args: Dictionary, query_values: Array[String], action_name: String) -> Dictionary:
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	var required := _required_confidence(args)
 	var candidates: Array[Dictionary] = []
@@ -982,7 +1331,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "row_not_found",
-			"message": "No settings row matched read_value with the requested selector and confidence.",
+			"message": "No settings row matched %s with the requested selector and confidence." % action_name,
 			"candidate_count": 0,
 			"candidates": []
 		}
@@ -990,7 +1339,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		return {
 			"success": false,
 			"reason": "ambiguous_row",
-			"message": "Multiple settings rows matched read_value; pass target_path or a more specific setting_path.",
+			"message": "Multiple settings rows matched %s; pass target_path or a more specific setting_path." % action_name,
 			"candidate_count": candidates.size(),
 			"candidates": candidates
 		}
@@ -999,7 +1348,7 @@ func _resolve_row_for_value_read(rows: Array, surface: String, args: Dictionary,
 		"row": candidates[0],
 		"resolution": {
 			"candidate_count": 1,
-			"selector": _read_value_selector_summary(args),
+			"selector": _value_action_selector_summary(args),
 			"require_confidence": required
 		}
 	}
@@ -1025,6 +1374,159 @@ func _read_row_value(row: Dictionary, rows: Array) -> Dictionary:
 	}
 
 
+func _write_row_value(row: Dictionary, before_value: Dictionary, requested_value, rows: Array) -> Dictionary:
+	var value_control: Dictionary = _value_control_for_row(row, rows)
+	if value_control.is_empty():
+		return {
+			"success": false,
+			"reason": "value_control_not_found",
+			"message": "No writable value control was found for the settings row."
+		}
+	var editor_type := str(before_value.get("value_editor_type", row.get("value_editor_type", "unknown")))
+	if editor_type == "unknown":
+		editor_type = _value_editor_type_hint(value_control)
+	var value_path := str(before_value.get("value_control_path", value_control.get("path", value_control.get("node_path", "")))).strip_edges()
+	if value_path.is_empty():
+		return {
+			"success": false,
+			"reason": "value_control_not_found",
+			"message": "The settings row value control does not expose a path."
+		}
+	match editor_type:
+		"text":
+			var text_value := str(requested_value)
+			var set_text_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "set_text",
+				"target_path": value_path,
+				"text": text_value
+			})
+			return _wrap_write_result(set_text_result, editor_type, value_path, "set_text", text_value)
+		"number":
+			var numeric_result := _coerce_number_value(requested_value)
+			if not bool(numeric_result.get("success", false)):
+				return numeric_result
+			var number_value = numeric_result.get("value")
+			var set_value_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "set_value",
+				"target_path": value_path,
+				"value": number_value
+			})
+			return _wrap_write_result(set_value_result, editor_type, value_path, "set_value", number_value)
+		"bool":
+			if not (requested_value is bool):
+				return {
+					"success": false,
+					"reason": "invalid_value_type",
+					"message": "Bool settings rows require a boolean value."
+				}
+			var before_bool = before_value.get("value")
+			if not (before_bool is bool):
+				return {
+					"success": false,
+					"reason": "bool_state_unavailable",
+					"message": "The bool settings row does not expose an explicit current pressed state."
+				}
+			if bool(before_bool) == bool(requested_value):
+				return {
+					"success": true,
+					"data": {
+						"value_editor_type": editor_type,
+						"value_control_path": value_path,
+						"write_action": "noop",
+						"expected_value": requested_value,
+						"already_set": true
+					}
+				}
+			var activate_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+				"action": "activate_control",
+				"target_path": value_path
+			})
+			return _wrap_write_result(activate_result, editor_type, value_path, "activate_control", requested_value)
+		_:
+			return {
+				"success": false,
+				"reason": "unsupported_value_editor_type",
+				"message": "set_value does not support settings value editor type: %s" % editor_type,
+				"data": {
+					"value_editor_type": editor_type,
+					"value_control_path": value_path
+				}
+			}
+
+
+func _wrap_write_result(result: Dictionary, editor_type: String, value_path: String, write_action: String, expected_value) -> Dictionary:
+	if bool(result.get("success", false)):
+		var data: Dictionary = result.get("data", {}).duplicate(true)
+		data["value_editor_type"] = editor_type
+		data["value_control_path"] = value_path
+		data["write_action"] = write_action
+		data["expected_value"] = expected_value
+		return {"success": true, "data": data}
+	return {
+		"success": false,
+		"reason": "write_failed",
+		"message": str(result.get("message", result.get("error", "Settings row value write failed."))),
+		"data": result.get("data", {})
+	}
+
+
+func _coerce_number_value(value) -> Dictionary:
+	if value is int or value is float:
+		return {"success": true, "value": value}
+	var text := str(value).strip_edges()
+	if text.is_valid_float():
+		return {"success": true, "value": text.to_float()}
+	return {
+		"success": false,
+		"reason": "invalid_value_type",
+		"message": "Number settings rows require a numeric value."
+	}
+
+
+func _verify_written_value(after_value: Dictionary, expected_value, editor_type: String) -> Dictionary:
+	var actual_value = after_value.get("value")
+	match editor_type:
+		"number":
+			var expected_number := _coerce_number_value(expected_value)
+			if bool(expected_number.get("success", false)) and (actual_value is int or actual_value is float):
+				var delta := abs(float(actual_value) - float(expected_number.get("value")))
+				return {
+					"success": delta <= 0.00001,
+					"expected_value": expected_number.get("value"),
+					"actual_value": actual_value,
+					"reason": "matched" if delta <= 0.00001 else "value_mismatch"
+				}
+		"bool":
+			if actual_value is bool and expected_value is bool:
+				return {
+					"success": bool(actual_value) == bool(expected_value),
+					"expected_value": expected_value,
+					"actual_value": actual_value,
+					"reason": "matched" if bool(actual_value) == bool(expected_value) else "value_mismatch"
+				}
+		_:
+			var expected_text := str(expected_value)
+			var actual_text := str(actual_value)
+			return {
+				"success": actual_text == expected_text,
+				"expected_value": expected_text,
+				"actual_value": actual_text,
+				"reason": "matched" if actual_text == expected_text else "value_mismatch"
+			}
+	return {
+		"success": false,
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"reason": "value_mismatch"
+	}
+
+
+func _wait_one_frame() -> void:
+	var main_loop = Engine.get_main_loop()
+	if main_loop != null:
+		await main_loop.process_frame
+
+
 func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
 	var value_path := str(row.get("value_control_path", "")).strip_edges()
 	if not value_path.is_empty() and value_path != str(row.get("row_control_path", "")):
@@ -1033,6 +1535,11 @@ func _value_control_for_row(row: Dictionary, rows: Array) -> Dictionary:
 				var candidate_path := str((candidate as Dictionary).get("path", (candidate as Dictionary).get("node_path", ""))).strip_edges()
 				if candidate_path == value_path:
 					return (candidate as Dictionary).duplicate(true)
+	var row_editor_type := str(row.get("value_editor_type", "unknown"))
+	if row_editor_type == "unknown":
+		row_editor_type = _value_editor_type_hint(row)
+	if row_editor_type in ["text", "bool", "number", "enum", "color"]:
+		return row.duplicate(true)
 	var row_path := str(row.get("row_control_path", "")).strip_edges()
 	if row_path.is_empty():
 		return {}
@@ -1077,6 +1584,116 @@ func _typed_value_from_row(row: Dictionary, editor_type: String, raw_text: Strin
 			return raw_text
 
 
+func _verify_expected_value(value_payload: Dictionary, expected_value) -> Dictionary:
+	var editor_type := str(value_payload.get("value_editor_type", "unknown"))
+	var actual_value = value_payload.get("value")
+	match editor_type:
+		"number":
+			return _verify_number_value(actual_value, expected_value)
+		"bool":
+			return _verify_bool_value(actual_value, expected_value)
+		"enum":
+			return _verify_enum_value(actual_value, expected_value)
+		_:
+			return _verify_text_value(actual_value, expected_value)
+
+
+func _verify_number_value(actual_value, expected_value) -> Dictionary:
+	var actual_number := _coerce_number_value(actual_value)
+	var expected_number := _coerce_number_value(expected_value)
+	var success := bool(actual_number.get("success", false)) and bool(expected_number.get("success", false))
+	if success:
+		var delta := abs(float(actual_number.get("value")) - float(expected_number.get("value")))
+		success = delta <= 0.00001
+		return {
+			"success": success,
+			"reason": "matched" if success else "value_mismatch",
+			"expected_value": expected_number.get("value"),
+			"actual_value": actual_number.get("value"),
+			"actual_type": "number"
+		}
+	return {
+		"success": false,
+		"reason": "type_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "number"
+	}
+
+
+func _verify_bool_value(actual_value, expected_value) -> Dictionary:
+	if actual_value is bool and expected_value is bool:
+		var success := bool(actual_value) == bool(expected_value)
+		return {
+			"success": success,
+			"reason": "matched" if success else "value_mismatch",
+			"expected_value": expected_value,
+			"actual_value": actual_value,
+			"actual_type": "bool"
+		}
+	return {
+		"success": false,
+		"reason": "type_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "bool"
+	}
+
+
+func _verify_enum_value(actual_value, expected_value) -> Dictionary:
+	var actual_text := ""
+	var actual_selected: Variant = null
+	if actual_value is Dictionary:
+		actual_text = str((actual_value as Dictionary).get("text", ""))
+		actual_selected = (actual_value as Dictionary).get("selected", null)
+	else:
+		actual_text = str(actual_value)
+	var expected_text := ""
+	var expected_selected: Variant = null
+	var expects_text := false
+	var expects_selected := false
+	if expected_value is Dictionary:
+		var expected_dict := expected_value as Dictionary
+		if expected_dict.has("text"):
+			expected_text = str(expected_dict.get("text", ""))
+			expects_text = true
+		if expected_dict.has("selected"):
+			expected_selected = expected_dict.get("selected", null)
+			expects_selected = true
+	else:
+		expected_text = str(expected_value)
+		expects_text = true
+	var text_matches := (not expects_text) or actual_text == expected_text
+	var selected_matches := (not expects_selected) or _values_equal_exact(actual_selected, expected_selected)
+	var success := text_matches and selected_matches and (expects_text or expects_selected)
+	return {
+		"success": success,
+		"reason": "matched" if success else "value_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "enum"
+	}
+
+
+func _verify_text_value(actual_value, expected_value) -> Dictionary:
+	var actual_text := str(actual_value)
+	var expected_text := str(expected_value)
+	var success := actual_text == expected_text
+	return {
+		"success": success,
+		"reason": "matched" if success else "value_mismatch",
+		"expected_value": expected_text,
+		"actual_value": actual_text,
+		"actual_type": "text"
+	}
+
+
+func _values_equal_exact(left, right) -> bool:
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
+
+
 func _row_matches_target_path(row: Dictionary, target_path: String) -> bool:
 	for key in ["row_control_path", "label_control_path", "value_control_path"]:
 		if str(row.get(key, "")).strip_edges() == target_path:
@@ -1099,7 +1716,7 @@ func _confidence_meets(actual: String, required: String) -> bool:
 	return int(ranks.get(actual, 0)) >= int(ranks.get(required, 1))
 
 
-func _read_value_selector_summary(args: Dictionary) -> Dictionary:
+func _value_action_selector_summary(args: Dictionary) -> Dictionary:
 	return {
 		"target_path": str(args.get("target_path", "")),
 		"setting_path": str(args.get("setting_path", "")),
