@@ -32,6 +32,8 @@ It can also read the current value of a uniquely matched visible row through `re
 
 Project configuration evidence now also covers input maps: agents can inspect a single project input action through `system_project_configure`, including its deadzone and concrete key, mouse, or controller bindings. This makes input-map reviews easier to ground in the actual project configuration before changing gameplay or editor shortcuts.
 
+Project configuration can also list export presets through `system_project_configure(action="list_export_presets")`. The response summarizes preset names, platforms, runnable state, filters, script export mode, and export-path shape while redacting sensitive option keys and absolute local export paths.
+
 Clients can now resolve a unique visible settings row through `resolve_row` before reading a value or choosing a follow-up UI action. The response carries row paths, confidence, selector evidence, and ambiguity diagnostics while staying read-only.
 
 When an agent only needs to move keyboard focus to the matched value editor, `focus_value` focuses the value control and returns focused editor evidence without changing the setting.

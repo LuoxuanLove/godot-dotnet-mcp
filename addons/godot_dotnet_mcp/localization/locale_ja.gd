@@ -990,6 +990,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_list_dock_tabs_name": "List Dock Tabs",
 	"tool_action_list_input_actions_name": "List Input Actions",
 	"tool_action_get_input_action_name": "入力アクションの取得",
+	"tool_action_list_export_presets_name": "エクスポートプリセット一覧",
 	"tool_action_list_popups_desc": "List currently visible editor popups.",
 	"tool_action_list_popups_name": "List Popups",
 	"tool_action_list_visible_desc": "Enumerate currently visible controls or popups.",

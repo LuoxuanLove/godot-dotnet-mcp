@@ -388,7 +388,7 @@ func _system_actions_for(full_name: String) -> Array:
 		"system_editor_plugin_control":
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
-			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action"]
+			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action", "list_export_presets"]
 		"system_plugin_update":
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 	return []
