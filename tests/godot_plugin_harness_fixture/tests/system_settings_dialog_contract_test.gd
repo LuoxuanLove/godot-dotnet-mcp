@@ -28,7 +28,13 @@ class FakeBridge extends RefCounted:
 			"editor_ui_control":
 				match action:
 					"list_visible":
-						return success({"count": _visible_controls().size(), "controls": _visible_controls()})
+						var visible_controls := _visible_controls()
+						var limit := maxi(int(args.get("limit", visible_controls.size())), 1)
+						return success({"count": visible_controls.size(), "controls": visible_controls.slice(0, mini(limit, visible_controls.size()))})
+					"list_tree_items":
+						return success({"target_path": str(args.get("target_path", "")), "count": _visible_tree_items(str(args.get("target_path", ""))).size(), "items": _visible_tree_items(str(args.get("target_path", "")))})
+					"select_tree_item":
+						return _select_tree_item(args)
 					"select_menu_item":
 						var item_text := str(args.get("item_text", ""))
 						if item_text == localized_project_item:
@@ -143,6 +149,16 @@ class FakeBridge extends RefCounted:
 			rows.append({"path": "/root/ProjectSettings", "class": "AcceptDialog", "title": "Project Settings", "visible": true, "enabled": true})
 			rows.append(_tab_container_row("ProjectSettings", "/root/ProjectSettings/Tabs", project_current_tab_index, _project_tab_titles()))
 			rows.append({"path": "/root/ProjectSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": project_filter_text, "visible": true, "enabled": true})
+			if project_filter_text.is_empty():
+				for index in range(12):
+					rows.append({"path": "/root/ProjectSettings/General/VisibleRow%s" % index, "parent_path": "/root/ProjectSettings/General", "class": "HBoxContainer", "text": "Visible Row %s" % index, "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector", "parent_path": "/root/ProjectSettings", "class": "SectionedInspector", "name": "SectionedInspector", "visible": true, "enabled": true, "child_count": 2})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Left", "parent_path": "/root/ProjectSettings/SectionedInspector", "class": "VBoxContainer", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Left/Sections", "parent_path": "/root/ProjectSettings/SectionedInspector/Left", "class": "Tree", "visible": true, "enabled": true, "child_count": 3})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right", "parent_path": "/root/ProjectSettings/SectionedInspector", "class": "VBoxContainer", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/Inspector", "parent_path": "/root/ProjectSettings/SectionedInspector/Right", "class": "EditorInspector", "name": "EditorInspector", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/Inspector/SettingsTree", "parent_path": "/root/ProjectSettings/SectionedInspector/Right/Inspector", "class": "Tree", "name": "Settings Tree", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SettingsList", "parent_path": "/root/ProjectSettings", "class": "Tree", "name": "Settings List", "visible": true, "enabled": true, "child_count": 2})
 			if project_filter_text.contains("application/config/name"):
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name", "parent_path": "/root/ProjectSettings/General/Application/Config", "class": "HBoxContainer", "text": "Application Config Name", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 				rows.append({"path": "/root/ProjectSettings/General/Application/Config/Name/Value", "parent_path": "/root/ProjectSettings/General/Application/Config/Name", "class": "LineEdit", "text": project_name_value, "visible": true, "disabled": false, "editable_text": true})
@@ -170,9 +186,46 @@ class FakeBridge extends RefCounted:
 			rows.append({"path": "/root/EditorSettings", "class": "AcceptDialog", "title": "Editor Settings", "visible": true, "enabled": true})
 			rows.append(_tab_container_row("EditorSettings", "/root/EditorSettings/Tabs", editor_current_tab_index, _editor_tab_titles()))
 			rows.append({"path": "/root/EditorSettings/Filter", "class": "LineEdit", "name": "Filter Settings", "text": editor_filter_text, "visible": true, "enabled": true})
+			rows.append({"path": "/root/EditorSettings/CategoryTree", "parent_path": "/root/EditorSettings", "class": "Tree", "name": "Category Tree", "visible": true, "enabled": true, "child_count": 2})
 			if editor_filter_text.contains("interface/editor/editor_language"):
 				rows.append({"path": "/root/EditorSettings/Interface/Editor/Language", "parent_path": "/root/EditorSettings/Interface/Editor", "class": "HBoxContainer", "text": "Editor Language", "visible": true, "disabled": false, "editable_text": false, "child_count": 2})
 		return rows
+
+	func _visible_tree_items(target_path: String) -> Array[Dictionary]:
+		if target_path == "/root/ProjectSettings/SectionedInspector/Left/Sections":
+			return [
+				{"index": 0, "text": "Application", "item_path": "Application", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 2},
+				{"index": 1, "text": "Config", "item_path": "Application/Config", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
+				{"index": 2, "text": "Run", "item_path": "Application/Run", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
+				{"index": 3, "text": "Rendering", "item_path": "Rendering", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 1},
+				{"index": 4, "text": "2D", "item_path": "Rendering/2D", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		if target_path == "/root/ProjectSettings/SettingsList":
+			return [
+				{"index": 0, "text": "Advanced Settings", "item_path": "Advanced Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0},
+				{"index": 1, "text": "Project Settings", "item_path": "Project Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		if target_path == "/root/ProjectSettings/SectionedInspector/Right/Inspector/SettingsTree":
+			return [
+				{"index": 0, "text": "Inspector Settings", "item_path": "Inspector Settings", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		if target_path == "/root/EditorSettings/CategoryTree":
+			return [
+				{"index": 0, "text": "Interface", "item_path": "Interface", "depth": 0, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 1},
+				{"index": 1, "text": "Editor", "item_path": "Interface/Editor", "depth": 1, "tree_control_path": target_path, "visible": true, "selected": false, "collapsed": false, "child_count": 0}
+			]
+		return []
+
+	func _select_tree_item(args: Dictionary) -> Dictionary:
+		var target_path := str(args.get("target_path", ""))
+		var item_path := str(args.get("item_path", ""))
+		var item_index := int(args.get("item_index", -1))
+		for item in _visible_tree_items(target_path):
+			if str(item.get("item_path", "")) == item_path or int(item.get("index", -1)) == item_index:
+				var selected := item.duplicate(true)
+				selected["selected"] = true
+				return success({"target_path": target_path, "selected_item": selected, "resolution": {"candidate_count": 1}})
+		return error("Tree item not found", {"target_path": target_path, "item_path": item_path, "item_index": item_index})
 
 	func _tab_container_row(surface_prefix: String, path: String, current_index: int, titles: Array[String]) -> Dictionary:
 		var tabs: Array[Dictionary] = []
@@ -249,11 +302,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
 	if not properties.has("tab_index"):
 		return _failure("settings_dialog schema should expose tab_index for activate_tab.")
+	for property_name in ["category", "category_path", "category_index"]:
+		if not properties.has(property_name):
+			return _failure("settings_dialog schema should expose %s for category workflows." % property_name)
 	var surfaces: Array = properties.get("surface", {}).get("enum", [])
 	for surface in ["project_settings", "editor_settings"]:
 		if not surfaces.has(surface):
@@ -264,6 +320,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("status should succeed even when a settings surface is not open.")
 	if bool(missing_status.get("data", {}).get("dialog_found", true)):
 		return _failure("status should report dialog_found=false before open.")
+	var missing_categories := impl.execute("settings_dialog", {"action": "list_categories", "surface": "project_settings"})
+	if not bool(missing_categories.get("success", false)):
+		return _failure("list_categories should succeed even when the requested settings surface is not visible.")
+	if int(missing_categories.get("data", {}).get("category_count", -1)) != 0:
+		return _failure("list_categories should return no categories before the settings surface is visible.")
+	var missing_focus_category := impl.execute("settings_dialog", {
+		"action": "focus_category",
+		"surface": "project_settings",
+		"category_path": "Application/Config"
+	})
+	if bool(missing_focus_category.get("success", false)):
+		return _failure("focus_category should fail when the requested settings surface is not visible.")
+	var missing_focus_workflow: Array = missing_focus_category.get("data", {}).get("workflow", [])
+	var missing_focus_step: Dictionary = missing_focus_workflow[missing_focus_workflow.size() - 1] if not missing_focus_workflow.is_empty() else {}
+	if str(missing_focus_step.get("reason", "")) != "surface_not_visible":
+		return _failure("focus_category missing-surface failure should report surface_not_visible.")
 	var missing_read_value := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "project_settings",
@@ -349,6 +421,57 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if bool(unknown_tab.get("success", false)) or str(unknown_tab.get("data", {}).get("resolution", {}).get("reason", "")) != "tab_not_found":
 		return _failure("activate_tab should fail with tab_not_found for unknown tabs.")
+
+	var calls_before_list_categories := fake.calls.size()
+	var listed_categories := impl.execute("settings_dialog", {
+		"action": "list_categories",
+		"surface": "project_settings",
+		"category": "Application",
+		"limit": 10
+	})
+	if not bool(listed_categories.get("success", false)):
+		return _failure("list_categories should succeed against a visible settings category tree.")
+	var category_data: Dictionary = listed_categories.get("data", {})
+	if int(category_data.get("category_count", 0)) != 3:
+		return _failure("list_categories should return matching visible category tree items.")
+	if str(category_data.get("tree_control_path", "")) != "/root/ProjectSettings/SectionedInspector/Left/Sections":
+		return _failure("list_categories should report the SectionedInspector category tree control path.")
+	var project_categories: Array = category_data.get("categories", [])
+	if _find_category_by_path(project_categories, "Advanced Settings").is_empty() == false:
+		return _failure("list_categories must not include items from non-category settings Tree controls.")
+	if _find_category_by_path(project_categories, "Inspector Settings").is_empty() == false:
+		return _failure("list_categories must not include Tree items nested under the settings EditorInspector.")
+	var config_category := _find_category_by_path(project_categories, "Application/Config")
+	if config_category.is_empty():
+		return _failure("list_categories should preserve nested category_path evidence.")
+	if str(config_category.get("confidence", "")) != "high":
+		return _failure("list_categories should assign high confidence to category tree items with path and index.")
+	if _has_call_since(fake.calls, calls_before_list_categories, "editor_ui_control", "set_text"):
+		return _failure("list_categories must not write the settings search field.")
+
+	var focused_category := impl.execute("settings_dialog", {
+		"action": "focus_category",
+		"surface": "project_settings",
+		"category_path": "Application/Config",
+		"limit": 10
+	})
+	if not bool(focused_category.get("success", false)):
+		return _failure("focus_category should select a unique visible settings category.")
+	if not _has_call(fake.calls, "editor_ui_control", "select_tree_item"):
+		return _failure("focus_category should delegate to editor_ui_control.select_tree_item.")
+	if str(focused_category.get("data", {}).get("focused_category", {}).get("category_path", "")) != "Application/Config":
+		return _failure("focus_category should return the focused category model.")
+
+	var ambiguous_category := impl.execute("settings_dialog", {
+		"action": "focus_category",
+		"surface": "project_settings",
+		"query": "Application",
+		"limit": 10
+	})
+	if bool(ambiguous_category.get("success", false)):
+		return _failure("focus_category should fail when multiple categories match the selector.")
+	if str(ambiguous_category.get("data", {}).get("resolution", {}).get("reason", "")) != "ambiguous_category":
+		return _failure("focus_category ambiguous failure should report ambiguous_category.")
 
 	var searched := await impl.execute_async("settings_dialog", {
 		"action": "search",
@@ -741,6 +864,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_tabs := impl.execute("settings_dialog", {"action": "list_tabs", "surface": "editor_settings"})
 	if not bool(editor_tabs.get("success", false)) or not _has_tab_title(editor_tabs.get("data", {}).get("tabs", []), "Shortcuts"):
 		return _failure("list_tabs should also support editor_settings tabs.")
+	var editor_categories := impl.execute("settings_dialog", {
+		"action": "list_categories",
+		"surface": "editor_settings",
+		"category_path": "Interface/Editor",
+		"limit": 10
+	})
+	if not bool(editor_categories.get("success", false)):
+		return _failure("list_categories should also support editor_settings category trees.")
+	if int(editor_categories.get("data", {}).get("category_count", 0)) != 1:
+		return _failure("editor_settings list_categories should return only matching editor categories.")
+	if str(((editor_categories.get("data", {}).get("categories", []) as Array)[0]).get("category_path", "")) != "Interface/Editor":
+		return _failure("editor_settings list_categories should preserve editor category paths.")
 	var editor_opened_with_tab := await impl.execute_async("settings_dialog", {"action": "open", "surface": "editor_settings", "tab": "Shortcuts"})
 	if not bool(editor_opened_with_tab.get("success", false)):
 		return _failure("open should activate a requested tab when the settings surface is already visible.")
@@ -809,6 +944,13 @@ func _has_tab_title(tabs: Array, title: String) -> bool:
 		if tab is Dictionary and str((tab as Dictionary).get("title", "")) == title:
 			return true
 	return false
+
+
+func _find_category_by_path(categories: Array, category_path: String) -> Dictionary:
+	for category in categories:
+		if category is Dictionary and str((category as Dictionary).get("category_path", "")) == category_path:
+			return category as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:

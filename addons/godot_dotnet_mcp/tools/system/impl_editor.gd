@@ -37,6 +37,8 @@ func get_tools() -> Array[Dictionary]:
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
+							"list_tree_items",
+							"select_tree_item",
 							"list_menus",
 							"open_menu",
 							"select_menu_item",
@@ -101,6 +103,10 @@ func get_tools() -> Array[Dictionary]:
 					"item_index": {
 						"type": "integer",
 						"description": "PopupMenu item index for select_menu_item"
+					},
+					"item_path": {
+						"type": "string",
+						"description": "Tree item path for select_tree_item"
 					},
 					"bottom_panel_title": {
 						"type": "string",
@@ -312,6 +318,21 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"bottom_panel_title": str(args.get("bottom_panel_title", "")).strip_edges(),
 				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
 				"path": str(args.get("path", "")).strip_edges()
+			})
+		"list_tree_items":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "list_tree_items",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200))
+			})
+		"select_tree_item":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "select_tree_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"item_path": str(args.get("item_path", "")).strip_edges(),
+				"item_index": int(args.get("item_index", -1))
 			})
 		"list_menus":
 			return bridge.call_atomic("editor_ui_control", {

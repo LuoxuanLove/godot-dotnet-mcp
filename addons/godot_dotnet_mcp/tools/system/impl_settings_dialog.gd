@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list conservative row models, read, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list and activate settings tabs, list and focus visible category tree items, list conservative row models, read, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -93,9 +93,21 @@ func get_tools() -> Array[Dictionary]:
 						"type": "integer",
 						"description": "Optional tab index for activate_tab"
 					},
+					"category": {
+						"type": "string",
+						"description": "Category text or category path for list_categories/focus_category"
+					},
+					"category_path": {
+						"type": "string",
+						"description": "Category path returned by list_categories for focus_category"
+					},
+					"category_index": {
+						"type": "integer",
+						"description": "Category item index returned by list_categories for focus_category"
+					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value/set_value/verify_value"
+						"description": "Control path returned by status/search/list_rows for focus_result, a row/value control path used by read_value/set_value/verify_value, or a tree/category control path used by focus_category"
 					},
 					"value": {
 						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
@@ -165,6 +177,16 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			if surface.is_empty():
 				return bridge.error("surface is required")
 			return _activate_tab(surface, args)
+		"list_categories":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _list_categories(surface, args)
+		"focus_category":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _focus_category(surface, args)
 		"list_rows":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -235,7 +257,7 @@ func _resolve_surface(args: Dictionary) -> String:
 
 
 func _status(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	return bridge.success(observation, "Settings surface status observed")
 
 
@@ -247,7 +269,7 @@ func _search(surface: String, args: Dictionary) -> Dictionary:
 		search_write = await _write_search_field(surface, args, search_text)
 		if not bool(search_write.get("success", false)):
 			return search_write
-	var observation: Dictionary = _observe(surface, args, query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	observation["workflow"].append({"step": "search", "queries": query_values, "result_count": int(observation.get("result_count", 0))})
 	if not search_write.is_empty():
 		observation["search_field_write"] = search_write.get("data", {})
@@ -261,7 +283,7 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 	var workflow: Array[Dictionary] = []
 	if target_path.is_empty():
 		var query_values: Array[String] = _search_terms(args)
-		var observation: Dictionary = _observe(surface, args, query_values)
+		var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 		workflow.assign(observation.get("workflow", []))
 		target_path = _first_result_path(observation.get("results", []))
 	if target_path.is_empty():
@@ -283,7 +305,7 @@ func _focus_result(surface: String, args: Dictionary) -> Dictionary:
 
 func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, args, query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	var rows: Array[Dictionary] = _settings_row_models(observation.get("all_controls", []), surface, query_values, _result_limit(args))
 	var payload: Dictionary = {
 		"surface": surface,
@@ -309,7 +331,7 @@ func _list_rows(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _list_tabs(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
 	tabs_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
 		"step": "list_tabs",
@@ -328,7 +350,7 @@ func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
 	var requested_index := int(args.get("tab_index", -1))
 	if requested_title.is_empty() and requested_index < 0:
 		return bridge.error("tab or tab_index is required for activate_tab")
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	if not bool(observation.get("dialog_found", false)):
 		return bridge.error("Settings surface is not visible for activate_tab: %s" % surface, observation)
 	var tabs_payload: Dictionary = _settings_tabs_payload(surface, observation)
@@ -377,9 +399,82 @@ func _activate_tab(surface: String, args: Dictionary) -> Dictionary:
 	return bridge.success(payload, "Settings tab activated")
 
 
+func _list_categories(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _category_terms(args)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
+	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, query_values, _result_limit(args))
+	var payload: Dictionary = {
+		"surface": surface,
+		"dialog_found": bool(observation.get("dialog_found", false)),
+		"dialog_path": str(observation.get("dialog_path", "")),
+		"primary_popup_path": str(observation.get("primary_popup_path", "")),
+		"tree_control_path": _first_category_tree_path(categories),
+		"categories": categories,
+		"category_count": categories.size(),
+		"model_quality": _category_model_quality(categories),
+		"workflow": _workflow_with_step(observation.get("workflow", []), {
+			"step": "list_categories",
+			"queries": query_values,
+			"category_count": categories.size(),
+			"success": true
+		})
+	}
+	if bool(args.get("include_raw_controls", false)):
+		payload["raw_controls"] = observation.get("all_controls", [])
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings categories listed")
+
+
+func _focus_category(surface: String, args: Dictionary) -> Dictionary:
+	var query_values: Array[String] = _category_terms(args)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
+	if not bool(observation.get("dialog_found", false)):
+		var missing_payload := observation.duplicate(true)
+		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_category",
+			"success": false,
+			"reason": "surface_not_visible"
+		})
+		return bridge.error("Settings surface is not visible for focus_category: %s" % surface, missing_payload)
+	var categories: Array[Dictionary] = _settings_categories(observation.get("all_controls", []), surface, [], _category_resolution_limit(args))
+	var resolution: Dictionary = _resolve_category(categories, args, query_values)
+	if not bool(resolution.get("success", false)):
+		var error_payload := observation.duplicate(true)
+		error_payload["categories"] = categories
+		error_payload["resolution"] = resolution
+		error_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+			"step": "focus_category",
+			"success": false,
+			"reason": str(resolution.get("reason", "category_not_found"))
+		})
+		return bridge.error(str(resolution.get("message", "No unique settings category matched focus_category.")), error_payload)
+	var category: Dictionary = resolution.get("category", {})
+	var focus_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+		"action": "select_tree_item",
+		"target_path": str(category.get("tree_control_path", "")),
+		"item_path": str(category.get("category_path", "")),
+		"item_index": int(category.get("index", -1))
+	})
+	if not bool(focus_result.get("success", false)):
+		return focus_result
+	var payload: Dictionary = focus_result.get("data", {}).duplicate(true)
+	payload["surface"] = surface
+	payload["focused_category"] = category
+	payload["resolution"] = resolution.get("resolution", {})
+	payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
+		"step": "focus_category",
+		"category_path": str(category.get("category_path", "")),
+		"success": true
+	})
+	if bool(args.get("capture", false)):
+		_attach_capture(payload, args)
+	return bridge.success(payload, "Settings category focused")
+
+
 func _read_value(surface: String, args: Dictionary) -> Dictionary:
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -437,7 +532,7 @@ func _set_value(surface: String, args: Dictionary) -> Dictionary:
 	if not args.has("value"):
 		return bridge.error("value is required for set_value")
 	var query_values: Array[String] = _search_terms(args)
-	var observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):
 		var missing_payload := observation.duplicate(true)
 		missing_payload["workflow"] = _workflow_with_step(observation.get("workflow", []), {
@@ -481,7 +576,7 @@ func _set_value(surface: String, args: Dictionary) -> Dictionary:
 		})
 		return bridge.error(str(write_result.get("message", "Settings row value write failed.")), write_payload)
 	await _wait_one_frame()
-	var verification_observation: Dictionary = _observe(surface, _read_value_observation_args(args), query_values)
+	var verification_observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	var after_value: Dictionary = {}
 	var verification: Dictionary = {
 		"success": false,
@@ -552,13 +647,13 @@ func _verify_value(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, _search_terms(args))
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), _search_terms(args))
 	_attach_capture(observation, args)
 	return bridge.success(observation, "Settings surface captured")
 
 
 func _close(surface: String, args: Dictionary) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var target_path := str(args.get("target_path", "")).strip_edges()
 	if target_path.is_empty():
 		target_path = str(observation.get("primary_popup_path", "")).strip_edges()
@@ -577,7 +672,7 @@ func _close(surface: String, args: Dictionary) -> Dictionary:
 
 
 func _open(surface: String, args: Dictionary) -> Dictionary:
-	var current: Dictionary = _observe(surface, args, [])
+	var current: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	if bool(current.get("dialog_found", false)):
 		current["opened"] = true
 		current["already_open"] = true
@@ -606,7 +701,7 @@ func _open(surface: String, args: Dictionary) -> Dictionary:
 					"message": str(wait_result.get("message", wait_result.get("error", "")))
 				})
 				if bool(wait_result.get("success", false)):
-					var observation: Dictionary = _observe(surface, args, _search_terms(args))
+					var observation: Dictionary = _observe(surface, _deep_observation_args(args), _search_terms(args))
 					observation["opened"] = true
 					observation["workflow"] = _merge_workflow(attempts, observation.get("workflow", []))
 					observation["verification"] = wait_result.get("data", {})
@@ -736,6 +831,13 @@ func _search_terms(args: Dictionary) -> Array[String]:
 	return values
 
 
+func _category_terms(args: Dictionary) -> Array[String]:
+	var values: Array[String] = []
+	for key in ["category_path", "category", "query"]:
+		_append_search_term(values, str(args.get(key, "")))
+	return values
+
+
 func _append_search_term(values: Array[String], value: String) -> void:
 	var normalized := value.strip_edges()
 	if not normalized.is_empty() and not values.has(normalized):
@@ -750,7 +852,7 @@ func _primary_search_text(query_values: Array[String]) -> String:
 
 
 func _write_search_field(surface: String, args: Dictionary, text: String) -> Dictionary:
-	var observation: Dictionary = _observe(surface, args, [])
+	var observation: Dictionary = _observe(surface, _deep_observation_args(args), [])
 	var search_field_path := str(observation.get("search_field_path", "")).strip_edges()
 	if search_field_path.is_empty():
 		return bridge.error("No search field found for settings surface: %s" % surface, observation)
@@ -925,10 +1027,14 @@ func _observation_limit(args: Dictionary) -> int:
 	return max(1, int(args.get("limit", 100)))
 
 
-func _read_value_observation_args(args: Dictionary) -> Dictionary:
+func _deep_observation_args(args: Dictionary) -> Dictionary:
 	var observed_args := args.duplicate(true)
 	observed_args["limit"] = max(_observation_limit(args), 500)
 	return observed_args
+
+
+func _category_resolution_limit(args: Dictionary) -> int:
+	return max(_result_limit(args), 500)
 
 
 func _result_limit(args: Dictionary) -> int:
@@ -1654,6 +1760,299 @@ func _is_settings_search_result_candidate(row: Dictionary) -> bool:
 	if lower_path.contains("/filter") or lower_path.ends_with("/value"):
 		return false
 	return true
+
+
+func _settings_categories(rows: Array, surface: String, query_values: Array[String], limit: int) -> Array[Dictionary]:
+	var categories: Array[Dictionary] = []
+	for tree_row in _settings_category_tree_rows(rows):
+		var tree_path := str(tree_row.get("path", tree_row.get("node_path", ""))).strip_edges()
+		if tree_path.is_empty():
+			continue
+		var list_result: Dictionary = bridge.call_atomic("editor_ui_control", {
+			"action": "list_tree_items",
+			"target_path": tree_path,
+			"text_query": _primary_search_text(query_values),
+			"include_hidden": false,
+			"limit": limit
+		})
+		if not bool(list_result.get("success", false)):
+			continue
+		var items: Array = list_result.get("data", {}).get("items", [])
+		for item in items:
+			if not (item is Dictionary):
+				continue
+			var model := _build_category_model(item as Dictionary, tree_row, surface)
+			if not query_values.is_empty() and not _category_matches(model, query_values):
+				continue
+			categories.append(model)
+			if categories.size() >= limit:
+				return categories
+	return categories
+
+
+func _settings_category_tree_rows(rows: Array) -> Array[Dictionary]:
+	var trees: Array[Dictionary] = []
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		if str(dict.get("class", "")).strip_edges() != "Tree":
+			continue
+		if not bool(dict.get("visible", true)):
+			continue
+		if _is_settings_category_tree_row(dict, rows):
+			trees.append(dict.duplicate(true))
+	return trees
+
+
+func _is_settings_category_tree_row(row: Dictionary, rows: Array) -> bool:
+	var hints: Array[String] = [
+		str(row.get("path", row.get("node_path", ""))),
+		str(row.get("name", "")),
+		str(row.get("text", "")),
+		str(row.get("title", "")),
+		str(row.get("tooltip", "")),
+		str(row.get("tooltip_text", "")),
+		str(row.get("accessible_name", ""))
+	]
+	for hint in hints:
+		var normalized := hint.strip_edges().to_lower()
+		if normalized.is_empty():
+			continue
+		if normalized.contains("category") or normalized.contains("categories"):
+			return true
+	if _has_sectioned_inspector_context(row, rows):
+		return true
+	return false
+
+
+func _has_sectioned_inspector_context(row: Dictionary, rows: Array) -> bool:
+	var path := str(row.get("path", row.get("node_path", ""))).strip_edges()
+	var parent_path := str(row.get("parent_path", "")).strip_edges()
+	if path.is_empty():
+		return false
+	if _is_under_editor_inspector(path, rows):
+		return false
+	var sectioned_root := _nearest_sectioned_inspector_path(path, parent_path, rows)
+	if sectioned_root.is_empty():
+		return false
+	return _sectioned_inspector_has_editor_inspector(sectioned_root, rows)
+
+
+func _nearest_sectioned_inspector_path(path: String, parent_path: String, rows: Array) -> String:
+	var candidate_paths: Array[String] = [path, parent_path]
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty():
+			continue
+		if not (path == row_path or path.begins_with("%s/" % row_path) or parent_path == row_path or parent_path.begins_with("%s/" % row_path)):
+			continue
+		candidate_paths.append(row_path)
+	candidate_paths.sort_custom(func(a: String, b: String) -> bool: return a.length() > b.length())
+	for candidate in candidate_paths:
+		if _path_or_row_mentions_sectioned_inspector(candidate, rows):
+			return candidate
+	return ""
+
+
+func _path_or_row_mentions_sectioned_inspector(path: String, rows: Array) -> bool:
+	var normalized := path.to_lower()
+	if normalized.ends_with("/sectionedinspector") or normalized.ends_with("/sectioned_inspector") or normalized == "sectionedinspector" or normalized == "sectioned_inspector":
+		return true
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path != path:
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("sectionedinspector") or hints.contains("sectioned_inspector"):
+			return true
+	return false
+
+
+func _sectioned_inspector_has_editor_inspector(sectioned_root: String, rows: Array) -> bool:
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty() or not (row_path == sectioned_root or row_path.begins_with("%s/" % sectioned_root)):
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("editorinspector") or hints.contains("editor_inspector"):
+			return true
+	return false
+
+
+func _is_under_editor_inspector(path: String, rows: Array) -> bool:
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var dict := row as Dictionary
+		var row_path := str(dict.get("path", dict.get("node_path", ""))).strip_edges()
+		if row_path.is_empty() or not path.begins_with("%s/" % row_path):
+			continue
+		var hints := " ".join([
+			str(dict.get("class", "")),
+			str(dict.get("name", "")),
+			str(dict.get("title", "")),
+			str(dict.get("text", ""))
+		]).to_lower()
+		if hints.contains("editorinspector") or hints.contains("editor_inspector"):
+			return true
+	return false
+
+
+func _build_category_model(item: Dictionary, tree_row: Dictionary, surface: String) -> Dictionary:
+	var category_path := str(item.get("item_path", item.get("text", ""))).strip_edges()
+	var label := str(item.get("text", "")).strip_edges()
+	var model := {
+		"surface": surface,
+		"category_id": category_path if not category_path.is_empty() else label,
+		"label": label,
+		"category_path": category_path,
+		"target_path": str(tree_row.get("path", tree_row.get("node_path", ""))).strip_edges(),
+		"tree_control_path": str(item.get("tree_control_path", tree_row.get("path", ""))).strip_edges(),
+		"parent_path": str(tree_row.get("parent_path", "")),
+		"control_class": str(tree_row.get("class", "")),
+		"index": int(item.get("index", -1)),
+		"depth": int(item.get("depth", 0)),
+		"visible": bool(item.get("visible", true)),
+		"enabled": not bool(tree_row.get("disabled", false)) and bool(tree_row.get("enabled", true)),
+		"selected": bool(item.get("selected", false)),
+		"collapsed": bool(item.get("collapsed", false)),
+		"child_count": int(item.get("child_count", 0)),
+		"source": "tree_item",
+		"confidence": "low",
+		"evidence": _category_model_evidence(item, tree_row)
+	}
+	model["confidence"] = _category_model_confidence(model)
+	return model
+
+
+func _category_matches(model: Dictionary, query_values: Array[String]) -> bool:
+	var haystack := " ".join([
+		str(model.get("label", "")),
+		str(model.get("category_path", "")),
+		str(model.get("target_path", "")),
+		str(model.get("tree_control_path", ""))
+	]).to_lower()
+	for query in query_values:
+		if haystack.contains(query.to_lower()):
+			return true
+	return false
+
+
+func _resolve_category(categories: Array[Dictionary], args: Dictionary, query_values: Array[String]) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	var category_path := str(args.get("category_path", "")).strip_edges().to_lower()
+	var category_text := str(args.get("category", "")).strip_edges().to_lower()
+	var category_index := int(args.get("category_index", -1))
+	var candidates: Array[Dictionary] = []
+	for category in categories:
+		if not target_path.is_empty() and str(category.get("target_path", "")) != target_path and str(category.get("tree_control_path", "")) != target_path:
+			continue
+		if category_index >= 0 and int(category.get("index", -1)) != category_index:
+			continue
+		if not category_path.is_empty() and str(category.get("category_path", "")).strip_edges().to_lower() != category_path:
+			continue
+		if not category_text.is_empty() and str(category.get("label", "")).strip_edges().to_lower() != category_text and str(category.get("category_path", "")).strip_edges().to_lower() != category_text:
+			continue
+		if category_path.is_empty() and category_text.is_empty() and category_index < 0 and query_values.is_empty():
+			continue
+		if category_path.is_empty() and category_text.is_empty() and category_index < 0 and not query_values.is_empty() and not _category_matches(category, query_values):
+			continue
+		candidates.append(category)
+	if candidates.is_empty():
+		return {
+			"success": false,
+			"reason": "category_not_found",
+			"message": "No settings category matched focus_category with the requested selector.",
+			"candidate_count": 0,
+			"selector": _category_selector_summary(args)
+		}
+	if candidates.size() > 1:
+		return {
+			"success": false,
+			"reason": "ambiguous_category",
+			"message": "Multiple settings categories matched focus_category; pass category_path or category_index.",
+			"candidate_count": candidates.size(),
+			"candidates": candidates,
+			"selector": _category_selector_summary(args)
+		}
+	return {
+		"success": true,
+		"category": candidates[0],
+		"resolution": {
+			"candidate_count": 1,
+			"selector": _category_selector_summary(args)
+		}
+	}
+
+
+func _category_selector_summary(args: Dictionary) -> Dictionary:
+	return {
+		"target_path": str(args.get("target_path", "")),
+		"category_path": str(args.get("category_path", "")),
+		"category": str(args.get("category", "")),
+		"category_index": int(args.get("category_index", -1)),
+		"query": str(args.get("query", ""))
+	}
+
+
+func _first_category_tree_path(categories: Array[Dictionary]) -> String:
+	for category in categories:
+		var path := str(category.get("tree_control_path", "")).strip_edges()
+		if not path.is_empty():
+			return path
+	return ""
+
+
+func _category_model_evidence(item: Dictionary, tree_row: Dictionary) -> Array[String]:
+	var keys: Array[String] = []
+	for key in ["index", "text", "item_path", "depth", "selected", "collapsed", "child_count"]:
+		if item.has(key):
+			keys.append("item.%s" % key)
+	for key in ["path", "parent_path", "class", "visible", "rect"]:
+		if tree_row.has(key):
+			keys.append("tree.%s" % key)
+	return keys
+
+
+func _category_model_confidence(model: Dictionary) -> String:
+	if not str(model.get("category_path", "")).is_empty() and int(model.get("index", -1)) >= 0:
+		return "high"
+	if not str(model.get("label", "")).is_empty():
+		return "medium"
+	return "low"
+
+
+func _category_model_quality(categories: Array[Dictionary]) -> Dictionary:
+	var counts: Dictionary = {"high": 0, "medium": 0, "low": 0}
+	for category in categories:
+		var confidence := str(category.get("confidence", "low"))
+		if not counts.has(confidence):
+			confidence = "low"
+		counts[confidence] = int(counts[confidence]) + 1
+	return {
+		"category_count": categories.size(),
+		"confidence_counts": counts
+	}
 
 
 func _build_row_model(row: Dictionary, surface: String, row_id_override: String) -> Dictionary:

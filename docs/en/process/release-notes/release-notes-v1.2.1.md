@@ -20,6 +20,8 @@ The workflow exposes read-only row models through `list_rows`, summarizing visib
 
 It can list and activate settings tabs through `list_tabs` and `activate_tab`, including `open(tab=...)`, so clients can move between Project Settings or Editor Settings tabs without coordinate clicks.
 
+The settings workflow can list visible category tree items and focus a unique category before row inspection, making Project Settings and Editor Settings navigation less dependent on raw control enumeration.
+
 It can also read the current value of a uniquely matched visible row through `read_value`, returning typed text, bool, number, or enum payloads with row and value-control evidence while still avoiding direct setting writes.
 
 Supported unique visible rows can now be edited through `set_value` for text, number, and bool controls. The workflow writes through editor UI controls and then observes the row again so agents can verify the value they changed instead of assuming the click or text edit worked.

@@ -13,6 +13,7 @@ Target version: 1.2.1.
 - Added `system_editor_control(action="wait_for_ui")`, a bounded wait-and-verify action that polls editor controls for existence, visibility, text, and enabled/disabled conditions before returning matched UI evidence or a timeout payload.
 - Added `system_settings_dialog`, a high-level settings-like dialog workflow that opens Project Settings or Editor Settings, waits for visibility, searches candidate setting rows, focuses results, captures evidence, and closes the surface without writing setting values.
 - Added `system_settings_dialog(action=list_tabs/activate_tab)` settings tab navigation, including `open(tab=...)`, so clients can list and switch Project Settings or Editor Settings tabs without coordinate clicks.
+- Added `system_settings_dialog(action=list_categories/focus_category)` for settings category tree discovery and unique category focusing before row inspection without writing setting values.
 - Added read-only `system_settings_dialog(action=list_rows)` row models that summarize visible settings-like controls with conservative confidence and evidence fields without writing the settings search field.
 - Added read-only `system_settings_dialog(action=read_value)` value inspection for unique visible settings rows, returning typed text, bool, number, and enum payloads with row/value evidence without writing setting values.
 - Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
@@ -21,6 +22,7 @@ Target version: 1.2.1.
 ### Internal
 
 - Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
+- Extended the editor UI control atomic layer with Tree item listing/selection coverage for settings-dialog category navigation.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
 
