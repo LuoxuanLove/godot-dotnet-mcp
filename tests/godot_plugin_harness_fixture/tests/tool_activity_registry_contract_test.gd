@@ -101,6 +101,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var completed_recent_result: Dictionary = registry.get_recent(50, {"state": "completed"})
 	if int(completed_recent_result.get("filtered_recent_count", -1)) != 0:
 		return _failure("Tool activity registry state filters should distinguish completed and failed recent calls.")
+	if not (completed_recent_result.get("recent_failures", []) as Array).is_empty():
+		return _failure("Tool activity registry should not return failure summaries for a completed state filter.")
 
 	var recent_lookup: Dictionary = registry.get_call(str(first.get("call_id", "")))
 	if not bool(recent_lookup.get("found", false)):

@@ -268,6 +268,9 @@ func _build_slow_recent_records(limit: int, threshold_ms: float, filters: Dictio
 
 
 func _build_recent_failure_records(limit: int, filters: Dictionary) -> Array[Dictionary]:
+	var state_filter := str(filters.get("state", ""))
+	if not state_filter.is_empty() and state_filter != "failed":
+		return []
 	var failure_filters := filters.duplicate()
 	failure_filters["state"] = "failed"
 	var out: Array[Dictionary] = []
