@@ -25,7 +25,7 @@ class FakeToolLoader:
 			"name": "system_runtime_step",
 			"description": "Apply runtime input and capture a frame",
 			"category": "system",
-			"domain_key": "runtime",
+			"domain_key": "core",
 			"enabled": true,
 			"inputSchema": {
 				"type": "object",
@@ -42,7 +42,7 @@ class FakeToolLoader:
 			"name": "project_input",
 			"description": "Manage input action mappings",
 			"category": "project",
-			"domain_key": "project",
+			"domain_key": "core",
 			"enabled": true,
 			"inputSchema": {
 				"type": "object",
@@ -72,7 +72,7 @@ class FakeToolLoader:
 				"name": "runtime_step",
 				"full_name": "system_runtime_step",
 				"category": "system",
-				"domain_key": "runtime",
+				"domain_key": "core",
 				"enabled": true,
 				"inputSchema": {
 					"type": "object",
@@ -86,7 +86,7 @@ class FakeToolLoader:
 				"name": "input",
 				"full_name": "project_input",
 				"category": "project",
-				"domain_key": "project",
+				"domain_key": "core",
 				"enabled": true,
 				"inputSchema": {
 					"type": "object",
@@ -101,7 +101,8 @@ class FakeToolLoader:
 	func get_domain_states() -> Array:
 		return [
 			{"domain": "system", "domain_key": "core", "loaded": true},
-			{"domain": "project", "domain_key": "project", "loaded": true}
+			{"domain": "plugin_runtime", "domain_key": "plugin", "loaded": true},
+			{"domain": "user", "domain_key": "user", "loaded": true}
 		]
 
 	func get_tool_loader_status() -> Dictionary:
@@ -138,10 +139,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not ((visible_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
 		return _failure("Catalog search should match enum values and report param_enum.")
 
-	var domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "runtime", "query": "label"})
+	var domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "core", "query": "label"})
 	var domain_matches: Array = (domain_search.get("data", {}) as Dictionary).get("matches", [])
 	if domain_matches.size() != 1 or not ((domain_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param"):
-		return _failure("Domain-filtered search should match parameter names.")
+		return _failure("Domain-key-filtered search should match parameter names.")
 
 	var invalid_visibility: Dictionary = ToolCatalogSearchService.search(loader, {"visibility": "all"})
 	if bool(invalid_visibility.get("success", true)):
