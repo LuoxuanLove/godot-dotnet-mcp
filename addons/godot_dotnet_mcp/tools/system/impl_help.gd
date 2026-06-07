@@ -61,6 +61,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
 			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
+			"Use system_settings_dialog for Project Settings or Editor Settings open/status/search/list_tabs/activate_tab/list_categories/focus_category/list_rows/resolve_row/read_value/focus_value/set_value/verify_value/focus_result/capture/close workflows before falling back to raw editor control enumeration.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Use system_editor_plugin_control to inspect or toggle third-party EditorPlugin session state; use dedicated plugin reload/update tools for this plugin itself.",
 			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
@@ -70,7 +71,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
 			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided project orientation", "content authoring", "debug triage", "reference integrity", "runtime validation", "editor UI control"],
-			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
+			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "popup capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
@@ -83,7 +84,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"read_only_tools_note": "Project, scene, and editor read-only tools can be available even when project launch, runtime control, or runtime capture is unavailable.",
 			"check_before_running": ["can_start_project", "blocking_reasons", "headless_logic_ok", "visible_capture_required", "can_run_without_focus", "no_focus_launch_supported", "foreground_window_policy", "foreground_window_fallbacks"],
 			"check_before_runtime_automation": ["can_control_runtime", "can_capture_runtime", "commandable_session_count"],
-			"project_run_log_marker_validation": "system_project_run can optionally wait for success_markers or failure_markers in structured debug_runtime_bridge events through the async MCP tool path. This is not universal stdout capture; markers are matched against runtime bridge event kind and payload text. In marker mode failure markers take precedence, timeout_ms is clamped as the wait timeout, log_tail is capped, and auto_stop defaults to true via scene_run stop only.",
+			"project_lifecycle_marker_validation": "system_project_lifecycle(action=start) can optionally wait for success_markers or failure_markers in structured debug_runtime_bridge events through the async MCP tool path. This is not universal stdout capture; markers are matched against runtime bridge event kind and payload text. In marker mode failure markers take precedence, timeout_ms is clamped as the wait timeout, log_tail is capped, and auto_stop defaults to true via scene_run stop only.",
 			"foreground_window_note": "This plugin does not guarantee background, minimized, or no-focus runtime launch. Unsupported requests return requires_foreground_window with fallback guidance.",
 			"external_process_note": "Externally launched visible Godot processes are not treated as commandable runtime sessions unless they attach through the editor debugger bridge."
 		},
@@ -91,6 +92,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"prefer_editor_screenshot": true,
 			"screenshot_tool": "system_editor_control",
 			"screenshot_action": "capture_editor",
+			"settings_dialog_tool": "system_settings_dialog",
 			"non_invasive_activation_action": "activate_ui",
 			"avoid_os_mouse_window_automation": true,
 			"hidden_controls_supported": true,

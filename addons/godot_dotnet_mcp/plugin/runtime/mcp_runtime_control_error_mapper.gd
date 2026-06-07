@@ -65,7 +65,7 @@ func _build_error_hint(error_type: String) -> String:
 			var session_snapshot := _get_debugger_session_snapshot_safe()
 			if int(session_snapshot.get("active_session_count", 0)) > 0 and int(session_snapshot.get("commandable_session_count", 0)) == 0:
 				return "The editor sees a runtime session, but it is not commandable. Ensure the game was launched from the editor in debug mode and that remote debugging is active."
-			return "Call system_project_run first, then enable runtime control again."
+			return "Call system_project_lifecycle(action=start) first, then enable runtime control again."
 		"runtime_control_disabled":
 			return "Call system_runtime_control with action=enable before sending runtime automation commands."
 		"runtime_session_lost":

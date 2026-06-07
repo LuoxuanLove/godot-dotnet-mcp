@@ -26,26 +26,24 @@ class FakeToolLoader:
 				"type": "object",
 				"properties": {}
 			}
-		}]
-
-	func get_tool_definitions() -> Array:
-		var definitions := get_exposed_tool_definitions()
-		definitions.append({
-			"name": "system_project_stop",
-			"description": "Compatibility alias for stopping project runs",
+		}, {
+			"name": "system_project_lifecycle",
+			"description": "Start or stop a project runtime session",
 			"category": "system",
 			"domain_key": "system",
 			"load_state": "ready",
 			"source": "builtin",
 			"enabled": true,
-			"compatibility_alias": true,
-			"compatibility_replacement": "system_project_run",
 			"inputSchema": {
 				"type": "object",
-				"properties": {}
+				"properties": {
+					"action": {"type": "string", "enum": ["start", "stop"]}
+				}
 			}
-		})
-		return definitions
+		}]
+
+	func get_tool_definitions() -> Array:
+		return get_exposed_tool_definitions()
 
 	func get_domain_states() -> Array:
 		return [{
@@ -61,6 +59,12 @@ class FakeToolLoader:
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {}}
+			}, {
+				"name": "project_lifecycle",
+				"full_name": "system_project_lifecycle",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
 			}],
 			"project": [{
 				"name": "info",
@@ -149,12 +153,10 @@ class FakeCallbacks:
 	func is_tool_enabled(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
-		return tool_name == "system_project_state" or tool_name == "system_project_run" or tool_name == "system_project_stop"
+		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle"
 
 	func is_tool_exposed(tool_name: String) -> bool:
-		if tool_name == "system_project_stop":
-			return is_tool_enabled("system_project_stop") and is_tool_enabled("system_project_run")
-		return is_tool_enabled(tool_name) and tool_name == "system_project_state"
+		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle")
 
 	func log(message: String, level: String) -> void:
 		last_log = {
@@ -187,8 +189,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
 	for tool_entry in tools:
-		if tool_entry is Dictionary and str((tool_entry as Dictionary).get("name", "")) == "system_project_stop":
-			return _failure("Tool RPC router should omit compatibility aliases from tools/list.")
+		if not (tool_entry is Dictionary):
+			continue
+		if str((tool_entry as Dictionary).get("name", "")) == "system_project_stop":
+			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
+		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
+			return _failure("Tool RPC router should not expose removed system_project_run.")
 
 	var success_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_project_state",
@@ -230,26 +236,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(recent_context.get("agent_id", "")) != "router-contract-agent":
 		return _failure("Tool activity registry should retain sanitized self-reported agent context.")
 
-	var alias_result: Dictionary = await router.build_tool_call_result_async({
-		"name": "system_project_stop",
-		"arguments": {}
+	var lifecycle_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_project_lifecycle",
+		"arguments": {"action": "stop"}
 	})
-	if bool(alias_result.get("isError", true)):
-		return _failure("Tool RPC router should allow hidden compatibility aliases through tools/call.")
-	var alias_payload = JSON.parse_string(str(((alias_result.get("content", []) as Array)[0] as Dictionary).get("text", "")))
-	if not (alias_payload is Dictionary):
-		return _failure("Tool RPC router should serialize compatibility alias calls.")
-	var alias_data = (alias_payload as Dictionary).get("data", {})
-	if not (alias_data is Dictionary) or str((alias_data as Dictionary).get("tool", "")) != "project_stop":
-		return _failure("Tool RPC router should resolve system_project_stop to the project_stop implementation.")
+	if bool(lifecycle_result.get("isError", true)):
+		return _failure("Tool RPC router should allow system_project_lifecycle(action=stop) through tools/call.")
+	var lifecycle_payload = JSON.parse_string(str(((lifecycle_result.get("content", []) as Array)[0] as Dictionary).get("text", "")))
+	if not (lifecycle_payload is Dictionary):
+		return _failure("Tool RPC router should serialize lifecycle calls.")
+	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
+	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
+		return _failure("Tool RPC router should resolve system_project_lifecycle to the project_lifecycle implementation.")
 
-	callbacks.disabled_tools["system_project_run"] = true
-	var disabled_alias_result: Dictionary = await router.build_tool_call_result_async({
-		"name": "system_project_stop",
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		var removed_result: Dictionary = await router.build_tool_call_result_async({
+			"name": removed_tool_name,
+			"arguments": {}
+		})
+		if not bool(removed_result.get("isError", false)):
+			return _failure("Tool RPC router should reject removed project lifecycle entry '%s'." % removed_tool_name)
+
+	callbacks.disabled_tools["system_project_lifecycle"] = true
+	var disabled_lifecycle_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_project_lifecycle",
 		"arguments": {}
 	})
-	if not bool(disabled_alias_result.get("isError", false)):
-		return _failure("Tool RPC router should reject hidden compatibility aliases when their replacement tool is disabled.")
+	if not bool(disabled_lifecycle_result.get("isError", false)):
+		return _failure("Tool RPC router should reject system_project_lifecycle when disabled.")
 	callbacks.disabled_tools.clear()
 
 	var error_result: Dictionary = await router.build_tool_call_result_async({})

@@ -369,6 +369,15 @@ class FakeUiControl:
 		text = value
 
 
+class FakeNumericUiControl:
+	extends FakeUiControl
+
+	var value := 0.0
+
+	func _init(node_name: String = "", ui_class: String = "SpinBox", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
+		super(node_name, ui_class, rect)
+
+
 class FakePopupMenuControl:
 	extends FakeUiControl
 
@@ -646,6 +655,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_field.text = "InitialQuery"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
+	var numeric_value := FakeNumericUiControl.new("NumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	numeric_value.value = 5.0
 	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
 	project_menu.get_popup().add_item("Project Settings...", 101)
 	project_menu.get_popup().add_item("Export...", 102)
@@ -695,6 +706,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	mcp_dock.add_child(mcp_tabs)
 	search_panel.add_child(search_field)
 	search_panel.add_child(refresh_button)
+	search_panel.add_child(numeric_value)
 	popup_root.add_child(popup_button)
 	popup_root.add_child(popup_input)
 	editor_interface.get_base_control().add_popup_child(popup_root)
@@ -725,11 +737,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var expected_names := ["status", "screenshot", "settings", "undo_redo", "notification", "ui_control", "popup", "inspector", "filesystem", "plugin"]
 	var actual_names: Array[String] = []
+	var popup_tool_schema: Dictionary = {}
 	for tool_def in tool_defs:
-		actual_names.append(str(tool_def.get("name", "")))
+		var tool_name := str(tool_def.get("name", ""))
+		actual_names.append(tool_name)
+		if tool_name == "popup":
+			popup_tool_schema = tool_def.get("inputSchema", {})
 	for expected_name in expected_names:
 		if not actual_names.has(expected_name):
 			return _failure("Editor executor is missing tool definition '%s'." % expected_name)
+	var popup_actions: Array = popup_tool_schema.get("properties", {}).get("action", {}).get("enum", [])
+	for expected_popup_action in ["get_popup", "capture_popup"]:
+		if not popup_actions.has(expected_popup_action):
+			return _failure("Editor popup schema should expose %s." % expected_popup_action)
 
 	var set_screen_result: Dictionary = executor.execute("status", {"action": "set_main_screen", "screen": "Godex"})
 	if not bool(set_screen_result.get("success", false)):
@@ -840,6 +860,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var search_field_path := str(search_field.get_path())
 	var refresh_button_path := str(refresh_button.get_path())
+	var numeric_value_path := str(numeric_value.get_path())
 	var list_controls_result: Dictionary = executor.execute("ui_control", {
 		"action": "list_visible",
 		"class_name": "LineEdit"
@@ -876,6 +897,89 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control set_text failed through the split service path.")
 	if search_field.text != "Player":
 		return _failure("Editor ui_control set_text should update the target control text.")
+	var numeric_control_result: Dictionary = executor.execute("ui_control", {
+		"action": "get_control",
+		"target_path": numeric_value_path
+	})
+	if not bool(numeric_control_result.get("success", false)):
+		return _failure("Editor ui_control get_control should inspect numeric controls.")
+	if not (numeric_control_result.get("data", {}).get("control", {}).get("actionable", []) as Array).has("set_value"):
+		return _failure("Editor ui_control actionable metadata should expose set_value for value controls.")
+	var set_value_result: Dictionary = executor.execute("ui_control", {
+		"action": "set_value",
+		"target_path": numeric_value_path,
+		"value": 12
+	})
+	if not bool(set_value_result.get("success", false)):
+		return _failure("Editor ui_control set_value failed through the split service path.")
+	if float(numeric_value.value) != 12.0:
+		return _failure("Editor ui_control set_value should update the target control value.")
+
+	var wait_exists_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": search_field_path,
+		"condition": "exists",
+		"timeout_ms": 0
+	})
+	if not bool(wait_exists_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy exists for a known control path.")
+	if not bool(wait_exists_result.get("data", {}).get("condition_met", false)):
+		return _failure("Editor ui_control wait_for_ui should mark the satisfied condition.")
+	if str(wait_exists_result.get("data", {}).get("matched", {}).get("path", "")) != search_field_path:
+		return _failure("Editor ui_control wait_for_ui should return the matched control summary.")
+	var wait_text_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"class_name": "LineEdit",
+		"text_query": "Player",
+		"condition": "text_contains",
+		"text": "Player",
+		"timeout_ms": 0
+	})
+	if not bool(wait_text_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy text_contains against observed controls.")
+	var wait_empty_text_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"class_name": "LineEdit",
+		"condition": "text_contains",
+		"text": "",
+		"timeout_ms": 0
+	})
+	if bool(wait_empty_text_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should reject empty expected text for text conditions.")
+	var wait_not_exists_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/MissingDialog",
+		"condition": "not_exists",
+		"timeout_ms": 0
+	})
+	if not bool(wait_not_exists_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should satisfy not_exists for a missing control.")
+	var wait_timeout_result: Dictionary = executor.execute("ui_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/MissingDialog",
+		"condition": "exists",
+		"timeout_ms": 0
+	})
+	if bool(wait_timeout_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should fail when the condition is not satisfied before timeout.")
+	if not wait_timeout_result.has("data") or str(wait_timeout_result.get("data", {}).get("condition", "")) != "exists":
+		return _failure("Editor ui_control wait_for_ui timeout should return the final observed condition payload.")
+	var delayed_field := FakeUiControl.new("DeferredSearchField", "LineEdit", Rect2(24, 152, 160, 24))
+	delayed_field.text = "DeferredReady"
+	editor_interface.get_base_control().call_deferred("add_popup_child", delayed_field)
+	var wait_deferred_result: Dictionary = await executor.execute_async("ui_control", {
+		"action": "wait_for_ui",
+		"class_name": "LineEdit",
+		"text_query": "DeferredReady",
+		"condition": "text_contains",
+		"text": "DeferredReady",
+		"timeout_ms": 500,
+		"poll_interval_ms": 10
+	})
+	if not bool(wait_deferred_result.get("success", false)):
+		return _failure("Editor ui_control wait_for_ui should yield between polls and detect controls added on a later frame.")
+	if str(wait_deferred_result.get("data", {}).get("matched", {}).get("path", "")).find("DeferredSearchField") == -1:
+		return _failure("Editor ui_control wait_for_ui should report the delayed matched control.")
 
 	var activate_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_control",
@@ -993,6 +1097,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_ui should capture the activated tab when path is provided.")
 	if not str(activate_tab_result.get("data", {}).get("capture", {}).get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
 		return _failure("Editor ui_control activate_ui should normalize root-level user:// PNG paths into the managed control capture directory.")
+	var tab_summary_result: Dictionary = executor.execute("ui_control", {
+		"action": "list_visible",
+		"class_name": "TabContainer",
+		"include_hidden": true
+	})
+	if not bool(tab_summary_result.get("success", false)):
+		return _failure("Editor ui_control list_visible should enumerate TabContainer controls.")
+	var tab_summary := _find_control_summary(tab_summary_result.get("data", {}).get("controls", []), tab_container_path)
+	if tab_summary.is_empty():
+		return _failure("Editor ui_control list_visible should include the MCP TabContainer.")
+	if int(tab_summary.get("tab_count", 0)) != 3 or int(tab_summary.get("current_tab_index", -1)) != 2:
+		return _failure("Editor ui_control list_visible should expose TabContainer count and current index metadata.")
+	var tab_entries: Array = tab_summary.get("tabs", [])
+	if tab_entries.size() != 3 or not bool((tab_entries[2] as Dictionary).get("current", false)) or str((tab_entries[2] as Dictionary).get("title", "")) != "配置":
+		return _failure("Editor ui_control list_visible should expose TabContainer tab title/current metadata.")
 
 	var activate_semantic_result: Dictionary = executor.execute("ui_control", {
 		"action": "activate_ui",
@@ -1110,6 +1229,35 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var popup_root_path := str(popup_list_result.get("data", {}).get("popups", [{}])[0].get("node_path", ""))
 	var popup_button_path := "%s/ConfirmButton" % popup_root_path
 	var popup_input_path := "%s/SearchInput" % popup_root_path
+
+	var get_popup_result: Dictionary = executor.execute("popup", {
+		"action": "get_popup",
+		"target_path": popup_input_path
+	})
+	if not bool(get_popup_result.get("success", false)):
+		return _failure("Editor popup get_popup should fetch a visible popup root from a child target path.")
+	if str(get_popup_result.get("data", {}).get("popup_path", "")) != popup_root_path:
+		return _failure("Editor popup get_popup should resolve the visible popup root path.")
+	if str(get_popup_result.get("data", {}).get("popup", {}).get("node_path", "")) != popup_root_path:
+		return _failure("Editor popup get_popup should return the popup root summary.")
+
+	var capture_popup_result: Dictionary = executor.execute("popup", {
+		"action": "capture_popup",
+		"target_path": popup_input_path,
+		"path": "user://editor_executor_contract_popup.png"
+	})
+	if not bool(capture_popup_result.get("success", false)):
+		return _failure("Editor popup capture_popup should capture a visible popup root from a child target path.")
+	var capture_popup_data: Dictionary = capture_popup_result.get("data", {})
+	var capture_popup_path := ProjectSettings.globalize_path(str(capture_popup_data.get("path", "")))
+	if not FileAccess.file_exists(capture_popup_path):
+		return _failure("Editor popup capture_popup did not create the PNG file.")
+	if not str(capture_popup_data.get("path", "")).begins_with("user://godot_dotnet_mcp/captures/editor_controls/"):
+		return _failure("Editor popup capture_popup should normalize root-level user:// PNG paths into the managed control capture directory.")
+	if str(capture_popup_data.get("capture_mode", "")) != "popup":
+		return _failure("Editor popup capture_popup should report capture_mode=popup.")
+	if int(capture_popup_data.get("width", 0)) != 100 or int(capture_popup_data.get("height", 0)) != 24:
+		return _failure("Editor popup capture_popup should crop to the visible popup root rect.")
 
 	var popup_select_by_text_result: Dictionary = executor.execute("popup", {
 		"action": "select_item",
@@ -1449,6 +1597,13 @@ func _has_plugin_summary(plugins: Array, plugin_name: String) -> bool:
 		if plugin is Dictionary and str((plugin as Dictionary).get("plugin", (plugin as Dictionary).get("name", ""))) == plugin_name:
 			return (plugin as Dictionary).has("editor_enabled") and (plugin as Dictionary).has("setting_enabled")
 	return false
+
+
+func _find_control_summary(controls: Array, path: String) -> Dictionary:
+	for control in controls:
+		if control is Dictionary and str((control as Dictionary).get("path", "")) == path:
+			return control as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:

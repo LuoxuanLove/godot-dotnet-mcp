@@ -41,7 +41,7 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_project_configure",
 	"system_project_files",
 	"system_project_index_build",
-	"system_project_run",
+	"system_project_lifecycle",
 	"system_project_state",
 	"system_project_symbol_search",
 	"system_runtime_control",

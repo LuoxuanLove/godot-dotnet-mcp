@@ -19,11 +19,9 @@ class FakeToolLoader:
 			"category": "system",
 			"inputSchema": {"type": "object", "properties": {}}
 		}, {
-			"name": "system_project_stop",
+			"name": "system_project_lifecycle",
 			"category": "system",
-			"compatibility_alias": true,
-			"compatibility_replacement": "system_project_run",
-			"inputSchema": {"type": "object", "properties": {}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
 		}]
 
 	func get_exposed_tool_definitions() -> Array:
@@ -31,6 +29,10 @@ class FakeToolLoader:
 			"name": "system_project_state",
 			"category": "system",
 			"inputSchema": {"type": "object", "properties": {}}
+		}, {
+			"name": "system_project_lifecycle",
+			"category": "system",
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
 		}]
 
 	func get_domain_states() -> Array:
@@ -39,9 +41,7 @@ class FakeToolLoader:
 	func is_tool_exposed(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
-		if tool_name == "system_project_stop":
-			return not disabled_tools.has("system_project_run")
-		return tool_name == "system_project_state"
+		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle"
 
 	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
 		var execution_args := arguments.duplicate(true)
@@ -105,31 +105,40 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(agent_context.get("agent_id", "")) != "stdio-contract-agent":
 		return _failure("Stdio tools/call should retain top-level _mcp_context in activity.")
 
-	var alias_response: Dictionary = await stdio_server.call("_handle_tools_call", {
-		"name": "system_project_stop",
-		"arguments": {}
+	var lifecycle_response: Dictionary = await stdio_server.call("_handle_tools_call", {
+		"name": "system_project_lifecycle",
+		"arguments": {"action": "stop"}
 	}, 43)
-	var alias_result = alias_response.get("result", {})
-	if not (alias_result is Dictionary) or bool((alias_result as Dictionary).get("isError", true)):
-		return _failure("Stdio tools/call should allow hidden compatibility aliases.")
-	var alias_content = (alias_result as Dictionary).get("content", [])
-	if not (alias_content is Array) or (alias_content as Array).is_empty():
-		return _failure("Stdio compatibility alias call should include text content.")
-	var alias_payload = JSON.parse_string(str(((alias_content as Array)[0] as Dictionary).get("text", "")))
-	if not (alias_payload is Dictionary):
-		return _failure("Stdio compatibility alias call should serialize a JSON object payload.")
-	var alias_data = (alias_payload as Dictionary).get("data", {})
-	if not (alias_data is Dictionary) or str((alias_data as Dictionary).get("tool", "")) != "project_stop":
-		return _failure("Stdio compatibility alias call should resolve system_project_stop to project_stop.")
+	var lifecycle_result = lifecycle_response.get("result", {})
+	if not (lifecycle_result is Dictionary) or bool((lifecycle_result as Dictionary).get("isError", true)):
+		return _failure("Stdio tools/call should allow system_project_lifecycle(action=stop).")
+	var lifecycle_content = (lifecycle_result as Dictionary).get("content", [])
+	if not (lifecycle_content is Array) or (lifecycle_content as Array).is_empty():
+		return _failure("Stdio lifecycle call should include text content.")
+	var lifecycle_payload = JSON.parse_string(str(((lifecycle_content as Array)[0] as Dictionary).get("text", "")))
+	if not (lifecycle_payload is Dictionary):
+		return _failure("Stdio lifecycle call should serialize a JSON object payload.")
+	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
+	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
+		return _failure("Stdio lifecycle call should resolve system_project_lifecycle to project_lifecycle.")
 
-	loader.disabled_tools["system_project_run"] = true
-	var disabled_alias_response: Dictionary = await stdio_server.call("_handle_tools_call", {
-		"name": "system_project_stop",
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		var removed_response: Dictionary = await stdio_server.call("_handle_tools_call", {
+			"name": removed_tool_name,
+			"arguments": {}
+		}, 44)
+		var removed_result = removed_response.get("result", {})
+		if not (removed_result is Dictionary) or not bool((removed_result as Dictionary).get("isError", false)):
+			return _failure("Stdio tools/call should reject removed project lifecycle entry '%s'." % removed_tool_name)
+
+	loader.disabled_tools["system_project_lifecycle"] = true
+	var disabled_lifecycle_response: Dictionary = await stdio_server.call("_handle_tools_call", {
+		"name": "system_project_lifecycle",
 		"arguments": {}
 	}, 44)
-	var disabled_alias_result = disabled_alias_response.get("result", {})
-	if not (disabled_alias_result is Dictionary) or not bool((disabled_alias_result as Dictionary).get("isError", false)):
-		return _failure("Stdio tools/call should reject hidden compatibility aliases when their replacement tool is disabled.")
+	var disabled_lifecycle_result = disabled_lifecycle_response.get("result", {})
+	if not (disabled_lifecycle_result is Dictionary) or not bool((disabled_lifecycle_result as Dictionary).get("isError", false)):
+		return _failure("Stdio tools/call should reject system_project_lifecycle when disabled.")
 	loader.disabled_tools.clear()
 
 	var plain_activity_result: Dictionary = stdio_server.call("_normalize_tool_result", {

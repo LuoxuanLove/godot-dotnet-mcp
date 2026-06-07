@@ -31,6 +31,8 @@ func detect(running_processes: PackedStringArray) -> Dictionary:
 	)
 	var runtime_state = _runtime_inspector.build_runtime_state(str(resolved.get("path", "")), image_names, running_processes)
 	var config_entry_status = _config_entry_inspector.inspect_config_entry(config_path, str(_options.get("config_type", "")))
+	var capability_value: Variant = _options.get("capability", {})
+	var capability: Dictionary = capability_value.duplicate(true) if capability_value is Dictionary else {}
 	var can_write = bool(_options.get("launch_supported", false)) or not config_path.is_empty()
 	var has_path = not str(resolved.get("path", "")).is_empty()
 
@@ -49,7 +51,8 @@ func detect(running_processes: PackedStringArray) -> Dictionary:
 		"path_pick_supported": true,
 		"path_clear_supported": bool(resolved.get("has_manual_path", false)),
 		"runtime_state": runtime_state,
-		"config_entry_status": config_entry_status
+		"config_entry_status": config_entry_status,
+		"capability": capability
 	}
 
 

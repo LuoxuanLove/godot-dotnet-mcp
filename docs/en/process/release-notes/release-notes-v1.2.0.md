@@ -1,55 +1,41 @@
 ## 🧩 Godot .NET MCP v1.2.0: Reconnect-Aware Agent Workflows
 
-This release makes the plugin easier to use from several MCP clients or agent sessions at once. It improves maintenance-window reporting, reconnect guidance, transport resilience, health diagnostics, update-sync refresh behavior, and editor UI control so clients can recover cleanly after plugin reloads or update syncs while still navigating registered editor main screens and visible Godot UI flows.
+Godot .NET MCP `v1.2.0` is a reliability and editor-control release for agents that stay connected to Godot while projects, plugins, and custom tools are changing. It improves reconnect guidance, multi-client diagnostics, Godot UI automation, User-tool observability, and protocol guardrails while keeping Godot 4.6+ .NET support, Asset Library installs, direct source-copy installs, and existing high-level tool names compatible.
 
-### ✨ Highlights
+<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/en/process/release-notes/release-notes-v1.2.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/zh-CN/流程/发布说明/发布说明-v1.2.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ja/プロセス/リリースノート/リリースノート-v1.2.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.2.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.2.0.md">한국어</a></p>
 
-- Added top menu control to `system_editor_control`, so agents can list editor menus, open a `MenuButton`, and choose a `PopupMenu` item by text or index before continuing with popup inspection or text/button actions.
-- Unified project run and stop control under `system_project_run(action=run|stop)`, so clients can start, validate, auto-stop, or explicitly stop a run from one high-level project entry.
-- Added maintenance-window metadata to health, plugin reload, and plugin update responses so clients can detect temporary disconnects, retry timing, and tool-list refresh requirements.
-- Added HTTP client session identity and request audit fields to `/health`, including stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions.
-- Added User-tool runtime diagnostics so clients can inspect discovered custom tools, load failures, watcher state, compatibility, and recent audit entries from the plugin evolution tools or project health.
-- Added `system_tool_activity` so clients can inspect currently running tool calls, recent completions, execution order, and optional self-reported Agent context across HTTP and stdio tool calls when coordinating parallel work.
-- Localized reconnect guidance across the supported Dock languages.
-- Added output size safeguards for MCP resources and prompt guides so very large file-backed resources are rejected before expensive reads, while long generated prompt text reports byte-size truncation metadata.
-- Added editor UI hover and leave actions so agents can validate tooltips, hover-only menus, and floating panels through Godot input events instead of OS mouse automation.
-- Added editor plugin session diagnostics so clients can inspect third-party EditorPlugin project settings, live editor state, visible UI hints, and guarded enable/disable behavior.
-- Added editor-control actions for listing main-screen buttons, switching to registered plugin main screens, and controlling distraction-free mode.
-- Added a high-level editor-control action for selecting visible `PopupMenu` items by index, id, or exact text.
-- Added docs i18n validation coverage for locale file parity, Markdown link targets, and cross-locale link leakage.
-- Kept the localized docs trees aligned with the current plugin UI, tool, and binding references.
+### 🔁 Reconnect-Aware Multi-Client Sessions
 
-### 🔧 Fixes
+Health, plugin reload, and plugin update responses now report maintenance-window state, reconnect expectations, retry timing, and stale-tool-list guidance. Clients can tell when a disconnect is temporary, when schemas may need to be fetched again, and when update sync or lifecycle reload work is still in progress.
 
-- Refreshed the Godot editor file system after plugin update sync writes files, before scheduling the plugin lifecycle reload.
-- Made generated C# empty-method guard bodies explicit by using `NotImplementedException` instead of ambiguous fallback bodies.
-- Kept the public plugin-evolution runtime diagnostics path aligned with project health by forwarding the live user-tool runtime snapshot into the summary.
-- Guarded popup menu automation against hidden popups, disabled items, separators, submenu rows, conflicting selectors, and ambiguous duplicate text matches.
-- Corrected English and Japanese documentation facts around service routing, .NET support, UI flow, and tool-domain indexes.
-- Replaced broken or outdated localization draft fragments with current user-facing content.
-- Removed invalid screenshot references from the Japanese README.
-- Improved HTTP keep-alive handling so already buffered pipelined requests continue draining after async tool execution.
-- Added reconnect backpressure safeguards for multi-client recovery, including bounded pending request buffers and connection cleanup after response write failures.
-- Hardened stdio burst processing and lifecycle reload scheduling so stale responses and failed reload schedules do not leave misleading pending state.
-- Project file reimport now reports clear `not_importable_resource` errors for project settings, text files, sidecar metadata, and unsupported paths.
-- Added DAP debugger size and timeout guards so abnormal debug endpoints report clear limit errors instead of tying up an agent request.
-- Made plugin harness failure reports clearer by separating Godot exit-cleanup warnings from runtime error markers and test-case failures in CI output.
-- Made malformed JSON-RPC parameter handling consistent across HTTP and stdio, so invalid top-level `params` return a standard error while invalid tool arguments stay in the tool-result error channel.
+HTTP health reporting also includes stable connection IDs, request IDs, client summaries, active sessions, and recently disconnected sessions. When several MCP clients or agent sessions are attached at once, the plugin gives them a clearer picture of who is connected and how to recover after a reload.
+
+### 🖱️ Stronger Godot Editor UI Control
+
+`system_editor_control` can now work through more of the Godot editor UI directly. Agents can list top menus, open `MenuButton` popups, select visible `PopupMenu` rows by text, index, or id, switch registered editor main screens, control distraction-free mode, and send hover or leave events for tooltip and floating-panel checks.
+
+These controls make editor automation less dependent on OS-level mouse movement. They also reject hidden popups, disabled rows, separators, submenu rows, duplicate text matches, and conflicting selectors, so UI automation fails with clearer reasons instead of silently choosing the wrong menu item.
+
+### 🧰 Tool Activity and User-Tool Diagnostics
+
+The new `system_tool_activity` entry reports running tool calls, recent completions, execution order, and optional self-reported `_mcp_context` supplied by clients. This gives parallel agents a lightweight way to understand what is already happening before starting another long-running operation.
+
+User-tool runtime diagnostics now surface discovered custom tools, load failures, watcher state, compatibility summaries, and recent audit entries through plugin evolution diagnostics and project health. The diagnostics are read-only and do not change custom-tool loading behavior, but they make extension-tool failures much easier to inspect.
+
+### 🛡️ Safer Protocol and Debug Boundaries
+
+HTTP and stdio now handle malformed JSON-RPC top-level `params` consistently with standard `-32602` errors, while invalid `tools/call.arguments` values continue to report normal MCP tool-result errors. Resource and Prompt Guide output also has size protection: oversized file-backed resources fail before expensive reads, and shortened prompt text includes `_meta` truncation details.
+
+DAP debugger calls now reject oversized frames and excessive timeouts with clear limit errors. Script editing also uses explicit `NotImplementedException` guard bodies for generated empty C# methods, reducing ambiguous generated-body behavior.
+
+### 🌐 Localized Documentation and Release Notes
+
+The public documentation tree is now maintained in English, Simplified Chinese, Japanese, and Korean with localized directory and file names. Dock UI localization gained Korean coverage and broader translated tool metadata, client guidance, prompt-guide text, reconnect guidance, and fallback labels across supported languages.
+
+The `v1.2.0` release notes are preserved in all four documentation trees. The GitHub Release body is rendered from the English note, while the note itself links to the other language versions so readers can choose the documentation language that fits them.
 
 ### ✅ Compatibility and Upgrade Notes
 
-- Existing tool names remain compatible.
-- The tool schema version changed because editor control gained new UI actions, project run control gained `action=run|stop`, and user-tool runtime diagnostics now expose live runtime-state fields.
-- `system_project_stop` remains available as a compatibility alias, but new clients should use `system_project_run(action=stop)`.
-- `system_editor_plugin_control` is additive; use dedicated plugin reload/update tools for this plugin instead of generic self-disable flows.
-- Update sync now asks the editor to rescan plugin files before the lifecycle reload step.
-- Clients should poll health during update syncs or plugin reloads, reconnect if the transport drops, and fetch the tool list again when the maintenance window says schemas may be stale.
-- User-tool diagnostics are read-only and do not change existing custom-tool loading behavior.
-- No file layout or tool schema migration is required.
-- Clients may pass a short `_mcp_context` object with tool calls for coordination; it is treated as self-reported context, not as authentication.
-- Switching to a plugin main screen requires that the current editor session has already registered that screen.
-- Popup menu selection adds a tool-schema action; reconnect and fetch tools again after upgrading.
-- No file layout migration is required.
-- Existing installs do not need migration.
-- Clients can treat non-object JSON-RPC `params` as `-32602` across transports; `tools/call.arguments` validation continues to report a normal MCP tool error result.
-- Clients that read resources should handle standard JSON-RPC errors for oversized file-backed resources and inspect `_meta` on prompt responses when prompt text is shortened.
+Existing high-level tool names remain compatible. The public tool schema version changes because editor control, tool activity, and User-tool diagnostics expose new capabilities, so clients should reconnect and fetch the tool list again after upgrading.
+
+No file layout migration is required for existing installs. Continue using the Godot Asset Library installation path or copy `addons/godot_dotnet_mcp/` directly from the source tree. During plugin reloads or update syncs, clients should poll health, reconnect if the transport drops, and refresh tools when the maintenance window says schemas may be stale.

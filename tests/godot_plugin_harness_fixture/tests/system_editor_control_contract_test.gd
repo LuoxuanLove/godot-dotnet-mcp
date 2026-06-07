@@ -41,6 +41,15 @@ class FakeBridge extends RefCounted:
 							"count": 1,
 							"controls": [{"path": "/root/Editor/SearchPanel/SearchField", "class": "LineEdit"}]
 						})
+					"wait_for_ui":
+						return success({
+							"condition": str(args.get("condition", "")),
+							"condition_met": true,
+							"target_path": str(args.get("target_path", "")),
+							"text": str(args.get("text", "")),
+							"timeout_ms": int(args.get("timeout_ms", 0)),
+							"poll_interval_ms": int(args.get("poll_interval_ms", 0))
+						})
 					"list_dock_tabs":
 						return success({
 							"count": 1,
@@ -58,6 +67,24 @@ class FakeBridge extends RefCounted:
 							"bottom_panel_title": str(args.get("bottom_panel_title", "")),
 							"bottom_panel_path": str(args.get("bottom_panel_path", "")),
 							"path": str(args.get("path", ""))
+						})
+					"list_tree_items":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"text_query": str(args.get("text_query", "")),
+							"count": 2,
+							"items": [
+								{"index": 0, "text": "Application", "item_path": "Application"},
+								{"index": 1, "text": "Config", "item_path": "Application/Config"}
+							]
+						})
+					"select_tree_item":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"selected_item": {
+								"index": int(args.get("item_index", -1)),
+								"item_path": str(args.get("item_path", ""))
+							}
 						})
 					"list_menus":
 						return success({
@@ -95,12 +122,27 @@ class FakeBridge extends RefCounted:
 						})
 					"set_text":
 						return success({"target_path": str(args.get("target_path", "")), "text": str(args.get("text", ""))})
+					"set_value":
+						return success({"target_path": str(args.get("target_path", "")), "value": args.get("value", null)})
 					_:
 						return error("Unsupported editor_ui_control action")
 			"editor_popup":
 				match str(args.get("action", "")):
 					"list_visible":
 						return success({"count": 1, "popups": [{"node_path": "/root/Editor/SearchDialog"}]})
+					"get_popup":
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"popup_path": "/root/Editor/SearchDialog",
+							"popup": {"node_path": "/root/Editor/SearchDialog", "class": "AcceptDialog"}
+						})
+					"capture_popup":
+						return success({
+							"path": str(args.get("path", "")),
+							"target_path": str(args.get("target_path", "")),
+							"popup_path": "/root/Editor/SearchDialog",
+							"capture_mode": "popup"
+						})
 					"select_item":
 						return success({
 							"target_path": str(args.get("target_path", "")),
@@ -134,6 +176,10 @@ class FakeBridge extends RefCounted:
 						return error("Unsupported editor_plugin action")
 			_:
 				return error("Unsupported atomic tool: %s" % tool_name)
+
+	func call_atomic_async(tool_name: String, args: Dictionary) -> Dictionary:
+		await Engine.get_main_loop().process_frame
+		return call_atomic(tool_name, args)
 
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
@@ -182,9 +228,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "select_popup_menu_item", "hover_control", "leave_control"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "wait_for_ui", "list_tree_items", "select_tree_item", "get_popup", "capture_popup", "select_popup_menu_item", "hover_control", "leave_control", "set_value"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
+	if not editor_control_properties.has("value"):
+		return _failure("editor_control schema should expose value for set_value.")
+	if not editor_control_properties.has("item_path"):
+		return _failure("editor_control schema should expose item_path for select_tree_item.")
+	for expected_property in ["condition", "timeout_ms", "poll_interval_ms"]:
+		if not editor_control_properties.has(expected_property):
+			return _failure("editor_control schema should expose %s for wait_for_ui." % expected_property)
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",
@@ -229,6 +282,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate list_controls.")
 	if int(list_controls_result.get("data", {}).get("count", 0)) != 1:
 		return _failure("system editor_control should preserve the list_controls payload.")
+	var wait_result: Dictionary = await impl.execute_async("editor_control", {
+		"action": "wait_for_ui",
+		"target_path": "/root/Editor/SearchPanel/SearchField",
+		"condition": "text_contains",
+		"text": "Search",
+		"timeout_ms": 250,
+		"poll_interval_ms": 25
+	})
+	if not bool(wait_result.get("success", false)):
+		return _failure("system editor_control should delegate wait_for_ui.")
+	if str(wait_result.get("data", {}).get("condition", "")) != "text_contains":
+		return _failure("system editor_control should preserve wait_for_ui condition.")
+	if int(wait_result.get("data", {}).get("timeout_ms", 0)) != 250:
+		return _failure("system editor_control should preserve wait_for_ui timeout_ms.")
 
 	var list_dock_tabs_result: Dictionary = impl.execute("editor_control", {
 		"action": "list_dock_tabs",
@@ -360,6 +427,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(popup_result.get("success", false)):
 		return _failure("system editor_control should delegate list_popups.")
 
+	var get_popup_result: Dictionary = impl.execute("editor_control", {
+		"action": "get_popup",
+		"target_path": "/root/Editor/SearchDialog/SearchInput"
+	})
+	if not bool(get_popup_result.get("success", false)):
+		return _failure("system editor_control should delegate get_popup.")
+	if str(get_popup_result.get("data", {}).get("popup_path", "")) != "/root/Editor/SearchDialog":
+		return _failure("system editor_control should preserve get_popup popup_path.")
+
+	var capture_popup_result: Dictionary = impl.execute("editor_control", {
+		"action": "capture_popup",
+		"target_path": "/root/Editor/SearchDialog/SearchInput",
+		"path": "user://search_dialog.png"
+	})
+	if not bool(capture_popup_result.get("success", false)):
+		return _failure("system editor_control should delegate capture_popup.")
+	if str(capture_popup_result.get("data", {}).get("capture_mode", "")) != "popup":
+		return _failure("system editor_control should preserve capture_popup capture mode.")
+
 	var popup_select_result: Dictionary = impl.execute("editor_control", {
 		"action": "select_popup_menu_item",
 		"target_path": "/root/Editor/SearchDialog",
@@ -379,6 +465,43 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(set_text_result.get("success", false)):
 		return _failure("system editor_control should delegate set_control_text.")
+	var set_value_result: Dictionary = impl.execute("editor_control", {
+		"action": "set_value",
+		"target_path": "/root/Editor/SearchPanel/NumericValue",
+		"value": 42
+	})
+	if not bool(set_value_result.get("success", false)):
+		return _failure("system editor_control should delegate set_value.")
+	if int(set_value_result.get("data", {}).get("value", 0)) != 42:
+		return _failure("system editor_control should preserve set_value numeric payload.")
+	var missing_value_result: Dictionary = impl.execute("editor_control", {
+		"action": "set_value",
+		"target_path": "/root/Editor/SearchPanel/NumericValue"
+	})
+	if bool(missing_value_result.get("success", false)):
+		return _failure("system editor_control set_value should reject missing value instead of defaulting to zero.")
+	if not str(missing_value_result.get("message", "")).contains("value is required"):
+		return _failure("system editor_control set_value missing value should report a required value error.")
+
+	var list_tree_items_result: Dictionary = impl.execute("editor_control", {
+		"action": "list_tree_items",
+		"target_path": "/root/Editor/ProjectSettings/CategoryTree",
+		"text_query": "Application"
+	})
+	if not bool(list_tree_items_result.get("success", false)):
+		return _failure("system editor_control should delegate list_tree_items.")
+	if int(list_tree_items_result.get("data", {}).get("count", 0)) != 2:
+		return _failure("system editor_control should preserve list_tree_items result payload.")
+	var select_tree_item_result: Dictionary = impl.execute("editor_control", {
+		"action": "select_tree_item",
+		"target_path": "/root/Editor/ProjectSettings/CategoryTree",
+		"item_path": "Application/Config",
+		"item_index": 1
+	})
+	if not bool(select_tree_item_result.get("success", false)):
+		return _failure("system editor_control should delegate select_tree_item.")
+	if str(select_tree_item_result.get("data", {}).get("selected_item", {}).get("item_path", "")) != "Application/Config":
+		return _failure("system editor_control should preserve select_tree_item path payload.")
 
 	var plugin_list_result: Dictionary = impl.execute("editor_plugin_control", {"action": "list"})
 	if not bool(plugin_list_result.get("success", false)) or int(plugin_list_result.get("data", {}).get("count", 0)) != 1:
