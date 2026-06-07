@@ -63,13 +63,13 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "settings_dialog",
-			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative row models, read current visible row values, set supported visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
+			"description": "SETTINGS DIALOG: High-level settings-like editor dialog workflow entry. Use it to open Project Settings or Editor Settings, wait until the target dialog is visible, summarize search fields and candidate setting rows, list conservative row models, read, set, or verify current visible row values, focus a returned result, capture evidence, and close the visible settings surface. This tool orchestrates editor UI controls and popups; value writes are limited to uniquely matched visible rows and verified after the UI action.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["open", "status", "search", "list_rows", "read_value", "set_value", "focus_result", "capture", "close"],
+						"enum": ["open", "status", "search", "list_rows", "read_value", "set_value", "verify_value", "focus_result", "capture", "close"],
 						"description": "Settings dialog workflow action"
 					},
 					"surface": {
@@ -83,7 +83,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"setting_path": {
 						"type": "string",
-						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/set_value only filter currently observed visible rows."
+						"description": "Optional setting path or path fragment. search writes this text into the settings filter; list_rows/read_value/set_value/verify_value only filter currently observed visible rows."
 					},
 					"tab": {
 						"type": "string",
@@ -91,10 +91,13 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value/set_value"
+						"description": "Control path returned by status/search/list_rows for focus_result, or a row/value control path used by read_value/set_value/verify_value"
 					},
 					"value": {
 						"description": "New value for set_value. Text and number rows accept string/number values; bool rows require a boolean value."
+					},
+					"expected_value": {
+						"description": "Expected value for verify_value. Text and number rows accept string/number values, bool rows require a boolean value, and enum rows accept a string text or dictionary with text/selected."
 					},
 					"include_raw_controls": {
 						"type": "boolean",
@@ -103,7 +106,7 @@ func get_tools() -> Array[Dictionary]:
 					"require_confidence": {
 						"type": "string",
 						"enum": ["low", "medium", "high"],
-						"description": "Minimum row model confidence accepted by read_value/set_value (default medium)"
+						"description": "Minimum row model confidence accepted by read_value/set_value/verify_value (default medium)"
 					},
 					"include_hidden": {
 						"type": "boolean",
@@ -160,6 +163,11 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _read_value(surface, args)
 		"set_value":
 			return bridge.error("set_value requires asynchronous execution")
+		"verify_value":
+			var surface := _resolve_surface(args)
+			if surface.is_empty():
+				return bridge.error("surface is required")
+			return _verify_value(surface, args)
 		"focus_result":
 			var surface := _resolve_surface(args)
 			if surface.is_empty():
@@ -433,6 +441,31 @@ func _set_value(surface: String, args: Dictionary) -> Dictionary:
 	if bool(verification.get("success", false)):
 		return bridge.success(payload, "Settings row value set")
 	return bridge.error("Settings row value write could not be verified.", payload)
+
+
+func _verify_value(surface: String, args: Dictionary) -> Dictionary:
+	if not args.has("expected_value"):
+		return bridge.error("expected_value is required for verify_value")
+	var read_result: Dictionary = _read_value(surface, args)
+	if not bool(read_result.get("success", false)):
+		return read_result
+	var payload: Dictionary = read_result.get("data", {}).duplicate(true)
+	var verification: Dictionary = _verify_expected_value(payload, args.get("expected_value"))
+	verification["unique_row"] = true
+	verification["require_confidence"] = _required_confidence(args)
+	verification["row_confidence"] = str(payload.get("row", {}).get("confidence", payload.get("confidence", "low")))
+	verification["value_source"] = str(payload.get("value_source", ""))
+	payload["verification"] = verification
+	payload["workflow"] = _workflow_with_step(payload.get("workflow", []), {
+		"step": "verify_value",
+		"target_path": str(args.get("target_path", "")),
+		"setting_path": str(args.get("setting_path", "")),
+		"expected_value": args.get("expected_value"),
+		"success": bool(verification.get("success", false))
+	})
+	if bool(verification.get("success", false)):
+		return bridge.success(payload, "Settings row value verified")
+	return bridge.error("Settings row value did not match expected_value.", payload)
 
 
 func _capture(surface: String, args: Dictionary) -> Dictionary:
@@ -1238,6 +1271,116 @@ func _typed_value_from_row(row: Dictionary, editor_type: String, raw_text: Strin
 			}
 		_:
 			return raw_text
+
+
+func _verify_expected_value(value_payload: Dictionary, expected_value) -> Dictionary:
+	var editor_type := str(value_payload.get("value_editor_type", "unknown"))
+	var actual_value = value_payload.get("value")
+	match editor_type:
+		"number":
+			return _verify_number_value(actual_value, expected_value)
+		"bool":
+			return _verify_bool_value(actual_value, expected_value)
+		"enum":
+			return _verify_enum_value(actual_value, expected_value)
+		_:
+			return _verify_text_value(actual_value, expected_value)
+
+
+func _verify_number_value(actual_value, expected_value) -> Dictionary:
+	var actual_number := _coerce_number_value(actual_value)
+	var expected_number := _coerce_number_value(expected_value)
+	var success := bool(actual_number.get("success", false)) and bool(expected_number.get("success", false))
+	if success:
+		var delta := abs(float(actual_number.get("value")) - float(expected_number.get("value")))
+		success = delta <= 0.00001
+		return {
+			"success": success,
+			"reason": "matched" if success else "value_mismatch",
+			"expected_value": expected_number.get("value"),
+			"actual_value": actual_number.get("value"),
+			"actual_type": "number"
+		}
+	return {
+		"success": false,
+		"reason": "type_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "number"
+	}
+
+
+func _verify_bool_value(actual_value, expected_value) -> Dictionary:
+	if actual_value is bool and expected_value is bool:
+		var success := bool(actual_value) == bool(expected_value)
+		return {
+			"success": success,
+			"reason": "matched" if success else "value_mismatch",
+			"expected_value": expected_value,
+			"actual_value": actual_value,
+			"actual_type": "bool"
+		}
+	return {
+		"success": false,
+		"reason": "type_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "bool"
+	}
+
+
+func _verify_enum_value(actual_value, expected_value) -> Dictionary:
+	var actual_text := ""
+	var actual_selected: Variant = null
+	if actual_value is Dictionary:
+		actual_text = str((actual_value as Dictionary).get("text", ""))
+		actual_selected = (actual_value as Dictionary).get("selected", null)
+	else:
+		actual_text = str(actual_value)
+	var expected_text := ""
+	var expected_selected: Variant = null
+	var expects_text := false
+	var expects_selected := false
+	if expected_value is Dictionary:
+		var expected_dict := expected_value as Dictionary
+		if expected_dict.has("text"):
+			expected_text = str(expected_dict.get("text", ""))
+			expects_text = true
+		if expected_dict.has("selected"):
+			expected_selected = expected_dict.get("selected", null)
+			expects_selected = true
+	else:
+		expected_text = str(expected_value)
+		expects_text = true
+	var text_matches := (not expects_text) or actual_text == expected_text
+	var selected_matches := (not expects_selected) or _values_equal_exact(actual_selected, expected_selected)
+	var success := text_matches and selected_matches and (expects_text or expects_selected)
+	return {
+		"success": success,
+		"reason": "matched" if success else "value_mismatch",
+		"expected_value": expected_value,
+		"actual_value": actual_value,
+		"actual_type": "enum"
+	}
+
+
+func _verify_text_value(actual_value, expected_value) -> Dictionary:
+	var actual_text := str(actual_value)
+	var expected_text := str(expected_value)
+	var success := actual_text == expected_text
+	return {
+		"success": success,
+		"reason": "matched" if success else "value_mismatch",
+		"expected_value": expected_text,
+		"actual_value": actual_text,
+		"actual_type": "text"
+	}
+
+
+func _values_equal_exact(left, right) -> bool:
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
 
 
 func _row_matches_target_path(row: Dictionary, target_path: String) -> bool:
