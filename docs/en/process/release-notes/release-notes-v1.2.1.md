@@ -12,6 +12,8 @@ This release line improves editor UI automation by letting clients wait for visi
 
 The new wait action complements menu, popup, click, hover, and text-entry controls without requiring OS mouse automation. This makes workflows such as opening editor dialogs, filtering settings, and confirming transient panels easier to verify from inside Godot.
 
+Editor UI guidance now makes the automation order explicit: semantic workflows and navigation first, control-level focus, text, value, and popup actions second, and control-local mouse or pointer events only as fallback. Agents can choose a higher-level path before reaching for coordinates.
+
 Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/API-key variants, and nested metadata secrets before reporting resource outputs. Troubleshooting evidence stays useful for automation loops without exposing credentials in summaries.
 
 ### 🪟 Floating Window Evidence

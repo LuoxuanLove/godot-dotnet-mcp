@@ -208,6 +208,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_control_schema: Dictionary = {}
 	for tool_def in tool_defs:
 		if str(tool_def.get("name", "")) == "editor_control":
+			var editor_control_description := str(tool_def.get("description", ""))
+			if editor_control_description.find("semantic") == -1 or editor_control_description.find("control-level") == -1 or editor_control_description.find("fallback") == -1:
+				return _failure("editor_control description should document semantic-first, control-level-second, mouse-fallback UI automation guidance.")
 			editor_control_schema = tool_def.get("inputSchema", {})
 			break
 	var editor_control_properties: Dictionary = editor_control_schema.get("properties", {})
@@ -238,6 +241,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_property in ["condition", "timeout_ms", "poll_interval_ms"]:
 		if not editor_control_properties.has(expected_property):
 			return _failure("editor_control schema should expose %s for wait_for_ui." % expected_property)
+	var semantic_path_description := str((editor_control_properties.get("semantic_path", {}) as Dictionary).get("description", ""))
+	if semantic_path_description.find("Prefer") == -1 or semantic_path_description.find("before raw control paths or coordinates") == -1:
+		return _failure("editor_control semantic_path description should prefer semantic targets before raw paths or coordinates.")
+	for coordinate_property in ["local_x", "local_y"]:
+		var coordinate_description := str((editor_control_properties.get(coordinate_property, {}) as Dictionary).get("description", ""))
+		if coordinate_description.find("fallback") == -1 or coordinate_description.find("not guessed OS screen coordinates") == -1:
+			return _failure("editor_control %s description should limit coordinate input to fallback actions and returned control coordinates." % coordinate_property)
+	for control_action in ["focus_control", "activate_control", "set_control_text", "set_value", "press_popup_button", "select_popup_menu_item"]:
+		if not editor_control_actions.has(control_action):
+			return _failure("editor_control schema should expose control-level action %s." % control_action)
 
 	var set_screen_result: Dictionary = impl.execute("editor_control", {
 		"action": "set_main_screen",

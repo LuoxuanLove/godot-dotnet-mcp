@@ -28,6 +28,10 @@ Target version: 1.2.1.
 - Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
 - Added `system_project_lifecycle(action=start|stop)` as the canonical high-level project runtime session lifecycle entry, replacing the older project run/stop tool names without compatibility aliases.
 
+### Changed
+
+- Clarified editor UI control guidance so agents prefer semantic workflows and navigation first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
+
 ### Internal
 
 - Extended MCP resources/prompts harness coverage to verify localized resource and resource-template metadata under a non-English locale.
@@ -39,6 +43,7 @@ Target version: 1.2.1.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
 - Updated the project lifecycle tool tree, prompt, localization, protocol facts, stdio/router/tool-loader, and harness contracts for the canonical `system_project_lifecycle` surface with the `2026-06-08.16` tool schema facts update and explicit lifecycle action validation.
+- Updated editor UI prompt, help, localization, and schema contract coverage for the semantic-first, control-level-second, mouse-fallback automation order with the `2026-06-08.17` tool schema facts update.
 
 ### Fixed
 
