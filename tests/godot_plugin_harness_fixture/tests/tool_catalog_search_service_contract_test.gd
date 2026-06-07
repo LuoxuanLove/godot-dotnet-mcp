@@ -143,6 +143,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var domain_matches: Array = (domain_search.get("data", {}) as Dictionary).get("matches", [])
 	if domain_matches.size() != 1 or not ((domain_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param"):
 		return _failure("Domain-key-filtered search should match parameter names.")
+	var alternate_domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "plugin", "query": "label"})
+	var alternate_domain_matches: Array = (alternate_domain_search.get("data", {}) as Dictionary).get("matches", [])
+	if not alternate_domain_matches.is_empty():
+		return _failure("Domain-key-filtered search should exclude matches from other domains.")
 
 	var invalid_visibility: Dictionary = ToolCatalogSearchService.search(loader, {"visibility": "all"})
 	if bool(invalid_visibility.get("success", true)):
