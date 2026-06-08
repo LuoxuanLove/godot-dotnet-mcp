@@ -444,7 +444,7 @@ func _count_files_by_filters(path: String, filters: Array, recursive: bool) -> D
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
 				for raw_filter in filters:
@@ -469,7 +469,7 @@ func _count_files(path: String, filter: String, recursive: bool) -> int:
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
 				if file_name.match(filter):
@@ -954,6 +954,10 @@ func _grep(pattern: String, path: String, filter: String, recursive: bool) -> Di
 	var regex_error = regex.compile(pattern)
 
 	for file_path in files:
+		var file_path_result := _normalize_tool_path_result(file_path, false)
+		if not bool(file_path_result.get("success", false)):
+			return file_path_result
+		file_path = str(file_path_result.get("path", file_path))
 		var file = FileAccess.open(file_path, FileAccess.READ)
 		if not file:
 			continue
@@ -1025,10 +1029,11 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	for pending_write in pending_writes:
 		var file_path := str(pending_write.get("path", ""))
 		var write_file = FileAccess.open(file_path, FileAccess.WRITE)
-		if write_file:
-			write_file.store_string(str(pending_write.get("content", "")))
-			write_file.close()
-			modified_files.append(file_path)
+		if not write_file:
+			return _error("Failed to open file for replacement write: %s" % file_path)
+		write_file.store_string(str(pending_write.get("content", "")))
+		write_file.close()
+		modified_files.append(file_path)
 
 	# Refresh filesystem
 	var fs = _get_filesystem()

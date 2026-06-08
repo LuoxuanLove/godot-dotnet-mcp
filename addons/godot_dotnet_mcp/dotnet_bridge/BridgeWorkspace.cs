@@ -244,7 +244,7 @@ internal static class WorkspacePathResolver
         }
 
         var relativePath = Path.GetRelativePath(root, resolved);
-        if (relativePath.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+        if (IsParentRelativePath(relativePath) || Path.IsPathRooted(relativePath))
         {
             return true;
         }
@@ -286,6 +286,13 @@ internal static class WorkspacePathResolver
         {
             return true;
         }
+    }
+
+    private static bool IsParentRelativePath(string path)
+    {
+        return string.Equals(path, "..", StringComparison.Ordinal)
+            || path.StartsWith("../", StringComparison.Ordinal)
+            || path.StartsWith(@"..\", StringComparison.Ordinal);
     }
 
     private static string EnsureTrailingSeparator(string path)
