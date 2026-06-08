@@ -5,6 +5,9 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Provides file and directory operations within the project
 
 const _PLUGIN_ROOT := "res://addons/godot_dotnet_mcp"
+const _MCPFileUtils = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
+
+var _filesystem_path_utils = _MCPFileUtils.new()
 
 
 func get_tools() -> Array[Dictionary]:
@@ -297,7 +300,10 @@ func _execute_directory(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	match action:
 		"list":
@@ -438,7 +444,7 @@ func _count_files_by_filters(path: String, filters: Array, recursive: bool) -> D
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
 				for raw_filter in filters:
@@ -463,7 +469,7 @@ func _count_files(path: String, filter: String, recursive: bool) -> int:
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
 				if file_name.match(filter):
@@ -474,6 +480,12 @@ func _count_files(path: String, filter: String, recursive: bool) -> int:
 
 
 func _collect_files(path: String, filter: String, recursive: bool, results: Array[String]) -> void:
+	if FileAccess.file_exists(path):
+		var file_name := path.get_file()
+		if file_name.match(filter):
+			results.append(path)
+		return
+
 	var pending: Array = [path]
 	while not pending.is_empty():
 		var current: String = pending.pop_back()
@@ -485,10 +497,10 @@ func _collect_files(path: String, filter: String, recursive: bool, results: Arra
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
-				if file_name.match(filter):
+				if file_name.match(filter) and not dir.is_link(file_name):
 					results.append(full_path)
 			file_name = dir.get_next()
 		dir.list_dir_end()
@@ -545,7 +557,10 @@ func _read_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
@@ -565,7 +580,10 @@ func _write_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(path)
 	if not protected_error.is_empty():
@@ -598,7 +616,10 @@ func _append_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	# Read existing content if file exists
 	var existing = ""
@@ -615,7 +636,10 @@ func _delete_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(path)
 	if not protected_error.is_empty():
@@ -642,7 +666,10 @@ func _file_exists(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	return _success({
 		"path": path,
@@ -654,8 +681,14 @@ func _copy_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	source = _normalize_tool_path(source)
-	dest = _normalize_tool_path(dest)
+	var source_result := _normalize_tool_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_tool_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", ""))
+	dest = str(dest_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(dest)
 	if not protected_error.is_empty():
@@ -691,8 +724,14 @@ func _move_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	source = _normalize_tool_path(source)
-	dest = _normalize_tool_path(dest)
+	var source_result := _normalize_tool_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_tool_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", ""))
+	dest = str(dest_result.get("path", ""))
 
 	var source_error = _guard_protected_plugin_write(source)
 	if not source_error.is_empty():
@@ -731,7 +770,10 @@ func _get_file_info(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	if not FileAccess.file_exists(path):
 		return _error("File not found: %s" % path)
@@ -754,7 +796,10 @@ func _execute_json(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	match action:
 		"read":
@@ -799,16 +844,21 @@ func _write_json(path: String, data) -> Dictionary:
 
 
 func _normalize_tool_path(path: String) -> String:
-	var normalized = path.strip_edges().replace("\\", "/")
-	if normalized.is_empty():
-		return ""
-	if not normalized.begins_with("res://") and not normalized.begins_with("user://"):
-		normalized = "res://" + normalized
-	return normalized
+	var result := _normalize_tool_path_result(path)
+	return str(result.get("path", "")) if bool(result.get("success", false)) else ""
+
+
+func _normalize_tool_path_result(path: String, allow_root: bool = true) -> Dictionary:
+	return _filesystem_path_utils.validate_project_path(path, allow_root)
 
 
 func _guard_protected_plugin_write(path: String) -> Dictionary:
-	if path == _PLUGIN_ROOT or path.begins_with(_PLUGIN_ROOT + "/"):
+	var normalized_path := path.replace("\\", "/").trim_suffix("/")
+	var normalized_plugin_root := _PLUGIN_ROOT
+	if OS.get_name() == "Windows":
+		normalized_path = normalized_path.to_lower()
+		normalized_plugin_root = normalized_plugin_root.to_lower()
+	if normalized_path == normalized_plugin_root or normalized_path.begins_with(normalized_plugin_root + "/"):
 		return _error("Writes to plugin files are blocked: %s" % path)
 	return {}
 
@@ -871,8 +921,10 @@ func _execute_search(args: Dictionary) -> Dictionary:
 
 
 func _find_files(pattern: String, path: String, recursive: bool) -> Dictionary:
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, pattern, recursive, files)
@@ -889,8 +941,10 @@ func _grep(pattern: String, path: String, filter: String, recursive: bool) -> Di
 	if pattern.is_empty():
 		return _error("Pattern is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
@@ -900,6 +954,10 @@ func _grep(pattern: String, path: String, filter: String, recursive: bool) -> Di
 	var regex_error = regex.compile(pattern)
 
 	for file_path in files:
+		var file_path_result := _normalize_tool_path_result(file_path, false)
+		if not bool(file_path_result.get("success", false)):
+			return file_path_result
+		file_path = str(file_path_result.get("path", file_path))
 		var file = FileAccess.open(file_path, FileAccess.READ)
 		if not file:
 			continue
@@ -937,16 +995,23 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	if find.is_empty():
 		return _error("Find pattern is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
 
-	var modified_files: Array[String] = []
+	var pending_writes: Array[Dictionary] = []
 	var total_replacements = 0
 
 	for file_path in files:
+		var file_path_result := _normalize_tool_path_result(file_path, false)
+		if not bool(file_path_result.get("success", false)):
+			return file_path_result
+		file_path = str(file_path_result.get("path", file_path))
+
 		var file = FileAccess.open(file_path, FileAccess.READ)
 		if not file:
 			continue
@@ -956,12 +1021,37 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 
 		var new_content = content.replace(find, replace)
 		if new_content != content:
-			var write_file = FileAccess.open(file_path, FileAccess.WRITE)
-			if write_file:
-				write_file.store_string(new_content)
-				write_file.close()
-				modified_files.append(file_path)
-				total_replacements += content.count(find)
+			var protected_error := _guard_protected_plugin_write(file_path)
+			if not protected_error.is_empty():
+				return protected_error
+			pending_writes.append({
+				"path": file_path,
+				"content": new_content
+			})
+			total_replacements += content.count(find)
+
+	var modified_files: Array[String] = []
+	for pending_write in pending_writes:
+		var file_path := str(pending_write.get("path", ""))
+		var write_file = FileAccess.open(file_path, FileAccess.WRITE)
+		if not write_file:
+			return _error("Failed to open file for replacement write: %s" % file_path, {
+				"path": file_path,
+				"partial_write": not modified_files.is_empty(),
+				"modified_files": modified_files
+			})
+		write_file.store_string(str(pending_write.get("content", "")))
+		write_file.flush()
+		var write_error := write_file.get_error()
+		write_file.close()
+		if write_error != OK:
+			return _error("Failed to write replacement content: %s" % file_path, {
+				"path": file_path,
+				"error_code": write_error,
+				"partial_write": not modified_files.is_empty(),
+				"modified_files": modified_files
+			})
+		modified_files.append(file_path)
 
 	# Refresh filesystem
 	var fs = _get_filesystem()
