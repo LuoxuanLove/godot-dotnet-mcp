@@ -847,7 +847,12 @@ func _normalize_tool_path_result(path: String, allow_root: bool = true) -> Dicti
 
 
 func _guard_protected_plugin_write(path: String) -> Dictionary:
-	if path == _PLUGIN_ROOT or path.begins_with(_PLUGIN_ROOT + "/"):
+	var normalized_path := path.replace("\\", "/").trim_suffix("/")
+	var normalized_plugin_root := _PLUGIN_ROOT
+	if OS.get_name() == "Windows":
+		normalized_path = normalized_path.to_lower()
+		normalized_plugin_root = normalized_plugin_root.to_lower()
+	if normalized_path == normalized_plugin_root or normalized_path.begins_with(normalized_plugin_root + "/"):
 		return _error("Writes to plugin files are blocked: %s" % path)
 	return {}
 

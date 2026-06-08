@@ -172,6 +172,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"args": {"action": "read", "path": "file://outside.json"}
 		},
 		{
+			"tool": "json",
+			"args": {"action": "read", "path": "file:/outside.json"}
+		},
+		{
 			"tool": "search",
 			"args": {"action": "find_files", "pattern": "*.gd", "path": "res://Tmp/./bad"}
 		}
@@ -182,6 +186,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Filesystem executor should reject unsafe project path case: %s" % str(guard_case))
 		if str(guard_result.get("error_code", "")) != "project_path_outside_project":
 			return _failure("Filesystem executor unsafe path rejection should include project_path_outside_project error_code.")
+
+	var plugin_write_guard_result: Dictionary = executor.execute("file_write", {
+		"action": "write",
+		"path": "res://ADDONS/godot_dotnet_mcp/unsafe.txt",
+		"content": "plugin"
+	})
+	if bool(plugin_write_guard_result.get("success", false)):
+		return _failure("Filesystem executor should reject protected plugin writes case-insensitively.")
 
 	return {
 		"name": "filesystem_tool_executor_contracts",

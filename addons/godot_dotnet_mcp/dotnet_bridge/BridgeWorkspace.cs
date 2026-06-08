@@ -121,7 +121,13 @@ internal static class WorkspacePathResolver
             root = Environment.CurrentDirectory;
         }
 
-        return Path.GetFullPath(Environment.ExpandEnvironmentVariables(root));
+        var resolvedRoot = Path.GetFullPath(Environment.ExpandEnvironmentVariables(root));
+        if (!File.Exists(Path.Combine(resolvedRoot, "project.godot")))
+        {
+            throw new BridgeToolException("The .NET bridge project root must point at a Godot project directory containing project.godot.");
+        }
+
+        return resolvedRoot;
     }
 
     private static bool IsPathInsideProject(string path)
@@ -141,8 +147,27 @@ internal static class WorkspacePathResolver
 
     private static bool HasUriScheme(string path)
     {
-        var marker = path.IndexOf("://", StringComparison.Ordinal);
+        var marker = path.IndexOf(':', StringComparison.Ordinal);
         if (marker <= 0)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < marker; index++)
+        {
+            var character = path[index];
+            if (index == 0 && !char.IsAsciiLetter(character))
+            {
+                return false;
+            }
+
+            if (!char.IsAsciiLetterOrDigit(character) && character is not '+' and not '-' and not '.')
+            {
+                return false;
+            }
+        }
+
+        if (OperatingSystem.IsWindows() && marker == 1 && path.Length > 2 && (path[2] == '/' || path[2] == '\\'))
         {
             return false;
         }

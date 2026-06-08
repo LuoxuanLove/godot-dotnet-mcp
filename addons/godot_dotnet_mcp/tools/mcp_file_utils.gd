@@ -95,9 +95,18 @@ func _project_path_error(message: String, raw_path: String, normalized_path: Str
 
 
 func _has_non_res_scheme(path: String) -> bool:
-	var marker := path.find("://")
+	var marker := path.find(":")
 	if marker <= 0:
 		return false
+	for index in range(marker):
+		var code := path.unicode_at(index)
+		var is_alpha := (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
+		var is_digit := code >= 48 and code <= 57
+		var is_scheme_char := is_alpha or is_digit or code == 43 or code == 45 or code == 46
+		if index == 0 and not is_alpha:
+			return false
+		if not is_scheme_char:
+			return false
 	return not path.begins_with("res://")
 
 
