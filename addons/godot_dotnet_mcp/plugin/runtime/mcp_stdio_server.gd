@@ -26,6 +26,7 @@ var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
 var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
+var _tool_activity_registry = MCPToolActivityRegistry.new()
 var _processing_stdin := false
 var _transport_generation := 0
 var _last_written_response: Dictionary = {}
@@ -307,6 +308,7 @@ func _configure_resources_prompts_services() -> void:
 	var resources_context = MCPResourcesServiceContextScript.new()
 	resources_context.get_tool_loader = func(): return _tool_loader
 	resources_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
+	resources_context.get_tool_activity_registry = func(): return _tool_activity_registry
 	resources_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
 	_resources_service.configure(resources_context)
 	var prompts_context = MCPPromptsServiceContextScript.new()

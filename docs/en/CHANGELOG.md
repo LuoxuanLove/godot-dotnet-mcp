@@ -25,6 +25,7 @@ Target version: 1.3.0.
 - Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
+- Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 
 ### Changed
@@ -60,6 +61,7 @@ Target version: 1.3.0.
 - Added editor evidence surface contracts for exact/fallback/degraded capture behavior, visible-popup metadata, localized tool metadata, prompt/help guidance, and Tools tab rendering.
 - Added project lifecycle contracts for explicit lifecycle actions, marker validation, foreground-window fallback behavior, and removed run/stop compatibility names.
 - Added tool catalog, tool activity, User-tool naming, scene inspect, plugin maintenance, project configuration, and userdata maintenance contract coverage across loader, router, Tools tab, localization inventory, and protocol facts.
+- Added resource contract coverage for canonical guide, state, activity, and tool-catalog resources plus the activity-call resource template, and bumped the tool schema facts to `2026-06-08.26`.
 - Extended editor/system control harness coverage for wait conditions, popup capture, hover/leave pointer fallback, click input dispatch, Button-like target observation, activation-signal separation, and input-only Button diagnostics.
 
 ## [1.2.0] - 2026-06-06
