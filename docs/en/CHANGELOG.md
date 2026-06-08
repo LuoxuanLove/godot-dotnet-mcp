@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.4.0.
 
+### Added
+
+- Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
+
 ### Documentation
 
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
