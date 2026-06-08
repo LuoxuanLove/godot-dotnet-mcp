@@ -144,7 +144,10 @@ The harness discovers cases automatically. The following list shows representati
 | `editor_lifecycle_action_service_contracts` | Verify confirmation semantics, accepted payload, and scheduling behavior |
 | `editor_lifecycle_state_builder_contracts` | Verify default state, scene ordering, and hint projection |
 | `system_project_executor_contracts` | Verify the tool exposure, runtime-health aggregation, and project-level routing of `impl_project.gd` as the current project-level system aggregator |
-| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, menu, `capture_control`, and `popup` actions to the correct atomic tools |
+| `system_editor_control_contracts` | Verify the high-level editor UI router that delegates `set_main_screen`, `activate_ui`, `capture_editor`, `list_controls`, `wait_for_ui`, menu, `capture_control`, and `popup` actions to the correct atomic tools |
+| `system_editor_evidence_contracts` | Verify the high-level editor evidence surface workflow for `editor`, `control`, `popup`, `active_dialog`, and `auto` captures, including fallback metadata, target-required guards, and exact-capture refusal paths |
+| `system_settings_dialog_contracts` | Verify the settings-like dialog workflow that opens Project Settings or Editor Settings, waits for visibility, searches candidate rows, lists and activates settings tabs, lists and focuses category tree items, lists row models, reads values, focuses value editors with `focus_value`, sets and verifies supported visible row values, runs trusted `run_task` read/verify/set/set-and-verify flows with capture gating, focuses results, captures evidence, and closes through the expected atomic tools |
+| `system_inspector_contracts` | Verify the high-level Inspector workflow that lists visible property models, resolves unique properties, reads typed text/number/bool values, focuses value editors, writes supported values with verification, refuses unsafe writes, captures property evidence, and runs trusted `run_task` read/set/verify flows |
 | `system_script_executor_contracts` | Verify `impl_script.gd` as the current script-level system aggregator, and verify that `system_script_analyze` reads Godot LSP diagnostics through the real `tool_loader -> tool_lsp_diagnostics_adapter -> gdscript_lsp_diagnostics_service` path |
 | `system_runtime_impl_contracts` | Verify the state, capture annotations, and parameter handling in `impl_runtime.gd` |
 | `system_plugin_update_contracts` | Verify current version and status reads, update source selection, ref discovery, and sync routing in `system_plugin_update` |
@@ -159,7 +162,7 @@ The harness discovers cases automatically. The following list shows representati
 | `gdscript_lsp_diagnostics_service_contracts` | Verify request replacement, cache hits, clear, and debug snapshot behavior in `gdscript_lsp_diagnostics_service.gd` |
 | `lsp_client_contracts` | Verify initialize, `publishDiagnostics` frame parsing, timeout, connection failure, and `cancel / retry / failed-then-restart` recovery |
 | `lsp_service_access_contracts` | Verify that `mcp_http_server.gd` and `mcp_stdio_server.gd` only expose the loader-owned GDScript diagnostics service instead of creating or falling back to a singleton themselves |
-| `tools_tab_rendering_contracts` | Verify TreeItem rendering, tree interaction, context menu, Dock-local popup coordinate contract, and preview return flow in `tools_tab.gd` |
+| `tools_tab_rendering_contracts` | Verify TreeItem rendering, tree interaction, context menu, Dock-local popup coordinate contract, system action lists, and preview return flow in `tools_tab.gd` |
 | `editor_lifecycle_endpoint_contracts` | Verify request parsing and action dispatch in `mcp_editor_lifecycle_endpoint.gd` |
 | `plugin_entrypoint_contracts` | Verify the real runtime entry lifecycle of `plugin.gd` during `_enter_tree` and `_exit_tree`, including Autoload, debugger bridge, Dock attach and detach, and server controller assembly; this case runs as an editor probe |
 

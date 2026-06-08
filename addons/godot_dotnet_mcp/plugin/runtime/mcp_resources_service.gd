@@ -7,6 +7,7 @@ const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/p
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -15,7 +16,18 @@ const SCENE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
 const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
 const REDACTED_VALUE := "[redacted]"
-const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key"]
+const SENSITIVE_KEY_PARTS := ["token", "password", "secret", "api_key", "apikey", "authorization", "credential", "private_key", "privatekey"]
+const SENSITIVE_TEXT_KEYS := [
+	"token", "password", "secret",
+	"api_key", "apikey", "api-key", "apiKey", "x-api-key", "x.api.key", "xApiKey",
+	"authorization", "credential",
+	"private_key", "private-key", "privateKey",
+	"access_token", "access-token", "accessToken",
+	"refresh_token", "refresh-token", "refreshToken",
+	"client_secret", "client-secret", "clientSecret"
+]
+const URL_SCHEME_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
+const URL_SCHEME_FIRST_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const MAX_RESOURCE_TEXT_BYTES := 524288
 
 var _get_tool_loader := Callable()
@@ -42,18 +54,18 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 	return {
 		"resources": [{
 			"uri": PROJECT_INFO_URI,
-			"name": "Project info",
-			"description": "Current Godot project path, protocol facts, server info, and loader status.",
+			"name": _text("mcp_resource_project_info_name", "Project info"),
+			"description": _text("mcp_resource_project_info_desc", "Current Godot project path, protocol facts, server info, and loader status."),
 			"mimeType": "application/json"
 		}, {
 			"uri": DIAGNOSTICS_SUMMARY_URI,
-			"name": "Diagnostics summary",
-			"description": "Plugin self-diagnostics and recent MCP log records.",
+			"name": _text("mcp_resource_diagnostics_summary_name", "Diagnostics summary"),
+			"description": _text("mcp_resource_diagnostics_summary_desc", "Plugin self-diagnostics and recent MCP log records."),
 			"mimeType": "application/json"
 		}, {
 			"uri": TOOL_CATALOG_URI,
-			"name": "Tool catalog",
-			"description": "Current MCP tool catalog with grouping metadata used by tools/list.",
+			"name": _text("mcp_resource_tool_catalog_name", "Tool catalog"),
+			"description": _text("mcp_resource_tool_catalog_desc", "Current MCP tool catalog with grouping metadata used by tools/list."),
 			"mimeType": "application/json"
 		}]
 	}
@@ -63,18 +75,18 @@ func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionar
 	return {
 		"resourceTemplates": [{
 			"uriTemplate": SCENE_TEMPLATE_URI,
-			"name": "Scene text",
-			"description": "Read a .tscn scene file by project-relative path.",
+			"name": _text("mcp_resource_template_scene_name", "Scene text"),
+			"description": _text("mcp_resource_template_scene_desc", "Read a .tscn scene file by project-relative path."),
 			"mimeType": "text/plain"
 		}, {
 			"uriTemplate": SCRIPT_TEMPLATE_URI,
-			"name": "Script text",
-			"description": "Read a .gd or .cs script file by project-relative path.",
+			"name": _text("mcp_resource_template_script_name", "Script text"),
+			"description": _text("mcp_resource_template_script_desc", "Read a .gd or .cs script file by project-relative path."),
 			"mimeType": "text/plain"
 		}, {
 			"uriTemplate": RESOURCE_TEMPLATE_URI,
-			"name": "Resource text",
-			"description": "Read a .tres or .res resource file by project-relative path.",
+			"name": _text("mcp_resource_template_resource_name", "Resource text"),
+			"description": _text("mcp_resource_template_resource_desc", "Read a .tres or .res resource file by project-relative path."),
 			"mimeType": "text/plain"
 		}]
 	}
@@ -240,7 +252,7 @@ func _redact_sensitive_value(value):
 
 
 func _is_sensitive_key(key: String) -> bool:
-	var normalized := key.to_lower()
+	var normalized := key.to_lower().replace("-", "_").replace(".", "_").replace(" ", "_")
 	for marker in SENSITIVE_KEY_PARTS:
 		if normalized.find(str(marker)) != -1:
 			return true
@@ -248,13 +260,14 @@ func _is_sensitive_key(key: String) -> bool:
 
 
 func _redact_sensitive_text(text: String) -> String:
-	var redacted := text
-	for marker in ["token=", "password=", "secret=", "api_key=", "apikey=", "authorization:", "authorization="]:
-		redacted = _redact_after_marker(redacted, marker)
+	var redacted := _redact_url_credentials(text)
+	redacted = _redact_after_marker(redacted, "bearer ", true)
+	for key in SENSITIVE_TEXT_KEYS:
+		redacted = _redact_after_key_delimiter(redacted, str(key))
 	return redacted
 
 
-func _redact_after_marker(text: String, marker: String) -> String:
+func _redact_after_marker(text: String, marker: String, stop_on_space: bool = false) -> String:
 	var search_from := 0
 	var result := text
 	while true:
@@ -265,18 +278,126 @@ func _redact_after_marker(text: String, marker: String) -> String:
 		var value_start := marker_index + marker.length()
 		while value_start < result.length():
 			var start_ch := result.substr(value_start, 1)
-			if start_ch != " " and start_ch != "\t":
+			if start_ch != " " and start_ch != "\t" and start_ch != "\"" and start_ch != "'":
 				break
 			value_start += 1
 		var value_end := value_start
 		while value_end < result.length():
 			var ch := result.substr(value_end, 1)
-			if ch == "\n" or ch == "\r" or ch == ";" or ch == ",":
+			if ch == "\n" or ch == "\r" or ch == ";" or ch == "," or ch == "&" or ch == "\"" or ch == "'" or (stop_on_space and (ch == " " or ch == "\t")):
 				break
 			value_end += 1
 		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
 		search_from = value_start + REDACTED_VALUE.length()
 	return result
+
+
+func _redact_after_key_delimiter(text: String, key: String) -> String:
+	var search_from := 0
+	var result := text
+	var lower_key := key.to_lower()
+	while true:
+		var lower_result := result.to_lower()
+		var key_index := lower_result.find(lower_key, search_from)
+		if key_index == -1:
+			return result
+		if not _is_sensitive_text_key_match(result, key_index, key.length()):
+			search_from = key_index + key.length()
+			continue
+		var delimiter_index := key_index + key.length()
+		while delimiter_index < result.length():
+			var delimiter_ch := result.substr(delimiter_index, 1)
+			if delimiter_ch != " " and delimiter_ch != "\t" and delimiter_ch != "\"" and delimiter_ch != "'":
+				break
+			delimiter_index += 1
+		if delimiter_index >= result.length():
+			return result
+		var delimiter := result.substr(delimiter_index, 1)
+		if delimiter != ":" and delimiter != "=":
+			search_from = key_index + key.length()
+			continue
+		var value_start := delimiter_index + 1
+		while value_start < result.length():
+			var start_ch := result.substr(value_start, 1)
+			if start_ch != " " and start_ch != "\t" and start_ch != "\"" and start_ch != "'":
+				break
+			value_start += 1
+		var value_end := value_start
+		while value_end < result.length():
+			var ch := result.substr(value_end, 1)
+			if ch == "\n" or ch == "\r" or ch == ";" or ch == "," or ch == "&" or ch == "\"" or ch == "'":
+				break
+			value_end += 1
+		result = result.substr(0, value_start) + REDACTED_VALUE + result.substr(value_end)
+		search_from = value_start + REDACTED_VALUE.length()
+	return result
+
+
+func _is_sensitive_text_key_match(text: String, key_index: int, key_length: int) -> bool:
+	if key_index > 0 and _is_key_token_char(text.substr(key_index - 1, 1)):
+		return false
+	var after_index := key_index + key_length
+	if after_index < text.length() and _is_key_token_char(text.substr(after_index, 1)):
+		return false
+	return true
+
+
+func _is_key_token_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_CHARS.find(ch) != -1
+
+
+func _redact_url_credentials(text: String) -> String:
+	var result := text
+	var search_from := 0
+	while true:
+		var scheme_index := _find_next_url_scheme(result, search_from)
+		if scheme_index == -1:
+			return result
+		var scheme_sep := result.find("://", scheme_index)
+		if scheme_sep == -1:
+			return result
+		var authority_start := scheme_sep + 3
+		var authority_end := _find_url_authority_end(result, authority_start)
+		var authority := result.substr(authority_start, authority_end - authority_start)
+		var at_index := authority.rfind("@")
+		if at_index == -1:
+			search_from = authority_end
+			continue
+		var replacement := REDACTED_VALUE + "@"
+		result = result.substr(0, authority_start) + replacement + authority.substr(at_index + 1) + result.substr(authority_end)
+		search_from = authority_start + replacement.length()
+	return result
+
+
+func _find_next_url_scheme(text: String, from_index: int) -> int:
+	var sep_index := text.find("://", from_index)
+	while sep_index != -1:
+		var scheme_start := sep_index - 1
+		while scheme_start >= 0 and _is_url_scheme_char(text.substr(scheme_start, 1)):
+			scheme_start -= 1
+		scheme_start += 1
+		if scheme_start < sep_index and _is_url_scheme_first_char(text.substr(scheme_start, 1)):
+			return scheme_start
+		sep_index = text.find("://", sep_index + 3)
+	return -1
+
+
+func _is_url_scheme_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_CHARS.find(ch) != -1
+
+
+func _is_url_scheme_first_char(ch: String) -> bool:
+	return not ch.is_empty() and URL_SCHEME_FIRST_CHARS.find(ch) != -1
+
+
+func _find_url_authority_end(text: String, from_index: int) -> int:
+	var index := from_index
+	while index < text.length():
+		var ch := text.substr(index, 1)
+		if ch == "/" or ch == "?" or ch == "#" or ch == " " or ch == "\t" or ch == "\n" or ch == "\r":
+			return index
+		index += 1
+	return text.length()
 
 func _get_loader():
 	if _get_tool_loader.is_valid():
@@ -296,6 +417,14 @@ func _sanitize(value):
 	if _sanitize_for_json.is_valid():
 		return _sanitize_for_json.call(value)
 	return value
+
+
+func _text(key: String, fallback: String) -> String:
+	var localization = LocalizationServiceScript.get_instance()
+	var text := str(localization.get_text(key)) if localization != null else key
+	if text == key or text.is_empty():
+		return fallback
+	return text
 
 
 func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:

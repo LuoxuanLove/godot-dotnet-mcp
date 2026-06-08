@@ -4,6 +4,7 @@ class_name ClientDetectorRegistry
 
 const ClientConfigFileDetectorScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_file_detector.gd")
 const ClientExecutableDetectorScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_executable_detector.gd")
+const ClientCapabilityMatrixScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_capability_matrix.gd")
 
 var _path_resolver: Variant = null
 var _runtime_inspector: Variant = null
@@ -17,28 +18,13 @@ func configure(path_resolver: Variant, runtime_inspector: Variant, config_entry_
 
 
 func get_supported_client_ids() -> PackedStringArray:
-	return PackedStringArray([
-		"claude_desktop",
-		"claude_code",
-		"cursor",
-		"trae",
-		"codex_desktop",
-		"codex",
-		"gemini",
-		"opencode_desktop",
-		"opencode",
-		"windsurf",
-		"cline",
-		"roo_code",
-		"qwen",
-		"cherry_studio"
-	])
+	return ClientCapabilityMatrixScript.get_supported_client_ids()
 
 
 func detect_all(running_processes: PackedStringArray) -> Dictionary:
 	return {
 		"claude_desktop": _detect_config_client("claude_desktop", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
-		"claude_code": _detect_executable_client("claude_code", running_processes, false),
+		"claude_code": _detect_executable_client("claude_code", running_processes, true),
 		"cursor": _detect_config_client("cursor", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, true),
 		"trae": _detect_config_client("trae", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
 		"codex_desktop": _detect_executable_client("codex_desktop", running_processes, false),
@@ -67,7 +53,8 @@ func _detect_config_client(client_id: String, config_type: String, running_proce
 			"where_aliases": [client_id],
 			"image_names": ["%s.exe" % client_id],
 			"launch_supported": launch_supported,
-			"config_type": config_type
+			"config_type": config_type,
+			"capability": ClientCapabilityMatrixScript.build_for_client(client_id, launch_supported, true, false, true)
 		}
 	)
 	return detector.detect(running_processes)
@@ -75,19 +62,23 @@ func _detect_config_client(client_id: String, config_type: String, running_proce
 
 func _detect_executable_client(client_id: String, running_processes: PackedStringArray, auto_add_supported: bool) -> Dictionary:
 	var detector = ClientExecutableDetectorScript.new()
+	var config_path := _resolve_config_path(client_id)
+	var support_level := ClientCapabilityMatrixScript.get_support_level(client_id)
 	detector.configure_detector(
 		client_id,
 		_path_resolver,
 		_runtime_inspector,
 		_config_entry_inspector,
 		{
-			"config_path": _resolve_config_path(client_id),
+			"config_path": config_path,
 			"where_aliases": [client_id],
 			"image_names": ["%s.exe" % client_id],
 			"launch_supported": true,
 			"auto_add_supported": auto_add_supported,
-			"inspect_config_entry": true,
-			"config_type": "opencode" if client_id == "opencode" else ""
+			"write_supported": support_level == "full_write",
+			"inspect_config_entry": not config_path.is_empty(),
+			"config_type": "opencode" if client_id == "opencode" else "",
+			"capability": ClientCapabilityMatrixScript.build_for_client(client_id, true, true, false, not config_path.is_empty())
 		}
 	)
 	return detector.detect(running_processes)
