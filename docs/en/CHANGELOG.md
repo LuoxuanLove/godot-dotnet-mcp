@@ -10,8 +10,22 @@ Target version: 1.4.0.
 
 ### Added
 
-- Added the v1.3.0 semantic editor automation model: editor UI guidance now directs clients toward semantic workflows first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
 - Initialized the v1.4.0 protocol refactor version line and release-note source template.
+
+### Changed
+
+- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
+
+### Documentation
+
+- Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
+- Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
+
+## [1.3.0] - 2026-06-08
+
+### Added
+
+- Added the v1.3.0 semantic editor automation model: editor UI guidance now directs clients toward semantic workflows first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
 - Added `system_editor_control(action="wait_for_ui")` so clients can wait for real editor controls by existence, visibility, text, and enabled/disabled state before continuing an automation workflow.
 - Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` for inspecting and cropping visible floating editor popups or windows by returned popup paths.
 - Added click fallback observation evidence for `system_editor_control` and low-level `ui_control` click actions, including dispatched input events, Button-like target state before/after the click, observed control signals, and hints when input is delivered without activation evidence.
@@ -30,7 +44,6 @@ Target version: 1.4.0.
 
 ### Changed
 
-- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Changed `system_settings_dialog(action="capture")` to prefer visible settings popup/window bounds, then dialog control bounds, before falling back to full-editor screenshots, with `capture_backend` and `capture_target_path` evidence metadata.
 - Changed project runtime control to use `system_project_lifecycle(action=start|stop)` as the public surface and removed compatibility aliases for the older project run/stop tool names.
 - Changed generated User-tool scaffolds to extend the base tool script by resource path, reducing headless catalog-scan dependence on global script-class registration.
@@ -526,7 +539,8 @@ Target version: 1.4.0.
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
