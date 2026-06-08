@@ -38,6 +38,37 @@ var _temp_paths: Array[String] = []
 var _previous_language := ""
 
 
+class FakeStdioToolLoader extends RefCounted:
+	var _tool_activity_registry = null
+
+	func set_tool_activity_registry(registry) -> void:
+		_tool_activity_registry = registry
+
+	func get_tool_definitions() -> Array[Dictionary]:
+		return [{
+			"name": "system_project_state",
+			"category": "system"
+		}]
+
+	func get_exposed_tool_definitions() -> Array[Dictionary]:
+		return get_tool_definitions()
+
+	func get_domain_states() -> Array:
+		return [{"category": "system", "status": "ready"}]
+
+	func is_tool_exposed(_tool_name: String) -> bool:
+		return true
+
+	func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+		var call_id := ""
+		if _tool_activity_registry != null:
+			var record: Dictionary = _tool_activity_registry.begin_call("%s_%s" % [category, tool_name], category, tool_name, args)
+			call_id = str(record.get("call_id", ""))
+		if _tool_activity_registry != null and not call_id.is_empty():
+			_tool_activity_registry.finish_call(call_id, true)
+		return {"success": true, "data": {"summary": true}}
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var localization = LocalizationServiceScript.get_instance()
 	if localization != null:
@@ -388,6 +419,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio full request path should reject non-object params before method dispatch.")
 	stdio_server.set("_last_written_response", {})
+	stdio_server.initialize(FakeStdioToolLoader.new())
+	var stdio_tool_call_result: Dictionary = await stdio_server._handle_tools_call_async({
+		"name": "system_project_state",
+		"arguments": {"summary": true}
+	}, 23)
+	if bool(stdio_tool_call_result.get("error", null) is Dictionary):
+		return _failure("stdio tool call should route through the fake loader before activity resource verification.")
+	var stdio_activity_recent_response: Dictionary = stdio_server._handle_resources_read({"uri": ACTIVITY_RECENT_URI}, 24)
+	var stdio_activity_result = stdio_activity_recent_response.get("result", {})
+	if not (stdio_activity_result is Dictionary):
+		return _failure("stdio activity recent resource should return a result object.")
+	var stdio_activity_contents = (stdio_activity_result as Dictionary).get("contents", [])
+	if not (stdio_activity_contents is Array) or (stdio_activity_contents as Array).is_empty():
+		return _failure("stdio activity recent resource should return content entries.")
+	var stdio_activity_payload = JSON.parse_string(str(((stdio_activity_contents as Array)[0] as Dictionary).get("text", "")))
+	if not (stdio_activity_payload is Dictionary):
+		return _failure("stdio activity recent resource text should parse as JSON.")
+	var stdio_recent = (stdio_activity_payload as Dictionary).get("recent", [])
+	if not (stdio_recent is Array) or (stdio_recent as Array).is_empty():
+		return _failure("stdio activity resources should read the same activity registry used by stdio tool calls.")
+	var stdio_recent_tool := str(((stdio_recent as Array)[0] as Dictionary).get("tool", ""))
+	if stdio_recent_tool != "system_project_state":
+		return _failure("stdio activity resources should preserve the stdio tool call record.")
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",
