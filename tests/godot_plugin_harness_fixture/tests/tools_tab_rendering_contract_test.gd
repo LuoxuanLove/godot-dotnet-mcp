@@ -343,11 +343,13 @@ func _build_tools_by_category() -> Dictionary:
 		_add_tool_def(tools_by_category, str(full_name), _system_actions_for(str(full_name)))
 		for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(full_name, []):
 			var atomic_full_name := ""
+			var atomic_actions: Array = []
 			if entry is Dictionary:
 				atomic_full_name = str(entry.get("tool", ""))
+				atomic_actions = entry.get("actions", [])
 			else:
 				atomic_full_name = str(entry)
-			_add_tool_def(tools_by_category, atomic_full_name)
+			_add_tool_def(tools_by_category, atomic_full_name, atomic_actions)
 	return tools_by_category
 
 
@@ -363,6 +365,7 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 		tools_by_category[category] = []
 	for existing in tools_by_category[category]:
 		if str(existing.get("name", "")) == tool_name:
+			_merge_tool_actions(existing, actions)
 			return
 	var tool_def := {
 		"name": tool_name,
@@ -372,7 +375,7 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 		tool_def["inputSchema"] = {
 			"type": "object",
 			"properties": {
-				"action": {"type": "string", "enum": actions}
+				"action": {"type": "string", "enum": actions.duplicate()}
 			}
 		}
 	if full_name == "system_dap_debugger" or full_name == "dap_debugger":
@@ -386,6 +389,37 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 			"required": ["action"]
 		}
 	tools_by_category[category].append(tool_def)
+
+
+func _merge_tool_actions(tool_def: Dictionary, actions: Array) -> void:
+	if actions.is_empty():
+		return
+	var input_schema = tool_def.get("inputSchema", {})
+	if not (input_schema is Dictionary):
+		tool_def["inputSchema"] = {
+			"type": "object",
+			"properties": {
+				"action": {"type": "string", "enum": actions}
+			}
+		}
+		return
+	var properties = (input_schema as Dictionary).get("properties", {})
+	if not (properties is Dictionary):
+		properties = {}
+		(input_schema as Dictionary)["properties"] = properties
+	var action_schema = (properties as Dictionary).get("action", {})
+	if not (action_schema is Dictionary):
+		action_schema = {"type": "string", "enum": []}
+		(properties as Dictionary)["action"] = action_schema
+	var enum_values = (action_schema as Dictionary).get("enum", [])
+	if enum_values is Array:
+		enum_values = (enum_values as Array).duplicate()
+	else:
+		enum_values = []
+	(action_schema as Dictionary)["enum"] = enum_values
+	for action in actions:
+		if not (enum_values as Array).has(action):
+			(enum_values as Array).append(action)
 
 
 func _split_full_name(full_name: String) -> Dictionary:
@@ -426,6 +460,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 		"system_scene_inspect":
 			return ["validate", "analyze", "full"]
+		"system_plugin_maintenance":
+			return ["status", "reload", "update_status", "set_update_source", "start_update"]
 	return []
 
 

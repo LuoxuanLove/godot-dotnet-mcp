@@ -38,6 +38,7 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_editor_state",
 	"system_help",
 	"system_inspector",
+	"system_plugin_maintenance",
 	"system_plugin_reload",
 	"system_plugin_update",
 	"system_project_configure",
