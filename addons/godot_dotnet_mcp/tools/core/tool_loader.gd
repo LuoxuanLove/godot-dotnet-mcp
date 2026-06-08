@@ -160,7 +160,7 @@ func is_tool_exposed(tool_name: String) -> bool:
 	for tool_def in get_exposed_tool_definitions():
 		if str(tool_def.get("name", "")) == tool_name:
 			return true
-	return false
+	return _is_callable_compatibility_alias(tool_name)
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
@@ -1014,6 +1014,25 @@ func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
 	if _as_bool(tool_def.get("compatibility_alias", false)):
 		return false
 	var category := str(tool_def.get("category", ""))
+	return _is_exposed_tool_category(category)
+
+
+func _is_callable_compatibility_alias(tool_name: String) -> bool:
+	for tool_def in get_tool_definitions():
+		if str(tool_def.get("name", "")) != tool_name:
+			continue
+		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
+			return false
+		if not _as_bool(tool_def.get("enabled", true)):
+			return false
+		var replacement_tool := str(tool_def.get("compatibility_replacement", "")).strip_edges()
+		if not replacement_tool.is_empty() and not is_tool_enabled(replacement_tool):
+			return false
+		return _as_bool(tool_def.get("compatibility_alias", false))
+	return false
+
+
+func _is_exposed_tool_category(category: String) -> bool:
 	return category == "system" or category == "user"
 
 

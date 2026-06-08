@@ -44,6 +44,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"image_names": ["codex.exe"],
 			"launch_supported": true,
 			"auto_add_supported": true,
+			"write_supported": true,
 			"inspect_config_entry": true
 		}
 	)
@@ -53,6 +54,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client executable detector should report ready when an executable path is available.")
 	if not bool(result.get("auto_add_supported", false)):
 		return _failure("Client executable detector should preserve auto_add capability for CLI-managed clients.")
+	if not bool(result.get("write_supported", false)):
+		return _failure("Client executable detector should preserve config-write capability when an executable client also owns a config file.")
+	if str(result.get("config_path", "")) != "C:/Users/Test/.codex/config.toml":
+		return _failure("Client executable detector should preserve the config path for executable clients with config-backed actions.")
 	if not bool(result.get("launch_supported", false)):
 		return _failure("Client executable detector should preserve launch capability for launchable CLI clients.")
 	if not bool(result.get("path_clear_supported", false)):

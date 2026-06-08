@@ -100,7 +100,7 @@ func enable_control(args: Dictionary = {}) -> Dictionary:
 	var wait_timeout_ms := _resolve_timeout_ms(args, DEFAULT_ENABLE_TIMEOUT_MS)
 	var session_id := await _session_selector.await_commandable_session(wait_timeout_ms)
 	if session_id < 0:
-		return _error_mapper.error("runtime_not_running", "Runtime control requires an active running project session. Call system_project_run first.", {
+		return _error_mapper.error("runtime_not_running", "Runtime control requires an active running project session. Call system_project_lifecycle(action=start) first.", {
 			"timeout_ms": wait_timeout_ms
 		}, "enable")
 	var readiness_result := await _await_runtime_ready(session_id, wait_timeout_ms)
@@ -263,7 +263,7 @@ func _await_runtime_ready(initial_session_id: int, timeout_ms: int) -> Dictionar
 			var remaining_for_session := maxi(deadline - Time.get_ticks_msec(), 1)
 			session_id = await _session_selector.await_commandable_session(mini(remaining_for_session, 1000))
 			if session_id < 0:
-				last_error = _error_mapper.error("runtime_not_running", "Runtime control requires an active running project session. Call system_project_run first.", {
+				last_error = _error_mapper.error("runtime_not_running", "Runtime control requires an active running project session. Call system_project_lifecycle(action=start) first.", {
 					"timeout_ms": timeout_ms
 				}, "enable")
 				break

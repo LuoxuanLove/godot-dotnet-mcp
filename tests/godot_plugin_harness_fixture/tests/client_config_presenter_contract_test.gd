@@ -159,7 +159,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"launch_supported": true,
 				"path_pick_supported": true,
 				"path_clear_supported": false,
-				"runtime_status": {"status": "not_running"}
+				"runtime_status": {"status": "not_running"},
+				"capability": {
+					"support_level": "manual_guidance",
+					"actions": ["copy_config"],
+					"notes": ["config_client_capability_manual_guidance"]
+				}
 			},
 			"codex_desktop": {
 				"status": "ready",
@@ -169,7 +174,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"path_pick_supported": true,
 				"path_clear_supported": false,
 				"runtime_status": {"status": "unknown"},
-				"executable_path": "C:/Apps/Codex/Codex.exe"
+				"executable_path": "C:/Apps/Codex/Codex.exe",
+				"capability": "invalid"
 			},
 			"cherry_studio": {
 				"status": "config_only",
@@ -180,7 +186,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"launch_supported": false,
 				"path_pick_supported": true,
 				"path_clear_supported": false,
-				"runtime_status": {"status": "unknown"}
+				"runtime_status": {"status": "unknown"},
+				"capability": {
+					"kind": "manual_guidance"
+				}
 			}
 		},
 		localization,
@@ -191,18 +200,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Presenter should expose all supported desktop clients in the config page model.")
 	if str(cursor_model.get("install_status_text", "")).find("C:/Users/Test/.cursor/mcp.json") == -1:
 		return _failure("Desktop client status should surface the concrete config path once godot-mcp is installed.")
-	if str(cursor_model.get("capability", {}).get("kind", "")) != "full_write":
-		return _failure("A writeable desktop client should be labelled as a full one-click config integration.")
-	if str(cursor_model.get("guidance_text", "")).find("Full one-click config write and remove") == -1:
-		return _failure("Writeable desktop client guidance should summarize full one-click capabilities.")
+	if str(cursor_model.get("capability", {}).get("kind", "")) != "manual_guidance":
+		return _failure("Presenter should prefer the detection capability matrix over legacy boolean inference.")
+	if str(cursor_model.get("capability", {}).get("support_level", "")) != "manual_guidance":
+		return _failure("Presenter should expose detection capability support_level in the card model.")
+	if cursor_model.get("capability", {}).get("actions", []).has("write_config"):
+		return _failure("Presenter should not expose write_config when detection capability support_level is manual guidance.")
+	if not cursor_model.get("capability", {}).get("actions", []).has("open_config_file"):
+		return _failure("Presenter should merge realtime config-path actions when detection capability is present.")
+	if str(cursor_model.get("guidance_text", "")).find("Manual setup guidance") == -1:
+		return _failure("Presenter should use detection capability support_level for the visible capability summary.")
 	var codex_desktop_model: Dictionary = desktop_models[3]
 	if str(codex_desktop_model.get("capability", {}).get("kind", "")) != "launch_path":
-		return _failure("A launch-only desktop client should not be labelled as a full one-click integration.")
+		return _failure("Presenter should fall back to legacy inference when detection capability is not a dictionary.")
+	if str(codex_desktop_model.get("capability", {}).get("support_level", "")) != "launch_path":
+		return _failure("A launch-only desktop client should expose launch_path as its capability support level.")
 	if str(codex_desktop_model.get("guidance_text", "")).find("Launch and path management") == -1:
 		return _failure("Launch-only desktop client guidance should summarize launch/path-only support.")
 	var cherry_model: Dictionary = desktop_models[8]
 	if str(cherry_model.get("capability", {}).get("kind", "")) != "manual_guidance":
 		return _failure("A config/manual guidance client should be labelled separately from full one-click clients.")
+	if str(cherry_model.get("capability", {}).get("support_level", "")) != "manual_guidance":
+		return _failure("Presenter should preserve legacy capability.kind as support_level when support_level is absent.")
 	if str(cherry_model.get("guidance_text", "")).find("Manual setup guidance") == -1:
 		return _failure("Manual guidance client summary should explain that it is not full one-click support.")
 	var windsurf_model: Dictionary = desktop_models[5]
@@ -276,6 +295,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Codex should switch the primary action to Remove when godot-mcp is already installed.")
 	if str(codex_model.get("capability", {}).get("kind", "")) != "auto_add":
 		return _failure("A CLI auto-add client should be labelled as one-click CLI add/remove support.")
+	if str(codex_model.get("capability", {}).get("support_level", "")) != "auto_add":
+		return _failure("A CLI auto-add client should expose auto_add as its capability support level.")
+	if not codex_model.get("capability", {}).get("actions", []).has("auto_add"):
+		return _failure("A CLI auto-add client should expose auto_add as a supported capability action.")
 	if str(codex_model.get("guidance_text", "")).find("One-click CLI add or remove") == -1:
 		return _failure("CLI auto-add client guidance should summarize one-click CLI capabilities.")
 	var gemini_model: Dictionary = cli_models[2]

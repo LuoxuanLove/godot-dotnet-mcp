@@ -202,6 +202,30 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab should emit update setting and Sync signals from selectors/buttons without a user-visible Check action.")
 
+	var branch_values: Array[String] = ["dev"]
+	for index in range(24):
+		branch_values.append("feature/long-selector-%02d" % index)
+	_instance.apply_model({
+		"localization": FakeLocalization.new(),
+		"editor_scale": 1.0,
+		"settings": {
+			"port": 4102,
+			"update_source": "custom_branch",
+			"update_custom_branch": "feature/long-selector-23"
+		},
+		"current_log_level": "error",
+		"current_language": "zh_CN",
+		"log_levels": ["debug", "info", "warning", "error"],
+		"update_refs_branches": branch_values,
+		"plugin_version": "1.0.1",
+		"plugin_freshness": {}
+	})
+	await tree.process_frame
+	if custom_branch.get_item_count() != branch_values.size() or str(custom_branch.get_item_metadata(custom_branch.selected)) != "feature/long-selector-23":
+		return _failure("Settings tab should preserve every discovered branch option while selecting the persisted branch.")
+	if custom_branch.get_popup().max_size.y != 348 or source_option.get_popup().max_size.y != 348:
+		return _failure("Settings tab update selectors should cap popup height instead of letting long ref lists cover the editor.")
+
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
 
 

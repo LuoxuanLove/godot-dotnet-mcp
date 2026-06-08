@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Prefer semantic actions such as activate_ui, activate_dock_tab, set_main_screen, menu selection, tree selection, and settings-dialog workflows before raw controls. Use control-level focus, activation, text, value, and popup actions next. Use control-local click, right-click, hover, and leave only as fallback for unsupported UI, context menus, tooltips, or pointer-event validation. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -37,6 +37,8 @@ func get_tools() -> Array[Dictionary]:
 							"list_dock_tabs",
 							"activate_dock_tab",
 							"activate_ui",
+							"list_tree_items",
+							"select_tree_item",
 							"list_menus",
 							"open_menu",
 							"select_menu_item",
@@ -49,7 +51,10 @@ func get_tools() -> Array[Dictionary]:
 							"hover_control",
 							"leave_control",
 							"set_control_text",
+							"set_value",
 							"list_popups",
+							"get_popup",
+							"capture_popup",
 							"press_popup_button",
 							"select_popup_menu_item",
 							"set_popup_text",
@@ -67,11 +72,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"path": {
 						"type": "string",
-						"description": "Output screenshot path for capture_editor/capture_control"
+						"description": "Output screenshot path for capture_editor/capture_control/capture_popup"
 					},
 					"target_path": {
 						"type": "string",
-						"description": "Editor control path returned from list_controls/list_popups"
+						"description": "Editor control or popup path returned from list_controls/list_popups"
 					},
 					"title": {
 						"type": "string",
@@ -79,7 +84,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"semantic_path": {
 						"type": "string",
-						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home"
+						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home. Prefer this semantic target before raw control paths or coordinates."
 					},
 					"tab_title": {
 						"type": "string",
@@ -101,6 +106,10 @@ func get_tools() -> Array[Dictionary]:
 						"type": "integer",
 						"description": "PopupMenu item index for select_menu_item"
 					},
+					"item_path": {
+						"type": "string",
+						"description": "Tree item path for select_tree_item"
+					},
 					"bottom_panel_title": {
 						"type": "string",
 						"description": "Bottom panel control title/name/text for activate_ui"
@@ -112,6 +121,10 @@ func get_tools() -> Array[Dictionary]:
 					"text": {
 						"type": "string",
 						"description": "Text for set_control_text/set_popup_text, PopupMenu item text for select_popup_menu_item, or expected text for wait_for_ui"
+					},
+					"value": {
+						"type": "number",
+						"description": "Numeric value for set_value"
 					},
 					"condition": {
 						"type": "string",
@@ -145,11 +158,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"local_x": {
 						"type": "number",
-						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local X coordinate for click_control/right_click_control/hover_control fallback actions; defaults to the control center. Use coordinates returned by control tools, not guessed OS screen coordinates."
 					},
 					"local_y": {
 						"type": "number",
-						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local Y coordinate for click_control/right_click_control/hover_control fallback actions; defaults to the control center. Use coordinates returned by control tools, not guessed OS screen coordinates."
 					},
 					"class_name": {
 						"type": "string",
@@ -308,6 +321,21 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"bottom_panel_path": str(args.get("bottom_panel_path", "")).strip_edges(),
 				"path": str(args.get("path", "")).strip_edges()
 			})
+		"list_tree_items":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "list_tree_items",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"text_query": str(args.get("text_query", "")).strip_edges(),
+				"include_hidden": bool(args.get("include_hidden", false)),
+				"limit": int(args.get("limit", 200))
+			})
+		"select_tree_item":
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "select_tree_item",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"item_path": str(args.get("item_path", "")).strip_edges(),
+				"item_index": int(args.get("item_index", -1))
+			})
 		"list_menus":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "list_menus",
@@ -385,8 +413,27 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 				"target_path": str(args.get("target_path", "")).strip_edges(),
 				"text": str(args.get("text", ""))
 			})
+		"set_value":
+			if not args.has("value"):
+				return bridge.error("value is required for set_value")
+			return bridge.call_atomic("editor_ui_control", {
+				"action": "set_value",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"value": args.get("value")
+			})
 		"list_popups":
 			return bridge.call_atomic("editor_popup", {"action": "list_visible"})
+		"get_popup":
+			return bridge.call_atomic("editor_popup", {
+				"action": "get_popup",
+				"target_path": str(args.get("target_path", "")).strip_edges()
+			})
+		"capture_popup":
+			return bridge.call_atomic("editor_popup", {
+				"action": "capture_popup",
+				"target_path": str(args.get("target_path", "")).strip_edges(),
+				"path": str(args.get("path", "")).strip_edges()
+			})
 		"press_popup_button":
 			return bridge.call_atomic("editor_popup", {
 				"action": "press_button",

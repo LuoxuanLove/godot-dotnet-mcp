@@ -76,8 +76,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.bridge = bridge
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 4:
-		return _failure("System scene implementation should expose scene_validate, scene_analyze, scene_tree and scene_patch.")
+	if tool_defs.size() != 5:
+		return _failure("System scene implementation should expose scene_inspect, scene_validate, scene_analyze, scene_tree and scene_patch.")
+	if not _has_tool(tool_defs, "scene_inspect"):
+		return _failure("System scene implementation should expose the unified scene_inspect entry.")
 	if not _has_tool(tool_defs, "scene_tree"):
 		return _failure("System scene implementation should expose scene_tree for high-level Scene dock changes.")
 
@@ -134,6 +136,50 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("scene_validate should classify missing UID plus fallback path references.")
 	if _count_issue_type(validate_issues, "missing_uid_and_path") < 2:
 		return _failure("scene_validate should also classify known UID references when both resolved and fallback paths are missing.")
+
+	var inspect_validate_result: Dictionary = executor.execute("scene_inspect", {
+		"action": "validate",
+		"scene": scene_path
+	})
+	if not bool(inspect_validate_result.get("success", false)):
+		return _failure("scene_inspect validate should reuse scene_validate successfully.")
+	var inspect_validate_data: Dictionary = inspect_validate_result.get("data", {})
+	if int(inspect_validate_data.get("dependency_reference_issue_count", 0)) != int(validate_data.get("dependency_reference_issue_count", -1)):
+		return _failure("scene_inspect validate should preserve scene_validate payload fields.")
+
+	var inspect_analyze_result: Dictionary = executor.execute("scene_inspect", {
+		"action": "analyze",
+		"scene": scene_path
+	})
+	if not bool(inspect_analyze_result.get("success", false)):
+		return _failure("scene_inspect analyze should reuse scene_analyze successfully.")
+	var inspect_analyze_data: Dictionary = inspect_analyze_result.get("data", {})
+	if not inspect_analyze_data.has("node_count") or not inspect_analyze_data.has("binding_count"):
+		return _failure("scene_inspect analyze should preserve scene_analyze payload fields.")
+
+	var inspect_full_result: Dictionary = executor.execute("scene_inspect", {
+		"action": "full",
+		"scene": scene_path
+	})
+	if not bool(inspect_full_result.get("success", false)):
+		return _failure("scene_inspect full should return combined validation and analysis payloads.")
+	var inspect_full_data: Dictionary = inspect_full_result.get("data", {})
+	if not (inspect_full_data.get("validation", {}) is Dictionary) or not (inspect_full_data.get("analysis", {}) is Dictionary):
+		return _failure("scene_inspect full should keep validation and analysis in separate payloads.")
+	if inspect_full_data.has("node_count") or inspect_full_data.has("binding_count"):
+		return _failure("scene_inspect full should not flatten analysis fields into the top-level payload.")
+
+	var inspect_missing_full_result: Dictionary = executor.execute("scene_inspect", {
+		"action": "full",
+		"scene": TEMP_ROOT.path_join("MissingScene.tscn")
+	})
+	if bool(inspect_missing_full_result.get("success", true)):
+		return _failure("scene_inspect full should fail when validation cannot load the scene.")
+	var inspect_missing_full_data: Dictionary = inspect_missing_full_result.get("data", {})
+	if not (inspect_missing_full_data.get("validation", {}) is Dictionary) or not (inspect_missing_full_data.get("analysis", {}) is Dictionary):
+		return _failure("scene_inspect full validation failures should keep the combined payload shape.")
+	if inspect_missing_full_data.has("analysis_result"):
+		return _failure("scene_inspect full should not expose a separate analysis_result envelope on failure.")
 	ResourceUID.remove_id(missing_uid_id)
 
 	return {

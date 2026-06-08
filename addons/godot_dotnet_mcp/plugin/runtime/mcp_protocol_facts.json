@@ -1,6 +1,6 @@
 {
   "protocol_version": "2025-06-18",
-  "tool_schema_version": "2026-06-07.7",
+  "tool_schema_version": "2026-06-08.24",
   "server_name": "godot-dotnet-mcp",
   "server_version": "1.2.1",
   "error_codes": {
@@ -16,7 +16,8 @@
     "tool_load_failed": "tool_load_failed",
     "tool_runtime_missing": "tool_runtime_missing",
     "tool_execution_failed": "tool_execution_failed",
-    "project_run_marker_validation_requires_async": "project_run_marker_validation_requires_async",
+    "project_lifecycle_action_required": "project_lifecycle_action_required",
+    "project_lifecycle_marker_validation_requires_async": "project_lifecycle_marker_validation_requires_async",
     "run_log_failure_marker_matched": "run_log_failure_marker_matched",
     "run_log_marker_timeout": "run_log_marker_timeout",
     "parse_error": "parse_error",
