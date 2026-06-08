@@ -345,7 +345,7 @@ static func _build_default_tool_output_schema() -> Dictionary:
 		"properties": {
 			"success": {"type": "boolean"},
 			"data": {
-				"type": "object",
+				"type": ["object", "array", "string", "number", "boolean", "null"],
 				"description": "Tool-specific structured payload.",
 				"additionalProperties": true
 			},

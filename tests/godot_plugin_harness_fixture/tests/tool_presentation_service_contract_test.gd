@@ -130,6 +130,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Default outputSchema should document the normalized success envelope.")
 	if not ((default_output_schema as Dictionary).get("required", []) is Array) or not (((default_output_schema as Dictionary).get("required", []) as Array).has("success")):
 		return _failure("Default outputSchema should require the normalized success flag.")
+	var default_data_schema = ((default_output_schema as Dictionary).get("properties", {}) as Dictionary).get("data", {})
+	if not (default_data_schema is Dictionary) or not (((default_data_schema as Dictionary).get("type", []) is Array)) or not (((default_data_schema as Dictionary).get("type", []) as Array).has("array")) or not (((default_data_schema as Dictionary).get("type", []) as Array).has("null")):
+		return _failure("Default outputSchema data should allow existing object, array, scalar, and null tool payloads.")
 	var mcp_runtime_control := _find_mcp_tool(mcp_tools, "system_runtime_control")
 	if mcp_runtime_control.is_empty():
 		return _failure("Presentation service should include runtime control in MCP tools/list output.")
