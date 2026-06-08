@@ -106,6 +106,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose system_editor_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_plugin_control"):
 		return _failure("Tool loader did not expose system_editor_plugin_control under the default tool access provider.")
+	if not exposed_names.has("system_editor_evidence"):
+		return _failure("Tool loader did not expose system_editor_evidence under the default tool access provider.")
 	if not exposed_names.has("system_settings_dialog"):
 		return _failure("Tool loader did not expose system_settings_dialog under the default tool access provider.")
 	if not exposed_names.has("system_inspector"):
@@ -153,6 +155,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_editor_state should include the editor section.")
 	if bool((editor_section as Dictionary).get("available", true)):
 		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
+
+	var editor_evidence_result: Dictionary = await _loader.execute_tool_async("system", "editor_evidence", {"action": "status"})
+	if not bool(editor_evidence_result.get("success", false)):
+		return _failure("Tool loader should route system_editor_evidence status successfully.")
+	var editor_evidence_data = editor_evidence_result.get("data", {})
+	if not (editor_evidence_data is Dictionary) or not (((editor_evidence_data as Dictionary).get("surfaces", []) as Array).has("active_dialog")):
+		return _failure("Tool loader system_editor_evidence should return available capture surfaces.")
 
 	var settings_dialog_result: Dictionary = await _loader.execute_tool_async("system", "settings_dialog", {
 		"action": "status",

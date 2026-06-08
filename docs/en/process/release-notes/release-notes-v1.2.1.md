@@ -22,6 +22,8 @@ Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/AP
 
 `system_settings_dialog` uses that evidence path automatically when capturing settings surfaces. If the current settings workflow can see a popup or editor window for Project Settings or Editor Settings, capture results now identify the selected backend and target path, and fall back to broader editor screenshots only when narrower surfaces are unavailable.
 
+`system_editor_evidence` now gives clients one evidence-aware capture entry for editor, control, popup, active-dialog, or automatic surfaces. Results describe the requested surface, actual backend, target path, visible popups, fallback reasons, and degraded state so agents can tell whether a screenshot proves the current task surface or only provides a broader fallback view.
+
 ### 🧭 Configuration Navigation and Evidence
 
 `system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.

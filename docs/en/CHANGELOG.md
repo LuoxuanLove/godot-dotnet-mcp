@@ -29,6 +29,7 @@ Target version: 1.2.1.
 - Added `system_settings_dialog(action=run_task)` as a trusted settings task workflow that composes open/navigation, unique row resolution, before reads, optional supported writes, verification, and capture evidence into one high-level operation.
 - Added `system_inspector`, a high-level Inspector property workflow that can list visible property models, resolve a unique property, read, focus, set, verify, capture, or run trusted property tasks on the current edited object or a prepared node/resource target.
 - Added `system_project_lifecycle(action=start|stop)` as the canonical high-level project runtime session lifecycle entry, replacing the older project run/stop tool names without compatibility aliases.
+- Added `system_editor_evidence`, a high-level visual evidence workflow that captures editor, control, popup, active-dialog, or automatic surfaces with explicit target, fallback, degradation, and visible-popup metadata.
 
 ### Changed
 
@@ -49,6 +50,7 @@ Target version: 1.2.1.
 - Updated editor UI prompt, help, localization, and schema contract coverage for the semantic-first, control-level-second, mouse-fallback automation order with the `2026-06-08.17` tool schema facts update.
 - Extended settings-dialog task contract coverage for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, Tools tab action rendering, catalog search discovery, prompt/help guidance, and the `2026-06-08.19` tool schema facts update.
 - Added Inspector workflow contracts and tool-tree coverage for property model resolution, typed value reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and the `2026-06-08.20` tool schema facts update.
+- Added editor evidence surface contracts, tool-tree entries, Tools tab rendering, catalog search discovery, prompt/help guidance, localized tool metadata, and the `2026-06-08.21` tool schema facts update.
 
 ### Fixed
 

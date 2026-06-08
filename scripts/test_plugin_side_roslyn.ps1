@@ -409,6 +409,7 @@ $RequiredCases = @(
     "plugin_path_csharp_registration_probe"
     "system_editor_state_contracts"
     "system_editor_log_contracts"
+    "system_editor_evidence_contracts"
     "system_runtime_health_contracts"
     "system_plugin_reload_contracts"
     "system_plugin_update_contracts"
