@@ -56,6 +56,128 @@ $versionFields = @(
     }
 )
 
+function ConvertFrom-ProtocolFactsJson {
+    param(
+        [string]$Content,
+        [string]$Source
+    )
+
+    try {
+        return $Content | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Cannot parse protocol facts JSON in $Source. $($_.Exception.Message)"
+    }
+}
+
+function ConvertFrom-ProtocolFallbackFacts {
+    param(
+        [string]$Content,
+        [string]$Source
+    )
+
+    $functionIndex = $Content.IndexOf("static func _default_facts() -> Dictionary:")
+    if ($functionIndex -lt 0) {
+        throw "Cannot find protocol fallback _default_facts dictionary in $Source."
+    }
+
+    $returnIndex = $Content.IndexOf("return", $functionIndex)
+    $braceStart = $Content.IndexOf("{", $returnIndex)
+    if ($returnIndex -lt 0 -or $braceStart -lt 0) {
+        throw "Cannot find protocol fallback _default_facts return dictionary in $Source."
+    }
+
+    $braceEnd = Find-MatchingBrace -Content $Content -BraceStart $braceStart
+    if ($braceEnd -lt 0) {
+        throw "Cannot parse protocol fallback _default_facts dictionary braces in $Source."
+    }
+
+    $body = $Content.Substring($braceStart, $braceEnd - $braceStart + 1)
+    try {
+        return $body | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Cannot parse protocol fallback _default_facts dictionary in $Source. Keep the fallback dictionary JSON-compatible. $($_.Exception.Message)"
+    }
+}
+
+function Find-MatchingBrace {
+    param(
+        [string]$Content,
+        [int]$BraceStart
+    )
+
+    $depth = 0
+    $inString = $false
+    $escaped = $false
+    for ($index = $BraceStart; $index -lt $Content.Length; $index++) {
+        $character = $Content[$index]
+        if ($inString) {
+            if ($escaped) {
+                $escaped = $false
+            } elseif ($character -eq '\') {
+                $escaped = $true
+            } elseif ($character -eq '"') {
+                $inString = $false
+            }
+            continue
+        }
+
+        if ($character -eq '"') {
+            $inString = $true
+        } elseif ($character -eq '{') {
+            $depth++
+        } elseif ($character -eq '}') {
+            $depth--
+            if ($depth -eq 0) {
+                return $index
+            }
+        }
+    }
+
+    return -1
+}
+
+function Get-ObjectPropertyNames {
+    param([object]$Value)
+
+    if ($null -eq $Value) {
+        return @()
+    }
+
+    return @($Value.PSObject.Properties | ForEach-Object { [string]$_.Name } | Sort-Object)
+}
+
+function Assert-ProtocolFactsParity {
+    param(
+        [string]$Ref,
+        [string]$Label
+    )
+
+    $jsonPath = "addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.json"
+    $fallbackPath = "addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd"
+    $jsonSource = if ([string]::IsNullOrWhiteSpace($Ref)) { $jsonPath } else { "${Ref}:$jsonPath" }
+    $fallbackSource = if ([string]::IsNullOrWhiteSpace($Ref)) { $fallbackPath } else { "${Ref}:$fallbackPath" }
+    $jsonFacts = ConvertFrom-ProtocolFactsJson -Content (Read-VersionContent -Ref $Ref -Path $jsonPath -Label $Label) -Source $jsonSource
+    $fallbackFacts = ConvertFrom-ProtocolFallbackFacts -Content (Read-VersionContent -Ref $Ref -Path $fallbackPath -Label $Label) -Source $fallbackSource
+
+    foreach ($field in @("protocol_version", "tool_schema_version", "server_name", "server_version")) {
+        if ([string]$jsonFacts.$field -ne [string]$fallbackFacts.$field) {
+            throw "Protocol facts parity failed for $Label ${field}: $jsonSource='$($jsonFacts.$field)' but $fallbackSource='$($fallbackFacts.$field)'."
+        }
+    }
+
+    $jsonErrorCodeKeys = Get-ObjectPropertyNames -Value $jsonFacts.error_codes
+    $fallbackErrorCodeKeys = Get-ObjectPropertyNames -Value $fallbackFacts.error_codes
+    $missingFallbackKeys = @($jsonErrorCodeKeys | Where-Object { $fallbackErrorCodeKeys -notcontains $_ })
+    if ($missingFallbackKeys.Count -gt 0) {
+        throw "Protocol facts parity failed for $Label error_codes: fallback is missing key(s): $($missingFallbackKeys -join ', ')."
+    }
+
+    $staleFallbackKeys = @($fallbackErrorCodeKeys | Where-Object { $jsonErrorCodeKeys -notcontains $_ })
+    if ($staleFallbackKeys.Count -gt 0) {
+        throw "Protocol facts parity failed for $Label error_codes: fallback has stale key(s): $($staleFallbackKeys -join ', ')."
+    }
+}
+
 function Invoke-Git {
     param([string[]]$Arguments)
 
@@ -133,6 +255,8 @@ if (-not $SkipFetch) {
         Invoke-Git -Arguments @("fetch", "--no-tags", "--depth=1", "origin", "+refs/pull/$PullNumber/head:$HeadRef") | Out-Null
     }
 }
+
+Assert-ProtocolFactsParity -Ref $HeadRef -Label "head"
 
 $changes = New-Object System.Collections.Generic.List[string]
 foreach ($field in $versionFields) {
