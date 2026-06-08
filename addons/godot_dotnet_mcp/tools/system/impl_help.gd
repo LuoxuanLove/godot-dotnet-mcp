@@ -61,17 +61,19 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
 			LocalizationService.translate("help_recommended_start_tool_activity"),
 			"Call system_editor_state when the task depends on the current editor UI.",
-			"Use system_settings_dialog for Project Settings or Editor Settings open/status/search/list_tabs/activate_tab/list_categories/focus_category/list_rows/resolve_row/read_value/focus_value/set_value/verify_value/focus_result/capture/close workflows before falling back to raw editor control enumeration.",
+			"Use system_settings_dialog(action=run_task) for trusted Project Settings or Editor Settings locate/read/set/verify/capture tasks, and split into open/status/search/list_tabs/activate_tab/list_categories/focus_category/list_rows/resolve_row/read_value/focus_value/set_value/verify_value/focus_result/capture/close only when you need individual workflow steps before falling back to raw editor control enumeration.",
+			"Use system_inspector(action=run_task) for trusted Inspector property locate/read/set/verify/capture tasks on the currently edited object or a prepared node/resource target before falling back to raw control enumeration.",
+			"Use system_editor_evidence(action=capture) when visual proof is needed; choose surface=auto/editor/control/popup/active_dialog so the result states what was captured, which backend ran, and whether fallback or degraded evidence occurred.",
 			"Use system_editor_control(action=activate_ui) for non-invasive dock/plugin tab activation before considering foreground automation.",
 			"Use system_editor_plugin_control to inspect or toggle third-party EditorPlugin session state; use dedicated plugin reload/update tools for this plugin itself.",
-			"Prefer system_editor_control(action=capture_editor) for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
+			"Prefer self-describing system_editor_evidence captures for UI or layout judgment before acting; default captures are stored under user://godot_dotnet_mcp/captures/.",
 			"Use system_userdata_maintenance(action=list_capture_cache) to inspect managed screenshot caches, cleanup_capture_cache with dry_run=true to preview removal, and cleanup_legacy_cache for stale root-level MCP files; cleanup skips symlinks/junctions/reparse points and must only be applied by explicit Agent/user action.",
 			"If a target UI is not found, retry system_editor_control(action=list_controls) with include_hidden=true."
 		],
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
 			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided project orientation", "content authoring", "debug triage", "reference integrity", "runtime validation", "editor UI control"],
-			"editor": ["full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "popup capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
+			"editor": ["self-describing visual evidence", "full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "Inspector property workflow", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "popup capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
 			"dap": ["endpoint status", "runtime settings", "session IDs", "initialize", "launch/attach", "configuration_done", "breakpoint set/remove/list", "pause", "continue", "step over", "threads", "stack trace", "output events", "terminate/disconnect", "structured dap_unavailable"],
 			"logs": ["Output panel read", "warnings/errors filter", "Output clear"],
@@ -90,13 +92,32 @@ func _build_help(include_tools: bool) -> Dictionary:
 		},
 		"visual_guidance": {
 			"prefer_editor_screenshot": true,
-			"screenshot_tool": "system_editor_control",
-			"screenshot_action": "capture_editor",
+			"screenshot_tool": "system_editor_evidence",
+			"screenshot_action": "capture",
+			"capture_surfaces": ["auto", "editor", "control", "popup", "active_dialog"],
+			"capture_contract": "Every evidence capture reports requested surface, actual backend, target path, visible popup metadata when available, fallback reasons, and degraded state.",
 			"settings_dialog_tool": "system_settings_dialog",
+			"inspector_tool": "system_inspector",
 			"non_invasive_activation_action": "activate_ui",
 			"avoid_os_mouse_window_automation": true,
 			"hidden_controls_supported": true,
-			"hidden_control_hint": "Use list_controls with include_hidden=true when visible enumeration misses a target."
+			"hidden_control_hint": "Use list_controls with include_hidden=true when visible enumeration misses a target.",
+			"ui_automation_preference_order": [{
+				"level": "semantic",
+				"guidance": "Prefer semantic workflow and navigation tools before raw control actions.",
+				"tools": ["system_settings_dialog", "system_inspector", "system_editor_evidence", "system_editor_control"],
+				"actions": ["run_task", "resolve_property", "capture", "activate_ui", "activate_dock_tab", "set_main_screen", "list_menus", "open_menu", "select_menu_item", "list_tree_items", "select_tree_item"]
+			}, {
+				"level": "control",
+				"guidance": "Use control-level focus, activation, text, value, and popup actions when no higher-level workflow covers the target.",
+				"tools": ["system_editor_control"],
+				"actions": ["focus_control", "activate_control", "set_control_text", "set_value", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
+			}, {
+				"level": "mouse_fallback",
+				"guidance": "Use mouse and pointer events only as a fallback for unsupported UI, context menus, tooltips, or pointer-event validation, with Control-local coordinates returned by the tools.",
+				"tools": ["system_editor_control"],
+				"actions": ["click_control", "right_click_control", "hover_control", "leave_control"]
+			}]
 		},
 		"schema": {
 			"tool_schema_version": str(facts.get("tool_schema_version", "")),

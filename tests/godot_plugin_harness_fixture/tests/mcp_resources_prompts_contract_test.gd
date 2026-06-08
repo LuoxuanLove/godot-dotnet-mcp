@@ -258,10 +258,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_prompt := await _get_prompt_text(EDITOR_UI_CONTROL_PROMPT, {"ui_goal": "open settings", "target_path": "MCPDock/settings"}, 19)
 	if not bool(editor_prompt.get("ok", false)):
 		return _failure(str(editor_prompt.get("error", "editor UI control prompt failed")))
-	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_control"]):
+	if not _prompt_text_is_actionable(str(editor_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_state", "system_editor_evidence", "system_editor_control"]):
 		return _failure("editor UI control prompt should provide actionable editor UI workflow sections.")
-	if str(editor_prompt.get("text", "")).find("resolve_row") == -1:
-		return _failure("editor UI control prompt should mention settings_dialog resolve_row in the localized prompt text.")
+	var editor_prompt_text := str(editor_prompt.get("text", ""))
+	if editor_prompt_text.find("run_task") == -1 or editor_prompt_text.find("resolve_row") == -1 or editor_prompt_text.find("system_inspector") == -1 or editor_prompt_text.find("resolve_property") == -1:
+		return _failure("editor UI control prompt should mention settings_dialog and inspector semantic workflows in the localized prompt text.")
+	if not _fragment_order_is_increasing(editor_prompt_text, ["system_settings_dialog", "system_inspector", "system_editor_evidence(action=capture)", "system_editor_control(action=activate_ui)", "focus_control", "click_control"]):
+		return _failure("editor UI control prompt should order semantic settings/inspector/evidence/UI actions before control-level focus and click fallback.")
+	if not _all_fragments_before(editor_prompt_text, ["focus_control", "activate_control", "set_control_text"], "click_control"):
+		return _failure("editor UI control prompt should order control-level actions before mouse fallback actions.")
+	for expected_editor_action in ["surface=auto/editor/control/popup/active_dialog", "fallback reasons", "degraded", "list_menus/open_menu/select_menu_item", "list_tree_items/select_tree_item", "hover_control", "leave_control", "Control-local"]:
+		if editor_prompt_text.find(expected_editor_action) == -1:
+			return _failure("editor UI control prompt should mention preference-order action: %s" % expected_editor_action)
 
 	var invalid_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"script_path": "../Player.cs"}}, 15)
 	if not (invalid_prompt_response.get("error", null) is Dictionary):
@@ -496,6 +504,27 @@ func _has_any_fragment(text: String, fragment_group: String) -> bool:
 		if text.find(fragment) != -1:
 			return true
 	return false
+
+
+func _fragment_order_is_increasing(text: String, fragments: Array[String]) -> bool:
+	var last_index := -1
+	for fragment in fragments:
+		var index := text.find(fragment)
+		if index == -1 or index <= last_index:
+			return false
+		last_index = index
+	return true
+
+
+func _all_fragments_before(text: String, fragments: Array[String], later_fragment: String) -> bool:
+	var later_index := text.find(later_fragment)
+	if later_index == -1:
+		return false
+	for fragment in fragments:
+		var index := text.find(fragment)
+		if index == -1 or index >= later_index:
+			return false
+	return true
 
 
 func _first_message_text(messages) -> String:

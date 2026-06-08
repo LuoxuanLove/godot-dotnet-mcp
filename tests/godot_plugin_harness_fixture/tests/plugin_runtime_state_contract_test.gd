@@ -37,8 +37,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var expected_collapsed := [
 		"system_bindings_audit",
 		"system_editor_log",
+		"system_editor_evidence",
 		"system_editor_state",
 		"system_help",
+		"system_inspector",
 		"system_plugin_reload",
 		"system_plugin_update",
 		"system_project_configure",

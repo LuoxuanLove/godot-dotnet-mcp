@@ -31,11 +31,15 @@ class FakeLocalization extends RefCounted:
 		"tool_action_get_output_name": "读取输出",
 		"tool_action_get_errors_name": "读取错误",
 		"tool_action_clear_name": "清空",
+		"tool_action_status_name": "读取状态",
+		"tool_action_capture_name": "截图",
 		"tool_action_ensure_layout_name": "确保目录结构",
 		"tool_action_list_capture_cache_name": "列出截图缓存",
 		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
 		"tool_action_cleanup_legacy_cache_name": "清理旧缓存",
 		"tool_action_set_settings_name": "写入设置",
+		"tool_action_run_task_name": "运行任务",
+		"tool_action_run_task_desc": "编排可信的设置行定位、读取、可选写入、验证与截图取证任务。",
 		"tool_action_initialize_name": "初始化",
 		"tool_action_launch_name": "启动",
 		"tool_action_attach_name": "附加",
@@ -56,6 +60,8 @@ class FakeLocalization extends RefCounted:
 		"tool_system_dap_debugger_name": "DAP 调试器",
 		"tool_system_editor_state_name": "编辑器状态",
 		"tool_system_editor_log_name": "编辑器日志",
+		"tool_system_editor_evidence_name": "编辑器取证",
+		"tool_system_editor_evidence_desc": "捕获自描述的编辑器视觉证据。",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
 		"tool_system_runtime_step_name": "运行时步进",
 		"tool_runtime_step_name": "步进",
@@ -165,11 +171,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var project_lifecycle_tool = _find_child_by_metadata(system_category, "tool", "system_project_lifecycle")
+	var inspector_tool = _find_child_by_metadata(system_category, "tool", "system_inspector")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
+	var editor_evidence_tool = _find_child_by_metadata(system_category, "tool", "system_editor_evidence")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var plugin_runtime_state_tool = _find_child_by_metadata(plugin_runtime_category, "tool", "plugin_runtime_state")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_lifecycle_tool == null or editor_log_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_lifecycle_tool == null or inspector_tool == null or editor_log_tool == null or editor_evidence_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
@@ -179,7 +187,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
-	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or userdata_tool.get_text(0) != "用户数据维护":
+	if editor_state_tool.get_text(0) != "编辑器状态" or editor_log_tool.get_text(0) != "编辑器日志" or editor_evidence_tool.get_text(0) != "编辑器取证" or userdata_tool.get_text(0) != "用户数据维护":
 		return _failure("Tools tab should localize newly added system tool rows.")
 	if plugin_runtime_state_tool.get_text(0) != "插件状态":
 		return _failure("Tools tab should localize plugin runtime tool rows.")
@@ -205,11 +213,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if atomic_tool == null:
 		return _failure("Tools tab should keep the atomic child chain for system tools after tree rendering refactor.")
 	var editor_log_action = _find_child_by_metadata(editor_log_tool, "action", "system_editor_log.get_output")
+	var editor_evidence_status_action = _find_child_by_metadata(editor_evidence_tool, "action", "system_editor_evidence.status")
+	var editor_evidence_capture_action = _find_child_by_metadata(editor_evidence_tool, "action", "system_editor_evidence.capture")
 	var userdata_action = _find_child_by_metadata(userdata_tool, "action", "system_userdata_maintenance.ensure_layout")
-	if editor_log_action == null or userdata_action == null:
+	if editor_log_action == null or editor_evidence_status_action == null or editor_evidence_capture_action == null or userdata_action == null:
 		return _failure("Tools tab should render high-level system tool action children.")
-	if editor_log_action.get_text(0) != "读取输出" or userdata_action.get_text(0) != "确保目录结构":
+	if editor_log_action.get_text(0) != "读取输出" or editor_evidence_status_action.get_text(0) != "读取状态" or editor_evidence_capture_action.get_text(0) != "截图" or userdata_action.get_text(0) != "确保目录结构":
 		return _failure("Tools tab should localize high-level system tool action children.")
+	var settings_dialog_tool := _find_child_by_metadata(system_category, "tool", "system_settings_dialog")
+	var run_task_action := _find_child_by_metadata(settings_dialog_tool, "action", "system_settings_dialog.run_task") if settings_dialog_tool != null else null
+	if run_task_action == null or run_task_action.get_text(0) != "运行任务":
+		return _failure("Tools tab should render the localized run_task action for system_settings_dialog.")
+	var settings_popup_atomic := _find_child_by_metadata(settings_dialog_tool, "atomic", "editor_popup") if settings_dialog_tool != null else null
+	var settings_popup_capture_action := _find_child_by_metadata(settings_popup_atomic, "action", "editor_popup.capture_popup") if settings_popup_atomic != null else null
+	if settings_popup_capture_action == null:
+		return _failure("Tools tab should expose editor_popup.capture_popup under system_settings_dialog for surface evidence workflows.")
 	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
 	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
 		return _failure("Tools tab should localize DAP debugger action children instead of humanizing snake_case action names.")
@@ -387,10 +405,14 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["status", "enable", "disable"]
 		"system_runtime_step":
 			return ["step", "capture", "input"]
+		"system_editor_evidence":
+			return ["status", "capture"]
 		"system_editor_control":
 			return ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free", "capture_editor", "list_controls", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_control_text", "set_value", "list_popups", "get_popup", "capture_popup", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
 		"system_settings_dialog":
-			return ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"]
+			return ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "run_task", "capture", "close"]
+		"system_inspector":
+			return ["status", "edit_object", "inspect_resource", "refresh", "list_properties", "resolve_property", "read_value", "focus_value", "set_value", "verify_value", "run_task", "capture"]
 		"system_editor_plugin_control":
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
