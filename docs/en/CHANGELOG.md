@@ -33,6 +33,7 @@ Target version: 1.2.1.
 - Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while keeping existing scene validation and analysis tools available.
 - Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while keeping the dedicated reload and update tools available.
 - Added User-tool naming diagnostics that report declared, normalized, and public MCP tool names in User-tool listings and compatibility reports.
+- Added `system_tool_activity` query filters and slow/failure diagnostics so clients can inspect running or recent calls by state, tool, and slow-call threshold without fetching unrelated activity records.
 
 ### Changed
 
@@ -58,6 +59,7 @@ Target version: 1.2.1.
 - Extended scene executor, tool loader, Tools tab rendering, localization inventory, and protocol facts coverage for the `2026-06-08.23` `system_scene_inspect` schema surface.
 - Added plugin-maintenance contracts, tool-tree coverage, localized tool metadata, and the `2026-06-08.22` tool schema facts update for the grouped maintenance entry.
 - Extended User-tool service contract coverage for scaffold public-name previews, legacy `user_` prefix normalization warnings, and the `2026-06-08.24` tool schema facts update.
+- Extended tool activity registry and loader contracts to cover filtered status/recent queries, live running durations, slow-call summaries, bounded recent failure summaries, and the `2026-06-08.25` tool schema facts update.
 
 ### Fixed
 

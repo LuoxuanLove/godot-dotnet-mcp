@@ -37,6 +37,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var status: Dictionary = registry.get_status()
 	if int(status.get("running_count", 0)) != 2:
 		return _failure("Tool activity registry should report both running calls.")
+	OS.delay_msec(1)
+	var filtered_status: Dictionary = registry.get_status({"tool": "project_state", "state": "running", "threshold_ms": 0.01})
+	if int(filtered_status.get("filtered_running_count", 0)) != 1:
+		return _failure("Tool activity registry should filter running calls by tool and state.")
+	if (filtered_status.get("slow_running", []) as Array).is_empty():
+		return _failure("Tool activity registry should report running calls above the slow threshold.")
+	if float(((filtered_status.get("running", []) as Array)[0] as Dictionary).get("duration_ms", 0.0)) <= 0.0:
+		return _failure("Tool activity registry should project live running durations.")
+	var missing_filter_status: Dictionary = registry.get_status({"tool": "missing-tool"})
+	if int(missing_filter_status.get("running_count", 0)) != 2 or int(missing_filter_status.get("filtered_running_count", -1)) != 0:
+		return _failure("Tool activity registry filters should not change total running counts.")
 	var order = status.get("execution_order", [])
 	if not (order is Array) or (order as Array).size() != 2:
 		return _failure("Tool activity registry should expose running execution order.")
@@ -79,6 +90,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool activity registry recent query should return completed calls.")
 	if str(((recent as Array)[0] as Dictionary).get("call_id", "")) != str(first.get("call_id", "")):
 		return _failure("Tool activity registry recent query should preserve completed call identity.")
+	var failed_recent_result: Dictionary = registry.get_recent(50, {"state": "failed", "failure_limit": 1})
+	if int(failed_recent_result.get("filtered_recent_count", 0)) != 1:
+		return _failure("Tool activity registry should filter recent calls by failed state.")
+	if (failed_recent_result.get("recent_failures", []) as Array).size() != 1:
+		return _failure("Tool activity registry should expose a bounded recent failure summary.")
+	var hidden_failure_result: Dictionary = registry.get_recent(50, {"state": "failed", "failure_limit": 0})
+	if not (hidden_failure_result.get("recent_failures", []) as Array).is_empty():
+		return _failure("Tool activity registry should honor a zero recent failure summary limit.")
+	var completed_recent_result: Dictionary = registry.get_recent(50, {"state": "completed"})
+	if int(completed_recent_result.get("filtered_recent_count", -1)) != 0:
+		return _failure("Tool activity registry state filters should distinguish completed and failed recent calls.")
+	if not (completed_recent_result.get("recent_failures", []) as Array).is_empty():
+		return _failure("Tool activity registry should not return failure summaries for a completed state filter.")
 
 	var recent_lookup: Dictionary = registry.get_call(str(first.get("call_id", "")))
 	if not bool(recent_lookup.get("found", false)):

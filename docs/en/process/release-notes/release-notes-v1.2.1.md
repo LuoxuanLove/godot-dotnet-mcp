@@ -16,6 +16,10 @@ Editor UI guidance now makes the automation order explicit: semantic workflows a
 
 Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/API-key variants, and nested metadata secrets before reporting resource outputs. Troubleshooting evidence stays useful for automation loops without exposing credentials in summaries.
 
+### 🔍 Activity Diagnostics
+
+Tool activity queries can now filter running and recent calls by state or tool and flag slow or failed calls, giving clients a quick way to spot stalled automation before launching more work.
+
 ### 🪟 Floating Window Evidence
 
 `system_editor_control` can now read and crop visible floating popup/window surfaces through `get_popup` and `capture_popup`. That gives clients a direct evidence path for modal editor windows and popup menus before choosing a button, menu item, text field, or close action.
