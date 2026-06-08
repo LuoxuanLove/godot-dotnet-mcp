@@ -22,6 +22,33 @@ class FakeToolLoader:
 				}
 			}
 		}, {
+			"name": "system_settings_dialog",
+			"description": "Settings dialog workflow with trusted task orchestration",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["open", "resolve_row", "run_task"], "description": "Settings dialog workflow action"},
+					"capture_policy": {"type": "string", "description": "Capture policy for run_task"}
+				}
+			}
+		}, {
+			"name": "system_editor_evidence",
+			"description": "Capture self-describing editor visual evidence for editor, control, popup, or active_dialog surfaces",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "capture"], "description": "Editor evidence action"},
+					"surface": {"type": "string", "enum": ["auto", "editor", "control", "popup", "active_dialog"], "description": "Requested evidence surface"},
+					"capture_policy": {"type": "string", "enum": ["best_effort", "allow_fallback", "require_exact"], "description": "Capture fallback policy"}
+				}
+			}
+		}, {
 			"name": "system_runtime_step",
 			"description": "Apply runtime input and capture a frame",
 			"category": "system",
@@ -32,6 +59,19 @@ class FakeToolLoader:
 				"properties": {
 					"action": {"type": "string", "enum": ["step", "capture", "input"], "description": "Runtime automation mode"},
 					"capture_label": {"type": "string", "description": "Optional capture label"}
+				}
+			}
+		}, {
+			"name": "system_inspector",
+			"description": "Inspector property workflow with trusted task orchestration",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["list_properties", "resolve_property", "run_task"], "description": "Inspector workflow action"},
+					"property_path": {"type": "string", "description": "Inspector property path or fragment"}
 				}
 			}
 		}]
@@ -69,6 +109,33 @@ class FakeToolLoader:
 					}
 				}
 			}, {
+				"name": "settings_dialog",
+				"full_name": "system_settings_dialog",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["open", "resolve_row", "run_task"], "description": "Settings dialog workflow action"},
+						"capture_policy": {"type": "string", "description": "Capture policy for run_task"}
+					}
+				}
+			}, {
+				"name": "editor_evidence",
+				"full_name": "system_editor_evidence",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["status", "capture"], "description": "Editor evidence action"},
+						"surface": {"type": "string", "enum": ["auto", "editor", "control", "popup", "active_dialog"], "description": "Requested evidence surface"},
+						"capture_policy": {"type": "string", "enum": ["best_effort", "allow_fallback", "require_exact"], "description": "Capture fallback policy"}
+					}
+				}
+			}, {
 				"name": "runtime_step",
 				"full_name": "system_runtime_step",
 				"category": "system",
@@ -79,6 +146,19 @@ class FakeToolLoader:
 					"properties": {
 						"action": {"type": "string", "enum": ["step", "capture", "input"], "description": "Runtime automation mode"},
 						"capture_label": {"type": "string", "description": "Optional capture label"}
+					}
+				}
+			}, {
+				"name": "inspector",
+				"full_name": "system_inspector",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["list_properties", "resolve_property", "run_task"], "description": "Inspector workflow action"},
+						"property_path": {"type": "string", "description": "Inspector property path or fragment"}
 					}
 				}
 			}],
@@ -106,12 +186,12 @@ class FakeToolLoader:
 		]
 
 	func get_tool_loader_status() -> Dictionary:
-		return {"healthy": true, "status": "ready", "tool_count": 3, "exposed_tool_count": 2}
+		return {"healthy": true, "status": "ready", "tool_count": 6, "exposed_tool_count": 5}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var loader := FakeToolLoader.new()
-	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "capture", "limit": 10})
+	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "input", "limit": 10})
 	if not bool(exposed_search.get("success", false)):
 		return _failure("Exposed catalog search should succeed.")
 	var exposed_data: Dictionary = exposed_search.get("data", {})
@@ -122,6 +202,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Catalog search should omit full schemas unless include_schema=true.")
 	if not ((exposed_matches[0] as Dictionary).get("match_reasons", []) as Array).has("action"):
 		return _failure("Catalog search should report action match reasons.")
+
+	var settings_task_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "capture_policy", "limit": 10})
+	var settings_task_matches: Array = (settings_task_search.get("data", {}) as Dictionary).get("matches", [])
+	if settings_task_matches.size() != 2:
+		return _failure("Catalog search should expose settings task and editor evidence capture policy discovery.")
+	var capture_policy_names := _match_names(settings_task_matches)
+	if not capture_policy_names.has("system_settings_dialog") or not capture_policy_names.has("system_editor_evidence"):
+		return _failure("Catalog search should include both settings_dialog and editor_evidence for capture_policy.")
+	for match in settings_task_matches:
+		if not ((match as Dictionary).get("match_reasons", []) as Array).has("param"):
+			return _failure("Catalog search should report capture_policy as a parameter match.")
+
+	var evidence_surface_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "active_dialog", "limit": 10})
+	var evidence_surface_matches: Array = (evidence_surface_search.get("data", {}) as Dictionary).get("matches", [])
+	if evidence_surface_matches.size() != 1 or str((evidence_surface_matches[0] as Dictionary).get("name", "")) != "system_editor_evidence":
+		return _failure("Catalog search should expose system_editor_evidence active_dialog surface discovery.")
+	if not ((evidence_surface_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
+		return _failure("Catalog search should report active_dialog as a parameter enum match.")
+
+	var inspector_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "property_path", "limit": 10})
+	var inspector_matches: Array = (inspector_search.get("data", {}) as Dictionary).get("matches", [])
+	if inspector_matches.size() != 1 or str((inspector_matches[0] as Dictionary).get("name", "")) != "system_inspector":
+		return _failure("Catalog search should expose system_inspector property workflow discovery.")
+	if not ((inspector_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param"):
+		return _failure("Catalog search should report property_path as a parameter match.")
 
 	var visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
 		"query": "get_action",
@@ -169,3 +274,12 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _match_names(matches: Array) -> Array[String]:
+	var names: Array[String] = []
+	for match in matches:
+		if match is Dictionary:
+			names.append(str((match as Dictionary).get("name", "")))
+	names.sort()
+	return names

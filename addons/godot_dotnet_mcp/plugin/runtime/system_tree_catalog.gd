@@ -26,10 +26,20 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "editor_ui_control",  "actions": ["list_visible", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text", "set_value"]},
 		{"tool": "editor_popup",       "actions": ["list_visible", "get_popup", "capture_popup", "press_button", "select_item", "set_text", "close_popup"]}
 	],
+	"system_editor_evidence": [
+		{"tool": "editor_screenshot", "actions": ["capture"]},
+		{"tool": "editor_ui_control", "actions": ["capture_control"]},
+		{"tool": "editor_popup",      "actions": ["list_visible", "capture_popup"]}
+	],
 	"system_settings_dialog": [
 		{"tool": "editor_ui_control", "actions": ["list_visible", "wait_for_ui", "select_menu_item", "activate_ui", "list_tree_items", "select_tree_item", "focus_control", "activate_control", "set_text", "set_value"]},
 		{"tool": "editor_screenshot", "actions": ["capture"]},
-		{"tool": "editor_popup",      "actions": ["list_visible", "close_popup"]}
+		{"tool": "editor_popup",      "actions": ["list_visible", "capture_popup", "close_popup"]}
+	],
+	"system_inspector": [
+		{"tool": "editor_inspector",  "actions": ["get_edited", "get_selected_property", "edit_object", "inspect_resource", "refresh"]},
+		{"tool": "editor_ui_control", "actions": ["list_visible", "focus_control", "activate_control", "set_text", "set_value", "capture_control"]},
+		{"tool": "editor_screenshot", "actions": ["capture"]}
 	],
 	"system_editor_plugin_control": [
 		{"tool": "editor_plugin",      "actions": ["list", "inspect", "is_enabled", "enable", "disable"]}

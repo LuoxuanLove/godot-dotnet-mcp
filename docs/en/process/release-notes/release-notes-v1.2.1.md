@@ -20,6 +20,10 @@ Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/AP
 
 `system_editor_control` can now read and crop visible floating popup/window surfaces through `get_popup` and `capture_popup`. That gives clients a direct evidence path for modal editor windows and popup menus before choosing a button, menu item, text field, or close action.
 
+`system_settings_dialog` uses that evidence path automatically when capturing settings surfaces. If the current settings workflow can see a popup or editor window for Project Settings or Editor Settings, capture results now identify the selected backend and target path, and fall back to broader editor screenshots only when narrower surfaces are unavailable.
+
+`system_editor_evidence` now gives clients one evidence-aware capture entry for editor, control, popup, active-dialog, or automatic surfaces. Results describe the requested surface, actual backend, target path, visible popups, fallback reasons, and degraded state so agents can tell whether a screenshot proves the current task surface or only provides a broader fallback view.
+
 ### 🧭 Configuration Navigation and Evidence
 
 `system_settings_dialog` adds a high-level workflow for Project Settings and Editor Settings. Clients can open a settings surface through editor menus, wait for the dialog to become visible, search candidate setting rows, focus a returned result, capture evidence, and close the surface without writing setting values directly.
@@ -42,7 +46,13 @@ When an agent only needs to move keyboard focus to the matched value editor, `fo
 
 Supported unique visible rows can now be edited through `set_value` for text, number, and bool controls. The workflow writes through editor UI controls and then observes the row again so agents can verify the value they changed instead of assuming the click or text edit worked.
 
+`run_task` now wraps that settings chain into one trusted operation. It can open and narrow the settings surface, resolve a unique row, read the before value, optionally write a supported value, verify the expected result, and attach capture evidence. Risky writes are refused before interaction when the selector is ambiguous, hidden controls are requested, confidence is too low, or required capture evidence cannot be produced before the value changes.
+
 Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
+
+Inspector automation now has its own high-level workflow through `system_inspector`. Clients can list visible Inspector property models, resolve one property, read its current typed value, focus the value editor, write supported text, number, and bool editors with verification, capture property evidence, or run the full locate/read/set/verify/capture task against the current edited object or a prepared node/resource target.
+
+The Inspector workflow refuses hidden-control writes, ambiguous selectors, disabled value editors, and unsupported complex editors instead of guessing. That gives agents a property-level path before falling back to raw editor control enumeration or coordinate-based input.
 
 ### 🔎 Searchable Tool Discovery
 
