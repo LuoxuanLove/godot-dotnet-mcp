@@ -224,6 +224,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var run_task_action := _find_child_by_metadata(settings_dialog_tool, "action", "system_settings_dialog.run_task") if settings_dialog_tool != null else null
 	if run_task_action == null or run_task_action.get_text(0) != "运行任务":
 		return _failure("Tools tab should render the localized run_task action for system_settings_dialog.")
+	var settings_popup_atomic := _find_child_by_metadata(settings_dialog_tool, "atomic", "editor_popup") if settings_dialog_tool != null else null
+	var settings_popup_capture_action := _find_child_by_metadata(settings_popup_atomic, "action", "editor_popup.capture_popup") if settings_popup_atomic != null else null
+	if settings_popup_capture_action == null:
+		return _failure("Tools tab should expose editor_popup.capture_popup under system_settings_dialog for surface evidence workflows.")
 	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
 	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
 		return _failure("Tools tab should localize DAP debugger action children instead of humanizing snake_case action names.")

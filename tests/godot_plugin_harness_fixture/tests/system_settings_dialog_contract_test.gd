@@ -1067,6 +1067,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(verify_task_mismatch.get("data", {}).get("capture_backend", "")) != "popup":
 		return _failure("run_task on_failure capture policy should capture failure evidence.")
 
+	var calls_before_final_mismatch := fake.calls.size()
+	var final_verify_task_mismatch := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Mismatch",
+		"capture_policy": "final",
+		"limit": 10
+	})
+	if bool(final_verify_task_mismatch.get("success", false)):
+		return _failure("run_task verify mode should fail when expected_value does not match under capture_policy=final.")
+	if str(final_verify_task_mismatch.get("data", {}).get("failed_step", "")) != "verify_after":
+		return _failure("run_task final capture policy mismatch should fail at verify_after.")
+	if str(final_verify_task_mismatch.get("data", {}).get("capture_backend", "")) != "none":
+		return _failure("run_task capture_policy=final should not capture failure evidence.")
+	if _has_call_since(fake.calls, calls_before_final_mismatch, "editor_popup", "capture_popup") or _has_call_since(fake.calls, calls_before_final_mismatch, "editor_ui_control", "capture_control") or _has_call_since(fake.calls, calls_before_final_mismatch, "editor_screenshot", "capture"):
+		return _failure("run_task capture_policy=final failure path must not dispatch capture backends.")
+
 	var set_task := await impl.execute_async("settings_dialog", {
 		"action": "run_task",
 		"surface": "project_settings",

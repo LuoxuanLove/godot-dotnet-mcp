@@ -951,6 +951,13 @@ func _task_base_payload(surface: String, args: Dictionary, mode: String) -> Dict
 		"write": {},
 		"after": {},
 		"verification": {},
+		"capture": {},
+		"capture_surface": surface,
+		"capture_path": "",
+		"capture_backend": "none",
+		"capture_target_path": "",
+		"capture_fallback_reasons": [],
+		"capture_error": "",
 		"write_attempted": args.has("value"),
 		"write_verified": false,
 		"steps": {},
@@ -1144,8 +1151,10 @@ func _should_capture_task(capture_policy: String, failed: bool) -> bool:
 			return failed
 		"always":
 			return true
+		"final":
+			return not failed
 		_:
-			return true
+			return not failed
 
 
 func _result_reason(result: Dictionary, default_reason: String) -> String:
