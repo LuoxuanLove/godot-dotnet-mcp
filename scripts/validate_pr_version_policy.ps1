@@ -154,6 +154,10 @@ if ($changes.Count -eq 0) {
 }
 
 if ($BaseBranch -eq "refactor/v1.4.0" -and $HeadBranch -eq "chore/v1.4-version-baseline") {
+    if ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner) {
+        throw "v1.4 refactor baseline version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
+
     Write-Host "Version policy validated: v1.4 refactor baseline branch changes public version metadata:"
     foreach ($change in $changes) {
         Write-Host "- $change"
