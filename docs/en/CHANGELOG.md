@@ -47,6 +47,7 @@ Target version: 1.2.1.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
 - Updated the project lifecycle tool tree, prompt, localization, protocol facts, stdio/router/tool-loader, and harness contracts for the canonical `system_project_lifecycle` surface with the `2026-06-08.16` tool schema facts update and explicit lifecycle action validation.
+- Extended Settings tab rendering coverage so long discovered update-ref lists keep every selectable option while enforcing bounded selector popup heights.
 - Updated editor UI prompt, help, localization, and schema contract coverage for the semantic-first, control-level-second, mouse-fallback automation order with the `2026-06-08.17` tool schema facts update.
 - Extended settings-dialog task contract coverage for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, Tools tab action rendering, catalog search discovery, prompt/help guidance, and the `2026-06-08.19` tool schema facts update.
 - Added Inspector workflow contracts and tool-tree coverage for property model resolution, typed value reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and the `2026-06-08.20` tool schema facts update.
@@ -55,6 +56,7 @@ Target version: 1.2.1.
 ### Fixed
 
 - Hardened MCP resource diagnostics redaction so mixed-case URL credentials and sensitive text markers are masked before resource outputs are reported.
+- Capped Settings update source and branch selector popups so long discovered ref lists scroll inside the menu instead of covering the editor.
 
 ## [1.2.0] - 2026-06-06
 

@@ -18,6 +18,9 @@ const UPDATE_DESCRIPTION_FALLBACK_ZH := "选择更新方式后会自动发现 Gi
 const UPDATE_DESCRIPTION_FALLBACK_EN := "Choose an update mode; branches, releases, and tags are discovered automatically."
 const UPDATE_DESCRIPTION_AUTO_ZH := "选择更新方式后会自动发现 GitHub 分支、发布版和标签，然后可同步选中目标。"
 const UPDATE_DESCRIPTION_AUTO_EN := "Choose an update mode; branches, releases, and tags are discovered automatically."
+const UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS := 12
+const UPDATE_SELECTOR_POPUP_ROW_HEIGHT := 28.0
+const UPDATE_SELECTOR_POPUP_VERTICAL_PADDING := 12.0
 
 @onready var _margin: MarginContainer = %Margin
 @onready var _content: VBoxContainer = %Content
@@ -120,6 +123,7 @@ func apply_model(model: Dictionary) -> void:
 	_custom_branch_syncing = true
 	_apply_projected_options(_custom_branch_value, options.get("update_branches", []))
 	_custom_branch_syncing = false
+	_apply_update_selector_popup_limits()
 
 	_updates_status.text = str(updates.get("status_text", ""))
 	var update_source := str(updates.get("source", "latest_stable"))
@@ -199,6 +203,29 @@ func _get_update_description_text(localization) -> String:
 func _apply_update_source_rows(source: String) -> void:
 	if _custom_branch_row != null:
 		_custom_branch_row.visible = source == "custom_branch"
+
+
+func _apply_update_selector_popup_limits() -> void:
+	_apply_option_popup_height_limit(_source_option, UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS)
+	_apply_option_popup_height_limit(_custom_branch_value, UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS)
+
+
+func _apply_option_popup_height_limit(option_button: OptionButton, max_visible_items: int) -> void:
+	if option_button == null or max_visible_items <= 0:
+		return
+	var popup := option_button.get_popup()
+	if popup == null:
+		return
+	var max_size := popup.max_size
+	max_size.y = _get_option_popup_height_limit(max_visible_items)
+	popup.max_size = max_size
+
+
+func _get_option_popup_height_limit(max_visible_items: int) -> int:
+	var scale := _current_scale if _current_scale > 0.0 else 1.0
+	var row_height := UPDATE_SELECTOR_POPUP_ROW_HEIGHT * scale
+	var vertical_padding := UPDATE_SELECTOR_POPUP_VERTICAL_PADDING * scale
+	return int(ceil(row_height * float(max_visible_items) + vertical_padding))
 
 
 func _apply_projected_options(option_button: OptionButton, projected_items: Array) -> void:
