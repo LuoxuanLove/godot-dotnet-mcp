@@ -714,6 +714,18 @@ func _focus_value(surface: String, args: Dictionary) -> Dictionary:
 func _set_value(surface: String, args: Dictionary) -> Dictionary:
 	if not args.has("value"):
 		return bridge.error("value is required for set_value")
+	if bool(args.get("include_hidden", false)):
+		return bridge.error("set_value refuses hidden-control writes; use visible rows only.", {
+			"reason": "hidden_write_refused",
+			"include_hidden": true,
+			"surface": surface
+		})
+	if _required_confidence(args) == "low":
+		return bridge.error("set_value refuses low-confidence writes.", {
+			"reason": "low_confidence_write_refused",
+			"require_confidence": "low",
+			"surface": surface
+		})
 	var query_values: Array[String] = _search_terms(args)
 	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):

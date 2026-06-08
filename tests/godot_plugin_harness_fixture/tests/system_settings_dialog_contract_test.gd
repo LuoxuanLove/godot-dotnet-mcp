@@ -686,6 +686,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("set_value should verify the updated text value.")
 	if str(set_text_value.get("data", {}).get("write", {}).get("write_action", "")) != "set_text":
 		return _failure("set_value should use editor_ui_control.set_text for text rows.")
+	var hidden_set_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "HiddenWrite",
+		"include_hidden": true,
+		"limit": 10
+	})
+	if bool(hidden_set_value.get("success", false)) or str(hidden_set_value.get("data", {}).get("reason", "")) != "hidden_write_refused":
+		return _failure("set_value should refuse direct hidden-control writes.")
+	var low_confidence_set_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "LowConfidenceWrite",
+		"require_confidence": "low",
+		"limit": 10
+	})
+	if bool(low_confidence_set_value.get("success", false)) or str(low_confidence_set_value.get("data", {}).get("reason", "")) != "low_confidence_write_refused":
+		return _failure("set_value should refuse direct low-confidence writes.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",

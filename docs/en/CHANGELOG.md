@@ -36,6 +36,7 @@ Target version: 1.3.0.
 
 ### Fixed
 
+- Hardened editor UI write actions so hidden, disabled, display-only, and low-confidence settings controls are rejected before text/value mutation.
 - Capped Settings update source and branch selector popup heights so long discovered ref lists scroll inside the menu instead of covering the editor.
 - Fixed Tools tab enabled and total counts so plugin-domain tools are included alongside core and user tool domains.
 - Hardened MCP resource diagnostics redaction so mixed-case URL credentials, bearer/API-key variants, sensitive text markers, and nested metadata secrets are masked before outputs are reported.
@@ -48,6 +49,7 @@ Target version: 1.3.0.
 
 ### Internal
 
+- Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
 - Extended settings-dialog contracts for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, tab/category/row/value actions, prompt/help guidance, and tool rendering.
 - Added Inspector workflow contracts for property model resolution, typed reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and tool rendering.
