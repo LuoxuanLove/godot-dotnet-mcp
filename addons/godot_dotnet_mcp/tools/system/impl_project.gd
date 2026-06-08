@@ -173,16 +173,16 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "project_files",
-			"description": "PROJECT FILES: High-level project FileSystem tree operations. Actions: list_dir, create_dir, delete_dir, read_file, write_file, delete_file, copy_file, move_file, select_file, get_selected, get_current_path, scan, reimport. Use this for common FileSystem dock and project file-tree changes before falling back to atomic filesystem tools.",
+			"description": "PROJECT FILES: High-level project FileSystem tree operations. Actions: list_dir, create_dir, delete_dir, read_file, write_file, delete_file, copy_file, move_file, select_file, get_selected, get_current_path, scan, reimport, import_status. Use this for common FileSystem dock and project file-tree changes before falling back to atomic filesystem tools.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["list_dir", "create_dir", "delete_dir", "read_file", "write_file", "delete_file", "copy_file", "move_file", "select_file", "get_selected", "get_current_path", "scan", "reimport"], "description": "Project file-tree action"},
+					"action": {"type": "string", "enum": ["list_dir", "create_dir", "delete_dir", "read_file", "write_file", "delete_file", "copy_file", "move_file", "select_file", "get_selected", "get_current_path", "scan", "reimport", "import_status"], "description": "Project file-tree action"},
 					"path": {"type": "string", "description": "Project path (res://...)"},
 					"content": {"type": "string", "description": "Content for write_file"},
 					"source": {"type": "string", "description": "Source path for copy_file/move_file"},
 					"dest": {"type": "string", "description": "Destination path for copy_file/move_file"},
-					"paths": {"type": "array", "items": {"type": "string"}, "description": "Paths for reimport"},
+					"paths": {"type": "array", "items": {"type": "string"}, "description": "Paths for reimport or import_status"},
 					"filter": {"type": "string", "description": "Filter for list_dir (default *)"},
 					"recursive": {"type": "boolean", "description": "Recursive list_dir traversal"}
 				},
@@ -1743,6 +1743,8 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 			return bridge.call_atomic("editor_filesystem", {"action": "scan"})
 		"reimport":
 			return bridge.call_atomic("editor_filesystem", {"action": "reimport", "paths": args.get("paths", [])})
+		"import_status":
+			return bridge.call_atomic("editor_filesystem", {"action": "import_status", "paths": args.get("paths", [])})
 		_:
 			return bridge.error("Unknown project_files action: %s" % action)
 

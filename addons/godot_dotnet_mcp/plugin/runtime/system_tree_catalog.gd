@@ -76,7 +76,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "filesystem_file_read", "actions": ["read"]},
 		{"tool": "filesystem_file_write", "actions": ["write"]},
 		{"tool": "filesystem_file_manage", "actions": ["delete", "copy", "move"]},
-		{"tool": "editor_filesystem", "actions": ["select_file", "get_selected", "get_current_path", "scan", "reimport"]}
+		{"tool": "editor_filesystem", "actions": ["select_file", "get_selected", "get_current_path", "scan", "reimport", "import_status"]}
 	],
 	"system_userdata_maintenance": [],
 	"system_project_lifecycle":  [

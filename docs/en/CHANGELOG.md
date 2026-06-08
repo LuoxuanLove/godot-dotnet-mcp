@@ -31,6 +31,7 @@ Target version: 1.4.0.
 - Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while preserving the existing scene validation and analysis tools.
 - Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
+- Added read-only project file import status inspection so clients can see whether selected resources are imported, importable but not yet imported, missing, or outside Godot's import pipeline before reimporting.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 
@@ -61,6 +62,7 @@ Target version: 1.4.0.
 
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
+- Added editor/system project file import-status contracts and advanced the tool schema version for the new read-only import inspection action.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
 - Extended settings-dialog contracts for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, tab/category/row/value actions, prompt/help guidance, and tool rendering.
 - Added Inspector workflow contracts for property model resolution, typed reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and tool rendering.

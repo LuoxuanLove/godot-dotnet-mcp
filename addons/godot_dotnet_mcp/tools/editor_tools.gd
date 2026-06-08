@@ -567,18 +567,20 @@ ACTIONS:
 - get_current_path: Get current directory path
 - scan: Trigger filesystem scan
 - reimport: Reimport specific files
+- import_status: Inspect whether files are managed by Godot's import pipeline without reimporting
 
 EXAMPLES:
 - Select file: {"action": "select_file", "path": "res://scenes/main.tscn"}
 - Get selected: {"action": "get_selected"}
 - Scan filesystem: {"action": "scan"}
-- Reimport: {"action": "reimport", "paths": ["res://sprites/player.png"]}""",
+- Reimport: {"action": "reimport", "paths": ["res://sprites/player.png"]}
+- Import status: {"action": "import_status", "paths": ["res://sprites/player.png", "res://notes.txt"]}""",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
 					"action": {
 						"type": "string",
-						"enum": ["select_file", "get_selected", "get_current_path", "scan", "reimport"],
+						"enum": ["select_file", "get_selected", "get_current_path", "scan", "reimport", "import_status"],
 						"description": "Filesystem action"
 					},
 					"path": {
@@ -588,7 +590,7 @@ EXAMPLES:
 					"paths": {
 						"type": "array",
 						"items": {"type": "string"},
-						"description": "File paths to reimport"
+						"description": "File paths to reimport or inspect for import status"
 					}
 				},
 				"required": ["action"]
