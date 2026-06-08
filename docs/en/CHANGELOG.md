@@ -42,6 +42,7 @@ Target version: 1.3.0.
 
 ### Documentation
 
+- Refreshed README Highlights to align the top-level feature story with the v1.2.0 and v1.3.0 release lines, grouping overlapping entries into consistent editor-native service, semantic automation, evidence, diagnostics, runtime, workflow discovery, and User-tool extension themes.
 - Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
 - Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
 
