@@ -2448,7 +2448,7 @@ func _is_settings_row_candidate(row: Dictionary) -> bool:
 		return false
 	if bool(row.get("editable_text", false)):
 		return true
-	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
+	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "Slider", "HSlider", "VSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
 		return true
 	if path.contains("/") and (path.contains("Settings") or path.contains("General") or path.contains("Interface")):
 		return true
@@ -2803,7 +2803,7 @@ func _value_editor_type_hint(row: Dictionary) -> String:
 		return "bool"
 	if control_class in ["OptionButton"]:
 		return "enum"
-	if control_class in ["SpinBox", "EditorSpinSlider", "HSlider", "VSlider"]:
+	if control_class in ["SpinBox", "EditorSpinSlider", "Slider", "HSlider", "VSlider"]:
 		return "number"
 	if control_class in ["ColorPickerButton", "ColorPicker"]:
 		return "color"

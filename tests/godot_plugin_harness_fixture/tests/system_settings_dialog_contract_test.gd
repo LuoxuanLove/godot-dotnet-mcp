@@ -20,6 +20,7 @@ class FakeBridge extends RefCounted:
 	var snap_2d_transforms_to_pixel := false
 	var max_renderable_elements := 128000.0
 	var direct_spin_value := 3.0
+	var plain_slider_value := 0.25
 	var popup_capture_enabled := true
 	var control_capture_enabled := true
 	var editor_capture_enabled := true
@@ -86,6 +87,9 @@ class FakeBridge extends RefCounted:
 						if target_path.ends_with("/DirectSpin"):
 							direct_spin_value = float(args.get("value", 0.0))
 							return success({"target_path": target_path, "value": direct_spin_value})
+						if target_path.ends_with("/PlainSlider"):
+							plain_slider_value = float(args.get("value", 0.0))
+							return success({"target_path": target_path, "value": plain_slider_value})
 						return error("Value target not found")
 					"activate_control":
 						var target_path := str(args.get("target_path", ""))
@@ -194,6 +198,8 @@ class FakeBridge extends RefCounted:
 				rows.append({"path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements/Value", "parent_path": "/root/ProjectSettings/General/Rendering/Limits/Rendering/MaxRenderableElements", "class": "SpinBox", "value": max_renderable_elements, "text": str(max_renderable_elements), "visible": true, "disabled": false})
 			if project_filter_text.contains("editor/direct_spin"):
 				rows.append({"path": "/root/ProjectSettings/General/Editor/DirectSpin", "parent_path": "/root/ProjectSettings/General/Editor", "class": "SpinBox", "setting_path": "editor/direct_spin", "value": direct_spin_value, "text": str(direct_spin_value), "visible": true, "disabled": false})
+			if project_filter_text.contains("editor/plain_slider"):
+				rows.append({"path": "/root/ProjectSettings/General/Editor/PlainSlider", "parent_path": "/root/ProjectSettings/General/Editor", "class": "Slider", "setting_path": "editor/plain_slider", "value": plain_slider_value, "text": str(plain_slider_value), "visible": true, "disabled": false})
 			if project_filter_text.contains("editor/plain_label"):
 				rows.append({"path": "/root/ProjectSettings/General/Editor/PlainLabel", "parent_path": "/root/ProjectSettings/General/Editor", "class": "HBoxContainer", "setting_path": "editor/plain_label", "text": "Plain Label", "visible": true, "disabled": false, "editable_text": false, "child_count": 0})
 			if project_filter_text.contains("editor/display_value_label"):
@@ -878,6 +884,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("focus_value should focus a direct value row when the row itself is a value editor.")
 	if str(focus_direct_value.get("data", {}).get("value_control_path", "")) != "/root/ProjectSettings/General/Editor/DirectSpin":
 		return _failure("focus_value should target the direct value row itself when no child value control exists.")
+
+	await impl.execute_async("settings_dialog", {
+		"action": "search",
+		"surface": "project_settings",
+		"setting_path": "editor/plain_slider",
+		"limit": 10
+	})
+	var slider_value := impl.execute("settings_dialog", {
+		"action": "read_value",
+		"surface": "project_settings",
+		"setting_path": "editor/plain_slider",
+		"limit": 10
+	})
+	if not bool(slider_value.get("success", false)) or str(slider_value.get("data", {}).get("value_editor_type", "")) != "number":
+		return _failure("read_value should classify plain Slider rows as number values.")
+	var set_slider_value := await impl.execute_async("settings_dialog", {
+		"action": "set_value",
+		"surface": "project_settings",
+		"setting_path": "editor/plain_slider",
+		"value": 0.75,
+		"limit": 10
+	})
+	if not bool(set_slider_value.get("success", false)):
+		return _failure("set_value should update a unique plain Slider row.")
+	if str(set_slider_value.get("data", {}).get("write", {}).get("value_editor_type", "")) != "number":
+		return _failure("set_value should preserve number editor typing for plain Slider rows.")
+	if float(set_slider_value.get("data", {}).get("after", {}).get("value", 0.0)) != 0.75:
+		return _failure("set_value should verify plain Slider row updates.")
 
 	await impl.execute_async("settings_dialog", {
 		"action": "search",
