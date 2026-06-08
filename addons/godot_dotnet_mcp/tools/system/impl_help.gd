@@ -96,7 +96,23 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"non_invasive_activation_action": "activate_ui",
 			"avoid_os_mouse_window_automation": true,
 			"hidden_controls_supported": true,
-			"hidden_control_hint": "Use list_controls with include_hidden=true when visible enumeration misses a target."
+			"hidden_control_hint": "Use list_controls with include_hidden=true when visible enumeration misses a target.",
+			"ui_automation_preference_order": [{
+				"level": "semantic",
+				"guidance": "Prefer semantic workflow and navigation tools before raw control actions.",
+				"tools": ["system_settings_dialog", "system_editor_control"],
+				"actions": ["activate_ui", "activate_dock_tab", "set_main_screen", "list_menus", "open_menu", "select_menu_item", "list_tree_items", "select_tree_item"]
+			}, {
+				"level": "control",
+				"guidance": "Use control-level focus, activation, text, value, and popup actions when no higher-level workflow covers the target.",
+				"tools": ["system_editor_control"],
+				"actions": ["focus_control", "activate_control", "set_control_text", "set_value", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
+			}, {
+				"level": "mouse_fallback",
+				"guidance": "Use mouse and pointer events only as a fallback for unsupported UI, context menus, tooltips, or pointer-event validation, with Control-local coordinates returned by the tools.",
+				"tools": ["system_editor_control"],
+				"actions": ["click_control", "right_click_control", "hover_control", "leave_control"]
+			}]
 		},
 		"schema": {
 			"tool_schema_version": str(facts.get("tool_schema_version", "")),

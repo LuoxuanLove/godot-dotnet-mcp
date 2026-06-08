@@ -39,6 +39,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system help should explicitly recommend editor screenshots for UI judgment.")
 	if not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
 		return _failure("system help should explicitly state hidden controls can be enumerated.")
+	var preference_order = (visual_guidance as Dictionary).get("ui_automation_preference_order", [])
+	if not (preference_order is Array) or (preference_order as Array).size() != 3:
+		return _failure("system help should expose the three-level UI automation preference order.")
+	var expected_levels := ["semantic", "control", "mouse_fallback"]
+	for index in expected_levels.size():
+		var entry = (preference_order as Array)[index]
+		if not (entry is Dictionary):
+			return _failure("system help UI automation preference entry should be a dictionary.")
+		var entry_dict := entry as Dictionary
+		if str(entry_dict.get("level", "")) != expected_levels[index]:
+			return _failure("system help UI automation preference order should keep %s at index %d." % [expected_levels[index], index])
+	if not _preference_entry_has_tool((preference_order as Array)[0], "system_settings_dialog") or not _preference_entry_has_action((preference_order as Array)[0], "activate_ui"):
+		return _failure("system help semantic UI preference should mention settings_dialog and activate_ui.")
+	if not _preference_entry_has_action((preference_order as Array)[1], "set_control_text") or not _preference_entry_has_action((preference_order as Array)[1], "press_popup_button"):
+		return _failure("system help control-level UI preference should mention text and popup control actions.")
+	if not _preference_entry_has_action((preference_order as Array)[2], "click_control") or not _preference_entry_has_action((preference_order as Array)[2], "hover_control"):
+		return _failure("system help mouse fallback UI preference should mention click and hover fallback actions.")
 
 	var schema = help_data.get("schema", {})
 	if not (schema is Dictionary):
@@ -86,3 +103,17 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _preference_entry_has_tool(entry, tool_name: String) -> bool:
+	if not (entry is Dictionary):
+		return false
+	var tools = (entry as Dictionary).get("tools", [])
+	return tools is Array and (tools as Array).has(tool_name)
+
+
+func _preference_entry_has_action(entry, action_name: String) -> bool:
+	if not (entry is Dictionary):
+		return false
+	var actions = (entry as Dictionary).get("actions", [])
+	return actions is Array and (actions as Array).has(action_name)
