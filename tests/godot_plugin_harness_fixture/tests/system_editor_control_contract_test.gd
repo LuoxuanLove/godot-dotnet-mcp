@@ -118,7 +118,24 @@ class FakeBridge extends RefCounted:
 							"target_path": str(args.get("target_path", "")),
 							"action": str(args.get("action", "")),
 							"local_x": args.get("local_x", null),
-							"local_y": args.get("local_y", null)
+							"local_y": args.get("local_y", null),
+							"input_dispatch": {"event_count": 2},
+							"target_observation": {
+								"button_like": str(args.get("target_path", "")).ends_with("RefreshButton"),
+								"activation_supported": true,
+								"activation_observed": false,
+								"signal_observation": {
+									"supported": true,
+									"observed": false,
+									"activation_observed": false,
+									"input_observed": false,
+									"signals": {}
+								},
+								"state_before": {},
+								"state_after": {},
+								"state_changed": false,
+								"hints": []
+							}
 						})
 					"set_text":
 						return success({"target_path": str(args.get("target_path", "")), "text": str(args.get("text", ""))})
@@ -411,6 +428,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate click_control.")
 	if int(click_control_result.get("data", {}).get("local_x", 0)) != 12:
 		return _failure("system editor_control should preserve click_control local_x.")
+	if int(click_control_result.get("data", {}).get("input_dispatch", {}).get("event_count", 0)) != 2:
+		return _failure("system editor_control should preserve click_control input dispatch evidence.")
+	if not click_control_result.get("data", {}).has("target_observation"):
+		return _failure("system editor_control should preserve click_control target observation metadata.")
 
 	var right_click_control_result: Dictionary = impl.execute("editor_control", {
 		"action": "right_click_control",

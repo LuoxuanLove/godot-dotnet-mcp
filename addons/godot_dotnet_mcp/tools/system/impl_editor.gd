@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Prefer semantic actions such as activate_ui, activate_dock_tab, set_main_screen, menu selection, tree selection, and settings-dialog workflows before raw controls. Use control-level focus, activation, text, value, and popup actions next. Use control-local click, right-click, hover, and leave only as fallback for unsupported UI, context menus, tooltips, or pointer-event validation. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Prefer semantic actions such as activate_ui, activate_dock_tab, set_main_screen, menu selection, tree selection, and settings-dialog workflows before raw controls. Use control-level focus, activation, text, value, and popup actions next. Use control-local click, right-click, hover, and leave only as fallback for unsupported UI, context menus, tooltips, or pointer-event validation; click and right-click fallback results include input dispatch and target observation evidence when available. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
