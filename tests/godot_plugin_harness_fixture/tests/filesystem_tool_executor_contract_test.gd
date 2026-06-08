@@ -150,6 +150,39 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(bulk_counts.get("*.json", -1)) != int(search_find_result.get("data", {}).get("count", -2)):
 		return _failure("Directory get_files bulk count_only should count json files in the same traversal.")
 
+	var guard_cases: Array[Dictionary] = [
+		{
+			"tool": "directory",
+			"args": {"action": "list", "path": "user://outside"}
+		},
+		{
+			"tool": "file_read",
+			"args": {"action": "read", "path": "res://../project.godot"}
+		},
+		{
+			"tool": "file_write",
+			"args": {"action": "write", "path": "/tmp/godot_dotnet_mcp_outside.txt", "content": "outside"}
+		},
+		{
+			"tool": "file_manage",
+			"args": {"action": "copy", "source": file_write_path, "dest": "res://Tmp/../outside_copy.txt"}
+		},
+		{
+			"tool": "json",
+			"args": {"action": "read", "path": "file://outside.json"}
+		},
+		{
+			"tool": "search",
+			"args": {"action": "find_files", "pattern": "*.gd", "path": "res://Tmp/./bad"}
+		}
+	]
+	for guard_case in guard_cases:
+		var guard_result: Dictionary = executor.execute(str(guard_case.get("tool", "")), guard_case.get("args", {}))
+		if bool(guard_result.get("success", false)):
+			return _failure("Filesystem executor should reject unsafe project path case: %s" % str(guard_case))
+		if str(guard_result.get("error_code", "")) != "project_path_outside_project":
+			return _failure("Filesystem executor unsafe path rejection should include project_path_outside_project error_code.")
+
 	return {
 		"name": "filesystem_tool_executor_contracts",
 		"success": true,

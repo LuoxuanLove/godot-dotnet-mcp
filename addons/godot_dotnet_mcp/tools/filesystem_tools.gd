@@ -5,6 +5,9 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Provides file and directory operations within the project
 
 const _PLUGIN_ROOT := "res://addons/godot_dotnet_mcp"
+const _MCPFileUtils = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
+
+var _filesystem_path_utils = _MCPFileUtils.new()
 
 
 func get_tools() -> Array[Dictionary]:
@@ -297,7 +300,10 @@ func _execute_directory(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	match action:
 		"list":
@@ -545,7 +551,10 @@ func _read_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
@@ -565,7 +574,10 @@ func _write_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(path)
 	if not protected_error.is_empty():
@@ -598,7 +610,10 @@ func _append_file(path: String, content: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	# Read existing content if file exists
 	var existing = ""
@@ -615,7 +630,10 @@ func _delete_file(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(path)
 	if not protected_error.is_empty():
@@ -642,7 +660,10 @@ func _file_exists(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	return _success({
 		"path": path,
@@ -654,8 +675,14 @@ func _copy_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	source = _normalize_tool_path(source)
-	dest = _normalize_tool_path(dest)
+	var source_result := _normalize_tool_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_tool_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", ""))
+	dest = str(dest_result.get("path", ""))
 
 	var protected_error = _guard_protected_plugin_write(dest)
 	if not protected_error.is_empty():
@@ -691,8 +718,14 @@ func _move_file(source: String, dest: String) -> Dictionary:
 	if source.is_empty() or dest.is_empty():
 		return _error("Source and destination paths are required")
 
-	source = _normalize_tool_path(source)
-	dest = _normalize_tool_path(dest)
+	var source_result := _normalize_tool_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_tool_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", ""))
+	dest = str(dest_result.get("path", ""))
 
 	var source_error = _guard_protected_plugin_write(source)
 	if not source_error.is_empty():
@@ -731,7 +764,10 @@ func _get_file_info(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	if not FileAccess.file_exists(path):
 		return _error("File not found: %s" % path)
@@ -754,7 +790,10 @@ func _execute_json(args: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	path = _normalize_tool_path(path)
+	var path_result := _normalize_tool_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	match action:
 		"read":
@@ -799,12 +838,12 @@ func _write_json(path: String, data) -> Dictionary:
 
 
 func _normalize_tool_path(path: String) -> String:
-	var normalized = path.strip_edges().replace("\\", "/")
-	if normalized.is_empty():
-		return ""
-	if not normalized.begins_with("res://") and not normalized.begins_with("user://"):
-		normalized = "res://" + normalized
-	return normalized
+	var result := _normalize_tool_path_result(path)
+	return str(result.get("path", "")) if bool(result.get("success", false)) else ""
+
+
+func _normalize_tool_path_result(path: String, allow_root: bool = true) -> Dictionary:
+	return _filesystem_path_utils.validate_project_path(path, allow_root)
 
 
 func _guard_protected_plugin_write(path: String) -> Dictionary:
@@ -871,8 +910,10 @@ func _execute_search(args: Dictionary) -> Dictionary:
 
 
 func _find_files(pattern: String, path: String, recursive: bool) -> Dictionary:
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, pattern, recursive, files)
@@ -889,8 +930,10 @@ func _grep(pattern: String, path: String, filter: String, recursive: bool) -> Di
 	if pattern.is_empty():
 		return _error("Pattern is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
@@ -937,8 +980,10 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	if find.is_empty():
 		return _error("Find pattern is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_tool_path_result(path)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", ""))
 
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
