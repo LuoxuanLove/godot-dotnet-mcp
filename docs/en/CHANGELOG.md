@@ -13,6 +13,10 @@ Target version: 1.4.0.
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 
+### Internal
+
+- Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints.
+
 ## [1.3.0] - 2026-06-08
 
 ### Added
