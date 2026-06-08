@@ -29,7 +29,7 @@ Use these entry points when you need a fast path through the docs:
 ### Prepare A Release
 
 1. [process/release-runbook.md](process/release-runbook.md)
-2. [process/release-notes/release-notes-v1.3.0.md](process/release-notes/release-notes-v1.3.0.md)
+2. [process/release-notes/release-notes-v1.4.0.md](process/release-notes/release-notes-v1.4.0.md)
 3. [CHANGELOG.md](CHANGELOG.md)
 
 ### Validate Changes
