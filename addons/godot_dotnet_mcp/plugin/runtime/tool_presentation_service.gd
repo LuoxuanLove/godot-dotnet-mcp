@@ -141,7 +141,8 @@ static func build_mcp_tool_list(tools: Array, presentation: Dictionary = {}) -> 
 			"loadState": tool.get("load_state", tool.get("loadState", "definitions_only")),
 			"source": tool.get("source", "builtin"),
 			"enabled": bool(tool.get("enabled", true)),
-			"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}})
+			"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
+			"outputSchema": _get_tool_output_schema(tool)
 		}
 		if tool.has("groupPath"):
 			item["groupPath"] = tool.get("groupPath", [])
@@ -214,6 +215,7 @@ static func _build_tool_node(
 		"domainScriptPath": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
 		"domain_script_path": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
 		"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
+		"outputSchema": _get_tool_output_schema(tool),
 		"groupPath": group_path,
 		"treeChildren": child_ids,
 		"children": children
@@ -279,6 +281,7 @@ static func _build_atomic_children(
 			"domainScriptPath": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
 			"domain_script_path": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
 			"inputSchema": atomic_tool.get("inputSchema", {"type": "object", "properties": {}}),
+			"outputSchema": _get_tool_output_schema(atomic_tool),
 			"groupPath": next_path,
 			"treeChildren": child_ids,
 			"children": children
@@ -324,6 +327,39 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"domain_script_path": str(node.get("domain_script_path", "")),
 		"groupPath": node.get("groupPath", []),
 		"treeChildren": node.get("treeChildren", [])
+	}
+
+
+static func _get_tool_output_schema(tool: Dictionary) -> Dictionary:
+	var explicit_schema = tool.get("outputSchema", tool.get("output_schema", null))
+	if explicit_schema is Dictionary:
+		return (explicit_schema as Dictionary).duplicate(true)
+	return _build_default_tool_output_schema()
+
+
+static func _build_default_tool_output_schema() -> Dictionary:
+	return {
+		"type": "object",
+		"additionalProperties": true,
+		"required": ["success"],
+		"properties": {
+			"success": {"type": "boolean"},
+			"data": {
+				"type": "object",
+				"description": "Tool-specific structured payload.",
+				"additionalProperties": true
+			},
+			"message": {"type": "string"},
+			"error": {"type": "string"},
+			"hints": {
+				"type": "array",
+				"items": {"type": "string"}
+			},
+			"activity": {
+				"type": "object",
+				"additionalProperties": true
+			}
+		}
 	}
 
 

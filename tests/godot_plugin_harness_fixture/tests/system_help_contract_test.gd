@@ -67,8 +67,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system help should include schema facts.")
 	if str((schema as Dictionary).get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("system help should expose the unified tool schema version.")
-	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.25":
-		return _failure("system help contract should cover the current scene inspect schema version.")
+	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.28":
+		return _failure("system help contract should cover the current output schema catalog version.")
 
 	var exposed_tools: Array = help_data.get("exposed_system_tools", [])
 	if not exposed_tools.has("system_help") or not exposed_tools.has("system_editor_control"):
