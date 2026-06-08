@@ -13,6 +13,10 @@ Target version: 1.4.0.
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 
+### Internal
+
+- Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
+
 ## [1.3.0] - 2026-06-08
 
 ### Added

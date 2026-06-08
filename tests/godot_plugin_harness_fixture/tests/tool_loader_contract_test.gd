@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
@@ -93,7 +94,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
 		var exposed_name := str(tool_def.get("name", ""))
+		var exposed_category := str(tool_def.get("category", ""))
 		exposed_names.append(exposed_name)
+		if not MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES.has(exposed_category):
+			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
 		if not exposed_name.begins_with("system_"):
 			return _failure("Public MCP exposure should remain high-level system-only, not permission-filtered atomic exposure: %s" % exposed_name)
 	if not exposed_names.has("system_help"):
