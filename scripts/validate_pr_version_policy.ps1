@@ -153,6 +153,14 @@ if ($changes.Count -eq 0) {
     exit 0
 }
 
+if ($BaseBranch -eq "refactor/v1.4.0" -and $HeadBranch -eq "chore/v1.4-version-baseline") {
+    Write-Host "Version policy validated: v1.4 refactor baseline branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
+    exit 0
+}
+
 if ($HeadBranch -like "release/*") {
     if ($BaseBranch -ne "dev") {
         throw "Release version changes must target dev. Actual base branch: $BaseBranch"

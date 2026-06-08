@@ -4,13 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.3.0])
+## [Unreleased] ([1.4.0])
 
-Target version: 1.3.0.
+Target version: 1.4.0.
 
 ### Added
 
 - Added the v1.3.0 semantic editor automation model: editor UI guidance now directs clients toward semantic workflows first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
+- Initialized the v1.4.0 protocol refactor version line and release-note source template.
 - Added `system_editor_control(action="wait_for_ui")` so clients can wait for real editor controls by existence, visibility, text, and enabled/disabled state before continuing an automation workflow.
 - Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` for inspecting and cropping visible floating editor popups or windows by returned popup paths.
 - Added click fallback observation evidence for `system_editor_control` and low-level `ui_control` click actions, including dispatched input events, Button-like target state before/after the click, observed control signals, and hints when input is delivered without activation evidence.
@@ -29,7 +30,7 @@ Target version: 1.3.0.
 
 ### Changed
 
-- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.3.0`.
+- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Changed `system_settings_dialog(action="capture")` to prefer visible settings popup/window bounds, then dialog control bounds, before falling back to full-editor screenshots, with `capture_backend` and `capture_target_path` evidence metadata.
 - Changed project runtime control to use `system_project_lifecycle(action=start|stop)` as the public surface and removed compatibility aliases for the older project run/stop tool names.
 - Changed generated User-tool scaffolds to extend the base tool script by resource path, reducing headless catalog-scan dependence on global script-class registration.
