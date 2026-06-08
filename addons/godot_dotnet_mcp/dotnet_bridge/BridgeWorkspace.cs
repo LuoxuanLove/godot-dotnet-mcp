@@ -7,6 +7,8 @@ namespace GodotDotnetMcp.DotnetBridge;
 
 internal static class WorkspacePathResolver
 {
+    private static readonly string ProjectRoot = ResolveProjectRoot();
+
     public static string ResolveExistingPath(string path)
     {
         var resolved = ResolvePath(path);
@@ -52,19 +54,26 @@ internal static class WorkspacePathResolver
 
     public static string? FindNearestProjectFile(string path)
     {
-        var currentDirectory = File.Exists(path) ? Path.GetDirectoryName(path) : path;
+        var resolvedPath = ResolvePath(path);
+        var currentDirectory = File.Exists(resolvedPath) ? Path.GetDirectoryName(resolvedPath) : resolvedPath;
         if (string.IsNullOrWhiteSpace(currentDirectory))
         {
             return null;
         }
 
         var directory = new DirectoryInfo(currentDirectory);
-        while (directory is not null)
+        var root = new DirectoryInfo(ProjectRoot);
+        while (directory is not null && IsPathInsideProject(directory.FullName))
         {
             var projectFiles = directory.GetFiles("*.csproj", SearchOption.TopDirectoryOnly);
             if (projectFiles.Length > 0)
             {
                 return projectFiles[0].FullName;
+            }
+
+            if (SamePath(directory.FullName, root.FullName))
+            {
+                break;
             }
 
             directory = directory.Parent;
@@ -75,8 +84,232 @@ internal static class WorkspacePathResolver
 
     private static string ResolvePath(string path)
     {
-        return Path.GetFullPath(Environment.ExpandEnvironmentVariables(path));
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new BridgeToolException("Path is required.");
+        }
+
+        var normalized = Environment.ExpandEnvironmentVariables(path.Trim()).Replace('\\', '/');
+        if (normalized.StartsWith("user://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ProjectPathException(path);
+        }
+
+        var candidate = normalized.StartsWith("res://", StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(ProjectRoot, normalized["res://".Length..].TrimStart('/'))
+            : normalized;
+
+        if (HasUriScheme(candidate) || HasTraversalSegment(candidate))
+        {
+            throw ProjectPathException(path);
+        }
+
+        var resolved = Path.GetFullPath(candidate, ProjectRoot);
+        if (!IsPathInsideProject(resolved))
+        {
+            throw ProjectPathException(path);
+        }
+
+        if (PathUsesReparsePointSegment(ProjectRoot, resolved))
+        {
+            throw ProjectPathException(path);
+        }
+
+        return resolved;
     }
+
+    private static string ResolveProjectRoot()
+    {
+        var candidates = new List<string?>
+        {
+            Environment.GetEnvironmentVariable("GODOT_DOTNET_MCP_PROJECT_ROOT"),
+            Environment.CurrentDirectory,
+            AppContext.BaseDirectory,
+            Path.GetDirectoryName(typeof(WorkspacePathResolver).Assembly.Location)
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var root = FindProjectRootFrom(candidate);
+            if (root is null)
+            {
+                continue;
+            }
+
+            var filesystemRoot = Path.GetPathRoot(root) ?? root;
+            if (PathUsesReparsePointSegment(filesystemRoot, root))
+            {
+                throw new BridgeToolException("The .NET bridge project root must not traverse symlink, junction, or reparse-point segments.");
+            }
+
+            return root;
+        }
+
+        throw new BridgeToolException("The .NET bridge project root must point at a Godot project directory containing project.godot.");
+    }
+
+    private static string? FindProjectRootFrom(string? startPath)
+    {
+        if (string.IsNullOrWhiteSpace(startPath))
+        {
+            return null;
+        }
+
+        var resolved = Path.GetFullPath(Environment.ExpandEnvironmentVariables(startPath));
+        if (File.Exists(resolved))
+        {
+            resolved = Path.GetDirectoryName(resolved) ?? resolved;
+        }
+
+        var directory = new DirectoryInfo(resolved);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "project.godot")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static bool IsPathInsideProject(string path)
+    {
+        var resolved = Path.GetFullPath(path);
+        return SamePath(resolved, ProjectRoot)
+            || resolved.StartsWith(EnsureTrailingSeparator(ProjectRoot), PathComparison);
+    }
+
+    private static bool SamePath(string left, string right)
+    {
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            PathComparison);
+    }
+
+    private static bool HasUriScheme(string path)
+    {
+        var marker = path.IndexOf(':', StringComparison.Ordinal);
+        if (marker <= 0)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < marker; index++)
+        {
+            var character = path[index];
+            if (index == 0 && !char.IsAsciiLetter(character))
+            {
+                return false;
+            }
+
+            if (!char.IsAsciiLetterOrDigit(character) && character is not '+' and not '-' and not '.')
+            {
+                return false;
+            }
+        }
+
+        if (OperatingSystem.IsWindows() && marker == 1 && path.Length > 2 && (path[2] == '/' || path[2] == '\\'))
+        {
+            return false;
+        }
+
+        return !path.StartsWith("res://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasTraversalSegment(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        foreach (var segment in normalized.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment is "." or "..")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool PathUsesReparsePointSegment(string rootPath, string path)
+    {
+        var root = Path.GetFullPath(rootPath);
+        var resolved = Path.GetFullPath(path);
+        if (SamePath(resolved, root))
+        {
+            return IsReparsePoint(resolved);
+        }
+
+        var relativePath = Path.GetRelativePath(root, resolved);
+        if (IsParentRelativePath(relativePath) || Path.IsPathRooted(relativePath))
+        {
+            return true;
+        }
+
+        var currentPath = root;
+        foreach (var segment in relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                continue;
+            }
+
+            currentPath = Path.Combine(currentPath, segment);
+            if (!File.Exists(currentPath) && !Directory.Exists(currentPath))
+            {
+                return false;
+            }
+
+            if (IsReparsePoint(currentPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    private static bool IsParentRelativePath(string path)
+    {
+        return string.Equals(path, "..", StringComparison.Ordinal)
+            || path.StartsWith("../", StringComparison.Ordinal)
+            || path.StartsWith(@"..\", StringComparison.Ordinal);
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        var normalized = Path.GetFullPath(path);
+        return Path.EndsInDirectorySeparator(normalized)
+            ? normalized
+            : normalized + Path.DirectorySeparatorChar;
+    }
+
+    private static BridgeToolException ProjectPathException(string path)
+    {
+        return new BridgeToolException($"Path must stay inside the Godot project root and avoid traversal or external schemes: {path}");
+    }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }
 
 internal sealed record DotnetBuildResult(
