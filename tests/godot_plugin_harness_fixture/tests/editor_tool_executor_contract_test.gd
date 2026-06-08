@@ -397,7 +397,6 @@ class FakeNumericUiControl:
 
 	var value := 0.0
 	var editable := true
-	var read_only := false
 
 	func _init(node_name: String = "", ui_class: String = "SpinBox", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
 		super(node_name, ui_class, rect)
