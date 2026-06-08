@@ -304,6 +304,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_stdio_tool_arguments_result = invalid_stdio_tool_arguments.get("result", {})
 	if not (invalid_stdio_tool_arguments_result is Dictionary) or not bool((invalid_stdio_tool_arguments_result as Dictionary).get("isError", false)):
 		return _failure("stdio tools/call should return isError=true for non-object arguments.")
+	var invalid_stdio_tool_arguments_structured = (invalid_stdio_tool_arguments_result as Dictionary).get("structuredContent", {})
+	if not (invalid_stdio_tool_arguments_structured is Dictionary) or bool((invalid_stdio_tool_arguments_structured as Dictionary).get("success", true)):
+		return _failure("stdio tools/call non-object arguments should expose failing structuredContent.")
 	var invalid_stdio_tool_arguments_content = (invalid_stdio_tool_arguments_result as Dictionary).get("content", [])
 	if not (invalid_stdio_tool_arguments_content is Array) or (invalid_stdio_tool_arguments_content as Array).is_empty():
 		return _failure("stdio tools/call non-object arguments should include text content.")

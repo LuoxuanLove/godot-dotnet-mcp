@@ -219,6 +219,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Tool RPC router did not preserve the success flag in the serialized payload.")
+	var structured = success_result.get("structuredContent", {})
+	if not (structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent for successful tool responses.")
+	var structured_dict: Dictionary = structured
+	if bool(structured_dict.get("success", false)) != bool(parsed_dict.get("success", false)):
+		return _failure("Tool RPC router structuredContent should match the compatibility text JSON success flag.")
+	if JSON.stringify(structured_dict.get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
+		return _failure("Tool RPC router structuredContent should match the compatibility text JSON data payload.")
 	var parsed_data = parsed_dict.get("data", {})
 	if not (parsed_data is Dictionary) or str((parsed_data as Dictionary).get("tool", "")) != "project_state":
 		return _failure("Tool RPC router did not preserve the resolved tool name in the serialized payload.")
@@ -305,6 +313,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(failing_result.get("isError", false)):
 		return _failure("Tool RPC router should mark failing tool execution as an error.")
+	var failing_structured = failing_result.get("structuredContent", {})
+	if not (failing_structured is Dictionary) or bool((failing_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router should expose structuredContent for failing tool responses.")
 	var debug_events := MCPDebugBuffer.get_recent(1)
 	if debug_events.is_empty():
 		return _failure("Tool RPC router should record failing tool calls in the debug buffer.")
@@ -330,6 +341,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plain_payload = JSON.parse_string(str(((plain_result.get("content", []) as Array)[0] as Dictionary).get("text", "")))
 	if not (plain_payload is Dictionary):
 		return _failure("Tool RPC router should serialize plain activity test payload.")
+	var plain_structured = plain_result.get("structuredContent", {})
+	if not (plain_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent for normalized non-protocol activity payloads.")
+	if JSON.stringify((plain_structured as Dictionary).get("data", {})) != JSON.stringify((plain_payload as Dictionary).get("data", {})):
+		return _failure("Tool RPC router structuredContent should preserve normalized non-protocol activity data.")
 	if (plain_payload as Dictionary).has("activity"):
 		return _failure("Tool RPC router should reserve top-level activity only for protocol activity summaries.")
 	var plain_data = (plain_payload as Dictionary).get("data", {})

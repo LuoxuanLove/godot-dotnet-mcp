@@ -368,6 +368,7 @@ func _create_tool_response(result: Dictionary, id) -> Dictionary:
 	var is_error := not bool(normalized.get("success", false))
 	return _create_json_rpc_response({
 		"content": [{"type": "text", "text": result_text}],
+		"structuredContent": sanitized,
 		"isError": is_error
 	}, id)
 
