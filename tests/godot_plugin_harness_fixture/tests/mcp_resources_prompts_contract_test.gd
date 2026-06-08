@@ -7,6 +7,7 @@ const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtim
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
@@ -43,6 +44,9 @@ class FakeStdioToolLoader extends RefCounted:
 
 	func set_tool_activity_registry(registry) -> void:
 		_tool_activity_registry = registry
+
+	func get_tool_activity_registry():
+		return _tool_activity_registry
 
 	func get_tool_definitions() -> Array[Dictionary]:
 		return [{
@@ -419,7 +423,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio full request path should reject non-object params before method dispatch.")
 	stdio_server.set("_last_written_response", {})
-	stdio_server.initialize(FakeStdioToolLoader.new())
+	var shared_stdio_loader := FakeStdioToolLoader.new()
+	var shared_stdio_registry = ToolActivityRegistryScript.new()
+	shared_stdio_loader.set_tool_activity_registry(shared_stdio_registry)
+	stdio_server.initialize(shared_stdio_loader)
+	if shared_stdio_loader.get_tool_activity_registry() != shared_stdio_registry:
+		return _failure("stdio initialization should not replace an existing shared tool activity registry.")
 	var stdio_tool_call_result: Dictionary = await stdio_server._handle_tools_call_async({
 		"name": "system_project_state",
 		"arguments": {"summary": true}

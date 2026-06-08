@@ -310,7 +310,7 @@ func _configure_resources_prompts_services() -> void:
 	var resources_context = MCPResourcesServiceContextScript.new()
 	resources_context.get_tool_loader = func(): return _tool_loader
 	resources_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
-	resources_context.get_tool_activity_registry = func(): return _tool_activity_registry
+	resources_context.get_tool_activity_registry = Callable(self, "_get_stdio_tool_activity_registry")
 	resources_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
 	_resources_service.configure(resources_context)
 	var prompts_context = MCPPromptsServiceContextScript.new()
@@ -319,8 +319,20 @@ func _configure_resources_prompts_services() -> void:
 
 
 func _configure_tool_activity_registry() -> void:
-	if _tool_loader != null and _tool_loader.has_method("set_tool_activity_registry"):
+	if _tool_loader == null or not _tool_loader.has_method("set_tool_activity_registry"):
+		return
+	if _tool_loader.has_method("get_tool_activity_registry") and _tool_loader.get_tool_activity_registry() != null:
+		return
+	if _tool_loader.has_method("set_tool_activity_registry"):
 		_tool_loader.set_tool_activity_registry(_tool_activity_registry)
+
+
+func _get_stdio_tool_activity_registry():
+	if _tool_loader != null and _tool_loader.has_method("get_tool_activity_registry"):
+		var registry = _tool_loader.get_tool_activity_registry()
+		if registry != null:
+			return registry
+	return _tool_activity_registry
 
 
 func _ensure_resources_prompts_services() -> void:
