@@ -176,6 +176,12 @@ function Assert-ProtocolFactsParity {
     if ($staleFallbackKeys.Count -gt 0) {
         throw "Protocol facts parity failed for $Label error_codes: fallback has stale key(s): $($staleFallbackKeys -join ', ')."
     }
+
+    foreach ($key in $jsonErrorCodeKeys) {
+        if ([string]$jsonFacts.error_codes.$key -ne [string]$fallbackFacts.error_codes.$key) {
+            throw "Protocol facts parity failed for $Label error_codes.${key}: JSON='$($jsonFacts.error_codes.$key)' but fallback='$($fallbackFacts.error_codes.$key)'."
+        }
+    }
 }
 
 function Invoke-Git {
