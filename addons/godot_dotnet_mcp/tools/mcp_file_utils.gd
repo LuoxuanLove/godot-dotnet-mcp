@@ -47,6 +47,8 @@ func validate_project_path(path: String, allow_root: bool = true) -> Dictionary:
 		compare_target = compare_target.to_lower()
 	if compare_target != compare_root and not compare_target.begins_with(compare_root + "/"):
 		return _project_path_error("Project path resolves outside the project tree.", raw_path, normalized)
+	if _path_uses_link_segment(project_root, relative):
+		return _project_path_error("Project paths must not traverse symlink, junction, or reparse-point segments.", raw_path, normalized)
 
 	return {
 		"success": true,
@@ -123,6 +125,18 @@ func _normalize_absolute(path: String) -> String:
 	while normalized.ends_with("/") and normalized.length() > 1:
 		normalized = normalized.substr(0, normalized.length() - 1)
 	return normalized
+
+
+func _path_uses_link_segment(project_root: String, relative_path: String) -> bool:
+	var current_path := project_root
+	for segment in relative_path.split("/", false):
+		var parent_dir := DirAccess.open(current_path)
+		current_path = current_path.path_join(segment)
+		if not DirAccess.dir_exists_absolute(current_path) and not FileAccess.file_exists(current_path):
+			return false
+		if parent_dir != null and parent_dir.is_link(segment):
+			return true
+	return false
 
 
 func _success(data = null, message: String = "") -> Dictionary:

@@ -110,24 +110,69 @@ internal static class WorkspacePathResolver
             throw ProjectPathException(path);
         }
 
+        if (PathUsesReparsePointSegment(ProjectRoot, resolved))
+        {
+            throw ProjectPathException(path);
+        }
+
         return resolved;
     }
 
     private static string ResolveProjectRoot()
     {
-        var root = Environment.GetEnvironmentVariable("GODOT_DOTNET_MCP_PROJECT_ROOT");
-        if (string.IsNullOrWhiteSpace(root))
+        var candidates = new List<string?>
         {
-            root = Environment.CurrentDirectory;
+            Environment.GetEnvironmentVariable("GODOT_DOTNET_MCP_PROJECT_ROOT"),
+            Environment.CurrentDirectory,
+            AppContext.BaseDirectory,
+            Path.GetDirectoryName(typeof(WorkspacePathResolver).Assembly.Location)
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var root = FindProjectRootFrom(candidate);
+            if (root is null)
+            {
+                continue;
+            }
+
+            var filesystemRoot = Path.GetPathRoot(root) ?? root;
+            if (PathUsesReparsePointSegment(filesystemRoot, root))
+            {
+                throw new BridgeToolException("The .NET bridge project root must not traverse symlink, junction, or reparse-point segments.");
+            }
+
+            return root;
         }
 
-        var resolvedRoot = Path.GetFullPath(Environment.ExpandEnvironmentVariables(root));
-        if (!File.Exists(Path.Combine(resolvedRoot, "project.godot")))
+        throw new BridgeToolException("The .NET bridge project root must point at a Godot project directory containing project.godot.");
+    }
+
+    private static string? FindProjectRootFrom(string? startPath)
+    {
+        if (string.IsNullOrWhiteSpace(startPath))
         {
-            throw new BridgeToolException("The .NET bridge project root must point at a Godot project directory containing project.godot.");
+            return null;
         }
 
-        return resolvedRoot;
+        var resolved = Path.GetFullPath(Environment.ExpandEnvironmentVariables(startPath));
+        if (File.Exists(resolved))
+        {
+            resolved = Path.GetDirectoryName(resolved) ?? resolved;
+        }
+
+        var directory = new DirectoryInfo(resolved);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "project.godot")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     private static bool IsPathInsideProject(string path)
@@ -187,6 +232,60 @@ internal static class WorkspacePathResolver
         }
 
         return false;
+    }
+
+    private static bool PathUsesReparsePointSegment(string rootPath, string path)
+    {
+        var root = Path.GetFullPath(rootPath);
+        var resolved = Path.GetFullPath(path);
+        if (SamePath(resolved, root))
+        {
+            return IsReparsePoint(resolved);
+        }
+
+        var relativePath = Path.GetRelativePath(root, resolved);
+        if (relativePath.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+        {
+            return true;
+        }
+
+        var currentPath = root;
+        foreach (var segment in relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                continue;
+            }
+
+            currentPath = Path.Combine(currentPath, segment);
+            if (!File.Exists(currentPath) && !Directory.Exists(currentPath))
+            {
+                return false;
+            }
+
+            if (IsReparsePoint(currentPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
     }
 
     private static string EnsureTrailingSeparator(string path)

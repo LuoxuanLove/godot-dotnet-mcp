@@ -480,6 +480,12 @@ func _count_files(path: String, filter: String, recursive: bool) -> int:
 
 
 func _collect_files(path: String, filter: String, recursive: bool, results: Array[String]) -> void:
+	if FileAccess.file_exists(path):
+		var file_name := path.get_file()
+		if file_name.match(filter):
+			results.append(path)
+		return
+
 	var pending: Array = [path]
 	while not pending.is_empty():
 		var current: String = pending.pop_back()
@@ -993,7 +999,7 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	var files: Array[String] = []
 	_collect_files(path, filter, recursive, files)
 
-	var modified_files: Array[String] = []
+	var pending_writes: Array[Dictionary] = []
 	var total_replacements = 0
 
 	for file_path in files:
@@ -1006,12 +1012,23 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 
 		var new_content = content.replace(find, replace)
 		if new_content != content:
-			var write_file = FileAccess.open(file_path, FileAccess.WRITE)
-			if write_file:
-				write_file.store_string(new_content)
-				write_file.close()
-				modified_files.append(file_path)
-				total_replacements += content.count(find)
+			var protected_error := _guard_protected_plugin_write(file_path)
+			if not protected_error.is_empty():
+				return protected_error
+			pending_writes.append({
+				"path": file_path,
+				"content": new_content
+			})
+			total_replacements += content.count(find)
+
+	var modified_files: Array[String] = []
+	for pending_write in pending_writes:
+		var file_path := str(pending_write.get("path", ""))
+		var write_file = FileAccess.open(file_path, FileAccess.WRITE)
+		if write_file:
+			write_file.store_string(str(pending_write.get("content", "")))
+			write_file.close()
+			modified_files.append(file_path)
 
 	# Refresh filesystem
 	var fs = _get_filesystem()

@@ -102,6 +102,42 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(search_grep_result.get("success", false)):
 		return _failure("Search grep failed through the split search service.")
 
+	var search_replace_result: Dictionary = executor.execute("search", {
+		"action": "find_and_replace",
+		"find": "future architecture",
+		"replace": "current architecture",
+		"path": TEMP_ROOT,
+		"filter": "*.txt",
+		"recursive": true
+	})
+	if not bool(search_replace_result.get("success", false)):
+		return _failure("Search find_and_replace failed through the split search service.")
+	if int(search_replace_result.get("data", {}).get("files_modified", -1)) != 2:
+		return _failure("Search find_and_replace should update both text files in the temporary tree.")
+
+	var replaced_read_result: Dictionary = executor.execute("file_read", {
+		"action": "read",
+		"path": file_write_path
+	})
+	if not bool(replaced_read_result.get("success", false)):
+		return _failure("File read failed after search find_and_replace.")
+	if str(replaced_read_result.get("data", {}).get("content", "")) != "current architecture only":
+		return _failure("Search find_and_replace returned success without updating file content.")
+
+	var plugin_cfg_content := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.cfg")
+	var protected_replace_result: Dictionary = executor.execute("search", {
+		"action": "find_and_replace",
+		"find": "Godot .NET MCP",
+		"replace": "Unsafe Plugin Rewrite",
+		"path": "res://addons/godot_dotnet_mcp/plugin.cfg",
+		"filter": "*.cfg",
+		"recursive": false
+	})
+	if bool(protected_replace_result.get("success", false)):
+		return _failure("Search find_and_replace should reject protected plugin writes.")
+	if FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.cfg") != plugin_cfg_content:
+		return _failure("Search find_and_replace should leave protected plugin files unchanged.")
+
 	var directory_files_result: Dictionary = executor.execute("directory", {
 		"action": "get_files",
 		"path": TEMP_ROOT,
