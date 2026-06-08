@@ -481,10 +481,13 @@ func _build_client_capability_model(client_id: String, model: Dictionary, detect
 	var launch_supported := bool(detection.get("launch_supported", false))
 	var path_pick_supported := bool(detection.get("path_pick_supported", false))
 	var path_clear_supported := bool(detection.get("path_clear_supported", false))
+	var detection_capability: Dictionary = detection.get("capability", {}) if detection.get("capability", {}) is Dictionary else {}
 	var visible_write_supported := bool(model.get("writeable", false)) or bool(model.get("remove_supported", false))
 	var has_manual_config_guidance := _has_manual_config_guidance(client_id, config_path, entry_status)
 	var kind := "copy_guidance"
-	if auto_add_supported:
+	if not detection_capability.is_empty():
+		kind = _normalize_client_support_level(str(detection_capability.get("support_level", detection_capability.get("kind", ""))))
+	elif auto_add_supported:
 		kind = "auto_add"
 	elif write_supported and visible_write_supported:
 		kind = "full_write"
@@ -493,8 +496,16 @@ func _build_client_capability_model(client_id: String, model: Dictionary, detect
 	elif launch_supported or path_pick_supported or path_clear_supported:
 		kind = "launch_path"
 
-	return {
+	var capability := detection_capability.duplicate(true)
+	capability["kind"] = kind
+	capability["support_level"] = kind
+	capability["actions"] = _build_client_capability_actions(client_id, kind, launch_supported, path_pick_supported, path_clear_supported, not config_path.is_empty())
+	var capability_notes: Variant = capability.get("notes", [])
+	if not capability.has("notes") or not (capability_notes is Array):
+		capability["notes"] = ["config_client_capability_%s" % kind]
+	capability.merge({
 		"kind": kind,
+		"support_level": kind,
 		"client_id": client_id,
 		"write_supported": write_supported,
 		"auto_add_supported": auto_add_supported,
@@ -503,8 +514,55 @@ func _build_client_capability_model(client_id: String, model: Dictionary, detect
 		"path_clear_supported": path_clear_supported,
 		"config_path": config_path,
 		"entry_status": entry_status,
-		"one_click_supported": write_supported or auto_add_supported
-	}
+		"one_click_supported": kind in ["full_write", "auto_add"]
+	}, true)
+	return capability
+
+
+func _normalize_client_support_level(support_level: String) -> String:
+	match support_level:
+		"full_write", "auto_add", "manual_guidance", "launch_path", "copy_guidance":
+			return support_level
+		_:
+			return "copy_guidance"
+
+
+func _build_client_capability_actions(
+	client_id: String,
+	support_level: String,
+	launch_supported: bool,
+	path_pick_supported: bool,
+	path_clear_supported: bool,
+	config_path_available: bool
+) -> Array[String]:
+	var actions: Array[String] = ["copy_config"]
+	match support_level:
+		"full_write":
+			actions.append("write_config")
+			actions.append("remove_config")
+		"auto_add":
+			actions.append("auto_add")
+			actions.append("remove_config")
+		"manual_guidance":
+			actions.append("open_config_dir")
+	if launch_supported:
+		actions.append("open_terminal" if client_id in ["claude_code", "codex", "gemini", "opencode", "qwen"] else "open_app")
+	if path_pick_supported:
+		actions.append("pick_path")
+	if path_clear_supported:
+		actions.append("clear_path")
+	if config_path_available:
+		actions.append("open_config_dir")
+		actions.append("open_config_file")
+	return _deduplicate_strings(actions)
+
+
+func _deduplicate_strings(values: Array[String]) -> Array[String]:
+	var deduplicated: Array[String] = []
+	for value in values:
+		if not deduplicated.has(value):
+			deduplicated.append(value)
+	return deduplicated
 
 
 func _has_manual_config_guidance(client_id: String, config_path: String, entry_status: String) -> bool:

@@ -98,25 +98,42 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Public MCP exposure should remain high-level system-only, not permission-filtered atomic exposure: %s" % exposed_name)
 	if not exposed_names.has("system_help"):
 		return _failure("Tool loader did not expose system_help under the default tool access provider.")
+	if not exposed_names.has("system_tool_catalog"):
+		return _failure("Tool loader did not expose system_tool_catalog under the default tool access provider.")
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_state"):
 		return _failure("Tool loader did not expose system_editor_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_plugin_control"):
 		return _failure("Tool loader did not expose system_editor_plugin_control under the default tool access provider.")
+	if not exposed_names.has("system_editor_evidence"):
+		return _failure("Tool loader did not expose system_editor_evidence under the default tool access provider.")
 	if not exposed_names.has("system_settings_dialog"):
 		return _failure("Tool loader did not expose system_settings_dialog under the default tool access provider.")
+	if not exposed_names.has("system_inspector"):
+		return _failure("Tool loader did not expose system_inspector under the default tool access provider.")
 	if not exposed_names.has("system_plugin_reload"):
 		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
 	if not exposed_names.has("system_plugin_update"):
 		return _failure("Tool loader did not expose the high-level system_plugin_update entry.")
+	if not exposed_names.has("system_plugin_maintenance"):
+		return _failure("Tool loader did not expose the high-level system_plugin_maintenance entry.")
 	if not exposed_names.has("system_dap_debugger"):
 		return _failure("Tool loader did not expose the high-level system_dap_debugger entry.")
 	if not exposed_names.has("system_tool_activity"):
 		return _failure("Tool loader did not expose the high-level system_tool_activity entry.")
+	if not exposed_names.has("system_scene_inspect"):
+		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
+	if not exposed_names.has("system_project_lifecycle"):
+		return _failure("Tool loader did not expose the unified system_project_lifecycle entry.")
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		if exposed_names.has(removed_tool_name):
+			return _failure("Tool loader should not expose removed project lifecycle entry '%s'." % removed_tool_name)
+		if _loader.is_tool_exposed(removed_tool_name):
+			return _failure("Tool loader should not keep removed project lifecycle entry '%s' callable." % removed_tool_name)
 	for merged_runtime_tool_name in ["system_runtime_capture", "system_runtime_input"]:
 		if exposed_names.has(merged_runtime_tool_name):
 			return _failure("Tool loader should merge runtime I/O into system_runtime_step, not expose '%s'." % merged_runtime_tool_name)
@@ -143,6 +160,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bool((editor_section as Dictionary).get("available", true)):
 		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
 
+	var editor_evidence_result: Dictionary = await _loader.execute_tool_async("system", "editor_evidence", {"action": "status"})
+	if not bool(editor_evidence_result.get("success", false)):
+		return _failure("Tool loader should route system_editor_evidence status successfully.")
+	var editor_evidence_data = editor_evidence_result.get("data", {})
+	if not (editor_evidence_data is Dictionary) or not (((editor_evidence_data as Dictionary).get("surfaces", []) as Array).has("active_dialog")):
+		return _failure("Tool loader system_editor_evidence should return available capture surfaces.")
+
 	var settings_dialog_result: Dictionary = await _loader.execute_tool_async("system", "settings_dialog", {
 		"action": "status",
 		"surface": "project_settings"
@@ -152,6 +176,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var settings_dialog_data = settings_dialog_result.get("data", {})
 	if not (settings_dialog_data is Dictionary) or str((settings_dialog_data as Dictionary).get("surface", "")) != "project_settings":
 		return _failure("Tool loader system_settings_dialog should return a settings surface payload.")
+	var inspector_result: Dictionary = await _loader.execute_tool_async("system", "inspector", {"action": "status"})
+	var inspector_data = inspector_result.get("data", {})
+	if not (inspector_data is Dictionary) or not (inspector_data as Dictionary).has("available"):
+		return _failure("Tool loader should route system_inspector status and return an Inspector workflow payload.")
 
 	var project_state_result: Dictionary = await _loader.execute_tool_async("system", "project_state", {"include_runtime_health": true})
 	if not bool(project_state_result.get("success", false)):
@@ -222,6 +250,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visual_guidance = (help_data as Dictionary).get("visual_guidance", {})
 	if not (visual_guidance is Dictionary) or not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
 		return _failure("Tool loader system_help should expose hidden-control guidance.")
+	var catalog_result: Dictionary = await _loader.execute_tool_async("system", "tool_catalog", {"query": "runtime", "limit": 5})
+	if not bool(catalog_result.get("success", false)):
+		return _failure("Tool loader should route system_tool_catalog successfully.")
+	var catalog_data = catalog_result.get("data", {})
+	if not (catalog_data is Dictionary) or not ((catalog_data as Dictionary).get("matches", []) is Array):
+		return _failure("Tool loader system_tool_catalog should return a matches array.")
 	var activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {"action": "status"})
 	if not bool(activity_result.get("success", false)):
 		return _failure("Tool loader should route system_tool_activity successfully.")
@@ -252,6 +286,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_status: Dictionary = _loader.get_tool_loader_status()
 	if int(disabled_status.get("exposed_tool_count", 0)) >= int(status.get("exposed_tool_count", 0)):
 		return _failure("Disabling system_project_state did not reduce the exposed tool count.")
+
+	_loader.set_disabled_tools(["system_project_lifecycle"])
+	if _loader.is_tool_exposed("system_project_lifecycle"):
+		return _failure("Disabled tool system_project_lifecycle should no longer be exposed.")
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		if _loader.is_tool_exposed(removed_tool_name):
+			return _failure("Removed project lifecycle entry '%s' should remain unavailable even when system_project_lifecycle is disabled." % removed_tool_name)
 
 	return {
 		"name": "tool_loader_contracts",

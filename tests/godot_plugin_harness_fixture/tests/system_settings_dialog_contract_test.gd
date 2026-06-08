@@ -20,6 +20,9 @@ class FakeBridge extends RefCounted:
 	var snap_2d_transforms_to_pixel := false
 	var max_renderable_elements := 128000.0
 	var direct_spin_value := 3.0
+	var popup_capture_enabled := true
+	var control_capture_enabled := true
+	var editor_capture_enabled := true
 	var calls: Array[Dictionary] = []
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -93,6 +96,13 @@ class FakeBridge extends RefCounted:
 							snap_2d_transforms_to_pixel = not snap_2d_transforms_to_pixel
 							return success({"target_path": target_path})
 						return error("Activation target not found")
+					"capture_control":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.contains("ProjectSettings") and project_visible and control_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "capture_mode": "control"})
+						if target_path.contains("EditorSettings") and editor_visible and control_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "capture_mode": "control"})
+						return error("Control capture target not found")
 					_:
 						return error("Unsupported editor_ui_control action: %s" % action)
 			"editor_popup":
@@ -104,6 +114,13 @@ class FakeBridge extends RefCounted:
 						if editor_visible:
 							popups.append({"node_path": "/root/EditorSettings", "title": "Editor Settings", "class": "AcceptDialog"})
 						return success({"count": popups.size(), "popups": popups})
+					"capture_popup":
+						var target_path := str(args.get("target_path", ""))
+						if target_path.contains("ProjectSettings") and project_visible and popup_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "popup_path": "/root/ProjectSettings", "capture_mode": "popup"})
+						if target_path.contains("EditorSettings") and editor_visible and popup_capture_enabled:
+							return success({"path": str(args.get("path", "user://settings_dialog.png")), "target_path": target_path, "popup_path": "/root/EditorSettings", "capture_mode": "popup"})
+						return error("Popup capture target not found")
 					"close_popup":
 						var target_path := str(args.get("target_path", ""))
 						if target_path.contains("ProjectSettings"):
@@ -114,7 +131,7 @@ class FakeBridge extends RefCounted:
 					_:
 						return error("Unsupported editor_popup action: %s" % action)
 			"editor_screenshot":
-				if action == "capture":
+				if action == "capture" and editor_capture_enabled:
 					return success({"path": str(args.get("path", "user://settings_dialog.png")), "capture_mode": "full"})
 				return error("Unsupported editor_screenshot action: %s" % action)
 			_:
@@ -308,9 +325,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var schema: Dictionary = tool_defs[0].get("inputSchema", {})
 	var properties: Dictionary = schema.get("properties", {})
 	var actions: Array = properties.get("action", {}).get("enum", [])
-	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "capture", "close"]:
+	for action in ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "run_task", "capture", "close"]:
 		if not actions.has(action):
 			return _failure("settings_dialog schema should expose action: %s." % action)
+	for property_name in ["capture_policy", "require_capture"]:
+		if not properties.has(property_name):
+			return _failure("settings_dialog schema should expose %s for run_task workflows." % property_name)
 	if not properties.has("tab_index"):
 		return _failure("settings_dialog schema should expose tab_index for activate_tab.")
 	for property_name in ["category", "category_path", "category_index"]:
@@ -991,6 +1011,236 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if _has_value_payload_key(ambiguous_resolve_data.get("resolution", {})):
 		return _failure("resolve_row ambiguous failure should not expose value-bearing fields through resolution candidates.")
 
+	fake.project_name_value = "Example"
+	var calls_before_read_task := fake.calls.size()
+	var read_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"category_path": "Application/Config",
+		"setting_path": "application/config/name",
+		"capture_policy": "none",
+		"limit": 10
+	})
+	if not bool(read_task.get("success", false)):
+		return _failure("run_task read mode should open, locate, resolve, and read a unique settings row.")
+	var read_task_data: Dictionary = read_task.get("data", {})
+	if str(read_task_data.get("task_action", "")) != "run_task" or str(read_task_data.get("mode", "")) != "read":
+		return _failure("run_task read mode should report its task action and mode.")
+	if str(read_task_data.get("before", {}).get("value", "")) != "Example":
+		return _failure("run_task read mode should preserve the before value payload.")
+	if not read_task_data.get("steps", {}).has("open") or not read_task_data.get("steps", {}).has("resolve_row") or not read_task_data.get("steps", {}).has("read_before"):
+		return _failure("run_task read mode should preserve high-level step evidence.")
+	if _task_steps_have_raw_payload(read_task_data.get("steps", {})):
+		return _failure("run_task step evidence should summarize workflow data without exposing raw control/result payloads.")
+	if _has_call_since(fake.calls, calls_before_read_task, "editor_ui_control", "set_value") or _has_call_since(fake.calls, calls_before_read_task, "editor_ui_control", "activate_control"):
+		return _failure("run_task read mode must not invoke write-oriented editor controls.")
+
+	var verify_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Example",
+		"capture_policy": "none",
+		"limit": 10
+	})
+	if not bool(verify_task.get("success", false)):
+		return _failure("run_task verify mode should succeed when expected_value matches.")
+	if str(verify_task.get("data", {}).get("mode", "")) != "verify":
+		return _failure("run_task verify mode should be reported when expected_value is supplied without value.")
+	if not bool(verify_task.get("data", {}).get("verification", {}).get("performed", false)):
+		return _failure("run_task verify mode should report performed verification.")
+	if str(verify_task.get("data", {}).get("verification", {}).get("expected_source", "")) != "expected_value":
+		return _failure("run_task verify mode should mark expected_value as the expected source.")
+
+	var verify_task_mismatch := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Mismatch",
+		"capture_policy": "on_failure",
+		"limit": 10
+	})
+	if bool(verify_task_mismatch.get("success", false)):
+		return _failure("run_task verify mode should fail when expected_value does not match.")
+	if str(verify_task_mismatch.get("data", {}).get("failed_step", "")) != "verify_after":
+		return _failure("run_task verify mismatch should fail at verify_after.")
+	if str(verify_task_mismatch.get("data", {}).get("capture_backend", "")) != "popup":
+		return _failure("run_task on_failure capture policy should capture failure evidence.")
+
+	var calls_before_final_mismatch := fake.calls.size()
+	var final_verify_task_mismatch := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"expected_value": "Mismatch",
+		"capture_policy": "final",
+		"limit": 10
+	})
+	if bool(final_verify_task_mismatch.get("success", false)):
+		return _failure("run_task verify mode should fail when expected_value does not match under capture_policy=final.")
+	if str(final_verify_task_mismatch.get("data", {}).get("failed_step", "")) != "verify_after":
+		return _failure("run_task final capture policy mismatch should fail at verify_after.")
+	if str(final_verify_task_mismatch.get("data", {}).get("capture_backend", "")) != "none":
+		return _failure("run_task capture_policy=final should not capture failure evidence.")
+	if _has_call_since(fake.calls, calls_before_final_mismatch, "editor_popup", "capture_popup") or _has_call_since(fake.calls, calls_before_final_mismatch, "editor_ui_control", "capture_control") or _has_call_since(fake.calls, calls_before_final_mismatch, "editor_screenshot", "capture"):
+		return _failure("run_task capture_policy=final failure path must not dispatch capture backends.")
+
+	var set_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "Renamed",
+		"capture_policy": "final",
+		"limit": 10
+	})
+	if not bool(set_task.get("success", false)):
+		return _failure("run_task set mode should write and verify supported text rows.")
+	var set_task_data: Dictionary = set_task.get("data", {})
+	if str(set_task_data.get("mode", "")) != "set":
+		return _failure("run_task set mode should be reported when value is supplied without expected_value.")
+	if str(set_task_data.get("before", {}).get("value", "")) != "Example" or str(set_task_data.get("after", {}).get("value", "")) != "Renamed":
+		return _failure("run_task set mode should preserve before and after value payloads.")
+	if str(set_task_data.get("verification", {}).get("expected_source", "")) != "value":
+		return _failure("run_task set mode should default expected_value to value.")
+	if not bool(set_task_data.get("write_attempted", false)) or not bool(set_task_data.get("write_verified", false)):
+		return _failure("run_task set mode should mark successful write evidence.")
+	if str(set_task_data.get("capture_backend", "")) != "popup":
+		return _failure("run_task final capture policy should use surface-aware capture evidence.")
+
+	var set_task_expected_mismatch := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "MismatchTarget",
+		"expected_value": "AnotherValue",
+		"capture_policy": "none",
+		"limit": 10
+	})
+	if bool(set_task_expected_mismatch.get("success", false)):
+		return _failure("run_task set_and_verify mode should fail when explicit expected_value does not match after writing.")
+	if str(set_task_expected_mismatch.get("data", {}).get("failed_step", "")) != "verify_after":
+		return _failure("run_task set_and_verify mismatch should fail at verify_after.")
+	if not bool(set_task_expected_mismatch.get("data", {}).get("write_attempted", false)) or bool(set_task_expected_mismatch.get("data", {}).get("write_verified", true)):
+		return _failure("run_task set_and_verify mismatch should preserve write side-effect evidence.")
+
+	var calls_before_ambiguous_task := fake.calls.size()
+	var ambiguous_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "ambiguous/example",
+		"value": "Blocked",
+		"capture_policy": "none",
+		"limit": 10
+	})
+	if bool(ambiguous_task.get("success", false)):
+		return _failure("run_task should fail before writing when row resolution is ambiguous.")
+	if str(ambiguous_task.get("data", {}).get("failed_step", "")) != "resolve_row":
+		return _failure("run_task ambiguous row should fail at resolve_row.")
+	if _has_call_since(fake.calls, calls_before_ambiguous_task, "editor_ui_control", "set_value"):
+		return _failure("run_task ambiguous row must not reach value writes.")
+
+	var hidden_write_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "Hidden",
+		"include_hidden": true
+	})
+	if bool(hidden_write_task.get("success", false)) or str(hidden_write_task.get("data", {}).get("reason", "")) != "hidden_write_refused":
+		return _failure("run_task should refuse writes while include_hidden=true.")
+	var low_confidence_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "Low",
+		"require_confidence": "low"
+	})
+	if bool(low_confidence_task.get("success", false)) or str(low_confidence_task.get("data", {}).get("reason", "")) != "low_confidence_write_refused":
+		return _failure("run_task should refuse low-confidence writes.")
+	var missing_selector_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"capture_policy": "none"
+	})
+	if bool(missing_selector_task.get("success", false)) or str(missing_selector_task.get("data", {}).get("reason", "")) != "row_selector_required":
+		return _failure("run_task should require a row selector.")
+
+	var calls_before_capture_policy_refused := fake.calls.size()
+	var capture_policy_refused_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"require_capture": true,
+		"capture_policy": "none",
+		"limit": 10
+	})
+	if bool(capture_policy_refused_task.get("success", false)) or str(capture_policy_refused_task.get("data", {}).get("reason", "")) != "capture_policy_refused":
+		return _failure("run_task should fail preflight when require_capture=true but capture_policy=none.")
+	if fake.calls.size() != calls_before_capture_policy_refused:
+		return _failure("run_task capture policy preflight failure must not touch the editor UI.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var capture_required_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"require_capture": true,
+		"limit": 10
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if bool(capture_required_task.get("success", false)):
+		return _failure("run_task should fail when require_capture=true and no capture backend succeeds.")
+	if str(capture_required_task.get("data", {}).get("failed_step", "")) != "capture" or str(capture_required_task.get("data", {}).get("capture_backend", "")) != "none":
+		return _failure("run_task require_capture failure should report capture as the failed step.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var always_capture_best_effort_task := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"capture_policy": "always",
+		"limit": 10
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if not bool(always_capture_best_effort_task.get("success", false)):
+		return _failure("run_task capture_policy=always should remain best-effort unless require_capture=true.")
+	if str(always_capture_best_effort_task.get("data", {}).get("capture_backend", "")) != "none":
+		return _failure("run_task capture_policy=always should report capture_backend=none when best-effort capture is unavailable.")
+
+	fake.project_name_value = "Example"
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var calls_before_capture_blocked_write := fake.calls.size()
+	var capture_blocked_write := await impl.execute_async("settings_dialog", {
+		"action": "run_task",
+		"surface": "project_settings",
+		"setting_path": "application/config/name",
+		"value": "ShouldNotWrite",
+		"require_capture": true,
+		"capture_policy": "final",
+		"limit": 10
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if bool(capture_blocked_write.get("success", false)):
+		return _failure("run_task should fail before writing when required capture evidence is unavailable.")
+	if fake.project_name_value != "Example":
+		return _failure("run_task capture preflight failure must preserve the setting value before writes.")
+	if _has_call_since_with_target(fake.calls, calls_before_capture_blocked_write, "editor_ui_control", "set_text", "/root/ProjectSettings/General/Application/Config/Name/Value"):
+		return _failure("run_task capture preflight failure must not dispatch text writes.")
+	if str(capture_blocked_write.get("data", {}).get("failed_step", "")) != "capture":
+		return _failure("run_task capture preflight write block should report capture as the failed step.")
+
 	var focused := impl.execute("settings_dialog", {
 		"action": "focus_result",
 		"surface": "project_settings",
@@ -1001,6 +1251,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_call(fake.calls, "editor_ui_control", "focus_control"):
 		return _failure("focus_result should delegate to editor_ui_control.focus_control.")
 
+	var calls_before_capture := fake.calls.size()
 	var captured := impl.execute("settings_dialog", {
 		"action": "capture",
 		"surface": "project_settings",
@@ -1008,8 +1259,87 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(captured.get("success", false)):
 		return _failure("capture should succeed for a visible settings surface.")
-	if str(captured.get("data", {}).get("capture_path", "")) != "user://custom_settings.png":
-		return _failure("capture should return the screenshot path from editor_screenshot.")
+	var captured_data: Dictionary = captured.get("data", {})
+	if str(captured_data.get("capture_path", "")) != "user://custom_settings.png":
+		return _failure("capture should return the screenshot path from the selected capture backend.")
+	if str(captured_data.get("capture_surface", "")) != "project_settings":
+		return _failure("capture should preserve the requested settings surface.")
+	if str(captured_data.get("capture_backend", "")) != "popup":
+		return _failure("capture should prefer the visible settings popup backend.")
+	if str(captured_data.get("capture_target_path", "")) != "/root/ProjectSettings":
+		return _failure("capture should target the observed Project Settings popup path.")
+	if str(captured_data.get("capture", {}).get("capture_mode", "")) != "popup":
+		return _failure("capture should preserve popup capture payload metadata.")
+	if not _has_call_since_with_target(fake.calls, calls_before_capture, "editor_popup", "capture_popup", "/root/ProjectSettings"):
+		return _failure("capture should delegate to editor_popup.capture_popup for visible settings popups.")
+
+	var calls_before_focused_capture := fake.calls.size()
+	var focused_with_capture := impl.execute("settings_dialog", {
+		"action": "focus_result",
+		"surface": "project_settings",
+		"target_path": str(first_result.get("path", "")),
+		"capture": true
+	})
+	if not bool(focused_with_capture.get("success", false)):
+		return _failure("focus_result(capture=true) should focus a returned result path.")
+	var focused_capture_data: Dictionary = focused_with_capture.get("data", {})
+	if str(focused_capture_data.get("capture_backend", "")) != "popup":
+		return _failure("focus_result(capture=true) should recover settings surface context and prefer popup capture.")
+	if not _has_call_since_with_target(fake.calls, calls_before_focused_capture, "editor_popup", "capture_popup", "/root/ProjectSettings"):
+		return _failure("focus_result(capture=true) should delegate capture to the current settings popup.")
+
+	fake.popup_capture_enabled = false
+	var control_fallback := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"path": "user://control_fallback.png"
+	})
+	fake.popup_capture_enabled = true
+	if not bool(control_fallback.get("success", false)):
+		return _failure("capture should still succeed when popup capture is unavailable and control capture works.")
+	var control_fallback_data: Dictionary = control_fallback.get("data", {})
+	if str(control_fallback_data.get("capture_backend", "")) != "control":
+		return _failure("capture should fall back from popup capture to control capture.")
+	if str(control_fallback_data.get("capture_target_path", "")) != "/root/ProjectSettings":
+		return _failure("control fallback should target the observed settings dialog control path.")
+	if not (control_fallback_data.get("capture_fallback_reasons", []) as Array).has("popup_capture_failed"):
+		return _failure("control fallback should report the failed popup capture attempt.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	var editor_fallback := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings",
+		"path": "user://editor_fallback.png"
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	if not bool(editor_fallback.get("success", false)):
+		return _failure("capture should still succeed when only the full-editor screenshot backend works.")
+	var editor_fallback_data: Dictionary = editor_fallback.get("data", {})
+	if str(editor_fallback_data.get("capture_backend", "")) != "editor":
+		return _failure("capture should fall back to full-editor screenshots after narrower targets fail.")
+	var editor_fallback_reasons: Array = editor_fallback_data.get("capture_fallback_reasons", [])
+	if not editor_fallback_reasons.has("popup_capture_failed") or not editor_fallback_reasons.has("control_capture_failed"):
+		return _failure("editor fallback should report both narrower capture failures.")
+
+	fake.popup_capture_enabled = false
+	fake.control_capture_enabled = false
+	fake.editor_capture_enabled = false
+	var failed_capture := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "project_settings"
+	})
+	fake.popup_capture_enabled = true
+	fake.control_capture_enabled = true
+	fake.editor_capture_enabled = true
+	if not bool(failed_capture.get("success", false)):
+		return _failure("capture action should return a settings workflow payload even when evidence backends fail.")
+	var failed_capture_data: Dictionary = failed_capture.get("data", {})
+	if str(failed_capture_data.get("capture_backend", "")) != "none":
+		return _failure("failed capture should report capture_backend=none.")
+	if str(failed_capture_data.get("capture_error", "")).is_empty():
+		return _failure("failed capture should preserve an error message from the final capture backend.")
 
 	var closed := impl.execute("settings_dialog", {"action": "close", "surface": "project_settings"})
 	if not bool(closed.get("success", false)):
@@ -1046,6 +1376,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("open(tab) should delegate to activate_tab for an already visible settings surface.")
 	if str(editor_opened_with_tab.get("data", {}).get("tab_activation", {}).get("selected_tab", {}).get("title", "")) != "Shortcuts":
 		return _failure("open(tab) should return the selected tab activation payload.")
+	var calls_before_editor_capture := fake.calls.size()
+	var editor_captured := impl.execute("settings_dialog", {
+		"action": "capture",
+		"surface": "editor_settings",
+		"path": "user://editor_settings.png"
+	})
+	if not bool(editor_captured.get("success", false)):
+		return _failure("capture should also support editor_settings surfaces.")
+	var editor_capture_data: Dictionary = editor_captured.get("data", {})
+	if str(editor_capture_data.get("capture_surface", "")) != "editor_settings":
+		return _failure("editor_settings capture should preserve the requested surface.")
+	if str(editor_capture_data.get("capture_backend", "")) != "popup":
+		return _failure("editor_settings capture should use the same popup-first capture path.")
+	if str(editor_capture_data.get("capture_target_path", "")) != "/root/EditorSettings":
+		return _failure("editor_settings capture should target the observed Editor Settings popup path.")
+	if not _has_call_since_with_target(fake.calls, calls_before_editor_capture, "editor_popup", "capture_popup", "/root/EditorSettings"):
+		return _failure("editor_settings capture should delegate to editor_popup.capture_popup without Project Settings special cases.")
 	var editor_wrong_surface_read := impl.execute("settings_dialog", {
 		"action": "read_value",
 		"surface": "editor_settings",
@@ -1123,6 +1470,22 @@ func _has_value_payload_key(value) -> bool:
 	if value is Array:
 		for item in value:
 			if _has_value_payload_key(item):
+				return true
+	return false
+
+
+func _task_steps_have_raw_payload(steps) -> bool:
+	if not (steps is Dictionary):
+		return false
+	for step_name in (steps as Dictionary).keys():
+		var step = (steps as Dictionary).get(step_name)
+		if not (step is Dictionary):
+			continue
+		var data = (step as Dictionary).get("data", {})
+		if not (data is Dictionary):
+			continue
+		for raw_key in ["all_controls", "results", "raw_controls", "surface_matches", "popup_matches"]:
+			if (data as Dictionary).has(raw_key):
 				return true
 	return false
 

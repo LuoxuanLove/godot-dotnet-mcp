@@ -20,7 +20,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "editor_control",
-			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Use it to switch main workspace tabs, activate dock/plugin/bottom-panel UI through Godot APIs without OS mouse/window automation, capture the full editor UI, inspect visible controls and coordinate mapping, capture a specific control or popup, focus or activate controls, dispatch control-local left/right mouse clicks, hover/leave pointer motion, edit control text or numeric values, edit popup text, and close editor popups. Prefer this tool when the task depends on the current editor interface, not just project files.",
+			"description": "EDITOR CONTROL: High-level editor UI workflow entry. Prefer semantic actions such as activate_ui, activate_dock_tab, set_main_screen, menu selection, tree selection, and settings-dialog workflows before raw controls. Use control-level focus, activation, text, value, and popup actions next. Use control-local click, right-click, hover, and leave only as fallback for unsupported UI, context menus, tooltips, or pointer-event validation. Prefer this tool when the task depends on the current editor interface, not just project files.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -84,7 +84,7 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"semantic_path": {
 						"type": "string",
-						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home"
+						"description": "Stable semantic UI path for activate_ui, e.g. MCPDock/config, MCPDock/tools, MCPDock/home. Prefer this semantic target before raw control paths or coordinates."
 					},
 					"tab_title": {
 						"type": "string",
@@ -158,11 +158,11 @@ func get_tools() -> Array[Dictionary]:
 					},
 					"local_x": {
 						"type": "number",
-						"description": "Control-local X coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local X coordinate for click_control/right_click_control/hover_control fallback actions; defaults to the control center. Use coordinates returned by control tools, not guessed OS screen coordinates."
 					},
 					"local_y": {
 						"type": "number",
-						"description": "Control-local Y coordinate for click_control/right_click_control; defaults to the control center"
+						"description": "Control-local Y coordinate for click_control/right_click_control/hover_control fallback actions; defaults to the control center. Use coordinates returned by control tools, not guessed OS screen coordinates."
 					},
 					"class_name": {
 						"type": "string",

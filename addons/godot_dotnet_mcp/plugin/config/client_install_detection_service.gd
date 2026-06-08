@@ -3,6 +3,7 @@ extends RefCounted
 class_name ClientInstallDetectionService
 
 const ConfigPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_paths.gd")
+const ClientCapabilityMatrixScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_capability_matrix.gd")
 
 const STATUS_READY := "ready"
 const STATUS_CONFIG_ONLY := "config_only"
@@ -72,6 +73,7 @@ func detect_all(force_refresh: bool = false, include_slow_checks: bool = false) 
 		"qwen": _detect_qwen(running_processes),
 		"cherry_studio": _detect_cherry_studio(running_processes)
 	}
+	_attach_capability_matrix(_cached_all)
 	_cached_all_includes_slow_checks = requested_slow_checks
 	_allow_slow_checks = false
 	_cache_deadline_msec = now + CACHE_TTL_MS
@@ -552,6 +554,23 @@ func _build_common_result(client_id: String, resolved: Dictionary, runtime_state
 		"config_entry_status": entry_state,
 		"runtime_status": runtime_state
 	}
+
+
+func _attach_capability_matrix(statuses: Dictionary) -> void:
+	for client_id in statuses.keys():
+		var status_value: Variant = statuses.get(client_id, {})
+		if not (status_value is Dictionary):
+			continue
+		var status: Dictionary = status_value
+		var config_path := str(status.get("config_path", "")).strip_edges()
+		status["capability"] = ClientCapabilityMatrixScript.build_for_client(
+			str(client_id),
+			bool(status.get("launch_supported", false)),
+			bool(status.get("path_pick_supported", false)),
+			bool(status.get("path_clear_supported", false)),
+			not config_path.is_empty()
+		)
+		statuses[client_id] = status
 
 
 func _inspect_cli_server_entry(executable_path: String, arguments: PackedStringArray) -> Dictionary:
