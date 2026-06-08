@@ -164,12 +164,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var dap_tool = _find_child_by_metadata(system_category, "tool", "system_dap_debugger")
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
+	var project_lifecycle_tool = _find_child_by_metadata(system_category, "tool", "system_project_lifecycle")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var plugin_runtime_state_tool = _find_child_by_metadata(plugin_runtime_category, "tool", "plugin_runtime_state")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or editor_log_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_lifecycle_tool == null or editor_log_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
+			return _failure("Tools tab should not render removed project lifecycle entry '%s'." % removed_tool_name)
+	if _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.start") == null or _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.stop") == null:
+		return _failure("Tools tab should render start and stop actions under system_project_lifecycle.")
 	var user_metadata = user_tool.get_metadata(0)
 	if not (user_metadata is Dictionary) or str((user_metadata as Dictionary).get("script_path", "")) != "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd":
 		return _failure("Tools tab should preserve user tool script_path metadata when rendering presentation nodes.")
@@ -389,6 +395,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action", "list_export_presets"]
+		"system_project_lifecycle":
+			return ["start", "stop"]
 		"system_plugin_update":
 			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 	return []

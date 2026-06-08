@@ -252,7 +252,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(runtime_prompt.get("error", "runtime validation prompt failed")))
 	if str(runtime_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(runtime_prompt.get("text", "")).find("MENU_READY") == -1:
 		return _failure("runtime validation prompt should normalize scene_path and include success marker context.")
-	if not _prompt_text_is_actionable(str(runtime_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_run", "system_runtime_step"]):
+	if not _prompt_text_is_actionable(str(runtime_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_lifecycle(action=start)", "system_project_lifecycle(action=stop)", "system_runtime_step"]):
 		return _failure("runtime validation prompt should provide actionable run/input/capture workflow sections.")
 
 	var editor_prompt := await _get_prompt_text(EDITOR_UI_CONTROL_PROMPT, {"ui_goal": "open settings", "target_path": "MCPDock/settings"}, 19)

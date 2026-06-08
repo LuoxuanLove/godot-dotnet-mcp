@@ -217,7 +217,7 @@ The `system` domain is more complex than the others. It has been split into exec
 | `impl_runtime.gd` | Implements `runtime_control` and the unified runtime I/O entry `runtime_step(action=step|capture|input)` |
 | `impl_scene.gd` | Implements `scene_validate`, `scene_analyze`, and `scene_patch` |
 | `impl_index.gd` | Implements internal index cache, `project_symbol_search`, and `scene_dependency_graph` |
-| `impl_project.gd` | Implements `project_state`, `editor_state`, `project_configure`, `project_run`, `project_stop`, and `runtime_diagnose` |
+| `impl_project.gd` | Implements `project_state`, `editor_state`, `project_configure`, `project_lifecycle(action=start|stop)`, and `runtime_diagnose` |
 | `impl_script.gd` | Implements `bindings_audit`, `script_analyze`, and `script_patch` |
 
 ---

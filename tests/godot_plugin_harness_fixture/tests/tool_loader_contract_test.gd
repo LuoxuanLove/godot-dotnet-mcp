@@ -119,6 +119,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
+	if not exposed_names.has("system_project_lifecycle"):
+		return _failure("Tool loader did not expose the unified system_project_lifecycle entry.")
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		if exposed_names.has(removed_tool_name):
+			return _failure("Tool loader should not expose removed project lifecycle entry '%s'." % removed_tool_name)
+		if _loader.is_tool_exposed(removed_tool_name):
+			return _failure("Tool loader should not keep removed project lifecycle entry '%s' callable." % removed_tool_name)
 	for merged_runtime_tool_name in ["system_runtime_capture", "system_runtime_input"]:
 		if exposed_names.has(merged_runtime_tool_name):
 			return _failure("Tool loader should merge runtime I/O into system_runtime_step, not expose '%s'." % merged_runtime_tool_name)
@@ -244,6 +251,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_status: Dictionary = _loader.get_tool_loader_status()
 	if int(disabled_status.get("exposed_tool_count", 0)) >= int(status.get("exposed_tool_count", 0)):
 		return _failure("Disabling system_project_state did not reduce the exposed tool count.")
+
+	_loader.set_disabled_tools(["system_project_lifecycle"])
+	if _loader.is_tool_exposed("system_project_lifecycle"):
+		return _failure("Disabled tool system_project_lifecycle should no longer be exposed.")
+	for removed_tool_name in ["system_project_run", "system_project_stop"]:
+		if _loader.is_tool_exposed(removed_tool_name):
+			return _failure("Removed project lifecycle entry '%s' should remain unavailable even when system_project_lifecycle is disabled." % removed_tool_name)
 
 	return {
 		"name": "tool_loader_contracts",

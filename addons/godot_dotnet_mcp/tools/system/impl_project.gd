@@ -2,8 +2,8 @@
 extends RefCounted
 
 ## System implementation: project_state, editor_state, plugin_reload, plugin_update,
-## project_configure, userdata_maintenance, project_files, project_run,
-## project_stop, runtime_diagnose
+## project_configure, userdata_maintenance, project_files, project_lifecycle,
+## runtime_diagnose
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -37,11 +37,11 @@ const _RUN_LOG_MARKER_DEFAULT_LOG_TAIL := 100
 const _RUN_LOG_MARKER_MAX_LOG_TAIL := 500
 const _RUN_LOG_MARKER_MAX_COUNT := 32
 const _RUN_LOG_MARKER_MAX_LENGTH := 256
-var _project_run_timeout_token := 0
+var _project_lifecycle_timeout_token := 0
 
 const HANDLED_TOOLS := [
 	"project_state", "editor_state", "project_configure",
-	"project_files", "project_run", "project_stop", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
+	"project_files", "project_lifecycle", "runtime_diagnose", "userdata_maintenance", "plugin_reload", "plugin_update", "resource_reference_audit"
 ]
 
 
@@ -176,14 +176,15 @@ func get_tools() -> Array[Dictionary]:
 			}
 		},
 		{
-			"name": "project_run",
-			"description": "PROJECT RUN: Launch the project in the Godot editor. Runs the main scene by default; provide scene (.tscn path) to run a specific scene. Recommend checking project_state.runtime_capabilities before running. Pair with project_stop. On failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_run waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
+			"name": "project_lifecycle",
+			"description": "PROJECT LIFECYCLE: Start or stop a project runtime session in the Godot editor. action=start starts the main scene or a provided scene (.tscn path); action=stop stops the currently running project. Recommend checking project_state.runtime_capabilities before starting. Pair starts with action=stop or marker-mode auto_stop. On start failure, returns editor/project/scene/runtime_control context. Optional timeout_ms schedules an automatic stop when no log markers are supplied. When success_markers or failure_markers are supplied, project_lifecycle waits for matching structured runtime bridge log events; timeout_ms becomes the marker wait timeout, failure markers take precedence, and auto_stop defaults to true. background/minimized/no_focus are currently unsupported and return requires_foreground_window with fallback guidance.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"scene": {"type": "string", "description": "Custom scene to run (optional, runs main scene if omitted)"},
+					"action": {"type": "string", "enum": ["start", "stop"], "description": "Project lifecycle control action. start launches the project; stop stops the currently running project."},
+					"scene": {"type": "string", "description": "Custom scene to start (optional, starts the main scene if omitted)"},
 					"timeout_ms": {"type": "integer", "description": "Without markers: optional auto-stop timeout in milliseconds. With markers: marker wait timeout in milliseconds (default 10000)."},
-					"success_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation success. If omitted or empty with failure_markers empty, project_run returns immediately as before."},
+					"success_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation success. If omitted or empty with failure_markers empty, project_lifecycle returns immediately as before."},
 					"failure_markers": {"type": "array", "items": {"type": "string"}, "description": "Structured runtime bridge event text markers that indicate validation failure. Failure markers take precedence over success markers."},
 					"auto_stop": {"type": "boolean", "description": "Marker wait mode only: stop the running scene through scene_run stop after success, failure, or timeout (default true). Does not kill processes."},
 					"poll_interval_ms": {"type": "integer", "description": "Marker wait mode only: runtime bridge poll interval in milliseconds (default 100)."},
@@ -191,15 +192,8 @@ func get_tools() -> Array[Dictionary]:
 					"background": {"type": "boolean", "description": "Request non-foreground launch. Currently unsupported; returns requires_foreground_window instead of starting."},
 					"minimized": {"type": "boolean", "description": "Request minimized launch. Currently unsupported; returns requires_foreground_window instead of starting."},
 					"no_focus": {"type": "boolean", "description": "Request launch without taking focus. Currently unsupported; returns requires_foreground_window instead of starting."}
-				}
-			}
-		},
-		{
-			"name": "project_stop",
-			"description": "PROJECT STOP: Stop the currently running project in the editor. No parameters. Returns: stopped=true on success.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {}
+				},
+				"required": ["action"]
 			}
 		},
 		{
@@ -240,8 +234,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		"resource_reference_audit": return _execute_resource_reference_audit(args)
 		"project_configure": return _execute_project_configure(args)
 		"project_files":     return _execute_project_files(args)
-		"project_run":       return _execute_project_run(args)
-		"project_stop":      return _execute_project_stop(args)
+		"project_lifecycle":       return _execute_project_lifecycle(args)
 		"runtime_diagnose":  return _execute_runtime_diagnose(args)
 		"userdata_maintenance": return _execute_userdata_maintenance(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
@@ -249,8 +242,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool_async: %s" % tool_name)
-	if tool_name == "project_run" and _has_run_log_markers(args):
-		return await _execute_project_run_with_log_markers(args)
+	if tool_name == "project_lifecycle" and _project_lifecycle_action(args) != "start":
+		return execute(tool_name, args)
+	if tool_name == "project_lifecycle" and _has_lifecycle_log_markers(args):
+		return await _execute_project_lifecycle_with_log_markers(args)
 	return execute(tool_name, args)
 
 
@@ -1694,44 +1689,60 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown project_files action: %s" % action)
 
 
-func _execute_project_run(args: Dictionary) -> Dictionary:
-	if _has_run_log_markers(args):
-		return bridge.error("project_run marker validation requires async tool execution", {
-			"error_code": "project_run_marker_validation_requires_async",
-			"hint": "Call system_project_run through the async MCP tool path when success_markers or failure_markers are supplied."
+func _execute_project_lifecycle(args: Dictionary) -> Dictionary:
+	if not args.has("action") or str(args.get("action", "")).strip_edges().is_empty():
+		return bridge.error("project_lifecycle requires action=start or action=stop", {
+			"error_code": "project_lifecycle_action_required",
+			"required": ["action"],
+			"valid_actions": ["start", "stop"]
+		})
+	var action := _project_lifecycle_action(args)
+	match action:
+		"start":
+			pass
+		"stop":
+			return _stop_project_lifecycle(args)
+		_:
+			return bridge.error("Unknown project_lifecycle action: %s. Valid: start, stop" % action)
+	if _has_lifecycle_log_markers(args):
+		return bridge.error("project_lifecycle marker validation requires async tool execution", {
+			"error_code": "project_lifecycle_marker_validation_requires_async",
+			"hint": "Call system_project_lifecycle through the async MCP tool path when success_markers or failure_markers are supplied."
 		})
 	var custom_scene := str(args.get("scene", "")).strip_edges()
 	var timeout_ms := int(args.get("timeout_ms", 0))
-	if _project_run_foreground_options_requested(args):
-		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
-	var run_result := _start_project_run(custom_scene)
+	if _project_lifecycle_foreground_options_requested(args):
+		return bridge.error("Project lifecycle start without foreground focus is not supported by this editor session.", _build_project_lifecycle_foreground_required_context(custom_scene, args))
+	var run_result := _start_project_lifecycle(custom_scene)
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
-			"project_run failed: %s" % str(run_result.get("error", "unknown")))
-		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_run_failure_context(custom_scene, run_result))
+			"project_lifecycle failed: %s" % str(run_result.get("error", "unknown")))
+		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_lifecycle_failure_context(custom_scene, run_result))
 	var auto_stop_enabled := timeout_ms > 0
 	if auto_stop_enabled:
 		_schedule_project_auto_stop(timeout_ms, custom_scene if not custom_scene.is_empty() else "main")
 	else:
-		_project_run_timeout_token += 1
+		_project_lifecycle_timeout_token += 1
 	return bridge.success({
 		"started": true,
 		"scene": custom_scene if not custom_scene.is_empty() else "main",
 		"auto_stop_scheduled": auto_stop_enabled,
 		"timeout_ms": timeout_ms if auto_stop_enabled else 0,
-		"runtime_capabilities": _build_project_run_success_capabilities(custom_scene)
+		"runtime_capabilities": _build_project_lifecycle_success_capabilities(custom_scene)
 	}, str(run_result.get("message", "Project started")))
 
 
-func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
+func _execute_project_lifecycle_with_log_markers(args: Dictionary) -> Dictionary:
+	if _project_lifecycle_action(args) != "start":
+		return _execute_project_lifecycle(args)
 	var custom_scene := str(args.get("scene", "")).strip_edges()
-	if _project_run_foreground_options_requested(args):
-		return bridge.error("Project run without foreground focus is not supported by this editor session.", _build_project_run_foreground_required_context(custom_scene, args))
+	if _project_lifecycle_foreground_options_requested(args):
+		return bridge.error("Project lifecycle start without foreground focus is not supported by this editor session.", _build_project_lifecycle_foreground_required_context(custom_scene, args))
 	var success_markers := _normalize_marker_list(args.get("success_markers", []))
 	var failure_markers := _normalize_marker_list(args.get("failure_markers", []))
 	if success_markers.is_empty() and failure_markers.is_empty():
-		return _execute_project_run(args)
-	var validation_error := _validate_run_log_markers(success_markers, failure_markers)
+		return _execute_project_lifecycle(args)
+	var validation_error := _validate_lifecycle_log_markers(success_markers, failure_markers)
 	if not validation_error.is_empty():
 		return bridge.error(str(validation_error.get("message", "Invalid runtime log marker arguments.")), validation_error)
 	var timeout_ms: int = clamp(int(args.get("timeout_ms", _RUN_LOG_MARKER_DEFAULT_TIMEOUT_MS)), 1, _RUN_LOG_MARKER_MAX_TIMEOUT_MS)
@@ -1739,12 +1750,12 @@ func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
 	var log_tail: int = clamp(int(args.get("log_tail", _RUN_LOG_MARKER_DEFAULT_LOG_TAIL)), 1, _RUN_LOG_MARKER_MAX_LOG_TAIL)
 	var auto_stop := bool(args.get("auto_stop", true))
 	var baseline := _build_runtime_event_baseline(_fetch_runtime_log_events(log_tail))
-	var run_result := _start_project_run(custom_scene)
+	var run_result := _start_project_lifecycle(custom_scene)
 	if not bool(run_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
-			"project_run failed: %s" % str(run_result.get("error", "unknown")))
-		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_run_failure_context(custom_scene, run_result))
-	_project_run_timeout_token += 1
+			"project_lifecycle failed: %s" % str(run_result.get("error", "unknown")))
+		return bridge.error("Failed to start project: %s" % str(run_result.get("error", "unknown")), _build_project_lifecycle_failure_context(custom_scene, run_result))
+	_project_lifecycle_timeout_token += 1
 	var validation: Dictionary = await _wait_for_runtime_log_marker(success_markers, failure_markers, baseline, timeout_ms, poll_interval_ms, log_tail)
 	var stop_result: Dictionary = {}
 	if auto_stop:
@@ -1758,7 +1769,7 @@ func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
 		"poll_interval_ms": poll_interval_ms,
 		"log_tail": log_tail,
 		"validation": validation,
-		"runtime_capabilities": _build_project_run_success_capabilities(custom_scene)
+		"runtime_capabilities": _build_project_lifecycle_success_capabilities(custom_scene)
 	}
 	if auto_stop:
 		result_data["stop_result"] = stop_result
@@ -1773,15 +1784,19 @@ func _execute_project_run_with_log_markers(args: Dictionary) -> Dictionary:
 			return bridge.error("Runtime log marker validation timed out after %d ms" % timeout_ms, result_data)
 
 
-func _start_project_run(custom_scene: String) -> Dictionary:
+func _start_project_lifecycle(custom_scene: String) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system",
-		"project_run: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
+		"project_lifecycle: scene=%s" % (custom_scene if not custom_scene.is_empty() else "main"))
 	if custom_scene.is_empty():
 		return bridge.call_atomic("scene_run", {"action": "play_main"})
 	return bridge.call_atomic("scene_run", {"action": "play_custom", "path": custom_scene})
 
 
-func _has_run_log_markers(args: Dictionary) -> bool:
+func _project_lifecycle_action(args: Dictionary) -> String:
+	return str(args.get("action", "")).strip_edges().to_lower()
+
+
+func _has_lifecycle_log_markers(args: Dictionary) -> bool:
 	return not _normalize_marker_list(args.get("success_markers", [])).is_empty() or not _normalize_marker_list(args.get("failure_markers", [])).is_empty()
 
 
@@ -1799,7 +1814,7 @@ func _normalize_marker_list(raw_value) -> Array[String]:
 	return markers
 
 
-func _validate_run_log_markers(success_markers: Array[String], failure_markers: Array[String]) -> Dictionary:
+func _validate_lifecycle_log_markers(success_markers: Array[String], failure_markers: Array[String]) -> Dictionary:
 	var marker_count := success_markers.size() + failure_markers.size()
 	if marker_count > _RUN_LOG_MARKER_MAX_COUNT:
 		return {
@@ -1951,15 +1966,15 @@ func _append_runtime_log_text(value, parts: Array[String]) -> void:
 
 
 func _stop_project_after_marker_validation(scene_label: String, validation_status: String) -> Dictionary:
-	MCPDebugBuffer.record("info", "system", "project_run marker validation auto-stop: scene=%s status=%s" % [scene_label, validation_status])
+	MCPDebugBuffer.record("info", "system", "project_lifecycle marker validation auto-stop: scene=%s status=%s" % [scene_label, validation_status])
 	return bridge.call_atomic("scene_run", {"action": "stop"})
 
 
-func _project_run_foreground_options_requested(args: Dictionary) -> bool:
+func _project_lifecycle_foreground_options_requested(args: Dictionary) -> bool:
 	return bool(args.get("background", false)) or bool(args.get("minimized", false)) or bool(args.get("no_focus", false))
 
 
-func _build_project_run_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
+func _build_project_lifecycle_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
 	var project_info: Dictionary = bridge.extract_data(project_info_result)
 	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
@@ -1987,7 +2002,7 @@ func _build_project_run_foreground_required_context(custom_scene: String, args: 
 	}
 
 
-func _build_project_run_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
+func _build_project_lifecycle_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
 	var project_info: Dictionary = bridge.extract_data(project_info_result)
 	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
@@ -2000,7 +2015,7 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 	var editor_context := _build_editor_runtime_context()
 	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
 	var context := {
-		"error_code": "project_run_failed",
+		"error_code": "project_lifecycle_failed",
 		"requested_scene": custom_scene if not custom_scene.is_empty() else "main",
 		"resolved_scene": requested_scene,
 		"scene_exists": scene_exists,
@@ -2014,9 +2029,9 @@ func _build_project_run_failure_context(custom_scene: String, run_result: Dictio
 	}
 	if _is_editor_interface_unavailable_inconsistent(run_result, editor_context, runtime_capabilities):
 		context["error_code"] = "editor_run_interface_unavailable_despite_state_available"
-		context["state_probe_vs_run_invoker"] = _build_project_run_state_probe_comparison(editor_context, runtime_capabilities, run_result)
-		context["recovery_suggestions"] = _build_project_run_editor_interface_recovery_suggestions()
-		var cli_fallback := _build_project_run_cli_fallback(editor_context, requested_scene, scene_exists)
+		context["state_probe_vs_run_invoker"] = _build_project_lifecycle_state_probe_comparison(editor_context, runtime_capabilities, run_result)
+		context["recovery_suggestions"] = _build_project_lifecycle_editor_interface_recovery_suggestions()
+		var cli_fallback := _build_project_lifecycle_cli_fallback(editor_context, requested_scene, scene_exists)
 		if not cli_fallback.is_empty():
 			context["cli_fallback"] = cli_fallback
 	return context
@@ -2029,7 +2044,7 @@ func _is_editor_interface_unavailable_inconsistent(run_result: Dictionary, edito
 	return bool(runtime_capabilities.get("can_start_project", false)) or bool(editor_context.get("editor_interface_available", false))
 
 
-func _build_project_run_state_probe_comparison(editor_context: Dictionary, runtime_capabilities: Dictionary, run_result: Dictionary) -> Dictionary:
+func _build_project_lifecycle_state_probe_comparison(editor_context: Dictionary, runtime_capabilities: Dictionary, run_result: Dictionary) -> Dictionary:
 	return {
 		"state_probe": {
 			"editor_interface_available": bool(editor_context.get("editor_interface_available", false)),
@@ -2047,16 +2062,16 @@ func _build_project_run_state_probe_comparison(editor_context: Dictionary, runti
 	}
 
 
-func _build_project_run_editor_interface_recovery_suggestions() -> Array[String]:
+func _build_project_lifecycle_editor_interface_recovery_suggestions() -> Array[String]:
 	return [
 		"Retry system_project_state or system_editor_state to confirm the current MCP connection is attached to the intended Godot editor session.",
-		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_run.",
+		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_lifecycle.",
 		"If multiple Godot editors are open, close stale sessions or reconnect to the editor that owns this project.",
 		"If editor launching remains unavailable, use the cli_fallback command from this response to run the scene outside the editor."
 	]
 
 
-func _build_project_run_cli_fallback(editor_context: Dictionary, requested_scene: String, scene_exists: bool) -> Dictionary:
+func _build_project_lifecycle_cli_fallback(editor_context: Dictionary, requested_scene: String, scene_exists: bool) -> Dictionary:
 	var godot_executable_path := str(editor_context.get("godot_executable_path", ""))
 	var project_root_path := str(editor_context.get("project_root_path", ""))
 	if godot_executable_path.is_empty() or project_root_path.is_empty() or requested_scene.is_empty() or not scene_exists:
@@ -2071,7 +2086,7 @@ func _build_project_run_cli_fallback(editor_context: Dictionary, requested_scene
 	}
 
 
-func _build_project_run_success_capabilities(custom_scene: String) -> Dictionary:
+func _build_project_lifecycle_success_capabilities(custom_scene: String) -> Dictionary:
 	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
 	if not custom_scene.is_empty():
 		project_info["main_scene"] = custom_scene
@@ -2079,13 +2094,13 @@ func _build_project_run_success_capabilities(custom_scene: String) -> Dictionary
 	return _build_runtime_capabilities(project_info, dotnet_build_data, _get_runtime_summary(), _build_runtime_control_state_section())
 
 
-func _execute_project_stop(_args: Dictionary) -> Dictionary:
-	_project_run_timeout_token += 1
-	MCPDebugBuffer.record("debug", "system", "project_stop: stopping project")
+func _stop_project_lifecycle(_args: Dictionary) -> Dictionary:
+	_project_lifecycle_timeout_token += 1
+	MCPDebugBuffer.record("debug", "system", "project_lifecycle action=stop")
 	var stop_result: Dictionary = bridge.call_atomic("scene_run", {"action": "stop"})
 	if not bool(stop_result.get("success", false)):
 		MCPDebugBuffer.record("warning", "system",
-			"project_stop failed: %s" % str(stop_result.get("error", "unknown")))
+			"project_lifecycle action=stop failed: %s" % str(stop_result.get("error", "unknown")))
 		return bridge.error("Failed to stop project: %s" % str(stop_result.get("error", "unknown")))
 	return bridge.success({"stopped": true}, "Project stopped")
 
@@ -2166,18 +2181,18 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 func _schedule_project_auto_stop(timeout_ms: int, scene_label: String) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
-		MCPDebugBuffer.record("warning", "system", "project_run auto-stop skipped: SceneTree unavailable")
+		MCPDebugBuffer.record("warning", "system", "project_lifecycle auto-stop skipped: SceneTree unavailable")
 		return
-	_project_run_timeout_token += 1
-	var token := _project_run_timeout_token
+	_project_lifecycle_timeout_token += 1
+	var token := _project_lifecycle_timeout_token
 	var timer: SceneTreeTimer = tree.create_timer(float(timeout_ms) / 1000.0)
-	timer.timeout.connect(Callable(self, "_on_project_run_timeout").bind(token, scene_label, timeout_ms), CONNECT_ONE_SHOT)
+	timer.timeout.connect(Callable(self, "_on_project_lifecycle_timeout").bind(token, scene_label, timeout_ms), CONNECT_ONE_SHOT)
 
 
-func _on_project_run_timeout(token: int, scene_label: String, timeout_ms: int) -> void:
-	if token != _project_run_timeout_token:
+func _on_project_lifecycle_timeout(token: int, scene_label: String, timeout_ms: int) -> void:
+	if token != _project_lifecycle_timeout_token:
 		return
 	if bridge == null:
 		return
-	MCPDebugBuffer.record("info", "system", "project_run auto-stop: scene=%s timeout_ms=%d" % [scene_label, timeout_ms])
+	MCPDebugBuffer.record("info", "system", "project_lifecycle auto-stop: scene=%s timeout_ms=%d" % [scene_label, timeout_ms])
 	bridge.call_atomic("scene_run", {"action": "stop"})

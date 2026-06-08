@@ -50,6 +50,13 @@ This makes configuration and editor workflows easier to re-enter after profiles,
 
 Native MCP discovery now localizes resource and resource-template metadata too. When clients call `resources/list` or `resources/templates/list`, resource names and descriptions follow the active plugin language while URIs and templates remain stable.
 
+
+### 🧭 Project Runtime Lifecycle
+
+Project runtime control now uses `system_project_lifecycle(action=start|stop)` as its canonical high-level entry. Start, marker validation, auto-stop, explicit stop, foreground-window fallback guidance, and runtime capability context now live under one lifecycle surface instead of separate run and stop tool names.
+
+Clients that previously called the old project run or stop tool names should migrate to `system_project_lifecycle(action=start)` and `system_project_lifecycle(action=stop)`. The lifecycle wording is intended to make editor automation flows read as a controllable runtime session rather than a one-off launch command.
+
 ### ✅ Compatibility and Upgrade Notes
 
-These changes only extend the public tool schema. Existing `system_editor_control`, `system_settings_dialog`, and `system_project_configure` actions remain available, and clients that do not call the new actions do not need to change their requests.
+The project runtime control surface now uses `system_project_lifecycle(action=start|stop)`. Clients using earlier project run or stop tool names should migrate to the lifecycle entry, while existing editor, settings, and project configuration workflows remain available.

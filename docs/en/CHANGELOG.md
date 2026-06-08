@@ -26,6 +26,7 @@ Target version: 1.2.1.
 - Added read-only `system_settings_dialog(action=focus_value)` value-editor focusing for unique visible settings rows, moving editor focus to the value control without writing setting values.
 - Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
 - Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
+- Added `system_project_lifecycle(action=start|stop)` as the canonical high-level project runtime session lifecycle entry, replacing the older project run/stop tool names without compatibility aliases.
 
 ### Internal
 
@@ -37,6 +38,7 @@ Target version: 1.2.1.
 - Extended the editor UI control atomic layer with Tree item listing/selection coverage for settings-dialog category navigation.
 - Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
 - Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
+- Updated the project lifecycle tool tree, prompt, localization, protocol facts, stdio/router/tool-loader, and harness contracts for the canonical `system_project_lifecycle` surface with the `2026-06-08.16` tool schema facts update and explicit lifecycle action validation.
 
 ### Fixed
 
