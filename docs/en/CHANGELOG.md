@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.4.0.
 
+### Changed
+
+- Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+
 ### Documentation
 
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
