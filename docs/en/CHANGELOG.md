@@ -20,6 +20,7 @@ Target version: 1.4.0.
 - Added the v1.3.0 semantic editor automation model: editor UI guidance now directs clients toward semantic workflows first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
 - Added `system_editor_control(action="wait_for_ui")` so clients can wait for real editor controls by existence, visibility, text, and enabled/disabled state before continuing an automation workflow.
 - Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` for inspecting and cropping visible floating editor popups or windows by returned popup paths.
+- Added activation observation evidence for `system_editor_control` and low-level `ui_control` `activate_control`, including Button-like target state before/after activation, observed signals, and hints when semantic activation completes without observable evidence.
 - Added click fallback observation evidence for `system_editor_control` and low-level `ui_control` click actions, including dispatched input events, Button-like target state before/after the click, observed control signals, and hints when input is delivered without activation evidence.
 - Added `system_editor_evidence`, a high-level visual evidence workflow for editor, control, popup, active-dialog, and automatic surfaces with explicit target, fallback, degradation, visible-popup, and capture-policy metadata.
 - Added `system_settings_dialog`, a high-level Project Settings and Editor Settings workflow covering open/status/search/navigation, tab and category focusing, row modeling, row resolution, value read/focus/set/verify, surface capture, close, and trusted `run_task` orchestration.
@@ -68,6 +69,7 @@ Target version: 1.4.0.
 - Added project lifecycle contracts for explicit lifecycle actions, marker validation, foreground-window fallback behavior, and removed run/stop compatibility names.
 - Added tool catalog, tool activity, User-tool naming, scene inspect, plugin maintenance, project configuration, and userdata maintenance contract coverage across loader, router, Tools tab, localization inventory, and protocol facts.
 - Extended editor/system control harness coverage for wait conditions, popup capture, hover/leave pointer fallback, click input dispatch, Button-like target observation, activation-signal separation, and input-only Button diagnostics.
+- Extended editor/system control harness coverage for `activate_control` target observation metadata and activation evidence.
 
 ## [1.2.0] - 2026-06-06
 

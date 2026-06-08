@@ -16,7 +16,7 @@ const DOCK_VISIBLE_NAME := "MCP"
 const DOCK_LEGACY_NAME := "MCPDock"
 
 
-class ClickSignalRecorder:
+class ControlSignalRecorder:
 	extends RefCounted
 
 	var counts := {}
@@ -548,14 +548,19 @@ func _activate_control(ei, target_path: String) -> Dictionary:
 	if not _supports_activation(control):
 		return _error("Editor control does not support activation: %s" % target_path)
 
+	var state_before := _read_control_observable_state(control)
+	var signal_capture := _begin_control_signal_capture(control)
 	if control.has_method("press"):
 		control.press()
 	elif control.has_method("emit_signal"):
 		control.emit_signal("pressed")
+	var signal_observation := _end_control_signal_capture(control, signal_capture)
+	var state_after := _read_control_observable_state(control)
 
 	return _success({
 		"target_path": target_path,
-		"class": _control_class_name(control)
+		"class": _control_class_name(control),
+		"target_observation": _build_activation_target_observation(control, state_before, state_after, signal_observation)
 	}, "Editor control activated")
 
 
@@ -580,13 +585,13 @@ func _click_control(ei, args: Dictionary, button_index: int, button_name: String
 
 	var viewport_position := _control_local_to_viewport_position(control, local_position)
 	var screen_position := _viewport_to_screen_position(control, viewport_position)
-	var state_before := _read_click_observable_state(control)
-	var signal_capture := _begin_click_signal_capture(control)
+	var state_before := _read_control_observable_state(control)
+	var signal_capture := _begin_control_signal_capture(control)
 	var dispatch_result := _dispatch_control_mouse_click(control, button_index, viewport_position)
-	var signal_observation := _end_click_signal_capture(control, signal_capture)
+	var signal_observation := _end_control_signal_capture(control, signal_capture)
 	if not bool(dispatch_result.get("success", false)):
 		return dispatch_result
-	var state_after := _read_click_observable_state(control)
+	var state_after := _read_control_observable_state(control)
 	var dispatch_data: Dictionary = dispatch_result.get("data", {})
 
 	return _success({
@@ -1719,8 +1724,8 @@ func _dispatch_control_mouse_click(control, button_index: int, viewport_position
 	})
 
 
-func _begin_click_signal_capture(control) -> Dictionary:
-	var recorder := ClickSignalRecorder.new()
+func _begin_control_signal_capture(control) -> Dictionary:
+	var recorder := ControlSignalRecorder.new()
 	var connections: Array[Dictionary] = []
 	var signal_specs := [
 		{"signal": "pressed", "method": "record_pressed"},
@@ -1748,7 +1753,7 @@ func _begin_click_signal_capture(control) -> Dictionary:
 	}
 
 
-func _end_click_signal_capture(control, capture: Dictionary) -> Dictionary:
+func _end_control_signal_capture(control, capture: Dictionary) -> Dictionary:
 	var connections: Array = capture.get("connections", [])
 	for connection in connections:
 		if not (connection is Dictionary):
@@ -1779,7 +1784,7 @@ func _end_click_signal_capture(control, capture: Dictionary) -> Dictionary:
 	}
 
 
-func _read_click_observable_state(control) -> Dictionary:
+func _read_control_observable_state(control) -> Dictionary:
 	return {
 		"visible": _is_control_visible(control),
 		"disabled": _is_control_disabled(control),
@@ -1792,8 +1797,8 @@ func _read_click_observable_state(control) -> Dictionary:
 
 
 func _build_click_target_observation(control, state_before: Dictionary, state_after: Dictionary, signal_observation: Dictionary) -> Dictionary:
-	var state_changed := _observable_click_state_changed(state_before, state_after)
-	var activation_state_changed := _observable_click_activation_state_changed(state_before, state_after)
+	var state_changed := _observable_control_state_changed(state_before, state_after)
+	var activation_state_changed := _observable_control_activation_state_changed(state_before, state_after)
 	var button_like := _is_button_like_control(control)
 	var activation_observed := bool(signal_observation.get("activation_observed", false))
 	var hints: Array[String] = []
@@ -1803,6 +1808,25 @@ func _build_click_target_observation(control, state_before: Dictionary, state_af
 		"button_like": button_like,
 		"activation_supported": _supports_activation(control),
 		"activation_observed": activation_observed or activation_state_changed,
+		"state_before": state_before,
+		"state_after": state_after,
+		"state_changed": state_changed,
+		"signal_observation": signal_observation,
+		"hints": hints
+	}
+
+
+func _build_activation_target_observation(control, state_before: Dictionary, state_after: Dictionary, signal_observation: Dictionary) -> Dictionary:
+	var state_changed := _observable_control_state_changed(state_before, state_after)
+	var activation_state_changed := _observable_control_activation_state_changed(state_before, state_after)
+	var activation_observed := bool(signal_observation.get("activation_observed", false)) or activation_state_changed
+	var hints: Array[String] = []
+	if _is_button_like_control(control) and not activation_observed:
+		hints.append("activate_control completed, but no Button activation signal or pressed-state change was observed. Inspect disabled state, toggle mode, custom press handlers, or use click_control when pointer input evidence is required.")
+	return {
+		"button_like": _is_button_like_control(control),
+		"activation_supported": _supports_activation(control),
+		"activation_observed": activation_observed,
 		"state_before": state_before,
 		"state_after": state_after,
 		"state_changed": state_changed,
@@ -1825,14 +1849,14 @@ func _click_input_signal_observed(signal_counts: Dictionary) -> bool:
 	return false
 
 
-func _observable_click_activation_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
+func _observable_control_activation_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
 	for key in ["button_pressed", "pressed"]:
 		if state_before.get(key, null) != state_after.get(key, null):
 			return true
 	return false
 
 
-func _observable_click_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
+func _observable_control_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
 	for key in ["button_pressed", "pressed", "toggle_mode", "disabled", "visible"]:
 		if state_before.get(key, null) != state_after.get(key, null):
 			return true
