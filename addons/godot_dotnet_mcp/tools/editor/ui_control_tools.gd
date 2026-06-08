@@ -2072,6 +2072,8 @@ func _is_text_input_mutable(control) -> bool:
 func _supports_value_input(control) -> bool:
 	if control == null:
 		return false
+	if not _is_control_visible(control):
+		return false
 	if not _has_property(control, "value"):
 		return false
 	var control_class := _control_class_name(control)
