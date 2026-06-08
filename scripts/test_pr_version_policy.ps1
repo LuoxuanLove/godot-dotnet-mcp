@@ -101,6 +101,7 @@ function Invoke-PolicyScenario {
     param(
         [string]$Name,
         [string]$HeadBranch,
+        [string]$BaseBranch = "dev",
         [string]$BaseVersion = "1.0.0",
         [string]$HeadVersion = "1.0.0",
         [scriptblock]$MutateHead = $null,
@@ -117,7 +118,7 @@ function Invoke-PolicyScenario {
         $passed = $true
         $failureMessage = ""
         try {
-            & $validatorPath -RepositoryRoot $repo -BaseBranch "dev" -HeadBranch $HeadBranch -BaseRef "dev" -HeadRef $headCommit -RepositoryOwner $RepositoryOwner -HeadRepositoryOwner $HeadRepositoryOwner -RequireTrustedReleaseBranch:$RequireTrustedReleaseBranch -SkipFetch | Out-Host
+            & $validatorPath -RepositoryRoot $repo -BaseBranch $BaseBranch -HeadBranch $HeadBranch -BaseRef "dev" -HeadRef $headCommit -RepositoryOwner $RepositoryOwner -HeadRepositoryOwner $HeadRepositoryOwner -RequireTrustedReleaseBranch:$RequireTrustedReleaseBranch -SkipFetch | Out-Host
         } catch {
             $passed = $false
             $failureMessage = $_.Exception.Message
@@ -145,8 +146,11 @@ function Invoke-PolicyScenario {
 }
 
 Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "feature/tooling" -HeadVersion "1.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release changed metadata" -HeadBranch "fix/version-text" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'fix/version-text' changes public version metadata"
+Invoke-PolicyScenario -Name "refactor base changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-version" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v1.4-version' changes public version metadata"
 Invoke-PolicyScenario -Name "release changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $true
+Invoke-PolicyScenario -Name "release branch cannot target refactor base" -BaseBranch "refactor/v1.4.0" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must target dev"
 Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must come from a release/* branch in the base repository"
 Invoke-PolicyScenario -Name "non-release plugin cfg text change without version change" -HeadBranch "docs/plugin-metadata" -HeadVersion "1.0.0" -MutateHead { param($repo) Write-MetadataFixture -RepositoryRoot $repo -Version "1.0.0" -PluginDescription "Updated metadata" } -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release protocol version only" -HeadBranch "feature/protocol-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_version": "1.0.0"', '"server_version": "1.1.0"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "protocol facts server_version"
