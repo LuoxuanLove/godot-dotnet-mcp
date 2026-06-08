@@ -25,6 +25,7 @@ static func search(loader, args: Dictionary) -> Dictionary:
 	var include_schema := bool(args.get("include_schema", false))
 
 	var catalog := _build_catalog(loader, visibility == "visible", include_schema)
+	var catalog_filter_index := _build_filter_index(catalog)
 	var matches: Array[Dictionary] = []
 	var total_matched := 0
 	for tool in catalog:
@@ -41,6 +42,14 @@ static func search(loader, args: Dictionary) -> Dictionary:
 			var item := tool_dict.duplicate(true)
 			item["match_reasons"] = match_reasons
 			matches.append(item)
+	var diagnostics := _build_search_diagnostics(
+		query,
+		visibility,
+		domain_filters,
+		category_filters,
+		catalog_filter_index,
+		total_matched
+	)
 
 	return {
 		"success": true,
@@ -57,7 +66,13 @@ static func search(loader, args: Dictionary) -> Dictionary:
 				"filters": {
 					"domain": domain_filters.keys(),
 					"category": category_filters.keys()
-				}
+				},
+				"available_filters": {
+					"domain": catalog_filter_index.get("domain", []),
+					"category": catalog_filter_index.get("category", [])
+				},
+				"filter_warnings": diagnostics.get("filter_warnings", []),
+				"suggested_next_queries": diagnostics.get("suggested_next_queries", [])
 			},
 			"matches": matches,
 			"tool_loader_status": _get_loader_status(loader)
@@ -211,6 +226,128 @@ static func _match_reasons(tool: Dictionary, query: String) -> Array[String]:
 		for enum_value in param.get("enum", []):
 			_add_match_reason(reasons, "param_enum", str(enum_value), needle)
 	return reasons
+
+
+static func _build_filter_index(catalog: Array[Dictionary]) -> Dictionary:
+	var domains := {}
+	var categories := {}
+	for tool in catalog:
+		var domain := str(tool.get("domain_key", "")).strip_edges().to_lower()
+		var category := str(tool.get("category", "")).strip_edges().to_lower()
+		if not domain.is_empty():
+			domains[domain] = true
+		if not category.is_empty():
+			categories[category] = true
+	return {
+		"domain": _sorted_keys(domains),
+		"category": _sorted_keys(categories)
+	}
+
+
+static func _build_search_diagnostics(
+	query: String,
+	visibility: String,
+	domain_filters: Dictionary,
+	category_filters: Dictionary,
+	filter_index: Dictionary,
+	total_matched: int
+) -> Dictionary:
+	var warnings: Array[Dictionary] = []
+	var suggestions: Array[Dictionary] = []
+	var available_domains: Array = filter_index.get("domain", [])
+	var available_categories: Array = filter_index.get("category", [])
+	_append_filter_warnings(warnings, suggestions, "domain", domain_filters.keys(), category_filters.keys(), available_domains, available_categories, query, visibility)
+	_append_filter_warnings(warnings, suggestions, "category", category_filters.keys(), domain_filters.keys(), available_categories, available_domains, query, visibility)
+	if total_matched == 0 and warnings.is_empty() and (not domain_filters.is_empty() or not category_filters.is_empty()):
+		suggestions.append({
+			"query": query,
+			"visibility": visibility,
+			"domain": [],
+			"category": [],
+			"reason": "Remove filters to check whether the query matches another tool group."
+		})
+	if total_matched == 0 and suggestions.is_empty() and not query.is_empty():
+		suggestions.append({
+			"query": "",
+			"visibility": visibility,
+			"domain": domain_filters.keys(),
+			"category": category_filters.keys(),
+			"reason": "Clear the query to inspect tools available under the current filters."
+		})
+	return {
+		"filter_warnings": warnings,
+		"suggested_next_queries": suggestions
+	}
+
+
+static func _append_filter_warnings(
+	warnings: Array[Dictionary],
+	suggestions: Array[Dictionary],
+	filter_name: String,
+	requested_values: Array,
+	paired_values: Array,
+	available_values: Array,
+	alternate_values: Array,
+	query: String,
+	visibility: String
+) -> void:
+	for raw_value in requested_values:
+		var value := str(raw_value).strip_edges().to_lower()
+		if value.is_empty() or available_values.has(value):
+			continue
+		var warning := {
+			"filter": filter_name,
+			"value": value,
+			"available": available_values,
+			"message": "%s filter '%s' is not available in %s tool catalog results." % [filter_name, value, visibility]
+		}
+		if alternate_values.has(value):
+			warning["hint"] = "'%s' is available as the other filter type." % value
+		warnings.append(warning)
+		suggestions.append(_suggest_filter_removal(filter_name, value, paired_values, query, visibility))
+		if alternate_values.has(value):
+			suggestions.append(_suggest_filter_transfer(filter_name, value, query, visibility))
+
+
+static func _suggest_filter_removal(filter_name: String, value: String, paired_values: Array, query: String, visibility: String) -> Dictionary:
+	var suggestion := {
+		"query": query,
+		"visibility": visibility,
+		"reason": "Remove unavailable %s filter '%s'." % [filter_name, value]
+	}
+	if filter_name == "domain":
+		suggestion["domain"] = []
+		suggestion["category"] = paired_values
+	else:
+		suggestion["domain"] = paired_values
+		suggestion["category"] = []
+	return suggestion
+
+
+static func _suggest_filter_transfer(filter_name: String, value: String, query: String, visibility: String) -> Dictionary:
+	if filter_name == "domain":
+		return {
+			"query": query,
+			"visibility": visibility,
+			"domain": [],
+			"category": [value],
+			"reason": "Use '%s' as a category filter instead of a domain filter." % value
+		}
+	return {
+		"query": query,
+		"visibility": visibility,
+		"domain": [value],
+		"category": [],
+		"reason": "Use '%s' as a domain filter instead of a category filter." % value
+	}
+
+
+static func _sorted_keys(values: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in values.keys():
+		out.append(str(key))
+	out.sort()
+	return out
 
 
 static func _add_match_reason(reasons: Array[String], field: String, value: String, needle: String) -> void:

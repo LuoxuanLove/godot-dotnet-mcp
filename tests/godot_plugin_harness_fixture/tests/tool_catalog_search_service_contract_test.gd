@@ -252,6 +252,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var alternate_domain_matches: Array = (alternate_domain_search.get("data", {}) as Dictionary).get("matches", [])
 	if not alternate_domain_matches.is_empty():
 		return _failure("Domain-key-filtered search should exclude matches from other domains.")
+	var alternate_summary: Dictionary = (alternate_domain_search.get("data", {}) as Dictionary).get("summary", {})
+	var available_filters: Dictionary = alternate_summary.get("available_filters", {})
+	if not ((available_filters.get("domain", []) as Array).has("core")):
+		return _failure("Catalog diagnostics should report available domain filters.")
+	var filter_warnings: Array = alternate_summary.get("filter_warnings", [])
+	if filter_warnings.is_empty():
+		return _failure("Catalog diagnostics should warn about unavailable domain filters.")
+	if str((filter_warnings[0] as Dictionary).get("filter", "")) != "domain":
+		return _failure("Catalog diagnostics should identify the unavailable filter type.")
+	var suggested_next_queries: Array = alternate_summary.get("suggested_next_queries", [])
+	if suggested_next_queries.is_empty():
+		return _failure("Catalog diagnostics should suggest a follow-up query when filters are too narrow.")
+
+	var category_misuse_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "project", "query": "get_action", "visibility": "visible"})
+	var category_misuse_summary: Dictionary = (category_misuse_search.get("data", {}) as Dictionary).get("summary", {})
+	var category_misuse_warnings: Array = category_misuse_summary.get("filter_warnings", [])
+	if category_misuse_warnings.is_empty() or not (category_misuse_warnings[0] as Dictionary).has("hint"):
+		return _failure("Catalog diagnostics should hint when a domain filter value is available as a category.")
 
 	var invalid_visibility: Dictionary = ToolCatalogSearchService.search(loader, {"visibility": "all"})
 	if bool(invalid_visibility.get("success", true)):
