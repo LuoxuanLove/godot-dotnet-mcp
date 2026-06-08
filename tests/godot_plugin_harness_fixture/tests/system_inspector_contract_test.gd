@@ -101,6 +101,10 @@ class FakeBridge extends RefCounted:
 		if include_settings_rows:
 			rows.append({"path": "/root/ProjectSettingsDialog/Rows/SettingRow", "parent_path": "/root/ProjectSettingsDialog/Rows", "class": "HBoxContainer", "text": "Application Name", "setting_path": "application/config/name", "visible": true, "enabled": true, "child_count": 2})
 			rows.append({"path": "/root/ProjectSettingsDialog/Rows/SettingRow/Value", "parent_path": "/root/ProjectSettingsDialog/Rows/SettingRow", "class": "LineEdit", "text": "Wrong Surface", "visible": true, "enabled": true, "editable_text": true, "actionable": ["focus", "set_text"]})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector", "parent_path": "/root/ProjectSettings", "class": "SectionedInspector", "text": "Project Settings", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/EditorInspector", "parent_path": "/root/ProjectSettings/SectionedInspector/Right", "class": "EditorInspector", "text": "Settings Inspector", "visible": true, "enabled": true, "child_count": 1})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/EditorInspector/Rows/ApplicationName", "parent_path": "/root/ProjectSettings/SectionedInspector/Right/EditorInspector/Rows", "class": "HBoxContainer", "text": "Application Name", "setting_path": "application/config/name", "visible": true, "enabled": true, "child_count": 2})
+			rows.append({"path": "/root/ProjectSettings/SectionedInspector/Right/EditorInspector/Rows/ApplicationName/Value", "parent_path": "/root/ProjectSettings/SectionedInspector/Right/EditorInspector/Rows/ApplicationName", "class": "LineEdit", "text": "Wrong Sectioned Surface", "visible": true, "enabled": true, "editable_text": true, "actionable": ["focus", "set_text"]})
 		return rows
 
 	func _property_row(label: String, property_path: String, value_class: String, value_fields: Dictionary) -> Array[Dictionary]:
@@ -176,10 +180,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if str(listed_data.get("model_quality", {}).get("high", "")) == "0":
 		return _failure("list_properties should report high-confidence property models.")
 	fake.include_settings_rows = true
-	var mixed_surface_list = impl.execute("inspector", {"action": "list_properties", "property_path": "application/config/name", "limit": 20})
+	var mixed_surface_list = impl.execute("inspector", {"action": "list_properties", "query": "Application Name", "limit": 20})
 	fake.include_settings_rows = false
 	if bool(mixed_surface_list.get("success", false)) and int(mixed_surface_list.get("data", {}).get("property_count", 0)) != 0:
-		return _failure("system_inspector should ignore settings rows outside the Inspector subtree.")
+		return _failure("system_inspector should ignore settings rows and SectionedInspector surfaces outside the editor Inspector.")
 	fake.query_filters_children = false
 	var queried = impl.execute("inspector", {"action": "read_value", "query": "Name"})
 	fake.query_filters_children = true
@@ -225,6 +229,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var number_set = await impl.execute_async("inspector", {"action": "set_value", "property_path": "movement/speed", "value": 9.25})
 	if not bool(number_set.get("success", false)) or not is_equal_approx(fake.speed_value, 9.25):
 		return _failure("set_value should write and verify supported number properties.")
+	var invalid_number_calls = fake.calls.size()
+	var invalid_number_write = await impl.execute_async("inspector", {"action": "set_value", "property_path": "movement/speed", "value": "not-a-number"})
+	if bool(invalid_number_write.get("success", false)) or str(invalid_number_write.get("data", {}).get("write", {}).get("reason", "")) != "invalid_value_type":
+		return _failure("set_value should reject non-numeric values before numeric Inspector writes.")
+	if not is_equal_approx(fake.speed_value, 9.25) or _has_call_since(fake.calls, invalid_number_calls, "editor_ui_control", "set_value"):
+		return _failure("invalid numeric Inspector writes should not touch the editor value control.")
 	var bool_set = await impl.execute_async("inspector", {"action": "set_value", "property_path": "visible", "value": true})
 	if not bool(bool_set.get("success", false)) or not fake.visible_value:
 		return _failure("set_value should activate bool controls only when the value changes.")

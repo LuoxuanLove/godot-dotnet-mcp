@@ -457,8 +457,7 @@ func _inspector_scoped_controls(raw_controls: Array) -> Array:
 			continue
 		var row = control as Dictionary
 		var path = str(row.get("path", ""))
-		var control_class = str(row.get("class", "")).to_lower()
-		if not path.is_empty() and (control_class.contains("inspector") or path.to_lower().contains("editorinspector")):
+		if not path.is_empty() and _is_editor_inspector_root(row):
 			roots.append(path)
 	var scoped: Array = []
 	for control in raw_controls:
@@ -549,7 +548,22 @@ func _looks_like_property_row(row: Dictionary) -> bool:
 
 func _path_under_inspector(path: String) -> bool:
 	var lower = path.to_lower()
-	return lower.contains("inspector")
+	if _path_is_settings_or_dialog_inspector(path):
+		return false
+	return lower.contains("editorinspector") or lower.contains("inspector_dock") or lower.contains("inspectordock") or lower.contains("/inspector/")
+
+
+func _is_editor_inspector_root(row: Dictionary) -> bool:
+	var path = str(row.get("path", ""))
+	if path.is_empty() or _path_is_settings_or_dialog_inspector(path):
+		return false
+	var normalized_class = str(row.get("class", "")).strip_edges().to_lower().replace("_", "")
+	return normalized_class == "editorinspector"
+
+
+func _path_is_settings_or_dialog_inspector(path: String) -> bool:
+	var normalized = path.to_lower().replace("_", "")
+	return normalized.contains("projectsettings") or normalized.contains("editorsettings") or normalized.contains("sectionedinspector") or normalized.contains("settingsdialog")
 
 
 func _find_value_control(row: Dictionary, controls: Array) -> Dictionary:
@@ -600,6 +614,8 @@ func _write_property_value(property: Dictionary, value) -> Dictionary:
 			return bridge.success(payload, "Inspector text property written")
 		return result
 	if editor_type == "number":
+		if not _can_coerce_number(value):
+			return bridge.error("Inspector numeric property writes require a numeric value.", {"reason": "invalid_value_type", "value_editor_type": editor_type})
 		var result: Dictionary = bridge.call_atomic("editor_ui_control", {"action": "set_value", "target_path": value_path, "value": value})
 		var payload = _safe_data(result)
 		payload["write_action"] = "set_value"
@@ -790,7 +806,7 @@ func _has_property_selector(args: Dictionary) -> bool:
 
 func _find_inspector_root(controls: Array) -> Dictionary:
 	for control in controls:
-		if control is Dictionary and str((control as Dictionary).get("class", "")).to_lower().contains("inspector"):
+		if control is Dictionary and _is_editor_inspector_root(control as Dictionary):
 			return (control as Dictionary).duplicate(true)
 	return {}
 
