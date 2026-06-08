@@ -500,7 +500,7 @@ func _collect_files(path: String, filter: String, recursive: bool, results: Arra
 				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
-				if file_name.match(filter):
+				if file_name.match(filter) and not dir.is_link(file_name):
 					results.append(full_path)
 			file_name = dir.get_next()
 		dir.list_dir_end()
@@ -1007,6 +1007,11 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	var total_replacements = 0
 
 	for file_path in files:
+		var file_path_result := _normalize_tool_path_result(file_path, false)
+		if not bool(file_path_result.get("success", false)):
+			return file_path_result
+		file_path = str(file_path_result.get("path", file_path))
+
 		var file = FileAccess.open(file_path, FileAccess.READ)
 		if not file:
 			continue
