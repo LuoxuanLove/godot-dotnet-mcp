@@ -20,6 +20,10 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	],
 	"system_plugin_reload": [],
 	"system_plugin_update": [],
+	"system_plugin_maintenance": [
+		{"tool": "system_plugin_reload", "actions": ["get_freshness", "full_reload_plugin"]},
+		{"tool": "system_plugin_update", "actions": ["get_current", "get_status", "set_source", "start_sync"]}
+	],
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
@@ -93,6 +97,12 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_scene_analyze": [
 		{"tool": "scene_bindings", "actions": ["from_path"]},
 		{"tool": "scene_audit",    "actions": ["from_path"]},
+		{"tool": "script_inspect", "actions": ["path"]}
+	],
+	"system_scene_inspect": [
+		{"tool": "scene_audit",    "actions": ["from_path"]},
+		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]},
+		{"tool": "scene_bindings", "actions": ["from_path"]},
 		{"tool": "script_inspect", "actions": ["path"]}
 	],
 	"system_scene_patch": [

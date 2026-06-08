@@ -116,10 +116,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
 	if not exposed_names.has("system_plugin_update"):
 		return _failure("Tool loader did not expose the high-level system_plugin_update entry.")
+	if not exposed_names.has("system_plugin_maintenance"):
+		return _failure("Tool loader did not expose the high-level system_plugin_maintenance entry.")
 	if not exposed_names.has("system_dap_debugger"):
 		return _failure("Tool loader did not expose the high-level system_dap_debugger entry.")
 	if not exposed_names.has("system_tool_activity"):
 		return _failure("Tool loader did not expose the high-level system_tool_activity entry.")
+	if not exposed_names.has("system_scene_inspect"):
+		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)

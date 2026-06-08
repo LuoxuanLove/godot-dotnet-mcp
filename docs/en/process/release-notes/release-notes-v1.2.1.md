@@ -64,6 +64,13 @@ This makes configuration and editor workflows easier to re-enter after profiles,
 
 Native MCP discovery now localizes resource and resource-template metadata too. When clients call `resources/list` or `resources/templates/list`, resource names and descriptions follow the active plugin language while URIs and templates remain stable.
 
+### 🧪 Read-Only Scene Inspection
+
+`system_scene_inspect` gives clients one read-only entry for scene checks. Use `validate` for fast loadability and reference issues, `analyze` for deeper node, binding, and script details, or `full` when a workflow needs both payloads kept separate in one response.
+
+### 🛠 Plugin Maintenance Workflow
+
+`system_plugin_maintenance` gives clients one grouped maintenance entry for inspecting plugin status, scheduling a lifecycle reload, checking update progress, selecting an update source, and starting the plugin update flow. The tool is additive: lower-level reload and update tools remain available for clients that already compose those steps directly.
 
 ### 🧭 Project Runtime Lifecycle
 
@@ -74,3 +81,7 @@ Clients that previously called the old project run or stop tool names should mig
 ### ✅ Compatibility and Upgrade Notes
 
 The project runtime control surface now uses `system_project_lifecycle(action=start|stop)`. Clients using earlier project run or stop tool names should migrate to the lifecycle entry, while existing editor, settings, and project configuration workflows remain available.
+
+Existing scene validation and analysis tools remain available. `system_scene_inspect` is an additive combined route for clients that want one high-level scene inspection surface.
+
+`system_plugin_maintenance` is an additive high-level wrapper. Existing `system_plugin_reload` and `system_plugin_update` calls remain supported.

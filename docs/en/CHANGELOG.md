@@ -30,6 +30,8 @@ Target version: 1.2.1.
 - Added `system_inspector`, a high-level Inspector property workflow that can list visible property models, resolve a unique property, read, focus, set, verify, capture, or run trusted property tasks on the current edited object or a prepared node/resource target.
 - Added `system_project_lifecycle(action=start|stop)` as the canonical high-level project runtime session lifecycle entry, replacing the older project run/stop tool names without compatibility aliases.
 - Added `system_editor_evidence`, a high-level visual evidence workflow that captures editor, control, popup, active-dialog, or automatic surfaces with explicit target, fallback, degradation, and visible-popup metadata.
+- Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while keeping existing scene validation and analysis tools available.
+- Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while keeping the dedicated reload and update tools available.
 
 ### Changed
 
@@ -52,6 +54,8 @@ Target version: 1.2.1.
 - Extended settings-dialog task contract coverage for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, Tools tab action rendering, catalog search discovery, prompt/help guidance, and the `2026-06-08.19` tool schema facts update.
 - Added Inspector workflow contracts and tool-tree coverage for property model resolution, typed value reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and the `2026-06-08.20` tool schema facts update.
 - Added editor evidence surface contracts, tool-tree entries, Tools tab rendering, catalog search discovery, prompt/help guidance, localized tool metadata, and the `2026-06-08.21` tool schema facts update.
+- Extended scene executor, tool loader, Tools tab rendering, localization inventory, and protocol facts coverage for the `2026-06-08.23` `system_scene_inspect` schema surface.
+- Added plugin-maintenance contracts, tool-tree coverage, localized tool metadata, and the `2026-06-08.22` tool schema facts update for the grouped maintenance entry.
 
 ### Fixed
 
