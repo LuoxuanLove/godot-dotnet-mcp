@@ -356,8 +356,10 @@ jobs:
 
       - name: Delete consumed next draft
         if: ${{ inputs.dry_run == false }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -366,4 +368,11 @@ jobs:
           $global:LASTEXITCODE = 0
           if ($lookupExit -eq 0 -and $isDraft -eq "true") {
             gh release delete next --yes
+            $deleteExit = $LASTEXITCODE
+            $global:LASTEXITCODE = 0
+            if ($deleteExit -ne 0) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Warning: GitHub Release ``$env:TAG_NAME`` was created, but cleanup of the ``next`` draft failed. Delete the draft manually before preparing the next release."
+              exit $deleteExit
+            }
           }
