@@ -4,70 +4,56 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.2.1])
+## [Unreleased] ([1.3.0])
 
-Target version: 1.2.1.
+Target version: 1.3.0.
 
 ### Added
 
-- Localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
-- Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
-- Added `system_tool_catalog` so clients can search the currently exposed tool catalog by query, category, or domain and inspect match reasons, actions, parameters, visibility, and enabled state.
-- Added `system_project_configure(action="list_export_presets")` to inspect `export_presets.cfg` as a read-only preset summary with redacted sensitive option keys and absolute export paths.
-- Added `system_project_configure(action="get_input_action")` so agents can inspect a specific input action's deadzone and concrete event bindings from the high-level project configuration tool.
-- Added `system_editor_control(action="wait_for_ui")`, a bounded wait-and-verify action that polls editor controls for existence, visibility, text, and enabled/disabled conditions before returning matched UI evidence or a timeout payload.
-- Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` so clients can inspect and crop evidence from visible floating editor popups or windows by returned popup paths.
-- Added `system_settings_dialog`, a high-level settings-like dialog workflow that opens Project Settings or Editor Settings, waits for visibility, searches candidate setting rows, focuses results, captures evidence, and closes the surface without writing setting values.
-- Added `system_settings_dialog(action=list_tabs/activate_tab)` settings tab navigation, including `open(tab=...)`, so clients can list and switch Project Settings or Editor Settings tabs without coordinate clicks.
-- Added `system_settings_dialog(action=list_categories/focus_category)` for settings category tree discovery and unique category focusing before row inspection without writing setting values.
-- Added read-only `system_settings_dialog(action=list_rows)` row models that summarize visible settings-like controls with conservative confidence and evidence fields without writing the settings search field.
-- Added read-only `system_settings_dialog(action=read_value)` value inspection for unique visible settings rows, returning typed text, bool, number, and enum payloads with row/value evidence without writing setting values.
-- Added read-only `system_settings_dialog(action=resolve_row)` row resolution so clients can confirm a unique visible settings row before reading values or choosing a follow-up UI action.
-- Added read-only `system_settings_dialog(action=focus_value)` value-editor focusing for unique visible settings rows, moving editor focus to the value control without writing setting values.
-- Added `system_settings_dialog(action=set_value)` for supported unique visible settings rows, writing text, number, and bool values through editor UI controls and verifying the observed value after the action.
-- Added read-only `system_settings_dialog(action=verify_value)` value assertions for unique visible settings rows, comparing expected text, bool, number, and enum values without writing setting values.
-- Added `system_settings_dialog(action=run_task)` as a trusted settings task workflow that composes open/navigation, unique row resolution, before reads, optional supported writes, verification, and capture evidence into one high-level operation.
-- Added `system_inspector`, a high-level Inspector property workflow that can list visible property models, resolve a unique property, read, focus, set, verify, capture, or run trusted property tasks on the current edited object or a prepared node/resource target.
-- Added `system_project_lifecycle(action=start|stop)` as the canonical high-level project runtime session lifecycle entry, replacing the older project run/stop tool names without compatibility aliases.
-- Added `system_editor_evidence`, a high-level visual evidence workflow that captures editor, control, popup, active-dialog, or automatic surfaces with explicit target, fallback, degradation, and visible-popup metadata.
-- Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while keeping existing scene validation and analysis tools available.
-- Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while keeping the dedicated reload and update tools available.
-- Added User-tool naming diagnostics that report declared, normalized, and public MCP tool names in User-tool listings and compatibility reports.
+- Added the v1.3.0 semantic editor automation model: editor UI guidance now directs clients toward semantic workflows first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
+- Added `system_editor_control(action="wait_for_ui")` so clients can wait for real editor controls by existence, visibility, text, and enabled/disabled state before continuing an automation workflow.
+- Added `system_editor_control(action="get_popup")` and `system_editor_control(action="capture_popup")` for inspecting and cropping visible floating editor popups or windows by returned popup paths.
+- Added click fallback observation evidence for `system_editor_control` and low-level `ui_control` click actions, including dispatched input events, Button-like target state before/after the click, observed control signals, and hints when input is delivered without activation evidence.
+- Added `system_editor_evidence`, a high-level visual evidence workflow for editor, control, popup, active-dialog, and automatic surfaces with explicit target, fallback, degradation, visible-popup, and capture-policy metadata.
+- Added `system_settings_dialog`, a high-level Project Settings and Editor Settings workflow covering open/status/search/navigation, tab and category focusing, row modeling, row resolution, value read/focus/set/verify, surface capture, close, and trusted `run_task` orchestration.
+- Added `system_inspector`, a high-level Inspector property workflow for visible property models, unique property resolution, typed value reads, value focusing, guarded text/number/bool writes, verification, capture, and trusted property tasks on current or prepared targets.
+- Added `system_project_lifecycle(action=start|stop)` as the canonical project runtime session lifecycle entry, including marker validation, auto-stop handling, stop control, foreground-window fallback metadata, and runtime capability context.
+- Added `system_tool_catalog` so clients can search exposed tools by query, category, or domain and inspect match reasons, actions, parameters, visibility, enabled state, and optional schemas.
 - Added `system_tool_activity` query filters and slow/failure diagnostics so clients can inspect running or recent calls by state, tool, and slow-call threshold without fetching unrelated activity records.
-- Added `system_editor_control` click fallback observation evidence so control-local left and right clicks report dispatched input events, Button-like target state before/after the click, observed control signals, and diagnostic hints when input is delivered without observable activation evidence.
+- Added User-tool naming diagnostics that expose declared, normalized, and public MCP tool names in User-tool listings, scaffold previews, and compatibility reports.
+- Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while preserving the existing scene validation and analysis tools.
+- Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
+- Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
+- Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
+- Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 
 ### Changed
 
-- Clarified editor UI control guidance so agents prefer semantic workflows and navigation first, control-level focus/text/value/popup actions second, and control-local mouse or pointer events only as fallback.
+- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.3.0`.
 - Changed `system_settings_dialog(action="capture")` to prefer visible settings popup/window bounds, then dialog control bounds, before falling back to full-editor screenshots, with `capture_backend` and `capture_target_path` evidence metadata.
-
-### Internal
-
-- Extended MCP resources/prompts harness coverage to verify localized resource and resource-template metadata under a non-English locale.
-- Extended Config client registry, production detection, and presenter contract coverage for capability matrix projection, compatibility aliases, and fallback behavior.
-- Added system project executor and Tools tab rendering coverage for export preset summary discovery, including sensitive option-key redaction and absolute export-path redaction.
-- Added tool-catalog search harness coverage for public exposure, internal visible lookups, schema opt-in, filter handling, and match-reason reporting.
-- Switched plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract fixture expectations, localized changelogs, and release-note sources to the `1.2.1` development line.
-- Extended the editor UI control atomic layer with Tree item listing/selection coverage for settings-dialog category navigation.
-- Extended the Tools tab rendering contract and documentation examples so the plugin domain is covered alongside core and user tool domains.
-- Fixed the Tools tab header count so plugin-domain tools are included in the enabled and total tool totals.
-- Updated the project lifecycle tool tree, prompt, localization, protocol facts, stdio/router/tool-loader, and harness contracts for the canonical `system_project_lifecycle` surface with the `2026-06-08.16` tool schema facts update and explicit lifecycle action validation.
-- Extended Settings tab rendering coverage so long discovered update-ref lists keep every selectable option while enforcing bounded selector popup heights.
-- Updated editor UI prompt, help, localization, and schema contract coverage for the semantic-first, control-level-second, mouse-fallback automation order with the `2026-06-08.17` tool schema facts update.
-- Extended settings-dialog task contract coverage for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, Tools tab action rendering, catalog search discovery, prompt/help guidance, and the `2026-06-08.19` tool schema facts update.
-- Added Inspector workflow contracts and tool-tree coverage for property model resolution, typed value reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and the `2026-06-08.20` tool schema facts update.
-- Added editor evidence surface contracts, tool-tree entries, Tools tab rendering, catalog search discovery, prompt/help guidance, localized tool metadata, and the `2026-06-08.21` tool schema facts update.
-- Extended scene executor, tool loader, Tools tab rendering, localization inventory, and protocol facts coverage for the `2026-06-08.23` `system_scene_inspect` schema surface.
-- Added plugin-maintenance contracts, tool-tree coverage, localized tool metadata, and the `2026-06-08.22` tool schema facts update for the grouped maintenance entry.
-- Extended User-tool service contract coverage for scaffold public-name previews, legacy `user_` prefix normalization warnings, and the `2026-06-08.24` tool schema facts update.
-- Extended tool activity registry and loader contracts to cover filtered status/recent queries, live running durations, slow-call summaries, bounded recent failure summaries, and the `2026-06-08.25` tool schema facts update.
-- Extended editor/system control harness coverage for click input dispatch and Button-like target observation evidence while preserving semantic-first UI automation guidance.
+- Changed project runtime control to use `system_project_lifecycle(action=start|stop)` as the public surface and removed compatibility aliases for the older project run/stop tool names.
+- Changed generated User-tool scaffolds to extend the base tool script by resource path, reducing headless catalog-scan dependence on global script-class registration.
 
 ### Fixed
 
-- Hardened MCP resource diagnostics redaction so mixed-case URL credentials and sensitive text markers are masked before resource outputs are reported.
-- Capped Settings update source and branch selector popups so long discovered ref lists scroll inside the menu instead of covering the editor.
-- Fixed generated User-tool scaffolds so they extend the base tool script by resource path, keeping headless catalog scans from depending on global script-class registration.
+- Capped Settings update source and branch selector popup heights so long discovered ref lists scroll inside the menu instead of covering the editor.
+- Fixed Tools tab enabled and total counts so plugin-domain tools are included alongside core and user tool domains.
+- Hardened MCP resource diagnostics redaction so mixed-case URL credentials, bearer/API-key variants, sensitive text markers, and nested metadata secrets are masked before outputs are reported.
+
+### Documentation
+
+- Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
+- Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
+
+### Internal
+
+- Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
+- Extended settings-dialog contracts for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, tab/category/row/value actions, prompt/help guidance, and tool rendering.
+- Added Inspector workflow contracts for property model resolution, typed reads, guarded text/number/bool writes, capture fallback behavior, catalog discovery, prompt/help guidance, and tool rendering.
+- Added editor evidence surface contracts for exact/fallback/degraded capture behavior, visible-popup metadata, localized tool metadata, prompt/help guidance, and Tools tab rendering.
+- Added project lifecycle contracts for explicit lifecycle actions, marker validation, foreground-window fallback behavior, and removed run/stop compatibility names.
+- Added tool catalog, tool activity, User-tool naming, scene inspect, plugin maintenance, project configuration, and userdata maintenance contract coverage across loader, router, Tools tab, localization inventory, and protocol facts.
+- Extended editor/system control harness coverage for wait conditions, popup capture, hover/leave pointer fallback, click input dispatch, Button-like target observation, activation-signal separation, and input-only Button diagnostics.
 
 ## [1.2.0] - 2026-06-06
 
