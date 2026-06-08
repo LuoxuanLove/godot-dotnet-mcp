@@ -47,6 +47,19 @@ class FakeToolLoader:
 					"capture_label": {"type": "string", "description": "Optional capture label"}
 				}
 			}
+		}, {
+			"name": "system_inspector",
+			"description": "Inspector property workflow with trusted task orchestration",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["list_properties", "resolve_property", "run_task"], "description": "Inspector workflow action"},
+					"property_path": {"type": "string", "description": "Inspector property path or fragment"}
+				}
+			}
 		}]
 
 	func get_tool_definitions() -> Array:
@@ -107,6 +120,19 @@ class FakeToolLoader:
 						"capture_label": {"type": "string", "description": "Optional capture label"}
 					}
 				}
+			}, {
+				"name": "inspector",
+				"full_name": "system_inspector",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["list_properties", "resolve_property", "run_task"], "description": "Inspector workflow action"},
+						"property_path": {"type": "string", "description": "Inspector property path or fragment"}
+					}
+				}
 			}],
 			"project": [{
 				"name": "input",
@@ -132,7 +158,7 @@ class FakeToolLoader:
 		]
 
 	func get_tool_loader_status() -> Dictionary:
-		return {"healthy": true, "status": "ready", "tool_count": 4, "exposed_tool_count": 3}
+		return {"healthy": true, "status": "ready", "tool_count": 5, "exposed_tool_count": 4}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -149,12 +175,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not ((exposed_matches[0] as Dictionary).get("match_reasons", []) as Array).has("action"):
 		return _failure("Catalog search should report action match reasons.")
 
-	var settings_task_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "run_task", "limit": 10})
+	var settings_task_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "capture_policy", "limit": 10})
 	var settings_task_matches: Array = (settings_task_search.get("data", {}) as Dictionary).get("matches", [])
 	if settings_task_matches.size() != 1 or str((settings_task_matches[0] as Dictionary).get("name", "")) != "system_settings_dialog":
-		return _failure("Catalog search should expose system_settings_dialog run_task action discovery.")
-	if not ((settings_task_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
-		return _failure("Catalog search should report run_task as a parameter enum match.")
+		return _failure("Catalog search should expose system_settings_dialog task capture policy discovery.")
+	if not ((settings_task_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param"):
+		return _failure("Catalog search should report capture_policy as a parameter match.")
+
+	var inspector_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "property_path", "limit": 10})
+	var inspector_matches: Array = (inspector_search.get("data", {}) as Dictionary).get("matches", [])
+	if inspector_matches.size() != 1 or str((inspector_matches[0] as Dictionary).get("name", "")) != "system_inspector":
+		return _failure("Catalog search should expose system_inspector property workflow discovery.")
+	if not ((inspector_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param"):
+		return _failure("Catalog search should report property_path as a parameter match.")
 
 	var visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
 		"query": "get_action",

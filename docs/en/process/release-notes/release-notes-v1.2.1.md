@@ -48,6 +48,10 @@ Supported unique visible rows can now be edited through `set_value` for text, nu
 
 Agents can also use read-only `verify_value` checks to compare expected text, bool, number, or enum values against the uniquely matched visible row. This gives settings workflows a non-mutating assertion step before or after a UI action.
 
+Inspector automation now has its own high-level workflow through `system_inspector`. Clients can list visible Inspector property models, resolve one property, read its current typed value, focus the value editor, write supported text, number, and bool editors with verification, capture property evidence, or run the full locate/read/set/verify/capture task against the current edited object or a prepared node/resource target.
+
+The Inspector workflow refuses hidden-control writes, ambiguous selectors, disabled value editors, and unsupported complex editors instead of guessing. That gives agents a property-level path before falling back to raw editor control enumeration or coordinate-based input.
+
 ### 🔎 Searchable Tool Discovery
 
 `system_tool_catalog` gives clients a read-only search surface for the current tool catalog. Clients can search by query, category, or domain and inspect why each tool matched, which actions and parameters it exposes, whether it is visible, and whether it is currently enabled.

@@ -50,8 +50,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var entry_dict := entry as Dictionary
 		if str(entry_dict.get("level", "")) != expected_levels[index]:
 			return _failure("system help UI automation preference order should keep %s at index %d." % [expected_levels[index], index])
-	if not _preference_entry_has_tool((preference_order as Array)[0], "system_settings_dialog") or not _preference_entry_has_action((preference_order as Array)[0], "activate_ui"):
-		return _failure("system help semantic UI preference should mention settings_dialog and activate_ui.")
+	if not _preference_entry_has_tool((preference_order as Array)[0], "system_settings_dialog") or not _preference_entry_has_tool((preference_order as Array)[0], "system_inspector") or not _preference_entry_has_action((preference_order as Array)[0], "activate_ui") or not _preference_entry_has_action((preference_order as Array)[0], "resolve_property"):
+		return _failure("system help semantic UI preference should mention settings_dialog, inspector, activate_ui, and resolve_property.")
 	if not _preference_entry_has_action((preference_order as Array)[1], "set_control_text") or not _preference_entry_has_action((preference_order as Array)[1], "press_popup_button"):
 		return _failure("system help control-level UI preference should mention text and popup control actions.")
 	if not _preference_entry_has_action((preference_order as Array)[2], "click_control") or not _preference_entry_has_action((preference_order as Array)[2], "hover_control"):
@@ -62,6 +62,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system help should include schema facts.")
 	if str((schema as Dictionary).get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("system help should expose the unified tool schema version.")
+	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.20":
+		return _failure("system help contract should cover the current Inspector workflow schema version.")
 
 	var exposed_tools: Array = help_data.get("exposed_system_tools", [])
 	if not exposed_tools.has("system_help") or not exposed_tools.has("system_editor_control"):
@@ -77,8 +79,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
 		return _failure("system help capabilities should include prompts as an explicit category.")
 	var help_text := JSON.stringify(help_data)
-	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1 or help_text.find("run_task") == -1:
-		return _failure("system help should mention current settings_dialog action names.")
+	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1 or help_text.find("resolve_property") == -1 or help_text.find("system_inspector") == -1 or help_text.find("run_task") == -1:
+		return _failure("system help should mention current settings_dialog and inspector workflow action names.")
 
 	var compact_result: Dictionary = impl.execute("help", {"include_tools": false})
 	if not bool(compact_result.get("success", false)):

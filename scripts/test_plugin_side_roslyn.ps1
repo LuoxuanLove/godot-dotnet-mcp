@@ -431,6 +431,7 @@ $RequiredCases = @(
     "server_runtime_settings_projection_service_contracts"
     "external_host_removal_audit"
     "system_help_contracts"
+    "system_inspector_contracts"
     "json_rpc_request_service_contracts"
     "mcp_resources_prompts_contracts"
     "system_project_executor_contracts"

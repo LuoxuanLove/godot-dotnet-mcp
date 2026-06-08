@@ -167,11 +167,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var runtime_control_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_control")
 	var runtime_step_tool = _find_child_by_metadata(system_category, "tool", "system_runtime_step")
 	var project_lifecycle_tool = _find_child_by_metadata(system_category, "tool", "system_project_lifecycle")
+	var inspector_tool = _find_child_by_metadata(system_category, "tool", "system_inspector")
 	var editor_log_tool = _find_child_by_metadata(system_category, "tool", "system_editor_log")
 	var userdata_tool = _find_child_by_metadata(system_category, "tool", "system_userdata_maintenance")
 	var plugin_runtime_state_tool = _find_child_by_metadata(plugin_runtime_category, "tool", "plugin_runtime_state")
 	var user_tool = _find_child_by_metadata(user_category, "tool", "user_sample_tool")
-	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_lifecycle_tool == null or editor_log_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
+	if editor_state_tool == null or system_tool == null or dap_tool == null or runtime_control_tool == null or runtime_step_tool == null or project_lifecycle_tool == null or inspector_tool == null or editor_log_tool == null or userdata_tool == null or plugin_runtime_state_tool == null or user_tool == null:
 		return _failure("Tools tab should render tool rows for every visible category.")
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
@@ -397,6 +398,8 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free", "capture_editor", "list_controls", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_control_text", "set_value", "list_popups", "get_popup", "capture_popup", "press_popup_button", "select_popup_menu_item", "set_popup_text", "close_popup"]
 		"system_settings_dialog":
 			return ["open", "status", "search", "list_tabs", "activate_tab", "list_categories", "focus_category", "list_rows", "resolve_row", "read_value", "focus_value", "set_value", "verify_value", "focus_result", "run_task", "capture", "close"]
+		"system_inspector":
+			return ["status", "edit_object", "inspect_resource", "refresh", "list_properties", "resolve_property", "read_value", "focus_value", "set_value", "verify_value", "run_task", "capture"]
 		"system_editor_plugin_control":
 			return ["list", "get_status", "enable", "disable"]
 		"system_project_configure":

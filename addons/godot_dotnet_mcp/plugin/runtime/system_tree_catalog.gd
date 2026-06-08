@@ -31,6 +31,11 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "editor_screenshot", "actions": ["capture"]},
 		{"tool": "editor_popup",      "actions": ["list_visible", "close_popup"]}
 	],
+	"system_inspector": [
+		{"tool": "editor_inspector",  "actions": ["get_edited", "get_selected_property", "edit_object", "inspect_resource", "refresh"]},
+		{"tool": "editor_ui_control", "actions": ["list_visible", "focus_control", "activate_control", "set_text", "set_value", "capture_control"]},
+		{"tool": "editor_screenshot", "actions": ["capture"]}
+	],
 	"system_editor_plugin_control": [
 		{"tool": "editor_plugin",      "actions": ["list", "inspect", "is_enabled", "enable", "disable"]}
 	],
