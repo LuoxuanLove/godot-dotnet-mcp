@@ -185,6 +185,8 @@ Current invalidation entry points:
 
 That means client detection is runtime projection state, not persisted config itself.
 
+The projected state also includes the Config client capability matrix (`support_level`, `actions`, `notes`, and the compatible `kind` alias). It is recomputed through detection and presentation code and is not persisted into plugin settings.
+
 ---
 
 ## Localization Resources

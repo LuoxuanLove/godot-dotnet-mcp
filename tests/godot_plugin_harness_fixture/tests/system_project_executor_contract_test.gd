@@ -105,6 +105,14 @@ class FakeBridge extends RefCounted:
 			"project_autoload":
 				return success({"count": 0, "entries": []})
 			"project_input":
+				if str(args.get("action", "")) == "get_action":
+					return success({
+						"name": str(args.get("name", "")),
+						"deadzone": 0.5,
+						"events": [
+							{"type": "InputEventKey", "key_name": "Space"}
+						]
+					})
 				return success({"count": 0, "actions": []})
 			"filesystem_directory":
 				match str(args.get("action", "")):
@@ -390,8 +398,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	executor.configure_runtime({})
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 11:
-		return _failure("System project implementation should expose 11 tool definitions including plugin_reload, plugin_update, project_files, resource_reference_audit and userdata_maintenance.")
+	if tool_defs.size() != 10:
+		return _failure("System project implementation should keep 10 tool definitions including plugin_reload, plugin_update, project_files, resource_reference_audit, userdata_maintenance and project_lifecycle.")
 	if not _has_tool(tool_defs, "plugin_reload"):
 		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
 	if not _has_tool(tool_defs, "plugin_update"):
@@ -402,6 +410,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
 	if not _has_tool(tool_defs, "resource_reference_audit"):
 		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
+	var project_lifecycle_tool := _find_tool(tool_defs, "project_lifecycle")
+	var project_lifecycle_schema: Dictionary = project_lifecycle_tool.get("inputSchema", {})
+	var project_lifecycle_properties: Dictionary = project_lifecycle_schema.get("properties", {})
+	var project_lifecycle_action_schema: Dictionary = project_lifecycle_properties.get("action", {})
+	if project_lifecycle_action_schema.get("enum", []) != ["start", "stop"]:
+		return _failure("project_lifecycle should expose action=start|stop in its public schema.")
+	if project_lifecycle_schema.get("required", []) != ["action"]:
+		return _failure("project_lifecycle should require callers to choose action=start or action=stop explicitly.")
+	for removed_tool_name in ["project_run", "project_stop", "project_lifecycle_stop"]:
+		if _has_tool(tool_defs, removed_tool_name):
+			return _failure("System project implementation should not expose removed project lifecycle alias '%s'." % removed_tool_name)
 
 	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
 	if not bool(reference_audit.get("success", false)):
@@ -627,6 +646,52 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_configure: Dictionary = executor.execute("project_configure", {"action": "bogus"})
 	if bool(invalid_configure.get("success", false)):
 		return _failure("project_configure bogus action should fail.")
+	var input_action_detail: Dictionary = executor.execute("project_configure", {"action": "get_input_action", "name": "jump"})
+	if not bool(input_action_detail.get("success", false)):
+		return _failure("project_configure get_input_action should delegate to project_input.get_action.")
+	var input_action_data = input_action_detail.get("data", {})
+	if not (input_action_data is Dictionary) or str((input_action_data as Dictionary).get("name", "")) != "jump":
+		return _failure("project_configure get_input_action should preserve the action name.")
+	if ((input_action_data as Dictionary).get("events", []) as Array).is_empty():
+		return _failure("project_configure get_input_action should expose detailed input events.")
+	var missing_input_action_name: Dictionary = executor.execute("project_configure", {"action": "get_input_action"})
+	if bool(missing_input_action_name.get("success", false)):
+		return _failure("project_configure get_input_action should reject an empty action name before delegation.")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://export_presets.cfg"))
+	var missing_export_presets: Dictionary = executor.execute("project_configure", {"action": "list_export_presets"})
+	if not bool(missing_export_presets.get("success", false)):
+		return _failure("project_configure list_export_presets should succeed when export_presets.cfg is absent.")
+	if bool((missing_export_presets.get("data", {}) as Dictionary).get("exists", true)):
+		return _failure("project_configure list_export_presets should report exists=false when no export_presets.cfg file exists.")
+	_write_text("res://export_presets.cfg", "[preset.0]\nname=\"Windows Desktop\"\nplatform=\"Windows Desktop\"\nrunnable=true\ndedicated_server=false\ncustom_features=\"\"\nexport_filter=\"all_resources\"\ninclude_filter=\"\"\nexclude_filter=\"\"\nexport_path=\"build/windows/game.exe\"\nscript_export_mode=2\n\n[preset.0.options]\ncodesign/password=\"secret\"\nkeystore/release=\"res://release.keystore\"\ntexture_format/s3tc=true\n\n[preset.1]\nname=\"Linux Absolute\"\nplatform=\"Linux\"\nrunnable=false\nexport_path=\"C:/Users/example/build/game.x86_64\"\n\n[preset.1.options]\ncustom_template/debug=\"res://templates/debug\"\n")
+	var export_presets: Dictionary = executor.execute("project_configure", {"action": "list_export_presets"})
+	if not bool(export_presets.get("success", false)):
+		return _failure("project_configure list_export_presets should parse export_presets.cfg.")
+	var export_data: Dictionary = export_presets.get("data", {})
+	if int(export_data.get("preset_count", 0)) != 2:
+		return _failure("project_configure list_export_presets should report both presets.")
+	var presets: Array = export_data.get("presets", [])
+	var preset: Dictionary = presets[0] if not presets.is_empty() and presets[0] is Dictionary else {}
+	if str(preset.get("platform", "")) != "Windows Desktop" or not bool(preset.get("runnable", false)):
+		return _failure("project_configure list_export_presets should expose preset platform and runnable state.")
+	if str(preset.get("export_path", "")) != "build/windows/game.exe":
+		return _failure("project_configure list_export_presets should expose relative export paths.")
+	if str(preset.get("export_path_kind", "")) != "relative" or str(preset.get("export_path_file", "")) != "game.exe":
+		return _failure("project_configure list_export_presets should classify relative export paths.")
+	if int(preset.get("options_key_count", 0)) != 3:
+		return _failure("project_configure list_export_presets should count option keys without returning option values.")
+	if int(preset.get("redacted_option_key_count", 0)) != 2:
+		return _failure("project_configure list_export_presets should count redacted sensitive option keys.")
+	var option_keys: Array = preset.get("option_keys", [])
+	if option_keys.has("codesign/password") or option_keys.has("keystore/release") or not option_keys.has("[redacted]") or not option_keys.has("texture_format/s3tc"):
+		return _failure("project_configure list_export_presets should redact sensitive option key names while keeping safe keys.")
+	var absolute_preset: Dictionary = presets[1] if presets.size() > 1 and presets[1] is Dictionary else {}
+	if str(absolute_preset.get("export_path_kind", "")) != "absolute":
+		return _failure("project_configure list_export_presets should classify absolute export paths.")
+	if str(absolute_preset.get("export_path", "")) != "[absolute_path_redacted]":
+		return _failure("project_configure list_export_presets should redact absolute export paths.")
+	if str(absolute_preset.get("export_path_file", "")) != "game.x86_64":
+		return _failure("project_configure list_export_presets should retain only the file name for absolute export paths.")
 
 	var project_files_list: Dictionary = executor.execute("project_files", {"action": "list_dir", "path": "res://", "filter": "*.gd"})
 	if not bool(project_files_list.get("success", false)):
@@ -643,37 +708,71 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(project_settings_reimport.get("data", {}).get("error_code", "")) != "not_importable_resource":
 		return _failure("project_files reimport should preserve not_importable_resource error data.")
 
-	var project_run: Dictionary = executor.execute("project_run", {})
-	if not bool(project_run.get("success", false)):
-		return _failure("project_run did not succeed through the split runtime service.")
-	var timed_project_run: Dictionary = executor.execute("project_run", {"timeout_ms": 1})
-	if not bool(timed_project_run.get("success", false)):
-		return _failure("project_run with timeout_ms did not succeed.")
+	var missing_lifecycle_action: Dictionary = executor.execute("project_lifecycle", {})
+	if bool(missing_lifecycle_action.get("success", false)):
+		return _failure("project_lifecycle should reject calls that omit the required action.")
+	if str(missing_lifecycle_action.get("data", {}).get("error_code", "")) != "project_lifecycle_action_required":
+		return _failure("project_lifecycle missing-action rejection should include project_lifecycle_action_required.")
+	var project_lifecycle: Dictionary = executor.execute("project_lifecycle", {"action": "start"})
+	if not bool(project_lifecycle.get("success", false)):
+		return _failure("project_lifecycle(action=start) did not succeed through the split runtime service.")
+	var timed_project_lifecycle: Dictionary = executor.execute("project_lifecycle", {"action": "start", "timeout_ms": 1})
+	if not bool(timed_project_lifecycle.get("success", false)):
+		return _failure("project_lifecycle(action=start) with timeout_ms did not succeed.")
 	await (Engine.get_main_loop() as SceneTree).create_timer(0.05).timeout
 	if executor.bridge.scene_run_actions.size() < 3:
-		return _failure("project_run timeout should trigger an automatic stop after the run starts.")
+		return _failure("project_lifecycle(action=start) timeout should trigger an automatic stop after the run starts.")
 	if executor.bridge.scene_run_actions[1] != "play_main" or executor.bridge.scene_run_actions[2] != "stop":
-		return _failure("project_run timeout should emit play_main followed by stop.")
+		return _failure("project_lifecycle(action=start) timeout should emit play_main followed by stop.")
+	var run_stop_action_count_before := int(executor.bridge.scene_run_actions.size())
+	var lifecycle_stop_result: Dictionary = executor.execute("project_lifecycle", {"action": "stop"})
+	if not bool(lifecycle_stop_result.get("success", false)):
+		return _failure("project_lifecycle(action=stop) should stop the running project through the unified entry.")
+	if not bool(lifecycle_stop_result.get("data", {}).get("stopped", false)):
+		return _failure("project_lifecycle(action=stop) should preserve the stopped=true payload.")
+	if executor.bridge.scene_run_actions.size() != run_stop_action_count_before + 1 or executor.bridge.scene_run_actions[executor.bridge.scene_run_actions.size() - 1] != "stop":
+		return _failure("project_lifecycle(action=stop) should call scene_run stop exactly once.")
+	for removed_tool_name in ["project_run", "project_stop", "project_lifecycle_stop"]:
+		var removed_result: Dictionary = executor.execute(removed_tool_name, {})
+		if bool(removed_result.get("success", false)):
+			return _failure("Removed project lifecycle entry '%s' should not remain executable." % removed_tool_name)
+	var invalid_project_lifecycle_action: Dictionary = executor.execute("project_lifecycle", {"action": "pause"})
+	if bool(invalid_project_lifecycle_action.get("success", false)):
+		return _failure("project_lifecycle should reject unknown actions.")
+	var async_stop_executor = SystemProjectExecutorScript.new()
+	var async_stop_bridge = FakeBridge.new(FakeToolLoader.new())
+	async_stop_executor.bridge = async_stop_bridge
+	async_stop_executor.configure_runtime({})
+	var async_lifecycle_stop_result: Dictionary = await async_stop_executor.execute_async("project_lifecycle", {
+		"action": "stop",
+		"success_markers": ["SHOULD_NOT_START"],
+		"timeout_ms": 10
+	})
+	if not bool(async_lifecycle_stop_result.get("success", false)):
+		return _failure("project_lifecycle(action=stop) should bypass marker validation on the async execution path.")
+	if async_stop_bridge.scene_run_actions != ["stop"]:
+		return _failure("project_lifecycle(action=stop) async path should stop without starting marker validation.")
 	var run_action_count_before_no_focus := int(executor.bridge.scene_run_actions.size())
-	var no_focus_run: Dictionary = executor.execute("project_run", {"no_focus": true})
+	var no_focus_run: Dictionary = executor.execute("project_lifecycle", {"action": "start", "no_focus": true})
 	if bool(no_focus_run.get("success", false)):
-		return _failure("project_run should reject unsupported no_focus launches instead of starting the project.")
+		return _failure("project_lifecycle should reject unsupported no_focus launches instead of starting the project.")
 	if executor.bridge.scene_run_actions.size() != run_action_count_before_no_focus:
-		return _failure("project_run should not call scene_run when no_focus launch is unsupported.")
+		return _failure("project_lifecycle should not call scene_run when no_focus launch is unsupported.")
 	var no_focus_data = no_focus_run.get("data", {})
 	if not (no_focus_data is Dictionary):
-		return _failure("project_run no_focus rejection should include structured data.")
+		return _failure("project_lifecycle(action=start) no_focus rejection should include structured data.")
 	if str((no_focus_data as Dictionary).get("error_code", "")) != "requires_foreground_window":
-		return _failure("project_run no_focus rejection should expose requires_foreground_window.")
+		return _failure("project_lifecycle(action=start) no_focus rejection should expose requires_foreground_window.")
 	if bool((no_focus_data as Dictionary).get("can_run_without_focus", true)):
-		return _failure("project_run no_focus rejection should report can_run_without_focus=false.")
+		return _failure("project_lifecycle(action=start) no_focus rejection should report can_run_without_focus=false.")
 
 	var marker_success_executor = SystemProjectExecutorScript.new()
 	var marker_success_bridge = FakeBridge.new(FakeToolLoader.new())
 	marker_success_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY", "level": "info"}}]
 	marker_success_executor.bridge = marker_success_bridge
 	marker_success_executor.configure_runtime({})
-	var marker_success: Dictionary = await marker_success_executor.execute_async("project_run", {
+	var marker_success: Dictionary = await marker_success_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["BOOT READY"],
 		"failure_markers": ["BOOT FAIL"],
 		"timeout_ms": 50,
@@ -681,13 +780,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"log_tail": 10
 	})
 	if not bool(marker_success.get("success", false)):
-		return _failure("project_run marker validation should pass when a success marker appears in runtime bridge events.")
+		return _failure("project_lifecycle(action=start) marker validation should pass when a success marker appears in runtime bridge events.")
 	var marker_success_data: Dictionary = marker_success.get("data", {})
 	var marker_success_validation: Dictionary = marker_success_data.get("validation", {})
 	if str(marker_success_validation.get("status", "")) != "passed" or str(marker_success_validation.get("matched_marker", "")) != "BOOT READY":
-		return _failure("project_run marker validation should report passed status and matched success marker details.")
+		return _failure("project_lifecycle(action=start) marker validation should report passed status and matched success marker details.")
 	if marker_success_bridge.scene_run_actions != ["play_main", "stop"]:
-		return _failure("project_run marker validation should auto-stop through scene_run stop by default.")
+		return _failure("project_lifecycle(action=start) marker validation should auto-stop through scene_run stop by default.")
 
 	var repeated_marker_executor = SystemProjectExecutorScript.new()
 	var repeated_marker_bridge = FakeBridge.new(FakeToolLoader.new())
@@ -695,18 +794,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	repeated_marker_bridge.runtime_events_after_start = [{"event_id": 2, "kind": "runtime_log", "payload": {"message": "REPEAT READY", "level": "info"}}]
 	repeated_marker_executor.bridge = repeated_marker_bridge
 	repeated_marker_executor.configure_runtime({})
-	var repeated_marker: Dictionary = await repeated_marker_executor.execute_async("project_run", {
+	var repeated_marker: Dictionary = await repeated_marker_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["REPEAT READY"],
 		"timeout_ms": 50,
 		"poll_interval_ms": 1,
 		"log_tail": 10
 	})
 	if not bool(repeated_marker.get("success", false)):
-		return _failure("project_run marker validation should not filter out a new event that has the same text as a pre-run baseline event.")
+		return _failure("project_lifecycle(action=start) marker validation should not filter out a new event that has the same text as a pre-run baseline event.")
 	var repeated_marker_validation: Dictionary = repeated_marker.get("data", {}).get("validation", {})
 	var repeated_matched_event: Dictionary = repeated_marker_validation.get("matched_event", {})
 	if int(repeated_matched_event.get("event_id", 0)) != 2:
-		return _failure("project_run marker validation should match the post-start event_id instead of the pre-run baseline event.")
+		return _failure("project_lifecycle(action=start) marker validation should match the post-start event_id instead of the pre-run baseline event.")
 
 	var high_volume_marker_executor = SystemProjectExecutorScript.new()
 	var high_volume_marker_bridge = FakeBridge.new(FakeToolLoader.new())
@@ -715,14 +815,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		high_volume_marker_bridge.runtime_events_after_start.append({"event_id": event_id, "kind": "runtime_log", "payload": {"message": "noise %d" % event_id, "level": "info"}})
 	high_volume_marker_executor.bridge = high_volume_marker_bridge
 	high_volume_marker_executor.configure_runtime({})
-	var high_volume_marker: Dictionary = await high_volume_marker_executor.execute_async("project_run", {
+	var high_volume_marker: Dictionary = await high_volume_marker_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["HIGH VOLUME READY"],
 		"timeout_ms": 50,
 		"poll_interval_ms": 1,
 		"log_tail": 1
 	})
 	if not bool(high_volume_marker.get("success", false)):
-		return _failure("project_run marker validation should not miss a marker that is followed by more events than log_tail.")
+		return _failure("project_lifecycle(action=start) marker validation should not miss a marker that is followed by more events than log_tail.")
 
 	MCPRuntimeDebugStoreShared.clear()
 	_create_user_file(MCPUserDataPaths.RUNTIME_EVENTS_PATH, JSON.stringify([{
@@ -843,7 +944,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	marker_failure_bridge.runtime_events_after_start = [{"event_id": 1, "kind": "runtime_log", "payload": {"message": "BOOT READY then BOOT FAIL", "level": "error"}}]
 	marker_failure_executor.bridge = marker_failure_bridge
 	marker_failure_executor.configure_runtime({})
-	var marker_failure: Dictionary = await marker_failure_executor.execute_async("project_run", {
+	var marker_failure: Dictionary = await marker_failure_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["BOOT READY"],
 		"failure_markers": ["BOOT FAIL"],
 		"timeout_ms": 50,
@@ -851,19 +953,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"log_tail": 10
 	})
 	if bool(marker_failure.get("success", false)):
-		return _failure("project_run marker validation should fail when a failure marker appears, even if success text also appears.")
+		return _failure("project_lifecycle(action=start) marker validation should fail when a failure marker appears, even if success text also appears.")
 	var marker_failure_data: Dictionary = marker_failure.get("data", {})
 	if str(marker_failure_data.get("error_code", "")) != "run_log_failure_marker_matched":
-		return _failure("project_run marker validation failure should include run_log_failure_marker_matched error_code.")
+		return _failure("project_lifecycle(action=start) marker validation failure should include run_log_failure_marker_matched error_code.")
 	var marker_failure_validation: Dictionary = marker_failure_data.get("validation", {})
 	if str(marker_failure_validation.get("status", "")) != "failed" or str(marker_failure_validation.get("matched_marker", "")) != "BOOT FAIL":
-		return _failure("project_run marker validation should report failed status and matched failure marker details.")
+		return _failure("project_lifecycle(action=start) marker validation should report failed status and matched failure marker details.")
 
 	var marker_timeout_executor = SystemProjectExecutorScript.new()
 	var marker_timeout_bridge = FakeBridge.new(FakeToolLoader.new())
 	marker_timeout_executor.bridge = marker_timeout_bridge
 	marker_timeout_executor.configure_runtime({})
-	var marker_timeout: Dictionary = await marker_timeout_executor.execute_async("project_run", {
+	var marker_timeout: Dictionary = await marker_timeout_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["NEVER READY"],
 		"timeout_ms": 5,
 		"poll_interval_ms": 1,
@@ -871,47 +974,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"auto_stop": false
 	})
 	if bool(marker_timeout.get("success", false)):
-		return _failure("project_run marker validation should fail when no marker appears before timeout.")
+		return _failure("project_lifecycle(action=start) marker validation should fail when no marker appears before timeout.")
 	var marker_timeout_data: Dictionary = marker_timeout.get("data", {})
 	if str(marker_timeout_data.get("error_code", "")) != "run_log_marker_timeout":
-		return _failure("project_run marker validation timeout should include run_log_marker_timeout error_code.")
+		return _failure("project_lifecycle(action=start) marker validation timeout should include run_log_marker_timeout error_code.")
 	if marker_timeout_bridge.scene_run_actions != ["play_main"]:
-		return _failure("project_run marker validation should respect auto_stop=false and avoid scene_run stop.")
+		return _failure("project_lifecycle(action=start) marker validation should respect auto_stop=false and avoid scene_run stop.")
 
 	var invalid_marker_executor = SystemProjectExecutorScript.new()
 	var invalid_marker_bridge = FakeBridge.new(FakeToolLoader.new())
 	invalid_marker_executor.bridge = invalid_marker_bridge
 	invalid_marker_executor.configure_runtime({})
-	var invalid_marker: Dictionary = await invalid_marker_executor.execute_async("project_run", {
+	var invalid_marker: Dictionary = await invalid_marker_executor.execute_async("project_lifecycle", {
+		"action": "start",
 		"success_markers": ["x".repeat(300)]
 	})
 	if bool(invalid_marker.get("success", false)):
-		return _failure("project_run marker validation should reject oversized markers.")
+		return _failure("project_lifecycle(action=start) marker validation should reject oversized markers.")
 	var invalid_marker_data: Dictionary = invalid_marker.get("data", {})
 	if str(invalid_marker_data.get("error_code", "")) != "invalid_argument":
-		return _failure("project_run marker validation should report invalid_argument for oversized markers.")
+		return _failure("project_lifecycle(action=start) marker validation should report invalid_argument for oversized markers.")
 	if not invalid_marker_bridge.scene_run_actions.is_empty():
-		return _failure("project_run marker validation should reject invalid marker arguments before starting the project.")
+		return _failure("project_lifecycle(action=start) marker validation should reject invalid marker arguments before starting the project.")
 
 	var failing_run_executor = SystemProjectExecutorScript.new()
 	failing_run_executor.bridge = FakeFailingRunBridge.new(FakeToolLoader.new())
 	failing_run_executor.configure_runtime({})
-	var failing_run: Dictionary = failing_run_executor.execute("project_run", {"scene": "res://Missing.tscn"})
+	var failing_run: Dictionary = failing_run_executor.execute("project_lifecycle", {"action": "start", "scene": "res://Missing.tscn"})
 	if bool(failing_run.get("success", false)):
-		return _failure("project_run should fail when the scene_run atomic tool fails.")
+		return _failure("project_lifecycle should fail when the scene_run atomic tool fails.")
 	var failing_run_data = failing_run.get("data", {})
 	if not (failing_run_data is Dictionary):
-		return _failure("project_run failure should return structured data.")
+		return _failure("project_lifecycle(action=start) failure should return structured data.")
 	if str((failing_run_data as Dictionary).get("error_code", "")) != "editor_run_interface_unavailable_despite_state_available":
-		return _failure("project_run failure should identify inconsistent EditorInterface availability.")
+		return _failure("project_lifecycle(action=start) failure should identify inconsistent EditorInterface availability.")
 	if not ((failing_run_data as Dictionary).get("state_probe_vs_run_invoker", {}) is Dictionary):
-		return _failure("project_run inconsistent EditorInterface failure should include state/run comparison.")
+		return _failure("project_lifecycle inconsistent EditorInterface failure should include state/run comparison.")
 	if ((failing_run_data as Dictionary).get("recovery_suggestions", []) as Array).is_empty():
-		return _failure("project_run inconsistent EditorInterface failure should include recovery suggestions.")
+		return _failure("project_lifecycle inconsistent EditorInterface failure should include recovery suggestions.")
 	if not ((failing_run_data as Dictionary).get("runtime_capabilities", {}) is Dictionary):
-		return _failure("project_run failure should include runtime capability context.")
+		return _failure("project_lifecycle(action=start) failure should include runtime capability context.")
 	if not ((failing_run_data as Dictionary).get("runtime_control_status", {}) is Dictionary):
-		return _failure("project_run failure should include runtime_control_status.")
+		return _failure("project_lifecycle(action=start) failure should include runtime_control_status.")
 
 	var runtime_diagnose: Dictionary = executor.execute("runtime_diagnose", {
 		"include_compile_errors": true,
@@ -942,6 +1046,13 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 	return false
 
 
+func _find_tool(tool_defs: Array[Dictionary], name: String) -> Dictionary:
+	for tool_def in tool_defs:
+		if str(tool_def.get("name", "")) == name:
+			return tool_def
+	return {}
+
+
 func _has_issue_type(issues: Array, issue_type: String) -> bool:
 	for issue in issues:
 		if issue is Dictionary and str((issue as Dictionary).get("type", "")) == issue_type:
@@ -958,6 +1069,7 @@ func _has_diagnostic_code(diagnostics: Array, code: String) -> bool:
 
 func cleanup_case(_tree: SceneTree) -> void:
 	PluginSelfDiagnosticStore.clear()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://export_presets.cfg"))
 	_remove_tree(TEMP_ROOT)
 	MCPUserDataPaths.cleanup_capture_cache(false)
 

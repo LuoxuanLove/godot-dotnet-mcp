@@ -89,11 +89,13 @@ static func _load_facts() -> Dictionary:
 static func _default_facts() -> Dictionary:
 	return {
 		"protocol_version": "2025-06-18",
-		"tool_schema_version": "2026-06-06.1",
+		"tool_schema_version": "2026-06-08.23",
 		"server_name": "godot-dotnet-mcp",
-		"server_version": "1.2.0",
+		"server_version": "1.2.1",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch",
+			"project_lifecycle_action_required": "project_lifecycle_action_required",
+			"project_lifecycle_marker_validation_requires_async": "project_lifecycle_marker_validation_requires_async",
 			"dap_unavailable": "dap_unavailable",
 			"dap_response_failed": "dap_response_failed",
 			"dap_invalid_session_state": "dap_invalid_session_state",

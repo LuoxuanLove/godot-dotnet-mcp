@@ -166,6 +166,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Gemini CLI detection should expose launch support when a CLI entry is known.")
 	if str(statuses.get("gemini", {}).get("config_entry_status", {}).get("status", "")) != service.ENTRY_PRESENT:
 		return _failure("Gemini detection should reuse config entry inspection so the config page can show install status.")
+	var expected_support_levels := {
+		"claude_desktop": "full_write",
+		"claude_code": "auto_add",
+		"cursor": "full_write",
+		"trae": "full_write",
+		"codex_desktop": "launch_path",
+		"codex": "auto_add",
+		"gemini": "auto_add",
+		"opencode_desktop": "manual_guidance",
+		"opencode": "full_write",
+		"windsurf": "full_write",
+		"cline": "full_write",
+		"roo_code": "full_write",
+		"qwen": "auto_add",
+		"cherry_studio": "manual_guidance"
+	}
+	for client_id in expected_support_levels.keys():
+		var capability: Dictionary = statuses.get(client_id, {}).get("capability", {})
+		if capability.is_empty():
+			return _failure("Client install detection service should attach the shared capability matrix for %s." % client_id)
+		var support_level := str(capability.get("support_level", ""))
+		if support_level != str(expected_support_levels.get(client_id, "")):
+			return _failure("Client install detection service should expose the shared support level for %s." % client_id)
+		var actions: Variant = capability.get("actions", [])
+		if not (actions is Array) or not actions.has("copy_config"):
+			return _failure("Client install detection service should expose capability actions for %s." % client_id)
+	if not statuses.get("claude_code", {}).get("capability", {}).get("actions", []).has("auto_add"):
+		return _failure("Client install detection service should expose Claude Code auto-add capability on the production detection path.")
+	if not statuses.get("opencode", {}).get("capability", {}).get("actions", []).has("write_config"):
+		return _failure("Client install detection service should expose OpenCode config-write capability on the production detection path.")
 	if service.cli_query_count != 2:
 		return _failure("Forced client install detection should execute the expected deep CLI queries exactly once each.")
 	if bool(service._allow_slow_checks):

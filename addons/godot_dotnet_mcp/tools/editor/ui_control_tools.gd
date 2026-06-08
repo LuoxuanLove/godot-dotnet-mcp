@@ -7,6 +7,10 @@ const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 
 const DEFAULT_LIST_LIMIT := 200
 const DEFAULT_MAX_DEPTH := 6
+const DEFAULT_WAIT_TIMEOUT_MS := 1000
+const DEFAULT_WAIT_POLL_INTERVAL_MS := 50
+const MAX_WAIT_TIMEOUT_MS := 5000
+const MAX_WAIT_POLL_INTERVAL_MS := 500
 const SEMANTIC_DOCK_ROOTS := ["mcpdock", "mcp"]
 const DOCK_VISIBLE_NAME := "MCP"
 const DOCK_LEGACY_NAME := "MCPDock"
@@ -20,12 +24,20 @@ func execute(ei, args: Dictionary) -> Dictionary:
 	match action:
 		"list_visible":
 			return _list_visible_controls(ei, args)
+		"wait_for_ui":
+			if int(args.get("timeout_ms", DEFAULT_WAIT_TIMEOUT_MS)) > 0:
+				return _error("wait_for_ui with timeout_ms > 0 requires async execution")
+			return _wait_for_ui_once(ei, args)
 		"list_dock_tabs":
 			return _list_dock_tabs(ei, bool(args.get("include_hidden", true)))
 		"activate_dock_tab":
 			return _activate_dock_tab(ei, str(args.get("title", "")).strip_edges())
 		"activate_ui":
 			return _activate_ui(ei, args)
+		"list_tree_items":
+			return _list_tree_items(ei, args)
+		"select_tree_item":
+			return _select_tree_item(ei, args)
 		"list_menus":
 			return _list_menus(ei, args)
 		"open_menu":
@@ -50,8 +62,22 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _leave_control(ei, args)
 		"set_text":
 			return _set_control_text(ei, str(args.get("target_path", "")).strip_edges(), str(args.get("text", "")))
+		"set_value":
+			return _set_control_value(ei, str(args.get("target_path", "")).strip_edges(), args.get("value"))
 		_:
 			return _error("Unknown action: %s" % action)
+
+
+func execute_async(ei, args: Dictionary) -> Dictionary:
+	if not ei:
+		return _error("Editor interface not available")
+
+	var action := str(args.get("action", "")).strip_edges()
+	match action:
+		"wait_for_ui":
+			return await _wait_for_ui_async(ei, args)
+		_:
+			return execute(ei, args)
 
 
 func _list_visible_controls(ei, args: Dictionary) -> Dictionary:
@@ -71,6 +97,169 @@ func _list_visible_controls(ei, args: Dictionary) -> Dictionary:
 		"count": matches.size(),
 		"controls": matches
 	}, "Visible editor controls listed")
+
+
+func _wait_for_ui_once(ei, args: Dictionary) -> Dictionary:
+	var root = _get_editor_root(ei)
+	if root == null:
+		return _error("Editor base control not available")
+
+	var validation := _validate_wait_args(args)
+	if not bool(validation.get("success", false)):
+		return validation
+	var validation_data: Dictionary = validation.get("data", {})
+	var condition := str(validation_data.get("condition", "exists"))
+	var timeout_ms := 0
+	var started_ms := Time.get_ticks_msec()
+	var snapshot := _build_wait_snapshot(ei, args, condition)
+	snapshot["elapsed_ms"] = Time.get_ticks_msec() - started_ms
+	snapshot["poll_count"] = 1
+	snapshot["timeout_ms"] = timeout_ms
+	snapshot["poll_interval_ms"] = 0
+	if bool(snapshot.get("condition_met", false)):
+		return _success(snapshot, "Editor UI condition satisfied")
+	return _error("Timed out waiting for editor UI condition: %s" % condition, snapshot)
+
+func _wait_for_ui_async(ei, args: Dictionary) -> Dictionary:
+	var root = _get_editor_root(ei)
+	if root == null:
+		return _error("Editor base control not available")
+
+	var validation := _validate_wait_args(args)
+	if not bool(validation.get("success", false)):
+		return validation
+	var validation_data: Dictionary = validation.get("data", {})
+	var condition := str(validation_data.get("condition", "exists"))
+	var timeout_ms := clampi(int(args.get("timeout_ms", DEFAULT_WAIT_TIMEOUT_MS)), 0, MAX_WAIT_TIMEOUT_MS)
+	var poll_interval_ms := clampi(int(args.get("poll_interval_ms", DEFAULT_WAIT_POLL_INTERVAL_MS)), 10, MAX_WAIT_POLL_INTERVAL_MS)
+	var started_ms := Time.get_ticks_msec()
+	var deadline_ms := started_ms + timeout_ms
+	var poll_count := 0
+	var last_snapshot := {}
+
+	while true:
+		poll_count += 1
+		var snapshot := _build_wait_snapshot(ei, args, condition)
+		last_snapshot = snapshot
+		if bool(snapshot.get("condition_met", false)):
+			var elapsed_ms := Time.get_ticks_msec() - started_ms
+			snapshot["elapsed_ms"] = elapsed_ms
+			snapshot["poll_count"] = poll_count
+			snapshot["timeout_ms"] = timeout_ms
+			snapshot["poll_interval_ms"] = poll_interval_ms
+			return _success(snapshot, "Editor UI condition satisfied")
+
+		if Time.get_ticks_msec() >= deadline_ms:
+			break
+		var sleep_ms := mini(poll_interval_ms, maxi(deadline_ms - Time.get_ticks_msec(), 0))
+		if not await _wait_poll_interval(sleep_ms):
+			return _error("SceneTree is required for async wait_for_ui polling")
+
+	var final_elapsed_ms := Time.get_ticks_msec() - started_ms
+	last_snapshot["elapsed_ms"] = final_elapsed_ms
+	last_snapshot["poll_count"] = poll_count
+	last_snapshot["timeout_ms"] = timeout_ms
+	last_snapshot["poll_interval_ms"] = poll_interval_ms
+	return _error("Timed out waiting for editor UI condition: %s" % condition, last_snapshot)
+
+
+func _validate_wait_args(args: Dictionary) -> Dictionary:
+	var condition := str(args.get("condition", "exists")).strip_edges().to_lower()
+	var supported_conditions := ["exists", "not_exists", "visible", "hidden", "text_contains", "text_equals", "enabled", "disabled"]
+	if not supported_conditions.has(condition):
+		return _error("Unsupported wait_for_ui condition: %s" % condition)
+	if condition in ["text_contains", "text_equals"] and str(args.get("text", "")).is_empty():
+		return _error("text is required for wait_for_ui condition: %s" % condition)
+	return _success({"condition": condition})
+
+
+func _wait_poll_interval(delay_ms: int) -> bool:
+	var main_loop = Engine.get_main_loop()
+	if main_loop == null or not main_loop.has_method("create_timer"):
+		return false
+	if delay_ms <= 0:
+		await main_loop.process_frame
+		return true
+	var timer = main_loop.create_timer(float(delay_ms) / 1000.0)
+	await timer.timeout
+	return true
+
+
+func _build_wait_snapshot(ei, args: Dictionary, condition: String) -> Dictionary:
+	var root = _get_editor_root(ei)
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	var class_filter := str(args.get("class_name", "")).strip_edges()
+	var text_query := str(args.get("text_query", "")).strip_edges().to_lower()
+	var expected_text := str(args.get("text", ""))
+	var include_hidden := bool(args.get("include_hidden", false)) or condition in ["hidden", "disabled", "not_exists"]
+	var limit := maxi(int(args.get("limit", DEFAULT_LIST_LIMIT)), 1)
+	var max_depth := maxi(int(args.get("max_depth", DEFAULT_MAX_DEPTH)), 0)
+	var controls: Array[Dictionary] = []
+	var matched := {}
+
+	if not target_path.is_empty():
+		var target = _find_control(ei, target_path)
+		if target != null:
+			matched = _describe_control(target, _resolve_parent_path(target), 0)
+			if _matches_filters(matched, class_filter, text_query):
+				controls.append(matched)
+			else:
+				matched = {}
+	else:
+		_collect_controls_recursive(root, "", 0, max_depth, include_hidden, class_filter, text_query, limit, controls)
+		if not controls.is_empty():
+			matched = controls[0]
+
+	var condition_met := _is_wait_condition_met(condition, matched, expected_text)
+	return {
+		"condition": condition,
+		"condition_met": condition_met,
+		"target_path": target_path,
+		"class_name": class_filter,
+		"text_query": text_query,
+		"text": expected_text,
+		"matched": matched,
+		"observed": {
+			"count": controls.size(),
+			"controls": controls
+		}
+	}
+
+
+func _is_wait_condition_met(condition: String, matched: Dictionary, expected_text: String) -> bool:
+	var has_match := not matched.is_empty()
+	match condition:
+		"exists":
+			return has_match
+		"not_exists":
+			return not has_match
+		"visible":
+			return has_match and bool(matched.get("visible", false))
+		"hidden":
+			return not has_match or not bool(matched.get("visible", false))
+		"enabled":
+			return has_match and not bool(matched.get("disabled", false))
+		"disabled":
+			return has_match and bool(matched.get("disabled", false))
+		"text_contains":
+			return has_match and _wait_text_haystack(matched).contains(expected_text.to_lower())
+		"text_equals":
+			return has_match and _wait_text_values(matched).has(expected_text)
+		_:
+			return false
+
+
+func _wait_text_haystack(summary: Dictionary) -> String:
+	return " ".join(_wait_text_values(summary)).to_lower()
+
+
+func _wait_text_values(summary: Dictionary) -> Array[String]:
+	return [
+		str(summary.get("text", "")),
+		str(summary.get("title", "")),
+		str(summary.get("name", "")),
+		str(summary.get("path", ""))
+	]
 
 
 func _list_dock_tabs(ei, include_hidden: bool) -> Dictionary:
@@ -127,6 +316,68 @@ func _activate_ui(ei, args: Dictionary) -> Dictionary:
 			return dock_result
 		return _maybe_capture_activation_result(ei, dock_result, str(dock_result.get("data", {}).get("target_path", "")), args)
 	return _error("semantic_path, title, or target_path with tab_title/tab_index is required")
+
+
+func _list_tree_items(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var tree = _find_control(ei, target_path)
+	if tree == null:
+		return _error("Editor tree control not found: %s" % target_path)
+	if _control_class_name(tree) != "Tree":
+		return _error("Editor control is not a Tree: %s" % target_path)
+	var text_query := str(args.get("text_query", "")).strip_edges().to_lower()
+	var include_hidden := bool(args.get("include_hidden", false))
+	var limit := maxi(int(args.get("limit", DEFAULT_LIST_LIMIT)), 1)
+	var items: Array[Dictionary] = []
+	_collect_tree_items(tree, text_query, include_hidden, limit, items)
+	return _success({
+		"target_path": target_path,
+		"tree": _describe_control(tree, _resolve_parent_path(tree), 0),
+		"count": items.size(),
+		"items": items
+	}, "Editor tree items listed")
+
+
+func _select_tree_item(ei, args: Dictionary) -> Dictionary:
+	var target_path := str(args.get("target_path", "")).strip_edges()
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var tree = _find_control(ei, target_path)
+	if tree == null:
+		return _error("Editor tree control not found: %s" % target_path)
+	if _control_class_name(tree) != "Tree":
+		return _error("Editor control is not a Tree: %s" % target_path)
+	var resolution := _resolve_tree_item(tree, args)
+	if not bool(resolution.get("success", false)):
+		return resolution
+	var resolution_data: Dictionary = resolution.get("data", {})
+	var item = resolution_data.get("item")
+	if item == null:
+		return _error("Editor tree item not found")
+	if tree.has_method("set_selected"):
+		tree.call("set_selected", item, 0)
+	elif item.has_method("select"):
+		item.call("select", 0)
+	else:
+		return _error("Editor tree item cannot be selected")
+	if tree.has_method("scroll_to_item"):
+		tree.call("scroll_to_item", item, true)
+	if tree.has_method("grab_focus"):
+		tree.grab_focus()
+	var selected_source = (resolution_data.get("resolution", {}) as Dictionary).get("matched", _describe_tree_item(tree, item, int(resolution_data.get("index", -1))))
+	var selected := {}
+	if selected_source is Dictionary:
+		selected = (selected_source as Dictionary).duplicate(true)
+	else:
+		selected = _describe_tree_item(tree, item, int(resolution_data.get("index", -1)))
+	selected["selected"] = true
+	return _success({
+		"target_path": target_path,
+		"selected_item": selected,
+		"resolution": resolution_data.get("resolution", {})
+	}, "Editor tree item selected")
 
 
 func _list_menus(ei, args: Dictionary) -> Dictionary:
@@ -392,6 +643,28 @@ func _set_control_text(ei, target_path: String, text: String) -> Dictionary:
 	}, "Editor control text updated")
 
 
+func _set_control_value(ei, target_path: String, value) -> Dictionary:
+	if target_path.is_empty():
+		return _error("target_path is required")
+	var control = _find_control(ei, target_path)
+	if control == null:
+		return _error("Editor control not found: %s" % target_path)
+	if not _has_property(control, "value"):
+		return _error("Editor control does not expose a value property: %s" % target_path)
+	var numeric_value = value
+	if not (numeric_value is int or numeric_value is float):
+		var value_text := str(value).strip_edges()
+		if not value_text.is_valid_float():
+			return _error("value must be numeric for value controls: %s" % target_path)
+		numeric_value = value_text.to_float()
+	control.set("value", numeric_value)
+	return _success({
+		"target_path": target_path,
+		"class": _control_class_name(control),
+		"value": control.get("value")
+	}, "Editor control value updated")
+
+
 func _collect_controls_recursive(node, parent_path: String, depth: int, max_depth: int, include_hidden: bool, class_filter: String, text_query: String, limit: int, out: Array[Dictionary]) -> void:
 	if node == null or out.size() >= limit:
 		return
@@ -450,6 +723,46 @@ func _collect_menu_buttons_recursive(node, depth: int, max_depth: int, include_h
 		_collect_menu_buttons_recursive(child, depth + 1, max_depth, include_hidden, text_query, limit, out)
 		if out.size() >= limit:
 			return
+
+
+func _collect_tree_items(tree, text_query: String, include_hidden: bool, limit: int, out: Array[Dictionary]) -> void:
+	var root = _tree_root_item(tree)
+	if root == null:
+		return
+	var start_items: Array = []
+	if _tree_root_hidden(tree):
+		var child = _tree_item_first_child(root)
+		while child != null:
+			start_items.append(child)
+			child = _tree_item_next(child)
+	else:
+		start_items.append(root)
+	var index := 0
+	for item in start_items:
+		index = _collect_tree_items_recursive(tree, item, [], 0, text_query, include_hidden, limit, out, index)
+		if out.size() >= limit:
+			return
+
+
+func _collect_tree_items_recursive(tree, item, parent_labels: Array[String], depth: int, text_query: String, include_hidden: bool, limit: int, out: Array[Dictionary], start_index: int) -> int:
+	if item == null or out.size() >= limit:
+		return start_index
+	var current_index := start_index
+	var label := _tree_item_text(item)
+	var labels := parent_labels.duplicate()
+	if not label.is_empty():
+		labels.append(label)
+	var summary := _describe_tree_item(tree, item, current_index, labels, depth)
+	if (include_hidden or bool(summary.get("visible", true))) and _tree_item_matches(summary, text_query):
+		out.append(summary)
+	current_index += 1
+	var child = _tree_item_first_child(item)
+	while child != null:
+		current_index = _collect_tree_items_recursive(tree, child, labels, depth + 1, text_query, include_hidden, limit, out, current_index)
+		if out.size() >= limit:
+			return current_index
+		child = _tree_item_next(child)
+	return current_index
 
 
 func _resolve_menu_button(ei, args: Dictionary):
@@ -543,6 +856,102 @@ func _describe_menu_popup(popup) -> Dictionary:
 	}
 
 
+func _describe_tree_item(tree, item, index: int, labels: Array[String] = [], depth: int = 0) -> Dictionary:
+	var label := _tree_item_text(item)
+	var item_labels := labels.duplicate()
+	if item_labels.is_empty() and not label.is_empty():
+		item_labels.append(label)
+	return {
+		"index": index,
+		"text": label,
+		"item_path": "/".join(item_labels),
+		"depth": depth,
+		"tree_control_path": _safe_control_path(tree),
+		"visible": _tree_item_visible(item),
+		"selected": _tree_item_selected(item),
+		"collapsed": _tree_item_collapsed(item),
+		"child_count": _tree_item_child_count(item)
+	}
+
+
+func _tree_item_matches(summary: Dictionary, text_query: String) -> bool:
+	if text_query.is_empty():
+		return true
+	var query := text_query.to_lower()
+	return str(summary.get("text", "")).to_lower().contains(query) or str(summary.get("item_path", "")).to_lower().contains(query)
+
+
+func _tree_item_selector_summary(args: Dictionary) -> Dictionary:
+	return {
+		"item_path": str(args.get("item_path", "")),
+		"item_text": str(args.get("item_text", "")),
+		"item_index": int(args.get("item_index", -1))
+	}
+
+
+func _tree_root_item(tree):
+	if tree != null and tree.has_method("get_root"):
+		return tree.call("get_root")
+	return null
+
+
+func _tree_root_hidden(tree) -> bool:
+	if tree != null and tree.has_method("is_root_hidden"):
+		return bool(tree.call("is_root_hidden"))
+	if _has_property(tree, "hide_root"):
+		return bool(tree.get("hide_root"))
+	return false
+
+
+func _tree_item_first_child(item):
+	if item != null and item.has_method("get_first_child"):
+		return item.call("get_first_child")
+	return null
+
+
+func _tree_item_next(item):
+	if item != null and item.has_method("get_next"):
+		return item.call("get_next")
+	return null
+
+
+func _tree_item_text(item) -> String:
+	if item != null and item.has_method("get_text"):
+		return str(item.call("get_text", 0)).strip_edges()
+	return ""
+
+
+func _tree_item_visible(item) -> bool:
+	if item != null and item.has_method("is_visible"):
+		return bool(item.call("is_visible"))
+	return true
+
+
+func _tree_item_selected(item) -> bool:
+	if item != null and item.has_method("is_selected"):
+		return bool(item.call("is_selected", 0))
+	return false
+
+
+func _tree_item_collapsed(item) -> bool:
+	if item != null and item.has_method("is_collapsed"):
+		return bool(item.call("is_collapsed"))
+	return false
+
+
+func _tree_item_child_count(item) -> int:
+	var count := 0
+	var child = _tree_item_first_child(item)
+	while child != null:
+		count += 1
+		child = _tree_item_next(child)
+	return count
+
+
+func _normalize_tree_item_path(value: String) -> String:
+	return value.strip_edges().replace("\\", "/").to_lower()
+
+
 func _get_menu_popup(menu):
 	if menu != null and menu.has_method("get_popup"):
 		return menu.get_popup()
@@ -596,6 +1005,85 @@ func _collect_menu_popup_items(popup) -> Array[Dictionary]:
 			"submenu": _read_popup_menu_item_submenu(popup, index)
 		})
 	return items
+
+
+func _resolve_tree_item(tree, args: Dictionary) -> Dictionary:
+	var item_path := _normalize_tree_item_path(str(args.get("item_path", "")))
+	var item_text := str(args.get("item_text", "")).strip_edges().to_lower()
+	var item_index := int(args.get("item_index", -1))
+	if item_path.is_empty() and item_text.is_empty() and item_index < 0:
+		return _error("item_path, item_text, or item_index is required")
+	var items: Array[Dictionary] = []
+	_collect_tree_items(tree, "", true, DEFAULT_LIST_LIMIT, items)
+	var matches: Array[Dictionary] = []
+	for summary in items:
+		if not (summary is Dictionary):
+			continue
+		var dict := summary as Dictionary
+		if item_index >= 0 and int(dict.get("index", -1)) == item_index:
+			matches.append(dict)
+			continue
+		if not item_path.is_empty() and _normalize_tree_item_path(str(dict.get("item_path", ""))) == item_path:
+			matches.append(dict)
+			continue
+		if not item_text.is_empty() and str(dict.get("text", "")).strip_edges().to_lower() == item_text:
+			matches.append(dict)
+	if matches.is_empty():
+		return _error("Editor tree item not found", {"candidate_count": 0, "selector": _tree_item_selector_summary(args)})
+	if matches.size() > 1:
+		return _error("Multiple editor tree items matched", {"candidate_count": matches.size(), "candidates": matches, "selector": _tree_item_selector_summary(args)})
+	var matched := matches[0]
+	var item = _tree_item_by_index(tree, int(matched.get("index", -1)))
+	if item == null:
+		return _error("Editor tree item index could not be resolved", {"matched": matched})
+	return _success({
+		"item": item,
+		"index": int(matched.get("index", -1)),
+		"resolution": {
+			"candidate_count": 1,
+			"selector": _tree_item_selector_summary(args),
+			"matched": matched
+		}
+	})
+
+
+func _tree_item_by_index(tree, wanted_index: int):
+	if wanted_index < 0:
+		return null
+	var root = _tree_root_item(tree)
+	if root == null:
+		return null
+	var start_items: Array = []
+	if _tree_root_hidden(tree):
+		var child = _tree_item_first_child(root)
+		while child != null:
+			start_items.append(child)
+			child = _tree_item_next(child)
+	else:
+		start_items.append(root)
+	var index := 0
+	for item in start_items:
+		var result: Dictionary = _tree_item_by_index_recursive(item, wanted_index, index)
+		index = int(result.get("next_index", index))
+		if result.get("item") != null:
+			return result.get("item")
+	return null
+
+
+func _tree_item_by_index_recursive(item, wanted_index: int, start_index: int) -> Dictionary:
+	if item == null:
+		return {"item": null, "next_index": start_index}
+	if start_index == wanted_index:
+		return {"item": item, "next_index": start_index + 1}
+	var index := start_index + 1
+	var child = _tree_item_first_child(item)
+	while child != null:
+		var result: Dictionary = _tree_item_by_index_recursive(child, wanted_index, index)
+		index = int(result.get("next_index", index))
+		if result.get("item") != null:
+			return {"item": result.get("item"), "next_index": index}
+		child = _tree_item_next(child)
+	return {"item": null, "next_index": index}
 
 
 func _get_popup_menu_item_count(popup) -> int:
@@ -1026,7 +1514,29 @@ func _describe_control(control, parent_path: String, depth: int) -> Dictionary:
 		summary["child_count"] = int(control.get_child_count())
 	elif control != null and control.has_method("get_children"):
 		summary["child_count"] = control.get_children().size()
+	_add_tab_summary(control, summary)
 	return summary
+
+
+func _add_tab_summary(control, summary: Dictionary) -> void:
+	if control == null or not control.has_method("get_tab_count"):
+		return
+	var tab_count := int(control.get_tab_count())
+	var current_tab := int(control.get("current_tab")) if _has_property(control, "current_tab") else -1
+	var tabs: Array[Dictionary] = []
+	for index in range(tab_count):
+		var tab_control = _get_tab_control(control, index)
+		tabs.append({
+			"index": index,
+			"title": _get_tab_title(control, index),
+			"control_path": _safe_control_path(tab_control) if tab_control != null else "",
+			"control_name": str(tab_control.name) if tab_control != null else "",
+			"current": index == current_tab,
+			"visible": _is_activation_target_visible(tab_control, control) if tab_control != null else _is_control_visible(control)
+		})
+	summary["tab_count"] = tab_count
+	summary["current_tab_index"] = current_tab
+	summary["tabs"] = tabs
 
 
 func _build_actionable_actions(control) -> Array[String]:
@@ -1044,6 +1554,8 @@ func _build_actionable_actions(control) -> Array[String]:
 		actions.append("leave_control")
 	if _supports_text_input(control):
 		actions.append("set_text")
+	if _supports_value_input(control):
+		actions.append("set_value")
 	return actions
 
 
@@ -1363,6 +1875,12 @@ func _supports_text_input(control) -> bool:
 	if control_class in ["LineEdit", "TextEdit", "CodeEdit"]:
 		return true
 	return control.has_method("set_text") or _has_property(control, "text")
+
+
+func _supports_value_input(control) -> bool:
+	if control == null:
+		return false
+	return _has_property(control, "value")
 
 
 func _control_class_name(control) -> String:

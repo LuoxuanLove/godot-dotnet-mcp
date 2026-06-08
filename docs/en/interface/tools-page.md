@@ -100,6 +100,9 @@ root
   │   │   │   └─ dap_debugger
   │   │   └─ ...
   │   └─ ... internal atomic categories
+  ├─ plugin
+  │   └─ plugin_runtime
+  │       └─ plugin_runtime_state
   └─ user
       └─ user
           ├─ user_tool_a
@@ -109,8 +112,9 @@ root
 Notes:
 
 - the root first renders domain nodes and then category nodes. `system` and `user` are no longer hard-coded root nodes
-- `system_*` high-level tools expand through `SystemTreeCatalog` into their real atomic and action chains. For example, `system_editor_control` shows control-local click and pointer-motion actions such as `click_control`, `right_click_control`, `hover_control`, and `leave_control`, top menu actions such as `list_menus`, `open_menu`, and `select_menu_item`, and `system_editor_plugin_control` shows the underlying `editor_plugin` status and toggle actions
-- `system_scene_inspect` shows `validate`, `analyze`, and `full` read-only scene inspection actions while keeping the lower-level scene audit, dependency query, binding, and script inspection links visible as implementation context
+- `plugin_*` tools live under the `plugin` domain, separate from core editor/project tools and user tools
+- `system_*` high-level tools expand through `SystemTreeCatalog` into their real atomic and action chains. For example, `system_editor_control` shows `wait_for_ui`, control-local click and pointer-motion actions such as `click_control`, `right_click_control`, `hover_control`, and `leave_control`, top menu actions such as `list_menus`, `open_menu`, and `select_menu_item`, and `system_editor_plugin_control` shows the underlying `editor_plugin` status and toggle actions
+- `system_scene_inspect` shows `validate`, `analyze`, and `full` read-only scene inspection actions while keeping the underlying scene audit, dependency query, binding audit, and script inspection chain visible as implementation context
 - `system_tool_activity` reports activity recorded at the shared execution layer. Optional `_mcp_context` is stripped before concrete tool execution and treated as self-reported coordination metadata, not as authentication or a per-tool schema field
 - `runtime_*` is an internal atomic category. It is only shown as a child chain of `system_runtime_*`, and it is not exposed as an MCP tool by itself
 - atomic tool nodes can keep expanding recursively
