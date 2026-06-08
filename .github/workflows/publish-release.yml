@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-release-${{ inputs.version || github.ref_name }}
+  group: publish-release
   cancel-in-progress: false
 
 jobs:
@@ -84,9 +84,14 @@ jobs:
           }
 
           $tagName = "v$version"
-          $existingTag = (@(git ls-remote --tags origin "refs/tags/$tagName") -join "`n").Trim()
-          if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
-            throw "Release tag $tagName already exists. Choose a new version."
+          $tagExists = $false
+          $localTag = (@(git tag --list $tagName) -join "`n").Trim()
+          if (-not [string]::IsNullOrWhiteSpace($localTag)) {
+            $tagExists = $true
+            $tagTargetSha = (git rev-parse "$tagName^{commit}").Trim()
+            if ($tagTargetSha -ne $headSha) {
+              throw "Release tag $tagName already exists at $tagTargetSha, not target $headSha."
+            }
           }
 
           gh release view $tagName *> $null
@@ -134,6 +139,7 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag_name=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "target_sha=$headSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag_exists=$($tagExists.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "dry_run_cache_prefix=publish-release-dry-run-$tagName-$headSha-" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
@@ -141,6 +147,7 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Version: ``$version``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Tag: ``$tagName``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Target SHA: ``$headSha``"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Existing tag on target: ``$($tagExists.ToString().ToLowerInvariant())``"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "- Dry run: ``$env:DRY_RUN``"
 
       - name: Restore matching dry-run record
@@ -227,8 +234,11 @@ jobs:
           }
           $extractDir = "$env:TEMP\godot_extracted"
           Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
-          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
-          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*console*.exe" -File | Sort-Object FullName | Select-Object -First 1
+          if ($null -eq $godotExe) {
+            throw "Cannot find the Godot console executable in $extractDir."
+          }
+          echo "GODOT_BIN=$($godotExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run plugin harness verification
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
@@ -305,6 +315,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          git fetch --force --tags origin "refs/tags/$env:TAG_NAME`:refs/tags/$env:TAG_NAME" 2>$null
+          $tagExists = -not [string]::IsNullOrWhiteSpace((@(git tag --list $env:TAG_NAME) -join "`n").Trim())
+          if ($tagExists) {
+            $tagTargetSha = (git rev-parse "$env:TAG_NAME^{commit}").Trim()
+            if ($tagTargetSha -ne $env:TARGET_SHA) {
+              throw "Release tag $env:TAG_NAME already exists at $tagTargetSha, not target $env:TARGET_SHA."
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Release tag ``$env:TAG_NAME`` already points at ``$env:TARGET_SHA``; reusing it to create the missing GitHub Release."
+            exit 0
+          }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$env:TAG_NAME" "$env:TARGET_SHA" -m "$env:TAG_NAME"
@@ -335,8 +356,10 @@ jobs:
 
       - name: Delete consumed next draft
         if: ${{ inputs.dry_run == false }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -345,4 +368,11 @@ jobs:
           $global:LASTEXITCODE = 0
           if ($lookupExit -eq 0 -and $isDraft -eq "true") {
             gh release delete next --yes
+            $deleteExit = $LASTEXITCODE
+            $global:LASTEXITCODE = 0
+            if ($deleteExit -ne 0) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Warning: GitHub Release ``$env:TAG_NAME`` was created, but cleanup of the ``next`` draft failed. Delete the draft manually before preparing the next release."
+              exit $deleteExit
+            }
           }

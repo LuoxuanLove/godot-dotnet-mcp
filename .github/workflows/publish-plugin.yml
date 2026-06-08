@@ -27,7 +27,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           $ErrorActionPreference = "Stop"
@@ -88,16 +87,6 @@ jobs:
             }
           }
 
-          gh release view $tagName *> $null
-          $releaseLookupExit = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          if ($releaseLookupExit -eq 0) {
-            throw "GitHub Release $tagName already exists. Update it manually or choose a new release tag."
-          }
-          if ($releaseLookupExit -ne 1) {
-            throw "Unable to check whether GitHub Release $tagName already exists. gh exited with $releaseLookupExit."
-          }
-
       - name: Verify hosted .NET 8 SDK
         shell: pwsh
         run: |
@@ -123,8 +112,11 @@ jobs:
           }
           $extractDir = "$env:TEMP\godot_extracted"
           Expand-Archive -Path $godotZip -DestinationPath $extractDir -Force
-          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "Godot*.exe" -File | Select-Object -First 1 -ExpandProperty FullName
-          echo "GODOT_BIN=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $godotExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*console*.exe" -File | Sort-Object FullName | Select-Object -First 1
+          if ($null -eq $godotExe) {
+            throw "Cannot find the Godot console executable in $extractDir."
+          }
+          echo "GODOT_BIN=$($godotExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run plugin harness verification
         shell: pwsh
@@ -170,24 +162,3 @@ jobs:
           name: release-notes
           path: ${{ steps.release_notes.outputs.notes_file }}
           if-no-files-found: error
-
-  create-release:
-    needs: verify-release
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: windows-2025
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download release notes
-        uses: actions/download-artifact@v4
-        with:
-          name: release-notes
-          path: release-notes
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          body_path: release-notes/${{ needs.verify-release.outputs.notes_file_name }}
-          prerelease: ${{ needs.verify-release.outputs.prerelease }}

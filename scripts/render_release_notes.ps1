@@ -232,6 +232,9 @@ function Get-CommitSummary {
 
   $commits = @(git -c core.quotepath=false -c i18n.logOutputEncoding=utf-8 log --no-merges --pretty=format:'- %h %s' "$previousTag..HEAD" 2>$null)
   $commits = @($commits | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+  if ($CommitLimit -gt 0 -and $commits.Count -gt $CommitLimit) {
+    $commits = @($commits | Select-Object -First $CommitLimit)
+  }
   if ($commits.Count -eq 0) {
     return @('_No notable commits found._')
   }
