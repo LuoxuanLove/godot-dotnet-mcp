@@ -14,6 +14,8 @@ The new wait action complements menu, popup, click, hover, and text-entry contro
 
 Editor UI guidance now makes the automation order explicit: semantic workflows and navigation first, control-level focus, text, value, and popup actions second, and control-local mouse or pointer events only as fallback. Agents can choose a higher-level path before reaching for coordinates.
 
+When a workflow must fall back to `click_control` or `right_click_control`, results now include dispatch and target-observation evidence. Clients can distinguish delivered mouse input from observable Button activation, including before/after state, signal counts, and hints when input arrived without activation evidence.
+
 Resource and prompt diagnostics now redact mixed-case URL credentials, bearer/API-key variants, and nested metadata secrets before reporting resource outputs. Troubleshooting evidence stays useful for automation loops without exposing credentials in summaries.
 
 ### 🔍 Activity Diagnostics

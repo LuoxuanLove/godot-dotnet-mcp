@@ -16,6 +16,39 @@ const DOCK_VISIBLE_NAME := "MCP"
 const DOCK_LEGACY_NAME := "MCPDock"
 
 
+class ClickSignalRecorder:
+	extends RefCounted
+
+	var counts := {}
+
+	func record_pressed() -> void:
+		_record("pressed")
+
+	func record_button_down() -> void:
+		_record("button_down")
+
+	func record_button_up() -> void:
+		_record("button_up")
+
+	func record_toggled(_pressed: bool) -> void:
+		_record("toggled")
+
+	func record_gui_input(_event) -> void:
+		_record("gui_input")
+
+	func record_mouse_entered() -> void:
+		_record("mouse_entered")
+
+	func record_mouse_exited() -> void:
+		_record("mouse_exited")
+
+	func to_dictionary() -> Dictionary:
+		return counts.duplicate(true)
+
+	func _record(signal_name: String) -> void:
+		counts[signal_name] = int(counts.get(signal_name, 0)) + 1
+
+
 func execute(ei, args: Dictionary) -> Dictionary:
 	if not ei:
 		return _error("Editor interface not available")
@@ -547,14 +580,21 @@ func _click_control(ei, args: Dictionary, button_index: int, button_name: String
 
 	var viewport_position := _control_local_to_viewport_position(control, local_position)
 	var screen_position := _viewport_to_screen_position(control, viewport_position)
+	var state_before := _read_click_observable_state(control)
+	var signal_capture := _begin_click_signal_capture(control)
 	var dispatch_result := _dispatch_control_mouse_click(control, button_index, viewport_position)
+	var signal_observation := _end_click_signal_capture(control, signal_capture)
 	if not bool(dispatch_result.get("success", false)):
 		return dispatch_result
+	var state_after := _read_click_observable_state(control)
+	var dispatch_data: Dictionary = dispatch_result.get("data", {})
 
 	return _success({
 		"target_path": target_path,
 		"class": _control_class_name(control),
 		"button": button_name,
+		"input_dispatch": dispatch_data,
+		"target_observation": _build_click_target_observation(control, state_before, state_after, signal_observation),
 		"local_position": _vector2_to_dict(local_position),
 		"viewport_position": _vector2_to_dict(viewport_position),
 		"screen_position": _vector2_to_dict(screen_position),
@@ -1664,7 +1704,131 @@ func _dispatch_control_mouse_click(control, button_index: int, viewport_position
 	release_event.global_position = viewport_position
 	release_event.button_mask = 0
 	viewport.push_input(release_event, false)
-	return _success({"event_count": 2})
+	return _success({
+		"event_count": 2,
+		"button_index": button_index,
+		"button_mask": button_mask
+	})
+
+
+func _begin_click_signal_capture(control) -> Dictionary:
+	var recorder := ClickSignalRecorder.new()
+	var connections: Array[Dictionary] = []
+	var signal_specs := [
+		{"signal": "pressed", "method": "record_pressed"},
+		{"signal": "button_down", "method": "record_button_down"},
+		{"signal": "button_up", "method": "record_button_up"},
+		{"signal": "toggled", "method": "record_toggled"},
+		{"signal": "gui_input", "method": "record_gui_input"},
+		{"signal": "mouse_entered", "method": "record_mouse_entered"},
+		{"signal": "mouse_exited", "method": "record_mouse_exited"}
+	]
+	for spec in signal_specs:
+		var signal_name := str(spec.get("signal", ""))
+		if not _has_signal(control, signal_name):
+			continue
+		var callable := Callable(recorder, str(spec.get("method", "")))
+		var connect_error := int(control.connect(signal_name, callable))
+		if connect_error == OK or connect_error == ERR_ALREADY_EXISTS:
+			connections.append({
+				"signal": signal_name,
+				"callable": callable
+			})
+	return {
+		"recorder": recorder,
+		"connections": connections
+	}
+
+
+func _end_click_signal_capture(control, capture: Dictionary) -> Dictionary:
+	var connections: Array = capture.get("connections", [])
+	for connection in connections:
+		if not (connection is Dictionary):
+			continue
+		var signal_name := str((connection as Dictionary).get("signal", ""))
+		var callable = (connection as Dictionary).get("callable", Callable())
+		if signal_name.is_empty() or not (callable is Callable):
+			continue
+		if _is_signal_connected(control, signal_name, callable):
+			control.disconnect(signal_name, callable)
+	var recorder = capture.get("recorder", null)
+	var counts := {}
+	if recorder != null and recorder.has_method("to_dictionary"):
+		counts = recorder.to_dictionary()
+	var any_signal_observed := false
+	for signal_name in counts.keys():
+		if int(counts.get(signal_name, 0)) > 0:
+			any_signal_observed = true
+			break
+	var activation_observed := _click_activation_signal_observed(counts)
+	var input_observed := _click_input_signal_observed(counts)
+	return {
+		"supported": connections.size() > 0,
+		"observed": any_signal_observed,
+		"activation_observed": activation_observed,
+		"input_observed": input_observed,
+		"signals": counts
+	}
+
+
+func _read_click_observable_state(control) -> Dictionary:
+	return {
+		"visible": _is_control_visible(control),
+		"disabled": _is_control_disabled(control),
+		"mouse_filter": _read_optional_property(control, "mouse_filter"),
+		"focus_mode": _read_optional_property(control, "focus_mode"),
+		"toggle_mode": _read_optional_property(control, "toggle_mode"),
+		"button_pressed": _read_optional_property(control, "button_pressed"),
+		"pressed": _read_optional_property(control, "pressed")
+	}
+
+
+func _build_click_target_observation(control, state_before: Dictionary, state_after: Dictionary, signal_observation: Dictionary) -> Dictionary:
+	var state_changed := _observable_click_state_changed(state_before, state_after)
+	var activation_state_changed := _observable_click_activation_state_changed(state_before, state_after)
+	var button_like := _is_button_like_control(control)
+	var activation_observed := bool(signal_observation.get("activation_observed", false))
+	var hints: Array[String] = []
+	if button_like and not activation_observed and not activation_state_changed:
+		hints.append("Click input was dispatched, but no Button signal or pressed-state change was observed. If the control did not react, try activate_control or inspect overlays, mouse_filter, focus, and disabled state.")
+	return {
+		"button_like": button_like,
+		"activation_supported": _supports_activation(control),
+		"activation_observed": activation_observed or activation_state_changed,
+		"state_before": state_before,
+		"state_after": state_after,
+		"state_changed": state_changed,
+		"signal_observation": signal_observation,
+		"hints": hints
+	}
+
+
+func _click_activation_signal_observed(signal_counts: Dictionary) -> bool:
+	for signal_name in ["pressed", "toggled"]:
+		if int(signal_counts.get(signal_name, 0)) > 0:
+			return true
+	return false
+
+
+func _click_input_signal_observed(signal_counts: Dictionary) -> bool:
+	for signal_name in ["gui_input", "button_down", "button_up", "mouse_entered", "mouse_exited"]:
+		if int(signal_counts.get(signal_name, 0)) > 0:
+			return true
+	return false
+
+
+func _observable_click_activation_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
+	for key in ["button_pressed", "pressed"]:
+		if state_before.get(key, null) != state_after.get(key, null):
+			return true
+	return false
+
+
+func _observable_click_state_changed(state_before: Dictionary, state_after: Dictionary) -> bool:
+	for key in ["button_pressed", "pressed", "toggle_mode", "disabled", "visible"]:
+		if state_before.get(key, null) != state_after.get(key, null):
+			return true
+	return false
 
 
 func _dispatch_control_mouse_motion(control, viewport_position: Vector2) -> Dictionary:
@@ -1862,10 +2026,14 @@ func _supports_focus(control) -> bool:
 func _supports_activation(control) -> bool:
 	if control == null:
 		return false
-	var control_class := _control_class_name(control)
-	if control_class in ["Button", "CheckButton", "CheckBox", "OptionButton", "MenuButton", "LinkButton"]:
+	if _is_button_like_control(control):
 		return true
 	return control.has_method("press")
+
+
+func _is_button_like_control(control) -> bool:
+	var control_class := _control_class_name(control)
+	return control_class in ["Button", "CheckButton", "CheckBox", "OptionButton", "MenuButton", "LinkButton"]
 
 
 func _supports_text_input(control) -> bool:
@@ -1922,6 +2090,20 @@ func _has_property(control, property_name: String) -> bool:
 		if str((property_info as Dictionary).get("name", "")) == property_name:
 			return true
 	return false
+
+
+func _has_signal(control, signal_name: String) -> bool:
+	return control != null and control.has_method("has_signal") and bool(control.has_signal(signal_name))
+
+
+func _is_signal_connected(control, signal_name: String, callable: Callable) -> bool:
+	return control != null and control.has_method("is_connected") and bool(control.is_connected(signal_name, callable))
+
+
+func _read_optional_property(control, property_name: String):
+	if _has_property(control, property_name):
+		return control.get(property_name)
+	return null
 
 
 func _safe_control_path(control) -> String:

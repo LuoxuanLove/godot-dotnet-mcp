@@ -148,6 +148,8 @@ class FakeEditorViewport:
 	var _texture := FakeScreenshotTexture.new()
 	var focus_owner = null
 	var pushed_events: Array = []
+	var signal_dispatch_target = null
+	var signal_dispatch_emits_activation := true
 
 	func get_texture():
 		return _texture
@@ -160,6 +162,18 @@ class FakeEditorViewport:
 
 	func push_input(event, _in_local_coords: bool = false) -> void:
 		pushed_events.append(event)
+		if signal_dispatch_target == null or not (event is InputEventMouseButton):
+			return
+		signal_dispatch_target.emit_signal("gui_input", event)
+		if int(event.button_index) != MOUSE_BUTTON_LEFT:
+			return
+		if bool(event.pressed):
+			signal_dispatch_target.emit_signal("button_down")
+		else:
+			signal_dispatch_target.emit_signal("button_up")
+			if signal_dispatch_emits_activation:
+				signal_dispatch_target.button_pressed = true
+				signal_dispatch_target.emit_signal("pressed")
 
 
 class FakeEditorBaseControl:
@@ -303,13 +317,21 @@ class FakeLegacyPopupMenu:
 class FakeUiControl:
 	extends RefCounted
 
+	signal pressed
+	signal button_down
+	signal button_up
+	signal toggled(pressed: bool)
+	signal gui_input(event)
+	signal mouse_entered
+	signal mouse_exited
+
 	var name := ""
 	var text := ""
 	var title := ""
 	var visible := true
 	var disabled := false
 	var focused := false
-	var pressed := false
+	var button_pressed := false
 	var _ui_class := "Control"
 	var _parent_ref: WeakRef = null
 	var _children: Array = []
@@ -363,7 +385,7 @@ class FakeUiControl:
 		focused = true
 
 	func press() -> void:
-		pressed = true
+		button_pressed = true
 
 	func set_text(value: String) -> void:
 		text = value
@@ -530,7 +552,7 @@ class FakeEditorInterface:
 		for button_name in _main_screen_buttons.keys():
 			var button = _main_screen_buttons.get(button_name, null)
 			if button != null and button is Object:
-				button.pressed = str(button_name).to_lower() == screen.to_lower()
+				button.button_pressed = str(button_name).to_lower() == screen.to_lower()
 
 	func register_main_screen_button(screen: String, button) -> void:
 		_main_screen_buttons[screen] = button
@@ -657,6 +679,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	refresh_button.text = "Refresh"
 	var numeric_value := FakeNumericUiControl.new("NumericValue", "SpinBox", Rect2(24, 88, 96, 24))
 	numeric_value.value = 5.0
+	var observed_button := FakeUiControl.new("ObservedButton", "Button", Rect2(128, 56, 96, 24))
+	observed_button.text = "Observed"
+	var input_only_button := FakeUiControl.new("InputOnlyButton", "Button", Rect2(128, 84, 96, 24))
+	input_only_button.text = "InputOnly"
 	var project_menu := FakeMenuButton.new("ProjectMenu", "Project", Rect2(0, 0, 96, 24))
 	project_menu.get_popup().add_item("Project Settings...", 101)
 	project_menu.get_popup().add_item("Export...", 102)
@@ -671,7 +697,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	editor_top_bar.add_child(ordinary_top_bar_button)
 	var ordinary_script_button := FakeUiControl.new("OrdinaryScriptButton", "Button", Rect2(24, 124, 128, 24))
 	ordinary_script_button.text = "Script"
-	ordinary_script_button.pressed = true
+	ordinary_script_button.button_pressed = true
 	editor_top_bar.add_child(ordinary_script_button)
 	var main_screen_bar := FakeUiControl.new("MainScreenBar", "HBoxContainer", Rect2(360, 8, 320, 40))
 	var main_screen_group := RefCounted.new()
@@ -679,7 +705,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		var builtin_button := FakeUiControl.new("%sButton" % builtin_screen, "Button", Rect2(360, 8, 56, 24))
 		builtin_button.text = builtin_screen
 		builtin_button.set_button_group(main_screen_group)
-		builtin_button.pressed = builtin_screen == "2D"
+		builtin_button.button_pressed = builtin_screen == "2D"
 		editor_interface.register_main_screen_button(builtin_screen, builtin_button)
 		main_screen_bar.add_child(builtin_button)
 	var stray_toolbar_button := FakeUiControl.new("RunProjectButton", "Button", Rect2(584, 8, 72, 24))
@@ -707,6 +733,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search_panel.add_child(search_field)
 	search_panel.add_child(refresh_button)
 	search_panel.add_child(numeric_value)
+	search_panel.add_child(observed_button)
+	search_panel.add_child(input_only_button)
 	popup_root.add_child(popup_button)
 	popup_root.add_child(popup_input)
 	editor_interface.get_base_control().add_popup_child(popup_root)
@@ -861,6 +889,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_field_path := str(search_field.get_path())
 	var refresh_button_path := str(refresh_button.get_path())
 	var numeric_value_path := str(numeric_value.get_path())
+	var observed_button_path := str(observed_button.get_path())
+	var input_only_button_path := str(input_only_button.get_path())
 	var list_controls_result: Dictionary = executor.execute("ui_control", {
 		"action": "list_visible",
 		"class_name": "LineEdit"
@@ -987,7 +1017,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(activate_control_result.get("success", false)):
 		return _failure("Editor ui_control activate_control failed through the split service path.")
-	if not bool(refresh_button.pressed):
+	if not bool(refresh_button.button_pressed):
 		return _failure("Editor ui_control activate_control should activate the target control.")
 
 	var capture_control_result: Dictionary = executor.execute("ui_control", {
@@ -1031,6 +1061,87 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control right_click_control should dispatch a right-button press first.")
 	if Vector2(pushed_events[0].position) != Vector2(32, 30):
 		return _failure("Editor ui_control click_control should convert local coordinates to viewport coordinates.")
+	if int(click_control_result.get("data", {}).get("input_dispatch", {}).get("event_count", 0)) != 2:
+		return _failure("Editor ui_control click_control should report the dispatched input event count.")
+
+	var click_button_result: Dictionary = executor.execute("ui_control", {
+		"action": "click_control",
+		"target_path": refresh_button_path
+	})
+	if not bool(click_button_result.get("success", false)):
+		return _failure("Editor ui_control click_control should support button-like controls.")
+	var target_observation: Dictionary = click_button_result.get("data", {}).get("target_observation", {})
+	if not bool(target_observation.get("button_like", false)):
+		return _failure("Editor ui_control click_control should mark Button targets as button_like.")
+	if not bool(target_observation.get("activation_supported", false)):
+		return _failure("Editor ui_control click_control should report activation support for Button targets.")
+	if not target_observation.has("state_before") or not target_observation.has("state_after"):
+		return _failure("Editor ui_control click_control should include before/after target state observations.")
+	if not target_observation.has("signal_observation"):
+		return _failure("Editor ui_control click_control should include signal observation metadata.")
+	if bool(target_observation.get("activation_observed", true)):
+		return _failure("Editor ui_control click_control should not report activation_observed without Button activation signals or pressed-state changes.")
+	var signal_observation: Dictionary = target_observation.get("signal_observation", {})
+	if bool(signal_observation.get("activation_observed", true)):
+		return _failure("Editor ui_control click_control should separate activation evidence from generic input signal evidence.")
+	if (target_observation.get("hints", []) as Array).is_empty():
+		return _failure("Editor ui_control click_control should provide a diagnostic hint when a Button click has no observed activation evidence.")
+
+	editor_interface.get_base_control().get_viewport().signal_dispatch_target = observed_button
+	var observed_button_result: Dictionary = executor.execute("ui_control", {
+		"action": "click_control",
+		"target_path": observed_button_path
+	})
+	editor_interface.get_base_control().get_viewport().signal_dispatch_target = null
+	if not bool(observed_button_result.get("success", false)):
+		return _failure("Editor ui_control click_control should support observed Button signals.")
+	var observed_target_observation: Dictionary = observed_button_result.get("data", {}).get("target_observation", {})
+	if not bool(observed_target_observation.get("activation_observed", false)):
+		return _failure("Editor ui_control click_control should report activation_observed when Button activation signals are captured.")
+	if not (observed_target_observation.get("hints", []) as Array).is_empty():
+		return _failure("Editor ui_control click_control should not add no-activation hints after Button activation signals are captured.")
+	var observed_signal_observation: Dictionary = observed_target_observation.get("signal_observation", {})
+	if not bool(observed_signal_observation.get("activation_observed", false)):
+		return _failure("Editor ui_control click_control should report activation signal evidence separately.")
+	if not bool(observed_signal_observation.get("input_observed", false)):
+		return _failure("Editor ui_control click_control should treat Button down/up signals as click input evidence.")
+	var observed_signals: Dictionary = observed_signal_observation.get("signals", {})
+	if int(observed_signals.get("button_down", 0)) != 1:
+		return _failure("Editor ui_control click_control should count the observed Button down signal.")
+	if int(observed_signals.get("button_up", 0)) != 1:
+		return _failure("Editor ui_control click_control should count the observed Button up signal.")
+	if int(observed_signals.get("pressed", 0)) != 1:
+		return _failure("Editor ui_control click_control should count the observed Button pressed signal.")
+	if int(observed_signals.get("gui_input", 0)) != 2:
+		return _failure("Editor ui_control click_control should count press and release gui_input events.")
+
+	editor_interface.get_base_control().get_viewport().signal_dispatch_target = input_only_button
+	editor_interface.get_base_control().get_viewport().signal_dispatch_emits_activation = false
+	var input_only_button_result: Dictionary = executor.execute("ui_control", {
+		"action": "click_control",
+		"target_path": input_only_button_path
+	})
+	editor_interface.get_base_control().get_viewport().signal_dispatch_target = null
+	editor_interface.get_base_control().get_viewport().signal_dispatch_emits_activation = true
+	if not bool(input_only_button_result.get("success", false)):
+		return _failure("Editor ui_control click_control should support input-only Button signal observation.")
+	var input_only_target_observation: Dictionary = input_only_button_result.get("data", {}).get("target_observation", {})
+	if bool(input_only_target_observation.get("activation_observed", true)):
+		return _failure("Editor ui_control click_control should not report activation_observed from Button down/up input alone.")
+	if (input_only_target_observation.get("hints", []) as Array).is_empty():
+		return _failure("Editor ui_control click_control should hint when Button input arrives without observable activation.")
+	var input_only_signal_observation: Dictionary = input_only_target_observation.get("signal_observation", {})
+	if bool(input_only_signal_observation.get("activation_observed", true)):
+		return _failure("Editor ui_control click_control should keep activation evidence false without pressed or toggled signals.")
+	if not bool(input_only_signal_observation.get("input_observed", false)):
+		return _failure("Editor ui_control click_control should still report input_observed for Button down/up input.")
+	var input_only_signals: Dictionary = input_only_signal_observation.get("signals", {})
+	if int(input_only_signals.get("button_down", 0)) != 1 or int(input_only_signals.get("button_up", 0)) != 1:
+		return _failure("Editor ui_control click_control should count input-only Button down/up signals.")
+	if int(input_only_signals.get("pressed", 0)) != 0:
+		return _failure("Editor ui_control click_control should not synthesize pressed for input-only Button observation.")
+
+	var motion_start_event_count := pushed_events.size()
 	var hover_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "hover_control",
 		"target_path": search_field_path,
@@ -1045,11 +1156,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(leave_control_result.get("success", false)):
 		return _failure("Editor ui_control leave_control failed through the split service path.")
-	if pushed_events.size() != 6:
+	if pushed_events.size() != motion_start_event_count + 2:
 		return _failure("Editor ui_control hover/leave actions should dispatch mouse motion input events.")
-	if not (pushed_events[4] is InputEventMouseMotion) or Vector2(pushed_events[4].position) != Vector2(34, 32):
+	if not (pushed_events[motion_start_event_count] is InputEventMouseMotion) or Vector2(pushed_events[motion_start_event_count].position) != Vector2(34, 32):
 		return _failure("Editor ui_control hover_control should dispatch mouse motion at the requested local point.")
-	if not (pushed_events[5] is InputEventMouseMotion) or Vector2(pushed_events[5].position) == Vector2(34, 32):
+	if not (pushed_events[motion_start_event_count + 1] is InputEventMouseMotion) or Vector2(pushed_events[motion_start_event_count + 1].position) == Vector2(34, 32):
 		return _failure("Editor ui_control leave_control should dispatch mouse motion away from the hovered point.")
 	var invalid_leave_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "leave_control",

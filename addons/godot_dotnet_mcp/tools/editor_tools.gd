@@ -350,8 +350,8 @@ ACTIONS:
 - capture_control: Capture a screenshot cropped to one control
 - focus_control: Move editor focus to a control
 - activate_control: Activate a button-like control
-- click_control: Dispatch a left mouse click at local_x/local_y inside a control
-- right_click_control: Dispatch a right mouse click at local_x/local_y inside a control
+- click_control: Dispatch a left mouse click at local_x/local_y inside a control and return dispatch/target observation evidence
+- right_click_control: Dispatch a right mouse click at local_x/local_y inside a control and return dispatch/target observation evidence
 - hover_control: Dispatch mouse motion to local_x/local_y inside a control
 - leave_control: Dispatch mouse motion outside a control, or to explicit local_x/local_y when provided
 - set_text: Write text into a text-editing control
@@ -371,7 +371,7 @@ EXAMPLES:
 - Capture one control: {"action": "capture_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Focus control: {"action": "focus_control", "target_path": "/root/Editor/SearchPanel/SearchInput"}
 - Activate control: {"action": "activate_control", "target_path": "/root/Editor/FileSystemDock/RefreshButton"}
-- Right-click control row: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
+- Right-click control row with observation evidence: {"action": "right_click_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Hover control row: {"action": "hover_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree", "local_x": 24, "local_y": 42}
 - Leave control row: {"action": "leave_control", "target_path": "/root/Editor/MCP/ToolsTab/ToolTree"}
 - Set text: {"action": "set_text", "target_path": "/root/Editor/SearchPanel/SearchInput", "text": "Player"}
