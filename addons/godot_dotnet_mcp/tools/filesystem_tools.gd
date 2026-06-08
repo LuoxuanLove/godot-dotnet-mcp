@@ -497,7 +497,7 @@ func _collect_files(path: String, filter: String, recursive: bool, results: Arra
 		while file_name != "":
 			var full_path = current.path_join(file_name)
 			if dir.current_is_dir():
-				if recursive and not file_name.begins_with("."):
+				if recursive and not file_name.begins_with(".") and not dir.is_link(file_name):
 					pending.append(full_path)
 			else:
 				if file_name.match(filter):
@@ -1030,9 +1030,22 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 		var file_path := str(pending_write.get("path", ""))
 		var write_file = FileAccess.open(file_path, FileAccess.WRITE)
 		if not write_file:
-			return _error("Failed to open file for replacement write: %s" % file_path)
+			return _error("Failed to open file for replacement write: %s" % file_path, {
+				"path": file_path,
+				"partial_write": not modified_files.is_empty(),
+				"modified_files": modified_files
+			})
 		write_file.store_string(str(pending_write.get("content", "")))
+		write_file.flush()
+		var write_error := write_file.get_error()
 		write_file.close()
+		if write_error != OK:
+			return _error("Failed to write replacement content: %s" % file_path, {
+				"path": file_path,
+				"error_code": write_error,
+				"partial_write": not modified_files.is_empty(),
+				"modified_files": modified_files
+			})
 		modified_files.append(file_path)
 
 	# Refresh filesystem
