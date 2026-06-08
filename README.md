@@ -28,15 +28,14 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 
 |       | Feature | What it does |
 | :---: | :--- | :--- |
-| 🎛️ | **Runs with the editor** | The MCP service is provided directly by the Godot plugin, with no extra background process required. |
-| 🚀 | **Low-friction setup** | Install it from the Godot Asset Library, generate connection settings for common MCP clients, and update the plugin from GitHub sources. |
-| 🎮 | **Live Godot editor context** | Provides your agent with the current scene, selected nodes, Dock state, logs, run information, diagnostics summaries, and editor screenshots. |
-| 🌳 | **Scene, resource, and binding diagnostics** | Helps inspect scene trees, resource references, dependencies, scene structure issues, and C# export binding state. |
-| ▶️ | **Game runtime support** | Starts and stops scenes, inspects runtime diagnostics, performs input, and captures game runtime views. |
-| 🔎 | **Roslyn-based C# support** | Uses the plugin's internal Roslyn syntax checks to read C# script structure, including classes, base types, methods, enums, and exported members. |
-| 🐞 | **Godot DAP debugging** | Reads breakpoints, threads, stack traces, and output events through Godot DAP, and performs pause, continue, and step-over actions for Godot script debugging; managed C# breakpoints still require a separate .NET debugger. |
-| 📚 | **MCP Resources and Prompts** | Provides project resources, diagnostics read entry points, and common Godot workflow Prompt Guides. |
-| 🧰 | **Tool extensions** | Optionally hot-loads `user_*` GDScript tools from `custom_tools/`, so projects can add their own MCP capabilities. |
+| 🎛️ | **Editor-native MCP service** | Runs inside the Godot editor and exposes live project, editor, and runtime state without a separate background service. |
+| 🚀 | **Setup, updates, and clients** | Installs from the Godot Asset Library, generates client configuration, manages plugin updates, and reports client capability guidance from the Dock. |
+| 🧭 | **Semantic editor automation** | Gives agents high-level workflows for settings, Inspector properties, menus, popups, controls, and UI waits before falling back to mouse-style input. |
+| 🪟 | **Evidence-aware editor context** | Captures editor, control, popup, active-dialog, and runtime surfaces with metadata that explains targets, fallbacks, and observed state. |
+| 🌳 | **Project understanding and diagnostics** | Inspects scenes, resources, dependencies, input/export configuration, C# script structure, diagnostics, and binding consistency before editing. |
+| ▶️ | **Runtime lifecycle and debugging** | Starts and stops runtime sessions, waits for validation markers, inspects runtime errors, sends input, captures frames, and reads Godot DAP state. |
+| 📚 | **Discoverable MCP workflows** | Provides localized resources, prompt guides, tool catalog search, activity diagnostics, and help surfaces so clients can choose the right tool path. |
+| 🧰 | **Extensible User tools** | Hot-loads project-defined GDScript tools, reports public tool names and compatibility diagnostics, and keeps custom capabilities visible to MCP clients. |
 
 ## Installation
 
