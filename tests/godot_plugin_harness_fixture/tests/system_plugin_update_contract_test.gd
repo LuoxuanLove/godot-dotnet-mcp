@@ -4,7 +4,7 @@ extends RefCounted
 
 const ImplProjectScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 
-const CURRENT_PLUGIN_VERSION := "1.2.1"
+const CURRENT_PLUGIN_VERSION := "1.3.0"
 
 
 class FakeBridge extends RefCounted:
