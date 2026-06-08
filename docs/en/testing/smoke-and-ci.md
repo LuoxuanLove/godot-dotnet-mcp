@@ -125,8 +125,7 @@ If the local machine does not have Godot or another required environment, the PR
 - dotnet bridge library, harness runner, and fixture build
 - refactor guardrails
 - plugin headless harness required subset
-- version consistency checks for `plugin.cfg`, tag, the English changelog, and the Simplified Chinese changelog before tag release
-- existence and version consistency checks for `docs/en/process/release-notes/release-notes-v*.md` before tag release
+- version consistency checks for `plugin.cfg`, tag, all four localized changelogs, and all four localized `v*` release-note source files before release validation
 - before merging to remote `dev`, the PR and `validate-plugin-harness` should pass and the latest `dev` should be revalidated. The current ruleset does not require an approving review
 
 ### Still soft-gated or environment-dependent

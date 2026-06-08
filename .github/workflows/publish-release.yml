@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-release-${{ inputs.version || github.ref_name }}
+  group: publish-release
   cancel-in-progress: false
 
 jobs:
@@ -310,13 +310,18 @@ jobs:
         if: ${{ inputs.dry_run == false }}
         env:
           TAG_NAME: ${{ steps.preflight.outputs.tag_name }}
-          TAG_EXISTS: ${{ steps.preflight.outputs.tag_exists }}
           VERSION: ${{ steps.preflight.outputs.version }}
           TARGET_SHA: ${{ steps.preflight.outputs.target_sha }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          if ($env:TAG_EXISTS -eq "true") {
+          git fetch --force --tags origin "refs/tags/$env:TAG_NAME`:refs/tags/$env:TAG_NAME" 2>$null
+          $tagExists = -not [string]::IsNullOrWhiteSpace((@(git tag --list $env:TAG_NAME) -join "`n").Trim())
+          if ($tagExists) {
+            $tagTargetSha = (git rev-parse "$env:TAG_NAME^{commit}").Trim()
+            if ($tagTargetSha -ne $env:TARGET_SHA) {
+              throw "Release tag $env:TAG_NAME already exists at $tagTargetSha, not target $env:TARGET_SHA."
+            }
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value ""
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "Release tag ``$env:TAG_NAME`` already points at ``$env:TARGET_SHA``; reusing it to create the missing GitHub Release."
             exit 0
