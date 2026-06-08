@@ -32,6 +32,7 @@ Target version: 1.2.1.
 - Added `system_editor_evidence`, a high-level visual evidence workflow that captures editor, control, popup, active-dialog, or automatic surfaces with explicit target, fallback, degradation, and visible-popup metadata.
 - Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while keeping existing scene validation and analysis tools available.
 - Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while keeping the dedicated reload and update tools available.
+- Added User-tool naming diagnostics that report declared, normalized, and public MCP tool names in User-tool listings and compatibility reports.
 
 ### Changed
 
@@ -56,11 +57,13 @@ Target version: 1.2.1.
 - Added editor evidence surface contracts, tool-tree entries, Tools tab rendering, catalog search discovery, prompt/help guidance, localized tool metadata, and the `2026-06-08.21` tool schema facts update.
 - Extended scene executor, tool loader, Tools tab rendering, localization inventory, and protocol facts coverage for the `2026-06-08.23` `system_scene_inspect` schema surface.
 - Added plugin-maintenance contracts, tool-tree coverage, localized tool metadata, and the `2026-06-08.22` tool schema facts update for the grouped maintenance entry.
+- Extended User-tool service contract coverage for scaffold public-name previews, legacy `user_` prefix normalization warnings, and the `2026-06-08.24` tool schema facts update.
 
 ### Fixed
 
 - Hardened MCP resource diagnostics redaction so mixed-case URL credentials and sensitive text markers are masked before resource outputs are reported.
 - Capped Settings update source and branch selector popups so long discovered ref lists scroll inside the menu instead of covering the editor.
+- Fixed generated User-tool scaffolds so they extend the base tool script by resource path, keeping headless catalog scans from depending on global script-class registration.
 
 ## [1.2.0] - 2026-06-06
 

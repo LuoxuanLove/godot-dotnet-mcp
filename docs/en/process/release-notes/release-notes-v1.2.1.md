@@ -64,6 +64,12 @@ This makes configuration and editor workflows easier to re-enter after profiles,
 
 Native MCP discovery now localizes resource and resource-template metadata too. When clients call `resources/list` or `resources/templates/list`, resource names and descriptions follow the active plugin language while URIs and templates remain stable.
 
+### 🧰 Clearer User Tool Names
+
+User-tool listings and compatibility reports now show the script-declared name, the normalized internal name, and the public MCP tool name. Scaffolding previews also show the public name up front, while legacy `user_`-prefixed declarations receive a review warning instead of leaving clients to guess how the tool will appear.
+
+New scaffolds also load more reliably during headless catalog scans because they no longer depend on global script-class registration for the base tool type.
+
 ### 🧪 Read-Only Scene Inspection
 
 `system_scene_inspect` gives clients one read-only entry for scene checks. Use `validate` for fast loadability and reference issues, `analyze` for deeper node, binding, and script details, or `full` when a workflow needs both payloads kept separate in one response.

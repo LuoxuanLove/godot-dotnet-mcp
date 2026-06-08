@@ -26,17 +26,25 @@ func configure(custom_tools_dir: String, backup_dir: String, audit_log_path: Str
 
 
 func create_tool_scaffold(tool_name: String, display_name: String, description: String, authorized: bool, agent_hint: String = "") -> Dictionary:
-	var slug = _slugify_tool_name(tool_name if not tool_name.is_empty() else display_name)
-	if slug.is_empty():
+	var script_slug = _slugify_tool_name(tool_name if not tool_name.is_empty() else display_name)
+	if script_slug.is_empty():
 		return _authorization_required("create_user_tool", {"reason": "empty_tool_name"})
+	var declared_tool_name := _normalize_declared_tool_name(script_slug)
+	if declared_tool_name.is_empty():
+		return _authorization_required("create_user_tool", {"reason": "empty_declared_tool_name"})
+	var public_tool_name := _build_public_tool_name(declared_tool_name)
 
 	var preview = {
 		"category": USER_CATEGORY,
 		"domain_key": USER_DOMAIN,
-		"tool_name": slug,
-		"display_name": display_name if not display_name.is_empty() else _humanize(slug),
+		"tool_name": declared_tool_name,
+		"declared_tool_name": declared_tool_name,
+		"public_tool_name": public_tool_name,
+		"script_slug": script_slug,
+		"requested_tool_name": tool_name,
+		"display_name": display_name if not display_name.is_empty() else _humanize(script_slug),
 		"description": description if not description.is_empty() else "User-defined tool scaffold.",
-		"script_path": "%s/%s.gd" % [_custom_tools_dir, slug],
+		"script_path": "%s/%s.gd" % [_custom_tools_dir, script_slug],
 		"scaffold_version": _scaffold_version
 	}
 
@@ -58,7 +66,7 @@ func create_tool_scaffold(tool_name: String, display_name: String, description: 
 		_append_audit("create_user_tool", true, false, preview, "write_failed", agent_hint)
 		return {"success": false, "error": "Failed to create user tool script", "data": preview}
 
-	file.store_string(_build_scaffold(slug, preview))
+	file.store_string(_build_scaffold(declared_tool_name, preview))
 	file.close()
 	_append_audit("create_user_tool", true, true, preview, "", agent_hint)
 	return {"success": true, "message": "User tool scaffold created", "data": preview}
@@ -253,7 +261,7 @@ func _truncate_audit_log() -> void:
 
 func _build_scaffold(tool_name: String, preview: Dictionary) -> String:
 	return """@tool
-extends MCPBaseTool
+extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 
 const _SCAFFOLD_VERSION := %s
 
@@ -518,6 +526,17 @@ func _slugify_tool_name(value: String) -> String:
 	while sanitized.contains("__"):
 		sanitized = sanitized.replace("__", "_")
 	return sanitized.trim_prefix("_").trim_suffix("_")
+
+
+func _normalize_declared_tool_name(tool_name: String) -> String:
+	var normalized := tool_name.strip_edges()
+	if normalized.begins_with("user_"):
+		normalized = normalized.trim_prefix("user_")
+	return normalized
+
+
+func _build_public_tool_name(declared_tool_name: String) -> String:
+	return "%s_%s" % [USER_CATEGORY, declared_tool_name]
 
 
 func _humanize(value: String) -> String:
