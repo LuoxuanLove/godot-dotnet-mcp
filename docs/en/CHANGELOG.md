@@ -36,7 +36,7 @@ Target version: 1.3.0.
 
 ### Fixed
 
-- Made the release workflows recoverable when an existing release tag already points at the target commit but the GitHub Release still needs to be created, and removed the duplicate tag-triggered Release creation path.
+- Made the release workflows recoverable when an existing release tag already points at the target commit but the GitHub Release still needs to be created, and clarified that the tag-triggered workflow now validates release sources without creating the formal Release.
 - Made release verification consistently select the Godot console executable and made rendered commit summaries honor the configured commit limit.
 - Capped Settings update source and branch selector popup heights so long discovered ref lists scroll inside the menu instead of covering the editor.
 - Fixed Tools tab enabled and total counts so plugin-domain tools are included alongside core and user tool domains.
