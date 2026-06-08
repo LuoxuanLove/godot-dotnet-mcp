@@ -714,6 +714,18 @@ func _focus_value(surface: String, args: Dictionary) -> Dictionary:
 func _set_value(surface: String, args: Dictionary) -> Dictionary:
 	if not args.has("value"):
 		return bridge.error("value is required for set_value")
+	if bool(args.get("include_hidden", false)):
+		return bridge.error("set_value refuses hidden-control writes; use visible rows only.", {
+			"reason": "hidden_write_refused",
+			"include_hidden": true,
+			"surface": surface
+		})
+	if _required_confidence(args) == "low":
+		return bridge.error("set_value refuses low-confidence writes.", {
+			"reason": "low_confidence_write_refused",
+			"require_confidence": "low",
+			"surface": surface
+		})
 	var query_values: Array[String] = _search_terms(args)
 	var observation: Dictionary = _observe(surface, _deep_observation_args(args), query_values)
 	if not bool(observation.get("dialog_found", false)):
@@ -2436,7 +2448,7 @@ func _is_settings_row_candidate(row: Dictionary) -> bool:
 		return false
 	if bool(row.get("editable_text", false)):
 		return true
-	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
+	if control_class in ["HBoxContainer", "VBoxContainer", "GridContainer", "CheckBox", "CheckButton", "OptionButton", "SpinBox", "EditorSpinSlider", "Slider", "HSlider", "VSlider", "LineEdit", "TextEdit", "CodeEdit", "ColorPickerButton"]:
 		return true
 	if path.contains("/") and (path.contains("Settings") or path.contains("General") or path.contains("Interface")):
 		return true
@@ -2791,7 +2803,7 @@ func _value_editor_type_hint(row: Dictionary) -> String:
 		return "bool"
 	if control_class in ["OptionButton"]:
 		return "enum"
-	if control_class in ["SpinBox", "EditorSpinSlider", "HSlider", "VSlider"]:
+	if control_class in ["SpinBox", "EditorSpinSlider", "Slider", "HSlider", "VSlider"]:
 		return "number"
 	if control_class in ["ColorPickerButton", "ColorPicker"]:
 		return "color"

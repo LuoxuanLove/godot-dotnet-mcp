@@ -330,6 +330,7 @@ class FakeUiControl:
 	var title := ""
 	var visible := true
 	var disabled := false
+	var read_only := false
 	var focused := false
 	var button_pressed := false
 	var _ui_class := "Control"
@@ -395,6 +396,7 @@ class FakeNumericUiControl:
 	extends FakeUiControl
 
 	var value := 0.0
+	var editable := true
 
 	func _init(node_name: String = "", ui_class: String = "SpinBox", rect: Rect2 = Rect2(0, 0, 100, 24)) -> void:
 		super(node_name, ui_class, rect)
@@ -675,10 +677,28 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_panel := FakeUiControl.new("SearchPanel", "PanelContainer", Rect2(16, 16, 200, 72))
 	var search_field := FakeUiControl.new("SearchField", "LineEdit", Rect2(24, 24, 160, 24))
 	search_field.text = "InitialQuery"
+	var hidden_search_field := FakeUiControl.new("HiddenSearchField", "LineEdit", Rect2(24, 24, 160, 24))
+	hidden_search_field.visible = false
+	var disabled_search_field := FakeUiControl.new("DisabledSearchField", "LineEdit", Rect2(24, 24, 160, 24))
+	disabled_search_field.disabled = true
+	var readonly_search_field := FakeUiControl.new("ReadonlySearchField", "LineEdit", Rect2(24, 24, 160, 24))
+	readonly_search_field.read_only = true
+	var display_label := FakeUiControl.new("DisplayLabel", "Label", Rect2(24, 24, 160, 24))
+	display_label.text = "Read only"
 	var refresh_button := FakeUiControl.new("RefreshButton", "Button", Rect2(24, 56, 96, 24))
 	refresh_button.text = "Refresh"
 	var numeric_value := FakeNumericUiControl.new("NumericValue", "SpinBox", Rect2(24, 88, 96, 24))
 	numeric_value.value = 5.0
+	var hidden_numeric_value := FakeNumericUiControl.new("HiddenNumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	hidden_numeric_value.visible = false
+	var disabled_numeric_value := FakeNumericUiControl.new("DisabledNumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	disabled_numeric_value.disabled = true
+	var readonly_numeric_value := FakeNumericUiControl.new("ReadonlyNumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	readonly_numeric_value.read_only = true
+	var immutable_numeric_value := FakeNumericUiControl.new("ImmutableNumericValue", "SpinBox", Rect2(24, 88, 96, 24))
+	immutable_numeric_value.editable = false
+	var display_numeric_value := FakeNumericUiControl.new("DisplayNumericValue", "ProgressBar", Rect2(24, 88, 96, 24))
+	display_numeric_value.value = 50.0
 	var observed_button := FakeUiControl.new("ObservedButton", "Button", Rect2(128, 56, 96, 24))
 	observed_button.text = "Observed"
 	var input_only_button := FakeUiControl.new("InputOnlyButton", "Button", Rect2(128, 84, 96, 24))
@@ -731,8 +751,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 	mcp_tabs.add_tab(config_tab, "配置")
 	mcp_dock.add_child(mcp_tabs)
 	search_panel.add_child(search_field)
+	search_panel.add_child(hidden_search_field)
+	search_panel.add_child(disabled_search_field)
+	search_panel.add_child(readonly_search_field)
+	search_panel.add_child(display_label)
 	search_panel.add_child(refresh_button)
 	search_panel.add_child(numeric_value)
+	search_panel.add_child(hidden_numeric_value)
+	search_panel.add_child(disabled_numeric_value)
+	search_panel.add_child(readonly_numeric_value)
+	search_panel.add_child(immutable_numeric_value)
+	search_panel.add_child(display_numeric_value)
 	search_panel.add_child(observed_button)
 	search_panel.add_child(input_only_button)
 	popup_root.add_child(popup_button)
@@ -887,8 +916,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor notification toast failed through the split service path.")
 
 	var search_field_path := str(search_field.get_path())
+	var hidden_search_field_path := str(hidden_search_field.get_path())
+	var disabled_search_field_path := str(disabled_search_field.get_path())
+	var readonly_search_field_path := str(readonly_search_field.get_path())
+	var display_label_path := str(display_label.get_path())
 	var refresh_button_path := str(refresh_button.get_path())
 	var numeric_value_path := str(numeric_value.get_path())
+	var hidden_numeric_value_path := str(hidden_numeric_value.get_path())
+	var disabled_numeric_value_path := str(disabled_numeric_value.get_path())
+	var readonly_numeric_value_path := str(readonly_numeric_value.get_path())
+	var immutable_numeric_value_path := str(immutable_numeric_value.get_path())
+	var display_numeric_value_path := str(display_numeric_value.get_path())
 	var observed_button_path := str(observed_button.get_path())
 	var input_only_button_path := str(input_only_button.get_path())
 	var list_controls_result: Dictionary = executor.execute("ui_control", {
@@ -927,6 +965,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control set_text failed through the split service path.")
 	if search_field.text != "Player":
 		return _failure("Editor ui_control set_text should update the target control text.")
+	for blocked_text_path in [hidden_search_field_path, disabled_search_field_path, readonly_search_field_path, display_label_path]:
+		var blocked_text_result: Dictionary = executor.execute("ui_control", {
+			"action": "set_text",
+			"target_path": blocked_text_path,
+			"text": "Unsafe"
+		})
+		if bool(blocked_text_result.get("success", false)):
+			return _failure("Editor ui_control set_text should reject hidden, disabled, or display-only controls.")
 	var numeric_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "get_control",
 		"target_path": numeric_value_path
@@ -944,6 +990,20 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control set_value failed through the split service path.")
 	if float(numeric_value.value) != 12.0:
 		return _failure("Editor ui_control set_value should update the target control value.")
+	for blocked_value_path in [hidden_numeric_value_path, disabled_numeric_value_path, readonly_numeric_value_path, immutable_numeric_value_path, display_numeric_value_path]:
+		var blocked_value_result: Dictionary = executor.execute("ui_control", {
+			"action": "set_value",
+			"target_path": blocked_value_path,
+			"value": 99
+		})
+		if bool(blocked_value_result.get("success", false)):
+			return _failure("Editor ui_control set_value should reject hidden, disabled, read-only, immutable, or display-only value controls.")
+		var blocked_value_metadata_result: Dictionary = executor.execute("ui_control", {
+			"action": "get_control",
+			"target_path": blocked_value_path
+		})
+		if bool(blocked_value_metadata_result.get("success", false)) and (blocked_value_metadata_result.get("data", {}).get("control", {}).get("actionable", []) as Array).has("set_value"):
+			return _failure("Editor ui_control actionable metadata should not expose set_value for blocked value controls.")
 
 	var wait_exists_result: Dictionary = executor.execute("ui_control", {
 		"action": "wait_for_ui",

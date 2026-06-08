@@ -668,6 +668,10 @@ func _set_control_text(ei, target_path: String, text: String) -> Dictionary:
 	var control = _find_control(ei, target_path)
 	if control == null:
 		return _error("Editor control not found: %s" % target_path)
+	if not _is_control_visible(control):
+		return _error("Editor control is not visible: %s" % target_path)
+	if _is_control_disabled(control):
+		return _error("Editor control is disabled: %s" % target_path)
 	if not _supports_text_input(control):
 		return _error("Editor control does not support text input: %s" % target_path)
 
@@ -689,8 +693,12 @@ func _set_control_value(ei, target_path: String, value) -> Dictionary:
 	var control = _find_control(ei, target_path)
 	if control == null:
 		return _error("Editor control not found: %s" % target_path)
-	if not _has_property(control, "value"):
-		return _error("Editor control does not expose a value property: %s" % target_path)
+	if not _is_control_visible(control):
+		return _error("Editor control is not visible: %s" % target_path)
+	if _is_control_disabled(control):
+		return _error("Editor control is disabled: %s" % target_path)
+	if not _supports_value_input(control):
+		return _error("Editor control does not support mutable numeric value input: %s" % target_path)
 	var numeric_value = value
 	if not (numeric_value is int or numeric_value is float):
 		var value_text := str(value).strip_edges()
@@ -2040,15 +2048,50 @@ func _supports_text_input(control) -> bool:
 	if control == null:
 		return false
 	var control_class := _control_class_name(control)
+	if control_class in ["Label", "RichTextLabel"] or _is_button_like_control(control):
+		return false
 	if control_class in ["LineEdit", "TextEdit", "CodeEdit"]:
-		return true
-	return control.has_method("set_text") or _has_property(control, "text")
+		return _is_text_input_mutable(control)
+	if _has_property(control, "editable"):
+		return _is_text_input_mutable(control) and (control.has_method("set_text") or _has_property(control, "text"))
+	if _has_property(control, "read_only"):
+		return _is_text_input_mutable(control) and (control.has_method("set_text") or _has_property(control, "text"))
+	return false
+
+
+func _is_text_input_mutable(control) -> bool:
+	if control == null:
+		return false
+	if _has_property(control, "editable") and not bool(control.get("editable")):
+		return false
+	if _has_property(control, "read_only") and bool(control.get("read_only")):
+		return false
+	return true
 
 
 func _supports_value_input(control) -> bool:
 	if control == null:
 		return false
-	return _has_property(control, "value")
+	if not _is_control_visible(control):
+		return false
+	if not _has_property(control, "value"):
+		return false
+	var control_class := _control_class_name(control)
+	if not (control_class in ["SpinBox", "EditorSpinSlider", "HSlider", "VSlider", "Slider"]):
+		return false
+	return _is_value_input_mutable(control)
+
+
+func _is_value_input_mutable(control) -> bool:
+	if control == null:
+		return false
+	if _is_control_disabled(control):
+		return false
+	if _has_property(control, "editable") and not bool(control.get("editable")):
+		return false
+	if _has_property(control, "read_only") and bool(control.get("read_only")):
+		return false
+	return true
 
 
 func _control_class_name(control) -> String:

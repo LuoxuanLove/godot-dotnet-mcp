@@ -36,6 +36,7 @@ Target version: 1.3.0.
 
 ### Fixed
 
+- Hardened editor UI write actions so hidden, disabled, display-only, and low-confidence settings controls are rejected before text/value mutation.
 - Hardened project path handling for filesystem/project-file tools and the .NET bridge so remote tool requests cannot escape the Godot project tree through `user://`, absolute paths, URI schemes, or traversal segments.
 - Made the release workflows recoverable when an existing release tag already points at the target commit but the GitHub Release still needs to be created, and clarified that the tag-triggered workflow now validates release sources without creating the formal Release.
 - Made release verification consistently select the Godot console executable and made rendered commit summaries honor the configured commit limit.
@@ -51,6 +52,7 @@ Target version: 1.3.0.
 
 ### Internal
 
+- Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
 - Extended settings-dialog contracts for `run_task` read/verify/set/set-and-verify flows, ambiguity and write-refusal guards, capture-required write preflight behavior, tab/category/row/value actions, prompt/help guidance, and tool rendering.
