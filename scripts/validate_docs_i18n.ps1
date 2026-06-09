@@ -1,12 +1,16 @@
 ﻿param(
     [string]$DocsRoot = "docs",
-    [string[]]$Locales = @("en", "zh-CN", "ja", "ko")
+    [string[]]$Locales = @("en", "zh-CN", "ja", "ko"),
+    [switch]$SkipDocumentMapValidation
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $docsRootPath = Join-Path $repoRoot $DocsRoot
+if ([System.IO.Path]::IsPathRooted($DocsRoot)) {
+    $docsRootPath = $DocsRoot
+}
 $errors = New-Object System.Collections.Generic.List[string]
 
 $docMap = @(
@@ -352,6 +356,9 @@ function Test-DocumentQuality {
     if ($RelativePath -in @("appendix/directory-tree-and-file-responsibilities.md", "附录/目录树与文件职责.md", "付録/ディレクトリツリーとファイル責務.md", "부록/디렉터리-트리와-파일-책임.md")) {
         Test-TablePathDuplicates -File $File -RelativePath $relative
     }
+    if ($RelativePath -in @("CHANGELOG.md", "变更日志.md", "変更履歴.md", "변경-로그.md")) {
+        Test-ChangelogSectionOrder -Content $content -RelativePath $relative
+    }
     foreach ($match in [regex]::Matches($naturalLanguageContent, '(?m)^#{1,6}\s+(.+)$')) {
         Test-LocalizedTextScript -Locale $Locale -Text $match.Groups[1].Value -Context $relative
     }
@@ -393,6 +400,39 @@ function Test-DocumentQuality {
             if ($naturalLanguageContent -match 'docs/(en|zh-CN|ja)/') {
                 $errors.Add("Korean document references another locale docs path: $relative")
             }
+        }
+    }
+}
+
+function Test-ChangelogSectionOrder {
+    param([string]$Content, [string]$RelativePath)
+    $allowedOrder = @("Added", "Changed", "Fixed", "Documentation", "Internal")
+    $orderLookup = @{}
+    for ($i = 0; $i -lt $allowedOrder.Count; $i++) {
+        $orderLookup[$allowedOrder[$i]] = $i
+    }
+
+    $versionMatches = @([regex]::Matches($Content, '(?m)^##\s+.+$'))
+    for ($versionIndex = 0; $versionIndex -lt $versionMatches.Count; $versionIndex++) {
+        $sectionStart = $versionMatches[$versionIndex].Index + $versionMatches[$versionIndex].Length
+        $sectionEnd = $Content.Length
+        if ($versionIndex + 1 -lt $versionMatches.Count) {
+            $sectionEnd = $versionMatches[$versionIndex + 1].Index
+        }
+        $sectionText = $Content.Substring($sectionStart, $sectionEnd - $sectionStart)
+        $lastOrder = -1
+        foreach ($match in [regex]::Matches($sectionText, '(?m)^###\s+(.+?)\s*$')) {
+            $heading = $match.Groups[1].Value.Trim()
+            if (-not $orderLookup.ContainsKey($heading)) {
+                continue
+            }
+            $currentOrder = [int]$orderLookup[$heading]
+            if ($currentOrder -lt $lastOrder) {
+                $versionHeading = $versionMatches[$versionIndex].Value.Trim()
+                $errors.Add("Changelog section order is invalid in ${RelativePath} ${versionHeading}: ${heading} appears after a later section. Expected order: $($allowedOrder -join ' / ')")
+                break
+            }
+            $lastOrder = $currentOrder
         }
     }
 }
@@ -466,6 +506,9 @@ foreach ($locale in $Locales) {
     $expectedByLocale[$locale] = New-Object System.Collections.Generic.HashSet[string]
 }
 foreach ($doc in $docMap) {
+    if ($SkipDocumentMapValidation) {
+        break
+    }
     foreach ($locale in $Locales) {
         if (-not $doc.Paths.ContainsKey($locale)) {
             $errors.Add("Missing path mapping for $($doc.Id) in $locale")
@@ -491,13 +534,15 @@ foreach ($locale in $Locales) {
     $actualFiles = @(Get-ChildItem -LiteralPath $localeRoot -Recurse -File -Filter "*.md" | ForEach-Object { Normalize-RelativePath (Get-RelativePath -BasePath $localeRoot -TargetPath $_.FullName) } | Sort-Object -Unique)
     foreach ($relativePath in $actualFiles) {
         Test-PathScript -Locale $locale -RelativePath $relativePath
-        if (-not $expectedByLocale[$locale].Contains($relativePath)) {
+        if ((-not $SkipDocumentMapValidation) -and -not $expectedByLocale[$locale].Contains($relativePath)) {
             $errors.Add("Unexpected localized docs file: $DocsRoot/$locale/$relativePath")
         }
     }
-    foreach ($expected in $expectedByLocale[$locale]) {
-        if ($actualFiles -notcontains $expected) {
-            $errors.Add("Missing localized docs file: $DocsRoot/$locale/$expected")
+    if (-not $SkipDocumentMapValidation) {
+        foreach ($expected in $expectedByLocale[$locale]) {
+            if ($actualFiles -notcontains $expected) {
+                $errors.Add("Missing localized docs file: $DocsRoot/$locale/$expected")
+            }
         }
     }
     $localeFiles = @(Get-ChildItem -LiteralPath $localeRoot -Recurse -File -Filter "*.md")
@@ -510,8 +555,10 @@ foreach ($locale in $Locales) {
 }
 
 $referenceLocale = $Locales[0]
-foreach ($doc in $docMap) {
-    Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
+if (-not $SkipDocumentMapValidation) {
+    foreach ($doc in $docMap) {
+        Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
+    }
 }
 
 foreach ($locale in $Locales) {
