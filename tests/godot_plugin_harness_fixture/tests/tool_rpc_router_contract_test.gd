@@ -85,6 +85,36 @@ class FakeToolLoader:
 			}
 		})
 		definitions.append({
+			"name": "system_plugin_reload",
+			"description": "Removed public plugin reload tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["get_freshness", "full_reload_plugin"]}
+				}
+			}
+		})
+		definitions.append({
+			"name": "system_plugin_update",
+			"description": "Removed public plugin update tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]}
+				}
+			}
+		})
+		definitions.append({
 			"name": "system_scene_validate",
 			"description": "Removed public scene validation tool",
 			"category": "system",
@@ -121,6 +151,46 @@ class FakeToolLoader:
 			"category": "system",
 			"status": "ready"
 		}]
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return [
+			"system_help",
+			"system_plugin_reload",
+			"system_plugin_update",
+			"system_scene_analyze",
+			"system_scene_validate",
+			"system_tool_catalog",
+			"system_tool_activity"
+		].has(tool_name)
+
+	func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
+		if tool_name == "system_plugin_reload":
+			return _removed_plugin_maintenance_tool(
+				tool_name,
+				{"action": "reload"} if str(arguments.get("action", "")) == "full_reload_plugin" else {"action": "status"}
+			)
+		if tool_name == "system_plugin_update":
+			return _removed_plugin_maintenance_tool(
+				tool_name,
+				{"action": "start_update"} if str(arguments.get("action", "")) == "start_sync" else {"action": "update_status"}
+			)
+		return {}
+
+	func _removed_plugin_maintenance_tool(tool_name: String, replacement_arguments: Dictionary) -> Dictionary:
+		return {
+			"success": false,
+			"error": "%s has been removed from the public tool surface. Call system_plugin_maintenance instead." % tool_name,
+			"data": {
+				"error_type": "removed_public_tool",
+				"removed_tool": tool_name,
+				"replacement_tools": [{
+					"name": "system_plugin_maintenance",
+					"arguments": replacement_arguments
+				}],
+				"replacement_methods": ["tools/call", "resources/read", "resources/list"],
+				"replacement_resources": ["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
+			}
+		}
 
 	func get_all_tools_by_category() -> Dictionary:
 		return {
@@ -307,6 +377,8 @@ class FakeCallbacks:
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
+			or tool_name == "system_plugin_reload"
+			or tool_name == "system_plugin_update"
 			or tool_name == "system_tool_catalog"
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
@@ -318,6 +390,8 @@ class FakeCallbacks:
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
+			or tool_name == "system_plugin_reload"
+			or tool_name == "system_plugin_update"
 			or tool_name == "system_tool_catalog"
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
@@ -356,7 +430,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:
@@ -480,6 +554,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed system_tool_activity should expose removed_public_tool guidance.")
 	if not (((removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
 		return _failure("Tool RPC router removed system_tool_activity should point to activity/status.")
+	for removed_plugin_case in [
+		{"tool": "system_plugin_reload", "arguments": {"action": "full_reload_plugin"}, "replacement_action": "reload"},
+		{"tool": "system_plugin_update", "arguments": {"action": "start_sync"}, "replacement_action": "start_update"}
+	]:
+		var removed_plugin_result: Dictionary = await router.build_tool_call_result_async({
+			"name": str(removed_plugin_case.get("tool", "")),
+			"arguments": removed_plugin_case.get("arguments", {})
+		})
+		if not bool(removed_plugin_result.get("isError", false)):
+			return _failure("Tool RPC router should return isError=true for removed %s." % str(removed_plugin_case.get("tool", "")))
+		var removed_plugin_structured = removed_plugin_result.get("structuredContent", {})
+		if not _is_removed_plugin_maintenance_tool(removed_plugin_structured, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
+			return _failure("Tool RPC router removed %s should point to system_plugin_maintenance." % str(removed_plugin_case.get("tool", "")))
 	for removed_scene_case in [
 		{"tool": "system_scene_validate", "action": "validate"},
 		{"tool": "system_scene_analyze", "action": "analyze"}
@@ -642,3 +729,24 @@ func _is_removed_scene_tool(structured, removed_tool: String, replacement_action
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, replacement_action: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action

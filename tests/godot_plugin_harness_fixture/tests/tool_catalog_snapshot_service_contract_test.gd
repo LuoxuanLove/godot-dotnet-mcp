@@ -161,6 +161,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var tools_by_category: Dictionary = snapshot.get("all_tools_by_category", {})
 	var system_tools: Array = tools_by_category.get("system", [])
+	for removed_system_tool in ["system_plugin_reload", "system_plugin_update", "system_tool_activity"]:
+		if _category_full_names("system", system_tools).has(removed_system_tool):
+			return _failure("Snapshot category catalog should filter removed public tool %s." % removed_system_tool)
 	if _category_full_names("system", system_tools).has("system_tool_activity"):
 		return _failure("Snapshot category catalog should filter removed public tools.")
 	if not _category_full_names("project", tools_by_category.get("project", [])).has("project_input"):

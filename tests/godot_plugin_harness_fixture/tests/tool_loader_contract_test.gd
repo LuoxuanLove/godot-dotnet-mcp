@@ -120,10 +120,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose system_settings_dialog under the default tool access provider.")
 	if not exposed_names.has("system_inspector"):
 		return _failure("Tool loader did not expose system_inspector under the default tool access provider.")
-	if not exposed_names.has("system_plugin_reload"):
-		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
-	if not exposed_names.has("system_plugin_update"):
-		return _failure("Tool loader did not expose the high-level system_plugin_update entry.")
+	for removed_plugin_tool_name in ["system_plugin_reload", "system_plugin_update"]:
+		if exposed_names.has(removed_plugin_tool_name):
+			return _failure("Tool loader should remove %s from public MCP exposure." % removed_plugin_tool_name)
+		if not _loader.is_tool_exposed(removed_plugin_tool_name):
+			return _failure("Tool loader should keep legacy %s calls routable to removal guidance." % removed_plugin_tool_name)
 	if not exposed_names.has("system_plugin_maintenance"):
 		return _failure("Tool loader did not expose the high-level system_plugin_maintenance entry.")
 	if not exposed_names.has("system_dap_debugger"):
@@ -312,6 +313,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if bool(filtered_activity_result.get("success", true)):
 		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
+	for removed_plugin_case in [
+		{"tool": "plugin_reload", "removed": "system_plugin_reload", "replacement_action": "reload", "args": {"action": "full_reload_plugin"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "start_update", "args": {"action": "start_sync"}}
+	]:
+		var removed_plugin_result: Dictionary = await _loader.execute_tool_async("system", str(removed_plugin_case.get("tool", "")), removed_plugin_case.get("args", {}))
+		if bool(removed_plugin_result.get("success", true)):
+			return _failure("Tool loader legacy %s calls should return removal guidance." % str(removed_plugin_case.get("removed", "")))
+		if not _is_removed_plugin_maintenance_tool(removed_plugin_result, str(removed_plugin_case.get("removed", "")), str(removed_plugin_case.get("replacement_action", ""))):
+			return _failure("Tool loader %s removal guidance should point to system_plugin_maintenance." % str(removed_plugin_case.get("removed", "")))
 	for removed_scene_case in [
 		{"tool": "scene_validate", "removed": "system_scene_validate", "action": "validate"},
 		{"tool": "scene_analyze", "removed": "system_scene_analyze", "action": "analyze"}
@@ -384,3 +394,22 @@ func _is_removed_scene_tool(result: Dictionary, removed_tool: String, replacemen
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_plugin_maintenance_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
