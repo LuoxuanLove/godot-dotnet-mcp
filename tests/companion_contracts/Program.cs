@@ -6,6 +6,8 @@ var tests = new (string Name, Action Run)[]
     ("keeps_capability_sets_immutable", CapabilityCatalogSetsCannotBeMutated),
     ("binds_only_godot_project_roots", ProjectDescriptorRequiresGodotProjectRoot),
     ("keeps_explicit_csproj_inside_project_root", ProjectDescriptorKeepsProjectFileInsideRoot),
+    ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
+    ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
@@ -62,6 +64,23 @@ static void ProjectDescriptorKeepsProjectFileInsideRoot()
     var externalProject = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csproj");
     AssertThrows<ArgumentException>(() => ProjectDescriptor.FromRoot(root, externalProject));
     AssertThrows<ArgumentException>(() => ProjectDescriptor.FromRoot(root, "not-a-project.txt"));
+}
+
+static void ProjectDescriptorHasNoPublicConstructor()
+{
+    var publicConstructors = typeof(ProjectDescriptor).GetConstructors();
+    AssertEqual(0, publicConstructors.Length);
+}
+
+static void BrokerRegistersProjectsThroughDescriptorFactory()
+{
+    var root = CreateTempProjectRoot();
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(root);
+    var session = broker.StartSession(project.ProjectId);
+
+    AssertEqual(project.ProjectId, session.Identity.ProjectId);
+    AssertEqual(Path.GetFullPath(root), project.ProjectRoot);
 }
 
 static void ToolCallsRequireProjectAndSessionScope()

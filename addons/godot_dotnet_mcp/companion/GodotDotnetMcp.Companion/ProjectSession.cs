@@ -3,11 +3,22 @@ using System.Text;
 
 namespace GodotDotnetMcp.Companion;
 
-public sealed record ProjectDescriptor(
-    string ProjectId,
-    string ProjectRoot,
-    string? ProjectFilePath)
+public sealed record ProjectDescriptor
 {
+    private ProjectDescriptor(
+        string projectId,
+        string projectRoot,
+        string? projectFilePath)
+    {
+        ProjectId = projectId;
+        ProjectRoot = projectRoot;
+        ProjectFilePath = projectFilePath;
+    }
+
+    public string ProjectId { get; }
+    public string ProjectRoot { get; }
+    public string? ProjectFilePath { get; }
+
     public static ProjectDescriptor FromRoot(string projectRoot, string? projectFilePath = null)
     {
         if (string.IsNullOrWhiteSpace(projectRoot))
@@ -36,9 +47,9 @@ public sealed record ProjectDescriptor(
         }
 
         return new ProjectDescriptor(
-            ProjectId: BuildProjectId(normalizedRoot),
-            ProjectRoot: normalizedRoot,
-            ProjectFilePath: normalizedProjectFile);
+            projectId: BuildProjectId(normalizedRoot),
+            projectRoot: normalizedRoot,
+            projectFilePath: normalizedProjectFile);
     }
 
     private static string BuildProjectId(string projectRoot)
