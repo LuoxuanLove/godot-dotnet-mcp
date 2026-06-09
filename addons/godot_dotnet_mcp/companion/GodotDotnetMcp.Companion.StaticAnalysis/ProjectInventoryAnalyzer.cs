@@ -24,7 +24,7 @@ public sealed class ProjectInventoryAnalyzer
         var dotnetWorkspace = new DotnetWorkspaceGraphAnalyzer().Analyze(normalizedRoot, csprojFiles);
 
         var descriptor = TryCreateDescriptor(normalizedRoot, isGodotProject, csprojFiles.FirstOrDefault());
-        var capabilities = BuildCapabilities(isGodotProject, csprojFiles.Length > 0);
+        var capabilities = BuildCapabilities(isGodotProject, dotnetWorkspace);
 
         return new ProjectInventory(
             ProjectRoot: normalizedRoot,
@@ -48,10 +48,10 @@ public sealed class ProjectInventoryAnalyzer
         return ProjectDescriptor.FromRoot(projectRoot, firstProjectFile);
     }
 
-    private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, bool hasCSharpProject)
+    private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, DotnetWorkspaceGraph dotnetWorkspace)
     {
         var dotnetWorkspaceReason = isGodotProject
-            ? "Requires at least one .csproj file inside the project root."
+            ? DotnetWorkspaceUnavailableReason(dotnetWorkspace)
             : "Requires a project.godot file.";
 
         return
@@ -62,8 +62,8 @@ public sealed class ProjectInventoryAnalyzer
                 "Requires a project.godot file."),
             StaticCapability(
                 CompanionCapability.DotnetWorkspaceAnalysis,
-                isGodotProject && hasCSharpProject,
-                hasCSharpProject ? "Available from discovered .csproj files." : dotnetWorkspaceReason),
+                isGodotProject && dotnetWorkspace.HasProjects,
+                dotnetWorkspace.HasProjects ? "Available from parsed .csproj files." : dotnetWorkspaceReason),
             StaticCapability(
                 CompanionCapability.ResourceGraphAnalysis,
                 isGodotProject,
@@ -74,6 +74,13 @@ public sealed class ProjectInventoryAnalyzer
             LiveCapability(CompanionCapability.EditorScreenshot),
             LiveCapability(CompanionCapability.RuntimeValidation),
         ];
+    }
+
+    private static string DotnetWorkspaceUnavailableReason(DotnetWorkspaceGraph dotnetWorkspace)
+    {
+        return dotnetWorkspace.HasDiagnostics
+            ? "No .csproj file could be parsed successfully; inspect .NET workspace diagnostics."
+            : "Requires at least one .csproj file inside the project root.";
     }
 
     private static ProjectCapabilityStatus StaticCapability(

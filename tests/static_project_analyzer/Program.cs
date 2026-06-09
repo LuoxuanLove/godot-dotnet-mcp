@@ -7,8 +7,11 @@ var tests = new (string Name, Action Run)[]
     ("reports_static_dotnet_workspace_graph", ReportsStaticDotnetWorkspaceGraph),
     ("keeps_project_references_inside_project_boundary", KeepsProjectReferencesInsideProjectBoundary),
     ("reports_malformed_dotnet_projects_as_diagnostics", ReportsMalformedDotnetProjectsAsDiagnostics),
+    ("does_not_claim_dotnet_workspace_when_every_project_is_malformed", DoesNotClaimDotnetWorkspaceWhenEveryProjectIsMalformed),
     ("skips_incomplete_reference_items_as_diagnostics", SkipsIncompleteReferenceItemsAsDiagnostics),
     ("skips_dot_directories_while_scanning_project_files", SkipsDotDirectoriesWhileScanningProjectFiles),
+    ("skips_hidden_and_system_directories_while_scanning_project_files", SkipsHiddenAndSystemDirectoriesWhileScanningProjectFiles),
+    ("skips_reparse_point_directories_while_scanning_project_files", SkipsReparsePointDirectoriesWhileScanningProjectFiles),
     ("allows_project_roots_under_parent_dot_directories", AllowsProjectRootsUnderParentDotDirectories),
     ("keeps_live_editor_capabilities_unavailable_headlessly", KeepsLiveEditorCapabilitiesUnavailableHeadlessly),
     ("reports_missing_dotnet_workspace_without_claiming_live_state", ReportsMissingDotnetWorkspaceWithoutClaimingLiveState),
@@ -112,7 +115,8 @@ static void KeepsProjectReferencesInsideProjectBoundary()
     AssertTrue(app.ProjectReferences[0].IsInsideProjectRoot);
     AssertTrue(app.ProjectReferences[0].Exists);
     AssertFalse(app.ProjectReferences[1].IsInsideProjectRoot);
-    AssertTrue(app.ProjectReferences[1].Exists);
+    AssertFalse(app.ProjectReferences[1].Exists);
+    AssertTrue(inventory.DotnetWorkspace.Diagnostics.Any(diagnostic => diagnostic.Code == "dotnet_workspace_project_reference_outside_root"));
 }
 
 static void ReportsMalformedDotnetProjectsAsDiagnostics()
@@ -131,6 +135,19 @@ static void ReportsMalformedDotnetProjectsAsDiagnostics()
     AssertEqual(Path.GetFullPath(malformedProject), inventory.DotnetWorkspace.Diagnostics[0].ProjectFilePath);
     AssertEqual(DotnetWorkspaceDiagnosticSeverity.Error, inventory.DotnetWorkspace.Diagnostics[0].Severity);
     AssertEqual("dotnet_workspace_project_unreadable", inventory.DotnetWorkspace.Diagnostics[0].Code);
+}
+
+static void DoesNotClaimDotnetWorkspaceWhenEveryProjectIsMalformed()
+{
+    var root = CreateTempProjectRoot();
+    File.WriteAllText(Path.Combine(root, "Broken.csproj"), "<Project>");
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertFalse(inventory.DotnetWorkspace.HasProjects);
+    AssertTrue(inventory.DotnetWorkspace.HasDiagnostics);
+    AssertFalse(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
+    AssertContains("No .csproj file could be parsed successfully", inventory.GetCapability(CompanionCapability.DotnetWorkspaceAnalysis).Reason);
 }
 
 static void SkipsIncompleteReferenceItemsAsDiagnostics()
@@ -164,6 +181,51 @@ static void SkipsDotDirectoriesWhileScanningProjectFiles()
     var hiddenProjectDir = Path.Combine(root, ".godot", "mono");
     Directory.CreateDirectory(hiddenProjectDir);
     File.WriteAllText(Path.Combine(hiddenProjectDir, "Generated.csproj"), "<Project />");
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertEqual(1, inventory.CSharpProjectFiles.Count);
+    AssertEqual(Path.GetFullPath(projectFile), inventory.CSharpProjectFiles[0]);
+    AssertEqual(1, inventory.DotnetWorkspace.Projects.Count);
+}
+
+static void SkipsHiddenAndSystemDirectoriesWhileScanningProjectFiles()
+{
+    var root = CreateTempProjectRoot();
+    var projectFile = Path.Combine(root, "Game.csproj");
+    File.WriteAllText(projectFile, "<Project />");
+    var hiddenProjectDir = Path.Combine(root, "HiddenGenerated");
+    var systemProjectDir = Path.Combine(root, "SystemGenerated");
+    Directory.CreateDirectory(hiddenProjectDir);
+    Directory.CreateDirectory(systemProjectDir);
+    File.WriteAllText(Path.Combine(hiddenProjectDir, "Hidden.csproj"), "<Project />");
+    File.WriteAllText(Path.Combine(systemProjectDir, "System.csproj"), "<Project />");
+
+    SetTemporaryAttributes(hiddenProjectDir, FileAttributes.Hidden, () =>
+        SetTemporaryAttributes(systemProjectDir, FileAttributes.System, () =>
+        {
+            var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+            AssertEqual(1, inventory.CSharpProjectFiles.Count);
+            AssertEqual(Path.GetFullPath(projectFile), inventory.CSharpProjectFiles[0]);
+            AssertEqual(1, inventory.DotnetWorkspace.Projects.Count);
+        }));
+}
+
+static void SkipsReparsePointDirectoriesWhileScanningProjectFiles()
+{
+    var root = CreateTempProjectRoot();
+    var projectFile = Path.Combine(root, "Game.csproj");
+    File.WriteAllText(projectFile, "<Project />");
+    var outsideRoot = Path.Combine(Path.GetTempPath(), "godot-dotnet-mcp-static-analyzer-outside", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(outsideRoot);
+    File.WriteAllText(Path.Combine(outsideRoot, "Outside.csproj"), "<Project />");
+    var linkPath = Path.Combine(root, "LinkedOutside");
+    if (!TryCreateDirectorySymbolicLink(linkPath, outsideRoot))
+    {
+        Console.WriteLine("SKIP skips_reparse_point_directories_while_scanning_project_files: directory symbolic links are unavailable.");
+        return;
+    }
 
     var inventory = new ProjectInventoryAnalyzer().Analyze(root);
 
@@ -249,6 +311,41 @@ static string CreateTempProjectRoot()
     Directory.CreateDirectory(root);
     File.WriteAllText(Path.Combine(root, "project.godot"), string.Empty);
     return root;
+}
+
+static void SetTemporaryAttributes(string path, FileAttributes attributes, Action run)
+{
+    var originalAttributes = File.GetAttributes(path);
+    try
+    {
+        File.SetAttributes(path, originalAttributes | attributes);
+        run();
+    }
+    finally
+    {
+        File.SetAttributes(path, originalAttributes);
+    }
+}
+
+static bool TryCreateDirectorySymbolicLink(string linkPath, string targetPath)
+{
+    try
+    {
+        Directory.CreateSymbolicLink(linkPath, targetPath);
+        return true;
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return false;
+    }
+    catch (IOException)
+    {
+        return false;
+    }
+    catch (PlatformNotSupportedException)
+    {
+        return false;
+    }
 }
 
 static void AssertTrue(bool condition)
