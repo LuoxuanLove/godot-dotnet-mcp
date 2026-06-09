@@ -15,6 +15,10 @@ Target version: 2.0.0.
 - Added an unevaluated static .NET workspace graph that reports SDK, target frameworks, package references, project references, compile includes/removes, and Godot SDK/package hints without restoring or building projects.
 - Added a static resource reference graph for text `.tscn` and `.tres` files, covering external resources, sub-resources, `uid://` markers, `res://` usages, missing references, and unsupported binary `.res` files without opening the editor.
 
+### Fixed
+
+- Rejected editor-live upgrades from missing, malformed, older-major, newer-major, or explicit version-mismatch editor bridge plugin versions so live editor capabilities require a compatible v2 bridge.
+
 ### Documentation
 
 - Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.

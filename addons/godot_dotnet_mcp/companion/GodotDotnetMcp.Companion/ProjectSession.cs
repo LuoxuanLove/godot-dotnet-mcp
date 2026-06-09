@@ -122,6 +122,11 @@ public sealed class ProjectSession
             throw new InvalidOperationException("Editor bridge must provide an editor_session_id before live capabilities are available.");
         }
 
+        if (!EditorBridgeCompatibility.IsPluginVersionCompatible(bridgeStatus.PluginVersion))
+        {
+            throw new InvalidOperationException($"Editor bridge plugin_version is not compatible. {EditorBridgeCompatibility.CompatibilityRequirement}");
+        }
+
         Identity = Identity with
         {
             Mode = CompanionMode.EditorLive,

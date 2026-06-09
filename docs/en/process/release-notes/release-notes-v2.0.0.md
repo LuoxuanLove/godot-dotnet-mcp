@@ -20,6 +20,8 @@ Tool calls must carry both `project_id` and `session_id`, and the broker rejects
 
 The bridge upgrade contract now documents the editor-side handshake states. A project session can become editor-live only when the bridge is online for the same project, reports a compatible plugin version, and provides a non-empty `editor_session_id`.
 
+The Companion contract now enforces that boundary in code: missing, malformed, older-major, newer-major, or explicit version-mismatch bridge versions remain static/headless instead of unlocking editor-live capabilities.
+
 ### ✅ Compatibility and Upgrade Notes
 
 The Companion layer is a contract library in this stage. It does not start a background process, open a port, launch Godot, or change the existing editor-native plugin startup behavior. The broker manifest keeps that promise explicit: broker startup, loopback HTTP transport, project registration, and editor launch all require deliberate user or client action.
