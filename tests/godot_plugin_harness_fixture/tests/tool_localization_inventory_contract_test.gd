@@ -10,6 +10,10 @@ const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plu
 const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"tool_system_help_name",
 	"tool_system_help_desc",
+	"tool_system_plugin_reload_name",
+	"tool_system_plugin_reload_desc",
+	"tool_system_plugin_update_name",
+	"tool_system_plugin_update_desc",
 	"tool_system_tool_catalog_name",
 	"tool_system_tool_catalog_desc",
 	"tool_system_tool_activity_name",

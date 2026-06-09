@@ -90,6 +90,12 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	if loader == null:
 		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
 
+	if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(tool_name)):
+		if loader.has_method("build_removed_public_tool_result"):
+			var removed_tool_result = loader.build_removed_public_tool_result(tool_name, arguments)
+			if removed_tool_result is Dictionary and not (removed_tool_result as Dictionary).is_empty():
+				return _create_tool_result_payload(removed_tool_result)
+
 	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)
 	if not result.get("success", false):

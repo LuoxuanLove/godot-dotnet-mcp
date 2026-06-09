@@ -24,6 +24,7 @@ Target version: 1.4.0.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 - Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
+- Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
 ### Fixed
@@ -65,7 +66,7 @@ Target version: 1.4.0.
 - Added `system_tool_activity` query filters and slow/failure diagnostics so clients can inspect running or recent calls by state, tool, and slow-call threshold without fetching unrelated activity records.
 - Added User-tool naming diagnostics that expose declared, normalized, and public MCP tool names in User-tool listings, scaffold previews, and compatibility reports.
 - Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while preserving the existing scene validation and analysis tools.
-- Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
+- Added `system_plugin_maintenance`, the canonical high-level plugin maintenance entry for status, reload, update-status, update-reference refresh, update-source selection, and update-start workflows.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
 - Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.

@@ -891,8 +891,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_editor_plugin_desc": "查詢和管理編輯器插件",
 	"tool_system_editor_state_name": "編輯器狀態",
 	"tool_system_editor_state_desc": "彙總目前編輯器介面、Inspector、FileSystem、運行狀態與運行時控制資訊。",
-	"tool_system_plugin_reload_name": "外掛重載",
-	"tool_system_plugin_reload_desc": "檢查運行中的外掛實例是否已刷新，或在不依賴前台 UI 的情況下排程完整外掛生命週期重載。",
 	"tool_system_project_files_name": "項目檔案",
 	"tool_system_project_files_desc": "透過高層流程讀取、修改、選取、掃描和重新匯入項目檔案系統樹項目。",
 	"tool_system_scene_tree_name": "場景樹",
@@ -1148,12 +1146,12 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "更新狀態",
 	"tool_action_set_update_source_desc": "透過維護流程選擇外掛更新來源。",
 	"tool_action_set_update_source_name": "設定更新來源",
+	"tool_action_refresh_update_refs_desc": "透過維護流程啟動外掛更新引用探索。",
+	"tool_action_refresh_update_refs_name": "刷新更新引用",
 	"tool_action_start_update_desc": "透過維護入口啟動外掛更新同步流程。",
 	"tool_action_start_update_name": "開始更新",
-	"tool_system_plugin_maintenance_desc": "統一常用外掛狀態、重載、更新狀態、來源選擇與更新啟動路徑，同時保留專用重載與更新工具。",
+	"tool_system_plugin_maintenance_desc": "外掛重載、外掛更新狀態、來源選擇、更新啟動與維護狀態的 canonical 工作流程入口。",
 	"tool_system_plugin_maintenance_name": "外掛維護",
-	"tool_system_plugin_update_desc": "檢查已安裝外掛版本與指紋、選擇更新來源，並協調非同步同步與重新載入進度。",
-	"tool_system_plugin_update_name": "外掛更新",
 }
 
 

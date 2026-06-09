@@ -182,7 +182,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
 			return _failure("Tools tab should not render removed project lifecycle entry '%s'." % removed_tool_name)
-	for removed_tool_name in ["system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_plugin_reload", "system_plugin_update", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
 			return _failure("Tools tab should not render removed public tool %s." % removed_tool_name)
 	if _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.start") == null or _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.stop") == null:
@@ -459,8 +459,6 @@ func _system_actions_for(full_name: String) -> Array:
 			return ["get_settings", "set_setting", "list_autoloads", "add_autoload", "remove_autoload", "list_input_actions", "get_input_action", "list_export_presets"]
 		"system_project_lifecycle":
 			return ["start", "stop"]
-		"system_plugin_update":
-			return ["get_current", "get_status", "set_source", "discover_refs", "start_sync"]
 		"system_scene_inspect":
 			return ["validate", "analyze", "full"]
 		"system_plugin_maintenance":

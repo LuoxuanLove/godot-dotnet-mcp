@@ -10,6 +10,8 @@ const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/t
 
 const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_help": true,
+	"system_plugin_reload": true,
+	"system_plugin_update": true,
 	"system_scene_analyze": true,
 	"system_scene_validate": true,
 	"system_tool_catalog": true,
@@ -183,6 +185,33 @@ func is_tool_exposed(tool_name: String) -> bool:
 
 func is_public_removed_tool(tool_name: String) -> bool:
 	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
+
+
+func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
+	if tool_name == "system_plugin_reload":
+		var action := str(arguments.get("action", "")).strip_edges()
+		return _removed_public_tool_result(
+			tool_name,
+			"Call system_plugin_maintenance instead.",
+			[{
+				"name": "system_plugin_maintenance",
+				"arguments": {"action": "reload"} if action == "full_reload_plugin" else {"action": "status"}
+			}],
+			["tools/call", "resources/read", "resources/list"],
+			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
+		)
+	if tool_name == "system_plugin_update":
+		return _removed_public_tool_result(
+			tool_name,
+			"Call system_plugin_maintenance instead.",
+			[{
+				"name": "system_plugin_maintenance",
+				"arguments": _plugin_update_replacement_arguments(str(arguments.get("action", "")).strip_edges(), arguments)
+			}],
+			["tools/call", "resources/read", "resources/list"],
+			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
+		)
+	return {}
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
@@ -1057,6 +1086,44 @@ func _is_callable_removed_public_tool(tool_name: String) -> bool:
 			return false
 		return _as_bool(tool_def.get("enabled", true))
 	return false
+
+
+func _removed_public_tool_result(tool_name: String, guidance: String, replacement_tools: Array, replacement_methods: Array, replacement_resources: Array) -> Dictionary:
+	return {
+		"success": false,
+		"error": "%s has been removed from the public tool surface. %s" % [tool_name, guidance],
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": tool_name,
+			"replacement_tools": replacement_tools,
+			"replacement_methods": replacement_methods,
+			"replacement_resources": replacement_resources
+		}
+	}
+
+
+func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
+	match action:
+		"get_current":
+			return {"action": "status"}
+		"get_status":
+			return {"action": "update_status"}
+		"discover_refs":
+			return {
+				"action": "refresh_update_refs",
+				"force_refresh": args.get("force_refresh", true)
+			}
+		"set_source":
+			return {
+				"action": "set_update_source",
+				"source": args.get("source", args.get("update_source", "")),
+				"custom_branch": args.get("custom_branch", args.get("branch", "")),
+				"release_tag": args.get("release_tag", args.get("tag", ""))
+			}
+		"start_sync":
+			return {"action": "start_update"}
+		_:
+			return {"action": "status"}
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:

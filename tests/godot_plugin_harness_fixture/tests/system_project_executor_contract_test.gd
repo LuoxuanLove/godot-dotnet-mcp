@@ -399,13 +399,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 11:
-		return _failure("System project implementation should expose 11 tool definitions including plugin_reload, plugin_update, plugin_maintenance, project_files, resource_reference_audit, userdata_maintenance and project_lifecycle.")
+		return _failure("System project implementation should expose 11 tool definitions including plugin removal guards, plugin_maintenance, project_files, resource_reference_audit, userdata_maintenance and project_lifecycle.")
 	if not _has_tool(tool_defs, "plugin_reload"):
-		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
+		return _failure("System project implementation should keep plugin_reload as a direct-call removal guard.")
 	if not _has_tool(tool_defs, "plugin_update"):
-		return _failure("System project implementation should expose plugin_update for high-level plugin update flows.")
+		return _failure("System project implementation should keep plugin_update as a direct-call removal guard.")
 	if not _has_tool(tool_defs, "plugin_maintenance"):
-		return _failure("System project implementation should expose plugin_maintenance as the grouped plugin maintenance entry.")
+		return _failure("System project implementation should expose plugin_maintenance as the canonical plugin maintenance entry.")
 	if not _has_tool(tool_defs, "userdata_maintenance"):
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 	if not _has_tool(tool_defs, "project_files"):

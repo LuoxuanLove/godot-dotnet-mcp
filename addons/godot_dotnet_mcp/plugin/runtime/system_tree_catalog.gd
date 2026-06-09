@@ -16,12 +16,7 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_scene_snapshot", "get_errors_context", "get_recent_filtered"]},
 		{"tool": "debug_dotnet",         "actions": ["build"]}
 	],
-	"system_plugin_reload": [],
-	"system_plugin_update": [],
-	"system_plugin_maintenance": [
-		{"tool": "system_plugin_reload", "actions": ["get_freshness", "full_reload_plugin"]},
-		{"tool": "system_plugin_update", "actions": ["get_current", "get_status", "set_source", "start_sync"]}
-	],
+	"system_plugin_maintenance": [],
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},

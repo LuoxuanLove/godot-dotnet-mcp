@@ -4,8 +4,6 @@ extends RefCounted
 
 const ImplProjectScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 
-const CURRENT_PLUGIN_VERSION := "1.4.0"
-
 
 class FakeBridge extends RefCounted:
 	func success(data = {}, message: String = "") -> Dictionary:
@@ -16,79 +14,21 @@ class FakeBridge extends RefCounted:
 
 
 class FakePlugin extends Node:
-	var selected_sources: Array[Dictionary] = []
-	var discover_force_refresh_values: Array[bool] = []
 	var sync_requested := false
-
-	func get_plugin_update_current_from_tools() -> Dictionary:
-		return {
-			"success": true,
-			"data": {
-				"source_version": CURRENT_PLUGIN_VERSION,
-				"server_version": CURRENT_PLUGIN_VERSION,
-				"protocol_version": "2025-06-18",
-				"tool_schema_version": "1",
-				"source_fingerprint": "abcdef0123456789abcdef",
-				"source_fingerprint_short": "abcdef0123456789",
-				"source_git_commit": "commit-sha",
-				"source_ref_kind": "branch",
-				"source_ref": "dev",
-				"lifecycle_reload": {"state": "idle"}
-			},
-			"message": "current"
-		}
-
-	func get_plugin_update_status_from_tools() -> Dictionary:
-		return {
-			"success": true,
-			"data": {
-				"status": "ready",
-				"source": "custom_branch",
-				"target": {"kind": "branch", "ref": "dev", "commit": "target-sha"},
-				"current": {"source_version": CURRENT_PLUGIN_VERSION, "source_git_commit": "commit-sha"},
-				"refs": {"state": "success"},
-				"sync": {"state": "idle"},
-				"lifecycle_reload": {"state": "idle"}
-			},
-			"message": "status"
-		}
+	var selected_sources: Array[Dictionary] = []
+	var discovery_requests: Array[bool] = []
 
 	func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
 		selected_sources.append({"source": source, "custom_branch": custom_branch, "release_tag": release_tag})
-		return {"success": true, "accepted": false, "status": "selected", "data": {"source": source, "custom_branch": custom_branch, "release_tag": release_tag}}
+		return {"success": true, "data": {"source": source, "custom_branch": custom_branch, "release_tag": release_tag}}
 
 	func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dictionary:
-		discover_force_refresh_values.append(force_refresh)
-		return {"success": true, "accepted": true, "loading": true, "status": "accepted", "data": {"refs": {"state": "loading"}}}
+		discovery_requests.append(force_refresh)
+		return {"success": true, "accepted": true}
 
 	func start_plugin_update_sync_from_tools() -> Dictionary:
 		sync_requested = true
-		var maintenance := {
-			"active": true,
-			"kind": "plugin_update_sync",
-			"state": "loading",
-			"transport_state": "updating",
-			"disconnect_expected": true,
-			"reconnect_required": true,
-			"refetch_tools_required": true,
-			"retry_after_ms": 500,
-			"safe_to_retry": true
-		}
-		return {
-			"success": true,
-			"accepted": true,
-			"loading": true,
-			"status": "accepted",
-			"maintenance": maintenance,
-			"maintenance_window": maintenance,
-			"data": {
-				"sync": {"state": "loading"},
-				"lifecycle_reload": {"state": "idle"},
-				"maintenance": maintenance,
-				"maintenance_window": maintenance,
-				"reconnect_hint": "Reconnect and fetch tools again."
-			}
-		}
+		return {"success": true, "accepted": true, "loading": true}
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -101,55 +41,84 @@ func run_case(tree: SceneTree) -> Dictionary:
 	executor.bridge = FakeBridge.new()
 	executor.configure_runtime({"server": server})
 
-	var current_result: Dictionary = executor.execute("plugin_update", {"action": "get_current"})
-	if not bool(current_result.get("success", false)):
-		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current should succeed.")
-	var current: Dictionary = current_result.get("data", {})
-	for required_field in ["source_version", "server_version", "protocol_version", "tool_schema_version", "source_fingerprint", "source_fingerprint_short", "source_git_commit", "lifecycle_reload"]:
-		if not current.has(required_field):
-			return await _cleanup_failure(tree, plugin, "system_plugin_update get_current should expose %s." % required_field)
-	if str(current.get("source_version", "")) != CURRENT_PLUGIN_VERSION or str(current.get("server_version", "")) != CURRENT_PLUGIN_VERSION:
-		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current should expose current plugin and server versions.")
+	var removed_start_result: Dictionary = executor.execute("plugin_update", {"action": "start_sync"})
+	if bool(removed_start_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync direct calls should return removal guidance.")
+	if plugin.sync_requested:
+		return await _cleanup_failure(tree, plugin, "system_plugin_update direct calls should not execute the update sync bridge.")
+	if not _is_removed_plugin_maintenance_tool(removed_start_result, "system_plugin_update", "start_update"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync guidance should point to system_plugin_maintenance(action=start_update).")
 
-	var status_result: Dictionary = executor.execute("plugin_update", {"action": "get_status"})
-	if not bool(status_result.get("success", false)):
-		return await _cleanup_failure(tree, plugin, "system_plugin_update get_status should succeed.")
-	var status: Dictionary = status_result.get("data", {})
-	for required_status_field in ["source", "target", "current", "refs", "sync", "lifecycle_reload"]:
-		if not status.has(required_status_field):
-			return await _cleanup_failure(tree, plugin, "system_plugin_update get_status should expose %s." % required_status_field)
-	if str((status.get("current", {}) as Dictionary).get("source_version", "")) != CURRENT_PLUGIN_VERSION:
-		return await _cleanup_failure(tree, plugin, "system_plugin_update get_status should expose the current plugin version.")
+	var removed_current_result: Dictionary = executor.execute("plugin_update", {"action": "get_current"})
+	if bool(removed_current_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current direct calls should return removal guidance.")
+	if not _is_removed_plugin_maintenance_tool(removed_current_result, "system_plugin_update", "status"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current guidance should point to system_plugin_maintenance(action=status).")
 
-	var set_source_result: Dictionary = executor.execute("plugin_update", {"action": "set_source", "source": "custom_branch", "custom_branch": "feature/update-tool", "release_tag": "v1.0.0"})
-	if not bool(set_source_result.get("success", false)) or plugin.selected_sources.size() != 1:
-		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source should route selected source to the plugin bridge.")
-	if str(plugin.selected_sources[0].get("source", "")) != "custom_branch" or str(plugin.selected_sources[0].get("custom_branch", "")) != "feature/update-tool":
-		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source should preserve the selected custom branch.")
-	if str(plugin.selected_sources[0].get("release_tag", "")) != "v1.0.0":
-		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source should forward the selected release tag.")
+	var removed_set_source_result: Dictionary = executor.execute("plugin_update", {
+		"action": "set_source",
+		"source": "custom_branch",
+		"custom_branch": "feature/update-tool",
+		"release_tag": "v1.0.0"
+	})
+	if bool(removed_set_source_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source direct calls should return removal guidance.")
+	if not plugin.selected_sources.is_empty():
+		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source direct calls should not mutate update source.")
+	if not _is_removed_plugin_maintenance_tool(removed_set_source_result, "system_plugin_update", "set_update_source"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source guidance should point to system_plugin_maintenance(action=set_update_source).")
+	var replacement_args := _replacement_arguments(removed_set_source_result)
+	if str(replacement_args.get("custom_branch", "")) != "feature/update-tool" or str(replacement_args.get("release_tag", "")) != "v1.0.0":
+		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source guidance should preserve branch and release tag arguments.")
 
-	var discover_result: Dictionary = executor.execute("plugin_update", {"action": "discover_refs", "force_refresh": false})
-	if not bool(discover_result.get("success", false)) or not bool(discover_result.get("accepted", false)):
-		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs should return an accepted async response.")
-	if plugin.discover_force_refresh_values != [false]:
-		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs should forward force_refresh.")
-
-	var sync_result: Dictionary = executor.execute("plugin_update", {"action": "start_sync"})
-	if not bool(sync_result.get("success", false)) or not bool(sync_result.get("accepted", false)):
-		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should return an accepted async response.")
-	if not plugin.sync_requested:
-		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should route to the plugin sync bridge.")
-	var sync_maintenance: Dictionary = sync_result.get("maintenance_window", {})
-	if not bool(sync_maintenance.get("active", false)) or str(sync_maintenance.get("kind", "")) != "plugin_update_sync":
-		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should preserve the active update sync maintenance window.")
-	var sync_data: Dictionary = sync_result.get("data", {})
-	if not (sync_data.get("maintenance_window", {}) is Dictionary) or str(sync_data.get("reconnect_hint", "")).is_empty():
-		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync should expose nested reconnect guidance.")
+	var removed_discover_result: Dictionary = executor.execute("plugin_update", {"action": "discover_refs", "force_refresh": false})
+	if bool(removed_discover_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs direct calls should return removal guidance.")
+	if not plugin.discovery_requests.is_empty():
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs direct calls should not execute the discovery bridge.")
+	if not _is_removed_plugin_maintenance_tool(removed_discover_result, "system_plugin_update", "refresh_update_refs"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs guidance should point to system_plugin_maintenance(action=refresh_update_refs).")
+	var discover_replacement_args := _replacement_arguments(removed_discover_result)
+	if bool(discover_replacement_args.get("force_refresh", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs guidance should preserve force_refresh=false.")
 
 	plugin.queue_free()
 	await tree.process_frame
-	return {"name": "system_plugin_update_contracts", "success": true, "error": ""}
+	return {
+		"name": "system_plugin_update_contracts",
+		"success": true,
+		"error": "",
+		"details": {"removed_tool": "system_plugin_update"}
+	}
+
+
+func _replacement_arguments(result: Dictionary) -> Dictionary:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return {}
+	var replacement_tools = (data as Dictionary).get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return {}
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return {}
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	if replacement_arguments is Dictionary:
+		return replacement_arguments
+	return {}
+
+
+func _is_removed_plugin_maintenance_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	var replacement_arguments := _replacement_arguments(result)
+	return str(replacement_arguments.get("action", "")) == replacement_action and str(((data_dict.get("replacement_tools", []) as Array)[0] as Dictionary).get("name", "")) == "system_plugin_maintenance"
 
 
 func _cleanup_failure(tree: SceneTree, plugin: Node, message: String) -> Dictionary:

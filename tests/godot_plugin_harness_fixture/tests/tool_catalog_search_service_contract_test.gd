@@ -35,6 +35,18 @@ class FakeToolLoader:
 				}
 			}
 		}, {
+			"name": "system_plugin_maintenance",
+			"description": "Canonical plugin maintenance workflow for status, plugin reload, plugin update status, update source selection, and update start",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "refresh_update_refs", "start_update"], "description": "Plugin maintenance action"}
+				}
+			}
+		}, {
 			"name": "system_editor_evidence",
 			"description": "Capture self-describing editor visual evidence for editor, control, popup, or active_dialog surfaces",
 			"category": "system",
@@ -393,6 +405,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_catalog_visible_matches: Array = (removed_catalog_visible_search.get("data", {}) as Dictionary).get("matches", [])
 	if not removed_catalog_visible_matches.is_empty():
 		return _failure("Visible catalog search should filter removed public tool system_tool_catalog.")
+	for removed_plugin_query in ["plugin reload", "plugin update"]:
+		var removed_plugin_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+			"query": removed_plugin_query,
+			"visibility": "visible",
+			"limit": 10
+		})
+		var removed_plugin_visible_matches: Array = (removed_plugin_visible_search.get("data", {}) as Dictionary).get("matches", [])
+		var removed_plugin_visible_names := _match_names(removed_plugin_visible_matches)
+		for removed_plugin_tool_name in ["system_plugin_reload", "system_plugin_update"]:
+			if removed_plugin_visible_names.has(removed_plugin_tool_name):
+				return _failure("Visible catalog search should filter removed public plugin tool %s." % removed_plugin_tool_name)
+		if not removed_plugin_visible_names.has("system_plugin_maintenance"):
+			return _failure("Visible catalog search should route removed plugin query '%s' to system_plugin_maintenance." % removed_plugin_query)
 	for removed_scene_query in ["scene validation", "scene analysis"]:
 		var removed_scene_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
 			"query": removed_scene_query,

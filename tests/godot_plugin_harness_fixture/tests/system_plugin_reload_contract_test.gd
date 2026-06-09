@@ -18,30 +18,7 @@ class FakePlugin extends Node:
 
 	func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 		lifecycle_reload_called = true
-		var maintenance := {
-			"active": true,
-			"kind": "plugin_lifecycle_reload",
-			"state": "scheduled",
-			"transport_state": "disconnecting",
-			"disconnect_expected": true,
-			"reconnect_required": true,
-			"refetch_tools_required": true,
-			"retry_after_ms": 500,
-			"safe_to_retry": false
-		}
-		return {
-			"success": true,
-			"message": "Plugin lifecycle reload scheduled",
-			"deferred": true,
-			"maintenance": maintenance,
-			"maintenance_window": maintenance,
-			"data": {
-				"request_id": "reload-1",
-				"reconnect_hint": "Reconnect and fetch tools again after reload.",
-				"maintenance": maintenance,
-				"maintenance_window": maintenance
-			}
-		}
+		return {"success": true, "message": "Plugin lifecycle reload scheduled"}
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -54,41 +31,43 @@ func run_case(tree: SceneTree) -> Dictionary:
 	executor.bridge = FakeBridge.new()
 	executor.configure_runtime({"server": server})
 
-	var freshness_result: Dictionary = executor.execute("plugin_reload", {"action": "get_freshness"})
-	if not bool(freshness_result.get("success", false)):
-		return _failure("system_plugin_reload get_freshness should succeed.")
-	var freshness: Dictionary = freshness_result.get("data", {})
-	if not freshness.has("running_instance") or not freshness.has("comparison"):
-		return _failure("system_plugin_reload get_freshness should expose freshness metadata.")
-
-	var reload_result: Dictionary = executor.execute("plugin_reload", {"action": "full_reload_plugin"})
+	var removed_result: Dictionary = executor.execute("plugin_reload", {"action": "full_reload_plugin"})
 	var lifecycle_reload_called := plugin.lifecycle_reload_called
 	plugin.queue_free()
 	await tree.process_frame
 
-	if not bool(reload_result.get("success", false)):
-		return _failure("system_plugin_reload full_reload_plugin should schedule lifecycle reload.")
-	if not lifecycle_reload_called:
-		return _failure("system_plugin_reload should route to the plugin lifecycle reload bridge.")
-	if not bool(reload_result.get("deferred", false)):
-		return _failure("system_plugin_reload should return a deferred accepted response.")
-	var maintenance: Dictionary = reload_result.get("maintenance_window", {})
-	if not bool(maintenance.get("disconnect_expected", false)) or not bool(maintenance.get("refetch_tools_required", false)):
-		return _failure("system_plugin_reload should preserve the lifecycle reload maintenance window.")
-	var data: Dictionary = reload_result.get("data", {})
-	if str(data.get("request_id", "")).is_empty() or str(data.get("reconnect_hint", "")).is_empty():
-		return _failure("system_plugin_reload should return request_id and reconnect guidance.")
-	if str(reload_result.get("target_plugin", "")) != "godot_dotnet_mcp" or not bool(reload_result.get("self_plugin", false)):
-		return _failure("system_plugin_reload should identify the reload target as this MCP plugin.")
-	if str(data.get("target_plugin", "")) != "godot_dotnet_mcp" or not bool(data.get("self_plugin", false)):
-		return _failure("system_plugin_reload data should preserve the self-plugin reload target metadata.")
+	if bool(removed_result.get("success", true)):
+		return _failure("system_plugin_reload direct calls should return removal guidance.")
+	if lifecycle_reload_called:
+		return _failure("system_plugin_reload direct calls should not execute the lifecycle reload bridge.")
+	if not _is_removed_plugin_maintenance_tool(removed_result, "system_plugin_reload", "reload"):
+		return _failure("system_plugin_reload removal guidance should point to system_plugin_maintenance(action=reload).")
 
 	return {
 		"name": "system_plugin_reload_contracts",
 		"success": true,
 		"error": "",
-		"details": {"reload_message": str(reload_result.get("message", ""))}
+		"details": {"removed_tool": "system_plugin_reload"}
 	}
+
+
+func _is_removed_plugin_maintenance_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
 
 
 func _failure(message: String) -> Dictionary:

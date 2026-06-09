@@ -128,14 +128,15 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "plugin_maintenance",
-			"description": "PLUGIN MAINTENANCE: High-level maintenance workflow entry that groups common plugin reload and update paths without replacing system_plugin_reload or system_plugin_update. Actions: status summarizes freshness and update status; reload schedules a plugin lifecycle reload; update_status reads update progress; set_update_source selects the update source; start_update starts async archive sync and reload scheduling.",
+			"description": "PLUGIN MAINTENANCE: Canonical high-level plugin maintenance workflow entry for plugin reload and plugin update flows. Actions: status summarizes freshness and update status; reload schedules a plugin lifecycle reload; update_status reads update progress; set_update_source selects the update source; refresh_update_refs starts async reference discovery; start_update starts async archive sync and reload scheduling.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "start_update"], "description": "Plugin maintenance action"},
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "refresh_update_refs", "start_update"], "description": "Plugin maintenance action"},
 					"source": {"type": "string", "enum": ["latest_stable", "latest_release", "custom_branch", "latest_dev", "branch", "release_tag"], "description": "Update source for set_update_source"},
 					"custom_branch": {"type": "string", "description": "Branch name used when source is custom_branch"},
-					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"}
+					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"},
+					"force_refresh": {"type": "boolean", "description": "Force ref discovery refresh for refresh_update_refs (default: true)"}
 				},
 				"required": ["action"]
 			}
@@ -708,6 +709,18 @@ func _build_resource_reference_summary(risk_level: String, error_count: int, war
 
 
 func _execute_plugin_reload(args: Dictionary) -> Dictionary:
+	return _removed_plugin_maintenance_tool(
+		"system_plugin_reload",
+		{"action": "reload"} if str(args.get("action", "")).strip_edges() == "full_reload_plugin" else {"action": "status"}
+	)
+
+
+func _execute_plugin_update(args: Dictionary) -> Dictionary:
+	var action := str(args.get("action", "")).strip_edges()
+	return _removed_plugin_maintenance_tool("system_plugin_update", _plugin_update_replacement_arguments(action, args))
+
+
+func _execute_plugin_reload_internal(args: Dictionary) -> Dictionary:
 	var action := str(args.get("action", "")).strip_edges()
 	match action:
 		"get_freshness":
@@ -724,7 +737,7 @@ func _execute_plugin_reload(args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown plugin_reload action: %s" % action)
 
 
-func _execute_plugin_update(args: Dictionary) -> Dictionary:
+func _execute_plugin_update_internal(args: Dictionary) -> Dictionary:
 	var action := str(args.get("action", "")).strip_edges()
 	var plugin = _get_plugin_from_runtime_context()
 	match action:
@@ -762,26 +775,31 @@ func _execute_plugin_maintenance(args: Dictionary) -> Dictionary:
 		"status":
 			return _execute_plugin_maintenance_status()
 		"reload":
-			return _execute_plugin_reload({"action": "full_reload_plugin"})
+			return _execute_plugin_reload_internal({"action": "full_reload_plugin"})
 		"update_status":
-			return _execute_plugin_update({"action": "get_status"})
+			return _execute_plugin_update_internal({"action": "get_status"})
 		"set_update_source":
-			return _execute_plugin_update({
+			return _execute_plugin_update_internal({
 				"action": "set_source",
 				"source": args.get("source", ""),
 				"custom_branch": args.get("custom_branch", args.get("branch", "")),
 				"release_tag": args.get("release_tag", args.get("tag", ""))
 			})
+		"refresh_update_refs":
+			return _execute_plugin_update_internal({
+				"action": "discover_refs",
+				"force_refresh": args.get("force_refresh", true)
+			})
 		"start_update":
-			return _execute_plugin_update({"action": "start_sync"})
+			return _execute_plugin_update_internal({"action": "start_sync"})
 		_:
 			return bridge.error("Unknown plugin_maintenance action: %s" % action)
 
 
 func _execute_plugin_maintenance_status() -> Dictionary:
 	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
-	var current_result: Dictionary = _execute_plugin_update({"action": "get_current"})
-	var status_result: Dictionary = _execute_plugin_update({"action": "get_status"})
+	var current_result: Dictionary = _execute_plugin_update_internal({"action": "get_current"})
+	var status_result: Dictionary = _execute_plugin_update_internal({"action": "get_status"})
 	return bridge.success({
 		"freshness": freshness,
 		"current": _plugin_maintenance_payload(current_result),
@@ -810,6 +828,53 @@ func _with_self_plugin_reload_target(result: Dictionary) -> Dictionary:
 			data_dict[key] = target[key]
 		enriched["data"] = data_dict
 	return enriched
+
+
+func _removed_plugin_maintenance_tool(removed_tool: String, replacement_arguments: Dictionary) -> Dictionary:
+	var replacement_args := replacement_arguments.duplicate(true)
+	var message := "%s has been removed from the public tool surface. Call system_plugin_maintenance instead." % removed_tool
+	return {
+		"success": false,
+		"error": message,
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": removed_tool,
+			"replacement_tools": [{
+				"name": "system_plugin_maintenance",
+				"arguments": replacement_args
+			}],
+			"replacement_methods": ["tools/call", "resources/read", "resources/list"],
+			"replacement_resources": [
+				"godot-dotnet-mcp://guides/capabilities",
+				"godot-dotnet-mcp://tools/catalog/visible"
+			]
+		}
+	}
+
+
+func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
+	match action:
+		"get_current":
+			return {"action": "status"}
+		"get_status":
+			return {"action": "update_status"}
+		"discover_refs":
+			return {
+				"action": "refresh_update_refs",
+				"force_refresh": args.get("force_refresh", true)
+			}
+		"set_source":
+			var replacement := {
+				"action": "set_update_source",
+				"source": args.get("source", args.get("update_source", "")),
+				"custom_branch": args.get("custom_branch", args.get("branch", "")),
+				"release_tag": args.get("release_tag", args.get("tag", ""))
+			}
+			return replacement
+		"start_sync":
+			return {"action": "start_update"}
+		_:
+			return {"action": "status"}
 
 
 func _plugin_maintenance_payload(result: Dictionary) -> Dictionary:
@@ -2142,7 +2207,7 @@ func _build_project_lifecycle_state_probe_comparison(editor_context: Dictionary,
 func _build_project_lifecycle_editor_interface_recovery_suggestions() -> Array[String]:
 	return [
 		"Retry system_project_state or system_editor_state to confirm the current MCP connection is attached to the intended Godot editor session.",
-		"Reload the Godot .NET MCP plugin with system_plugin_reload(action=full_reload_plugin), reconnect the MCP client, then retry system_project_lifecycle.",
+		"Reload the Godot .NET MCP plugin with system_plugin_maintenance(action=reload), reconnect the MCP client, then retry system_project_lifecycle.",
 		"If multiple Godot editors are open, close stale sessions or reconnect to the editor that owns this project.",
 		"If editor launching remains unavailable, use the cli_fallback command from this response to run the scene outside the editor."
 	]
