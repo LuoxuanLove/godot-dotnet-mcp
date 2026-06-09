@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
     $repositoryRoot = Split-Path -Parent $PSScriptRoot
-    $ManifestPath = Join-Path $repositoryRoot "addons\godot_dotnet_mcp\companion\contracts\v2-broker-manifest.json"
+    $ManifestPath = Join-Path $repositoryRoot "companion\contracts\v2-broker-manifest.json"
 }
 
 function Require-String {

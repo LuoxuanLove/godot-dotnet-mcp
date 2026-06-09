@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($SchemaPath)) {
     $repositoryRoot = Split-Path -Parent $PSScriptRoot
-    $SchemaPath = Join-Path $repositoryRoot "addons\godot_dotnet_mcp\companion\contracts\v2-bridge-status.schema.json"
+    $SchemaPath = Join-Path $repositoryRoot "companion\contracts\v2-bridge-status.schema.json"
 }
 
 $schema = Get-Content -LiteralPath (Resolve-Path -LiteralPath $SchemaPath) -Encoding UTF8 -Raw | ConvertFrom-Json

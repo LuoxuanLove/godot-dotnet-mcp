@@ -2,7 +2,7 @@
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $repositoryRoot "scripts\validate_v2_broker_manifest.ps1"
-$manifestPath = Join-Path $repositoryRoot "addons\godot_dotnet_mcp\companion\contracts\v2-broker-manifest.json"
+$manifestPath = Join-Path $repositoryRoot "companion\contracts\v2-broker-manifest.json"
 
 function ConvertTo-JsonFile {
     param($Object, [string]$Path)

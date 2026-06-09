@@ -2,7 +2,7 @@
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $repositoryRoot "scripts\validate_v2_bridge_contract.ps1"
-$schemaPath = Join-Path $repositoryRoot "addons\godot_dotnet_mcp\companion\contracts\v2-bridge-status.schema.json"
+$schemaPath = Join-Path $repositoryRoot "companion\contracts\v2-bridge-status.schema.json"
 
 function ConvertTo-JsonFile {
     param(
