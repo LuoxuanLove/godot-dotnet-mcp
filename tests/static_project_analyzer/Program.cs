@@ -4,6 +4,10 @@ using GodotDotnetMcp.Companion.StaticAnalysis;
 var tests = new (string Name, Action Run)[]
 {
     ("reports_static_inventory_for_godot_dotnet_project", ReportsStaticInventoryForGodotDotnetProject),
+    ("reports_static_dotnet_workspace_graph", ReportsStaticDotnetWorkspaceGraph),
+    ("keeps_project_references_inside_project_boundary", KeepsProjectReferencesInsideProjectBoundary),
+    ("reports_malformed_dotnet_projects_as_diagnostics", ReportsMalformedDotnetProjectsAsDiagnostics),
+    ("skips_incomplete_reference_items_as_diagnostics", SkipsIncompleteReferenceItemsAsDiagnostics),
     ("skips_dot_directories_while_scanning_project_files", SkipsDotDirectoriesWhileScanningProjectFiles),
     ("allows_project_roots_under_parent_dot_directories", AllowsProjectRootsUnderParentDotDirectories),
     ("keeps_live_editor_capabilities_unavailable_headlessly", KeepsLiveEditorCapabilitiesUnavailableHeadlessly),
@@ -34,9 +38,122 @@ static void ReportsStaticInventoryForGodotDotnetProject()
     AssertTrue(inventory.HasPluginDirectory);
     AssertEqual(1, inventory.CSharpProjectFiles.Count);
     AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectFiles[0]);
+    AssertTrue(inventory.DotnetWorkspace.HasProjects);
+    AssertFalse(inventory.DotnetWorkspace.HasDiagnostics);
     AssertTrue(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.ResourceGraphAnalysis));
+}
+
+static void ReportsStaticDotnetWorkspaceGraph()
+{
+    var root = CreateTempProjectRoot();
+    var libraryDir = Path.Combine(root, "src", "Library");
+    Directory.CreateDirectory(libraryDir);
+    var libraryProject = Path.Combine(libraryDir, "Library.csproj");
+    File.WriteAllText(libraryProject, """
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+          </PropertyGroup>
+          <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+            <PackageReference Include="Godot.NET.Sdk" Version="4.6.0" />
+            <PackageReference Include="Example.Package">
+              <Version>1.2.3</Version>
+            </PackageReference>
+            <Compile Include="Scripts/**/*.cs" />
+            <Compile Remove="Generated/**/*.cs" />
+          </ItemGroup>
+        </Project>
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var project = inventory.DotnetWorkspace.Projects.Single();
+
+    AssertEqual(Path.GetFullPath(libraryProject), project.ProjectFilePath);
+    AssertEqual("Microsoft.NET.Sdk", project.Sdk);
+    AssertEqual(2, project.TargetFrameworks.Count);
+    AssertEqual("net8.0", project.TargetFrameworks[0]);
+    AssertEqual("net9.0", project.TargetFrameworks[1]);
+    AssertTrue(project.IsGodotSdkStyleProject);
+    AssertEqual(2, project.PackageReferences.Count);
+    AssertEqual("Godot.NET.Sdk", project.PackageReferences[0].Include);
+    AssertEqual("4.6.0", project.PackageReferences[0].Version);
+    AssertContains("Configuration", project.PackageReferences[0].Condition ?? string.Empty);
+    AssertEqual("Example.Package", project.PackageReferences[1].Include);
+    AssertEqual("1.2.3", project.PackageReferences[1].Version);
+    AssertEqual(2, project.CompileItems.Count);
+    AssertEqual("Scripts/**/*.cs", project.CompileItems[0].Include);
+    AssertEqual("Generated/**/*.cs", project.CompileItems[1].Remove);
+}
+
+static void KeepsProjectReferencesInsideProjectBoundary()
+{
+    var root = CreateTempProjectRoot();
+    var appProject = Path.Combine(root, "App.csproj");
+    var libraryProject = Path.Combine(root, "Library", "Library.csproj");
+    Directory.CreateDirectory(Path.GetDirectoryName(libraryProject)!);
+    File.WriteAllText(libraryProject, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+    var outsideProject = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csproj");
+    File.WriteAllText(outsideProject, "<Project />");
+    File.WriteAllText(appProject, $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <ItemGroup>
+            <ProjectReference Include="Library/Library.csproj" />
+            <ProjectReference Include="{outsideProject}" />
+          </ItemGroup>
+        </Project>
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var app = inventory.DotnetWorkspace.Projects.Single(project => project.ProjectFilePath == Path.GetFullPath(appProject));
+
+    AssertEqual(2, app.ProjectReferences.Count);
+    AssertTrue(app.ProjectReferences[0].IsInsideProjectRoot);
+    AssertTrue(app.ProjectReferences[0].Exists);
+    AssertFalse(app.ProjectReferences[1].IsInsideProjectRoot);
+    AssertTrue(app.ProjectReferences[1].Exists);
+}
+
+static void ReportsMalformedDotnetProjectsAsDiagnostics()
+{
+    var root = CreateTempProjectRoot();
+    var goodProject = Path.Combine(root, "Good.csproj");
+    var malformedProject = Path.Combine(root, "Broken.csproj");
+    File.WriteAllText(goodProject, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+    File.WriteAllText(malformedProject, "<Project>");
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertEqual(1, inventory.DotnetWorkspace.Projects.Count);
+    AssertEqual(Path.GetFullPath(goodProject), inventory.DotnetWorkspace.Projects[0].ProjectFilePath);
+    AssertEqual(1, inventory.DotnetWorkspace.Diagnostics.Count);
+    AssertEqual(Path.GetFullPath(malformedProject), inventory.DotnetWorkspace.Diagnostics[0].ProjectFilePath);
+    AssertEqual(DotnetWorkspaceDiagnosticSeverity.Error, inventory.DotnetWorkspace.Diagnostics[0].Severity);
+    AssertEqual("dotnet_workspace_project_unreadable", inventory.DotnetWorkspace.Diagnostics[0].Code);
+}
+
+static void SkipsIncompleteReferenceItemsAsDiagnostics()
+{
+    var root = CreateTempProjectRoot();
+    var project = Path.Combine(root, "Game.csproj");
+    File.WriteAllText(project, """
+        <Project Sdk="Microsoft.NET.Sdk">
+          <ItemGroup>
+            <PackageReference Version="1.0.0" />
+            <ProjectReference Include=" " />
+          </ItemGroup>
+        </Project>
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var graph = inventory.DotnetWorkspace.Projects.Single();
+
+    AssertEqual(0, graph.PackageReferences.Count);
+    AssertEqual(0, graph.ProjectReferences.Count);
+    AssertEqual(2, inventory.DotnetWorkspace.Diagnostics.Count);
+    AssertTrue(inventory.DotnetWorkspace.Diagnostics.Any(diagnostic => diagnostic.Code == "dotnet_workspace_package_reference_missing_include"));
+    AssertTrue(inventory.DotnetWorkspace.Diagnostics.Any(diagnostic => diagnostic.Code == "dotnet_workspace_project_reference_missing_include"));
 }
 
 static void SkipsDotDirectoriesWhileScanningProjectFiles()
@@ -52,6 +169,7 @@ static void SkipsDotDirectoriesWhileScanningProjectFiles()
 
     AssertEqual(1, inventory.CSharpProjectFiles.Count);
     AssertEqual(Path.GetFullPath(projectFile), inventory.CSharpProjectFiles[0]);
+    AssertEqual(1, inventory.DotnetWorkspace.Projects.Count);
 }
 
 static void AllowsProjectRootsUnderParentDotDirectories()
@@ -102,6 +220,7 @@ static void ReportsMissingDotnetWorkspaceWithoutClaimingLiveState()
 
     AssertTrue(inventory.IsGodotProject);
     AssertFalse(inventory.HasCSharpProject);
+    AssertFalse(inventory.DotnetWorkspace.HasProjects);
     AssertTrue(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertFalse(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
     AssertContains(".csproj", inventory.GetCapability(CompanionCapability.DotnetWorkspaceAnalysis).Reason);

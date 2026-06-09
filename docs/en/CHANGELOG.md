@@ -12,6 +12,7 @@ Target version: 2.0.0.
 
 - Added the first .NET Companion contract library and pure contract runner for v2.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
 - Added a Companion static/headless project inventory analyzer that reports Godot project status, discovered `.csproj` files, plugin directory presence, and editor-live unavailability reasons without starting Godot.
+- Added an unevaluated static .NET workspace graph that reports SDK, target frameworks, package references, project references, compile includes/removes, and Godot SDK/package hints without restoring or building projects.
 
 ### Documentation
 
