@@ -213,6 +213,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router did not surface exposed tool definitions.")
 	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
 		return _failure("Tool RPC router did not expose the unified tool tree.")
+	if _contains_tool_name_recursive(tools_list.get("toolTree", []), "system_help") or _contains_tool_name_recursive(tools_list.get("toolGroups", []), "system_help"):
+		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
 	for tool_entry in tools:
@@ -413,3 +415,21 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is Dictionary:
+		var value_dict := value as Dictionary
+		for key in ["name", "full_name", "toolName", "tool_name"]:
+			if str(value_dict.get(key, "")) == tool_name:
+				return true
+		for nested_value in value_dict.values():
+			if _contains_tool_name_recursive(nested_value, tool_name):
+				return true
+	elif value is Array:
+		for nested_item in value as Array:
+			if _contains_tool_name_recursive(nested_item, tool_name):
+				return true
+	elif str(value) == tool_name:
+		return true
+	return false

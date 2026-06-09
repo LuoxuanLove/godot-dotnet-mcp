@@ -73,6 +73,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response should not expose removed system_help.")
 	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
 		return _failure("Tools list response did not expose the unified tool tree.")
+	if _contains_tool_name_recursive(tools_list.get("toolTree", []), "system_help") or _contains_tool_name_recursive(tools_list.get("toolGroups", []), "system_help"):
+		return _failure("Tools list tree and group metadata should not expose removed system_help.")
 	if not _first_tool_has_group_path(tools_list.get("tools", [])):
 		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
 
@@ -94,6 +96,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
 	if _has_tool(full_reload_tools_list.get("tools", []), "system_help"):
 		return _failure("HTTP server full reload reinitialize should not expose removed system_help.")
+	if _contains_tool_name_recursive(full_reload_tools_list.get("toolTree", []), "system_help") or _contains_tool_name_recursive(full_reload_tools_list.get("toolGroups", []), "system_help"):
+		return _failure("HTTP server full reload tree and group metadata should not expose removed system_help.")
 
 	_server.reinitialize(RESTART_CONTRACT_PORT, "127.0.0.1", false, [], "contract_restart")
 	if not bool(_server.start()):
@@ -120,6 +124,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
 	if not ((rpc_tools_list_result as Dictionary).get("toolTree", []) is Array) or (((rpc_tools_list_result as Dictionary).get("toolTree", []) as Array).is_empty()):
 		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
+	if _has_tool(rpc_tools, "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolTree", []), "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolGroups", []), "system_help"):
+		return _failure("JSON-RPC tools/list flat, tree, and group metadata should not expose removed system_help.")
 	if not _first_tool_has_group_path(rpc_tools):
 		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
 
@@ -239,6 +245,24 @@ func _has_tool(tools, tool_name: String) -> bool:
 	for tool_def in tools:
 		if tool_def is Dictionary and str((tool_def as Dictionary).get("name", "")) == tool_name:
 			return true
+	return false
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is Dictionary:
+		var value_dict := value as Dictionary
+		for key in ["name", "full_name", "toolName", "tool_name"]:
+			if str(value_dict.get(key, "")) == tool_name:
+				return true
+		for nested_value in value_dict.values():
+			if _contains_tool_name_recursive(nested_value, tool_name):
+				return true
+	elif value is Array:
+		for nested_item in value as Array:
+			if _contains_tool_name_recursive(nested_item, tool_name):
+				return true
+	elif str(value) == tool_name:
+		return true
 	return false
 
 
