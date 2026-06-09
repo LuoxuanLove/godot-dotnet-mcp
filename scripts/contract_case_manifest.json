@@ -12,6 +12,7 @@
   { "name": "system_plugin_maintenance_contracts", "layer": "system", "domain": "plugin", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "system_runtime_impl_contracts", "layer": "system", "domain": "runtime", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "http_server_listen_diagnostics_contracts", "layer": "transport", "domain": "http", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
+  { "name": "stdio_tool_error_parity_contracts", "layer": "transport", "domain": "stdio", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "runtime_command_service_contracts", "layer": "runtime", "domain": "runtime", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "dap_debugger_contracts", "layer": "runtime", "domain": "dap", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "editor_tool_executor_contracts", "layer": "tool", "domain": "editor", "behavior": "current", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "keep" },

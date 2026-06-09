@@ -61,7 +61,11 @@ func build_tool_call_result(params: Dictionary) -> Dictionary:
 
 
 func build_tool_call_result_async(params: Dictionary) -> Dictionary:
-	var tool_name = params.get("name", "")
+	var raw_tool_name = params.get("name", "")
+	var tool_name_type := typeof(raw_tool_name)
+	if tool_name_type != TYPE_STRING and tool_name_type != TYPE_STRING_NAME:
+		return _create_tool_result_payload({"success": false, "error": "Tool name must be a string"})
+	var tool_name := str(raw_tool_name)
 	var arguments = params.get("arguments", {})
 	if params.has("arguments") and not (arguments is Dictionary):
 		return _create_tool_result_payload({"success": false, "error": "Tool arguments must be an object"})

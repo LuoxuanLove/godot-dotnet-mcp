@@ -38,6 +38,9 @@ class FakeToolLoader:
 	func get_domain_states() -> Array:
 		return [{"category": "system", "status": "ready"}]
 
+	func is_tool_enabled(tool_name: String) -> bool:
+		return not disabled_tools.has(tool_name)
+
 	func is_tool_exposed(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
@@ -159,6 +162,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_lifecycle_structured = (disabled_lifecycle_result as Dictionary).get("structuredContent", {})
 	if not (disabled_lifecycle_structured is Dictionary) or bool((disabled_lifecycle_structured as Dictionary).get("success", true)):
 		return _failure("Stdio disabled tool errors should expose failing structuredContent.")
+	if str((disabled_lifecycle_structured as Dictionary).get("error", "")).find("disabled") == -1:
+		return _failure("Stdio disabled tool errors should use loader enabled-state semantics before exposure checks.")
 	loader.disabled_tools.clear()
 
 	stdio_server.start()
