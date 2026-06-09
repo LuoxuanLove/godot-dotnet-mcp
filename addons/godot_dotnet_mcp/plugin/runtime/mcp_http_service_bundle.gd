@@ -242,7 +242,8 @@ func _ensure_resources_service() -> void:
 		_resources_service = MCPResourcesServiceScript.new()
 	_ensure_tool_loader_supervisor()
 	_ensure_http_response_service()
-	_resources_service.configure(_context_builder.build_resources_service_context(_tool_loader_supervisor, _http_response_service))
+	_ensure_tool_activity_registry()
+	_resources_service.configure(_context_builder.build_resources_service_context(_tool_loader_supervisor, _http_response_service, _tool_activity_registry))
 
 
 func _ensure_prompts_service() -> void:

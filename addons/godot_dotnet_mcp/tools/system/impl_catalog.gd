@@ -21,7 +21,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "tool_catalog",
-			"description": "TOOL CATALOG: Search the current tool catalog by query, category, or domain key. ACTIONS: search (default). Returns matching tools with exposed/enabled state, actions, parameters, group path, and match reasons. Use visibility=visible to include non-public visible internal tools.",
+			"description": "TOOL CATALOG: Search the current tool catalog by query, category, or domain key. ACTIONS: search (default). Returns matching tools with exposed/enabled state, actions, parameters, group path, match reasons, available filter values, filter warnings, and suggested next queries. Use visibility=visible to include non-public visible internal tools.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
