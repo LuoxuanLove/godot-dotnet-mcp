@@ -20,8 +20,15 @@ var tests = new (string Name, Action Run)[]
 
 foreach (var test in tests)
 {
-    test.Run();
-    Console.WriteLine($"PASS {test.Name}");
+    try
+    {
+        test.Run();
+        Console.WriteLine($"PASS {test.Name}");
+    }
+    catch (OperationCanceledException exception)
+    {
+        Console.WriteLine($"SKIP {test.Name}: {exception.Message}");
+    }
 }
 
 return 0;
@@ -223,8 +230,7 @@ static void SkipsReparsePointDirectoriesWhileScanningProjectFiles()
     var linkPath = Path.Combine(root, "LinkedOutside");
     if (!TryCreateDirectorySymbolicLink(linkPath, outsideRoot))
     {
-        Console.WriteLine("SKIP skips_reparse_point_directories_while_scanning_project_files: directory symbolic links are unavailable.");
-        return;
+        throw new OperationCanceledException("directory symbolic links are unavailable.");
     }
 
     var inventory = new ProjectInventoryAnalyzer().Analyze(root);
