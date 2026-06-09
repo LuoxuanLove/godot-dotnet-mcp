@@ -9,6 +9,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var domain_defs: Array = MCPToolManifest.TOOL_DOMAIN_DEFS
 	if domain_defs.size() != 3:
 		return _failure("Tool manifest should define core, plugin, and user domains.")
+	var public_categories: Array = MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
+	if public_categories != ["system", "user"]:
+		return _failure("Public MCP exposure should stay limited to high-level system tools and user extensions.")
 
 	var catalog := ToolCatalogService.new()
 	if catalog.find_domain_key_for_category(domain_defs, "plugin") != "":
@@ -27,6 +30,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for split_plugin_category in ["plugin_runtime", "plugin_evolution", "plugin_developer"]:
 		if not builtin_categories.has(split_plugin_category):
 			return _failure("Tool registry should keep split plugin category: %s" % split_plugin_category)
+		if public_categories.has(split_plugin_category):
+			return _failure("Split plugin implementation category should not be publicly exposed: %s" % split_plugin_category)
+	for public_category in public_categories:
+		if not builtin_categories.has(str(public_category)):
+			return _failure("Public MCP category should exist in the registry: %s" % public_category)
 
 	return {
 		"name": "tool_manifest_contracts",

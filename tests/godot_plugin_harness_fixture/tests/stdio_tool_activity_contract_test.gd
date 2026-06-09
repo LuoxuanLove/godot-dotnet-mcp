@@ -93,6 +93,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Stdio tools/call should preserve successful tool results.")
+	var structured = (result as Dictionary).get("structuredContent", {})
+	if not (structured is Dictionary):
+		return _failure("Stdio tools/call should expose structuredContent for successful tool responses.")
+	var structured_dict: Dictionary = structured
+	if bool(structured_dict.get("success", false)) != bool(parsed_dict.get("success", false)):
+		return _failure("Stdio structuredContent should match the compatibility text JSON success flag.")
+	if JSON.stringify(structured_dict.get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
+		return _failure("Stdio structuredContent should match the compatibility text JSON data payload.")
 	if not (parsed_dict.get("activity", {}) is Dictionary) or str((parsed_dict.get("activity", {}) as Dictionary).get("call_id", "")).is_empty():
 		return _failure("Stdio tools/call should preserve loader activity summaries.")
 	if loader.executed_arguments.has("_mcp_context"):
@@ -118,9 +126,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var lifecycle_payload = JSON.parse_string(str(((lifecycle_content as Array)[0] as Dictionary).get("text", "")))
 	if not (lifecycle_payload is Dictionary):
 		return _failure("Stdio lifecycle call should serialize a JSON object payload.")
+	var lifecycle_structured = (lifecycle_result as Dictionary).get("structuredContent", {})
+	if not (lifecycle_structured is Dictionary):
+		return _failure("Stdio lifecycle call should expose structuredContent.")
 	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
 	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
 		return _failure("Stdio lifecycle call should resolve system_project_lifecycle to project_lifecycle.")
+	var lifecycle_structured_data = (lifecycle_structured as Dictionary).get("data", {})
+	if not (lifecycle_structured_data is Dictionary) or str((lifecycle_structured_data as Dictionary).get("tool", "")) != "project_lifecycle":
+		return _failure("Stdio lifecycle structuredContent should preserve the resolved tool name.")
 
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		var removed_response: Dictionary = await stdio_server.call("_handle_tools_call", {
@@ -130,6 +144,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var removed_result = removed_response.get("result", {})
 		if not (removed_result is Dictionary) or not bool((removed_result as Dictionary).get("isError", false)):
 			return _failure("Stdio tools/call should reject removed project lifecycle entry '%s'." % removed_tool_name)
+		var removed_structured = (removed_result as Dictionary).get("structuredContent", {})
+		if not (removed_structured is Dictionary) or bool((removed_structured as Dictionary).get("success", true)):
+			return _failure("Stdio removed tool errors should expose failing structuredContent for '%s'." % removed_tool_name)
 
 	loader.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_response: Dictionary = await stdio_server.call("_handle_tools_call", {
@@ -139,7 +156,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_lifecycle_result = disabled_lifecycle_response.get("result", {})
 	if not (disabled_lifecycle_result is Dictionary) or not bool((disabled_lifecycle_result as Dictionary).get("isError", false)):
 		return _failure("Stdio tools/call should reject system_project_lifecycle when disabled.")
+	var disabled_lifecycle_structured = (disabled_lifecycle_result as Dictionary).get("structuredContent", {})
+	if not (disabled_lifecycle_structured is Dictionary) or bool((disabled_lifecycle_structured as Dictionary).get("success", true)):
+		return _failure("Stdio disabled tool errors should expose failing structuredContent.")
 	loader.disabled_tools.clear()
+
+	stdio_server.start()
+	stdio_server.set("_last_written_response", {})
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 45,
+		"method": "tools/call",
+		"params": {
+			"name": "system_project_state",
+			"arguments": []
+		}
+	}))
+	var invalid_arguments_request_response = stdio_server.get("_last_written_response")
+	stdio_server.stop()
+	if not (invalid_arguments_request_response is Dictionary):
+		return _failure("Stdio full request path should record non-object tool arguments response.")
+	var invalid_arguments_request_result = (invalid_arguments_request_response as Dictionary).get("result", {})
+	if not (invalid_arguments_request_result is Dictionary):
+		return _failure("Stdio full request path should return a tool result for non-object tool arguments.")
+	var invalid_arguments_request_structured = (invalid_arguments_request_result as Dictionary).get("structuredContent", {})
+	if not (invalid_arguments_request_structured is Dictionary) or bool((invalid_arguments_request_structured as Dictionary).get("success", true)):
+		return _failure("Stdio full request path should expose failing structuredContent for non-object tool arguments.")
 
 	var plain_activity_result: Dictionary = stdio_server.call("_normalize_tool_result", {
 		"success": true,

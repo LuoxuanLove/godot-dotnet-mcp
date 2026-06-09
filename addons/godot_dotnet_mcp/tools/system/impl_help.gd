@@ -57,6 +57,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"server": facts,
 		"purpose": "Editor-native MCP tools for Godot 4.6+ .NET projects.",
 		"recommended_start": [
+			"Read resources/list, then godot-dotnet-mcp://guides/index and godot-dotnet-mcp://guides/capabilities for the canonical resource-first discovery map before calling tools.",
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
 			LocalizationService.translate("help_recommended_start_tool_activity"),
@@ -144,6 +145,23 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"discovery_methods": ["prompts/list", "prompts/get"],
 			"usage_note": "Prompt guides are MCP-native prompt templates, not tools/call actions. Use prompts/list to discover them and prompts/get with optional arguments to fetch the workflow text.",
 			"available": _build_prompt_guide_entries()
+		},
+		"resource_guides": {
+			"discovery_methods": ["resources/list", "resources/templates/list", "resources/read"],
+			"usage_note": "Resources carry context, state, catalogs, diagnostics, and activity records. Prompts carry workflow guidance, and tools perform actions or computed workflows.",
+			"canonical": {
+				"index": "godot-dotnet-mcp://guides/index",
+				"capabilities": "godot-dotnet-mcp://guides/capabilities",
+				"ui_automation": "godot-dotnet-mcp://guides/ui-automation",
+				"project_summary": "godot-dotnet-mcp://state/project/summary",
+				"editor_state": "godot-dotnet-mcp://state/editor",
+				"activity_status": "godot-dotnet-mcp://activity/status",
+				"activity_recent": "godot-dotnet-mcp://activity/recent",
+				"activity_call_template": "godot-dotnet-mcp://activity/call/{id}",
+				"exposed_tool_catalog": "godot-dotnet-mcp://tools/catalog/exposed",
+				"visible_tool_catalog": "godot-dotnet-mcp://tools/catalog/visible"
+			},
+			"compatibility": ["godot-dotnet-mcp://project/info", "godot-dotnet-mcp://diagnostics/summary", "godot-dotnet-mcp://tools/catalog"]
 		}
 	}
 	if include_tools:

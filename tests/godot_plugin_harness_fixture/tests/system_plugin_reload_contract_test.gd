@@ -78,6 +78,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var data: Dictionary = reload_result.get("data", {})
 	if str(data.get("request_id", "")).is_empty() or str(data.get("reconnect_hint", "")).is_empty():
 		return _failure("system_plugin_reload should return request_id and reconnect guidance.")
+	if str(reload_result.get("target_plugin", "")) != "godot_dotnet_mcp" or not bool(reload_result.get("self_plugin", false)):
+		return _failure("system_plugin_reload should identify the reload target as this MCP plugin.")
+	if str(data.get("target_plugin", "")) != "godot_dotnet_mcp" or not bool(data.get("self_plugin", false)):
+		return _failure("system_plugin_reload data should preserve the self-plugin reload target metadata.")
 
 	return {
 		"name": "system_plugin_reload_contracts",
