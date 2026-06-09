@@ -1,6 +1,7 @@
 extends RefCounted
 
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 
 
 class FakeLocalization extends RefCounted:
@@ -25,6 +26,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should expose builtin tool profiles.")
 	if PluginRuntimeStateScript.TOOL_DOMAIN_DEFS.is_empty():
 		return _failure("PluginRuntimeState should expose tool domain definitions.")
+	var default_profile := _find_builtin_profile("default")
+	if default_profile.is_empty():
+		return _failure("PluginRuntimeState should expose the default tool profile.")
+	var full_profile := _find_builtin_profile("full")
+	if full_profile.is_empty():
+		return _failure("PluginRuntimeState should expose the full tool profile.")
+	var default_enabled_categories: Array = default_profile.get("enabled_categories", [])
+	for visual_category in ["material", "shader", "lighting", "particle", "tilemap", "geometry"]:
+		if not MCPToolManifest.ALL_TOOL_CATEGORIES.has(visual_category):
+			return _failure("MCPToolManifest should keep the split visual category registered: %s" % visual_category)
+		if not default_enabled_categories.has(visual_category):
+			return _failure("Default tool profile should keep split visual authoring category enabled: %s" % visual_category)
+	var full_excluded_categories: Array = full_profile.get("excluded_categories", [])
+	if not full_excluded_categories.has("user"):
+		return _failure("Full tool profile should continue excluding User tools by default.")
 	for profile in PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES:
 		if not (profile is Dictionary):
 			continue
@@ -104,3 +120,12 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _find_builtin_profile(profile_id: String) -> Dictionary:
+	for profile in PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES:
+		if not (profile is Dictionary):
+			continue
+		if str((profile as Dictionary).get("id", "")) == profile_id:
+			return (profile as Dictionary)
+	return {}
