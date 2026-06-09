@@ -7,10 +7,22 @@ const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtim
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
+const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
 const TOOL_CATALOG_URI := "godot-dotnet-mcp://tools/catalog"
+const GUIDES_INDEX_URI := "godot-dotnet-mcp://guides/index"
+const GUIDES_CAPABILITIES_URI := "godot-dotnet-mcp://guides/capabilities"
+const GUIDES_UI_AUTOMATION_URI := "godot-dotnet-mcp://guides/ui-automation"
+const STATE_PROJECT_SUMMARY_URI := "godot-dotnet-mcp://state/project/summary"
+const STATE_EDITOR_URI := "godot-dotnet-mcp://state/editor"
+const ACTIVITY_STATUS_URI := "godot-dotnet-mcp://activity/status"
+const ACTIVITY_RECENT_URI := "godot-dotnet-mcp://activity/recent"
+const ACTIVITY_CALL_TEMPLATE_URI := "godot-dotnet-mcp://activity/call/{id}"
+const ACTIVITY_MISSING_CALL_URI := "godot-dotnet-mcp://activity/call/tool-contract-missing"
+const TOOLS_CATALOG_EXPOSED_URI := "godot-dotnet-mcp://tools/catalog/exposed"
+const TOOLS_CATALOG_VISIBLE_URI := "godot-dotnet-mcp://tools/catalog/visible"
 const SCENE_READ_URI := "godot-dotnet-mcp://scene/tests/headless_suite_entry.tscn"
 const SCRIPT_READ_URI := "godot-dotnet-mcp://script/tests/headless_case_support.gd"
 const RESOURCE_READ_URI := "godot-dotnet-mcp://resource/tests/_fixtures/mcp_resources_prompts_sample.tres"
@@ -25,6 +37,40 @@ const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
 var _server = null
 var _temp_paths: Array[String] = []
 var _previous_language := ""
+
+
+class FakeStdioToolLoader extends RefCounted:
+	var _tool_activity_registry = null
+
+	func set_tool_activity_registry(registry) -> void:
+		_tool_activity_registry = registry
+
+	func get_tool_activity_registry():
+		return _tool_activity_registry
+
+	func get_tool_definitions() -> Array[Dictionary]:
+		return [{
+			"name": "system_project_state",
+			"category": "system"
+		}]
+
+	func get_exposed_tool_definitions() -> Array[Dictionary]:
+		return get_tool_definitions()
+
+	func get_domain_states() -> Array:
+		return [{"category": "system", "status": "ready"}]
+
+	func is_tool_exposed(_tool_name: String) -> bool:
+		return true
+
+	func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+		var call_id := ""
+		if _tool_activity_registry != null:
+			var record: Dictionary = _tool_activity_registry.begin_call("%s_%s" % [category, tool_name], category, tool_name, args)
+			call_id = str(record.get("call_id", ""))
+		if _tool_activity_registry != null and not call_id.is_empty():
+			_tool_activity_registry.finish_call(call_id, true)
+		return {"success": true, "data": {"summary": true}}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -64,6 +110,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resources/list should expose the diagnostics summary resource.")
 	if not _has_resource(resources, TOOL_CATALOG_URI):
 		return _failure("resources/list should expose the tool catalog resource.")
+	for expected_resource in [
+		GUIDES_INDEX_URI,
+		GUIDES_CAPABILITIES_URI,
+		GUIDES_UI_AUTOMATION_URI,
+		STATE_PROJECT_SUMMARY_URI,
+		STATE_EDITOR_URI,
+		ACTIVITY_STATUS_URI,
+		ACTIVITY_RECENT_URI,
+		TOOLS_CATALOG_EXPOSED_URI,
+		TOOLS_CATALOG_VISIBLE_URI
+	]:
+		if not _has_resource(resources, expected_resource):
+			return _failure("resources/list should expose canonical v1.4 resource: %s" % expected_resource)
 	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
 	if str(project_info_metadata.get("name", "")) != "项目信息":
 		return _failure("resources/list should localize resource metadata through the active locale.")
@@ -77,12 +136,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var templates = (templates_result as Dictionary).get("resourceTemplates", [])
 	if not (templates is Array):
 		return _failure("resources/templates/list should return resourceTemplates as an array.")
-	for expected_template in ["godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
+	for expected_template in [ACTIVITY_CALL_TEMPLATE_URI, "godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
 		if not _has_template(templates, expected_template):
 			return _failure("resources/templates/list should expose template: %s" % expected_template)
 	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
 	if str(scene_template_metadata.get("name", "")) != "场景文本":
 		return _failure("resources/templates/list should localize template names through the active locale.")
+	var activity_template_metadata := _find_template(templates, ACTIVITY_CALL_TEMPLATE_URI)
+	if str(activity_template_metadata.get("name", "")) != "活动调用":
+		return _failure("resources/templates/list should localize canonical activity call template names.")
 
 	var project_info := await _read_json_resource(PROJECT_INFO_URI, 4)
 	if not bool(project_info.get("ok", false)):
@@ -92,6 +154,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project info resource should include the current protocol version.")
 	if str(project_payload.get("projectPath", "")).is_empty():
 		return _failure("project info resource should include the project path.")
+
+	var guide_index := await _read_json_resource(GUIDES_INDEX_URI, 23)
+	if not bool(guide_index.get("ok", false)):
+		return _failure(str(guide_index.get("error", "guide index resource failed")))
+	var guide_index_payload: Dictionary = guide_index.get("payload", {})
+	var canonical_resources = guide_index_payload.get("canonicalResources", {})
+	if not (canonical_resources is Dictionary) or not ((canonical_resources as Dictionary).get("state", []) as Array).has(STATE_PROJECT_SUMMARY_URI):
+		return _failure("guide index resource should map canonical state resources.")
+	var compatibility_resources = guide_index_payload.get("compatibilityResources", [])
+	if not (compatibility_resources is Array) or not (compatibility_resources as Array).has(PROJECT_INFO_URI):
+		return _failure("guide index resource should keep compatibility resource mapping.")
+
+	var capabilities_guide := await _read_json_resource(GUIDES_CAPABILITIES_URI, 24)
+	if not bool(capabilities_guide.get("ok", false)):
+		return _failure(str(capabilities_guide.get("error", "capability guide resource failed")))
+	var capabilities_payload: Dictionary = capabilities_guide.get("payload", {})
+	if str(capabilities_payload.get("protocolVersion", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("capability guide should include the current protocol version.")
+	if str((capabilities_payload.get("discovery", {}) as Dictionary).get("visibleToolCatalog", "")) != TOOLS_CATALOG_VISIBLE_URI:
+		return _failure("capability guide should direct clients to the canonical visible tool catalog.")
+
+	var ui_automation_guide := await _read_json_resource(GUIDES_UI_AUTOMATION_URI, 25)
+	if not bool(ui_automation_guide.get("ok", false)):
+		return _failure(str(ui_automation_guide.get("error", "UI automation guide resource failed")))
+	var ui_payload: Dictionary = ui_automation_guide.get("payload", {})
+	var preferred_order = ui_payload.get("preferredOrder", [])
+	if not (preferred_order is Array) or JSON.stringify(preferred_order).find("semantic_workflow") == -1 or JSON.stringify(preferred_order).find("mouse_fallback") == -1:
+		return _failure("UI automation guide should describe semantic-first and fallback order.")
+
+	var project_summary := await _read_json_resource(STATE_PROJECT_SUMMARY_URI, 26)
+	if not bool(project_summary.get("ok", false)):
+		return _failure(str(project_summary.get("error", "project summary resource failed")))
+	var project_summary_payload: Dictionary = project_summary.get("payload", {})
+	if str(project_summary_payload.get("projectPath", "")) != str(project_payload.get("projectPath", "")):
+		return _failure("canonical project summary should preserve the legacy project info payload.")
+
+	var editor_state := await _read_json_resource(STATE_EDITOR_URI, 27)
+	if not bool(editor_state.get("ok", false)):
+		return _failure(str(editor_state.get("error", "editor state resource failed")))
+	var editor_state_payload: Dictionary = editor_state.get("payload", {})
+	if not (editor_state_payload.get("resources", {}) is Dictionary):
+		return _failure("editor state resource should include resource pointers.")
 
 	MCPDebugBufferScript.clear()
 	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value Authorization: Bearer top-secret-bearer", "", {"password": "hunter2", "safe": "visible"})
@@ -147,6 +251,38 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
+
+	var exposed_tool_catalog := await _read_json_resource(TOOLS_CATALOG_EXPOSED_URI, 28)
+	if not bool(exposed_tool_catalog.get("ok", false)):
+		return _failure(str(exposed_tool_catalog.get("error", "exposed tool catalog resource failed")))
+	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
+	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
+		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
+	var visible_tool_catalog := await _read_json_resource(TOOLS_CATALOG_VISIBLE_URI, 29)
+	if not bool(visible_tool_catalog.get("ok", false)):
+		return _failure(str(visible_tool_catalog.get("error", "visible tool catalog resource failed")))
+	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
+	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
+		return _failure("visible tool catalog should include tree and group presentation metadata.")
+
+	var activity_status := await _read_json_resource(ACTIVITY_STATUS_URI, 30)
+	if not bool(activity_status.get("ok", false)):
+		return _failure(str(activity_status.get("error", "activity status resource failed")))
+	var activity_status_payload: Dictionary = activity_status.get("payload", {})
+	if not activity_status_payload.has("running_count") or not (activity_status_payload.get("execution_order", []) is Array):
+		return _failure("activity status resource should expose running counts and execution order.")
+	var activity_recent := await _read_json_resource(ACTIVITY_RECENT_URI, 31)
+	if not bool(activity_recent.get("ok", false)):
+		return _failure(str(activity_recent.get("error", "activity recent resource failed")))
+	var activity_recent_payload: Dictionary = activity_recent.get("payload", {})
+	if not activity_recent_payload.has("recent_count") or not (activity_recent_payload.get("recent", []) is Array):
+		return _failure("activity recent resource should expose recent activity records.")
+	var missing_activity_call := await _read_json_resource(ACTIVITY_MISSING_CALL_URI, 32)
+	if not bool(missing_activity_call.get("ok", false)):
+		return _failure(str(missing_activity_call.get("error", "activity call resource failed")))
+	var missing_activity_call_payload: Dictionary = missing_activity_call.get("payload", {})
+	if bool(missing_activity_call_payload.get("found", true)) or str(missing_activity_call_payload.get("call_id", "")) != "tool-contract-missing":
+		return _failure("activity call template should return a stable not-found payload for unknown call ids.")
 
 	var scene_read := await _read_text_resource(SCENE_READ_URI, 6)
 	if not bool(scene_read.get("ok", false)):
@@ -287,6 +423,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(((invalid_stdio_request_response as Dictionary).get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio full request path should reject non-object params before method dispatch.")
 	stdio_server.set("_last_written_response", {})
+	var shared_stdio_loader := FakeStdioToolLoader.new()
+	var shared_stdio_registry = ToolActivityRegistryScript.new()
+	shared_stdio_loader.set_tool_activity_registry(shared_stdio_registry)
+	stdio_server.initialize(shared_stdio_loader)
+	if shared_stdio_loader.get_tool_activity_registry() != shared_stdio_registry:
+		return _failure("stdio initialization should not replace an existing shared tool activity registry.")
+	var stdio_tool_call_result: Dictionary = await stdio_server._handle_tools_call_async({
+		"name": "system_project_state",
+		"arguments": {"summary": true}
+	}, 23)
+	if bool(stdio_tool_call_result.get("error", null) is Dictionary):
+		return _failure("stdio tool call should route through the fake loader before activity resource verification.")
+	var stdio_activity_recent_response: Dictionary = stdio_server._handle_resources_read({"uri": ACTIVITY_RECENT_URI}, 24)
+	var stdio_activity_result = stdio_activity_recent_response.get("result", {})
+	if not (stdio_activity_result is Dictionary):
+		return _failure("stdio activity recent resource should return a result object.")
+	var stdio_activity_contents = (stdio_activity_result as Dictionary).get("contents", [])
+	if not (stdio_activity_contents is Array) or (stdio_activity_contents as Array).is_empty():
+		return _failure("stdio activity recent resource should return content entries.")
+	var stdio_activity_payload = JSON.parse_string(str(((stdio_activity_contents as Array)[0] as Dictionary).get("text", "")))
+	if not (stdio_activity_payload is Dictionary):
+		return _failure("stdio activity recent resource text should parse as JSON.")
+	var stdio_recent = (stdio_activity_payload as Dictionary).get("recent", [])
+	if not (stdio_recent is Array) or (stdio_recent as Array).is_empty():
+		return _failure("stdio activity resources should read the same activity registry used by stdio tool calls.")
+	var stdio_recent_tool := str(((stdio_recent as Array)[0] as Dictionary).get("tool", ""))
+	if stdio_recent_tool != "system_project_state":
+		return _failure("stdio activity resources should preserve the stdio tool call record.")
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",
@@ -304,6 +468,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_stdio_tool_arguments_result = invalid_stdio_tool_arguments.get("result", {})
 	if not (invalid_stdio_tool_arguments_result is Dictionary) or not bool((invalid_stdio_tool_arguments_result as Dictionary).get("isError", false)):
 		return _failure("stdio tools/call should return isError=true for non-object arguments.")
+	var invalid_stdio_tool_arguments_structured = (invalid_stdio_tool_arguments_result as Dictionary).get("structuredContent", {})
+	if not (invalid_stdio_tool_arguments_structured is Dictionary) or bool((invalid_stdio_tool_arguments_structured as Dictionary).get("success", true)):
+		return _failure("stdio tools/call non-object arguments should expose failing structuredContent.")
 	var invalid_stdio_tool_arguments_content = (invalid_stdio_tool_arguments_result as Dictionary).get("content", [])
 	if not (invalid_stdio_tool_arguments_content is Array) or (invalid_stdio_tool_arguments_content as Array).is_empty():
 		return _failure("stdio tools/call non-object arguments should include text content.")

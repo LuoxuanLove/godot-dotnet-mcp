@@ -224,10 +224,11 @@ func build_json_rpc_request_context(server, json_rpc_router, http_response_servi
 	return context
 
 
-func build_resources_service_context(tool_loader_supervisor, http_response_service):
+func build_resources_service_context(tool_loader_supervisor, http_response_service, tool_activity_registry = null):
 	var context = MCPResourcesServiceContextScript.new()
 	context.get_tool_loader = Callable(tool_loader_supervisor, "get_tool_loader")
 	context.get_tool_loader_status = Callable(tool_loader_supervisor, "get_status")
+	context.get_tool_activity_registry = func(): return tool_activity_registry
 	context.sanitize_for_json = Callable(http_response_service, "sanitize_for_json")
 	return context
 
