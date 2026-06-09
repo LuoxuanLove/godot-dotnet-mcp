@@ -304,24 +304,37 @@ static func _append_filter_warnings(
 		if alternate_values.has(value):
 			warning["hint"] = "'%s' is available as the other filter type." % value
 		warnings.append(warning)
-		suggestions.append(_suggest_filter_removal(filter_name, value, paired_values, query, visibility))
+		suggestions.append(_suggest_filter_removal(filter_name, value, requested_values, paired_values, query, visibility))
 		if alternate_values.has(value):
 			suggestions.append(_suggest_filter_transfer(filter_name, value, query, visibility))
 
 
-static func _suggest_filter_removal(filter_name: String, value: String, paired_values: Array, query: String, visibility: String) -> Dictionary:
+static func _suggest_filter_removal(filter_name: String, value: String, requested_values: Array, paired_values: Array, query: String, visibility: String) -> Dictionary:
 	var suggestion := {
 		"query": query,
 		"visibility": visibility,
 		"reason": "Remove unavailable %s filter '%s'." % [filter_name, value]
 	}
+	var retained_values := _filter_values_except(requested_values, value)
 	if filter_name == "domain":
-		suggestion["domain"] = []
+		suggestion["domain"] = retained_values
 		suggestion["category"] = paired_values
 	else:
 		suggestion["domain"] = paired_values
-		suggestion["category"] = []
+		suggestion["category"] = retained_values
 	return suggestion
+
+
+static func _filter_values_except(values: Array, excluded_value: String) -> Array[String]:
+	var retained: Array[String] = []
+	for raw_value in values:
+		var value := str(raw_value).strip_edges().to_lower()
+		if value.is_empty() or value == excluded_value:
+			continue
+		if not retained.has(value):
+			retained.append(value)
+	retained.sort()
+	return retained
 
 
 static func _suggest_filter_transfer(filter_name: String, value: String, query: String, visibility: String) -> Dictionary:

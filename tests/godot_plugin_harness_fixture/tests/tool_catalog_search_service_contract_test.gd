@@ -264,6 +264,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var suggested_next_queries: Array = alternate_summary.get("suggested_next_queries", [])
 	if suggested_next_queries.is_empty():
 		return _failure("Catalog diagnostics should suggest a follow-up query when filters are too narrow.")
+	var mixed_domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": ["core", "plugin"], "query": "label"})
+	var mixed_domain_summary: Dictionary = (mixed_domain_search.get("data", {}) as Dictionary).get("summary", {})
+	var mixed_suggested_queries: Array = mixed_domain_summary.get("suggested_next_queries", [])
+	if mixed_suggested_queries.is_empty():
+		return _failure("Catalog diagnostics should suggest removing only unavailable filters from mixed domain filters.")
+	var mixed_removal_query: Dictionary = mixed_suggested_queries[0] as Dictionary
+	if (mixed_removal_query.get("domain", []) as Array) != ["core"]:
+		return _failure("Catalog diagnostics should preserve valid domain filters when removing unavailable domain filters.")
 
 	var category_misuse_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "project", "query": "get_action", "visibility": "visible"})
 	var category_misuse_summary: Dictionary = (category_misuse_search.get("data", {}) as Dictionary).get("summary", {})
