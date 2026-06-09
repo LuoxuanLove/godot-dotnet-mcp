@@ -556,8 +556,6 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_desc": "Lit un fichier de script .gd ou .cs via un chemin relatif au projet.",
 	"mcp_resource_template_resource_name": "Texte de ressource",
 	"mcp_resource_template_resource_desc": "Lit une ressource .tres ou .res via un chemin relatif au projet.",
-	"tool_system_tool_catalog_name": "Catalogue d'outils",
-	"tool_system_tool_catalog_desc": "Recherche dans le catalogue d'outils actuel par requête, catégorie ou domaine et renvoie les raisons de correspondance, les actions, les paramètres, la visibilité et l'état d'activation.",
 	"tool_system_plugin_reload_name": "Rechargement du plugin",
 	"tool_system_plugin_reload_desc": "Vérifie si l'instance du plugin en cours est fraîche, ou planifie une recharge complète du cycle de vie sans dépendre de l'UI au premier plan.",
 	"tool_system_project_configure_name": "Configurer le projet",

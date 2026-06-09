@@ -556,8 +556,6 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_desc": "Читает файл скрипта .gd или .cs по пути относительно проекта.",
 	"mcp_resource_template_resource_name": "Текст ресурса",
 	"mcp_resource_template_resource_desc": "Читает ресурс .tres или .res по пути относительно проекта.",
-	"tool_system_tool_catalog_name": "Каталог инструментов",
-	"tool_system_tool_catalog_desc": "Ищет в текущем каталоге инструментов по запросу, категории или домену и возвращает причины совпадений, действия, параметры, видимость и состояние включения.",
 	"tool_system_plugin_reload_name": "Перезагрузка плагина",
 	"tool_system_plugin_reload_desc": "Проверяет актуальность запущенного экземпляра плагина или планирует полную перезагрузку жизненного цикла без зависимости от UI на переднем плане.",
 	"tool_system_project_configure_name": "Настройка проекта",

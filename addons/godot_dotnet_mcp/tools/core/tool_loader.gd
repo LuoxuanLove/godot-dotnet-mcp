@@ -12,6 +12,7 @@ const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_help": true,
 	"system_scene_analyze": true,
 	"system_scene_validate": true,
+	"system_tool_catalog": true,
 	"system_tool_activity": true
 }
 

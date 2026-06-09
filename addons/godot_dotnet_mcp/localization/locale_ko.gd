@@ -764,8 +764,6 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_desc": "프로젝트 상대 경로로 .gd 또는 .cs 스크립트 파일을 읽습니다.",
 	"mcp_resource_template_resource_name": "리소스 텍스트",
 	"mcp_resource_template_resource_desc": "프로젝트 상대 경로로 .tres 또는 .res 리소스 파일을 읽습니다.",
-	"tool_system_tool_catalog_name": "도구 카탈로그",
-	"tool_system_tool_catalog_desc": "현재 tool catalog를 query, category, domain으로 검색하고 match reason, action, parameter, visibility, enabled state를 반환합니다.",
 	"prompt_project_orientation_title": "프로젝트 orientation workflow",
 	"prompt_project_orientation_desc": "Orient an agent in a Godot project with read-only 상태, health, file, symbol, and scene dependency evidence before choosing an editing or debugging 워크플로.",
 	"prompt_content_authoring_title": "Content authoring 워크플로",

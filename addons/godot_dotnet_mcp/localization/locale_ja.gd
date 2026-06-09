@@ -556,8 +556,6 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_desc": "プロジェクト相対パスで .gd または .cs スクリプトファイルを読み取ります。",
 	"mcp_resource_template_resource_name": "リソーステキスト",
 	"mcp_resource_template_resource_desc": "プロジェクト相対パスで .tres または .res リソースファイルを読み取ります。",
-	"tool_system_tool_catalog_name": "ツールカタログ",
-	"tool_system_tool_catalog_desc": "現在の tool catalog を query、category、domain で検索し、match reason、action、parameter、visibility、enabled state を返します。",
 	"tool_system_plugin_reload_name": "プラグイン再読み込み",
 	"tool_system_plugin_reload_desc": "実行中のプラグインインスタンスが最新か確認し、前面 UI に依存せず完全なライフサイクル再読み込みを予約します。",
 	"tool_system_project_configure_name": "プロジェクトの構成",
