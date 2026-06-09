@@ -38,9 +38,9 @@ $v2Bridge = Read-Workflow ".github/workflows/v2-bridge-contract.yml"
 $v2Broker = Read-Workflow ".github/workflows/v2-broker-manifest.yml"
 
 $companionChecks = @(
-    "addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj",
+    "companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj",
     "tests\companion_contracts\GodotDotnetMcp.Companion.Contracts.csproj",
-    "addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj",
+    "companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj",
     "tests\static_project_analyzer\GodotDotnetMcp.Companion.StaticAnalysis.Tests.csproj"
 )
 

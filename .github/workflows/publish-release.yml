@@ -232,7 +232,7 @@ jobs:
       - name: Build Companion contract library
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
         shell: pwsh
-        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion contract library" -ProjectPath ".\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" -Configuration Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion contract library" -ProjectPath ".\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" -Configuration Release
 
       - name: Run Companion contract tests
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
@@ -242,7 +242,7 @@ jobs:
       - name: Build Companion static analyzer
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
         shell: pwsh
-        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion static analyzer" -ProjectPath ".\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" -Configuration Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion static analyzer" -ProjectPath ".\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" -Configuration Release
 
       - name: Run Companion static analyzer tests
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
