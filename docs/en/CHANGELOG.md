@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 1.4.0.
 
+### Added
+
+- Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
+
 ### Documentation
 
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
