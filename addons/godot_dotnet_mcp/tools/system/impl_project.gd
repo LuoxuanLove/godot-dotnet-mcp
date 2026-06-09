@@ -102,7 +102,7 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "plugin_reload",
-			"description": "PLUGIN RELOAD: Stable Agent-callable plugin lifecycle reload entry and freshness check. action=get_freshness reports running instance vs disk state; action=full_reload_plugin schedules a Godot plugin disable/enable lifecycle reload without relying on MCPDock visibility. The MCP transport may disconnect during reload; reconnect and fetch tools again.",
+			"description": "PLUGIN RELOAD: Stable Agent-callable lifecycle reload entry and freshness check for this Godot .NET MCP plugin instance. action=get_freshness reports running instance vs disk state; action=full_reload_plugin schedules a disable/enable lifecycle reload for the MCP plugin itself without relying on MCPDock visibility. The MCP transport may disconnect during reload; reconnect and fetch tools again.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -718,7 +718,7 @@ func _execute_plugin_reload(args: Dictionary) -> Dictionary:
 				return bridge.error("Plugin lifecycle reload bridge is unavailable", {"freshness": PluginInstanceFreshness.get_freshness_snapshot()})
 			var result = plugin.request_plugin_lifecycle_reload_from_tools()
 			if result is Dictionary:
-				return result
+				return _with_self_plugin_reload_target(result as Dictionary)
 			return bridge.error("Plugin lifecycle reload returned an invalid response", {"freshness": PluginInstanceFreshness.get_freshness_snapshot()})
 		_:
 			return bridge.error("Unknown plugin_reload action: %s" % action)
@@ -791,6 +791,25 @@ func _execute_plugin_maintenance_status() -> Dictionary:
 		"current_success": bool(current_result.get("success", false)),
 		"update_status_success": bool(status_result.get("success", false))
 	}, "Plugin maintenance status fetched")
+
+
+func _with_self_plugin_reload_target(result: Dictionary) -> Dictionary:
+	var enriched := result.duplicate(true)
+	var target := {
+		"target_plugin": "godot_dotnet_mcp",
+		"target_plugin_name": "Godot .NET MCP",
+		"self_plugin": true,
+		"scope": "this_mcp_plugin_instance"
+	}
+	for key in target.keys():
+		enriched[key] = target[key]
+	var data = enriched.get("data", {})
+	if data is Dictionary:
+		var data_dict: Dictionary = (data as Dictionary).duplicate(true)
+		for key in target.keys():
+			data_dict[key] = target[key]
+		enriched["data"] = data_dict
+	return enriched
 
 
 func _plugin_maintenance_payload(result: Dictionary) -> Dictionary:

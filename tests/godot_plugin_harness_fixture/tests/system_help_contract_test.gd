@@ -67,8 +67,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system help should include schema facts.")
 	if str((schema as Dictionary).get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("system help should expose the unified tool schema version.")
-	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.25":
-		return _failure("system help contract should cover the current scene inspect schema version.")
+	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.31":
+		return _failure("system help contract should cover the current reload target metadata schema version.")
 
 	var exposed_tools: Array = help_data.get("exposed_system_tools", [])
 	if not exposed_tools.has("system_help") or not exposed_tools.has("system_editor_control"):
@@ -80,9 +80,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_text in ["prompts/list", "prompts/get", "godot.project_orientation", "godot.content_authoring", "godot.debug_triage", "godot.reference_integrity", "godot.runtime_validation", "godot.editor_ui_control"]:
 		if prompt_methods_text.find(expected_text) == -1:
 			return _failure("system help prompt guide details should mention: %s" % expected_text)
+	var resource_guides = help_data.get("resource_guides", {})
+	if not (resource_guides is Dictionary):
+		return _failure("system help should include MCP resource guide discovery details.")
+	var resource_methods_text := JSON.stringify(resource_guides)
+	for expected_resource_text in ["resources/list", "resources/templates/list", "resources/read", "godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://state/project/summary", "godot-dotnet-mcp://activity/status", "godot-dotnet-mcp://tools/catalog/visible"]:
+		if resource_methods_text.find(expected_resource_text) == -1:
+			return _failure("system help resource guide details should mention: %s" % expected_resource_text)
 	var capabilities = help_data.get("capabilities", {})
 	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
 		return _failure("system help capabilities should include prompts as an explicit category.")
+	if not (capabilities as Dictionary).has("resources") or not (((capabilities as Dictionary).get("resources", []) is Array)):
+		return _failure("system help capabilities should include resources as an explicit category.")
+	var protocol_surface_guidance = help_data.get("protocol_surface_guidance", {})
+	if not (protocol_surface_guidance is Dictionary):
+		return _failure("system help should explain how to choose between MCP resources, prompts, and tools.")
+	var protocol_surface := protocol_surface_guidance as Dictionary
+	var resource_surface = protocol_surface.get("resources", {})
+	if not (resource_surface is Dictionary):
+		return _failure("system help protocol surface guidance should expose a resources object.")
+	var resource_role := str((resource_surface as Dictionary).get("role", ""))
+	if resource_role.find("Read") == -1 or resource_role.find("without executing editor actions") == -1:
+		return _failure("system help resources guidance should describe read-only context access.")
+	if not _surface_has_all_strings(resource_surface, "methods", ["resources/list", "resources/templates/list", "resources/read"]):
+		return _failure("system help resources guidance should list resource discovery methods.")
+	if not _surface_has_all_strings(resource_surface, "examples", ["godot-dotnet-mcp://tools/catalog", "godot-dotnet-mcp://project/info"]):
+		return _failure("system help resources guidance should include canonical resource examples.")
+	var prompt_surface = protocol_surface.get("prompts", {})
+	if not (prompt_surface is Dictionary):
+		return _failure("system help protocol surface guidance should expose a prompts object.")
+	if str((prompt_surface as Dictionary).get("role", "")).find("workflow guidance") == -1:
+		return _failure("system help prompts guidance should describe workflow guidance.")
+	if not _surface_has_all_strings(prompt_surface, "methods", ["prompts/list", "prompts/get"]):
+		return _failure("system help prompts guidance should list prompt discovery methods.")
+	if not _surface_has_all_strings(prompt_surface, "examples", ["godot.project_orientation", "godot.runtime_validation"]):
+		return _failure("system help prompts guidance should include canonical prompt examples.")
+	var tools_surface = protocol_surface.get("tools", {})
+	if not (tools_surface is Dictionary):
+		return _failure("system help protocol surface guidance should expose a tools object.")
+	if str((tools_surface as Dictionary).get("role", "")).find("actions") == -1:
+		return _failure("system help tools guidance should describe action-oriented tool calls.")
+	if str((tools_surface as Dictionary).get("selection_note", "")).find("resource reads") == -1 or str((tools_surface as Dictionary).get("selection_note", "")).find("prompt guides") == -1:
+		return _failure("system help tools guidance should compare tools with resource reads and prompt guides.")
 	var help_text := JSON.stringify(help_data)
 	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1 or help_text.find("resolve_property") == -1 or help_text.find("system_inspector") == -1 or help_text.find("run_task") == -1 or help_text.find("system_editor_evidence") == -1 or help_text.find("active_dialog") == -1:
 		return _failure("system help should mention current settings_dialog, inspector, and editor evidence workflow action names.")
@@ -124,3 +163,15 @@ func _preference_entry_has_action(entry, action_name: String) -> bool:
 		return false
 	var actions = (entry as Dictionary).get("actions", [])
 	return actions is Array and (actions as Array).has(action_name)
+
+
+func _surface_has_all_strings(surface, key: String, expected_values: Array[String]) -> bool:
+	if not (surface is Dictionary):
+		return false
+	var values = (surface as Dictionary).get(key, [])
+	if not (values is Array):
+		return false
+	for expected_value in expected_values:
+		if not (values as Array).has(expected_value):
+			return false
+	return true

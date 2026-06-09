@@ -131,6 +131,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"last_error": "Duplicate user tool logical name: duplicated_tool",
 			"discovery_source": "watcher",
 			"last_refresh_reason": "file_changed"
+		},
+		{
+			"script_path": "res://addons/godot_dotnet_mcp/custom_tools/runtime_reload_failed_user_tool.gd",
+			"runtime_domain": "user/runtime_reload_failed_user_tool",
+			"version": 4,
+			"state": "reload_failed",
+			"active_calls": 0,
+			"pending_reload": false,
+			"removed_pending": false,
+			"last_loaded_at_unix": 0,
+			"last_error": "Missing dependency while reloading user tool",
+			"discovery_source": "watcher",
+			"last_refresh_reason": "file_changed"
+		},
+		{
+			"script_path": "res://addons/godot_dotnet_mcp/custom_tools/runtime_unknown_user_tool.gd",
+			"runtime_domain": "user/runtime_unknown_user_tool",
+			"version": 5,
+			"state": "load_failed",
+			"active_calls": 0,
+			"pending_reload": false,
+			"removed_pending": false,
+			"last_loaded_at_unix": 0,
+			"last_error": "unknown",
+			"discovery_source": "watcher",
+			"last_refresh_reason": "file_changed"
 		}
 	])
 	if int(diagnostics.get("discovered_script_count", 0)) < 2:
@@ -139,13 +165,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Runtime diagnostics should report failed user tool script loads.")
 	if not _contains_failed_load(diagnostics.get("failed_loads", []), _invalid_script_path):
 		return _failure("Runtime diagnostics should identify failed user tool script paths.")
-	if int(diagnostics.get("runtime_failed_count", 0)) != 1:
+	var invalid_failure := _find_failed_load(diagnostics.get("failed_loads", []), _invalid_script_path)
+	if str(invalid_failure.get("diagnostic_code", "")) != "missing_user_tool_definitions":
+		return _failure("Runtime diagnostics should classify invalid user tool scripts with missing definition guidance.")
+	if str(invalid_failure.get("recommended_action", "")).find("get_tools()") == -1:
+		return _failure("Runtime diagnostics should explain how to recover missing user tool definitions.")
+	if int(diagnostics.get("runtime_failed_count", 0)) != 2:
 		return _failure("Runtime diagnostics should report executor-level runtime failures without counting healthy null-error slots.")
 	if not _contains_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd"):
 		return _failure("Runtime diagnostics should merge executor-level reload failures into failed loads.")
+	var duplicate_failure := _find_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd")
+	if str(duplicate_failure.get("diagnostic_code", "")) != "duplicate_user_tool_logical_name":
+		return _failure("Runtime diagnostics should classify duplicate user tool logical names.")
+	if str(duplicate_failure.get("next_tool_hint", "")).find("plugin_evolution_runtime_diagnostics") == -1:
+		return _failure("Runtime diagnostics should provide a follow-up tool hint for duplicate failures.")
+	var reload_failure := _find_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_reload_failed_user_tool.gd")
+	if str(reload_failure.get("diagnostic_code", "")) != "user_tool_runtime_reload_failed":
+		return _failure("Runtime diagnostics should classify reload_failed runtime entries before generic missing-definition guidance.")
+	if str(reload_failure.get("recommended_action", "")).find("reload error") == -1:
+		return _failure("Runtime diagnostics should explain how to recover generic reload_failed runtime entries.")
+	var unknown_failure := _find_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_unknown_user_tool.gd")
+	if str(unknown_failure.get("diagnostic_code", "")) != "user_tool_load_unknown":
+		return _failure("Runtime diagnostics should classify empty runtime load errors as unknown user tool loads.")
 	if _contains_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_healthy_user_tool.gd"):
 		return _failure("Runtime diagnostics should not turn healthy null-error runtime slots into failed loads.")
-	if int(diagnostics.get("runtime_state_count", 0)) != 2:
+	if int(diagnostics.get("runtime_state_count", 0)) != 4:
 		return _failure("Runtime diagnostics should preserve runtime state snapshot entries.")
 	var watch_status = diagnostics.get("watch", {})
 	if not (watch_status is Dictionary) or not bool((watch_status as Dictionary).get("watching", false)):
@@ -247,12 +291,16 @@ func _count_array_items(values) -> int:
 
 
 func _contains_failed_load(entries, script_path: String) -> bool:
+	return not _find_failed_load(entries, script_path).is_empty()
+
+
+func _find_failed_load(entries, script_path: String) -> Dictionary:
 	if not (entries is Array):
-		return false
+		return {}
 	for entry in entries:
 		if entry is Dictionary and str((entry as Dictionary).get("script_path", "")) == script_path:
-			return true
-	return false
+			return entry as Dictionary
+	return {}
 
 
 func _remove_path(path: String) -> void:
