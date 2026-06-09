@@ -7,8 +7,8 @@ const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var domain_defs: Array = MCPToolManifest.TOOL_DOMAIN_DEFS
-	if domain_defs.size() != 3:
-		return _failure("Tool manifest should define core, plugin, and user domains.")
+	if domain_defs.size() != 6:
+		return _failure("Tool manifest should define core, visual, gameplay, interface, plugin, and user domains.")
 	var public_categories: Array = MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
 	if public_categories != ["system", "user"]:
 		return _failure("Public MCP exposure should stay limited to high-level system tools and user extensions.")
@@ -20,6 +20,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("System tools should resolve to the core domain.")
 	if catalog.find_domain_key_for_category(domain_defs, "plugin_runtime") != "plugin":
 		return _failure("Plugin runtime tools should resolve to the plugin domain.")
+	if catalog.find_domain_key_for_category(domain_defs, "animation") != "visual":
+		return _failure("Animation tools should resolve to the visual domain.")
+	if catalog.find_domain_key_for_category(domain_defs, "audio") != "gameplay":
+		return _failure("Audio tools should resolve to the gameplay domain.")
+	if catalog.find_domain_key_for_category(domain_defs, "ui") != "interface":
+		return _failure("UI tools should resolve to the interface domain.")
 	if catalog.find_domain_key_for_category(domain_defs, "user") != "user":
 		return _failure("User tools should resolve to the user domain.")
 
@@ -35,6 +41,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for public_category in public_categories:
 		if not builtin_categories.has(str(public_category)):
 			return _failure("Public MCP category should exist in the registry: %s" % public_category)
+	for entry in registry.get_builtin_entries():
+		var category := str(entry.get("category", ""))
+		var registry_domain_key := str(entry.get("domain_key", ""))
+		var manifest_domain_key := catalog.find_domain_key_for_category(domain_defs, category)
+		if manifest_domain_key.is_empty():
+			return _failure("Manifest should map registry category '%s' to a domain." % category)
+		if manifest_domain_key != registry_domain_key:
+			return _failure("Manifest domain '%s' should match registry domain '%s' for category '%s'." % [manifest_domain_key, registry_domain_key, category])
 
 	return {
 		"name": "tool_manifest_contracts",

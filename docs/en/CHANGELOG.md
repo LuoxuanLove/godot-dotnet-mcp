@@ -17,6 +17,7 @@ Target version: 1.4.0.
 ### Changed
 
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+- Aligned the tool domain manifest with registry domains so visual, gameplay, and interface tools are grouped outside the core domain in catalog presentation.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 
 ### Documentation
