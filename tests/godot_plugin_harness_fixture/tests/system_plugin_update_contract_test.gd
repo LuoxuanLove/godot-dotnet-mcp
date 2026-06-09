@@ -16,10 +16,15 @@ class FakeBridge extends RefCounted:
 class FakePlugin extends Node:
 	var sync_requested := false
 	var selected_sources: Array[Dictionary] = []
+	var discovery_requests: Array[bool] = []
 
 	func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
 		selected_sources.append({"source": source, "custom_branch": custom_branch, "release_tag": release_tag})
 		return {"success": true, "data": {"source": source, "custom_branch": custom_branch, "release_tag": release_tag}}
+
+	func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dictionary:
+		discovery_requests.append(force_refresh)
+		return {"success": true, "accepted": true}
 
 	func start_plugin_update_sync_from_tools() -> Dictionary:
 		sync_requested = true
@@ -59,6 +64,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var replacement_args := _replacement_arguments(removed_set_source_result)
 	if str(replacement_args.get("custom_branch", "")) != "feature/update-tool" or str(replacement_args.get("release_tag", "")) != "v1.0.0":
 		return await _cleanup_failure(tree, plugin, "system_plugin_update set_source guidance should preserve branch and release tag arguments.")
+
+	var removed_discover_result: Dictionary = executor.execute("plugin_update", {"action": "discover_refs", "force_refresh": false})
+	if bool(removed_discover_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs direct calls should return removal guidance.")
+	if not plugin.discovery_requests.is_empty():
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs direct calls should not execute the discovery bridge.")
+	if not _is_removed_plugin_maintenance_tool(removed_discover_result, "system_plugin_update", "refresh_update_refs"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs guidance should point to system_plugin_maintenance(action=refresh_update_refs).")
+	var discover_replacement_args := _replacement_arguments(removed_discover_result)
+	if bool(discover_replacement_args.get("force_refresh", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update discover_refs guidance should preserve force_refresh=false.")
 
 	plugin.queue_free()
 	await tree.process_frame

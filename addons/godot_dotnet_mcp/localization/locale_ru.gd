@@ -1110,6 +1110,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "Статус обновления",
 	"tool_action_set_update_source_desc": "Выбирает источник обновления плагина через поток обслуживания.",
 	"tool_action_set_update_source_name": "Задать источник",
+	"tool_action_refresh_update_refs_desc": "Запускает обнаружение ссылок обновления плагина через поток обслуживания.",
+	"tool_action_refresh_update_refs_name": "Обновить ссылки",
 	"tool_action_start_update_desc": "Запускает синхронизацию обновления плагина из входа обслуживания.",
 	"tool_action_start_update_name": "Запустить обновление",
 	"tool_system_plugin_maintenance_desc": "Канонический вход для перезагрузки плагина, статуса обновления, выбора источника, запуска обновления и статуса обслуживания.",

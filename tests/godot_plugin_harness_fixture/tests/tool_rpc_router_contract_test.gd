@@ -172,7 +172,7 @@ class FakeToolLoader:
 		if tool_name == "system_plugin_update":
 			return _removed_plugin_maintenance_tool(
 				tool_name,
-				{"action": "start_update"} if str(arguments.get("action", "")) == "start_sync" else {"action": "update_status"}
+				_plugin_update_replacement_arguments(str(arguments.get("action", "")), arguments)
 			)
 		return {}
 
@@ -191,6 +191,27 @@ class FakeToolLoader:
 				"replacement_resources": ["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
 			}
 		}
+
+	func _plugin_update_replacement_arguments(action: String, arguments: Dictionary) -> Dictionary:
+		match action:
+			"get_current", "get_status":
+				return {"action": "update_status"}
+			"discover_refs":
+				return {
+					"action": "refresh_update_refs",
+					"force_refresh": arguments.get("force_refresh", true)
+				}
+			"set_source":
+				return {
+					"action": "set_update_source",
+					"source": arguments.get("source", arguments.get("update_source", "")),
+					"custom_branch": arguments.get("custom_branch", arguments.get("branch", "")),
+					"release_tag": arguments.get("release_tag", arguments.get("tag", ""))
+				}
+			"start_sync":
+				return {"action": "start_update"}
+			_:
+				return {"action": "status"}
 
 	func get_all_tools_by_category() -> Dictionary:
 		return {
@@ -556,7 +577,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed system_tool_activity should point to activity/status.")
 	for removed_plugin_case in [
 		{"tool": "system_plugin_reload", "arguments": {"action": "full_reload_plugin"}, "replacement_action": "reload"},
-		{"tool": "system_plugin_update", "arguments": {"action": "start_sync"}, "replacement_action": "start_update"}
+		{"tool": "system_plugin_update", "arguments": {"action": "start_sync"}, "replacement_action": "start_update"},
+		{"tool": "system_plugin_update", "arguments": {"action": "discover_refs", "force_refresh": false}, "replacement_action": "refresh_update_refs"}
 	]:
 		var removed_plugin_result: Dictionary = await router.build_tool_call_result_async({
 			"name": str(removed_plugin_case.get("tool", "")),
@@ -567,6 +589,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var removed_plugin_structured = removed_plugin_result.get("structuredContent", {})
 		if not _is_removed_plugin_maintenance_tool(removed_plugin_structured, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
 			return _failure("Tool RPC router removed %s should point to system_plugin_maintenance." % str(removed_plugin_case.get("tool", "")))
+		if str(removed_plugin_case.get("replacement_action", "")) == "refresh_update_refs":
+			var removed_plugin_data = (removed_plugin_structured as Dictionary).get("data", {})
+			var replacement_args := _first_replacement_arguments(removed_plugin_data)
+			if bool(replacement_args.get("force_refresh", true)):
+				return _failure("Tool RPC router removed system_plugin_update discover_refs should preserve force_refresh=false.")
 	for removed_scene_case in [
 		{"tool": "system_scene_validate", "action": "validate"},
 		{"tool": "system_scene_analyze", "action": "analyze"}
@@ -750,3 +777,18 @@ func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, repla
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _first_replacement_arguments(data) -> Dictionary:
+	if not (data is Dictionary):
+		return {}
+	var replacement_tools = (data as Dictionary).get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return {}
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return {}
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	if replacement_arguments is Dictionary:
+		return replacement_arguments
+	return {}

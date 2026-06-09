@@ -1110,6 +1110,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "Update-Status",
 	"tool_action_set_update_source_desc": "Waehlt die Plugin-Aktualisierungsquelle aus dem Wartungsablauf.",
 	"tool_action_set_update_source_name": "Update-Quelle setzen",
+	"tool_action_refresh_update_refs_desc": "Startet die Plugin-Update-Referenzsuche aus dem Wartungsablauf.",
+	"tool_action_refresh_update_refs_name": "Update-Refs aktualisieren",
 	"tool_action_start_update_desc": "Startet die Plugin-Aktualisierungssynchronisierung aus dem Wartungseinstieg.",
 	"tool_action_start_update_name": "Update starten",
 	"tool_system_plugin_maintenance_desc": "Kanonischer Einstieg fuer Plugin-Reload, Plugin-Update-Status, Quellenwahl, Update-Start und Wartungsstatus.",

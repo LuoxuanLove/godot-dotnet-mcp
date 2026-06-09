@@ -647,6 +647,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "업데이트 상태",
 	"tool_action_set_update_source_desc": "유지 관리 워크플로에서 플러그인 업데이트 소스를 선택합니다.",
 	"tool_action_set_update_source_name": "업데이트 소스 설정",
+	"tool_action_refresh_update_refs_desc": "유지 관리 워크플로에서 플러그인 업데이트 참조 검색을 시작합니다.",
+	"tool_action_refresh_update_refs_name": "업데이트 참조 새로 고침",
 	"tool_action_start_update_desc": "유지 관리 진입점에서 플러그인 업데이트 동기화를 시작합니다.",
 	"tool_action_start_update_name": "업데이트 시작",
 	"tool_system_plugin_maintenance_desc": "플러그인 다시 로드, 플러그인 업데이트 상태, 소스 선택, 업데이트 시작, 유지 관리 상태를 위한 canonical workflow entry입니다.",

@@ -1146,6 +1146,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "更新狀態",
 	"tool_action_set_update_source_desc": "透過維護流程選擇外掛更新來源。",
 	"tool_action_set_update_source_name": "設定更新來源",
+	"tool_action_refresh_update_refs_desc": "透過維護流程啟動外掛更新引用探索。",
+	"tool_action_refresh_update_refs_name": "刷新更新引用",
 	"tool_action_start_update_desc": "透過維護入口啟動外掛更新同步流程。",
 	"tool_action_start_update_name": "開始更新",
 	"tool_system_plugin_maintenance_desc": "外掛重載、外掛更新狀態、來源選擇、更新啟動與維護狀態的 canonical 工作流程入口。",

@@ -128,14 +128,15 @@ func get_tools() -> Array[Dictionary]:
 		},
 		{
 			"name": "plugin_maintenance",
-			"description": "PLUGIN MAINTENANCE: Canonical high-level plugin maintenance workflow entry for plugin reload and plugin update flows. Actions: status summarizes freshness and update status; reload schedules a plugin lifecycle reload; update_status reads update progress; set_update_source selects the update source; start_update starts async archive sync and reload scheduling.",
+			"description": "PLUGIN MAINTENANCE: Canonical high-level plugin maintenance workflow entry for plugin reload and plugin update flows. Actions: status summarizes freshness and update status; reload schedules a plugin lifecycle reload; update_status reads update progress; set_update_source selects the update source; refresh_update_refs starts async reference discovery; start_update starts async archive sync and reload scheduling.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "start_update"], "description": "Plugin maintenance action"},
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "refresh_update_refs", "start_update"], "description": "Plugin maintenance action"},
 					"source": {"type": "string", "enum": ["latest_stable", "latest_release", "custom_branch", "latest_dev", "branch", "release_tag"], "description": "Update source for set_update_source"},
 					"custom_branch": {"type": "string", "description": "Branch name used when source is custom_branch"},
-					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"}
+					"release_tag": {"type": "string", "description": "Optional release/tag selector saved with latest_release source"},
+					"force_refresh": {"type": "boolean", "description": "Force ref discovery refresh for refresh_update_refs (default: true)"}
 				},
 				"required": ["action"]
 			}
@@ -784,6 +785,11 @@ func _execute_plugin_maintenance(args: Dictionary) -> Dictionary:
 				"custom_branch": args.get("custom_branch", args.get("branch", "")),
 				"release_tag": args.get("release_tag", args.get("tag", ""))
 			})
+		"refresh_update_refs":
+			return _execute_plugin_update_internal({
+				"action": "discover_refs",
+				"force_refresh": args.get("force_refresh", true)
+			})
 		"start_update":
 			return _execute_plugin_update_internal({"action": "start_sync"})
 		_:
@@ -848,8 +854,13 @@ func _removed_plugin_maintenance_tool(removed_tool: String, replacement_argument
 
 func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
 	match action:
-		"get_current", "get_status", "discover_refs":
+		"get_current", "get_status":
 			return {"action": "update_status"}
+		"discover_refs":
+			return {
+				"action": "refresh_update_refs",
+				"force_refresh": args.get("force_refresh", true)
+			}
 		"set_source":
 			var replacement := {
 				"action": "set_update_source",

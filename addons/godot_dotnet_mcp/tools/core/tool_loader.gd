@@ -1104,8 +1104,13 @@ func _removed_public_tool_result(tool_name: String, guidance: String, replacemen
 
 func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
 	match action:
-		"get_current", "get_status", "discover_refs":
+		"get_current", "get_status":
 			return {"action": "update_status"}
+		"discover_refs":
+			return {
+				"action": "refresh_update_refs",
+				"force_refresh": args.get("force_refresh", true)
+			}
 		"set_source":
 			return {
 				"action": "set_update_source",

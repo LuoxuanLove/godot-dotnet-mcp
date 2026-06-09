@@ -315,13 +315,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
 	for removed_plugin_case in [
 		{"tool": "plugin_reload", "removed": "system_plugin_reload", "replacement_action": "reload", "args": {"action": "full_reload_plugin"}},
-		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "start_update", "args": {"action": "start_sync"}}
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "start_update", "args": {"action": "start_sync"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "refresh_update_refs", "args": {"action": "discover_refs", "force_refresh": false}}
 	]:
 		var removed_plugin_result: Dictionary = await _loader.execute_tool_async("system", str(removed_plugin_case.get("tool", "")), removed_plugin_case.get("args", {}))
 		if bool(removed_plugin_result.get("success", true)):
 			return _failure("Tool loader legacy %s calls should return removal guidance." % str(removed_plugin_case.get("removed", "")))
 		if not _is_removed_plugin_maintenance_tool(removed_plugin_result, str(removed_plugin_case.get("removed", "")), str(removed_plugin_case.get("replacement_action", ""))):
 			return _failure("Tool loader %s removal guidance should point to system_plugin_maintenance." % str(removed_plugin_case.get("removed", "")))
+		if str(removed_plugin_case.get("replacement_action", "")) == "refresh_update_refs":
+			var replacement_args := _replacement_arguments(removed_plugin_result)
+			if bool(replacement_args.get("force_refresh", true)):
+				return _failure("Tool loader system_plugin_update discover_refs guidance should preserve force_refresh=false.")
 	for removed_scene_case in [
 		{"tool": "scene_validate", "removed": "system_scene_validate", "action": "validate"},
 		{"tool": "scene_analyze", "removed": "system_scene_analyze", "action": "analyze"}
@@ -413,3 +418,19 @@ func _is_removed_plugin_maintenance_tool(result: Dictionary, removed_tool: Strin
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _replacement_arguments(result: Dictionary) -> Dictionary:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return {}
+	var replacement_tools = (data as Dictionary).get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return {}
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return {}
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	if replacement_arguments is Dictionary:
+		return replacement_arguments
+	return {}

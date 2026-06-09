@@ -1114,6 +1114,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "更新状態",
 	"tool_action_set_update_source_desc": "保守ワークフローからプラグイン更新元を選択します。",
 	"tool_action_set_update_source_name": "更新元を設定",
+	"tool_action_refresh_update_refs_desc": "保守ワークフローからプラグイン更新参照の検出を開始します。",
+	"tool_action_refresh_update_refs_name": "更新参照を更新",
 	"tool_action_start_update_desc": "保守入口からプラグイン更新同期を開始します。",
 	"tool_action_start_update_name": "更新開始",
 	"tool_system_plugin_maintenance_desc": "プラグイン再読み込み、プラグイン更新状態、更新元選択、更新開始、保守状態の canonical workflow entry です。",

@@ -43,7 +43,7 @@ class FakeToolLoader:
 			"inputSchema": {
 				"type": "object",
 				"properties": {
-					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "start_update"], "description": "Plugin maintenance action"}
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "refresh_update_refs", "start_update"], "description": "Plugin maintenance action"}
 				}
 			}
 		}, {

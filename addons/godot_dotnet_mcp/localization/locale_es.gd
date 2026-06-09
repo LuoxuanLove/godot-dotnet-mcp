@@ -1110,6 +1110,8 @@ const TRANSLATIONS: Dictionary = {
 	"tool_action_update_status_name": "Estado de actualizacion",
 	"tool_action_set_update_source_desc": "Selecciona la fuente de actualizacion del plugin desde el flujo de mantenimiento.",
 	"tool_action_set_update_source_name": "Definir fuente",
+	"tool_action_refresh_update_refs_desc": "Inicia la deteccion de referencias de actualizacion del plugin desde el flujo de mantenimiento.",
+	"tool_action_refresh_update_refs_name": "Actualizar referencias",
 	"tool_action_start_update_desc": "Inicia la sincronizacion de actualizacion del plugin desde la entrada de mantenimiento.",
 	"tool_action_start_update_name": "Iniciar actualizacion",
 	"tool_system_plugin_maintenance_desc": "Entrada canonica para recarga del plugin, estado de actualizacion, seleccion de fuente, inicio de actualizacion y estado de mantenimiento.",
