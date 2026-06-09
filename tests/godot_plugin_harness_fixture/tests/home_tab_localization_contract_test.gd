@@ -64,8 +64,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if locale.has("advanced_settings"):
 			return _failure("Localization dictionaries should not keep the removed Advanced Settings label.")
 	for key in [
-		"tool_system_help_name",
-		"tool_system_help_desc",
 		"tool_system_editor_state_name",
 		"tool_system_project_files_name",
 		"tool_system_scene_tree_name",

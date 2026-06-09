@@ -8,6 +8,10 @@ const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
+	"tool_system_help_name",
+	"tool_system_help_desc",
+	"tool_system_tool_activity_name",
+	"tool_system_tool_activity_desc",
 	"tool_system_scene_validate_name",
 	"tool_system_scene_validate_desc",
 	"tool_system_scene_analyze_name",
