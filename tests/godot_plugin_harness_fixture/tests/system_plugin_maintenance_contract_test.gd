@@ -131,6 +131,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var reload_maintenance: Dictionary = reload_result.get("maintenance_window", {})
 	if str(reload_maintenance.get("kind", "")) != "plugin_lifecycle_reload":
 		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance reload should preserve lifecycle maintenance metadata.")
+	if str(reload_result.get("target_plugin", "")) != "godot_dotnet_mcp" or not bool(reload_result.get("self_plugin", false)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance reload should identify the reload target as this MCP plugin.")
 
 	plugin.queue_free()
 	await tree.process_frame
