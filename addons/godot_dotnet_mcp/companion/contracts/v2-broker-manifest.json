@@ -31,5 +31,15 @@
     "requires_project_id": true,
     "requires_session_id": true,
     "rejects_cross_project_session": true
+  },
+  "session_lifecycle": {
+    "default_lease_minutes": 30,
+    "max_active_sessions": 256,
+    "max_active_sessions_per_project": 32,
+    "tool_calls_renew_lease": true,
+    "renew_requires_active_session": true,
+    "stop_revokes_session": true,
+    "expired_sessions_rejected": true,
+    "expired_sessions_removed": true
   }
 }

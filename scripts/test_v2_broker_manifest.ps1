@@ -153,6 +153,79 @@ try {
         ConvertTo-JsonFile -Object $manifest -Path $path
         Invoke-Validator -Path $path
     }
+
+    Assert-Fails "session_lifecycle_requires_positive_lease" {
+        $path = Join-Path $tempRoot "session-lease.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.default_lease_minutes = 0
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_requires_global_session_limit" {
+        $path = Join-Path $tempRoot "session-global-limit.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.max_active_sessions = 0
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_requires_project_session_limit" {
+        $path = Join-Path $tempRoot "session-project-limit.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.max_active_sessions_per_project = 0
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_project_limit_cannot_exceed_global_limit" {
+        $path = Join-Path $tempRoot "session-limit-order.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.max_active_sessions = 8
+        $manifest.session_lifecycle.max_active_sessions_per_project = 16
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_tool_calls_renew_lease" {
+        $path = Join-Path $tempRoot "session-tool-renew.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.tool_calls_renew_lease = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_renew_requires_active_session" {
+        $path = Join-Path $tempRoot "session-renew-active.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.renew_requires_active_session = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_stop_revokes_session" {
+        $path = Join-Path $tempRoot "session-stop-revoke.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.stop_revokes_session = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_rejects_expired_sessions" {
+        $path = Join-Path $tempRoot "session-expired-reject.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.expired_sessions_rejected = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_lifecycle_removes_expired_sessions" {
+        $path = Join-Path $tempRoot "session-expired-remove.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_lifecycle.expired_sessions_removed = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {

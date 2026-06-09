@@ -39,6 +39,26 @@ function Require-Bool {
     return [bool]$value
 }
 
+function Require-PositiveInteger {
+    param($Object, [string]$Name, [string]$Context)
+
+    if ($Object.PSObject.Properties.Name -notcontains $Name) {
+        throw "$Context must declare '$Name'."
+    }
+
+    $value = $Object.$Name
+    if ($value -isnot [int] -and $value -isnot [long]) {
+        throw "$Context '$Name' must be an integer."
+    }
+
+    $number = [int64]$value
+    if ($number -le 0) {
+        throw "$Context '$Name' must be positive."
+    }
+
+    return $number
+}
+
 function Assert-Bool {
     param([bool]$Actual, [bool]$Expected, [string]$Message)
 
@@ -88,5 +108,27 @@ $scope = $manifest.session_scope
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "requires_project_id" -Context "session_scope") -Expected $true -Message "Broker session tools must require project_id."
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "requires_session_id" -Context "session_scope") -Expected $true -Message "Broker session tools must require session_id."
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "rejects_cross_project_session" -Context "session_scope") -Expected $true -Message "Broker must reject cross-project session reuse."
+
+$sessionLifecycle = $manifest.session_lifecycle
+$defaultLeaseMinutes = Require-PositiveInteger -Object $sessionLifecycle -Name "default_lease_minutes" -Context "session_lifecycle"
+$maxActiveSessions = Require-PositiveInteger -Object $sessionLifecycle -Name "max_active_sessions" -Context "session_lifecycle"
+$maxActiveSessionsPerProject = Require-PositiveInteger -Object $sessionLifecycle -Name "max_active_sessions_per_project" -Context "session_lifecycle"
+if ($defaultLeaseMinutes -ne 30) {
+    throw "Broker default session lease must stay 30 minutes."
+}
+if ($maxActiveSessions -ne 256) {
+    throw "Broker global active session limit must stay 256."
+}
+if ($maxActiveSessionsPerProject -ne 32) {
+    throw "Broker per-project active session limit must stay 32."
+}
+if ($maxActiveSessionsPerProject -gt $maxActiveSessions) {
+    throw "Broker per-project active session limit cannot exceed the global limit."
+}
+Assert-Bool -Actual (Require-Bool -Object $sessionLifecycle -Name "tool_calls_renew_lease" -Context "session_lifecycle") -Expected $true -Message "Broker tool calls must renew active session leases."
+Assert-Bool -Actual (Require-Bool -Object $sessionLifecycle -Name "renew_requires_active_session" -Context "session_lifecycle") -Expected $true -Message "Broker renew must require an active session."
+Assert-Bool -Actual (Require-Bool -Object $sessionLifecycle -Name "stop_revokes_session" -Context "session_lifecycle") -Expected $true -Message "Broker stop must revoke the session."
+Assert-Bool -Actual (Require-Bool -Object $sessionLifecycle -Name "expired_sessions_rejected" -Context "session_lifecycle") -Expected $true -Message "Broker must reject expired sessions."
+Assert-Bool -Actual (Require-Bool -Object $sessionLifecycle -Name "expired_sessions_removed" -Context "session_lifecycle") -Expected $true -Message "Broker must remove expired sessions."
 
 Write-Host "v2 broker manifest validation passed: $resolvedManifestPath"
