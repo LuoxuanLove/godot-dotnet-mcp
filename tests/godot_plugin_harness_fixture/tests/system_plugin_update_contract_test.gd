@@ -49,6 +49,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not _is_removed_plugin_maintenance_tool(removed_start_result, "system_plugin_update", "start_update"):
 		return await _cleanup_failure(tree, plugin, "system_plugin_update start_sync guidance should point to system_plugin_maintenance(action=start_update).")
 
+	var removed_current_result: Dictionary = executor.execute("plugin_update", {"action": "get_current"})
+	if bool(removed_current_result.get("success", true)):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current direct calls should return removal guidance.")
+	if not _is_removed_plugin_maintenance_tool(removed_current_result, "system_plugin_update", "status"):
+		return await _cleanup_failure(tree, plugin, "system_plugin_update get_current guidance should point to system_plugin_maintenance(action=status).")
+
 	var removed_set_source_result: Dictionary = executor.execute("plugin_update", {
 		"action": "set_source",
 		"source": "custom_branch",

@@ -315,6 +315,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
 	for removed_plugin_case in [
 		{"tool": "plugin_reload", "removed": "system_plugin_reload", "replacement_action": "reload", "args": {"action": "full_reload_plugin"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "status", "args": {"action": "get_current"}},
 		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "start_update", "args": {"action": "start_sync"}},
 		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "refresh_update_refs", "args": {"action": "discover_refs", "force_refresh": false}}
 	]:

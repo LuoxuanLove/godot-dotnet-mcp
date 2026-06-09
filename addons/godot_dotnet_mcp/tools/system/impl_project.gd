@@ -854,7 +854,9 @@ func _removed_plugin_maintenance_tool(removed_tool: String, replacement_argument
 
 func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
 	match action:
-		"get_current", "get_status":
+		"get_current":
+			return {"action": "status"}
+		"get_status":
 			return {"action": "update_status"}
 		"discover_refs":
 			return {

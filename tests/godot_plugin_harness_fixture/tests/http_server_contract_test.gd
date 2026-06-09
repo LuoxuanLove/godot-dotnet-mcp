@@ -249,6 +249,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC removed system_tool_activity should point to activity/status.")
 	for removed_plugin_case in [
 		{"tool": "system_plugin_reload", "arguments": {"action": "full_reload_plugin"}, "replacement_action": "reload"},
+		{"tool": "system_plugin_update", "arguments": {"action": "get_current"}, "replacement_action": "status"},
 		{"tool": "system_plugin_update", "arguments": {"action": "start_sync"}, "replacement_action": "start_update"},
 		{"tool": "system_plugin_update", "arguments": {"action": "discover_refs", "force_refresh": false}, "replacement_action": "refresh_update_refs"}
 	]:
