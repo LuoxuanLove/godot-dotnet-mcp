@@ -49,12 +49,10 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_runtime_control",
 	"system_runtime_diagnose",
 	"system_runtime_step",
-	"system_scene_analyze",
 	"system_scene_dependency_graph",
 	"system_scene_inspect",
 	"system_scene_patch",
 	"system_scene_tree",
-	"system_scene_validate",
 	"system_script_analyze",
 	"system_script_patch"
 ]

@@ -10,6 +10,8 @@ const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/t
 
 const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_help": true,
+	"system_scene_analyze": true,
+	"system_scene_validate": true,
 	"system_tool_activity": true
 }
 

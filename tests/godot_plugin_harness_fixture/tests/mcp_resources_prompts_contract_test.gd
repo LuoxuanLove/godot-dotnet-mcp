@@ -251,9 +251,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
-	for removed_tool in ["system_help", "system_tool_activity"]:
-		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool):
-			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool)
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
+			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
 
 	var exposed_tool_catalog := await _read_json_resource(TOOLS_CATALOG_EXPOSED_URI, 28)
 	if not bool(exposed_tool_catalog.get("ok", false)):
@@ -261,18 +261,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
-	for removed_tool in ["system_help", "system_tool_activity"]:
-		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool):
-			return _failure("exposed tool catalog resource should not expose removed public tool %s." % removed_tool)
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
+			return _failure("exposed tool catalog should not expose removed public tool %s." % removed_tool_name)
 	var visible_tool_catalog := await _read_json_resource(TOOLS_CATALOG_VISIBLE_URI, 29)
 	if not bool(visible_tool_catalog.get("ok", false)):
 		return _failure(str(visible_tool_catalog.get("error", "visible tool catalog resource failed")))
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
-	for removed_tool in ["system_help", "system_tool_activity"]:
-		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool):
-			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool)
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool_name):
+			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool_name)
 
 	var activity_status := await _read_json_resource(ACTIVITY_STATUS_URI, 30)
 	if not bool(activity_status.get("ok", false)):
@@ -383,7 +383,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(content_prompt.get("error", "content authoring prompt failed")))
 	if str(content_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(content_prompt.get("text", "")).find("res://tests/headless_case_support.gd") == -1:
 		return _failure("content authoring prompt should normalize scene_path and script_path to res://.")
-	if not _prompt_text_is_actionable(str(content_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_scene_analyze", "system_script_patch"]):
+	if not _prompt_text_is_actionable(str(content_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_scene_inspect", "action=analyze", "system_script_patch"]):
 		return _failure("content authoring prompt should provide actionable scene and script authoring sections.")
 
 	var debug_prompt := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"error_summary": "NullReferenceException", "include_runtime": true}, 13)
@@ -399,7 +399,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(reference_prompt.get("error", "reference integrity prompt failed")))
 	if str(reference_prompt.get("text", "")).find("bindings_audit") == -1 or str(reference_prompt.get("text", "")).find("resource_reference_audit") == -1 or str(reference_prompt.get("text", "")).find("res://Main.tscn") == -1:
 		return _failure("reference integrity prompt should mention binding and resource audits and normalize scene_path.")
-	if not _prompt_text_is_actionable(str(reference_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_script_analyze", "system_scene_validate"]):
+	if not _prompt_text_is_actionable(str(reference_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_script_analyze", "system_scene_inspect", "action=validate"]):
 		return _failure("reference integrity prompt should provide actionable workflow sections and validation tools.")
 	var gd_reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.gd"}, 16)
 	if not bool(gd_reference_prompt.get("ok", false)):

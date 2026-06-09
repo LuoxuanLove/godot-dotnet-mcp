@@ -22,6 +22,7 @@ Target version: 1.4.0.
 - Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
 - Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
+- Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 
 ### Fixed
 
@@ -40,7 +41,7 @@ Target version: 1.4.0.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
-- Added removal guard coverage so tool lists, catalog resources, search results, and Tools page rendering cannot re-expose `system_tool_activity`.
+- Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 

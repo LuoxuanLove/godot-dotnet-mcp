@@ -88,15 +88,6 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "scene_audit",          "actions": ["from_path"]},
 		{"tool": "filesystem_directory", "actions": ["get_files"]}
 	],
-	"system_scene_validate": [
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]}
-	],
-	"system_scene_analyze": [
-		{"tool": "scene_bindings", "actions": ["from_path"]},
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "script_inspect", "actions": ["path"]}
-	],
 	"system_scene_inspect": [
 		{"tool": "scene_audit",    "actions": ["from_path"]},
 		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]},

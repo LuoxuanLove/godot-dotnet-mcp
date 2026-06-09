@@ -69,6 +69,36 @@ class FakeToolLoader:
 				}
 			}
 		})
+		definitions.append({
+			"name": "system_scene_validate",
+			"description": "Removed public scene validation tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string"}
+				}
+			}
+		})
+		definitions.append({
+			"name": "system_scene_analyze",
+			"description": "Removed public scene analysis tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string"}
+				}
+			}
+		})
 		return definitions
 
 	func get_domain_states() -> Array:
@@ -103,6 +133,18 @@ class FakeToolLoader:
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "recent", "get"]}}}
+			}, {
+				"name": "scene_validate",
+				"full_name": "system_scene_validate",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {"scene": {"type": "string"}}}
+			}, {
+				"name": "scene_analyze",
+				"full_name": "system_scene_analyze",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {"scene": {"type": "string"}}}
 			}],
 			"project": [{
 				"name": "info",
@@ -130,6 +172,23 @@ class FakeToolLoader:
 					"removed_tool": "system_tool_activity",
 					"replacement_methods": ["resources/read", "resources/list", "resources/templates/list"],
 					"replacement_resources": ["godot-dotnet-mcp://activity/status"]
+				}
+			}
+		if category == "system" and (tool_name == "scene_validate" or tool_name == "scene_analyze"):
+			var removed_tool := "system_scene_validate" if tool_name == "scene_validate" else "system_scene_analyze"
+			var replacement_action := "validate" if tool_name == "scene_validate" else "analyze"
+			return {
+				"success": false,
+				"error": "%s has been removed from the public tool surface. Call system_scene_inspect with action=%s instead." % [removed_tool, replacement_action],
+				"data": {
+					"error_type": "removed_public_tool",
+					"removed_tool": removed_tool,
+					"replacement_tools": [{
+						"name": "system_scene_inspect",
+						"arguments": {"action": replacement_action, "scene": str(arguments.get("scene", ""))}
+					}],
+					"replacement_methods": ["tools/call", "resources/read", "resources/templates/list"],
+					"replacement_resources": ["godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://guides/capabilities"]
 				}
 			}
 		var execution_args := arguments.duplicate(true)
@@ -217,6 +276,8 @@ class FakeCallbacks:
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
 			or tool_name == "system_tool_activity"
+			or tool_name == "system_scene_validate"
+			or tool_name == "system_scene_analyze"
 		)
 
 	func is_tool_exposed(tool_name: String) -> bool:
@@ -225,6 +286,8 @@ class FakeCallbacks:
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
 			or tool_name == "system_tool_activity"
+			or tool_name == "system_scene_validate"
+			or tool_name == "system_scene_analyze"
 		)
 
 	func log(message: String, level: String) -> void:
@@ -259,8 +322,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	if _contains_tool_name_recursive(tools_list, "system_tool_activity"):
-		return _failure("Tool RPC router tools/list should not expose removed public tool system_tool_activity.")
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+		if _contains_tool_name_recursive(tools_list, removed_tool_name):
+			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:
 		if not (tool_entry is Dictionary):
 			continue
@@ -367,6 +431,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed system_tool_activity should expose removed_public_tool guidance.")
 	if not (((removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
 		return _failure("Tool RPC router removed system_tool_activity should point to activity/status.")
+	for removed_scene_case in [
+		{"tool": "system_scene_validate", "action": "validate"},
+		{"tool": "system_scene_analyze", "action": "analyze"}
+	]:
+		var removed_scene_result: Dictionary = await router.build_tool_call_result_async({
+			"name": str(removed_scene_case.get("tool", "")),
+			"arguments": {"scene": "res://Main.tscn"}
+		})
+		if not bool(removed_scene_result.get("isError", false)):
+			return _failure("Tool RPC router should return isError=true for removed %s." % str(removed_scene_case.get("tool", "")))
+		var removed_scene_structured = removed_scene_result.get("structuredContent", {})
+		if not _is_removed_scene_tool(removed_scene_structured, str(removed_scene_case.get("tool", "")), str(removed_scene_case.get("action", ""))):
+			return _failure("Tool RPC router removed %s should point to system_scene_inspect." % str(removed_scene_case.get("tool", "")))
 
 	callbacks.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_result: Dictionary = await router.build_tool_call_result_async({
@@ -493,3 +570,26 @@ func _contains_tool_name_recursive(value, tool_name: String) -> bool:
 			if _contains_tool_name_recursive(nested, tool_name):
 				return true
 	return false
+
+
+func _is_removed_scene_tool(structured, removed_tool: String, replacement_action: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://scene/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action

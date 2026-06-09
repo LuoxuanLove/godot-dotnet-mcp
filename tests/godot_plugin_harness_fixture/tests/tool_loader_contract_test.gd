@@ -132,6 +132,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should keep legacy system_tool_activity calls routable to removal guidance.")
 	if not exposed_names.has("system_scene_inspect"):
 		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
+	for removed_scene_tool_name in ["system_scene_validate", "system_scene_analyze"]:
+		if exposed_names.has(removed_scene_tool_name):
+			return _failure("Tool loader should remove %s from public MCP exposure." % removed_scene_tool_name)
+		if not _loader.is_tool_exposed(removed_scene_tool_name):
+			return _failure("Tool loader should keep legacy %s calls routable to removal guidance." % removed_scene_tool_name)
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
@@ -303,6 +308,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if bool(filtered_activity_result.get("success", true)):
 		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
+	for removed_scene_case in [
+		{"tool": "scene_validate", "removed": "system_scene_validate", "action": "validate"},
+		{"tool": "scene_analyze", "removed": "system_scene_analyze", "action": "analyze"}
+	]:
+		var removed_scene_result: Dictionary = await _loader.execute_tool_async("system", str(removed_scene_case.get("tool", "")), {"scene": "res://Main.tscn"})
+		if bool(removed_scene_result.get("success", true)):
+			return _failure("Tool loader legacy %s calls should return removal guidance." % str(removed_scene_case.get("removed", "")))
+		if not _is_removed_scene_tool(removed_scene_result, str(removed_scene_case.get("removed", "")), str(removed_scene_case.get("action", ""))):
+			return _failure("Tool loader %s removal guidance should point to system_scene_inspect." % str(removed_scene_case.get("removed", "")))
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):
@@ -345,3 +359,24 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _is_removed_scene_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://scene/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
