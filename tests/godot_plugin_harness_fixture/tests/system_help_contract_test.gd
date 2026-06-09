@@ -83,6 +83,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var capabilities = help_data.get("capabilities", {})
 	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
 		return _failure("system help capabilities should include prompts as an explicit category.")
+	if not (capabilities as Dictionary).has("resources") or not (((capabilities as Dictionary).get("resources", []) is Array)):
+		return _failure("system help capabilities should include resources as an explicit category.")
+	var protocol_surface_guidance = help_data.get("protocol_surface_guidance", {})
+	if not (protocol_surface_guidance is Dictionary):
+		return _failure("system help should explain how to choose between MCP resources, prompts, and tools.")
+	var protocol_surface_text := JSON.stringify(protocol_surface_guidance)
+	for expected_fragment in ["resources/list", "resources/templates/list", "resources/read", "prompts/list", "prompts/get", "system_* tools", "resource reads", "prompt guides"]:
+		if protocol_surface_text.find(expected_fragment) == -1:
+			return _failure("system help protocol surface guidance should mention: %s" % expected_fragment)
+	if protocol_surface_text.find("godot-dotnet-mcp://tools/catalog") == -1 or protocol_surface_text.find("godot.project_orientation") == -1:
+		return _failure("system help protocol surface guidance should point to canonical resource and prompt examples.")
 	var help_text := JSON.stringify(help_data)
 	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1 or help_text.find("resolve_property") == -1 or help_text.find("system_inspector") == -1 or help_text.find("run_task") == -1 or help_text.find("system_editor_evidence") == -1 or help_text.find("active_dialog") == -1:
 		return _failure("system help should mention current settings_dialog, inspector, and editor evidence workflow action names.")
