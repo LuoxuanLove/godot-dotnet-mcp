@@ -18,4 +18,4 @@ The bridge upgrade contract now documents the editor-side handshake states. A pr
 
 ### ✅ Compatibility and Upgrade Notes
 
-The Companion layer is a contract library in this stage. It does not start a background process, open a port, launch Godot, or change the existing editor-native plugin startup behavior.
+The Companion layer is a contract library in this stage. It does not start a background process, open a port, launch Godot, or change the existing editor-native plugin startup behavior. The broker manifest keeps that promise explicit: broker startup, loopback HTTP transport, project registration, and editor launch all require deliberate user or client action.
