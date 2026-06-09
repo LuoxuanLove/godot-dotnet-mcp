@@ -182,6 +182,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		if _find_child_by_metadata(system_category, "tool", removed_tool_name) != null:
 			return _failure("Tools tab should not render removed project lifecycle entry '%s'." % removed_tool_name)
+	if _find_child_by_metadata(system_category, "tool", "system_tool_activity") != null:
+		return _failure("Tools tab should not render removed public tool system_tool_activity.")
 	if _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.start") == null or _find_child_by_metadata(project_lifecycle_tool, "action", "system_project_lifecycle.stop") == null:
 		return _failure("Tools tab should render start and stop actions under system_project_lifecycle.")
 	var user_metadata = user_tool.get_metadata(0)

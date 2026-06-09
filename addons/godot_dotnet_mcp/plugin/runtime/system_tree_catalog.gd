@@ -3,7 +3,6 @@ extends RefCounted
 
 const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	"system_help": [],
-	"system_tool_activity": [],
 	"system_project_state": [
 		{"tool": "project_info",         "actions": ["get_info"]},
 		{"tool": "project_dotnet",       "actions": []},

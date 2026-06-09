@@ -8,6 +8,10 @@ const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_regist
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
+const PUBLIC_REMOVED_MCP_TOOLS := {
+	"system_tool_activity": true
+}
+
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
 var _entries_by_category: Dictionary = {}
@@ -129,7 +133,12 @@ func _build_tools_by_category_internal(visible_only: bool) -> Dictionary:
 			continue
 		var decorated_defs: Array[Dictionary] = []
 		for tool_def in defs:
-			decorated_defs.append(_decorate_tool_definition(category, tool_def))
+			var decorated_def := _decorate_tool_definition(category, tool_def)
+			if _is_public_removed_tool_definition(decorated_def):
+				continue
+			decorated_defs.append(decorated_def)
+		if decorated_defs.is_empty():
+			continue
 		result[category] = decorated_defs
 	return result
 
@@ -161,7 +170,13 @@ func is_tool_exposed(tool_name: String) -> bool:
 	for tool_def in get_exposed_tool_definitions():
 		if str(tool_def.get("name", "")) == tool_name:
 			return true
+	if _is_callable_removed_public_tool(tool_name):
+		return true
 	return _is_callable_compatibility_alias(tool_name)
+
+
+func is_public_removed_tool(tool_name: String) -> bool:
+	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
@@ -1014,8 +1029,28 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
 	if _as_bool(tool_def.get("compatibility_alias", false)):
 		return false
+	if _is_public_removed_tool_definition(tool_def):
+		return false
 	var category := str(tool_def.get("category", ""))
 	return _is_exposed_tool_category(category)
+
+
+func _is_public_removed_tool_definition(tool_def: Dictionary) -> bool:
+	var name := str(tool_def.get("name", ""))
+	var full_name := str(tool_def.get("full_name", name))
+	return PUBLIC_REMOVED_MCP_TOOLS.has(full_name) or PUBLIC_REMOVED_MCP_TOOLS.has(name)
+
+
+func _is_callable_removed_public_tool(tool_name: String) -> bool:
+	if not PUBLIC_REMOVED_MCP_TOOLS.has(tool_name):
+		return false
+	for tool_def in get_tool_definitions():
+		if str(tool_def.get("name", "")) != tool_name:
+			continue
+		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
+			return false
+		return _as_bool(tool_def.get("enabled", true))
+	return false
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:

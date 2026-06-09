@@ -79,6 +79,19 @@ class FakeToolLoader:
 	func get_tool_definitions() -> Array:
 		var tools := get_exposed_tool_definitions()
 		tools.append({
+			"name": "system_tool_activity",
+			"description": "Removed public activity diagnostics entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "recent", "get"], "description": "Removed activity query action"}
+				}
+			}
+		})
+		tools.append({
 			"name": "project_input",
 			"description": "Manage input action mappings",
 			"category": "project",
@@ -161,6 +174,18 @@ class FakeToolLoader:
 						"property_path": {"type": "string", "description": "Inspector property path or fragment"}
 					}
 				}
+			}, {
+				"name": "tool_activity",
+				"full_name": "system_tool_activity",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["status", "recent", "get"], "description": "Removed activity query action"}
+					}
+				}
 			}],
 			"project": [{
 				"name": "input",
@@ -187,6 +212,9 @@ class FakeToolLoader:
 
 	func get_tool_loader_status() -> Dictionary:
 		return {"healthy": true, "status": "ready", "tool_count": 6, "exposed_tool_count": 5}
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return tool_name == "system_tool_activity"
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -243,6 +271,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("include_schema=true should preserve the full input schema.")
 	if not ((visible_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
 		return _failure("Catalog search should match enum values and report param_enum.")
+	var removed_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+		"query": "activity diagnostics",
+		"visibility": "visible",
+		"limit": 10
+	})
+	var removed_visible_matches: Array = (removed_visible_search.get("data", {}) as Dictionary).get("matches", [])
+	if not removed_visible_matches.is_empty():
+		return _failure("Visible catalog search should filter removed public tool system_tool_activity.")
 
 	var domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "core", "query": "label"})
 	var domain_matches: Array = (domain_search.get("data", {}) as Dictionary).get("matches", [])

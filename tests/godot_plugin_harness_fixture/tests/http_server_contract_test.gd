@@ -75,6 +75,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not expose the unified tool tree.")
 	if not _first_tool_has_group_path(tools_list.get("tools", [])):
 		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
+	if _contains_tool_name_recursive(tools_list, "system_tool_activity"):
+		return _failure("Tools list response should not expose removed public tool system_tool_activity.")
 
 	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -94,6 +96,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
 	if not _has_tool(full_reload_tools_list.get("tools", []), "system_help"):
 		return _failure("HTTP server full reload reinitialize did not expose system_help.")
+	if _contains_tool_name_recursive(full_reload_tools_list, "system_tool_activity"):
+		return _failure("HTTP server full reload should not expose removed public tool system_tool_activity.")
 
 	_server.reinitialize(RESTART_CONTRACT_PORT, "127.0.0.1", false, [], "contract_restart")
 	if not bool(_server.start()):
@@ -122,6 +126,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
 	if not _first_tool_has_group_path(rpc_tools):
 		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
+	if _contains_tool_name_recursive(rpc_tools_list_result, "system_tool_activity"):
+		return _failure("JSON-RPC tools/list should not expose removed public tool system_tool_activity.")
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -180,6 +186,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if rpc_invalid_arguments_text.find("Tool arguments must be an object") == -1:
 		return _failure("JSON-RPC tools/call non-object arguments should preserve the router error text.")
 
+	var rpc_removed_activity: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 5,
+		"method": "tools/call",
+		"params": {
+			"name": "system_tool_activity",
+			"arguments": {"action": "status"}
+		}
+	}))
+	var rpc_removed_activity_result = rpc_removed_activity.get("result", {})
+	if not (rpc_removed_activity_result is Dictionary) or not bool((rpc_removed_activity_result as Dictionary).get("isError", false)):
+		return _failure("JSON-RPC tools/call should return isError=true for removed system_tool_activity.")
+	var rpc_removed_activity_structured = (rpc_removed_activity_result as Dictionary).get("structuredContent", {})
+	if not (rpc_removed_activity_structured is Dictionary) or bool((rpc_removed_activity_structured as Dictionary).get("success", true)):
+		return _failure("JSON-RPC removed system_tool_activity should expose failing structuredContent.")
+	var rpc_removed_activity_data = (rpc_removed_activity_structured as Dictionary).get("data", {})
+	if not (rpc_removed_activity_data is Dictionary) or str((rpc_removed_activity_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("JSON-RPC removed system_tool_activity should expose removed_public_tool guidance.")
+	if not (((rpc_removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
+		return _failure("JSON-RPC removed system_tool_activity should point to activity/status.")
+
 	return {
 		"name": "http_server_contracts",
 		"success": true,
@@ -220,6 +247,25 @@ func _has_tool(tools, tool_name: String) -> bool:
 	for tool_def in tools:
 		if tool_def is Dictionary and str((tool_def as Dictionary).get("name", "")) == tool_name:
 			return true
+	return false
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is String:
+		return str(value) == tool_name
+	if value is Array:
+		for item in value:
+			if _contains_tool_name_recursive(item, tool_name):
+				return true
+		return false
+	if value is Dictionary:
+		var dict := value as Dictionary
+		for key in ["name", "fullName", "full_name"]:
+			if str(dict.get(key, "")) == tool_name:
+				return true
+		for nested in dict.values():
+			if _contains_tool_name_recursive(nested, tool_name):
+				return true
 	return false
 
 

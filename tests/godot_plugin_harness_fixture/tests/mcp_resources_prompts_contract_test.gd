@@ -251,6 +251,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
+	if _contains_tool_name_recursive(tool_catalog_payload, "system_tool_activity"):
+		return _failure("tool catalog resource should not expose removed public tool system_tool_activity.")
 
 	var exposed_tool_catalog := await _read_json_resource(TOOLS_CATALOG_EXPOSED_URI, 28)
 	if not bool(exposed_tool_catalog.get("ok", false)):
@@ -258,12 +260,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
+	if _contains_tool_name_recursive(exposed_tool_catalog_payload, "system_tool_activity"):
+		return _failure("exposed tool catalog should not expose removed public tool system_tool_activity.")
 	var visible_tool_catalog := await _read_json_resource(TOOLS_CATALOG_VISIBLE_URI, 29)
 	if not bool(visible_tool_catalog.get("ok", false)):
 		return _failure(str(visible_tool_catalog.get("error", "visible tool catalog resource failed")))
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	if _contains_tool_name_recursive(visible_tool_catalog_payload, "system_tool_activity"):
+		return _failure("visible tool catalog should not expose removed public tool system_tool_activity.")
 
 	var activity_status := await _read_json_resource(ACTIVITY_STATUS_URI, 30)
 	if not bool(activity_status.get("ok", false)):
@@ -713,6 +719,25 @@ func _first_message_text(messages) -> String:
 	if not (content is Dictionary):
 		return ""
 	return str((content as Dictionary).get("text", ""))
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is String:
+		return str(value) == tool_name
+	if value is Array:
+		for item in value:
+			if _contains_tool_name_recursive(item, tool_name):
+				return true
+		return false
+	if value is Dictionary:
+		var dict := value as Dictionary
+		for key in ["name", "fullName", "full_name"]:
+			if str(dict.get(key, "")) == tool_name:
+				return true
+		for nested in dict.values():
+			if _contains_tool_name_recursive(nested, tool_name):
+				return true
+	return false
 
 
 func _failure(message: String) -> Dictionary:

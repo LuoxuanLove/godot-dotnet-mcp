@@ -105,6 +105,8 @@ static func _build_catalog(loader, include_internal: bool, include_schema: bool)
 		var full_name := str(tool.get("name", tool.get("full_name", "")))
 		if full_name.is_empty() or seen.has(full_name):
 			continue
+		if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(full_name)):
+			continue
 		seen[full_name] = true
 		var metadata: Dictionary = metadata_by_name.get(full_name, {})
 		var input_schema: Dictionary = tool.get("inputSchema", {"type": "object", "properties": {}})

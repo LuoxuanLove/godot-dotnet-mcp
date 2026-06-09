@@ -124,8 +124,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose the high-level system_plugin_maintenance entry.")
 	if not exposed_names.has("system_dap_debugger"):
 		return _failure("Tool loader did not expose the high-level system_dap_debugger entry.")
-	if not exposed_names.has("system_tool_activity"):
-		return _failure("Tool loader did not expose the high-level system_tool_activity entry.")
+	if exposed_names.has("system_tool_activity"):
+		return _failure("Tool loader should remove system_tool_activity from public MCP exposure.")
+	if not _loader.is_tool_exposed("system_tool_activity"):
+		return _failure("Tool loader should keep legacy system_tool_activity calls routable to removal guidance.")
 	if not exposed_names.has("system_scene_inspect"):
 		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
@@ -280,11 +282,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (catalog_data is Dictionary) or not ((catalog_data as Dictionary).get("matches", []) is Array):
 		return _failure("Tool loader system_tool_catalog should return a matches array.")
 	var activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {"action": "status"})
-	if not bool(activity_result.get("success", false)):
-		return _failure("Tool loader should route system_tool_activity successfully.")
+	if bool(activity_result.get("success", true)):
+		return _failure("Tool loader legacy system_tool_activity calls should return removal guidance.")
 	var activity_data = activity_result.get("data", {})
-	if not (activity_data is Dictionary) or not (activity_data as Dictionary).has("running_count"):
-		return _failure("Tool loader system_tool_activity should return activity counts.")
+	if not (activity_data is Dictionary) or str((activity_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_tool_activity removal guidance should expose error_type=removed_public_tool.")
+	if not (((activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
+		return _failure("Tool loader system_tool_activity removal guidance should point to activity/status.")
 	var filtered_activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {
 		"action": "recent",
 		"state": "completed",
@@ -293,14 +297,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"failure_limit": 1,
 		"limit": 5
 	})
-	if not bool(filtered_activity_result.get("success", false)):
-		return _failure("Tool loader should route filtered system_tool_activity queries successfully.")
-	var filtered_activity_data = filtered_activity_result.get("data", {})
-	if not (filtered_activity_data is Dictionary) or int((filtered_activity_data as Dictionary).get("filtered_recent_count", 0)) <= 0:
-		return _failure("Tool loader filtered system_tool_activity should return matching recent calls.")
-	var filtered_activity_filters = (filtered_activity_data as Dictionary).get("filters", {})
-	if not (filtered_activity_filters is Dictionary) or str((filtered_activity_filters as Dictionary).get("state", "")) != "completed":
-		return _failure("Tool loader filtered system_tool_activity should echo applied filters.")
+	if bool(filtered_activity_result.get("success", true)):
+		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):
