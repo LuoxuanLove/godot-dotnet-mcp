@@ -87,12 +87,21 @@ public sealed class DotnetWorkspaceGraphAnalyzer
             try
             {
                 var resolvedPath = Path.GetFullPath(include, projectDirectory);
+                var isInsideProjectRoot = IsInside(projectRoot, resolvedPath);
                 projectReferences.Add(new ProjectReferenceGraphItem(
                     Include: include,
                     ResolvedPath: resolvedPath,
-                    IsInsideProjectRoot: IsInside(projectRoot, resolvedPath),
-                    Exists: File.Exists(resolvedPath),
+                    IsInsideProjectRoot: isInsideProjectRoot,
+                    Exists: isInsideProjectRoot && File.Exists(resolvedPath),
                     Condition: ConditionFor(element)));
+                if (!isInsideProjectRoot)
+                {
+                    diagnostics.Add(new DotnetWorkspaceDiagnostic(
+                        ProjectFilePath: projectFilePath,
+                        Severity: DotnetWorkspaceDiagnosticSeverity.Warning,
+                        Code: "dotnet_workspace_project_reference_outside_root",
+                        Message: "ProjectReference outside the project root was recorded without probing file existence."));
+                }
             }
             catch (Exception exception) when (IsRecoverableProjectReferenceException(exception))
             {
