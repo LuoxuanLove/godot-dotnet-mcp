@@ -15,7 +15,7 @@ Target version: 1.4.0.
 
 ### Internal
 
-- Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints.
+- Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 
 ## [1.3.0] - 2026-06-08
 

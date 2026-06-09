@@ -450,6 +450,8 @@ $RequiredCases = @(
     "tool_presentation_service_contracts"
     "tools_api_service_contracts"
     "tool_rpc_router_contracts"
+    "user_tool_service_contracts"
+    "plugin_evolution_runtime_diagnostics_contracts"
     "dock_model_service_contracts"
     "tools_tab_rendering_contracts"
 )

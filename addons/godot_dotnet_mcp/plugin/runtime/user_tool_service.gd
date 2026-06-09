@@ -201,8 +201,7 @@ func _summarize_runtime_state(runtime_state: Array) -> Dictionary:
 			continue
 		var state_entry: Dictionary = entry
 		var state := str(state_entry.get("state", ""))
-		var last_error := _string_or_empty(state_entry.get("last_error", ""))
-		if state == "reload_failed" or not last_error.is_empty():
+		if state == "reload_failed":
 			summary["failed_count"] = int(summary.get("failed_count", 0)) + 1
 		if bool(state_entry.get("pending_reload", false)) or state in ["reload_pending", "waiting_quiesce"]:
 			summary["pending_count"] = int(summary.get("pending_count", 0)) + 1
