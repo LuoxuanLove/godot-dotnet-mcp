@@ -160,6 +160,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+	var all_tool_names: Array[String] = []
+	for tool_def in all_tools:
+		all_tool_names.append(str(tool_def.get("name", "")))
+	if all_tool_names.has("resource_manage"):
+		return _failure("Tool loader should remove the legacy resource_manage definition.")
+	for canonical_resource_tool_name in ["resource_query", "resource_create", "resource_file_ops"]:
+		if not all_tool_names.has(canonical_resource_tool_name):
+			return _failure("Tool loader should keep canonical resource replacement tool '%s'." % canonical_resource_tool_name)
+	if _loader.is_tool_exposed("resource_manage"):
+		return _failure("Tool loader should not keep legacy resource_manage callable through public exposure.")
+	var removed_resource_result: Dictionary = await _loader.execute_tool_async("resource", "manage", {"action": "create", "type": "Resource", "path": "res://Tmp/removed_resource_manage.tres"})
+	if bool(removed_resource_result.get("success", true)):
+		return _failure("Tool loader should not execute removed resource_manage through the resource domain.")
 
 	_loader.set("_tool_definitions_by_category", {
 		"user": [

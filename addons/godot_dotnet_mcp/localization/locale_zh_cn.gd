@@ -897,12 +897,10 @@ const TRANSLATIONS: Dictionary = {
 
 	# Resource tools
 	"tool_resource_query_name": "查询",
-	"tool_resource_manage_name": "管理",
 	"tool_resource_create_name": "创建",
 	"tool_resource_file_ops_name": "文件操作",
 	"tool_resource_texture_name": "纹理",
 	"tool_resource_query_desc": "查找和检查资源",
-	"tool_resource_manage_desc": "加载、保存和复制资源",
 	"tool_resource_create_desc": "根据资源类型创建新的资源文件",
 	"tool_resource_file_ops_desc": "复制、移动、删除或重新加载资源文件",
 	"tool_resource_texture_desc": "管理纹理资源",

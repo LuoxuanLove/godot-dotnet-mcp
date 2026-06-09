@@ -707,7 +707,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_node_visibility_desc": "컨트롤 node visibility and layers",
 	"tool_node_physics_desc": "물리 속성을 구성합니다.",
 	"tool_resource_query_name": "조회",
-	"tool_resource_manage_name": "관리",
 	"tool_resource_create_name": "생성",
 	"tool_resource_file_ops_name": "파일 작업",
 	"tool_resource_texture_name": "텍스처",

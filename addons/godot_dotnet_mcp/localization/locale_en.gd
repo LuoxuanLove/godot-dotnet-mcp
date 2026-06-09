@@ -897,12 +897,10 @@ const TRANSLATIONS: Dictionary = {
 
 	# Resource tools
 	"tool_resource_query_name": "Query",
-	"tool_resource_manage_name": "Manage",
 	"tool_resource_create_name": "Create",
 	"tool_resource_file_ops_name": "File Ops",
 	"tool_resource_texture_name": "Texture",
 	"tool_resource_query_desc": "Find and inspect resources",
-	"tool_resource_manage_desc": "Load, save and duplicate resources",
 	"tool_resource_create_desc": "Create new resource files from resource types",
 	"tool_resource_file_ops_desc": "Copy, move, delete or reload resource files",
 	"tool_resource_texture_desc": "Manage texture resources",

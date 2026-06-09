@@ -61,22 +61,6 @@ EXAMPLES:
 			}
 		},
 		{
-			"name": "manage",
-			"description": "COMPATIBILITY ALIAS: Legacy resource_manage entry kept for existing MCP wrappers.",
-			"compatibility_alias": true,
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"action": {"type": "string"},
-					"type": {"type": "string"},
-					"path": {"type": "string"},
-					"source": {"type": "string"},
-					"dest": {"type": "string"}
-				},
-				"required": ["action"]
-			}
-		},
-		{
 			"name": "create",
 			"description": """RESOURCE CREATE: Create a new resource file from a resource type.
 
@@ -188,8 +172,6 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"query":
 			return _execute_query(args)
-		"manage":
-			return _execute_manage_compat(args)
 		"create":
 			return _execute_create(args)
 		"file_ops":
@@ -379,13 +361,6 @@ func _execute_file_ops(args: Dictionary) -> Dictionary:
 			return _reload_resource(args.get("path", ""))
 		_:
 			return _error("Unknown action: %s" % str(args.get("action", "")))
-
-
-func _execute_manage_compat(args: Dictionary) -> Dictionary:
-	var action = str(args.get("action", ""))
-	if action == "create":
-		return _execute_create(args)
-	return _execute_file_ops(args)
 
 
 func _create_resource(type_name: String, path: String) -> Dictionary:
