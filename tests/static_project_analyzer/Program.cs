@@ -9,6 +9,10 @@ var tests = new (string Name, Action Run)[]
     ("reports_malformed_dotnet_projects_as_diagnostics", ReportsMalformedDotnetProjectsAsDiagnostics),
     ("does_not_claim_dotnet_workspace_when_every_project_is_malformed", DoesNotClaimDotnetWorkspaceWhenEveryProjectIsMalformed),
     ("skips_incomplete_reference_items_as_diagnostics", SkipsIncompleteReferenceItemsAsDiagnostics),
+    ("reports_static_resource_reference_graph", ReportsStaticResourceReferenceGraph),
+    ("resolves_forward_resource_declarations", ResolvesForwardResourceDeclarations),
+    ("reports_missing_and_unsupported_resource_references", ReportsMissingAndUnsupportedResourceReferences),
+    ("keeps_resource_references_inside_project_boundary", KeepsResourceReferencesInsideProjectBoundary),
     ("skips_dot_directories_while_scanning_project_files", SkipsDotDirectoriesWhileScanningProjectFiles),
     ("skips_hidden_and_system_directories_while_scanning_project_files", SkipsHiddenAndSystemDirectoriesWhileScanningProjectFiles),
     ("skips_reparse_point_directories_while_scanning_project_files", SkipsReparsePointDirectoriesWhileScanningProjectFiles),
@@ -50,6 +54,7 @@ static void ReportsStaticInventoryForGodotDotnetProject()
     AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectFiles[0]);
     AssertTrue(inventory.DotnetWorkspace.HasProjects);
     AssertFalse(inventory.DotnetWorkspace.HasDiagnostics);
+    AssertFalse(inventory.ResourceReferences.HasResources);
     AssertTrue(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.ResourceGraphAnalysis));
@@ -180,6 +185,125 @@ static void SkipsIncompleteReferenceItemsAsDiagnostics()
     AssertTrue(inventory.DotnetWorkspace.Diagnostics.Any(diagnostic => diagnostic.Code == "dotnet_workspace_project_reference_missing_include"));
 }
 
+static void ReportsStaticResourceReferenceGraph()
+{
+    var root = CreateTempProjectRoot();
+    Directory.CreateDirectory(Path.Combine(root, "scenes"));
+    Directory.CreateDirectory(Path.Combine(root, "scripts"));
+    Directory.CreateDirectory(Path.Combine(root, "resources"));
+    var scenePath = Path.Combine(root, "scenes", "Main.tscn");
+    var scriptPath = Path.Combine(root, "scripts", "Player.cs");
+    var resourcePath = Path.Combine(root, "resources", "Config.tres");
+    File.WriteAllText(scriptPath, string.Empty);
+    File.WriteAllText(resourcePath, """
+        [gd_resource type="Resource" format=3 uid="uid://config123"]
+
+        [resource]
+        value = 1
+        """);
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=3 format=3 uid="uid://main123"]
+
+        [ext_resource type="Script" path="res://scripts/Player.cs" id="1_player"]
+        [ext_resource type="Resource" uid="uid://config123" path="res://resources/Config.tres" id="2_config"]
+
+        [sub_resource type="Animation" id="Animation_idle"]
+
+        [node name="Main" type="Node"]
+        script = ExtResource("1_player")
+        config = ExtResource("2_config")
+        animation = SubResource("Animation_idle")
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var graph = inventory.ResourceReferences;
+
+    AssertTrue(graph.HasResources);
+    AssertEqual(2, graph.Files.Count);
+    AssertEqual(2, graph.ExternalResources.Count);
+    AssertEqual(1, graph.SubResources.Count);
+    AssertEqual(6, graph.ReferenceUsages.Count);
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.ExtResource && reference.Reference == "1_player" && reference.Exists));
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.SubResource && reference.Reference == "Animation_idle" && reference.Exists));
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.Uid && reference.Reference == "uid://main123"));
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.Uid && reference.Reference == "uid://config123"));
+    AssertFalse(graph.HasDiagnostics);
+}
+
+static void ResolvesForwardResourceDeclarations()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "Forward.tscn");
+    var scriptPath = Path.Combine(root, "Forward.cs");
+    File.WriteAllText(scriptPath, string.Empty);
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=2 format=3]
+
+        [node name="Forward" type="Node"]
+        script = ExtResource("ForwardScript")
+        child = SubResource("ForwardSub")
+
+        [ext_resource type="Script" path="res://Forward.cs" id="ForwardScript"]
+        [sub_resource type="Resource" id="ForwardSub"]
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertTrue(inventory.ResourceReferences.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.ExtResource && reference.Reference == "ForwardScript" && reference.Exists));
+    AssertTrue(inventory.ResourceReferences.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.SubResource && reference.Reference == "ForwardSub" && reference.Exists));
+    AssertFalse(inventory.ResourceReferences.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_missing_reference_declaration"));
+}
+
+static void ReportsMissingAndUnsupportedResourceReferences()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "Broken.tscn");
+    var binaryPath = Path.Combine(root, "Binary.res");
+    File.WriteAllText(binaryPath, "binary-placeholder");
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=2 format=3]
+
+        [ext_resource type="Texture2D" path="res://missing.png" id="MissingTexture"]
+
+        [node name="Broken" type="Node"]
+        texture = ExtResource("MissingTexture")
+        unresolved_external = ExtResource("UnknownExternal")
+        unresolved_sub = SubResource("UnknownSub")
+        packed = load("res://also_missing.tres")
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var graph = inventory.ResourceReferences;
+
+    AssertEqual(2, graph.Files.Count);
+    AssertEqual(1, graph.ExternalResources.Count);
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.ExtResource && reference.Reference == "MissingTexture" && !reference.Exists));
+    AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_missing_reference_declaration"));
+    AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_reference_missing_file"));
+    AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_binary_resource_unsupported"));
+}
+
+static void KeepsResourceReferencesInsideProjectBoundary()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "Escapes.tscn");
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=2 format=3]
+
+        [ext_resource type="Resource" path="res://../outside.tres" id="Escape"]
+
+        [node name="Escapes" type="Node"]
+        escape = ExtResource("Escape")
+        direct = preload("res://../outside.gd")
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertTrue(inventory.ResourceReferences.ExternalResources.Single().IsInsideProjectRoot == false);
+    AssertTrue(inventory.ResourceReferences.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.Preload && reference.IsInsideProjectRoot == false));
+    AssertTrue(inventory.ResourceReferences.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_reference_outside_project"));
+}
+
 static void SkipsDotDirectoriesWhileScanningProjectFiles()
 {
     var root = CreateTempProjectRoot();
@@ -305,6 +429,7 @@ static void DoesNotRegisterNonGodotDirectoriesAsProjects()
 
     AssertFalse(inventory.IsGodotProject);
     AssertEqual<string?>(null, inventory.ProjectId);
+    AssertFalse(inventory.ResourceReferences.HasResources);
     AssertFalse(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertFalse(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
     AssertContains("project.godot", inventory.GetCapability(CompanionCapability.DotnetWorkspaceAnalysis).Reason);

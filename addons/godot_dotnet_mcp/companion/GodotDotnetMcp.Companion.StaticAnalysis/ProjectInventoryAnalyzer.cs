@@ -22,6 +22,9 @@ public sealed class ProjectInventoryAnalyzer
         var pluginDirectory = Path.Combine(normalizedRoot, "addons", "godot_dotnet_mcp");
         var hasPluginDirectory = Directory.Exists(pluginDirectory);
         var dotnetWorkspace = new DotnetWorkspaceGraphAnalyzer().Analyze(normalizedRoot, csprojFiles);
+        var resourceReferences = isGodotProject
+            ? new ResourceReferenceGraphAnalyzer().Analyze(normalizedRoot)
+            : EmptyResourceGraph();
 
         var descriptor = TryCreateDescriptor(normalizedRoot, isGodotProject, csprojFiles.FirstOrDefault());
         var capabilities = BuildCapabilities(isGodotProject, dotnetWorkspace);
@@ -33,9 +36,15 @@ public sealed class ProjectInventoryAnalyzer
             ProjectFilePath: projectFilePath,
             CSharpProjectFiles: csprojFiles,
             DotnetWorkspace: dotnetWorkspace,
+            ResourceReferences: resourceReferences,
             HasPluginDirectory: hasPluginDirectory,
             Mode: CompanionMode.StaticHeadless,
             Capabilities: capabilities);
+    }
+
+    private static ResourceReferenceGraph EmptyResourceGraph()
+    {
+        return new ResourceReferenceGraph([], [], [], [], []);
     }
 
     private static ProjectDescriptor? TryCreateDescriptor(string projectRoot, bool isGodotProject, string? firstProjectFile)
