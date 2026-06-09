@@ -90,15 +90,6 @@ After reading all this, why not try Godot .NET MCP? I will keep studying the mar
 
 Does that sound arrogant? Maybe. If you have a more badass implementation idea, send a PR. You are very welcome!
 
-## Real Project Validation
-
-<table>
-  <tr>
-    <td width="38%" valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex"><img src="https://github.com/LuoxuanLove/CoGDSex/blob/main/resources/godex-workbench.png?raw=1" alt="CoGDSex Godex workbench screenshot" width="420"></a></td>
-    <td valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex">LuoxuanLove/CoGDSex</a> is a public Godot .NET game project that records its real development process. It also shows Godot .NET MCP being used against a substantial codebase and editor workflow, validating practical project capability and stability while feeding concrete improvement points back into future plugin features.</td>
-  </tr>
-</table>
-
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
