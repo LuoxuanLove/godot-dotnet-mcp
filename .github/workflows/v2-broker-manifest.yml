@@ -5,7 +5,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
     paths:
-      - "addons/godot_dotnet_mcp/companion/contracts/v2-broker-manifest.json"
+      - "companion/contracts/v2-broker-manifest.json"
       - "scripts/validate_v2_broker_manifest.ps1"
       - "scripts/test_v2_broker_manifest.ps1"
       - ".github/workflows/v2-broker-manifest.yml"
@@ -15,8 +15,9 @@ on:
     branches:
       - dev
       - v2.0
+      - release/v2.0.0-baseline
     paths:
-      - "addons/godot_dotnet_mcp/companion/contracts/v2-broker-manifest.json"
+      - "companion/contracts/v2-broker-manifest.json"
       - "scripts/validate_v2_broker_manifest.ps1"
       - "scripts/test_v2_broker_manifest.ps1"
       - ".github/workflows/v2-broker-manifest.yml"

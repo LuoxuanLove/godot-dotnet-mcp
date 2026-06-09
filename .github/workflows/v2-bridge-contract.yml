@@ -5,7 +5,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
     paths:
-      - "addons/godot_dotnet_mcp/companion/contracts/v2-bridge-status.schema.json"
+      - "companion/contracts/v2-bridge-status.schema.json"
       - "docs/**/v2-bridge-upgrade-contract.md"
       - "scripts/validate_v2_bridge_contract.ps1"
       - "scripts/test_v2_bridge_contract.ps1"
@@ -17,8 +17,9 @@ on:
     branches:
       - dev
       - v2.0
+      - release/v2.0.0-baseline
     paths:
-      - "addons/godot_dotnet_mcp/companion/contracts/v2-bridge-status.schema.json"
+      - "companion/contracts/v2-bridge-status.schema.json"
       - "docs/**/v2-bridge-upgrade-contract.md"
       - "scripts/validate_v2_bridge_contract.ps1"
       - "scripts/test_v2_bridge_contract.ps1"
