@@ -1,0 +1,46 @@
+name: v2-capability-manifest
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    paths:
+      - "addons/godot_dotnet_mcp/companion/contracts/v2-capabilities.json"
+      - "scripts/validate_v2_capability_manifest.ps1"
+      - "scripts/test_v2_capability_manifest.ps1"
+      - ".github/workflows/v2-capability-manifest.yml"
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+      - v2.0
+    paths:
+      - "addons/godot_dotnet_mcp/companion/contracts/v2-capabilities.json"
+      - "scripts/validate_v2_capability_manifest.ps1"
+      - "scripts/test_v2_capability_manifest.ps1"
+      - ".github/workflows/v2-capability-manifest.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  v2-capability-manifest:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate v2 capability manifest
+        shell: pwsh
+        run: .\scripts\validate_v2_capability_manifest.ps1
+
+      - name: Test v2 capability manifest policy
+        shell: pwsh
+        run: .\scripts\test_v2_capability_manifest.ps1

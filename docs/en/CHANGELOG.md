@@ -15,6 +15,7 @@ Target version: 2.0.0.
 ### Internal
 
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
+- Added a v2 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, or unscoped tool calls.
 
 ## [Unreleased] ([1.4.0])
 

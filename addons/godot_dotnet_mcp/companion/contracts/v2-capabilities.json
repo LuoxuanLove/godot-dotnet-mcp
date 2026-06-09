@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "version_line": "2.0.0",
+  "contract": "godot-dotnet-mcp.v2.capabilities",
+  "tool_scope": {
+    "requires_project_id": true,
+    "requires_session_id": true
+  },
+  "default_lifecycle": {
+    "starts_background_process": false,
+    "opens_listening_port": false,
+    "launches_godot_editor": false,
+    "requires_explicit_start": true,
+    "requires_explicit_editor_upgrade": true
+  },
+  "modes": [
+    {
+      "id": "static_headless",
+      "requires_editor_bridge": false,
+      "requires_explicit_upgrade": false,
+      "provides_live_editor_state": false,
+      "default_enabled": true
+    },
+    {
+      "id": "editor_live",
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "default_enabled": false
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "static_project_analysis",
+      "mode": "static_headless",
+      "layer": "ProjectSession",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": false,
+      "requires_explicit_upgrade": false,
+      "provides_live_editor_state": false,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "dotnet_workspace_analysis",
+      "mode": "static_headless",
+      "layer": "ProjectSession",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": false,
+      "requires_explicit_upgrade": false,
+      "provides_live_editor_state": false,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "resource_graph_analysis",
+      "mode": "static_headless",
+      "layer": "ProjectSession",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": false,
+      "requires_explicit_upgrade": false,
+      "provides_live_editor_state": false,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "editor_selection",
+      "mode": "editor_live",
+      "layer": "EditorPluginBridge",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "inspector_state",
+      "mode": "editor_live",
+      "layer": "EditorPluginBridge",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "dock_state",
+      "mode": "editor_live",
+      "layer": "EditorPluginBridge",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "editor_screenshot",
+      "mode": "editor_live",
+      "layer": "EditorPluginBridge",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "may_start_process": false,
+      "may_listen_port": false
+    },
+    {
+      "id": "runtime_validation",
+      "mode": "editor_live",
+      "layer": "EditorPluginBridge",
+      "requires_project_id": true,
+      "requires_session_id": true,
+      "requires_editor_bridge": true,
+      "requires_explicit_upgrade": true,
+      "provides_live_editor_state": true,
+      "may_start_process": false,
+      "may_listen_port": false
+    }
+  ]
+}
