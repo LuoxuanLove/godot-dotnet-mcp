@@ -19,6 +19,10 @@ Target version: 1.4.0.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 
+### Fixed
+
+- Fixed the default tool profile so registered split visual authoring categories for materials, shaders, lighting, particles, TileMaps, and geometry are visible without switching to the full profile.
+
 ### Documentation
 
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
