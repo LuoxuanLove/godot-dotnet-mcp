@@ -11,8 +11,13 @@ var tests = new (string Name, Action Run)[]
     ("skips_incomplete_reference_items_as_diagnostics", SkipsIncompleteReferenceItemsAsDiagnostics),
     ("reports_static_resource_reference_graph", ReportsStaticResourceReferenceGraph),
     ("resolves_forward_resource_declarations", ResolvesForwardResourceDeclarations),
+    ("reports_large_resource_files_as_diagnostics", ReportsLargeResourceFilesAsDiagnostics),
+    ("reports_duplicate_resource_ids_as_ambiguous", ReportsDuplicateResourceIdsAsAmbiguous),
     ("reports_missing_and_unsupported_resource_references", ReportsMissingAndUnsupportedResourceReferences),
+    ("does_not_double_count_preload_as_load", DoesNotDoubleCountPreloadAsLoad),
+    ("reports_invalid_external_resource_fallback_paths", ReportsInvalidExternalResourceFallbackPaths),
     ("keeps_resource_references_inside_project_boundary", KeepsResourceReferencesInsideProjectBoundary),
+    ("rejects_reparse_point_resource_references", RejectsReparsePointResourceReferences),
     ("skips_dot_directories_while_scanning_project_files", SkipsDotDirectoriesWhileScanningProjectFiles),
     ("skips_hidden_and_system_directories_while_scanning_project_files", SkipsHiddenAndSystemDirectoriesWhileScanningProjectFiles),
     ("skips_reparse_point_directories_while_scanning_project_files", SkipsReparsePointDirectoriesWhileScanningProjectFiles),
@@ -254,6 +259,51 @@ static void ResolvesForwardResourceDeclarations()
     AssertFalse(inventory.ResourceReferences.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_missing_reference_declaration"));
 }
 
+static void ReportsLargeResourceFilesAsDiagnostics()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "Huge.tscn");
+    using (var writer = new StreamWriter(scenePath))
+    {
+        writer.WriteLine("[gd_scene load_steps=1 format=3]");
+        writer.Write(new string('x', (int)ResourceReferenceGraphAnalyzer.MaxTextResourceBytes + 1));
+    }
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertEqual(1, inventory.ResourceReferences.Files.Count);
+    AssertEqual(0, inventory.ResourceReferences.ReferenceUsages.Count);
+    AssertTrue(inventory.ResourceReferences.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_resource_too_large"));
+}
+
+static void ReportsDuplicateResourceIdsAsAmbiguous()
+{
+    var root = CreateTempProjectRoot();
+    File.WriteAllText(Path.Combine(root, "First.cs"), string.Empty);
+    File.WriteAllText(Path.Combine(root, "Second.cs"), string.Empty);
+    var scenePath = Path.Combine(root, "Duplicate.tscn");
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=4 format=3]
+
+        [ext_resource type="Script" path="res://First.cs" id="Shared"]
+        [ext_resource type="Script" path="res://Second.cs" id="Shared"]
+        [sub_resource type="Resource" id="SharedSub"]
+        [sub_resource type="Resource" id="SharedSub"]
+
+        [node name="Duplicate" type="Node"]
+        script = ExtResource("Shared")
+        value = SubResource("SharedSub")
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var graph = inventory.ResourceReferences;
+
+    AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_duplicate_reference_id"));
+    AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_ambiguous_reference_id"));
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.ExtResource && reference.Reference == "Shared" && !reference.Exists));
+    AssertTrue(graph.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.SubResource && reference.Reference == "SharedSub" && !reference.Exists));
+}
+
 static void ReportsMissingAndUnsupportedResourceReferences()
 {
     var root = CreateTempProjectRoot();
@@ -283,6 +333,46 @@ static void ReportsMissingAndUnsupportedResourceReferences()
     AssertTrue(graph.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_binary_resource_unsupported"));
 }
 
+static void DoesNotDoubleCountPreloadAsLoad()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "PreloadOnly.tscn");
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=1 format=3]
+
+        [node name="PreloadOnly" type="Node"]
+        packed = preload("res://missing.tres")
+        """);
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+    var references = inventory.ResourceReferences.ReferenceUsages;
+
+    AssertEqual(1, references.Count(reference => reference.Kind == ResourceReferenceUsageKind.Preload));
+    AssertEqual(0, references.Count(reference => reference.Kind == ResourceReferenceUsageKind.Load));
+    AssertEqual(1, inventory.ResourceReferences.Diagnostics.Count(diagnostic => diagnostic.Code == "resource_graph_reference_missing_file"));
+}
+
+static void ReportsInvalidExternalResourceFallbackPaths()
+{
+    var root = CreateTempProjectRoot();
+    var scenePath = Path.Combine(root, "InvalidFallbacks.tscn");
+    File.WriteAllText(scenePath, """
+        [gd_scene load_steps=5 format=3]
+
+        [ext_resource type="Resource" path="user://settings.tres" id="UserPath"]
+        [ext_resource type="Resource" path="file:///tmp/external.tres" id="FilePath"]
+        [ext_resource type="Resource" path="/tmp/external.tres" id="AbsolutePath"]
+        [ext_resource type="Resource" path="" id="BlankPath"]
+        [ext_resource type="Resource" uid="uid://abc123" id="UidOnly"]
+        """);
+
+    var graph = new ProjectInventoryAnalyzer().Analyze(root).ResourceReferences;
+
+    AssertEqual(5, graph.ExternalResources.Count);
+    AssertEqual(3, graph.Diagnostics.Count(diagnostic => diagnostic.Code == "resource_graph_reference_invalid_path"));
+    AssertEqual(2, graph.Diagnostics.Count(diagnostic => diagnostic.Code == "resource_graph_reference_missing_path"));
+}
+
 static void KeepsResourceReferencesInsideProjectBoundary()
 {
     var root = CreateTempProjectRoot();
@@ -302,6 +392,37 @@ static void KeepsResourceReferencesInsideProjectBoundary()
     AssertTrue(inventory.ResourceReferences.ExternalResources.Single().IsInsideProjectRoot == false);
     AssertTrue(inventory.ResourceReferences.ReferenceUsages.Any(reference => reference.Kind == ResourceReferenceUsageKind.Preload && reference.IsInsideProjectRoot == false));
     AssertTrue(inventory.ResourceReferences.Diagnostics.Any(diagnostic => diagnostic.Code == "resource_graph_reference_outside_project"));
+}
+
+static void RejectsReparsePointResourceReferences()
+{
+    var root = CreateTempProjectRoot();
+    var outsideRoot = Path.Combine(Path.GetTempPath(), "godot-dotnet-mcp-resource-graph-outside", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(outsideRoot);
+    File.WriteAllText(Path.Combine(outsideRoot, "Target.tres"), "[gd_resource type=\"Resource\" format=3]");
+    var linkPath = Path.Combine(root, "LinkedOutside");
+    if (!TryCreateDirectorySymbolicLink(linkPath, outsideRoot))
+    {
+        throw new OperationCanceledException("directory symbolic links are unavailable.");
+    }
+
+    File.WriteAllText(Path.Combine(root, "LinkedReferences.tscn"), """
+        [gd_scene load_steps=3 format=3]
+
+        [ext_resource type="Resource" path="res://LinkedOutside/Target.tres" id="LinkedTarget"]
+
+        [node name="LinkedReferences" type="Node"]
+        loaded = load("res://LinkedOutside/Target.tres")
+        preloaded = preload("res://LinkedOutside/Target.tres")
+        """);
+
+    var graph = new ProjectInventoryAnalyzer().Analyze(root).ResourceReferences;
+
+    AssertFalse(graph.ExternalResources.Single().Exists);
+    AssertEqual<bool?>(null, graph.ExternalResources.Single().IsInsideProjectRoot);
+    AssertEqual(1, graph.ReferenceUsages.Count(reference => reference.Kind == ResourceReferenceUsageKind.Load && reference.Exists == false));
+    AssertEqual(1, graph.ReferenceUsages.Count(reference => reference.Kind == ResourceReferenceUsageKind.Preload && reference.Exists == false));
+    AssertEqual(3, graph.Diagnostics.Count(diagnostic => diagnostic.Code == "resource_graph_reference_reparse_point"));
 }
 
 static void SkipsDotDirectoriesWhileScanningProjectFiles()

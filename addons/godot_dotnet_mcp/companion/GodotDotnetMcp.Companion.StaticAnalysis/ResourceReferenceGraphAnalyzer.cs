@@ -4,6 +4,8 @@ namespace GodotDotnetMcp.Companion.StaticAnalysis;
 
 public sealed class ResourceReferenceGraphAnalyzer
 {
+    public const long MaxTextResourceBytes = 1024 * 1024;
+
     private static readonly Regex AttributePattern = new(
         """(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?:"(?<quoted>[^"]*)"|(?<bare>[^\s\]]+))""",
         RegexOptions.CultureInvariant);
@@ -17,11 +19,11 @@ public sealed class ResourceReferenceGraphAnalyzer
         RegexOptions.CultureInvariant);
 
     private static readonly Regex PreloadUsagePattern = new(
-        """preload\("(?<path>res://[^"]+)"\)""",
+        """(?<![A-Za-z0-9_])preload\("(?<path>res://[^"]+)"\)""",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex LoadUsagePattern = new(
-        """load\("(?<path>res://[^"]+)"\)""",
+        """(?<![A-Za-z0-9_])load\("(?<path>res://[^"]+)"\)""",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex UidUsagePattern = new(
@@ -85,9 +87,22 @@ public sealed class ResourceReferenceGraphAnalyzer
         List<ResourceGraphDiagnostic> diagnostics)
     {
         var externalById = new Dictionary<string, ResourceExternalResourceGraphItem>(StringComparer.Ordinal);
+        var duplicateExternalIds = new HashSet<string>(StringComparer.Ordinal);
         var subResourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var duplicateSubResourceIds = new HashSet<string>(StringComparer.Ordinal);
         try
         {
+            if (new FileInfo(file.FilePath).Length > MaxTextResourceBytes)
+            {
+                diagnostics.Add(new ResourceGraphDiagnostic(
+                    ResourcePath: file.ResourcePath,
+                    Line: null,
+                    Severity: ResourceGraphDiagnosticSeverity.Warning,
+                    Code: "resource_graph_resource_too_large",
+                    Message: $"Text resource exceeds the static analysis size limit of {MaxTextResourceBytes} bytes."));
+                return;
+            }
+
             var lines = File.ReadAllLines(file.FilePath);
             for (var index = 0; index < lines.Length; index++)
             {
@@ -99,7 +114,11 @@ public sealed class ResourceReferenceGraphAnalyzer
                     if (item is not null)
                     {
                         externalResources.Add(item);
-                        externalById[item.Id] = item;
+                        if (!externalById.TryAdd(item.Id, item))
+                        {
+                            duplicateExternalIds.Add(item.Id);
+                            diagnostics.Add(DuplicateDeclaration(file.ResourcePath, lineNumber, "ext_resource", item.Id));
+                        }
                     }
                 }
                 else if (line.StartsWith("[sub_resource ", StringComparison.Ordinal))
@@ -108,7 +127,11 @@ public sealed class ResourceReferenceGraphAnalyzer
                     if (item is not null)
                     {
                         subResources.Add(item);
-                        subResourceIds.Add(item.Id);
+                        if (!subResourceIds.Add(item.Id))
+                        {
+                            duplicateSubResourceIds.Add(item.Id);
+                            diagnostics.Add(DuplicateDeclaration(file.ResourcePath, lineNumber, "sub_resource", item.Id));
+                        }
                     }
                 }
             }
@@ -117,7 +140,17 @@ public sealed class ResourceReferenceGraphAnalyzer
             {
                 var lineNumber = index + 1;
                 var line = lines[index];
-                RecordReferenceUsages(projectRoot, file.ResourcePath, line, lineNumber, externalById, subResourceIds, referenceUsages, diagnostics);
+                RecordReferenceUsages(
+                    projectRoot,
+                    file.ResourcePath,
+                    line,
+                    lineNumber,
+                    externalById,
+                    duplicateExternalIds,
+                    subResourceIds,
+                    duplicateSubResourceIds,
+                    referenceUsages,
+                    diagnostics);
             }
         }
         catch (Exception exception) when (IsRecoverableReadException(exception))
@@ -145,14 +178,24 @@ public sealed class ResourceReferenceGraphAnalyzer
             return null;
         }
 
-        attributes.TryGetValue("path", out var path);
+        var hasPath = attributes.TryGetValue("path", out var path);
         attributes.TryGetValue("uid", out var uid);
-        var resolved = ResolveResourcePath(projectRoot, path);
-        if (path is not null && resolved.Invalid)
+        var resolved = string.IsNullOrWhiteSpace(path)
+            ? new ResourcePathResolution(null, null, false, Invalid: false, CrossesReparsePoint: false)
+            : ResolveResourcePath(projectRoot, path);
+        if (!hasPath || string.IsNullOrWhiteSpace(path))
+        {
+            diagnostics.Add(MissingExternalResourcePath(sourceResourcePath, lineNumber, id));
+        }
+        else if (resolved.CrossesReparsePoint)
+        {
+            diagnostics.Add(ReparsePointResourcePath(sourceResourcePath, lineNumber, path));
+        }
+        else if (resolved.Invalid)
         {
             diagnostics.Add(InvalidResourcePath(sourceResourcePath, lineNumber, path));
         }
-        else if (path is not null && resolved.IsInsideProjectRoot == false)
+        else if (resolved.IsInsideProjectRoot == false)
         {
             diagnostics.Add(new ResourceGraphDiagnostic(
                 ResourcePath: sourceResourcePath,
@@ -161,7 +204,7 @@ public sealed class ResourceReferenceGraphAnalyzer
                 Code: "resource_graph_reference_outside_project",
                 Message: $"External resource '{id}' resolves outside the project root."));
         }
-        else if (path is not null && resolved.IsInsideProjectRoot == true && !resolved.Exists)
+        else if (resolved.IsInsideProjectRoot == true && !resolved.Exists)
         {
             diagnostics.Add(MissingFile(sourceResourcePath, lineNumber, path));
         }
@@ -204,7 +247,9 @@ public sealed class ResourceReferenceGraphAnalyzer
         string line,
         int lineNumber,
         IReadOnlyDictionary<string, ResourceExternalResourceGraphItem> externalById,
+        IReadOnlySet<string> duplicateExternalIds,
         IReadOnlySet<string> subResourceIds,
+        IReadOnlySet<string> duplicateSubResourceIds,
         List<ResourceReferenceUsageGraphItem> referenceUsages,
         List<ResourceGraphDiagnostic> diagnostics)
     {
@@ -212,26 +257,32 @@ public sealed class ResourceReferenceGraphAnalyzer
         {
             var id = match.Groups["id"].Value;
             externalById.TryGetValue(id, out var external);
+            var ambiguous = duplicateExternalIds.Contains(id);
             referenceUsages.Add(new ResourceReferenceUsageGraphItem(
                 SourceResourcePath: sourceResourcePath,
                 Line: lineNumber,
                 Kind: ResourceReferenceUsageKind.ExtResource,
                 Reference: id,
-                ResolvedResourcePath: external?.Path,
-                ResolvedFilePath: external?.ResolvedFilePath,
-                IsInsideProjectRoot: external?.IsInsideProjectRoot,
-                Exists: external?.Exists ?? false));
+                ResolvedResourcePath: ambiguous ? null : external?.Path,
+                ResolvedFilePath: ambiguous ? null : external?.ResolvedFilePath,
+                IsInsideProjectRoot: ambiguous ? null : external?.IsInsideProjectRoot,
+                Exists: !ambiguous && (external?.Exists ?? false)));
 
             if (external is null)
             {
                 diagnostics.Add(MissingDeclaration(sourceResourcePath, lineNumber, "ExtResource", id));
+            }
+            else if (ambiguous)
+            {
+                diagnostics.Add(AmbiguousReference(sourceResourcePath, lineNumber, "ExtResource", id));
             }
         }
 
         foreach (Match match in SubResourceUsagePattern.Matches(line))
         {
             var id = match.Groups["id"].Value;
-            var exists = subResourceIds.Contains(id);
+            var ambiguous = duplicateSubResourceIds.Contains(id);
+            var exists = subResourceIds.Contains(id) && !ambiguous;
             referenceUsages.Add(new ResourceReferenceUsageGraphItem(
                 SourceResourcePath: sourceResourcePath,
                 Line: lineNumber,
@@ -244,7 +295,9 @@ public sealed class ResourceReferenceGraphAnalyzer
 
             if (!exists)
             {
-                diagnostics.Add(MissingDeclaration(sourceResourcePath, lineNumber, "SubResource", id));
+                diagnostics.Add(ambiguous
+                    ? AmbiguousReference(sourceResourcePath, lineNumber, "SubResource", id)
+                    : MissingDeclaration(sourceResourcePath, lineNumber, "SubResource", id));
             }
         }
 
@@ -289,7 +342,11 @@ public sealed class ResourceReferenceGraphAnalyzer
                 IsInsideProjectRoot: resolved.IsInsideProjectRoot,
                 Exists: resolved.Exists));
 
-            if (resolved.IsInsideProjectRoot == false)
+            if (resolved.CrossesReparsePoint)
+            {
+                diagnostics.Add(ReparsePointResourcePath(sourceResourcePath, lineNumber, path));
+            }
+            else if (resolved.IsInsideProjectRoot == false)
             {
                 diagnostics.Add(new ResourceGraphDiagnostic(
                     ResourcePath: sourceResourcePath,
@@ -339,9 +396,14 @@ public sealed class ResourceReferenceGraphAnalyzer
 
     private static ResourcePathResolution ResolveResourcePath(string projectRoot, string? resourcePath)
     {
-        if (string.IsNullOrWhiteSpace(resourcePath) || !resourcePath.StartsWith("res://", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(resourcePath))
         {
-            return new ResourcePathResolution(null, null, false, false);
+            return new ResourcePathResolution(null, null, false, Invalid: false, CrossesReparsePoint: false);
+        }
+
+        if (!resourcePath.StartsWith("res://", StringComparison.Ordinal))
+        {
+            return new ResourcePathResolution(null, null, false, Invalid: true, CrossesReparsePoint: false);
         }
 
         try
@@ -349,11 +411,21 @@ public sealed class ResourceReferenceGraphAnalyzer
             var relativePath = resourcePath["res://".Length..].Replace('/', Path.DirectorySeparatorChar);
             var filePath = Path.GetFullPath(relativePath, projectRoot);
             var isInside = IsInside(projectRoot, filePath);
-            return new ResourcePathResolution(filePath, isInside, isInside && File.Exists(filePath), false);
+            if (!isInside)
+            {
+                return new ResourcePathResolution(filePath, false, false, Invalid: false, CrossesReparsePoint: false);
+            }
+
+            if (ContainsReparsePointSegment(projectRoot, filePath))
+            {
+                return new ResourcePathResolution(filePath, null, false, Invalid: false, CrossesReparsePoint: true);
+            }
+
+            return new ResourcePathResolution(filePath, true, File.Exists(filePath), Invalid: false, CrossesReparsePoint: false);
         }
         catch (Exception exception) when (IsRecoverablePathException(exception))
         {
-            return new ResourcePathResolution(null, null, false, true);
+            return new ResourcePathResolution(null, null, false, Invalid: true, CrossesReparsePoint: false);
         }
     }
 
@@ -377,6 +449,26 @@ public sealed class ResourceReferenceGraphAnalyzer
             Message: $"{kind} reference '{id}' has no declaration earlier in the same resource file.");
     }
 
+    private static ResourceGraphDiagnostic DuplicateDeclaration(string resourcePath, int line, string kind, string id)
+    {
+        return new ResourceGraphDiagnostic(
+            ResourcePath: resourcePath,
+            Line: line,
+            Severity: ResourceGraphDiagnosticSeverity.Warning,
+            Code: "resource_graph_duplicate_reference_id",
+            Message: $"{kind} id '{id}' is declared more than once in the same resource file.");
+    }
+
+    private static ResourceGraphDiagnostic AmbiguousReference(string resourcePath, int line, string kind, string id)
+    {
+        return new ResourceGraphDiagnostic(
+            ResourcePath: resourcePath,
+            Line: line,
+            Severity: ResourceGraphDiagnosticSeverity.Warning,
+            Code: "resource_graph_ambiguous_reference_id",
+            Message: $"{kind} reference '{id}' is ambiguous because the id has multiple declarations.");
+    }
+
     private static ResourceGraphDiagnostic InvalidResourcePath(string resourcePath, int line, string referencedPath)
     {
         return new ResourceGraphDiagnostic(
@@ -385,6 +477,26 @@ public sealed class ResourceReferenceGraphAnalyzer
             Severity: ResourceGraphDiagnosticSeverity.Warning,
             Code: "resource_graph_reference_invalid_path",
             Message: $"Referenced resource '{referencedPath}' could not be resolved as a local project path.");
+    }
+
+    private static ResourceGraphDiagnostic MissingExternalResourcePath(string resourcePath, int line, string id)
+    {
+        return new ResourceGraphDiagnostic(
+            ResourcePath: resourcePath,
+            Line: line,
+            Severity: ResourceGraphDiagnosticSeverity.Warning,
+            Code: "resource_graph_reference_missing_path",
+            Message: $"External resource '{id}' does not declare a usable local fallback path.");
+    }
+
+    private static ResourceGraphDiagnostic ReparsePointResourcePath(string resourcePath, int line, string referencedPath)
+    {
+        return new ResourceGraphDiagnostic(
+            ResourcePath: resourcePath,
+            Line: line,
+            Severity: ResourceGraphDiagnosticSeverity.Warning,
+            Code: "resource_graph_reference_reparse_point",
+            Message: $"Referenced resource '{referencedPath}' crosses a reparse point and was not resolved by static/headless analysis.");
     }
 
     private static ResourceGraphDiagnostic MissingFile(string resourcePath, int line, string referencedPath)
@@ -514,6 +626,56 @@ public sealed class ResourceReferenceGraphAnalyzer
         return normalizedPath.StartsWith(normalizedRoot, StringComparisonForPlatform());
     }
 
+    private static bool ContainsReparsePointSegment(string projectRoot, string targetPath)
+    {
+        var relativePath = Path.GetRelativePath(projectRoot, targetPath);
+        var segments = relativePath.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0 || segments.Any(segment => segment == "." || segment == ".."))
+        {
+            return false;
+        }
+
+        var currentPath = Path.GetFullPath(projectRoot);
+        foreach (var segment in segments)
+        {
+            currentPath = Path.Combine(currentPath, segment);
+            if (HasReparsePoint(currentPath))
+            {
+                return true;
+            }
+
+            if (!Directory.Exists(currentPath) && !File.Exists(currentPath))
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasReparsePoint(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path) && !File.Exists(path))
+            {
+                return false;
+            }
+
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
+
     private static StringComparer StringComparerForPlatform()
     {
         return OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -528,5 +690,6 @@ public sealed class ResourceReferenceGraphAnalyzer
         string? FilePath,
         bool? IsInsideProjectRoot,
         bool Exists,
-        bool Invalid);
+        bool Invalid,
+        bool CrossesReparsePoint);
 }
