@@ -8,6 +8,8 @@ Godot .NET MCP v2.0.0 starts the optional Companion direction with a project-sco
 
 The Companion contract separates static/headless capabilities from live editor capabilities. Project sessions can expose C# and resource-analysis style work while clearly withholding selected node, Inspector, Dock, screenshot, and runtime validation state until the editor bridge is connected.
 
+The static analyzer now produces a read-only project inventory for this layer: whether the root is a Godot project, which `.csproj` files are present, whether the plugin directory is installed, and why editor-live capabilities remain unavailable while no editor bridge is online.
+
 ### 🔐 Project-Scoped Sessions
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.

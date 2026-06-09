@@ -12,6 +12,7 @@ Target version: 2.0.0.
 
 - Added the first .NET Companion contract library and pure contract runner for v2.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
 - Added explicit project session lifecycle controls with issued/last-used/expiry metadata, lease renewal, stop/revoke behavior, and stale-session rejection.
+- Added a Companion static/headless project inventory analyzer that reports Godot project status, discovered `.csproj` files, plugin directory presence, and editor-live unavailability reasons without starting Godot.
 
 ### Documentation
 
@@ -24,6 +25,7 @@ Target version: 2.0.0.
 - Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
+- Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
 - Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
 
