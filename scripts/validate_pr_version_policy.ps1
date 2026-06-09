@@ -239,9 +239,9 @@ if ([string]::IsNullOrWhiteSpace($BaseBranch)) {
     throw "Version policy validation requires a base branch. Set GITHUB_BASE_REF or pass -BaseBranch."
 }
 
-$allowedBaseBranches = @("dev", "refactor/v1.4.0")
+$allowedBaseBranches = @("dev", "refactor/v1.4.0", "v2.0")
 if ($allowedBaseBranches -notcontains $BaseBranch) {
-    throw "Version policy validation expects pull requests to target dev or refactor/v1.4.0. Actual base branch: $BaseBranch"
+    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, or v2.0. Actual base branch: $BaseBranch"
 }
 
 if ([string]::IsNullOrWhiteSpace($HeadBranch)) {
@@ -284,8 +284,8 @@ if ($changes.Count -eq 0) {
 }
 
 if ($HeadBranch -like "release/*") {
-    if ($BaseBranch -ne "dev") {
-        throw "Release version changes must target dev. Actual base branch: $BaseBranch"
+    if ($BaseBranch -notin @("dev", "v2.0")) {
+        throw "Release version changes must target dev or v2.0. Actual base branch: $BaseBranch"
     }
 
     if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {

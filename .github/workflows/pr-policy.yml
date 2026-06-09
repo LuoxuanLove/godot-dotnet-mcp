@@ -32,8 +32,8 @@ jobs:
           fi
 
           base_ref=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
-          if [[ "$base_ref" != "dev" && "$base_ref" != "refactor/v1.4.0" ]]; then
-            echo "::error::Pull requests must target dev or refactor/v1.4.0. Change the PR base branch before merging."
+          if [[ "$base_ref" != "dev" && "$base_ref" != "refactor/v1.4.0" && "$base_ref" != "v2.0" ]]; then
+            echo "::error::Pull requests must target dev, refactor/v1.4.0, or v2.0. Change the PR base branch before merging."
             exit 1
           fi
 
