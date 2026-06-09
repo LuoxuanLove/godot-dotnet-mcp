@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Require dev target branch
+      - name: Require allowed target branch
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pull_number }}
@@ -32,8 +32,8 @@ jobs:
           fi
 
           base_ref=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
-          if [[ "$base_ref" != "dev" ]]; then
-            echo "::error::All pull requests must target dev. Change the PR base branch to dev before merging."
+          if [[ "$base_ref" != "dev" && "$base_ref" != "refactor/v1.4.0" ]]; then
+            echo "::error::Pull requests must target dev or refactor/v1.4.0. Change the PR base branch before merging."
             exit 1
           fi
 

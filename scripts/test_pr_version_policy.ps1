@@ -70,6 +70,7 @@ static func _default_facts() -> Dictionary:
 function New-PolicyFixture {
     param(
         [string]$BaseVersion = "1.0.0",
+        [string]$ComparisonBaseVersion = "",
         [string]$HeadVersion = "1.0.0",
         [string]$HeadBranch = "feature/tooling",
         [scriptblock]$MutateHead = $null
@@ -85,6 +86,13 @@ function New-PolicyFixture {
     git -C $repo add addons
     git -C $repo commit -m "base" -q
     git -C $repo branch -M dev
+
+    if (-not [string]::IsNullOrWhiteSpace($ComparisonBaseVersion)) {
+        git -C $repo switch -c refactor/v1.4.0 -q
+        Write-MetadataFixture -RepositoryRoot $repo -Version $ComparisonBaseVersion -PluginDescription "Comparison base fixture"
+        git -C $repo add addons
+        git -C $repo commit -m "comparison base" -q
+    }
 
     git -C $repo switch -c $HeadBranch -q
     Write-MetadataFixture -RepositoryRoot $repo -Version $HeadVersion
@@ -103,6 +111,7 @@ function Invoke-PolicyScenario {
         [string]$HeadBranch,
         [string]$BaseBranch = "dev",
         [string]$BaseVersion = "1.0.0",
+        [string]$ComparisonBaseVersion = "",
         [string]$HeadVersion = "1.0.0",
         [scriptblock]$MutateHead = $null,
         [bool]$ShouldPass,
@@ -112,13 +121,14 @@ function Invoke-PolicyScenario {
         [switch]$RequireTrustedReleaseBranch
     )
 
-    $repo = New-PolicyFixture -BaseVersion $BaseVersion -HeadVersion $HeadVersion -HeadBranch $HeadBranch -MutateHead $MutateHead
+    $repo = New-PolicyFixture -BaseVersion $BaseVersion -ComparisonBaseVersion $ComparisonBaseVersion -HeadVersion $HeadVersion -HeadBranch $HeadBranch -MutateHead $MutateHead
     try {
         $headCommit = (git -C $repo rev-parse HEAD).Trim()
+        $baseRef = if ([string]::IsNullOrWhiteSpace($ComparisonBaseVersion)) { "dev" } else { $BaseBranch }
         $passed = $true
         $failureMessage = ""
         try {
-            & $validatorPath -RepositoryRoot $repo -BaseBranch $BaseBranch -HeadBranch $HeadBranch -BaseRef "dev" -HeadRef $headCommit -RepositoryOwner $RepositoryOwner -HeadRepositoryOwner $HeadRepositoryOwner -RequireTrustedReleaseBranch:$RequireTrustedReleaseBranch -SkipFetch | Out-Host
+            & $validatorPath -RepositoryRoot $repo -BaseBranch $BaseBranch -HeadBranch $HeadBranch -BaseRef $baseRef -HeadRef $headCommit -RepositoryOwner $RepositoryOwner -HeadRepositoryOwner $HeadRepositoryOwner -RequireTrustedReleaseBranch:$RequireTrustedReleaseBranch -SkipFetch | Out-Host
         } catch {
             $passed = $false
             $failureMessage = $_.Exception.Message
@@ -147,8 +157,10 @@ function Invoke-PolicyScenario {
 
 Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "feature/tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-tooling" -HeadVersion "1.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "refactor base compares against refactor ref, not default branch checkout" -BaseBranch "refactor/v1.4.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "1.4.0" -HeadBranch "feature/v1.4-policy" -HeadVersion "1.4.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release changed metadata" -HeadBranch "fix/version-text" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'fix/version-text' changes public version metadata"
 Invoke-PolicyScenario -Name "refactor base changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-version" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v1.4-version' changes public version metadata"
+Invoke-PolicyScenario -Name "refactor base catches drift from comparison base" -BaseBranch "refactor/v1.4.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "1.4.0" -HeadBranch "feature/v1.4-version-drift" -HeadVersion "1.4.1" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v1.4-version-drift' changes public version metadata"
 Invoke-PolicyScenario -Name "release changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $true
 Invoke-PolicyScenario -Name "release branch cannot target refactor base" -BaseBranch "refactor/v1.4.0" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must target dev"
 Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must come from a release/* branch in the base repository"
