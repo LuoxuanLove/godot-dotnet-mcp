@@ -38,6 +38,60 @@ function Format-CaseList {
     return ($Cases -join ",")
 }
 
+function Assert-ManifestValue {
+    param(
+        [object]$Case,
+        [string]$FieldName,
+        [string[]]$AllowedValues
+    )
+
+    if (-not ($Case.PSObject.Properties.Name -contains $FieldName)) {
+        throw "Contract case manifest entry '$($Case.name)' is missing required field: $FieldName"
+    }
+
+    $value = [string]$Case.$FieldName
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "Contract case manifest entry '$($Case.name)' has an empty required field: $FieldName"
+    }
+
+    if ($AllowedValues.Count -gt 0 -and $AllowedValues -notcontains $value) {
+        throw "Contract case manifest entry '$($Case.name)' has invalid $FieldName '$value'. Allowed values: $($AllowedValues -join ', ')"
+    }
+}
+
+function Get-ContractCaseManifest {
+    param([string]$ManifestPath)
+
+    if (-not (Test-Path -LiteralPath $ManifestPath)) {
+        throw "Contract case manifest was not found: $ManifestPath"
+    }
+
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest -isnot [array]) {
+        $manifest = @($manifest)
+    }
+    if ($manifest.Count -eq 0) {
+        throw "Contract case manifest must contain at least one case."
+    }
+
+    $names = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($case in $manifest) {
+        Assert-ManifestValue -Case $case -FieldName "name" -AllowedValues @()
+        Assert-ManifestValue -Case $case -FieldName "layer" -AllowedValues @()
+        Assert-ManifestValue -Case $case -FieldName "domain" -AllowedValues @()
+        Assert-ManifestValue -Case $case -FieldName "behavior" -AllowedValues @("current", "migration", "deprecation", "removal_guard")
+        Assert-ManifestValue -Case $case -FieldName "speed" -AllowedValues @("fast", "headless", "editor", "release")
+        Assert-ManifestValue -Case $case -FieldName "isolation" -AllowedValues @("pure", "user_fs", "stage_root", "editor")
+        Assert-ManifestValue -Case $case -FieldName "v1_4_disposition" -AllowedValues @("keep", "rewrite", "delete", "expires")
+
+        if (-not $names.Add([string]$case.name)) {
+            throw "Contract case manifest contains duplicate case name: $($case.name)"
+        }
+    }
+
+    return $manifest
+}
+
 function Get-SuiteResults {
     param(
         [object]$HarnessJson
@@ -402,64 +456,10 @@ function Invoke-HarnessProcessCleanup {
 }
 
 $GodotExe = Resolve-GodotPath -GodotPath $GodotPath
-$RequiredCases = @(
-    "plugin_roslyn_service_contracts"
-    "roslyn_parsing_contracts"
-    "csharp_tool_engine_contracts"
-    "plugin_path_csharp_registration_probe"
-    "system_editor_state_contracts"
-    "system_editor_log_contracts"
-    "system_editor_evidence_contracts"
-    "system_runtime_health_contracts"
-    "system_plugin_reload_contracts"
-    "system_plugin_update_contracts"
-    "system_plugin_maintenance_contracts"
-    "system_runtime_impl_contracts"
-    "http_server_listen_diagnostics_contracts"
-    "runtime_command_service_contracts"
-    "dap_debugger_contracts"
-    "editor_tool_executor_contracts"
-    "tool_loader_contracts"
-    "tool_localization_inventory_contracts"
-    "locale_key_parity_contracts"
-    "tool_manifest_contracts"
-    "plugin_action_router_contracts"
-    "plugin_entrypoint_contracts"
-    "plugin_update_settings_persistence_contracts"
-    "plugin_reload_coordinator_contracts"
-    "plugin_instance_freshness_contracts"
-    "plugin_runtime_reload_executor_contracts"
-    "plugin_runtime_state_contracts"
-    "server_runtime_settings_projection_service_contracts"
-    "external_host_removal_audit"
-    "system_help_contracts"
-    "system_inspector_contracts"
-    "json_rpc_request_service_contracts"
-    "mcp_resources_prompts_contracts"
-    "system_project_executor_contracts"
-    "system_scene_executor_contracts"
-    "client_install_detection_service_contracts"
-    "client_detector_registry_contracts"
-    "config_tab_action_service_contracts"
-    "client_config_presenter_contracts"
-    "config_tab_rendering_contracts"
-    "home_tab_localization_contracts"
-    "server_tab_model_projection_contracts"
-    "mcp_debug_buffer_contracts"
-    "tool_catalog_search_service_contracts"
-    "tool_presentation_service_contracts"
-    "tools_api_service_contracts"
-    "tool_rpc_router_contracts"
-    "dock_model_service_contracts"
-    "tools_tab_rendering_contracts"
-)
-$IsolatedHeadlessCases = @(
-    "tools_tab_rendering_contracts"
-)
-$EditorProbeCases = @(
-    "plugin_entrypoint_contracts"
-    "plugin_update_settings_persistence_contracts"
-)
+$ContractCaseManifest = Get-ContractCaseManifest -ManifestPath (Join-Path $repoRoot "scripts\contract_case_manifest.json")
+$RequiredCases = @($ContractCaseManifest | Where-Object { [string]$_.v1_4_disposition -ne "expires" } | ForEach-Object { [string]$_.name })
+$IsolatedHeadlessCases = @($ContractCaseManifest | Where-Object { [string]$_.name -eq "tools_tab_rendering_contracts" } | ForEach-Object { [string]$_.name })
+$EditorProbeCases = @($ContractCaseManifest | Where-Object { [string]$_.speed -eq "editor" -or [string]$_.isolation -eq "editor" } | ForEach-Object { [string]$_.name })
 
 $TimingRecords = New-Object System.Collections.Generic.List[object]
 $OverallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()

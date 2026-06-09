@@ -89,6 +89,9 @@ func build_prompts_get_result(params: Dictionary) -> Dictionary:
 	var arguments = params.get("arguments", {})
 	if not (arguments is Dictionary):
 		return {"success": false, "error": "Prompt arguments must be an object."}
+	var argument_validation := _validate_prompt_arguments(name, arguments as Dictionary)
+	if not bool(argument_validation.get("success", false)):
+		return argument_validation
 	match name:
 		PROJECT_ORIENTATION_PROMPT:
 			return _build_project_orientation_prompt(arguments as Dictionary)
@@ -104,6 +107,49 @@ func build_prompts_get_result(params: Dictionary) -> Dictionary:
 			return _build_editor_ui_control_prompt(arguments as Dictionary)
 		_:
 			return {"success": false, "error": "Unknown prompt: %s" % name}
+
+
+func _validate_prompt_arguments(prompt_name: String, arguments: Dictionary) -> Dictionary:
+	var allowed_args := _prompt_argument_names(prompt_name)
+	if allowed_args.is_empty():
+		return {"success": true}
+	var allowed_lookup := {}
+	for allowed_name in allowed_args:
+		allowed_lookup[str(allowed_name)] = true
+	var unknown_args: Array[String] = []
+	for key in arguments.keys():
+		var name := str(key)
+		if not allowed_lookup.has(name):
+			unknown_args.append(name)
+	if unknown_args.is_empty():
+		return {"success": true}
+	unknown_args.sort()
+	return {
+		"success": false,
+		"error": "Unknown prompt argument(s) for %s: %s. Allowed arguments: %s." % [
+			prompt_name,
+			", ".join(unknown_args),
+			", ".join(allowed_args)
+		]
+	}
+
+
+func _prompt_argument_names(prompt_name: String) -> Array[String]:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return ["goal", "symbol"]
+		CONTENT_AUTHORING_PROMPT:
+			return ["scene_path", "script_path", "goal"]
+		DEBUG_TRIAGE_PROMPT:
+			return ["error_summary", "include_runtime"]
+		REFERENCE_INTEGRITY_PROMPT:
+			return ["script_path", "scene_path", "resource_path", "binding_name"]
+		RUNTIME_VALIDATION_PROMPT:
+			return ["scene_path", "goal", "success_marker"]
+		EDITOR_UI_CONTROL_PROMPT:
+			return ["ui_goal", "target_path"]
+		_:
+			return []
 
 
 func _build_project_orientation_prompt(arguments: Dictionary) -> Dictionary:
