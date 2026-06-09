@@ -80,6 +80,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_text in ["prompts/list", "prompts/get", "godot.project_orientation", "godot.content_authoring", "godot.debug_triage", "godot.reference_integrity", "godot.runtime_validation", "godot.editor_ui_control"]:
 		if prompt_methods_text.find(expected_text) == -1:
 			return _failure("system help prompt guide details should mention: %s" % expected_text)
+	var resource_guides = help_data.get("resource_guides", {})
+	if not (resource_guides is Dictionary):
+		return _failure("system help should include MCP resource guide discovery details.")
+	var resource_methods_text := JSON.stringify(resource_guides)
+	for expected_resource_text in ["resources/list", "resources/templates/list", "resources/read", "godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://state/project/summary", "godot-dotnet-mcp://activity/status", "godot-dotnet-mcp://tools/catalog/visible"]:
+		if resource_methods_text.find(expected_resource_text) == -1:
+			return _failure("system help resource guide details should mention: %s" % expected_resource_text)
 	var capabilities = help_data.get("capabilities", {})
 	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
 		return _failure("system help capabilities should include prompts as an explicit category.")

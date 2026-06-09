@@ -4,9 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.3.0])
+## [Unreleased] ([1.4.0])
 
-Target version: 1.3.0.
+Target version: 1.4.0.
+
+### Documentation
+
+- Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
+- Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
+
+## [1.3.0] - 2026-06-08
 
 ### Added
 
@@ -25,6 +32,7 @@ Target version: 1.3.0.
 - Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
+- Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 - Added `structuredContent` to every `tools/call` result while preserving the text JSON content for existing clients.
 
@@ -48,12 +56,15 @@ Target version: 1.3.0.
 
 ### Documentation
 
+- Added a localized v1.4.0 protocol refactor plan and linked it from the four localized roadmaps.
 - Refreshed README Highlights to align the top-level feature story with the v1.2.0 and v1.3.0 release lines, grouping overlapping entries into consistent editor-native service, semantic automation, evidence, diagnostics, runtime, workflow discovery, and User-tool extension themes.
 - Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
 - Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
 
 ### Internal
 
+- Added documentation localization validation coverage for the localized v1.4.0 protocol plan page.
+- Added a v1.4.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
@@ -62,6 +73,7 @@ Target version: 1.3.0.
 - Added editor evidence surface contracts for exact/fallback/degraded capture behavior, visible-popup metadata, localized tool metadata, prompt/help guidance, and Tools tab rendering.
 - Added project lifecycle contracts for explicit lifecycle actions, marker validation, foreground-window fallback behavior, and removed run/stop compatibility names.
 - Added tool catalog, tool activity, User-tool naming, scene inspect, plugin maintenance, project configuration, and userdata maintenance contract coverage across loader, router, Tools tab, localization inventory, and protocol facts.
+- Added resource contract coverage for canonical guide, state, activity, and tool-catalog resources plus the activity-call resource template, and bumped the tool schema facts to `2026-06-08.26`.
 - Extended editor/system control harness coverage for wait conditions, popup capture, hover/leave pointer fallback, click input dispatch, Button-like target observation, activation-signal separation, and input-only Button diagnostics.
 
 ## [1.2.0] - 2026-06-06
@@ -527,7 +539,8 @@ Target version: 1.3.0.
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.0...v1.1.1
