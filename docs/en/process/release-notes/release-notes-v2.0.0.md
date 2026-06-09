@@ -10,6 +10,8 @@ The Companion contract separates static/headless capabilities from live editor c
 
 The static analyzer now produces a read-only project inventory for this layer: whether the root is a Godot project, which `.csproj` files are present, whether the plugin directory is installed, and why editor-live capabilities remain unavailable while no editor bridge is online.
 
+It also records an unevaluated .NET workspace graph from project XML: SDK names, target frameworks, package references, project references, and compile include/remove items. This keeps early C# insight available without restore, build, or MSBuild condition evaluation.
+
 ### 🔐 Project-Scoped Sessions
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
