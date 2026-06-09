@@ -61,6 +61,7 @@ Target version: 1.4.0.
 ### Internal
 
 - Added documentation localization validation coverage for the localized v1.4.0 protocol plan page.
+- Added a v1.4.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
