@@ -4,10 +4,12 @@ class_name MCPResourcesServiceContext
 
 var get_tool_loader := Callable()
 var get_tool_loader_status := Callable()
+var get_tool_activity_registry := Callable()
 var sanitize_for_json := Callable()
 
 
 func dispose() -> void:
 	get_tool_loader = Callable()
 	get_tool_loader_status = Callable()
+	get_tool_activity_registry = Callable()
 	sanitize_for_json = Callable()

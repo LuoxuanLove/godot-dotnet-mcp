@@ -57,6 +57,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		"server": facts,
 		"purpose": "Editor-native MCP tools for Godot 4.6+ .NET projects.",
 		"recommended_start": [
+			"Read resources/list, then godot-dotnet-mcp://guides/index and godot-dotnet-mcp://guides/capabilities for the canonical resource-first discovery map before calling tools.",
 			"Call system_project_state to confirm project path, Godot version, run state, and current errors.",
 			"Call prompts/list and prompts/get when you need MCP-native workflow guides for project orientation, content authoring, debug triage, reference integrity, runtime validation, or editor UI control before choosing tools.",
 			LocalizationService.translate("help_recommended_start_tool_activity"),
@@ -72,6 +73,7 @@ func _build_help(include_tools: bool) -> Dictionary:
 		],
 		"capabilities": {
 			"project": ["state", "settings", "autoloads", "input actions", "run", "stop", "runtime diagnostics"],
+			"resources": ["MCP resources/list discovery", "MCP resources/read project info", "diagnostics summary", "tool catalog", "strict res:// scene/script/resource reads"],
 			"prompts": ["MCP prompts/list discovery", "MCP prompts/get guided project orientation", "content authoring", "debug triage", "reference integrity", "runtime validation", "editor UI control"],
 			"editor": ["self-describing visual evidence", "full editor screenshot", "control enumeration", "hidden control enumeration", "settings dialog navigation", "Inspector property workflow", "non-invasive dock/plugin/bottom-panel UI activation", "dock tab activation", "control capture", "popup capture", "focus", "safe activation", "popup control", "third-party EditorPlugin session diagnostics"],
 			"runtime": ["debugger session arming", "single or sequence capture", "scripted input", "input-wait-capture step"],
@@ -80,6 +82,22 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"analysis": ["scene validation", "scene analysis", "script analysis", "C# binding audit", "Godot LSP diagnostics", "project symbol search", "scene dependency graph"],
 			"configuration": ["MCP client config inspection", "one-click CLI add/remove where supported", "install status path display"],
 			"coordination": ["running tool call activity", "recent tool call history", "self-reported agent context", "execution order visibility"]
+		},
+		"protocol_surface_guidance": {
+			"resources": {
+				"role": "Read durable context, current state summaries, catalog facts, and project files without executing editor actions.",
+				"methods": ["resources/list", "resources/templates/list", "resources/read"],
+				"examples": ["godot-dotnet-mcp://project/info", "godot-dotnet-mcp://diagnostics/summary", "godot-dotnet-mcp://tools/catalog", "godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]
+			},
+			"prompts": {
+				"role": "Read workflow guidance before choosing actions; prompts should not be treated as tools/call mutations.",
+				"methods": ["prompts/list", "prompts/get"],
+				"examples": ["godot.project_orientation", "godot.content_authoring", "godot.debug_triage", "godot.reference_integrity", "godot.runtime_validation", "godot.editor_ui_control"]
+			},
+			"tools": {
+				"role": "Execute editor actions, compute diagnostics, mutate project state, run validation, or return live action results.",
+				"selection_note": "Prefer resource reads for passive context, prompt guides for workflow planning, and system_* tools only when an action or computed workflow result is needed."
+			}
 		},
 		"runtime_capability_guidance": {
 			"source": "system_project_state(include_runtime_health=true).runtime_capabilities and system_editor_state.runtime_capabilities",
@@ -127,6 +145,23 @@ func _build_help(include_tools: bool) -> Dictionary:
 			"discovery_methods": ["prompts/list", "prompts/get"],
 			"usage_note": "Prompt guides are MCP-native prompt templates, not tools/call actions. Use prompts/list to discover them and prompts/get with optional arguments to fetch the workflow text.",
 			"available": _build_prompt_guide_entries()
+		},
+		"resource_guides": {
+			"discovery_methods": ["resources/list", "resources/templates/list", "resources/read"],
+			"usage_note": "Resources carry context, state, catalogs, diagnostics, and activity records. Prompts carry workflow guidance, and tools perform actions or computed workflows.",
+			"canonical": {
+				"index": "godot-dotnet-mcp://guides/index",
+				"capabilities": "godot-dotnet-mcp://guides/capabilities",
+				"ui_automation": "godot-dotnet-mcp://guides/ui-automation",
+				"project_summary": "godot-dotnet-mcp://state/project/summary",
+				"editor_state": "godot-dotnet-mcp://state/editor",
+				"activity_status": "godot-dotnet-mcp://activity/status",
+				"activity_recent": "godot-dotnet-mcp://activity/recent",
+				"activity_call_template": "godot-dotnet-mcp://activity/call/{id}",
+				"exposed_tool_catalog": "godot-dotnet-mcp://tools/catalog/exposed",
+				"visible_tool_catalog": "godot-dotnet-mcp://tools/catalog/visible"
+			},
+			"compatibility": ["godot-dotnet-mcp://project/info", "godot-dotnet-mcp://diagnostics/summary", "godot-dotnet-mcp://tools/catalog"]
 		}
 	}
 	if include_tools:

@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
@@ -1033,7 +1034,7 @@ func _is_callable_compatibility_alias(tool_name: String) -> bool:
 
 
 func _is_exposed_tool_category(category: String) -> bool:
-	return category == "system" or category == "user"
+	return category in MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
 
 
 func _get_tool_access_provider():

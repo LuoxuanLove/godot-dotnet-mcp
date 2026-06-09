@@ -79,3 +79,8 @@ const ALL_TOOL_CATEGORIES: Array[String] = [
 	"plugin_developer",
 	"user"
 ]
+
+const PUBLIC_MCP_TOOL_CATEGORIES: Array[String] = [
+	"system",
+	"user"
+]

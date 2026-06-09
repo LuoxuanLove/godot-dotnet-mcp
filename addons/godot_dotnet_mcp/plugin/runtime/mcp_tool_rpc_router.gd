@@ -179,6 +179,7 @@ func _create_tool_result_payload(result: Dictionary) -> Dictionary:
 			"type": "text",
 			"text": result_text
 		}],
+		"structuredContent": sanitized_result,
 		"isError": is_error
 	}
 
