@@ -210,6 +210,56 @@ function Test-ReleaseNoteLanguageSwitch {
     }
 }
 
+function Get-PluginVersion {
+    $pluginConfigPath = Join-Path $repoRoot "addons/godot_dotnet_mcp/plugin.cfg"
+    if (-not (Test-Path -LiteralPath $pluginConfigPath)) {
+        $errors.Add("Cannot validate overview release-note links because addon plugin.cfg is missing.")
+        return ""
+    }
+
+    $pluginConfig = Get-Content -LiteralPath $pluginConfigPath -Raw -Encoding UTF8
+    $versionMatch = [regex]::Match($pluginConfig, '(?m)^\s*version\s*=\s*"([^"]+)"\s*$')
+    if (-not $versionMatch.Success) {
+        $errors.Add("Cannot validate overview release-note links because addon plugin.cfg version is missing.")
+        return ""
+    }
+
+    return $versionMatch.Groups[1].Value
+}
+
+function Test-OverviewReleaseNoteLinks {
+    param([string]$Version)
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return
+    }
+
+    $overviewDoc = $docMap | Where-Object { $_.Id -eq "overview" } | Select-Object -First 1
+    $releaseNoteDoc = $docMap | Where-Object { $_.Id -eq "process-release-notes-v$Version" } | Select-Object -First 1
+    if ($null -eq $releaseNoteDoc) {
+        $errors.Add("Missing docs map entry for current release notes: process-release-notes-v$Version")
+        return
+    }
+
+    foreach ($locale in $Locales) {
+        if (-not $overviewDoc.Paths.ContainsKey($locale) -or -not $releaseNoteDoc.Paths.ContainsKey($locale)) {
+            $errors.Add("Missing overview or release-note docs map path for current version $Version in $locale")
+            continue
+        }
+
+        $overviewPath = Join-Path (Join-Path $docsRootPath $locale) $overviewDoc.Paths[$locale]
+        if (-not (Test-Path -LiteralPath $overviewPath)) {
+            $errors.Add("Missing localized overview for release-note link validation: $DocsRoot/$locale/$($overviewDoc.Paths[$locale])")
+            continue
+        }
+
+        $overviewContent = Get-Content -LiteralPath $overviewPath -Raw -Encoding UTF8
+        $expectedTarget = $releaseNoteDoc.Paths[$locale]
+        if (-not $overviewContent.Contains("]($expectedTarget)")) {
+            $errors.Add("Localized overview release-prep section must link current release notes v${Version} in ${locale}: $expectedTarget")
+        }
+    }
+}
+
 function Test-MarkdownImages {
     param([System.IO.FileInfo[]]$Files, [string]$RepositoryRoot)
     foreach ($file in $Files) {
@@ -574,6 +624,8 @@ if (-not $SkipDocumentMapValidation) {
         Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
     }
 }
+
+Test-OverviewReleaseNoteLinks -Version (Get-PluginVersion)
 
 foreach ($locale in $Locales) {
     if (-not $treeHashes.ContainsKey($locale) -or -not $treeHashes.ContainsKey($referenceLocale)) {
