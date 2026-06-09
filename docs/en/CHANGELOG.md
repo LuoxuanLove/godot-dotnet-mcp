@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Target version: 2.0.0.
 
+### Added
+
+- Added the first .NET Companion contract library and pure contract runner for v2.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
+
 ### Documentation
 
 - Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.
@@ -16,6 +20,7 @@ Target version: 2.0.0.
 ### Internal
 
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
+- Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
 - Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
 

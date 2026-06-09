@@ -49,6 +49,14 @@ jobs:
         shell: pwsh
         run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
 
+      - name: Build Companion contract library
+        shell: pwsh
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion contract library" -ProjectPath ".\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" -Configuration Release
+
+      - name: Run Companion contract tests
+        shell: pwsh
+        run: dotnet run --project ".\tests\companion_contracts\GodotDotnetMcp.Companion.Contracts.csproj" -c Release
+
       - name: Build harness runner
         shell: pwsh
         run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build harness runner" -ProjectPath ".\tests\godot_plugin_harness\GodotPluginHarness.csproj" -Configuration Release
