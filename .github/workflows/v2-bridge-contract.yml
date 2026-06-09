@@ -1,0 +1,54 @@
+name: v2-bridge-contract
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    paths:
+      - "addons/godot_dotnet_mcp/companion/contracts/v2-bridge-status.schema.json"
+      - "docs/**/v2-bridge-upgrade-contract.md"
+      - "scripts/validate_v2_bridge_contract.ps1"
+      - "scripts/test_v2_bridge_contract.ps1"
+      - "scripts/validate_docs_i18n.ps1"
+      - ".github/workflows/v2-bridge-contract.yml"
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+      - v2.0
+    paths:
+      - "addons/godot_dotnet_mcp/companion/contracts/v2-bridge-status.schema.json"
+      - "docs/**/v2-bridge-upgrade-contract.md"
+      - "scripts/validate_v2_bridge_contract.ps1"
+      - "scripts/test_v2_bridge_contract.ps1"
+      - "scripts/validate_docs_i18n.ps1"
+      - ".github/workflows/v2-bridge-contract.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  v2-bridge-contract:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate v2 bridge contract
+        shell: pwsh
+        run: .\scripts\validate_v2_bridge_contract.ps1
+
+      - name: Test v2 bridge contract policy
+        shell: pwsh
+        run: .\scripts\test_v2_bridge_contract.ps1
+
+      - name: Validate localized documentation
+        shell: pwsh
+        run: .\scripts\validate_docs_i18n.ps1

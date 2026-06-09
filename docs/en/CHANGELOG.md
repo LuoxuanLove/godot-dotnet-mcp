@@ -16,11 +16,13 @@ Target version: 2.0.0.
 ### Documentation
 
 - Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.
+- Added the v2 editor bridge upgrade contract across localized docs, covering bridge states, explicit editor-live upgrade requirements, and project/session-scoped bridge use.
 - Initialized the v2.0.0 release-note sources across the four localized documentation trees so the version line has durable release narrative files before feature work begins.
 
 ### Internal
 
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
+- Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.

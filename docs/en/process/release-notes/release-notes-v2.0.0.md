@@ -14,6 +14,8 @@ The static analyzer now produces a read-only project inventory for this layer: w
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
 
+The bridge upgrade contract now documents the editor-side handshake states. A project session can become editor-live only when the bridge is online for the same project, reports a compatible plugin version, and provides a non-empty `editor_session_id`.
+
 ### ✅ Compatibility and Upgrade Notes
 
 The Companion layer is a contract library in this stage. It does not start a background process, open a port, launch Godot, or change the existing editor-native plugin startup behavior.
