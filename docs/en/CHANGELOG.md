@@ -22,6 +22,10 @@ Target version: 1.4.0.
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 
+### Internal
+
+- Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
+
 ## [1.3.0] - 2026-06-08
 
 ### Added
