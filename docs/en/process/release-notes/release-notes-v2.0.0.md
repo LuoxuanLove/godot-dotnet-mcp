@@ -18,6 +18,8 @@ Static resource analysis now indexes text `.tscn` and `.tres` files as a referen
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
 
+Project sessions now carry lifecycle metadata as well: when they were issued, when they were last used, when their lease expires, and whether they have been stopped. The broker can renew active leases, stop sessions explicitly, and reject stale session ids instead of keeping leaked ids valid for the full broker lifetime.
+
 The bridge upgrade contract now documents the editor-side handshake states. A project session can become editor-live only when the bridge is online for the same project, reports a compatible plugin version, and provides a non-empty `editor_session_id`.
 
 The Companion contract now enforces that boundary in code: missing, malformed, older-major, newer-major, or explicit version-mismatch bridge versions remain static/headless instead of unlocking editor-live capabilities.

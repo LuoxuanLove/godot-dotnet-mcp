@@ -78,31 +78,122 @@ public sealed record ProjectSessionIdentity(
     string ProjectId,
     string ProjectRoot,
     CompanionMode Mode,
-    string? EditorSessionId);
+    string? EditorSessionId,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset LastUsedAtUtc,
+    DateTimeOffset ExpiresAtUtc,
+    bool Revoked);
 
 public sealed class ProjectSession
 {
-    internal ProjectSession(ProjectDescriptor project, string sessionId)
+    private readonly object _stateLock = new();
+    private readonly Func<DateTimeOffset> _clock;
+    private ProjectSessionIdentity _identity;
+
+    internal ProjectSession(
+        ProjectDescriptor project,
+        string sessionId,
+        DateTimeOffset nowUtc,
+        TimeSpan leaseDuration,
+        Func<DateTimeOffset> clock)
     {
+        _clock = clock;
         Project = project;
-        Identity = new ProjectSessionIdentity(
+        _identity = new ProjectSessionIdentity(
             SessionId: sessionId,
             ProjectId: project.ProjectId,
             ProjectRoot: project.ProjectRoot,
             Mode: CompanionMode.StaticHeadless,
-            EditorSessionId: null);
+            EditorSessionId: null,
+            CreatedAtUtc: nowUtc,
+            LastUsedAtUtc: nowUtc,
+            ExpiresAtUtc: nowUtc.Add(leaseDuration),
+            Revoked: false);
     }
 
     public ProjectDescriptor Project { get; }
 
-    public ProjectSessionIdentity Identity { get; private set; }
+    public ProjectSessionIdentity Identity
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                return _identity;
+            }
+        }
+    }
 
     public IReadOnlySet<CompanionCapability> Capabilities =>
-        CompanionCapabilityCatalog.ForMode(Identity.Mode);
+        GetCapabilities(_clock());
 
     public bool HasCapability(CompanionCapability capability)
     {
         return Capabilities.Contains(capability);
+    }
+
+    public bool IsExpired(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            return IsExpiredLocked(nowUtc);
+        }
+    }
+
+    public bool IsActive(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            return IsActiveLocked(nowUtc);
+        }
+    }
+
+    internal bool TryGetActiveIdentity(DateTimeOffset nowUtc, out ProjectSessionIdentity identity)
+    {
+        lock (_stateLock)
+        {
+            identity = _identity;
+            return IsActiveLocked(nowUtc);
+        }
+    }
+
+    internal void Touch(DateTimeOffset nowUtc, TimeSpan leaseDuration)
+    {
+        lock (_stateLock)
+        {
+            EnsureActiveLocked(nowUtc);
+            _identity = _identity with
+            {
+                LastUsedAtUtc = nowUtc,
+                ExpiresAtUtc = nowUtc.Add(leaseDuration),
+            };
+        }
+    }
+
+    internal void Revoke(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            if (_identity.Revoked)
+            {
+                return;
+            }
+
+            _identity = _identity with
+            {
+                LastUsedAtUtc = nowUtc,
+                ExpiresAtUtc = nowUtc,
+                Revoked = true,
+            };
+        }
+    }
+
+    internal void EnsureActive(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            EnsureActiveLocked(nowUtc);
+        }
     }
 
     public void UpgradeToEditorLive(EditorBridgeStatus bridgeStatus)
@@ -127,10 +218,47 @@ public sealed class ProjectSession
             throw new InvalidOperationException($"Editor bridge plugin_version is not compatible. {EditorBridgeCompatibility.CompatibilityRequirement}");
         }
 
-        Identity = Identity with
+        lock (_stateLock)
         {
-            Mode = CompanionMode.EditorLive,
-            EditorSessionId = bridgeStatus.EditorSessionId,
-        };
+            EnsureActiveLocked(_clock());
+            _identity = _identity with
+            {
+                Mode = CompanionMode.EditorLive,
+                EditorSessionId = bridgeStatus.EditorSessionId,
+            };
+        }
+    }
+
+    private IReadOnlySet<CompanionCapability> GetCapabilities(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            return IsActiveLocked(nowUtc)
+                ? CompanionCapabilityCatalog.ForMode(_identity.Mode)
+                : CompanionCapabilityCatalog.ForInactiveSession();
+        }
+    }
+
+    private void EnsureActiveLocked(DateTimeOffset nowUtc)
+    {
+        if (_identity.Revoked)
+        {
+            throw new InvalidOperationException("Project session has been stopped.");
+        }
+
+        if (IsExpiredLocked(nowUtc))
+        {
+            throw new InvalidOperationException("Project session lease has expired.");
+        }
+    }
+
+    private bool IsActiveLocked(DateTimeOffset nowUtc)
+    {
+        return !_identity.Revoked && !IsExpiredLocked(nowUtc);
+    }
+
+    private bool IsExpiredLocked(DateTimeOffset nowUtc)
+    {
+        return nowUtc >= _identity.ExpiresAtUtc;
     }
 }
