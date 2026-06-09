@@ -43,7 +43,18 @@ class FakeToolLoader:
 		}]
 
 	func get_tool_definitions() -> Array:
-		return get_exposed_tool_definitions()
+		var definitions := get_exposed_tool_definitions()
+		definitions.append({
+			"name": "system_help",
+			"description": "Removed help tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
+		})
+		return definitions
 
 	func get_domain_states() -> Array:
 		return [{
@@ -65,6 +76,12 @@ class FakeToolLoader:
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			}, {
+				"name": "help",
+				"full_name": "system_help",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
 			}],
 			"project": [{
 				"name": "info",
@@ -103,6 +120,16 @@ class FakeToolLoader:
 		if activity_registry != null and not record.is_empty():
 			var finished: Dictionary = activity_registry.finish_call(str(record.get("call_id", "")), true)
 			result["activity"] = activity_registry.summarize_record(finished)
+		if category == "system" and tool_name == "help":
+			result = {
+				"success": false,
+				"error": "system_help has been removed from the public MCP tool surface.",
+				"data": {
+					"error_type": "removed_public_tool",
+					"removed_tool": "system_help",
+					"replacement_resources": ["godot-dotnet-mcp://guides/index"]
+				}
+			}
 		return result
 
 
@@ -153,10 +180,10 @@ class FakeCallbacks:
 	func is_tool_enabled(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
-		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle"
+		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_help"
 
 	func is_tool_exposed(tool_name: String) -> bool:
-		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle")
+		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_help")
 
 	func log(message: String, level: String) -> void:
 		last_log = {
@@ -195,6 +222,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
 			return _failure("Tool RPC router should not expose removed system_project_run.")
+		if str((tool_entry as Dictionary).get("name", "")) == "system_help":
+			return _failure("Tool RPC router should omit removed system_help from tools/list.")
 
 	var success_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_project_state",
@@ -264,6 +293,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_result.get("isError", false)):
 			return _failure("Tool RPC router should reject removed project lifecycle entry '%s'." % removed_tool_name)
+
+	var removed_help_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_help",
+		"arguments": {}
+	})
+	if not bool(removed_help_result.get("isError", false)):
+		return _failure("Tool RPC router should return an error result for removed system_help legacy calls.")
+	var removed_help_structured = removed_help_result.get("structuredContent", {})
+	if not (removed_help_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent for removed system_help calls.")
+	var removed_help_data = (removed_help_structured as Dictionary).get("data", {})
+	if not (removed_help_data is Dictionary) or not (((removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
+		return _failure("Tool RPC router should preserve system_help replacement resource URIs.")
 
 	callbacks.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_result: Dictionary = await router.build_tool_call_result_async({

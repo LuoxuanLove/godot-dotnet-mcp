@@ -8,6 +8,14 @@ const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_regist
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
+const PUBLIC_REMOVED_MCP_TOOLS := {
+	"system_help": true
+}
+
+const CALLABLE_REMOVED_MCP_TOOLS := {
+	"system_help": true
+}
+
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
 var _entries_by_category: Dictionary = {}
@@ -158,6 +166,8 @@ func get_exposed_tool_definitions() -> Array[Dictionary]:
 
 
 func is_tool_exposed(tool_name: String) -> bool:
+	if _is_callable_removed_public_tool(tool_name):
+		return true
 	for tool_def in get_exposed_tool_definitions():
 		if str(tool_def.get("name", "")) == tool_name:
 			return true
@@ -1014,8 +1024,31 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
 	if _as_bool(tool_def.get("compatibility_alias", false)):
 		return false
+	if _is_public_removed_tool_definition(tool_def):
+		return false
 	var category := str(tool_def.get("category", ""))
 	return _is_exposed_tool_category(category)
+
+
+func _is_public_removed_tool_definition(tool_def: Dictionary) -> bool:
+	var tool_name := str(tool_def.get("name", ""))
+	if tool_name.is_empty():
+		var category := str(tool_def.get("category", ""))
+		var local_name := str(tool_def.get("full_name", ""))
+		if not category.is_empty() and not local_name.is_empty():
+			tool_name = "%s_%s" % [category, local_name]
+	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
+
+
+func _is_callable_removed_public_tool(tool_name: String) -> bool:
+	if not CALLABLE_REMOVED_MCP_TOOLS.has(tool_name):
+		return false
+	if not is_tool_enabled(tool_name):
+		return false
+	for tool_def in get_tool_definitions():
+		if str(tool_def.get("name", "")) == tool_name:
+			return true
+	return false
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:

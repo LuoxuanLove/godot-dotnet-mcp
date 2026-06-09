@@ -338,8 +338,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
 	if not bool(orientation_prompt.get("ok", false)):
 		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
-	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
+	var orientation_text := str(orientation_prompt.get("text", ""))
+	var required_orientation_fragments: Array[String] = ["resources/list", "godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://guides/capabilities", "prompts/list", "prompts/get", "system_project_state", "system_project_index_build"]
+	if not _prompt_text_is_actionable(orientation_text, required_orientation_fragments):
+		for required_fragment in required_orientation_fragments:
+			if not _has_any_fragment(orientation_text, required_fragment):
+				return _failure("project orientation prompt is missing required fragment: %s" % required_fragment)
 		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
+	if orientation_text.find("system_help") != -1:
+		return _failure("project orientation prompt should not recommend removed system_help.")
 	var unknown_argument_response: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "understand project", "bogus": "ignored"}}, 22)
 	if not (unknown_argument_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject unknown prompt arguments.")
