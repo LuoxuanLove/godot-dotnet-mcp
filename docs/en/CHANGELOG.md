@@ -11,6 +11,7 @@ Target version: 2.0.0.
 ### Added
 
 - Added the first .NET Companion contract library and pure contract runner for v2.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
+- Added explicit project session lifecycle controls with issued/last-used/expiry metadata, lease renewal, stop/revoke behavior, and stale-session rejection.
 
 ### Documentation
 

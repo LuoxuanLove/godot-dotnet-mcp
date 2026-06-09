@@ -10,6 +10,13 @@ var tests = new (string Name, Action Run)[]
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
+    ("stops_and_rejects_revoked_sessions", StopsAndRejectsRevokedSessions),
+    ("expires_and_rejects_stale_sessions", ExpiresAndRejectsStaleSessions),
+    ("prunes_expired_sessions_before_starting_new_sessions", PrunesExpiredSessionsBeforeStartingNewSessions),
+    ("limits_active_sessions_globally_and_per_project", LimitsActiveSessionsGloballyAndPerProject),
+    ("renews_session_leases_on_valid_use", RenewsSessionLeasesOnValidUse),
+    ("keeps_revoked_sessions_terminal_under_concurrency", RevokedSessionsStayTerminalUnderConcurrency),
+    ("keeps_session_snapshots_active_under_concurrency", SessionSnapshotsStayActiveUnderConcurrency),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
 };
 
@@ -108,6 +115,207 @@ static void CrossProjectSessionReuseIsRejected()
 
     AssertThrows<InvalidOperationException>(() =>
         broker.ResolveSession(new ToolRequestScope(secondProject.ProjectId, firstSession.Identity.SessionId)));
+}
+
+static void StopsAndRejectsRevokedSessions()
+{
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+
+    AssertTrue(broker.StopSession(scope));
+    AssertTrue(session.Identity.Revoked);
+    AssertFalse(session.HasCapability(CompanionCapability.StaticProjectAnalysis));
+    AssertFalse(session.HasCapability(CompanionCapability.EditorScreenshot));
+    AssertThrows<InvalidOperationException>(() =>
+        session.UpgradeToEditorLive(new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            project.ProjectId,
+            "editor_session_1",
+            "2.0.0")));
+    AssertThrows<KeyNotFoundException>(() => broker.ResolveSession(scope));
+    AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
+}
+
+static void ExpiresAndRejectsStaleSessions()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    now = now.AddSeconds(11);
+
+    AssertFalse(session.HasCapability(CompanionCapability.StaticProjectAnalysis));
+    AssertFalse(session.HasCapability(CompanionCapability.EditorScreenshot));
+    AssertThrows<InvalidOperationException>(() =>
+        session.UpgradeToEditorLive(new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            project.ProjectId,
+            "editor_session_1",
+            "2.0.0")));
+    AssertThrows<InvalidOperationException>(() =>
+        broker.ResolveSession(new ToolRequestScope(project.ProjectId, session.Identity.SessionId)));
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.ResolveSession(new ToolRequestScope(project.ProjectId, session.Identity.SessionId)));
+
+    var visibleSession = broker.StartSession(project.ProjectId);
+    now = now.AddSeconds(11);
+    AssertFalse(broker.Sessions.Any(current => current.SessionId == visibleSession.Identity.SessionId));
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.ResolveSession(new ToolRequestScope(project.ProjectId, visibleSession.Identity.SessionId)));
+}
+
+static void PrunesExpiredSessionsBeforeStartingNewSessions()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(
+        TimeSpan.FromSeconds(5),
+        () => now,
+        maxActiveSessions: 2,
+        maxActiveSessionsPerProject: 2);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var first = broker.StartSession(project.ProjectId);
+    var second = broker.StartSession(project.ProjectId);
+    now = now.AddSeconds(6);
+
+    var replacement = broker.StartSession(project.ProjectId);
+
+    AssertFalse(broker.Sessions.Any(current => current.SessionId == first.Identity.SessionId));
+    AssertFalse(broker.Sessions.Any(current => current.SessionId == second.Identity.SessionId));
+    AssertTrue(broker.Sessions.Any(current => current.SessionId == replacement.Identity.SessionId));
+}
+
+static void LimitsActiveSessionsGloballyAndPerProject()
+{
+    var broker = new CompanionBroker(
+        TimeSpan.FromMinutes(30),
+        maxActiveSessions: 3,
+        maxActiveSessionsPerProject: 2);
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+
+    broker.StartSession(firstProject.ProjectId);
+    broker.StartSession(firstProject.ProjectId);
+    AssertThrows<InvalidOperationException>(() => broker.StartSession(firstProject.ProjectId));
+
+    broker.StartSession(secondProject.ProjectId);
+    AssertThrows<InvalidOperationException>(() => broker.StartSession(secondProject.ProjectId));
+}
+
+static void RenewsSessionLeasesOnValidUse()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var firstExpiry = session.Identity.ExpiresAtUtc;
+    now = now.AddSeconds(5);
+
+    var renewed = broker.RenewSession(new ToolRequestScope(project.ProjectId, session.Identity.SessionId));
+
+    AssertEqual(session.Identity.SessionId, renewed.Identity.SessionId);
+    AssertTrue(renewed.Identity.ExpiresAtUtc > firstExpiry);
+    AssertEqual(now, renewed.Identity.LastUsedAtUtc);
+}
+
+static void RevokedSessionsStayTerminalUnderConcurrency()
+{
+    for (var i = 0; i < 100; i++)
+    {
+        var broker = new CompanionBroker();
+        var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+        var session = broker.StartSession(project.ProjectId);
+        var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+        var bridgeStatus = new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            project.ProjectId,
+            "editor_session_1",
+            "2.0.0");
+
+        var stopTask = Task.Run(() =>
+        {
+            try
+            {
+                broker.StopSession(scope);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var renewTask = Task.Run(() =>
+        {
+            try
+            {
+                broker.RenewSession(scope);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var upgradeTask = Task.Run(() =>
+        {
+            try
+            {
+                session.UpgradeToEditorLive(bridgeStatus);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+
+        Task.WaitAll(stopTask, renewTask, upgradeTask);
+        if (!session.Identity.Revoked)
+        {
+            broker.StopSession(scope);
+        }
+
+        AssertTrue(session.Identity.Revoked);
+        AssertFalse(session.IsActive(DateTimeOffset.UtcNow));
+        AssertFalse(session.HasCapability(CompanionCapability.StaticProjectAnalysis));
+        AssertFalse(session.HasCapability(CompanionCapability.EditorScreenshot));
+        AssertThrows<InvalidOperationException>(() => session.UpgradeToEditorLive(bridgeStatus));
+    }
+}
+
+static void SessionSnapshotsStayActiveUnderConcurrency()
+{
+    for (var i = 0; i < 100; i++)
+    {
+        var broker = new CompanionBroker();
+        var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+        var session = broker.StartSession(project.ProjectId);
+        var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+        var stopTask = Task.Run(() =>
+        {
+            try
+            {
+                broker.StopSession(scope);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var snapshotTask = Task.Run(() => broker.Sessions.ToArray());
+
+        Task.WaitAll(stopTask, snapshotTask);
+        foreach (var identity in snapshotTask.Result)
+        {
+            AssertFalse(identity.Revoked);
+            AssertTrue(identity.ExpiresAtUtc > DateTimeOffset.UtcNow);
+        }
+
+        AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
+    }
 }
 
 static void ExplicitBridgeUpgradeEnablesLiveCapabilities()

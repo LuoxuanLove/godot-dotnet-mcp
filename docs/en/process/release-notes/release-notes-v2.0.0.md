@@ -12,6 +12,8 @@ The Companion contract separates static/headless capabilities from live editor c
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
 
+Project sessions now carry lifecycle metadata as well: when they were issued, when they were last used, when their lease expires, and whether they have been stopped. The broker can renew active leases, stop sessions explicitly, and reject stale session ids instead of keeping leaked ids valid for the full broker lifetime.
+
 ### ✅ Compatibility and Upgrade Notes
 
 The Companion layer is a contract library in this stage. It does not start a background process, open a port, launch Godot, or change the existing editor-native plugin startup behavior.

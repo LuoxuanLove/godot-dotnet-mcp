@@ -30,6 +30,9 @@ public static class CompanionCapabilityCatalog
             CompanionCapability.ResourceGraphAnalysis,
         }.ToFrozenSet();
 
+    private static readonly FrozenSet<CompanionCapability> NoCapabilities =
+        Array.Empty<CompanionCapability>().ToFrozenSet();
+
     private static readonly FrozenSet<CompanionCapability> EditorLiveCapabilities =
         StaticCapabilities.Concat(
         [
@@ -48,5 +51,10 @@ public static class CompanionCapabilityCatalog
             CompanionMode.EditorLive => EditorLiveCapabilities,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown companion mode."),
         };
+    }
+
+    public static IReadOnlySet<CompanionCapability> ForInactiveSession()
+    {
+        return NoCapabilities;
     }
 }
