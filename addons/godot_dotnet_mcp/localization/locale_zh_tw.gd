@@ -755,7 +755,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "診斷摘要",
 	"mcp_resource_diagnostics_summary_desc": "外掛自身診斷與最近 MCP 日誌記錄。",
 	"mcp_resource_tool_catalog_name": "工具目錄",
-	"mcp_resource_tool_catalog_desc": "目前 MCP 工具目錄，以及 tools/list 使用的分組中繼資料。",
+	"mcp_resource_tool_catalog_desc": "目前 MCP 工具目錄，以及透過 resources 提供、獨立於 tools/list 的分組中繼資料。",
 	"mcp_resource_guides_index_name": "指南索引",
 	"mcp_resource_guides_index_desc": "指南、狀態、活動與工具目錄 resources 的 canonical MCP 入口映射。",
 	"mcp_resource_guides_capabilities_name": "能力指南",

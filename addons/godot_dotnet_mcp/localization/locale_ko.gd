@@ -757,7 +757,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "진단 요약",
 	"mcp_resource_diagnostics_summary_desc": "플러그인 자체 진단과 최근 MCP 로그 기록입니다.",
 	"mcp_resource_tool_catalog_name": "도구 카탈로그",
-	"mcp_resource_tool_catalog_desc": "현재 MCP 도구 카탈로그와 tools/list에서 사용하는 그룹 메타데이터입니다.",
+	"mcp_resource_tool_catalog_desc": "resources를 통해 제공되고 tools/list와 분리된 그룹 메타데이터를 포함한 현재 MCP 도구 카탈로그입니다.",
 	"mcp_resource_template_scene_name": "씬 텍스트",
 	"mcp_resource_template_scene_desc": "프로젝트 상대 경로로 .tscn 씬 파일을 읽습니다.",
 	"mcp_resource_template_script_name": "스크립트 텍스트",

@@ -549,7 +549,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "診断サマリー",
 	"mcp_resource_diagnostics_summary_desc": "プラグインの自己診断と最近の MCP ログ記録。",
 	"mcp_resource_tool_catalog_name": "ツールカタログ",
-	"mcp_resource_tool_catalog_desc": "tools/list で使われるグループ化メタデータを含む現在の MCP ツールカタログ。",
+	"mcp_resource_tool_catalog_desc": "resources 経由で提供され tools/list とは分離されたグループ化メタデータを含む現在の MCP ツールカタログ。",
 	"mcp_resource_template_scene_name": "シーンテキスト",
 	"mcp_resource_template_scene_desc": "プロジェクト相対パスで .tscn シーンファイルを読み取ります。",
 	"mcp_resource_template_script_name": "スクリプトテキスト",

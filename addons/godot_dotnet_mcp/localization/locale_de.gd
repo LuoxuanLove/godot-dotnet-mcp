@@ -549,7 +549,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "Diagnoseübersicht",
 	"mcp_resource_diagnostics_summary_desc": "Plugin-Selbstdiagnose und aktuelle MCP-Protokolleinträge.",
 	"mcp_resource_tool_catalog_name": "Werkzeugkatalog",
-	"mcp_resource_tool_catalog_desc": "Aktueller MCP-Werkzeugkatalog mit Gruppierungsmetadaten für tools/list.",
+	"mcp_resource_tool_catalog_desc": "Aktueller MCP-Werkzeugkatalog mit Gruppierungsmetadaten, die über Resources bereitgestellt werden.",
 	"mcp_resource_template_scene_name": "Szenentext",
 	"mcp_resource_template_scene_desc": "Liest eine .tscn-Szenendatei über einen projektrelativen Pfad.",
 	"mcp_resource_template_script_name": "Skripttext",
