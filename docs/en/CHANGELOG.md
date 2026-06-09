@@ -19,6 +19,8 @@ Target version: 1.4.0.
 
 - Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+- Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
+- Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 
 ### Documentation

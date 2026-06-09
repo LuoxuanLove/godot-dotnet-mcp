@@ -251,8 +251,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
-	if _contains_tool_name_recursive(tool_catalog_payload, "system_tool_activity"):
-		return _failure("tool catalog resource should not expose removed public tool system_tool_activity.")
+	for removed_tool in ["system_help", "system_tool_activity"]:
+		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool):
+			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool)
 
 	var exposed_tool_catalog := await _read_json_resource(TOOLS_CATALOG_EXPOSED_URI, 28)
 	if not bool(exposed_tool_catalog.get("ok", false)):
@@ -260,16 +261,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
-	if _contains_tool_name_recursive(exposed_tool_catalog_payload, "system_tool_activity"):
-		return _failure("exposed tool catalog should not expose removed public tool system_tool_activity.")
+	for removed_tool in ["system_help", "system_tool_activity"]:
+		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool):
+			return _failure("exposed tool catalog resource should not expose removed public tool %s." % removed_tool)
 	var visible_tool_catalog := await _read_json_resource(TOOLS_CATALOG_VISIBLE_URI, 29)
 	if not bool(visible_tool_catalog.get("ok", false)):
 		return _failure(str(visible_tool_catalog.get("error", "visible tool catalog resource failed")))
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
-	if _contains_tool_name_recursive(visible_tool_catalog_payload, "system_tool_activity"):
-		return _failure("visible tool catalog should not expose removed public tool system_tool_activity.")
+	for removed_tool in ["system_help", "system_tool_activity"]:
+		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool):
+			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool)
 
 	var activity_status := await _read_json_resource(ACTIVITY_STATUS_URI, 30)
 	if not bool(activity_status.get("ok", false)):
@@ -344,8 +347,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
 	if not bool(orientation_prompt.get("ok", false)):
 		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
-	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
+	var orientation_text := str(orientation_prompt.get("text", ""))
+	var required_orientation_fragments: Array[String] = ["resources/list", "godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://guides/capabilities", "prompts/list", "prompts/get", "system_project_state", "system_project_index_build"]
+	if not _prompt_text_is_actionable(orientation_text, required_orientation_fragments):
+		for required_fragment in required_orientation_fragments:
+			if not _has_any_fragment(orientation_text, required_fragment):
+				return _failure("project orientation prompt is missing required fragment: %s" % required_fragment)
 		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
+	if orientation_text.find("system_help") != -1:
+		return _failure("project orientation prompt should not recommend removed system_help.")
 	var unknown_argument_response: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "understand project", "bogus": "ignored"}}, 22)
 	if not (unknown_argument_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject unknown prompt arguments.")
