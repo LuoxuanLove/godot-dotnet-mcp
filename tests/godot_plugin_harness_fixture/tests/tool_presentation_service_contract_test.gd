@@ -19,7 +19,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"category": "system",
 		"domain_key": "core",
 		"enabled": true,
-		"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}}
+		"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
+		"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 	}, {
 		"name": "system_project_index_build",
 		"description": "Build project index",
@@ -40,7 +41,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"full_name": "system_runtime_control",
 			"category": "system",
 			"enabled": true,
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
+			"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}, {
 			"name": "project_index_build",
 			"full_name": "system_project_index_build",
@@ -117,6 +119,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var enriched := ToolPresentationService.enrich_tools_for_presentation(exposed_tools, presentation)
 	if enriched.is_empty() or not (enriched[0] as Dictionary).has("groupPath"):
 		return _failure("Presentation service should add non-breaking groupPath metadata to flat tools.")
+	var mcp_tools := ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation)
+	var mcp_project_state := _find_mcp_tool(mcp_tools, "system_project_state")
+	if mcp_project_state.is_empty():
+		return _failure("Presentation service should include project state in MCP tools/list output.")
+	var default_output_schema = mcp_project_state.get("outputSchema", {})
+	if not (default_output_schema is Dictionary):
+		return _failure("Presentation service should attach default outputSchema to MCP tools/list entries.")
+	if not ((default_output_schema as Dictionary).get("properties", {}) is Dictionary) or not (((default_output_schema as Dictionary).get("properties", {}) as Dictionary).has("success")):
+		return _failure("Default outputSchema should document the normalized success envelope.")
+	if not ((default_output_schema as Dictionary).get("required", []) is Array) or not (((default_output_schema as Dictionary).get("required", []) as Array).has("success")):
+		return _failure("Default outputSchema should require the normalized success flag.")
+	var default_data_schema = ((default_output_schema as Dictionary).get("properties", {}) as Dictionary).get("data", {})
+	if not (default_data_schema is Dictionary) or not (((default_data_schema as Dictionary).get("type", []) is Array)) or not (((default_data_schema as Dictionary).get("type", []) as Array).has("array")) or not (((default_data_schema as Dictionary).get("type", []) as Array).has("null")):
+		return _failure("Default outputSchema data should allow existing object, array, scalar, and null tool payloads.")
+	var mcp_runtime_control := _find_mcp_tool(mcp_tools, "system_runtime_control")
+	if mcp_runtime_control.is_empty():
+		return _failure("Presentation service should include runtime control in MCP tools/list output.")
+	var explicit_output_schema = mcp_runtime_control.get("outputSchema", {})
+	if not (explicit_output_schema is Dictionary) or not (((explicit_output_schema as Dictionary).get("properties", {}) as Dictionary).has("data")):
+		return _failure("Presentation service should preserve explicit tool outputSchema definitions.")
+	if JSON.stringify(mcp_runtime_control.get("inputSchema", {})) == JSON.stringify(explicit_output_schema):
+		return _failure("Presentation service should not mirror inputSchema into outputSchema.")
 
 	return {
 		"name": "tool_presentation_service_contracts",
@@ -136,6 +160,16 @@ func _find_node(nodes: Array, kind: String, key: String) -> Dictionary:
 		var node_dict := node as Dictionary
 		if str(node_dict.get("kind", "")) == kind and str(node_dict.get("key", "")) == key:
 			return node_dict
+	return {}
+
+
+func _find_mcp_tool(tools: Array, name: String) -> Dictionary:
+	for tool in tools:
+		if not (tool is Dictionary):
+			continue
+		var tool_dict := tool as Dictionary
+		if str(tool_dict.get("name", "")) == name:
+			return tool_dict
 	return {}
 
 
