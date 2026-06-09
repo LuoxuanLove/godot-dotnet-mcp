@@ -29,6 +29,7 @@ Target version: 1.4.0.
 ### Fixed
 
 - Fixed the default tool profile so registered split visual authoring categories for materials, shaders, lighting, particles, TileMaps, and geometry are visible without switching to the full profile.
+- Fixed stdio `tools/call` disabled-tool checks to use the shared loader enabled state before exposure checks, matching HTTP transport error semantics.
 
 ### Documentation
 

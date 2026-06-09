@@ -15,6 +15,8 @@ const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
 const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
 const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
+const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
+const MCPToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
@@ -26,6 +28,7 @@ var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
 var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
+var _tool_rpc_router = MCPToolRpcRouterScript.new()
 var _tool_activity_registry = MCPToolActivityRegistry.new()
 var _processing_stdin := false
 var _transport_generation := 0
@@ -43,6 +46,7 @@ func initialize(tool_loader, debug_mode: bool = false) -> void:
 	_tool_loader = tool_loader
 	_debug_mode = debug_mode
 	_configure_tool_activity_registry()
+	_configure_tool_rpc_router()
 	_configure_resources_prompts_services()
 
 
@@ -238,31 +242,22 @@ func _handle_tools_call_async(params, id) -> Dictionary:
 		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
 	var params_dict := params as Dictionary
 	if params_dict.has("arguments") and not (params_dict.get("arguments") is Dictionary):
-		return _create_tool_response({"success": false, "error": "Tool arguments must be an object"}, id)
+		return _create_json_rpc_response(await _tool_rpc_router.build_tool_call_result_async(params_dict), id)
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var tool_name := str(params_dict.get("name", ""))
-	var arguments = params_dict.get("arguments", {})
-	if not (arguments is Dictionary):
-		arguments = {}
-	else:
-		arguments = (arguments as Dictionary).duplicate(true)
-	if not (arguments as Dictionary).has("_mcp_context") and params_dict.get("_mcp_context", null) is Dictionary:
-		(arguments as Dictionary)["_mcp_context"] = (params_dict.get("_mcp_context", {}) as Dictionary).duplicate(true)
+	return _create_json_rpc_response(await _tool_rpc_router.build_tool_call_result_async(params_dict), id)
 
-	if tool_name.is_empty():
-		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
-	if _disabled_tools.has(tool_name):
-		return _create_tool_response({"success": false, "error": "Tool '%s' is disabled" % tool_name}, id)
-	if _tool_loader.has_method("is_tool_exposed") and not bool(_tool_loader.is_tool_exposed(tool_name)):
-		return _create_tool_response({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, id)
 
-	var resolved := _resolve_tool_call_name(tool_name)
-	if not bool(resolved.get("success", false)):
-		return _create_tool_response({"success": false, "error": "Invalid tool name: %s" % tool_name}, id)
+func _is_tool_enabled(tool_name: String) -> bool:
+	if _tool_loader != null and _tool_loader.has_method("is_tool_enabled"):
+		return bool(_tool_loader.is_tool_enabled(tool_name))
+	return not _disabled_tools.has(tool_name)
 
-	var result: Dictionary = await _tool_loader.execute_tool_async(str(resolved["category"]), str(resolved["tool"]), arguments)
-	return _create_tool_response(result, id)
+
+func _is_tool_exposed(tool_name: String) -> bool:
+	if _tool_loader != null and _tool_loader.has_method("is_tool_exposed"):
+		return bool(_tool_loader.is_tool_exposed(tool_name))
+	return false
 
 
 func _handle_resources_list(params, id) -> Dictionary:
@@ -316,6 +311,17 @@ func _configure_resources_prompts_services() -> void:
 	var prompts_context = MCPPromptsServiceContextScript.new()
 	prompts_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
 	_prompts_service.configure(prompts_context)
+
+
+func _configure_tool_rpc_router() -> void:
+	var router_context = MCPToolRpcRouterContextScript.new()
+	router_context.get_tool_loader = func(): return _tool_loader
+	router_context.is_tool_enabled = Callable(self, "_is_tool_enabled")
+	router_context.is_tool_exposed = Callable(self, "_is_tool_exposed")
+	router_context.log = Callable(self, "_log")
+	router_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
+	router_context.tool_activity_registry = _get_stdio_tool_activity_registry()
+	_tool_rpc_router.configure(router_context)
 
 
 func _configure_tool_activity_registry() -> void:
