@@ -249,9 +249,11 @@ func _handle_tools_call_async(params, id) -> Dictionary:
 
 
 func _is_tool_enabled(tool_name: String) -> bool:
+	if _disabled_tools.has(tool_name):
+		return false
 	if _tool_loader != null and _tool_loader.has_method("is_tool_enabled"):
 		return bool(_tool_loader.is_tool_enabled(tool_name))
-	return not _disabled_tools.has(tool_name)
+	return true
 
 
 func _is_tool_exposed(tool_name: String) -> bool:

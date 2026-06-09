@@ -100,9 +100,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if loader.executed_count != 0:
 		return _failure("Hidden stdio/router parity case should not execute the loader.")
 
+	loader.hidden_tools.clear()
+	stdio_server.set_disabled_tools(["system_project_lifecycle"])
+	var stdio_local_disabled_response: Dictionary = await stdio_server.call("_handle_tools_call", hidden_params, 12)
+	var stdio_local_disabled_check := _assert_stable_stdio_tool_error(
+		stdio_local_disabled_response.get("result", {}),
+		"disabled",
+		"stdio-local disabled"
+	)
+	if not bool(stdio_local_disabled_check.get("success", false)):
+		return stdio_local_disabled_check
+	if loader.executed_count != 0:
+		return _failure("Stdio-local disabled case should not execute the loader.")
+	stdio_server.set_disabled_tools([])
+
 	for malformed_name in [1, null]:
 		var malformed_params := {"name": malformed_name, "arguments": {}}
-		var malformed_response: Dictionary = await stdio_server.call("_handle_tools_call", malformed_params, 12)
+		var malformed_response: Dictionary = await stdio_server.call("_handle_tools_call", malformed_params, 13)
 		var malformed_check := _assert_stable_stdio_tool_error(
 			malformed_response.get("result", {}),
 			"Tool name must be a string",
@@ -119,7 +133,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"success": true,
 		"error": "",
 		"details": {
-			"checked_errors": ["disabled", "not exposed", "malformed name"]
+			"checked_errors": ["disabled", "not exposed", "stdio-local disabled", "malformed name"]
 		}
 	}
 
