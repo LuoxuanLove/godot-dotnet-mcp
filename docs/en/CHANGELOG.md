@@ -41,6 +41,7 @@ Target version: 2.0.0.
 - Added regression coverage for static resource graph fallback diagnostics, preload/load classification, reparse-point references, bridge version policy samples, and project session limits.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
 - Mirrored the Companion contract and static analyzer build/test gates into release workflows, added dry-run cache markers for those checks, and guarded active v2 baseline push filters for v2 contract workflows.
+- Added v2 bridge contract and broker manifest validators to release workflow gates, including dry-run cache markers for those policy checks.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
 - Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
 

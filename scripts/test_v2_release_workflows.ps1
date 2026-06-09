@@ -55,6 +55,28 @@ foreach ($field in @("companion_contract_checked", "companion_static_analyzer_ch
     Assert-Contains "publish-release dry-run record" $publishRelease "$field = `$true"
 }
 
+$v2PolicyChecks = @(
+    ".\scripts\validate_v2_bridge_contract.ps1",
+    ".\scripts\test_v2_bridge_contract.ps1",
+    ".\scripts\validate_v2_broker_manifest.ps1",
+    ".\scripts\test_v2_broker_manifest.ps1"
+)
+
+foreach ($check in $v2PolicyChecks) {
+    Assert-Contains "publish-plugin" $publishPlugin $check
+    Assert-Contains "publish-release" $publishRelease $check
+}
+
+foreach ($field in @(
+    "v2_bridge_contract_checked",
+    "v2_bridge_contract_tests_checked",
+    "v2_broker_manifest_checked",
+    "v2_broker_manifest_tests_checked"
+)) {
+    Assert-Contains "publish-release dry-run validation" $publishRelease "`$record.$field -eq `$true"
+    Assert-Contains "publish-release dry-run record" $publishRelease "$field = `$true"
+}
+
 foreach ($workflow in @(
     @{ Name = "dotnet-build"; Content = $dotnetBuild },
     @{ Name = "v2-bridge-contract"; Content = $v2Bridge },

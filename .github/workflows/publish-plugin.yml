@@ -118,6 +118,22 @@ jobs:
         shell: pwsh
         run: dotnet run --project ".\tests\static_project_analyzer\GodotDotnetMcp.Companion.StaticAnalysis.Tests.csproj" -c Release
 
+      - name: Validate v2 bridge contract
+        shell: pwsh
+        run: .\scripts\validate_v2_bridge_contract.ps1
+
+      - name: Run v2 bridge contract tests
+        shell: pwsh
+        run: .\scripts\test_v2_bridge_contract.ps1
+
+      - name: Validate v2 broker manifest
+        shell: pwsh
+        run: .\scripts\validate_v2_broker_manifest.ps1
+
+      - name: Run v2 broker manifest tests
+        shell: pwsh
+        run: .\scripts\test_v2_broker_manifest.ps1
+
       - name: Setup Godot 4.6
         shell: pwsh
         run: |
