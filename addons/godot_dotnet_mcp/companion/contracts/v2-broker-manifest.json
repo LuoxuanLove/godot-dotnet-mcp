@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "version_line": "2.0.0",
+  "contract": "godot-dotnet-mcp.v2.broker",
+  "default_lifecycle": {
+    "enabled_by_default": false,
+    "starts_background_process": false,
+    "opens_listening_port": false,
+    "launches_godot_editor": false,
+    "requires_explicit_start": true,
+    "requires_explicit_editor_launch": true
+  },
+  "project_discovery": {
+    "scans_known_projects_only": true,
+    "allows_recursive_home_scan": false,
+    "requires_explicit_project_registration": true
+  },
+  "transport": {
+    "allowed_modes": [
+      "stdio",
+      "http_loopback"
+    ],
+    "default_mode": "stdio",
+    "http_loopback": {
+      "enabled_by_default": false,
+      "host": "127.0.0.1",
+      "requires_explicit_port": true
+    }
+  },
+  "session_scope": {
+    "requires_project_id": true,
+    "requires_session_id": true,
+    "rejects_cross_project_session": true
+  }
+}
