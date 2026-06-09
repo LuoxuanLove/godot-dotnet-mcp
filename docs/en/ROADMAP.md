@@ -18,6 +18,10 @@ This project should not compete on raw tool count. It should compete on semantic
 
 The 1.x line should keep improving the editor-native plugin structure while turning Godot .NET MCP into an evidence-first workflow platform for Agents. The first goal is to help the Agent discover the right capabilities, make focused changes, verify them in Godot, and report trustworthy evidence.
 
+### v1.4.0 Protocol Refactor
+
+v1.4.0 follows the [protocol refactor plan](process/v1.4.0-protocol-refactor-plan.md): context, state, and catalogs move to Resources; workflow guidance stays in Prompts; and Tools narrow to action and computational workflow entries. The work is intentionally split into PR-sized refactor axes with removal guards and migration contracts.
+
 ### Capability Discovery and Tool Governance
 
 - Strengthen `system_help` and the tool catalog resources so the Agent can choose tools by task instead of guessing from a large flat list
