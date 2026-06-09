@@ -25,6 +25,7 @@ Target version: 1.4.0.
 
 ### Internal
 
+- Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 
 ## [1.3.0] - 2026-06-08
