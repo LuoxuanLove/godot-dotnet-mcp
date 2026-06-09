@@ -46,6 +46,8 @@
   { "name": "tool_presentation_service_contracts", "layer": "tooling", "domain": "catalog", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "tools_api_service_contracts", "layer": "tooling", "domain": "tools_api", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "tool_rpc_router_contracts", "layer": "protocol", "domain": "tools", "behavior": "migration", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
+  { "name": "user_tool_service_contracts", "layer": "plugin", "domain": "user_tools", "behavior": "current", "speed": "headless", "isolation": "user_fs", "v1_4_disposition": "keep" },
+  { "name": "plugin_evolution_runtime_diagnostics_contracts", "layer": "plugin", "domain": "diagnostics", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "dock_model_service_contracts", "layer": "dock", "domain": "model", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "tools_tab_rendering_contracts", "layer": "dock", "domain": "tools", "behavior": "current", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "rewrite" }
 ]
