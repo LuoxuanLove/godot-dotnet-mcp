@@ -100,13 +100,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if loader.executed_count != 0:
 		return _failure("Hidden stdio/router parity case should not execute the loader.")
 
+	for malformed_name in [1, null]:
+		var malformed_params := {"name": malformed_name, "arguments": {}}
+		var malformed_response: Dictionary = await stdio_server.call("_handle_tools_call", malformed_params, 12)
+		var malformed_check := _assert_stable_stdio_tool_error(
+			malformed_response.get("result", {}),
+			"Tool name must be a string",
+			"malformed name"
+		)
+		if not bool(malformed_check.get("success", false)):
+			return malformed_check
+	if loader.executed_count != 0:
+		return _failure("Malformed-name stdio cases should not execute the loader.")
+
 	stdio_server.free()
 	return {
 		"name": "stdio_tool_error_parity_contracts",
 		"success": true,
 		"error": "",
 		"details": {
-			"checked_errors": ["disabled", "not exposed"]
+			"checked_errors": ["disabled", "not exposed", "malformed name"]
 		}
 	}
 
@@ -131,6 +144,23 @@ func _assert_matching_tool_error(router_result: Dictionary, stdio_result, expect
 		return _failure("Stdio %s error should preserve the expected text." % expected_text)
 	if bool((stdio_structured as Dictionary).get("success", true)):
 		return _failure("Stdio %s structuredContent should report success=false." % expected_text)
+	return {"success": true, "error": ""}
+
+
+func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label: String) -> Dictionary:
+	if not (stdio_result is Dictionary):
+		return _failure("Stdio tools/call should return a tool result for %s errors." % label)
+	var stdio_result_dict: Dictionary = stdio_result
+	if not bool(stdio_result_dict.get("isError", false)):
+		return _failure("Stdio should mark %s as an error." % label)
+	var stdio_structured = stdio_result_dict.get("structuredContent", {})
+	if not (stdio_structured is Dictionary):
+		return _failure("Stdio should expose structuredContent for %s errors." % label)
+	var stdio_error := str((stdio_structured as Dictionary).get("error", ""))
+	if stdio_error.find(expected_text) == -1:
+		return _failure("Stdio %s error should preserve '%s'. actual=%s" % [label, expected_text, stdio_error])
+	if bool((stdio_structured as Dictionary).get("success", true)):
+		return _failure("Stdio %s structuredContent should report success=false." % label)
 	return {"success": true, "error": ""}
 
 
