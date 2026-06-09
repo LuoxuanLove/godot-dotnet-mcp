@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
+const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
@@ -93,9 +94,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
 		var exposed_name := str(tool_def.get("name", ""))
+		var exposed_category := str(tool_def.get("category", ""))
 		exposed_names.append(exposed_name)
-		if not exposed_name.begins_with("system_"):
-			return _failure("Public MCP exposure should remain high-level system-only, not permission-filtered atomic exposure: %s" % exposed_name)
+		if not MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES.has(exposed_category):
+			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
+		if not exposed_name.begins_with("%s_" % exposed_category):
+			return _failure("Public MCP exposure should prefix public tools with their manifest category: %s" % exposed_name)
 	if not exposed_names.has("system_help"):
 		return _failure("Tool loader did not expose system_help under the default tool access provider.")
 	if not exposed_names.has("system_tool_catalog"):
@@ -140,6 +144,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+
+	_loader.set("_tool_definitions_by_category", {
+		"user": [
+			{
+				"name": "contract_probe",
+				"description": "Contract probe user tool",
+				"parameters": {}
+			}
+		]
+	})
+	if not _loader.is_tool_exposed("user_contract_probe"):
+		return _failure("Tool loader should expose user tools when the manifest marks the user category public.")
+	var user_probe_found := false
+	for user_tool_def in _loader.get_exposed_tool_definitions():
+		if str(user_tool_def.get("name", "")) == "user_contract_probe":
+			user_probe_found = str(user_tool_def.get("category", "")) == "user"
+			break
+	if not user_probe_found:
+		return _failure("Tool loader should include public user tools in exposed definitions with the user category.")
 
 	var runtime_control_result: Dictionary = await _loader.execute_tool_async("system", "runtime_control", {"action": "status"})
 	if not bool(runtime_control_result.get("success", false)):

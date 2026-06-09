@@ -79,12 +79,12 @@ func get_runtime_diagnostics(watch_status: Dictionary = {}, audit_limit: int = 1
 		if bool(item.get("loadable", false)):
 			loadable.append(item)
 		else:
-			failed.append({
+			failed.append(_with_recovery_guidance({
 				"script_path": str(item.get("script_path", "")),
 				"display_name": str(item.get("display_name", "")),
 				"load_error": str(item.get("load_error", "unknown")),
 				"scaffold_version": str(item.get("scaffold_version", "unknown"))
-			})
+			}))
 	var runtime_failures := _collect_runtime_failures(runtime_state)
 	failed.append_array(runtime_failures)
 	var compatibility := get_compatibility_report()
@@ -132,7 +132,7 @@ func _collect_runtime_failures(runtime_state: Array) -> Array[Dictionary]:
 		if seen.has(key):
 			continue
 		seen[key] = true
-		failures.append({
+		failures.append(_with_recovery_guidance({
 			"script_path": script_path,
 			"display_name": "",
 			"load_error": last_error if not last_error.is_empty() else state,
@@ -142,8 +142,52 @@ func _collect_runtime_failures(runtime_state: Array) -> Array[Dictionary]:
 			"runtime_version": int(state_entry.get("version", 0)),
 			"discovery_source": str(state_entry.get("discovery_source", "")),
 			"last_refresh_reason": str(state_entry.get("last_refresh_reason", ""))
-		})
+		}))
 	return failures
+
+
+func _with_recovery_guidance(failure: Dictionary) -> Dictionary:
+	var out := failure.duplicate(true)
+	var guidance := _build_recovery_guidance(out)
+	out["diagnostic_code"] = str(guidance.get("diagnostic_code", "user_tool_load_failed"))
+	out["recommended_action"] = str(guidance.get("recommended_action", "Inspect the user tool script, fix the reported load error, then reload user tools."))
+	out["next_tool_hint"] = str(guidance.get("next_tool_hint", "Use plugin_evolution_runtime_diagnostics after the fix to confirm the user tool is loadable."))
+	return out
+
+
+func _build_recovery_guidance(failure: Dictionary) -> Dictionary:
+	var error_text := str(failure.get("load_error", "")).strip_edges()
+	var normalized := error_text.to_lower()
+	var runtime_state := str(failure.get("runtime_state", "")).strip_edges()
+	if normalized.find("duplicate") != -1 and normalized.find("logical name") != -1:
+		return {
+			"diagnostic_code": "duplicate_user_tool_logical_name",
+			"recommended_action": "Rename one of the conflicting user tool declarations so each logical tool name is unique.",
+			"next_tool_hint": "Run plugin_evolution_runtime_diagnostics after renaming to confirm the duplicate runtime failure cleared."
+		}
+	if runtime_state == "reload_failed":
+		return {
+			"diagnostic_code": "user_tool_runtime_reload_failed",
+			"recommended_action": "Inspect the runtime reload error, fix the script, then trigger a user-tool reload.",
+			"next_tool_hint": "Run plugin_evolution_runtime_diagnostics after reload to verify the runtime state is no longer reload_failed."
+		}
+	if normalized.find("get_tools") != -1 or normalized.find("no tools") != -1 or normalized.find("missing") != -1:
+		return {
+			"diagnostic_code": "missing_user_tool_definitions",
+			"recommended_action": "Add a get_tools() method that returns at least one user tool definition, or regenerate the scaffold.",
+			"next_tool_hint": "Use plugin_evolution_check_compatibility to confirm the scaffold shape before reloading."
+		}
+	if normalized.is_empty() or normalized == "unknown":
+		return {
+			"diagnostic_code": "user_tool_load_unknown",
+			"recommended_action": "Open the user tool script and editor output to find the load error, then reload user tools.",
+			"next_tool_hint": "Use plugin_evolution_runtime_diagnostics after collecting editor output to confirm the failure details."
+		}
+	return {
+		"diagnostic_code": "user_tool_load_failed",
+		"recommended_action": "Inspect the user tool script, fix the reported load error, then reload user tools.",
+		"next_tool_hint": "Use plugin_evolution_runtime_diagnostics after the fix to confirm the user tool is loadable."
+	}
 
 
 func _summarize_runtime_state(runtime_state: Array) -> Dictionary:
@@ -157,8 +201,7 @@ func _summarize_runtime_state(runtime_state: Array) -> Dictionary:
 			continue
 		var state_entry: Dictionary = entry
 		var state := str(state_entry.get("state", ""))
-		var last_error := _string_or_empty(state_entry.get("last_error", ""))
-		if state == "reload_failed" or not last_error.is_empty():
+		if state == "reload_failed":
 			summary["failed_count"] = int(summary.get("failed_count", 0)) + 1
 		if bool(state_entry.get("pending_reload", false)) or state in ["reload_pending", "waiting_quiesce"]:
 			summary["pending_count"] = int(summary.get("pending_count", 0)) + 1
