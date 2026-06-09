@@ -18,6 +18,7 @@ var tests = new (string Name, Action Run)[]
     ("keeps_revoked_sessions_terminal_under_concurrency", RevokedSessionsStayTerminalUnderConcurrency),
     ("keeps_session_snapshots_active_under_concurrency", SessionSnapshotsStayActiveUnderConcurrency),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
+    ("rejects_incompatible_editor_bridge_versions", IncompatibleEditorBridgeVersionsAreRejected),
 };
 
 foreach (var test in tests)
@@ -358,6 +359,38 @@ static void ExplicitBridgeUpgradeEnablesLiveCapabilities()
     var staticSession = isolatedSession.StartSession(registeredOther.ProjectId);
     AssertThrows<InvalidOperationException>(() =>
         staticSession.UpgradeToEditorLive(EditorBridgeStatus.Disabled(registeredOther.ProjectId)));
+}
+
+static void IncompatibleEditorBridgeVersionsAreRejected()
+{
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+
+    foreach (var pluginVersion in new string?[] { null, "", "1.4.0", "3.0.0", "not-a-version" })
+    {
+        AssertThrows<InvalidOperationException>(() =>
+            session.UpgradeToEditorLive(new EditorBridgeStatus(
+                EditorBridgeState.Online,
+                project.ProjectId,
+                "editor_session_1",
+                pluginVersion)));
+        AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    }
+
+    AssertThrows<InvalidOperationException>(() =>
+        session.UpgradeToEditorLive(new EditorBridgeStatus(
+            EditorBridgeState.VersionMismatch,
+            project.ProjectId,
+            "editor_session_1",
+            "2.0.0")));
+
+    session.UpgradeToEditorLive(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "v2.0.0-preview.1"));
+    AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
 }
 
 static string CreateTempProjectRoot()
