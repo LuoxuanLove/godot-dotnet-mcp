@@ -14,6 +14,14 @@ public sealed class CompanionBroker
 
     public ProjectDescriptor RegisterProject(ProjectDescriptor project)
     {
+        ArgumentNullException.ThrowIfNull(project);
+        var verifiedProject = ProjectDescriptor.FromRoot(project.ProjectRoot, project.ProjectFilePath);
+        return _projects.GetOrAdd(verifiedProject.ProjectId, verifiedProject);
+    }
+
+    public ProjectDescriptor RegisterProject(string projectRoot, string? projectFilePath = null)
+    {
+        var project = ProjectDescriptor.FromRoot(projectRoot, projectFilePath);
         return _projects.GetOrAdd(project.ProjectId, project);
     }
 
