@@ -17,6 +17,8 @@ const GUIDES_CAPABILITIES_URI := "godot-dotnet-mcp://guides/capabilities"
 const GUIDES_UI_AUTOMATION_URI := "godot-dotnet-mcp://guides/ui-automation"
 const STATE_PROJECT_SUMMARY_URI := "godot-dotnet-mcp://state/project/summary"
 const STATE_EDITOR_URI := "godot-dotnet-mcp://state/editor"
+const EDITOR_LOG_OUTPUT_URI := "godot-dotnet-mcp://logs/editor/output"
+const EDITOR_LOG_ERRORS_URI := "godot-dotnet-mcp://logs/editor/errors"
 const ACTIVITY_STATUS_URI := "godot-dotnet-mcp://activity/status"
 const ACTIVITY_RECENT_URI := "godot-dotnet-mcp://activity/recent"
 const ACTIVITY_CALL_TEMPLATE_URI := "godot-dotnet-mcp://activity/call/{id}"
@@ -116,6 +118,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		GUIDES_UI_AUTOMATION_URI,
 		STATE_PROJECT_SUMMARY_URI,
 		STATE_EDITOR_URI,
+		EDITOR_LOG_OUTPUT_URI,
+		EDITOR_LOG_ERRORS_URI,
 		ACTIVITY_STATUS_URI,
 		ACTIVITY_RECENT_URI,
 		TOOLS_CATALOG_EXPOSED_URI,
@@ -196,6 +200,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var editor_state_payload: Dictionary = editor_state.get("payload", {})
 	if not (editor_state_payload.get("resources", {}) is Dictionary):
 		return _failure("editor state resource should include resource pointers.")
+	var editor_state_resources: Dictionary = editor_state_payload.get("resources", {})
+	if str(editor_state_resources.get("editorLogOutput", "")) != EDITOR_LOG_OUTPUT_URI or str(editor_state_resources.get("editorLogErrors", "")) != EDITOR_LOG_ERRORS_URI:
+		return _failure("editor state resource should point clients to canonical editor log resources.")
+
+	var editor_log_output := await _read_json_resource(EDITOR_LOG_OUTPUT_URI, 33)
+	if not bool(editor_log_output.get("ok", false)):
+		return _failure(str(editor_log_output.get("error", "editor log output resource failed")))
+	var editor_log_output_payload: Dictionary = editor_log_output.get("payload", {})
+	if str(editor_log_output_payload.get("resourceUri", "")) != EDITOR_LOG_OUTPUT_URI or str(editor_log_output_payload.get("action", "")) != "get_output":
+		return _failure("editor log output resource should read Output lines with get_output.")
+	if not bool(editor_log_output_payload.get("readOnly", false)) or JSON.stringify(editor_log_output_payload).find("clear_output") != -1:
+		return _failure("editor log output resource should be read-only and avoid clear_output guidance.")
+
+	var editor_log_errors := await _read_json_resource(EDITOR_LOG_ERRORS_URI, 34)
+	if not bool(editor_log_errors.get("ok", false)):
+		return _failure(str(editor_log_errors.get("error", "editor log errors resource failed")))
+	var editor_log_errors_payload: Dictionary = editor_log_errors.get("payload", {})
+	if str(editor_log_errors_payload.get("resourceUri", "")) != EDITOR_LOG_ERRORS_URI or str(editor_log_errors_payload.get("action", "")) != "get_errors":
+		return _failure("editor log errors resource should read warning/error entries with get_errors.")
+	if not bool(editor_log_errors_payload.get("readOnly", false)):
+		return _failure("editor log errors resource should be read-only.")
 
 	MCPDebugBufferScript.clear()
 	MCPDebugBufferScript.record("warning", "contract", "token=super-secret-value Authorization: Bearer top-secret-bearer", "", {"password": "hunter2", "safe": "visible"})
@@ -251,7 +276,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
-	for removed_tool_name in ["system_help", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
 			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
 
@@ -261,7 +286,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
-	for removed_tool_name in ["system_help", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
 			return _failure("exposed tool catalog should not expose removed public tool %s." % removed_tool_name)
 	var visible_tool_catalog := await _read_json_resource(TOOLS_CATALOG_VISIBLE_URI, 29)
@@ -270,7 +295,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
-	for removed_tool_name in ["system_help", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool_name):
 			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool_name)
 
@@ -391,8 +416,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(debug_prompt.get("error", "debug prompt failed")))
 	if str(debug_prompt.get("text", "")).find("runtime_diagnose") == -1 or str(debug_prompt.get("text", "")).find("NullReferenceException") == -1 or str(debug_prompt.get("text", "")).find("system_dap_debugger") == -1:
 		return _failure("debug triage prompt should mention runtime_diagnose, DAP escalation, and include the error summary.")
-	if not _prompt_text_is_actionable(str(debug_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_editor_log", "system_project_state"]):
-		return _failure("debug triage prompt should provide actionable workflow sections and diagnostic tools.")
+	var debug_prompt_text := str(debug_prompt.get("text", ""))
+	if debug_prompt_text.find("system_editor_log") != -1:
+		return _failure("debug triage prompt should not recommend removed system_editor_log.")
+	if not _prompt_text_is_actionable(debug_prompt_text, ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", EDITOR_LOG_ERRORS_URI, "resources/read", "system_project_state"]):
+		return _failure("debug triage prompt should provide actionable workflow sections and resource-first diagnostic inputs.")
 
 	var reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "resource_path": "tests/_fixtures/mcp_resources_prompts_sample.tres", "binding_name": "HealthLabel"}, 14)
 	if not bool(reference_prompt.get("ok", false)):

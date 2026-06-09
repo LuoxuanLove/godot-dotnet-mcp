@@ -14,6 +14,7 @@ Target version: 1.4.0.
 - Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
+- Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
 
 ### Changed
 
@@ -25,6 +26,7 @@ Target version: 1.4.0.
 - Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
+- Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
 ### Fixed
@@ -48,6 +50,7 @@ Target version: 1.4.0.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
 - Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
 - Added removal guard coverage so `system_tool_catalog` stays absent from tools/list, tool-tree metadata, catalog resources, catalog search, and localization inventory while preserving explicit legacy-call guidance.
+- Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Updated version-policy CI to compare v1.4 pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
