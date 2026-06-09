@@ -12,6 +12,8 @@ The static analyzer now produces a read-only project inventory for this layer: w
 
 It also records an unevaluated .NET workspace graph from project XML: SDK names, target frameworks, package references, project references, and compile include/remove items. This keeps early C# insight available without restore, build, or MSBuild condition evaluation.
 
+Static resource analysis now indexes text `.tscn` and `.tres` files as a reference graph. It records external resources, sub-resources, `uid://` markers, `res://` preload/load usages, missing targets, project-boundary warnings, and unsupported binary `.res` files without loading the project in the editor.
+
 ### 🔐 Project-Scoped Sessions
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
