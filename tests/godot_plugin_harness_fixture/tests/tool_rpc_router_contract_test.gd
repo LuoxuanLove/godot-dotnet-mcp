@@ -43,7 +43,23 @@ class FakeToolLoader:
 		}]
 
 	func get_tool_definitions() -> Array:
-		return get_exposed_tool_definitions()
+		var definitions := get_exposed_tool_definitions()
+		definitions.append({
+			"name": "system_tool_activity",
+			"description": "Removed public activity tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "recent", "get"]}
+				}
+			}
+		})
+		return definitions
 
 	func get_domain_states() -> Array:
 		return [{
@@ -65,6 +81,12 @@ class FakeToolLoader:
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			}, {
+				"name": "tool_activity",
+				"full_name": "system_tool_activity",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "recent", "get"]}}}
 			}],
 			"project": [{
 				"name": "info",
@@ -83,6 +105,17 @@ class FakeToolLoader:
 		}
 
 	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
+		if category == "system" and tool_name == "tool_activity":
+			return {
+				"success": false,
+				"error": "system_tool_activity has been removed from the public tool surface. Read the activity resources instead.",
+				"data": {
+					"error_type": "removed_public_tool",
+					"removed_tool": "system_tool_activity",
+					"replacement_methods": ["resources/read", "resources/list", "resources/templates/list"],
+					"replacement_resources": ["godot-dotnet-mcp://activity/status"]
+				}
+			}
 		var execution_args := arguments.duplicate(true)
 		var agent_context := {}
 		if execution_args.get("_mcp_context", null) is Dictionary:
@@ -153,10 +186,10 @@ class FakeCallbacks:
 	func is_tool_enabled(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
-		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle"
+		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_tool_activity"
 
 	func is_tool_exposed(tool_name: String) -> bool:
-		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle")
+		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_tool_activity")
 
 	func log(message: String, level: String) -> void:
 		last_log = {
@@ -188,6 +221,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router did not expose the unified tool tree.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
+	if _contains_tool_name_recursive(tools_list, "system_tool_activity"):
+		return _failure("Tool RPC router tools/list should not expose removed public tool system_tool_activity.")
 	for tool_entry in tools:
 		if not (tool_entry is Dictionary):
 			continue
@@ -264,6 +299,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_result.get("isError", false)):
 			return _failure("Tool RPC router should reject removed project lifecycle entry '%s'." % removed_tool_name)
+
+	var removed_activity_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_tool_activity",
+		"arguments": {"action": "status"}
+	})
+	if not bool(removed_activity_result.get("isError", false)):
+		return _failure("Tool RPC router should return isError=true for removed system_tool_activity.")
+	var removed_activity_structured = removed_activity_result.get("structuredContent", {})
+	if not (removed_activity_structured is Dictionary) or bool((removed_activity_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router removed system_tool_activity should expose failing structuredContent.")
+	var removed_activity_data = (removed_activity_structured as Dictionary).get("data", {})
+	if not (removed_activity_data is Dictionary) or str((removed_activity_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool RPC router removed system_tool_activity should expose removed_public_tool guidance.")
+	if not (((removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
+		return _failure("Tool RPC router removed system_tool_activity should point to activity/status.")
 
 	callbacks.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_result: Dictionary = await router.build_tool_call_result_async({
@@ -371,3 +421,22 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is String:
+		return str(value) == tool_name
+	if value is Array:
+		for item in value:
+			if _contains_tool_name_recursive(item, tool_name):
+				return true
+		return false
+	if value is Dictionary:
+		var dict := value as Dictionary
+		for key in ["name", "fullName", "full_name"]:
+			if str(dict.get(key, "")) == tool_name:
+				return true
+		for nested in dict.values():
+			if _contains_tool_name_recursive(nested, tool_name):
+				return true
+	return false
