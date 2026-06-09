@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" />
-    <ProjectReference Include="..\..\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" />
+    <ProjectReference Include="..\..\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" />
+    <ProjectReference Include="..\..\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" />
   </ItemGroup>
 </Project>

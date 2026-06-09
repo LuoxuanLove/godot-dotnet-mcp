@@ -4,6 +4,12 @@ namespace GodotDotnetMcp.Companion.StaticAnalysis;
 
 public sealed class ProjectInventoryAnalyzer
 {
+    private static readonly string[] PluginOwnedProjectDirectoryFragments =
+    [
+        Path.Combine("addons", "godot_dotnet_mcp", "companion"),
+        Path.Combine("addons", "godot_dotnet_mcp", "dotnet_bridge"),
+    ];
+
     public ProjectInventory Analyze(string projectRoot)
     {
         if (string.IsNullOrWhiteSpace(projectRoot))
@@ -193,7 +199,22 @@ public sealed class ProjectInventoryAnalyzer
         }
 
         var normalizedDirectory = Path.GetFullPath(directory.FullName);
-        return IsInside(projectRoot, normalizedDirectory);
+        return IsInside(projectRoot, normalizedDirectory) &&
+            !IsPluginOwnedProjectDirectory(projectRoot, normalizedDirectory);
+    }
+
+    private static bool IsPluginOwnedProjectDirectory(string projectRoot, string directoryPath)
+    {
+        foreach (var relativeDirectory in PluginOwnedProjectDirectoryFragments)
+        {
+            var pluginOwnedDirectory = Path.Combine(projectRoot, relativeDirectory);
+            if (IsSameOrInside(pluginOwnedDirectory, directoryPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsInside(string root, string path)
@@ -201,6 +222,15 @@ public sealed class ProjectInventoryAnalyzer
         var normalizedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
         var normalizedPath = Path.GetFullPath(path);
         return normalizedPath.StartsWith(normalizedRoot, StringComparisonForPlatform());
+    }
+
+    private static bool IsSameOrInside(string root, string path)
+    {
+        var normalizedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var normalizedPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var comparison = StringComparisonForPlatform();
+        return string.Equals(normalizedRoot, normalizedPath, comparison) ||
+            normalizedPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, comparison);
     }
 
     private static StringComparer StringComparerForPlatform()

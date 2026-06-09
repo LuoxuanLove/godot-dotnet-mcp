@@ -21,6 +21,7 @@ var tests = new (string Name, Action Run)[]
     ("skips_dot_directories_while_scanning_project_files", SkipsDotDirectoriesWhileScanningProjectFiles),
     ("skips_hidden_and_system_directories_while_scanning_project_files", SkipsHiddenAndSystemDirectoriesWhileScanningProjectFiles),
     ("skips_reparse_point_directories_while_scanning_project_files", SkipsReparsePointDirectoriesWhileScanningProjectFiles),
+    ("skips_plugin_owned_projects_while_scanning_project_files", SkipsPluginOwnedProjectsWhileScanningProjectFiles),
     ("allows_project_roots_under_parent_dot_directories", AllowsProjectRootsUnderParentDotDirectories),
     ("keeps_live_editor_capabilities_unavailable_headlessly", KeepsLiveEditorCapabilitiesUnavailableHeadlessly),
     ("reports_missing_dotnet_workspace_without_claiming_live_state", ReportsMissingDotnetWorkspaceWithoutClaimingLiveState),
@@ -477,6 +478,25 @@ static void SkipsReparsePointDirectoriesWhileScanningProjectFiles()
     {
         throw new OperationCanceledException("directory symbolic links are unavailable.");
     }
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertEqual(1, inventory.CSharpProjectFiles.Count);
+    AssertEqual(Path.GetFullPath(projectFile), inventory.CSharpProjectFiles[0]);
+    AssertEqual(1, inventory.DotnetWorkspace.Projects.Count);
+}
+
+static void SkipsPluginOwnedProjectsWhileScanningProjectFiles()
+{
+    var root = CreateTempProjectRoot();
+    var projectFile = Path.Combine(root, "Game.csproj");
+    File.WriteAllText(projectFile, "<Project />");
+    var companionProjectDir = Path.Combine(root, "addons", "godot_dotnet_mcp", "companion", "GodotDotnetMcp.Companion");
+    var bridgeProjectDir = Path.Combine(root, "addons", "godot_dotnet_mcp", "dotnet_bridge");
+    Directory.CreateDirectory(companionProjectDir);
+    Directory.CreateDirectory(bridgeProjectDir);
+    File.WriteAllText(Path.Combine(companionProjectDir, "GodotDotnetMcp.Companion.csproj"), "<Project />");
+    File.WriteAllText(Path.Combine(bridgeProjectDir, "DotnetBridge.csproj"), "<Project />");
 
     var inventory = new ProjectInventoryAnalyzer().Analyze(root);
 
