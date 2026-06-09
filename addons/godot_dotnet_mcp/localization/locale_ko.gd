@@ -669,8 +669,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_bindings_audit_name": "바인딩 감사",
 	"tool_system_scene_inspect_name": "씬 검사",
 	"tool_system_scene_inspect_desc": "검증, 분석, 또는 두 페이로드를 함께 반환하는 통합 읽기 전용 씬 검사 진입점입니다.",
-	"tool_system_scene_validate_name": "씬 검증",
-	"tool_system_scene_analyze_name": "씬 분석",
 	"tool_system_scene_patch_name": "씬 패치",
 	"tool_system_scene_tree_name": "씬 트리",
 	"tool_system_script_analyze_name": "스크립트 분석",
