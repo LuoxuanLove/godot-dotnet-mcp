@@ -19,17 +19,35 @@ const TOOL_DOMAIN_DEFS: Array[Dictionary] = [
 			"editor",
 			"runtime",
 			"group",
-			"signal",
+			"signal"
+		]
+	},
+	{
+		"key": "visual",
+		"label": "domain_visual",
+		"categories": [
 			"animation",
 			"material",
 			"shader",
 			"lighting",
 			"particle",
 			"tilemap",
-			"geometry",
+			"geometry"
+		]
+	},
+	{
+		"key": "gameplay",
+		"label": "domain_gameplay",
+		"categories": [
 			"physics",
 			"navigation",
-			"audio",
+			"audio"
+		]
+	},
+	{
+		"key": "interface",
+		"label": "domain_interface",
+		"categories": [
 			"ui"
 		]
 	},

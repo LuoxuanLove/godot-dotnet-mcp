@@ -42,6 +42,7 @@ Target version: 1.4.0.
 ### Internal
 
 - Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
+- Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
