@@ -869,7 +869,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_dap_debugger_desc": "Drive Godot's built-in Debug Adapter Protocol endpoint with runtime settings, session IDs, lifecycle, thread, breakpoint, stepping, stack-trace, output, terminate, and disconnect actions.",
 	"tool_system_tool_activity_name": "Tool Activity",
 	"tool_system_tool_activity_desc": "Inspect running and recent MCP tool calls, execution order, and optional self-reported agent context.",
-	"help_recommended_start_tool_activity": "Call system_tool_activity when coordinating with other agents or sessions; optional _mcp_context fields are self-reported coordination hints, not authentication.",
+	"help_recommended_start_tool_activity": "Read godot-dotnet-mcp://activity/status or godot-dotnet-mcp://activity/recent when coordinating with other agents or sessions; optional _mcp_context fields are self-reported coordination hints, not authentication.",
 	"tool_runtime_control_name": "Control",
 	"tool_runtime_control_desc": "Internal runtime control: inspect or arm the running project's debugger session. Supports status, enable and disable.",
 	"tool_runtime_capture_name": "Capture",

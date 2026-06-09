@@ -19,6 +19,7 @@ Target version: 1.4.0.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
 - Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
 - Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
+- Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 
 ### Documentation
 
@@ -33,6 +34,7 @@ Target version: 1.4.0.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
+- Added removal guard coverage so tool lists, catalog resources, search results, and Tools page rendering cannot re-expose `system_tool_activity`.
 
 ## [1.3.0] - 2026-06-08
 
