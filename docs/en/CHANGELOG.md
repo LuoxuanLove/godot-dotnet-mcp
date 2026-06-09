@@ -32,6 +32,7 @@ Target version: 2.0.0.
 - Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added a v2 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
+- Added v2 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
 - Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
