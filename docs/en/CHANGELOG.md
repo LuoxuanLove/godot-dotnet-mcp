@@ -17,6 +17,7 @@ Target version: 1.4.0.
 ### Changed
 
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+- Updated the project orientation Prompt Guide to start discovery from canonical guide resources instead of the legacy `system_help` tool.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 
 ### Documentation

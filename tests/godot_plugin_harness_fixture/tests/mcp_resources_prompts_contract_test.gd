@@ -346,6 +346,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(orientation_prompt.get("error", "project orientation prompt failed")))
 	if not _prompt_text_is_actionable(str(orientation_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_state", "system_project_index_build"]):
 		return _failure("project orientation prompt should provide actionable read-only orientation workflow sections.")
+	var orientation_prompt_text := str(orientation_prompt.get("text", ""))
+	if orientation_prompt_text.find("system_help") != -1:
+		return _failure("project orientation prompt should not recommend system_help as the first discovery step.")
+	if orientation_prompt_text.find(GUIDES_INDEX_URI) == -1 or orientation_prompt_text.find(GUIDES_CAPABILITIES_URI) == -1:
+		return _failure("project orientation prompt should direct clients to canonical guide resources.")
 	var unknown_argument_response: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "understand project", "bogus": "ignored"}}, 22)
 	if not (unknown_argument_response.get("error", null) is Dictionary):
 		return _failure("prompts/get should reject unknown prompt arguments.")
