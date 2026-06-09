@@ -55,6 +55,21 @@ class FakeToolLoader:
 			"inputSchema": {"type": "object", "properties": {}}
 		})
 		definitions.append({
+			"name": "system_tool_catalog",
+			"description": "Removed public tool catalog",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"query": {"type": "string"}
+				}
+			}
+		})
+		definitions.append({
 			"name": "system_tool_activity",
 			"description": "Removed public activity tool",
 			"category": "system",
@@ -128,6 +143,12 @@ class FakeToolLoader:
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {}}
 			}, {
+				"name": "tool_catalog",
+				"full_name": "system_tool_catalog",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}
+			}, {
 				"name": "tool_activity",
 				"full_name": "system_tool_activity",
 				"category": "system",
@@ -163,6 +184,17 @@ class FakeToolLoader:
 		}
 
 	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
+		if category == "system" and tool_name == "tool_catalog":
+			return {
+				"success": false,
+				"error": "system_tool_catalog has been removed from the public tool surface. Read the catalog resources instead.",
+				"data": {
+					"error_type": "removed_public_tool",
+					"removed_tool": "system_tool_catalog",
+					"replacement_methods": ["resources/read", "resources/list"],
+					"replacement_resources": ["godot-dotnet-mcp://tools/catalog/visible", "godot-dotnet-mcp://tools/catalog/exposed"]
+				}
+			}
 		if category == "system" and tool_name == "tool_activity":
 			return {
 				"success": false,
@@ -275,6 +307,7 @@ class FakeCallbacks:
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
+			or tool_name == "system_tool_catalog"
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
@@ -285,6 +318,7 @@ class FakeCallbacks:
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
 			or tool_name == "system_help"
+			or tool_name == "system_tool_catalog"
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
@@ -322,7 +356,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:
@@ -416,6 +450,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_help_data = (removed_help_structured as Dictionary).get("data", {})
 	if not (removed_help_data is Dictionary) or not (((removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
 		return _failure("Tool RPC router should preserve system_help replacement resource URIs.")
+
+	var removed_catalog_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_tool_catalog",
+		"arguments": {"query": "runtime"}
+	})
+	if not bool(removed_catalog_result.get("isError", false)):
+		return _failure("Tool RPC router should return isError=true for removed system_tool_catalog.")
+	var removed_catalog_structured = removed_catalog_result.get("structuredContent", {})
+	if not (removed_catalog_structured is Dictionary) or bool((removed_catalog_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router removed system_tool_catalog should expose failing structuredContent.")
+	var removed_catalog_data = (removed_catalog_structured as Dictionary).get("data", {})
+	if not (removed_catalog_data is Dictionary) or str((removed_catalog_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool RPC router removed system_tool_catalog should expose removed_public_tool guidance.")
+	if not (((removed_catalog_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
+		return _failure("Tool RPC router removed system_tool_catalog should point to catalog resources.")
 
 	var removed_activity_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_tool_activity",

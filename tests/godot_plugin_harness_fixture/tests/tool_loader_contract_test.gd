@@ -104,8 +104,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should remove system_help from the public tools/list surface.")
 	if not _loader.is_tool_exposed("system_help"):
 		return _failure("Tool loader should keep system_help callable only for a legacy replacement error.")
-	if not exposed_names.has("system_tool_catalog"):
-		return _failure("Tool loader did not expose system_tool_catalog under the default tool access provider.")
+	if exposed_names.has("system_tool_catalog"):
+		return _failure("Tool loader should remove system_tool_catalog from the public tool surface.")
+	if not _loader.is_tool_exposed("system_tool_catalog"):
+		return _failure("Tool loader should keep system_tool_catalog legacy calls routable for removal guidance.")
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_state"):
@@ -285,11 +287,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (replacement_resources is Array) or not (replacement_resources as Array).has("godot-dotnet-mcp://guides/index"):
 		return _failure("Tool loader system_help removal error should include replacement guide resource URIs.")
 	var catalog_result: Dictionary = await _loader.execute_tool_async("system", "tool_catalog", {"query": "runtime", "limit": 5})
-	if not bool(catalog_result.get("success", false)):
-		return _failure("Tool loader should route system_tool_catalog successfully.")
+	if bool(catalog_result.get("success", false)):
+		return _failure("Tool loader should reject legacy system_tool_catalog calls with removal guidance.")
 	var catalog_data = catalog_result.get("data", {})
-	if not (catalog_data is Dictionary) or not ((catalog_data as Dictionary).get("matches", []) is Array):
-		return _failure("Tool loader system_tool_catalog should return a matches array.")
+	if not (catalog_data is Dictionary) or str((catalog_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_tool_catalog removal response should expose error_type=removed_public_tool.")
+	if not (((catalog_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
+		return _failure("Tool loader system_tool_catalog removal response should point to the visible catalog resource.")
 	var activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {"action": "status"})
 	if bool(activity_result.get("success", true)):
 		return _failure("Tool loader legacy system_tool_activity calls should return removal guidance.")

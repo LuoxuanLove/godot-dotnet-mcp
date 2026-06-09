@@ -118,6 +118,19 @@ class FakeToolLoader:
 			}
 		})
 		tools.append({
+			"name": "system_tool_catalog",
+			"description": "Removed public tool catalog search entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"query": {"type": "string", "description": "Removed public catalog search query"}
+				}
+			}
+		})
+		tools.append({
 			"name": "project_input",
 			"description": "Manage input action mappings",
 			"category": "project",
@@ -214,6 +227,18 @@ class FakeToolLoader:
 					}
 				}
 			}, {
+				"name": "tool_catalog",
+				"full_name": "system_tool_catalog",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {"type": "string", "description": "Removed public catalog search query"}
+					}
+				}
+			}, {
 				"name": "tool_activity",
 				"full_name": "system_tool_activity",
 				"category": "system",
@@ -290,7 +315,7 @@ class FakeToolLoader:
 		return {"healthy": true, "status": "ready", "tool_count": 6, "exposed_tool_count": 5}
 
 	func is_public_removed_tool(tool_name: String) -> bool:
-		return tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze"
+		return tool_name == "system_tool_catalog" or tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze"
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -360,6 +385,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_visible_matches: Array = (removed_visible_search.get("data", {}) as Dictionary).get("matches", [])
 	if not removed_visible_matches.is_empty():
 		return _failure("Visible catalog search should filter removed public tool system_tool_activity.")
+	var removed_catalog_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+		"query": "removed public catalog",
+		"visibility": "visible",
+		"limit": 10
+	})
+	var removed_catalog_visible_matches: Array = (removed_catalog_visible_search.get("data", {}) as Dictionary).get("matches", [])
+	if not removed_catalog_visible_matches.is_empty():
+		return _failure("Visible catalog search should filter removed public tool system_tool_catalog.")
 	for removed_scene_query in ["scene validation", "scene analysis"]:
 		var removed_scene_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
 			"query": removed_scene_query,
