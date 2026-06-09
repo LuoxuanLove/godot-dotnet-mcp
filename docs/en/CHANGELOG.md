@@ -15,11 +15,13 @@ Target version: 2.0.0.
 
 ### Documentation
 
+- Clarified source-copy installation guidance so users copy only the installable addon directory and do not install repository-level Companion, test, or script development directories into Godot projects.
 - Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.
 - Initialized the v2.0.0 release-note sources across the four localized documentation trees so the version line has durable release narrative files before feature work begins.
 
 ### Internal
 
+- Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.

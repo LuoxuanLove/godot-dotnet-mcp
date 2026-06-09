@@ -5,8 +5,12 @@ const TEMP_ROOT := "res://tests_tmp/godot_dotnet_mcp_debug_contracts"
 const TEMP_USER_DOTNET_BRIDGE_CSPROJ := "res://tests_tmp/godot_dotnet_mcp_debug_contracts/UserDotnetBridge/DotnetBridge.csproj"
 const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/dotnet_bridge"
 const PLUGIN_BRIDGE_CSPROJ := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+const PLUGIN_COMPANION_DIR := "res://addons/godot_dotnet_mcp/companion"
+const PLUGIN_COMPANION_PROJECT_DIR := "res://addons/godot_dotnet_mcp/companion/GodotDotnetMcp.Companion"
+const PLUGIN_COMPANION_CSPROJ := "res://addons/godot_dotnet_mcp/companion/GodotDotnetMcp.Companion/GodotDotnetMcp.Companion.csproj"
 
 var _created_plugin_bridge_fixture := false
+var _created_plugin_companion_fixture := false
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -21,14 +25,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plugin_bridge_result := _ensure_plugin_bridge_fixture()
 	if not bool(plugin_bridge_result.get("success", false)):
 		return plugin_bridge_result
+	var plugin_companion_result := _ensure_plugin_companion_fixture()
+	if not bool(plugin_companion_result.get("success", false)):
+		return plugin_companion_result
 
 	if not bool(executor.call("_is_plugin_bridge_csproj", PLUGIN_BRIDGE_CSPROJ)):
 		return _failure("Debug dotnet project discovery should identify the plugin-owned DotnetBridge.csproj.")
+	if not bool(executor.call("_is_plugin_owned_csproj", PLUGIN_COMPANION_CSPROJ)):
+		return _failure("Debug dotnet project discovery should identify plugin-owned Companion .csproj files.")
 	if bool(executor.call("_is_plugin_bridge_csproj", TEMP_USER_DOTNET_BRIDGE_CSPROJ)):
 		return _failure("Debug dotnet project discovery should not reject user projects named DotnetBridge.csproj.")
 	var plugin_bridge_projects: Array = executor.call("_find_csproj_files", PLUGIN_BRIDGE_DIR)
 	if not plugin_bridge_projects.is_empty():
 		return _failure("Debug dotnet automatic project discovery should skip plugin-owned DotnetBridge.csproj.")
+	var plugin_companion_projects: Array = executor.call("_find_csproj_files", PLUGIN_COMPANION_DIR)
+	if not plugin_companion_projects.is_empty():
+		return _failure("Debug dotnet automatic project discovery should skip plugin-owned Companion .csproj files.")
 	if str(executor.call("_resolve_csproj_path", PLUGIN_BRIDGE_CSPROJ)) != PLUGIN_BRIDGE_CSPROJ:
 		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
 
@@ -108,6 +120,9 @@ func cleanup_case(_tree: SceneTree) -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(PLUGIN_BRIDGE_CSPROJ))
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(PLUGIN_BRIDGE_DIR))
 		_created_plugin_bridge_fixture = false
+	if _created_plugin_companion_fixture:
+		_remove_tree(PLUGIN_COMPANION_PROJECT_DIR)
+		_created_plugin_companion_fixture = false
 
 
 func _prepare_temp_root() -> void:
@@ -122,6 +137,15 @@ func _ensure_plugin_bridge_fixture() -> Dictionary:
 	var write_result := _write_sample_csproj(PLUGIN_BRIDGE_CSPROJ, "DotnetBridge")
 	if bool(write_result.get("success", false)):
 		_created_plugin_bridge_fixture = true
+	return write_result
+
+
+func _ensure_plugin_companion_fixture() -> Dictionary:
+	if FileAccess.file_exists(PLUGIN_COMPANION_CSPROJ):
+		return {"success": true}
+	var write_result := _write_sample_csproj(PLUGIN_COMPANION_CSPROJ, "GodotDotnetMcp.Companion")
+	if bool(write_result.get("success", false)):
+		_created_plugin_companion_fixture = true
 	return write_result
 
 

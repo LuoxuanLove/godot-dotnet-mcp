@@ -51,7 +51,7 @@ jobs:
 
       - name: Build Companion contract library
         shell: pwsh
-        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion contract library" -ProjectPath ".\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" -Configuration Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion contract library" -ProjectPath ".\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" -Configuration Release
 
       - name: Run Companion contract tests
         shell: pwsh

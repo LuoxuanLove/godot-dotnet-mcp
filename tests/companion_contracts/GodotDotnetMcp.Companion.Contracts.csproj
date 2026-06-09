@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\addons\godot_dotnet_mcp\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" />
+    <ProjectReference Include="..\..\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" />
   </ItemGroup>
 </Project>
