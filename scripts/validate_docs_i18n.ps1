@@ -422,10 +422,16 @@ function Test-ChangelogSectionOrder {
         }
         $sectionText = $Content.Substring($sectionStart, $sectionEnd - $sectionStart)
         $lastOrder = -1
+        $seenHeadings = New-Object System.Collections.Generic.HashSet[string]
         foreach ($match in [regex]::Matches($sectionText, '(?m)^###\s+(.+?)\s*$')) {
             $heading = $match.Groups[1].Value.Trim()
             if (-not $orderLookup.ContainsKey($heading)) {
                 continue
+            }
+            if (-not $seenHeadings.Add($heading)) {
+                $versionHeading = $versionMatches[$versionIndex].Value.Trim()
+                $errors.Add("Changelog section is duplicated in ${RelativePath} ${versionHeading}: ${heading}. Each version must use each section heading at most once.")
+                break
             }
             $currentOrder = [int]$orderLookup[$heading]
             if ($currentOrder -lt $lastOrder) {

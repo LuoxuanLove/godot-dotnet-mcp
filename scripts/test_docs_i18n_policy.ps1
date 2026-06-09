@@ -6,7 +6,8 @@ $validatorPath = Join-Path $scriptRoot "scripts\validate_docs_i18n.ps1"
 function Write-DocFixture {
     param(
         [string]$RepositoryRoot,
-        [bool]$InvalidChangelogOrder
+        [bool]$InvalidChangelogOrder,
+        [bool]$DuplicateChangelogSection
     )
 
     $docsRoot = Join-Path $RepositoryRoot "docs"
@@ -50,6 +51,9 @@ function Write-DocFixture {
         if ($InvalidChangelogOrder) {
             $sectionLines = @("### Internal", "", "- $($text.Internal)", "", "### Documentation", "", "- $($text.Documentation)")
         }
+        if ($DuplicateChangelogSection) {
+            $sectionLines += @("", "### Internal", "", "- Duplicate $($text.Internal)")
+        }
         $changelogText = @(
             "# Changelog",
             "",
@@ -78,13 +82,14 @@ function Invoke-DocsScenario {
     param(
         [string]$Name,
         [bool]$InvalidChangelogOrder,
+        [bool]$DuplicateChangelogSection,
         [bool]$ShouldPass
     )
 
     $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-docs-policy-" + [System.Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $repo | Out-Null
     try {
-        Write-DocFixture -RepositoryRoot $repo -InvalidChangelogOrder $InvalidChangelogOrder
+        Write-DocFixture -RepositoryRoot $repo -InvalidChangelogOrder $InvalidChangelogOrder -DuplicateChangelogSection $DuplicateChangelogSection
         $passed = $true
         $failureMessage = ""
         try {
@@ -108,7 +113,8 @@ function Invoke-DocsScenario {
     }
 }
 
-Invoke-DocsScenario -Name "ordered changelog sections" -InvalidChangelogOrder $false -ShouldPass $true
-Invoke-DocsScenario -Name "invalid changelog section order" -InvalidChangelogOrder $true -ShouldPass $false
+Invoke-DocsScenario -Name "ordered changelog sections" -InvalidChangelogOrder $false -DuplicateChangelogSection $false -ShouldPass $true
+Invoke-DocsScenario -Name "invalid changelog section order" -InvalidChangelogOrder $true -DuplicateChangelogSection $false -ShouldPass $false
+Invoke-DocsScenario -Name "duplicate changelog section" -InvalidChangelogOrder $false -DuplicateChangelogSection $true -ShouldPass $false
 
 Write-Host "Docs i18n policy scenarios validated successfully."
