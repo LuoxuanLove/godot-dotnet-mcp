@@ -42,6 +42,7 @@
   { "name": "home_tab_localization_contracts", "layer": "dock", "domain": "localization", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "server_tab_model_projection_contracts", "layer": "dock", "domain": "server", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "mcp_debug_buffer_contracts", "layer": "runtime", "domain": "debug", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
+  { "name": "tool_catalog_snapshot_service_contracts", "layer": "tooling", "domain": "catalog", "behavior": "migration", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "tool_catalog_search_service_contracts", "layer": "tooling", "domain": "catalog", "behavior": "migration", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "tool_presentation_service_contracts", "layer": "tooling", "domain": "catalog", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "tools_api_service_contracts", "layer": "tooling", "domain": "tools_api", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },

@@ -2,7 +2,7 @@
 extends RefCounted
 class_name ToolCatalogSearchService
 
-const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 
 const DEFAULT_LIMIT := 25
 const MAX_LIMIT := 100
@@ -24,7 +24,15 @@ static func search(loader, args: Dictionary) -> Dictionary:
 	var category_filters := _string_filter_set(args.get("category", ""))
 	var include_schema := bool(args.get("include_schema", false))
 
-	var catalog := _build_catalog(loader, visibility == "visible", include_schema)
+	var snapshot := ToolCatalogSnapshotServiceScript.build_snapshot(loader)
+	if not bool(snapshot.get("success", false)):
+		return {
+			"success": false,
+			"error": str(snapshot.get("error", "tool_loader_unavailable")),
+			"message": str(snapshot.get("message", "Tool loader is unavailable"))
+		}
+
+	var catalog := _build_catalog(snapshot, visibility == "visible", include_schema)
 	var catalog_filter_index := _build_filter_index(catalog)
 	var matches: Array[Dictionary] = []
 	var total_matched := 0
@@ -75,22 +83,19 @@ static func search(loader, args: Dictionary) -> Dictionary:
 				"suggested_next_queries": diagnostics.get("suggested_next_queries", [])
 			},
 			"matches": matches,
-			"tool_loader_status": _get_loader_status(loader)
+			"tool_loader_status": snapshot.get("tool_loader_status", {})
 		},
 		"message": "Tool catalog search complete"
 	}
 
 
-static func _build_catalog(loader, include_internal: bool, include_schema: bool) -> Array[Dictionary]:
-	var exposed_tools: Array = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := _get_all_tools_by_category(loader)
-	var domain_states := _get_domain_states(loader)
-	var presentation := ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+static func _build_catalog(snapshot: Dictionary, include_internal: bool, include_schema: bool) -> Array[Dictionary]:
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
 	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})
 	var source_tools: Array = exposed_tools
 	if include_internal:
-		if loader.has_method("get_tool_definitions"):
-			source_tools = loader.get_tool_definitions()
+		source_tools = snapshot.get("visible_tools", exposed_tools)
 	var exposed_lookup := {}
 	for exposed in exposed_tools:
 		if exposed is Dictionary:
@@ -104,8 +109,6 @@ static func _build_catalog(loader, include_internal: bool, include_schema: bool)
 		var tool := raw_tool as Dictionary
 		var full_name := str(tool.get("name", tool.get("full_name", "")))
 		if full_name.is_empty() or seen.has(full_name):
-			continue
-		if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(full_name)):
 			continue
 		seen[full_name] = true
 		var metadata: Dictionary = metadata_by_name.get(full_name, {})
@@ -128,26 +131,6 @@ static func _build_catalog(loader, include_internal: bool, include_schema: bool)
 			item["input_schema"] = input_schema.duplicate(true)
 		out.append(item)
 	return out
-
-
-static func _get_all_tools_by_category(loader) -> Dictionary:
-	if loader.has_method("get_all_tools_by_category"):
-		return loader.get_all_tools_by_category()
-	if loader.has_method("get_tools_by_category"):
-		return loader.get_tools_by_category()
-	return {}
-
-
-static func _get_domain_states(loader) -> Array:
-	if loader.has_method("get_domain_states"):
-		return loader.get_domain_states()
-	return []
-
-
-static func _get_loader_status(loader) -> Dictionary:
-	if loader.has_method("get_tool_loader_status"):
-		return loader.get_tool_loader_status()
-	return {}
 
 
 static func _extract_actions(input_schema: Dictionary) -> Array[String]:
