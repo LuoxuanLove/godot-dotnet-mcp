@@ -34,6 +34,7 @@ Target version: 1.4.0.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
 - Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
+- Added `structuredContent` to every `tools/call` result while preserving the text JSON content for existing clients.
 
 ### Changed
 
@@ -41,6 +42,7 @@ Target version: 1.4.0.
 - Changed `system_settings_dialog(action="capture")` to prefer visible settings popup/window bounds, then dialog control bounds, before falling back to full-editor screenshots, with `capture_backend` and `capture_target_path` evidence metadata.
 - Changed project runtime control to use `system_project_lifecycle(action=start|stop)` as the public surface and removed compatibility aliases for the older project run/stop tool names.
 - Changed generated User-tool scaffolds to extend the base tool script by resource path, reducing headless catalog-scan dependence on global script-class registration.
+- Updated protocol facts to schema version `2026-06-08.27` for structured tool result payloads.
 
 ### Fixed
 
