@@ -17,6 +17,8 @@ const GUIDES_CAPABILITIES_URI := "godot-dotnet-mcp://guides/capabilities"
 const GUIDES_UI_AUTOMATION_URI := "godot-dotnet-mcp://guides/ui-automation"
 const STATE_PROJECT_SUMMARY_URI := "godot-dotnet-mcp://state/project/summary"
 const STATE_EDITOR_URI := "godot-dotnet-mcp://state/editor"
+const EDITOR_LOG_OUTPUT_URI := "godot-dotnet-mcp://logs/editor/output"
+const EDITOR_LOG_ERRORS_URI := "godot-dotnet-mcp://logs/editor/errors"
 const ACTIVITY_STATUS_URI := "godot-dotnet-mcp://activity/status"
 const ACTIVITY_RECENT_URI := "godot-dotnet-mcp://activity/recent"
 const ACTIVITY_CALL_TEMPLATE_URI := "godot-dotnet-mcp://activity/call/{id}"
@@ -90,6 +92,16 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 			"uri": STATE_EDITOR_URI,
 			"name": _text("mcp_resource_state_editor_name", "Editor state"),
 			"description": _text("mcp_resource_state_editor_desc", "Editor-facing readiness, protocol facts, and tool loader state snapshot."),
+			"mimeType": "application/json"
+		}, {
+			"uri": EDITOR_LOG_OUTPUT_URI,
+			"name": _text("mcp_resource_editor_log_output_name", "Editor log output"),
+			"description": _text("mcp_resource_editor_log_output_desc", "Read recent Godot editor Output panel lines without using a public tool."),
+			"mimeType": "application/json"
+		}, {
+			"uri": EDITOR_LOG_ERRORS_URI,
+			"name": _text("mcp_resource_editor_log_errors_name", "Editor log warnings and errors"),
+			"description": _text("mcp_resource_editor_log_errors_desc", "Read warning and error entries from the Godot editor Output panel."),
 			"mimeType": "application/json"
 		}, {
 			"uri": ACTIVITY_STATUS_URI,
@@ -169,6 +181,10 @@ func build_resources_read_result(params: Dictionary) -> Dictionary:
 			return _build_text_resource(uri, _build_project_info_payload(), "application/json")
 		STATE_EDITOR_URI:
 			return _build_text_resource(uri, _build_editor_state_payload(), "application/json")
+		EDITOR_LOG_OUTPUT_URI:
+			return _build_text_resource(uri, _build_editor_log_payload(EDITOR_LOG_OUTPUT_URI, "get_output", {"limit": 200}), "application/json")
+		EDITOR_LOG_ERRORS_URI:
+			return _build_text_resource(uri, _build_editor_log_payload(EDITOR_LOG_ERRORS_URI, "get_errors", {"limit": 200, "include_warnings": true}), "application/json")
 		ACTIVITY_STATUS_URI:
 			return _build_text_resource(uri, _build_activity_status_payload(), "application/json")
 		ACTIVITY_RECENT_URI:
@@ -242,6 +258,7 @@ func _build_guides_index_payload() -> Dictionary:
 		"canonicalResources": {
 			"guides": [GUIDES_INDEX_URI, GUIDES_CAPABILITIES_URI, GUIDES_UI_AUTOMATION_URI],
 			"state": [STATE_PROJECT_SUMMARY_URI, STATE_EDITOR_URI],
+			"logs": [EDITOR_LOG_OUTPUT_URI, EDITOR_LOG_ERRORS_URI],
 			"activity": [ACTIVITY_STATUS_URI, ACTIVITY_RECENT_URI, ACTIVITY_CALL_TEMPLATE_URI],
 			"tools": [TOOLS_CATALOG_EXPOSED_URI, TOOLS_CATALOG_VISIBLE_URI]
 		},
@@ -271,6 +288,8 @@ func _build_capabilities_guide_payload() -> Dictionary:
 			"resourceIndex": GUIDES_INDEX_URI,
 			"projectState": STATE_PROJECT_SUMMARY_URI,
 			"editorState": STATE_EDITOR_URI,
+			"editorLogOutput": EDITOR_LOG_OUTPUT_URI,
+			"editorLogErrors": EDITOR_LOG_ERRORS_URI,
 			"visibleToolCatalog": TOOLS_CATALOG_VISIBLE_URI,
 			"exposedToolCatalog": TOOLS_CATALOG_EXPOSED_URI,
 			"activityStatus": ACTIVITY_STATUS_URI,
@@ -309,6 +328,8 @@ func _build_editor_state_payload() -> Dictionary:
 		"resources": {
 			"projectSummary": STATE_PROJECT_SUMMARY_URI,
 			"diagnostics": DIAGNOSTICS_SUMMARY_URI,
+			"editorLogOutput": EDITOR_LOG_OUTPUT_URI,
+			"editorLogErrors": EDITOR_LOG_ERRORS_URI,
 			"activityStatus": ACTIVITY_STATUS_URI,
 			"toolCatalog": TOOLS_CATALOG_VISIBLE_URI
 		}
@@ -319,8 +340,42 @@ func _build_diagnostics_summary_payload() -> Dictionary:
 	return {
 		"selfDiagnostics": PluginSelfDiagnosticStoreScript.get_health_snapshot({}, 3),
 		"recentLogs": _redact_sensitive_value(MCPDebugBufferScript.get_recent(20)),
+		"editorLogResources": [EDITOR_LOG_OUTPUT_URI, EDITOR_LOG_ERRORS_URI],
 		"toolLoaderStatus": _get_loader_status_safe()
 	}
+
+
+func _build_editor_log_payload(resource_uri: String, action: String, args: Dictionary) -> Dictionary:
+	var payload := {
+		"resourceUri": resource_uri,
+		"sourceTool": "debug_editor_log",
+		"action": action,
+		"available": false,
+		"readOnly": true
+	}
+	var loader = _get_loader()
+	if loader == null or not loader.has_method("execute_tool"):
+		payload["error"] = "Tool loader is unavailable."
+		payload["toolLoaderStatus"] = _get_loader_status_safe()
+		return payload
+	var result = loader.execute_tool("debug", "editor_log", args)
+	if not (result is Dictionary):
+		payload["error"] = "Editor log reader returned an invalid response."
+		return payload
+	var result_dict := result as Dictionary
+	if not bool(result_dict.get("success", false)):
+		payload["error"] = str(result_dict.get("error", result_dict.get("message", "Editor log reader failed.")))
+		payload["details"] = result_dict.get("data", {})
+		return payload
+	payload["available"] = true
+	var data = result_dict.get("data", {})
+	if data is Dictionary:
+		for key in (data as Dictionary).keys():
+			payload[str(key)] = _redact_sensitive_value((data as Dictionary)[key])
+	else:
+		payload["data"] = _redact_sensitive_value(data)
+	payload["toolLoaderStatus"] = _get_loader_status_safe()
+	return payload
 
 
 func _build_activity_status_payload() -> Dictionary:

@@ -14,6 +14,7 @@ const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_plugin_update": true,
 	"system_scene_analyze": true,
 	"system_scene_validate": true,
+	"system_editor_log": true,
 	"system_tool_catalog": true,
 	"system_tool_activity": true
 }
@@ -210,6 +211,27 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 			}],
 			["tools/call", "resources/read", "resources/list"],
 			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
+		)
+	if tool_name == "system_editor_log":
+		var action := str(arguments.get("action", "")).strip_edges()
+		var replacement_tools: Array = []
+		var replacement_methods: Array = ["resources/read", "resources/list", "prompts/get"]
+		if action == "clear_output":
+			replacement_tools.append({
+				"name": "system_editor_control",
+				"arguments": {"action": "clear_output"}
+			})
+			replacement_methods.append("tools/call")
+		return _removed_public_tool_result(
+			tool_name,
+			"Read godot-dotnet-mcp://logs/editor/output or godot-dotnet-mcp://logs/editor/errors; use system_editor_control(action=clear_output) when clearing Output is required.",
+			replacement_tools,
+			replacement_methods,
+			[
+				"godot-dotnet-mcp://logs/editor/output",
+				"godot-dotnet-mcp://logs/editor/errors",
+				"godot-dotnet-mcp://diagnostics/summary"
+			]
 		)
 	return {}
 

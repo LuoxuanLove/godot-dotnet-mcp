@@ -52,7 +52,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Builtin tool profile '%s' should keep runtime atomic tools enabled for system runtime tree children." % profile_id)
 	var expected_collapsed := [
 		"system_bindings_audit",
-		"system_editor_log",
 		"system_editor_evidence",
 		"system_editor_state",
 		"system_inspector",

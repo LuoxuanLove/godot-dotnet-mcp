@@ -32,6 +32,7 @@ func get_tools() -> Array[Dictionary]:
 							"get_distraction_free",
 							"set_distraction_free",
 							"capture_editor",
+							"clear_output",
 							"list_controls",
 							"wait_for_ui",
 							"list_dock_tabs",
@@ -251,7 +252,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		return bridge.error("Unknown tool: %s" % tool_name)
 
 	if tool_name == "editor_log":
-		return _execute_editor_log(args)
+		return _removed_editor_log_tool(args)
 	if tool_name == "editor_plugin_control":
 		return _execute_editor_plugin_control(args)
 
@@ -273,6 +274,10 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			})
 		"capture_editor":
 			return _capture_editor(args)
+		"clear_output":
+			return bridge.call_atomic("debug_editor_log", {
+				"action": "clear"
+			})
 		"list_controls":
 			return bridge.call_atomic("editor_ui_control", {
 				"action": "list_visible",
@@ -521,23 +526,28 @@ func _execute_editor_plugin_control(args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown action: %s" % action)
 
 
-func _execute_editor_log(args: Dictionary) -> Dictionary:
+func _removed_editor_log_tool(args: Dictionary) -> Dictionary:
 	var action := str(args.get("action", "")).strip_edges()
-	match action:
-		"get_output":
-			return bridge.call_atomic("debug_editor_log", {
-				"action": "get_output",
-				"limit": int(args.get("limit", 100))
-			})
-		"get_errors":
-			return bridge.call_atomic("debug_editor_log", {
-				"action": "get_errors",
-				"limit": int(args.get("limit", 50)),
-				"include_warnings": bool(args.get("include_warnings", true))
-			})
-		"clear_output":
-			return bridge.call_atomic("debug_editor_log", {
-				"action": "clear"
-			})
-		_:
-			return bridge.error("Unknown action: %s" % action)
+	var replacement_tools: Array = []
+	var replacement_methods: Array = ["resources/read", "resources/list", "prompts/get"]
+	if action == "clear_output":
+		replacement_tools.append({
+			"name": "system_editor_control",
+			"arguments": {"action": "clear_output"}
+		})
+		replacement_methods.append("tools/call")
+	return {
+		"success": false,
+		"error": "system_editor_log has been removed from the public tool surface. Read editor log resources instead.",
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": "system_editor_log",
+			"replacement_tools": replacement_tools,
+			"replacement_methods": replacement_methods,
+			"replacement_resources": [
+				"godot-dotnet-mcp://logs/editor/output",
+				"godot-dotnet-mcp://logs/editor/errors",
+				"godot-dotnet-mcp://diagnostics/summary"
+			]
+		}
+	}

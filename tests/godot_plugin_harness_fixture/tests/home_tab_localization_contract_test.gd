@@ -68,7 +68,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_system_project_files_name",
 		"tool_system_scene_tree_name",
 		"tool_system_userdata_maintenance_name",
-		"tool_system_editor_log_name",
 		"cat_dap",
 		"tool_system_dap_debugger_name",
 		"tool_dap_debugger_name",

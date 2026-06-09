@@ -12,6 +12,8 @@ The v1.4.0 line is ready to collect protocol-refactor improvements. Final highli
 
 The v1.4.0 line moves passive context, status, and catalog discovery toward MCP Resources, keeps workflow planning in Prompts, and narrows public Tools to actions or computed workflow results. Legacy discovery calls now provide explicit replacement guidance instead of remaining first-class public tools.
 
+Editor Output reads now follow the same resource-first model: clients can read `godot-dotnet-mcp://logs/editor/output` or `godot-dotnet-mcp://logs/editor/errors`, while Output clearing remains an explicit editor-control action instead of a passive Resource.
+
 ### 🧪 Reproducible Plugin Gates
 
 Release-facing claims stay tied to plugin-owned checks: localized documentation validation, manifest-backed public-tool guardrails, headless MCP contracts, and clean install verification. This keeps the release notes focused on behavior users can reproduce from the plugin repository itself.
