@@ -17,6 +17,7 @@ Target version: 2.0.0.
 
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
+- Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
 
 ## [Unreleased] ([1.4.0])
 
