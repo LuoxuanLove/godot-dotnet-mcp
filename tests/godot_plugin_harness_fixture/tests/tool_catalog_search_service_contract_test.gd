@@ -92,6 +92,32 @@ class FakeToolLoader:
 			}
 		})
 		tools.append({
+			"name": "system_scene_validate",
+			"description": "Removed public scene validation entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string", "description": "Scene path"}
+				}
+			}
+		})
+		tools.append({
+			"name": "system_scene_analyze",
+			"description": "Removed public scene analysis entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string", "description": "Scene path"}
+				}
+			}
+		})
+		tools.append({
 			"name": "project_input",
 			"description": "Manage input action mappings",
 			"category": "project",
@@ -186,6 +212,30 @@ class FakeToolLoader:
 						"action": {"type": "string", "enum": ["status", "recent", "get"], "description": "Removed activity query action"}
 					}
 				}
+			}, {
+				"name": "scene_validate",
+				"full_name": "system_scene_validate",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"scene": {"type": "string", "description": "Scene path"}
+					}
+				}
+			}, {
+				"name": "scene_analyze",
+				"full_name": "system_scene_analyze",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"scene": {"type": "string", "description": "Scene path"}
+					}
+				}
 			}],
 			"project": [{
 				"name": "input",
@@ -214,7 +264,7 @@ class FakeToolLoader:
 		return {"healthy": true, "status": "ready", "tool_count": 6, "exposed_tool_count": 5}
 
 	func is_public_removed_tool(tool_name: String) -> bool:
-		return tool_name == "system_tool_activity"
+		return tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze"
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -279,6 +329,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_visible_matches: Array = (removed_visible_search.get("data", {}) as Dictionary).get("matches", [])
 	if not removed_visible_matches.is_empty():
 		return _failure("Visible catalog search should filter removed public tool system_tool_activity.")
+	for removed_scene_query in ["scene validation", "scene analysis"]:
+		var removed_scene_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+			"query": removed_scene_query,
+			"visibility": "visible",
+			"limit": 10
+		})
+		var removed_scene_visible_matches: Array = (removed_scene_visible_search.get("data", {}) as Dictionary).get("matches", [])
+		if not removed_scene_visible_matches.is_empty():
+			return _failure("Visible catalog search should filter removed public scene tool query '%s'." % removed_scene_query)
 
 	var domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "core", "query": "label"})
 	var domain_matches: Array = (domain_search.get("data", {}) as Dictionary).get("matches", [])

@@ -7,6 +7,8 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 
 var bridge
 const HANDLED_TOOLS := ["scene_inspect", "scene_validate", "scene_analyze", "scene_tree", "scene_patch"]
+const SCENE_RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
+const CAPABILITIES_GUIDE_URI := "godot-dotnet-mcp://guides/capabilities"
 
 
 func handles(tool_name: String) -> bool:
@@ -17,7 +19,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "scene_inspect",
-			"description": "SCENE INSPECT: Unified read-only scene inspection entry. Actions: validate, analyze, full. validate performs the quick integrity check used by system_scene_validate; analyze performs the deeper structural inspection used by system_scene_analyze; full returns both results as separate validation and analysis payloads without flattening fields. Requires: scene (.tscn path).",
+			"description": "SCENE INSPECT: Unified read-only scene inspection entry. Actions: validate, analyze, full. validate performs the quick integrity check; analyze performs the deeper structural inspection; full returns both results as separate validation and analysis payloads without flattening fields. Requires: scene (.tscn path).",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -116,14 +118,36 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
 		"scene_inspect":  return _execute_scene_inspect(args)
-		"scene_validate": return _execute_scene_validate(args)
-		"scene_analyze":  return _execute_scene_analyze(args)
+		"scene_validate": return _removed_public_scene_tool("system_scene_validate", "validate", args)
+		"scene_analyze":  return _removed_public_scene_tool("system_scene_analyze", "analyze", args)
 		"scene_tree":     return _execute_scene_tree(args)
 		"scene_patch":    return _execute_scene_patch(args)
 		_: return bridge.error("Unknown tool: %s" % tool_name)
 
 
 # --- private helpers ---
+
+func _removed_public_scene_tool(removed_tool: String, replacement_action: String, args: Dictionary) -> Dictionary:
+	var scene_path := str(args.get("scene", "")).strip_edges()
+	var replacement_arguments := {"action": replacement_action}
+	if not scene_path.is_empty():
+		replacement_arguments["scene"] = scene_path
+	var message := "%s has been removed from the public tool surface. Call system_scene_inspect with action=%s instead." % [removed_tool, replacement_action]
+	return {
+		"success": false,
+		"error": message,
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": removed_tool,
+			"replacement_tools": [{
+				"name": "system_scene_inspect",
+				"arguments": replacement_arguments
+			}],
+			"replacement_methods": ["tools/call", "resources/read", "resources/templates/list"],
+			"replacement_resources": [SCENE_RESOURCE_TEMPLATE_URI, CAPABILITIES_GUIDE_URI]
+		}
+	}
+
 
 func _apply_scene_patch_op(op: Dictionary) -> Dictionary:
 	var op_name := str(op.get("op", ""))

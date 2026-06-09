@@ -9,6 +9,8 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
 const PUBLIC_REMOVED_MCP_TOOLS := {
+	"system_scene_analyze": true,
+	"system_scene_validate": true,
 	"system_tool_activity": true
 }
 
