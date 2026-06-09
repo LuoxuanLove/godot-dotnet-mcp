@@ -12,6 +12,17 @@ const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localiz
 const PROJECT_INFO_URI := "godot-dotnet-mcp://project/info"
 const DIAGNOSTICS_SUMMARY_URI := "godot-dotnet-mcp://diagnostics/summary"
 const TOOL_CATALOG_URI := "godot-dotnet-mcp://tools/catalog"
+const GUIDES_INDEX_URI := "godot-dotnet-mcp://guides/index"
+const GUIDES_CAPABILITIES_URI := "godot-dotnet-mcp://guides/capabilities"
+const GUIDES_UI_AUTOMATION_URI := "godot-dotnet-mcp://guides/ui-automation"
+const STATE_PROJECT_SUMMARY_URI := "godot-dotnet-mcp://state/project/summary"
+const STATE_EDITOR_URI := "godot-dotnet-mcp://state/editor"
+const ACTIVITY_STATUS_URI := "godot-dotnet-mcp://activity/status"
+const ACTIVITY_RECENT_URI := "godot-dotnet-mcp://activity/recent"
+const ACTIVITY_CALL_TEMPLATE_URI := "godot-dotnet-mcp://activity/call/{id}"
+const ACTIVITY_CALL_URI_PREFIX := "godot-dotnet-mcp://activity/call/"
+const TOOLS_CATALOG_EXPOSED_URI := "godot-dotnet-mcp://tools/catalog/exposed"
+const TOOLS_CATALOG_VISIBLE_URI := "godot-dotnet-mcp://tools/catalog/visible"
 const SCENE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
 const SCRIPT_TEMPLATE_URI := "godot-dotnet-mcp://script/{path}"
 const RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://resource/{path}"
@@ -32,6 +43,7 @@ const MAX_RESOURCE_TEXT_BYTES := 524288
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
+var _get_tool_activity_registry := Callable()
 var _sanitize_for_json := Callable()
 
 
@@ -41,18 +53,65 @@ func configure(context = null) -> void:
 		return
 	_get_tool_loader = context.get_tool_loader
 	_get_tool_loader_status = context.get_tool_loader_status
+	_get_tool_activity_registry = context.get_tool_activity_registry
 	_sanitize_for_json = context.sanitize_for_json
 
 
 func dispose() -> void:
 	_get_tool_loader = Callable()
 	_get_tool_loader_status = Callable()
+	_get_tool_activity_registry = Callable()
 	_sanitize_for_json = Callable()
 
 
 func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 	return {
 		"resources": [{
+			"uri": GUIDES_INDEX_URI,
+			"name": _text("mcp_resource_guides_index_name", "Guide index"),
+			"description": _text("mcp_resource_guides_index_desc", "Canonical MCP entry map for guides, state, activity, and tool catalog resources."),
+			"mimeType": "application/json"
+		}, {
+			"uri": GUIDES_CAPABILITIES_URI,
+			"name": _text("mcp_resource_guides_capabilities_name", "Capability guide"),
+			"description": _text("mcp_resource_guides_capabilities_desc", "Protocol facts, MCP capabilities, loader status, and recommended discovery flow."),
+			"mimeType": "application/json"
+		}, {
+			"uri": GUIDES_UI_AUTOMATION_URI,
+			"name": _text("mcp_resource_guides_ui_automation_name", "UI automation guide"),
+			"description": _text("mcp_resource_guides_ui_automation_desc", "Resource-first guidance for semantic editor UI automation and evidence capture."),
+			"mimeType": "application/json"
+		}, {
+			"uri": STATE_PROJECT_SUMMARY_URI,
+			"name": _text("mcp_resource_state_project_summary_name", "Project state summary"),
+			"description": _text("mcp_resource_state_project_summary_desc", "Canonical project summary resource replacing project/info for new clients."),
+			"mimeType": "application/json"
+		}, {
+			"uri": STATE_EDITOR_URI,
+			"name": _text("mcp_resource_state_editor_name", "Editor state"),
+			"description": _text("mcp_resource_state_editor_desc", "Editor-facing readiness, protocol facts, and tool loader state snapshot."),
+			"mimeType": "application/json"
+		}, {
+			"uri": ACTIVITY_STATUS_URI,
+			"name": _text("mcp_resource_activity_status_name", "Activity status"),
+			"description": _text("mcp_resource_activity_status_desc", "Current running tool activity, execution order, and recent failure summaries."),
+			"mimeType": "application/json"
+		}, {
+			"uri": ACTIVITY_RECENT_URI,
+			"name": _text("mcp_resource_activity_recent_name", "Recent activity"),
+			"description": _text("mcp_resource_activity_recent_desc", "Recent tool activity records for workflow audit and diagnostics."),
+			"mimeType": "application/json"
+		}, {
+			"uri": TOOLS_CATALOG_EXPOSED_URI,
+			"name": _text("mcp_resource_tools_catalog_exposed_name", "Exposed tool catalog"),
+			"description": _text("mcp_resource_tools_catalog_exposed_desc", "Canonical list of public MCP tools exposed to clients."),
+			"mimeType": "application/json"
+		}, {
+			"uri": TOOLS_CATALOG_VISIBLE_URI,
+			"name": _text("mcp_resource_tools_catalog_visible_name", "Visible tool catalog"),
+			"description": _text("mcp_resource_tools_catalog_visible_desc", "Canonical visible tool tree, groups, domain states, and loader status."),
+			"mimeType": "application/json"
+		}, {
 			"uri": PROJECT_INFO_URI,
 			"name": _text("mcp_resource_project_info_name", "Project info"),
 			"description": _text("mcp_resource_project_info_desc", "Current Godot project path, protocol facts, server info, and loader status."),
@@ -74,6 +133,11 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionary:
 	return {
 		"resourceTemplates": [{
+			"uriTemplate": ACTIVITY_CALL_TEMPLATE_URI,
+			"name": _text("mcp_resource_template_activity_call_name", "Activity call"),
+			"description": _text("mcp_resource_template_activity_call_desc", "Read one running or recent tool activity record by call id."),
+			"mimeType": "application/json"
+		}, {
 			"uriTemplate": SCENE_TEMPLATE_URI,
 			"name": _text("mcp_resource_template_scene_name", "Scene text"),
 			"description": _text("mcp_resource_template_scene_desc", "Read a .tscn scene file by project-relative path."),
@@ -95,6 +159,24 @@ func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionar
 func build_resources_read_result(params: Dictionary) -> Dictionary:
 	var uri := str(params.get("uri", ""))
 	match uri:
+		GUIDES_INDEX_URI:
+			return _build_text_resource(uri, _build_guides_index_payload(), "application/json")
+		GUIDES_CAPABILITIES_URI:
+			return _build_text_resource(uri, _build_capabilities_guide_payload(), "application/json")
+		GUIDES_UI_AUTOMATION_URI:
+			return _build_text_resource(uri, _build_ui_automation_guide_payload(), "application/json")
+		STATE_PROJECT_SUMMARY_URI:
+			return _build_text_resource(uri, _build_project_info_payload(), "application/json")
+		STATE_EDITOR_URI:
+			return _build_text_resource(uri, _build_editor_state_payload(), "application/json")
+		ACTIVITY_STATUS_URI:
+			return _build_text_resource(uri, _build_activity_status_payload(), "application/json")
+		ACTIVITY_RECENT_URI:
+			return _build_text_resource(uri, _build_activity_recent_payload(), "application/json")
+		TOOLS_CATALOG_EXPOSED_URI:
+			return _build_text_resource(uri, _build_exposed_tool_catalog_payload(), "application/json")
+		TOOLS_CATALOG_VISIBLE_URI:
+			return _build_text_resource(uri, _build_tool_catalog_payload(), "application/json")
 		PROJECT_INFO_URI:
 			return _build_text_resource(uri, _build_project_info_payload(), "application/json")
 		DIAGNOSTICS_SUMMARY_URI:
@@ -102,6 +184,8 @@ func build_resources_read_result(params: Dictionary) -> Dictionary:
 		TOOL_CATALOG_URI:
 			return _build_text_resource(uri, _build_tool_catalog_payload(), "application/json")
 		_:
+			if uri.begins_with(ACTIVITY_CALL_URI_PREFIX):
+				return _build_text_resource(uri, _build_activity_call_payload(uri.substr(ACTIVITY_CALL_URI_PREFIX.length())), "application/json")
 			return _read_template_resource(uri)
 
 
@@ -151,11 +235,145 @@ func _build_project_info_payload() -> Dictionary:
 	}
 
 
+func _build_guides_index_payload() -> Dictionary:
+	return {
+		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+		"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
+		"canonicalResources": {
+			"guides": [GUIDES_INDEX_URI, GUIDES_CAPABILITIES_URI, GUIDES_UI_AUTOMATION_URI],
+			"state": [STATE_PROJECT_SUMMARY_URI, STATE_EDITOR_URI],
+			"activity": [ACTIVITY_STATUS_URI, ACTIVITY_RECENT_URI, ACTIVITY_CALL_TEMPLATE_URI],
+			"tools": [TOOLS_CATALOG_EXPOSED_URI, TOOLS_CATALOG_VISIBLE_URI]
+		},
+		"compatibilityResources": [PROJECT_INFO_URI, DIAGNOSTICS_SUMMARY_URI, TOOL_CATALOG_URI],
+		"recommendedFlow": [
+			{"step": "capabilities", "resource": GUIDES_CAPABILITIES_URI},
+			{"step": "project_state", "resource": STATE_PROJECT_SUMMARY_URI},
+			{"step": "tool_catalog", "resource": TOOLS_CATALOG_VISIBLE_URI},
+			{"step": "activity_audit", "resource": ACTIVITY_STATUS_URI}
+		],
+		"notes": [
+			"Use resources for context, state, catalogs, and diagnostics.",
+			"Use prompts for workflow guidance.",
+			"Use tools only for actions and computed workflows."
+		]
+	}
+
+
+func _build_capabilities_guide_payload() -> Dictionary:
+	return {
+		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+		"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
+		"serverInfo": MCPProtocolFacts.build_server_info(),
+		"capabilities": build_server_capabilities(),
+		"toolLoaderStatus": _get_loader_status_safe(),
+		"discovery": {
+			"resourceIndex": GUIDES_INDEX_URI,
+			"projectState": STATE_PROJECT_SUMMARY_URI,
+			"editorState": STATE_EDITOR_URI,
+			"visibleToolCatalog": TOOLS_CATALOG_VISIBLE_URI,
+			"exposedToolCatalog": TOOLS_CATALOG_EXPOSED_URI,
+			"activityStatus": ACTIVITY_STATUS_URI,
+			"activityRecent": ACTIVITY_RECENT_URI
+		}
+	}
+
+
+func _build_ui_automation_guide_payload() -> Dictionary:
+	return {
+		"preferredOrder": [
+			{"level": "semantic_workflow", "examples": ["system_settings_dialog", "system_inspector"]},
+			{"level": "editor_evidence", "examples": ["system_editor_evidence(action=capture, surface=auto/editor/control/popup/active_dialog)"]},
+			{"level": "control_action", "examples": ["system_editor_control(action=activate_ui)", "focus_control", "set_control_text"]},
+			{"level": "mouse_fallback", "examples": ["click_control", "hover_control", "Control-local coordinates"]}
+		],
+		"diagnostics": {
+			"editorState": STATE_EDITOR_URI,
+			"activityStatus": ACTIVITY_STATUS_URI,
+			"toolCatalog": TOOLS_CATALOG_VISIBLE_URI
+		},
+		"rules": [
+			"Prefer semantic editor workflows before low-level UI control.",
+			"Capture evidence with surface metadata before using coordinate fallback.",
+			"Record fallback reasons when visible control enumeration cannot identify the target."
+		]
+	}
+
+
+func _build_editor_state_payload() -> Dictionary:
+	return {
+		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
+		"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
+		"projectPath": ProjectSettings.globalize_path("res://"),
+		"toolLoaderStatus": _get_loader_status_safe(),
+		"resources": {
+			"projectSummary": STATE_PROJECT_SUMMARY_URI,
+			"diagnostics": DIAGNOSTICS_SUMMARY_URI,
+			"activityStatus": ACTIVITY_STATUS_URI,
+			"toolCatalog": TOOLS_CATALOG_VISIBLE_URI
+		}
+	}
+
+
 func _build_diagnostics_summary_payload() -> Dictionary:
 	return {
 		"selfDiagnostics": PluginSelfDiagnosticStoreScript.get_health_snapshot({}, 3),
 		"recentLogs": _redact_sensitive_value(MCPDebugBufferScript.get_recent(20)),
 		"toolLoaderStatus": _get_loader_status_safe()
+	}
+
+
+func _build_activity_status_payload() -> Dictionary:
+	var registry = _get_activity_registry()
+	if registry != null and registry.has_method("get_status"):
+		return registry.get_status()
+	return _empty_activity_status()
+
+
+func _build_activity_recent_payload() -> Dictionary:
+	var registry = _get_activity_registry()
+	if registry != null and registry.has_method("get_recent"):
+		return registry.get_recent(20)
+	return _empty_activity_recent()
+
+
+func _build_activity_call_payload(call_id: String) -> Dictionary:
+	var normalized_call_id := call_id.strip_edges()
+	if normalized_call_id.is_empty():
+		return {"found": false, "call_id": normalized_call_id, "error": "Missing activity call id."}
+	var registry = _get_activity_registry()
+	if registry != null and registry.has_method("get_call"):
+		return registry.get_call(normalized_call_id)
+	return {"found": false, "call_id": normalized_call_id}
+
+
+func _empty_activity_status() -> Dictionary:
+	return {
+		"running_count": 0,
+		"recent_count": 0,
+		"filtered_running_count": 0,
+		"filtered_recent_count": 0,
+		"running": [],
+		"recent": [],
+		"execution_order": [],
+		"max_recent": 0,
+		"filters": {},
+		"slow_threshold_ms": 0.0,
+		"slow_running": [],
+		"recent_failures": []
+	}
+
+
+func _empty_activity_recent() -> Dictionary:
+	return {
+		"recent": [],
+		"recent_count": 0,
+		"filtered_recent_count": 0,
+		"max_recent": 0,
+		"filters": {},
+		"slow_threshold_ms": 0.0,
+		"slow_recent": [],
+		"recent_failures": []
 	}
 
 
@@ -179,6 +397,15 @@ func _build_tool_catalog_payload() -> Dictionary:
 		"toolTree": presentation.get("toolTree", []),
 		"toolGroups": presentation.get("toolGroups", []),
 		"toolLoaderStatus": _get_loader_status_safe()
+	}
+
+
+func _build_exposed_tool_catalog_payload() -> Dictionary:
+	var catalog := _build_tool_catalog_payload()
+	return {
+		"tools": catalog.get("tools", []),
+		"presentationVersion": int(catalog.get("presentationVersion", 1)),
+		"toolLoaderStatus": catalog.get("toolLoaderStatus", _get_loader_status_safe())
 	}
 
 
@@ -411,6 +638,12 @@ func _get_loader_status_safe() -> Dictionary:
 		if status is Dictionary:
 			return (status as Dictionary).duplicate(true)
 	return {}
+
+
+func _get_activity_registry():
+	if _get_tool_activity_registry.is_valid():
+		return _get_tool_activity_registry.call()
+	return null
 
 
 func _sanitize(value):
