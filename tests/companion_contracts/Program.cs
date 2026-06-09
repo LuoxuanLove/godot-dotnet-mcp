@@ -159,7 +159,22 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
     var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
     var session = broker.StartSession(project.ProjectId);
 
-    foreach (var pluginVersion in new string?[] { null, "", "1.4.0", "3.0.0", "not-a-version" })
+    foreach (var pluginVersion in new string?[]
+    {
+        null,
+        "",
+        "1.4.0",
+        "3.0.0",
+        "not-a-version",
+        " 2.0.0",
+        "2.0.0 ",
+        "02.0.0",
+        "2.0.0-",
+        "2.0.0+",
+        "2.0.0-%%%",
+        "2.0.0+bad space",
+        "2.0.0-preview..1",
+    })
     {
         AssertThrows<InvalidOperationException>(() =>
             session.UpgradeToEditorLive(new EditorBridgeStatus(
@@ -181,7 +196,7 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "v2.0.0-preview.1"));
+        "v2.0.0-preview.1+build.5"));
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
 }
 

@@ -1,8 +1,15 @@
+using System.Text.RegularExpressions;
+
 namespace GodotDotnetMcp.Companion;
 
 public static class EditorBridgeCompatibility
 {
     public const int CompatibleMajorVersion = 2;
+    private static readonly Regex SemanticVersionPattern = new(
+        """
+        ^v?(?<core>(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))(?:-(?<pre>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$
+        """,
+        RegexOptions.CultureInvariant | RegexOptions.IgnorePatternWhitespace);
 
     public static bool IsPluginVersionCompatible(string? pluginVersion)
     {
@@ -21,18 +28,8 @@ public static class EditorBridgeCompatibility
             return false;
         }
 
-        var normalized = pluginVersion.Trim();
-        if (normalized.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-        {
-            normalized = normalized[1..];
-        }
-
-        var suffixIndex = normalized.IndexOfAny(['-', '+']);
-        if (suffixIndex >= 0)
-        {
-            normalized = normalized[..suffixIndex];
-        }
-
-        return Version.TryParse(normalized, out version!);
+        var match = SemanticVersionPattern.Match(pluginVersion);
+        return match.Success &&
+            Version.TryParse(match.Groups["core"].Value, out version!);
     }
 }
