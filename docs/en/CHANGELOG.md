@@ -18,7 +18,10 @@ Target version: 2.0.0.
 
 ### Fixed
 
+- Fixed the static resource graph so `preload()` usages are not also recorded as `load()` usages, damaged external-resource fallback paths are diagnosed, and `res://` references crossing reparse points are not resolved as ordinary in-project files.
 - Rejected editor-live upgrades from bridge statuses that omit `supports_live_editor_state`, lack a compatible v2 plugin version, or report missing, malformed, older-major, newer-major, or explicit version-mismatch plugin versions.
+- Aligned the bridge status `plugin_version` schema with the runtime compatibility parser for optional `v` prefixes, prerelease/build metadata, and whitespace rejection.
+- Bounded active project sessions globally and per project, and pruned expired sessions before accepting new sessions so stale entries cannot accumulate indefinitely.
 
 ### Documentation
 
@@ -35,6 +38,7 @@ Target version: 2.0.0.
 - Added v2 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
 - Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
+- Added regression coverage for static resource graph fallback diagnostics, preload/load classification, reparse-point references, bridge version policy samples, and project session limits.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
 - Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.

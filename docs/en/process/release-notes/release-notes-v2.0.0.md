@@ -14,15 +14,21 @@ It also records an unevaluated .NET workspace graph from project XML: SDK names,
 
 Static resource analysis now indexes text `.tscn` and `.tres` files as a reference graph. It records external resources, sub-resources, `uid://` markers, `res://` preload/load usages, missing targets, project-boundary warnings, and unsupported binary `.res` files without loading the project in the editor.
 
+The graph keeps those signals strict: `preload()` and `load()` are classified separately, broken external-resource fallback paths are reported, and `res://` references that cross symlinks or junction-style reparse points are withheld instead of being treated as ordinary project-local files.
+
 ### 🔐 Project-Scoped Sessions
 
 Tool calls must carry both `project_id` and `session_id`, and the broker rejects attempts to reuse a session across a different project. This gives the v2.0 line a clear isolation boundary before multi-project orchestration is added.
 
 Project sessions now carry lifecycle metadata as well: when they were issued, when they were last used, when their lease expires, and whether they have been stopped. The broker can renew active leases, stop sessions explicitly, and reject stale session ids instead of keeping leaked ids valid for the full broker lifetime.
 
+The broker also prunes expired sessions before opening new ones and keeps active session counts bounded per project and across the broker. This makes the early v2 session model honest about lifetime and capacity before it becomes a long-running companion process.
+
 The bridge upgrade contract now documents the editor-side handshake states. A project session can become editor-live only when the bridge is online for the same project, reports a compatible plugin version, and provides a non-empty `editor_session_id`.
 
 The Companion contract now enforces that boundary in code: missing, malformed, older-major, newer-major, or explicit version-mismatch bridge versions remain static/headless instead of unlocking editor-live capabilities.
+
+The bridge version contract accepts the same optional `v` prefix and prerelease/build metadata in both the JSON status schema and the runtime compatibility parser, so compatible online bridge payloads are judged consistently.
 
 ### ✅ Compatibility and Upgrade Notes
 
