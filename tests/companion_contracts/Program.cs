@@ -18,6 +18,7 @@ var tests = new (string Name, Action Run)[]
     ("keeps_revoked_sessions_terminal_under_concurrency", RevokedSessionsStayTerminalUnderConcurrency),
     ("keeps_session_snapshots_active_under_concurrency", SessionSnapshotsStayActiveUnderConcurrency),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
+    ("requires_bridge_live_state_support_for_editor_live_upgrade", BridgeLiveStateSupportIsRequired),
     ("rejects_incompatible_editor_bridge_versions", IncompatibleEditorBridgeVersionsAreRejected),
 };
 
@@ -134,7 +135,8 @@ static void StopsAndRejectsRevokedSessions()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0")));
+            "2.0.0",
+            true)));
     AssertThrows<KeyNotFoundException>(() => broker.ResolveSession(scope));
     AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
 }
@@ -154,7 +156,8 @@ static void ExpiresAndRejectsStaleSessions()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0")));
+            "2.0.0",
+            true)));
     AssertThrows<InvalidOperationException>(() =>
         broker.ResolveSession(new ToolRequestScope(project.ProjectId, session.Identity.SessionId)));
     AssertThrows<KeyNotFoundException>(() =>
@@ -232,7 +235,8 @@ static void RevokedSessionsStayTerminalUnderConcurrency()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0");
+            "2.0.0",
+            true);
 
         var stopTask = Task.Run(() =>
         {
@@ -339,13 +343,15 @@ static void ExplicitBridgeUpgradeEnablesLiveCapabilities()
             EditorBridgeState.Online,
             project.ProjectId,
             null,
-            "2.0.0")));
+            "2.0.0",
+            true)));
 
     session.UpgradeToEditorLive(new EditorBridgeStatus(
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0"));
+        "2.0.0",
+        true));
 
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
     AssertEqual("editor_session_1", session.Identity.EditorSessionId);
@@ -359,6 +365,22 @@ static void ExplicitBridgeUpgradeEnablesLiveCapabilities()
     var staticSession = isolatedSession.StartSession(registeredOther.ProjectId);
     AssertThrows<InvalidOperationException>(() =>
         staticSession.UpgradeToEditorLive(EditorBridgeStatus.Disabled(registeredOther.ProjectId)));
+}
+
+static void BridgeLiveStateSupportIsRequired()
+{
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+
+    AssertThrows<InvalidOperationException>(() =>
+        session.UpgradeToEditorLive(new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            project.ProjectId,
+            "editor_session_1",
+            "2.0.0",
+            false)));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
 }
 
 static void IncompatibleEditorBridgeVersionsAreRejected()
@@ -389,7 +411,8 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
                 EditorBridgeState.Online,
                 project.ProjectId,
                 "editor_session_1",
-                pluginVersion)));
+                pluginVersion,
+                true)));
         AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
     }
 
@@ -398,13 +421,15 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
             EditorBridgeState.VersionMismatch,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0")));
+            "2.0.0",
+            false)));
 
     session.UpgradeToEditorLive(new EditorBridgeStatus(
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "v2.0.0-preview.1+build.5"));
+        "v2.0.0-preview.1+build.5",
+        true));
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
 }
 

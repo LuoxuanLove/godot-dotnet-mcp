@@ -18,7 +18,7 @@ Target version: 2.0.0.
 
 ### Fixed
 
-- Rejected editor-live upgrades from missing, malformed, older-major, newer-major, or explicit version-mismatch editor bridge plugin versions so live editor capabilities require a compatible v2 bridge.
+- Rejected editor-live upgrades from bridge statuses that omit `supports_live_editor_state`, lack a compatible v2 plugin version, or report missing, malformed, older-major, newer-major, or explicit version-mismatch plugin versions.
 
 ### Documentation
 

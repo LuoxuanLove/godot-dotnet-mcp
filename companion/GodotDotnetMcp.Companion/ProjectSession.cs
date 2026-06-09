@@ -210,7 +210,7 @@ public sealed class ProjectSession
 
         if (!bridgeStatus.ProvidesLiveEditorState)
         {
-            throw new InvalidOperationException("Editor bridge must provide an editor_session_id before live capabilities are available.");
+            throw new InvalidOperationException("Editor bridge must provide an editor_session_id and supports_live_editor_state before live capabilities are available.");
         }
 
         if (!EditorBridgeCompatibility.IsPluginVersionCompatible(bridgeStatus.PluginVersion))
