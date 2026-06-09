@@ -27,3 +27,7 @@ jobs:
       - name: Run actionlint
         shell: bash
         run: ./actionlint -color
+
+      - name: Validate v2 release workflow gates
+        shell: pwsh
+        run: .\scripts\test_v2_release_workflows.ps1
