@@ -14,7 +14,8 @@ static func build_snapshot(loader) -> Dictionary:
 	if loader.has_method("get_tool_definitions"):
 		visible_tools = _filter_removed_tools(loader, loader.get_tool_definitions())
 	var all_tools_by_category := _filter_removed_tools_by_category(loader, _get_all_tools_by_category(loader))
-	var domain_states := _duplicate_dictionary_array(_get_domain_states(loader))
+	var category_states := _duplicate_dictionary_array(_get_domain_states(loader))
+	var domain_states := _aggregate_domain_states(category_states)
 	var presentation := ToolPresentationServiceScript.build_tool_presentation(
 		exposed_tools,
 		all_tools_by_category,
@@ -26,6 +27,7 @@ static func build_snapshot(loader) -> Dictionary:
 		"exposed_tools": exposed_tools,
 		"visible_tools": visible_tools,
 		"all_tools_by_category": all_tools_by_category,
+		"category_states": category_states,
 		"domain_states": domain_states,
 		"presentation": presentation.duplicate(true),
 		"tool_loader_status": _get_loader_status(loader)
@@ -80,6 +82,56 @@ static func _get_domain_states(loader) -> Array:
 	if loader.has_method("get_domain_states"):
 		return loader.get_domain_states()
 	return []
+
+
+static func _aggregate_domain_states(category_states: Array[Dictionary]) -> Array[Dictionary]:
+	var by_domain := {}
+	for state in category_states:
+		var domain_key := str(state.get("domain_key", state.get("domain", state.get("category", ""))))
+		if domain_key.is_empty():
+			continue
+		if not by_domain.has(domain_key):
+			by_domain[domain_key] = {
+				"domain": domain_key,
+				"domain_key": domain_key,
+				"categories": [],
+				"category_count": 0,
+				"loaded_category_count": 0,
+				"loaded": true,
+				"tool_count": 0,
+				"enabled_tool_count": 0,
+				"load_error_count": 0,
+				"last_errors": []
+			}
+		var aggregate: Dictionary = by_domain[domain_key]
+		var category := str(state.get("category", state.get("domain", "")))
+		var categories: Array = aggregate.get("categories", [])
+		if not category.is_empty() and not categories.has(category):
+			categories.append(category)
+			aggregate["categories"] = categories
+		aggregate["category_count"] = int(aggregate.get("category_count", 0)) + 1
+		if bool(state.get("loaded", false)):
+			aggregate["loaded_category_count"] = int(aggregate.get("loaded_category_count", 0)) + 1
+		else:
+			aggregate["loaded"] = false
+		aggregate["tool_count"] = int(aggregate.get("tool_count", 0)) + int(state.get("tool_count", 0))
+		aggregate["enabled_tool_count"] = int(aggregate.get("enabled_tool_count", 0)) + int(state.get("enabled_tool_count", 0))
+		var last_error = state.get("last_error", null)
+		if last_error != null:
+			aggregate["load_error_count"] = int(aggregate.get("load_error_count", 0)) + 1
+			var last_errors: Array = aggregate.get("last_errors", [])
+			last_errors.append(last_error)
+			aggregate["last_errors"] = last_errors
+	var out: Array[Dictionary] = []
+	var keys := by_domain.keys()
+	keys.sort()
+	for key in keys:
+		var aggregate: Dictionary = by_domain[key]
+		var categories: Array = aggregate.get("categories", [])
+		categories.sort()
+		aggregate["categories"] = categories
+		out.append(aggregate)
+	return out
 
 
 static func _get_loader_status(loader) -> Dictionary:

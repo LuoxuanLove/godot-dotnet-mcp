@@ -103,6 +103,19 @@ class FakeToolLoader:
 					"action": {"type": "string", "enum": ["list_actions", "get_action"], "description": "Input map action"},
 					"name": {"type": "string", "description": "Input action name"}
 				}
+			},
+			"outputSchema": {
+				"type": "object",
+				"required": ["success", "data"],
+				"properties": {
+					"success": {"type": "boolean"},
+					"data": {
+						"type": "object",
+						"properties": {
+							"actions": {"type": "array", "items": {"type": "string"}}
+						}
+					}
+				}
 			}
 		})
 		return tools
@@ -199,6 +212,19 @@ class FakeToolLoader:
 						"action": {"type": "string", "enum": ["list_actions", "get_action"], "description": "Input map action"},
 						"name": {"type": "string", "description": "Input action name"}
 					}
+				},
+				"outputSchema": {
+					"type": "object",
+					"required": ["success", "data"],
+					"properties": {
+						"success": {"type": "boolean"},
+						"data": {
+							"type": "object",
+							"properties": {
+								"actions": {"type": "array", "items": {"type": "string"}}
+							}
+						}
+					}
 				}
 			}]
 		}
@@ -269,6 +295,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Internal project_input should be reported as not exposed.")
 	if not (visible_matches[0] as Dictionary).has("input_schema"):
 		return _failure("include_schema=true should preserve the full input schema.")
+	if not (visible_matches[0] as Dictionary).has("output_schema"):
+		return _failure("include_schema=true should preserve the output schema.")
+	var output_schema: Dictionary = (visible_matches[0] as Dictionary).get("output_schema", {})
+	if not ((output_schema.get("required", []) as Array).has("data")):
+		return _failure("Catalog search should preserve explicit output schema requirements.")
 	if not ((visible_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
 		return _failure("Catalog search should match enum values and report param_enum.")
 	var removed_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {

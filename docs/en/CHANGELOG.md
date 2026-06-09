@@ -34,6 +34,7 @@ Target version: 1.4.0.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
 - Added removal guard coverage so tool lists, catalog resources, search results, and Tools page rendering cannot re-expose `system_tool_activity`.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
+- Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 
 ## [1.3.0] - 2026-06-08
 
