@@ -13,6 +13,10 @@ Target version: 1.4.0.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 
+### Changed
+
+- Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+
 ### Documentation
 
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
