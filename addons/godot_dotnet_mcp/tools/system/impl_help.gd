@@ -11,6 +11,11 @@ var bridge
 var _runtime_context: Dictionary = {}
 
 const HANDLED_TOOLS := ["help"]
+const REPLACEMENT_RESOURCES := [
+	"godot-dotnet-mcp://guides/index",
+	"godot-dotnet-mcp://guides/capabilities",
+	"godot-dotnet-mcp://guides/ui-automation"
+]
 
 
 func handles(tool_name: String) -> bool:
@@ -42,12 +47,20 @@ func get_tools() -> Array[Dictionary]:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	if tool_name not in HANDLED_TOOLS:
 		return _error("Unknown tool: %s" % tool_name)
-	var include_tools := bool(args.get("include_tools", true))
-	var data := _build_help(include_tools)
 	return {
-		"success": true,
-		"data": data,
-		"message": "Godot .NET MCP help fetched"
+		"success": false,
+		"error": "system_help has been removed from the public MCP tool surface. Use MCP resources and prompts instead.",
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": "system_help",
+			"replacement_methods": ["resources/list", "resources/read", "prompts/list", "prompts/get"],
+			"replacement_resources": REPLACEMENT_RESOURCES.duplicate(),
+			"replacement_prompts": ["godot.project_orientation", "godot.editor_ui_control", "godot.runtime_validation"]
+		},
+		"hints": [
+			"Read godot-dotnet-mcp://guides/index for the resource-first discovery map.",
+			"Use prompts/list and prompts/get for workflow guidance before choosing action tools."
+		]
 	}
 
 

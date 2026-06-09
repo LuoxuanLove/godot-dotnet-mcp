@@ -9,6 +9,7 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
 const PUBLIC_REMOVED_MCP_TOOLS := {
+	"system_help": true,
 	"system_scene_analyze": true,
 	"system_scene_validate": true,
 	"system_tool_activity": true
@@ -169,6 +170,8 @@ func get_exposed_tool_definitions() -> Array[Dictionary]:
 
 
 func is_tool_exposed(tool_name: String) -> bool:
+	if _is_callable_removed_public_tool(tool_name):
+		return true
 	for tool_def in get_exposed_tool_definitions():
 		if str(tool_def.get("name", "")) == tool_name:
 			return true

@@ -69,13 +69,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not return a tool_loader_status dictionary.")
 	if (tools_list.get("tools", []) as Array).is_empty():
 		return _failure("Tools list response did not return any exposed tools.")
-	if not _has_tool(tools_list.get("tools", []), "system_help"):
-		return _failure("Tools list response did not expose system_help.")
 	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
 		return _failure("Tools list response did not expose the unified tool tree.")
 	if not _first_tool_has_group_path(tools_list.get("tools", [])):
 		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tools list response should not expose removed public tool %s." % removed_tool_name)
 
@@ -95,9 +93,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(full_reload_summary.get("tool_count", 0)) <= 0:
 		return _failure("HTTP server full reload reinitialize did not report visible tools.")
 	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
-	if not _has_tool(full_reload_tools_list.get("tools", []), "system_help"):
-		return _failure("HTTP server full reload reinitialize did not expose system_help.")
-	for removed_tool_name in ["system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(full_reload_tools_list, removed_tool_name):
 			return _failure("HTTP server full reload should not expose removed public tool %s." % removed_tool_name)
 
@@ -126,9 +122,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
 	if not ((rpc_tools_list_result as Dictionary).get("toolTree", []) is Array) or (((rpc_tools_list_result as Dictionary).get("toolTree", []) as Array).is_empty()):
 		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
+	if _has_tool(rpc_tools, "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolTree", []), "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolGroups", []), "system_help"):
+		return _failure("JSON-RPC tools/list flat, tree, and group metadata should not expose removed system_help.")
 	if not _first_tool_has_group_path(rpc_tools):
 		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(rpc_tools_list_result, removed_tool_name):
 			return _failure("JSON-RPC tools/list should not expose removed public tool %s." % removed_tool_name)
 
@@ -166,6 +164,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}))
 	if int((rpc_invalid_params.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("JSON-RPC tools/call should reject non-object params with -32602.")
+
+	var rpc_removed_help: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 31,
+		"method": "tools/call",
+		"params": {
+			"name": "system_help",
+			"arguments": {}
+		}
+	}))
+	var rpc_removed_help_result = rpc_removed_help.get("result", {})
+	if not (rpc_removed_help_result is Dictionary) or not bool((rpc_removed_help_result as Dictionary).get("isError", false)):
+		return _failure("JSON-RPC tools/call should return an error result for removed system_help legacy calls.")
+	var rpc_removed_help_structured = (rpc_removed_help_result as Dictionary).get("structuredContent", {})
+	if not (rpc_removed_help_structured is Dictionary) or str((rpc_removed_help_structured as Dictionary).get("error", "")).find("system_help") == -1:
+		return _failure("JSON-RPC system_help removal response should include the removed tool name.")
+	var rpc_removed_help_data = (rpc_removed_help_structured as Dictionary).get("data", {})
+	if not (rpc_removed_help_data is Dictionary) or not (((rpc_removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
+		return _failure("JSON-RPC system_help removal response should include replacement guide resource URIs.")
 
 	var rpc_invalid_arguments: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",

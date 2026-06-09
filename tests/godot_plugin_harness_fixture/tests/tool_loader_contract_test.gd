@@ -100,8 +100,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
 		if not exposed_name.begins_with("%s_" % exposed_category):
 			return _failure("Public MCP exposure should prefix public tools with their manifest category: %s" % exposed_name)
-	if not exposed_names.has("system_help"):
-		return _failure("Tool loader did not expose system_help under the default tool access provider.")
+	if exposed_names.has("system_help"):
+		return _failure("Tool loader should remove system_help from the public tools/list surface.")
+	if not _loader.is_tool_exposed("system_help"):
+		return _failure("Tool loader should keep system_help callable only for a legacy replacement error.")
 	if not exposed_names.has("system_tool_catalog"):
 		return _failure("Tool loader did not expose system_tool_catalog under the default tool access provider.")
 	if not exposed_names.has("system_project_state"):
@@ -272,14 +274,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should preserve non-protocol tool activity payloads inside data.")
 
 	var help_result: Dictionary = await _loader.execute_tool_async("system", "help", {"include_tools": true})
-	if not bool(help_result.get("success", false)):
-		return _failure("Tool loader should route system_help successfully.")
+	if bool(help_result.get("success", true)):
+		return _failure("Tool loader system_help legacy call should return a removal error.")
 	var help_data = help_result.get("data", {})
 	if not (help_data is Dictionary):
-		return _failure("Tool loader system_help should return a dictionary payload.")
-	var visual_guidance = (help_data as Dictionary).get("visual_guidance", {})
-	if not (visual_guidance is Dictionary) or not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
-		return _failure("Tool loader system_help should expose hidden-control guidance.")
+		return _failure("Tool loader system_help removal error should return a dictionary payload.")
+	if str((help_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_help removal error should include removed_public_tool.")
+	var replacement_resources = (help_data as Dictionary).get("replacement_resources", [])
+	if not (replacement_resources is Array) or not (replacement_resources as Array).has("godot-dotnet-mcp://guides/index"):
+		return _failure("Tool loader system_help removal error should include replacement guide resource URIs.")
 	var catalog_result: Dictionary = await _loader.execute_tool_async("system", "tool_catalog", {"query": "runtime", "limit": 5})
 	if not bool(catalog_result.get("success", false)):
 		return _failure("Tool loader should route system_tool_catalog successfully.")

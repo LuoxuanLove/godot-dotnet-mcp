@@ -10,13 +10,17 @@ Target version: 1.4.0.
 
 ### Added
 
+- Initialized the v1.4.0 protocol refactor version line and release-note source template.
 - Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 
 ### Changed
 
+- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
+- Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
+- Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
 - Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
 - Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 

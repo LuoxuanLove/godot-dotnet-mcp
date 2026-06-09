@@ -45,6 +45,16 @@ class FakeToolLoader:
 	func get_tool_definitions() -> Array:
 		var definitions := get_exposed_tool_definitions()
 		definitions.append({
+			"name": "system_help",
+			"description": "Removed help tool",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
+		})
+		definitions.append({
 			"name": "system_tool_activity",
 			"description": "Removed public activity tool",
 			"category": "system",
@@ -111,6 +121,12 @@ class FakeToolLoader:
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			}, {
+				"name": "help",
+				"full_name": "system_help",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
 			}, {
 				"name": "tool_activity",
 				"full_name": "system_tool_activity",
@@ -195,6 +211,16 @@ class FakeToolLoader:
 		if activity_registry != null and not record.is_empty():
 			var finished: Dictionary = activity_registry.finish_call(str(record.get("call_id", "")), true)
 			result["activity"] = activity_registry.summarize_record(finished)
+		if category == "system" and tool_name == "help":
+			result = {
+				"success": false,
+				"error": "system_help has been removed from the public MCP tool surface.",
+				"data": {
+					"error_type": "removed_public_tool",
+					"removed_tool": "system_help",
+					"replacement_resources": ["godot-dotnet-mcp://guides/index"]
+				}
+			}
 		return result
 
 
@@ -245,10 +271,24 @@ class FakeCallbacks:
 	func is_tool_enabled(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
-		return tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze"
+		return (
+			tool_name == "system_project_state"
+			or tool_name == "system_project_lifecycle"
+			or tool_name == "system_help"
+			or tool_name == "system_tool_activity"
+			or tool_name == "system_scene_validate"
+			or tool_name == "system_scene_analyze"
+		)
 
 	func is_tool_exposed(tool_name: String) -> bool:
-		return is_tool_enabled(tool_name) and (tool_name == "system_project_state" or tool_name == "system_project_lifecycle" or tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze")
+		return is_tool_enabled(tool_name) and (
+			tool_name == "system_project_state"
+			or tool_name == "system_project_lifecycle"
+			or tool_name == "system_help"
+			or tool_name == "system_tool_activity"
+			or tool_name == "system_scene_validate"
+			or tool_name == "system_scene_analyze"
+		)
 
 	func log(message: String, level: String) -> void:
 		last_log = {
@@ -278,9 +318,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router did not surface exposed tool definitions.")
 	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
 		return _failure("Tool RPC router did not expose the unified tool tree.")
+	if _contains_tool_name_recursive(tools_list.get("toolTree", []), "system_help") or _contains_tool_name_recursive(tools_list.get("toolGroups", []), "system_help"):
+		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:
@@ -290,6 +332,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
 			return _failure("Tool RPC router should not expose removed system_project_run.")
+		if str((tool_entry as Dictionary).get("name", "")) == "system_help":
+			return _failure("Tool RPC router should omit removed system_help from tools/list.")
 
 	var success_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_project_state",
@@ -359,6 +403,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_result.get("isError", false)):
 			return _failure("Tool RPC router should reject removed project lifecycle entry '%s'." % removed_tool_name)
+
+	var removed_help_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "system_help",
+		"arguments": {}
+	})
+	if not bool(removed_help_result.get("isError", false)):
+		return _failure("Tool RPC router should return an error result for removed system_help legacy calls.")
+	var removed_help_structured = removed_help_result.get("structuredContent", {})
+	if not (removed_help_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent for removed system_help calls.")
+	var removed_help_data = (removed_help_structured as Dictionary).get("data", {})
+	if not (removed_help_data is Dictionary) or not (((removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
+		return _failure("Tool RPC router should preserve system_help replacement resource URIs.")
 
 	var removed_activity_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_tool_activity",
