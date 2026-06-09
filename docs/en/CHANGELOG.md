@@ -32,7 +32,7 @@ Target version: 1.4.0.
 
 ### Documentation
 
-- Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
+- Removed external project validation narrative from release-facing README, localized entry pages, and v1.4.0 release notes so documentation claims stay focused on plugin-owned capabilities and reproducible checks.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 - Clarified `system_help` protocol guidance so clients can choose MCP Resources for passive context, Prompts for workflow planning, and Tools for actions or computed workflow results.
 - Added a [v1.4.0 refactor progress tracker](process/v1.4.0-refactor-progress-tracker.md) that records completed guardrails, remaining cleanup axes, and the next PR queue.
