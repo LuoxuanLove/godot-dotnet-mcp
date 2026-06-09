@@ -73,7 +73,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not expose the unified tool tree.")
 	if not _first_tool_has_group_path(tools_list.get("tools", [])):
 		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tools list response should not expose removed public tool %s." % removed_tool_name)
 
@@ -93,7 +93,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(full_reload_summary.get("tool_count", 0)) <= 0:
 		return _failure("HTTP server full reload reinitialize did not report visible tools.")
 	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(full_reload_tools_list, removed_tool_name):
 			return _failure("HTTP server full reload should not expose removed public tool %s." % removed_tool_name)
 
@@ -126,7 +126,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list flat, tree, and group metadata should not expose removed system_help.")
 	if not _first_tool_has_group_path(rpc_tools):
 		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(rpc_tools_list_result, removed_tool_name):
 			return _failure("JSON-RPC tools/list should not expose removed public tool %s." % removed_tool_name)
 

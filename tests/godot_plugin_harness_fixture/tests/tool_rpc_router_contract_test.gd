@@ -453,7 +453,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:

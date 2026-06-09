@@ -133,6 +133,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should remove system_tool_activity from public MCP exposure.")
 	if not _loader.is_tool_exposed("system_tool_activity"):
 		return _failure("Tool loader should keep legacy system_tool_activity calls routable to removal guidance.")
+	if exposed_names.has("system_editor_log"):
+		return _failure("Tool loader should remove system_editor_log from public MCP exposure.")
+	if not _loader.is_tool_exposed("system_editor_log"):
+		return _failure("Tool loader should keep legacy system_editor_log calls routable to removal guidance.")
 	if not exposed_names.has("system_scene_inspect"):
 		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
 	for removed_scene_tool_name in ["system_scene_validate", "system_scene_analyze"]:
@@ -303,6 +307,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_tool_activity removal guidance should expose error_type=removed_public_tool.")
 	if not (((activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
 		return _failure("Tool loader system_tool_activity removal guidance should point to activity/status.")
+	var editor_log_result: Dictionary = await _loader.execute_tool_async("system", "editor_log", {"action": "get_errors"})
+	if bool(editor_log_result.get("success", true)):
+		return _failure("Tool loader legacy system_editor_log calls should return removal guidance.")
+	var editor_log_data = editor_log_result.get("data", {})
+	if not (editor_log_data is Dictionary) or str((editor_log_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_editor_log removal guidance should expose error_type=removed_public_tool.")
+	if not (((editor_log_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://logs/editor/errors")):
+		return _failure("Tool loader system_editor_log removal guidance should point to editor log resources.")
+	var clear_log_result: Dictionary = await _loader.execute_tool_async("system", "editor_log", {"action": "clear_output"})
+	var clear_log_data = clear_log_result.get("data", {})
+	var clear_replacements = (clear_log_data as Dictionary).get("replacement_tools", []) if clear_log_data is Dictionary else []
+	if not (clear_replacements is Array) or (clear_replacements as Array).is_empty() or str(((clear_replacements as Array)[0] as Dictionary).get("name", "")) != "system_editor_control":
+		return _failure("Tool loader system_editor_log clear_output guidance should point to system_editor_control.")
 	var filtered_activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {
 		"action": "recent",
 		"state": "completed",
