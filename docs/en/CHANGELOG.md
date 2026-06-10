@@ -39,6 +39,7 @@ Target version: 1.4.0.
 - Fixed stdio `tools/call` disabled-tool checks to use the shared loader enabled state before exposure checks, matching HTTP transport error semantics.
 - Fixed `prompts/get` argument validation so non-string prompt arguments and invalid `include_runtime` true/false strings are rejected instead of being coerced.
 - Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
+- Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 
 ### Documentation
 

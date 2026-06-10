@@ -993,7 +993,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_name": "Script text",
 	"mcp_resource_template_script_desc": "Read a .gd or .cs script file by project-relative path.",
 	"mcp_resource_template_resource_name": "Resource text",
-	"mcp_resource_template_resource_desc": "Read a .tres or .res resource file by project-relative path.",
+	"mcp_resource_template_resource_desc": "Read a .tres resource file by project-relative path.",
 	"prompt_project_orientation_title": "Project orientation workflow",
 	"prompt_project_orientation_desc": "Orient an agent in a Godot project with read-only state, health, file, symbol, and scene dependency evidence before choosing an editing or debugging workflow.",
 	"prompt_content_authoring_title": "Content authoring workflow",

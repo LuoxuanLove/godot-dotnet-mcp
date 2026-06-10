@@ -993,7 +993,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_name": "脚本文本",
 	"mcp_resource_template_script_desc": "按项目相对路径读取 .gd 或 .cs 脚本文件。",
 	"mcp_resource_template_resource_name": "资源文本",
-	"mcp_resource_template_resource_desc": "按项目相对路径读取 .tres 或 .res 资源文件。",
+	"mcp_resource_template_resource_desc": "按项目相对路径读取 .tres 资源文件。",
 	"prompt_project_orientation_title": "项目定位工作流",
 	"prompt_project_orientation_desc": "在选择编辑或调试工作流前，用只读的项目状态、健康、文件、符号和场景依赖证据帮助 Agent 理解 Godot 项目。",
 	"prompt_content_authoring_title": "内容创作工作流",

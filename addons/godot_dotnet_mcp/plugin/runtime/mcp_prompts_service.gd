@@ -212,7 +212,7 @@ func _build_project_orientation_prompt(arguments: Dictionary) -> Dictionary:
 
 
 func _build_content_authoring_prompt(arguments: Dictionary) -> Dictionary:
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var script_path_result := _optional_res_path(arguments, "script_path", [".cs", ".gd"])
@@ -258,7 +258,7 @@ func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 	var script_path_result := _optional_res_path(arguments, "script_path", [".cs", ".gd"])
 	if not bool(script_path_result.get("success", false)):
 		return script_path_result
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var resource_path_result := _optional_res_path(arguments, "resource_path", [".tscn", ".tres"])
@@ -281,7 +281,7 @@ func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 
 
 func _build_runtime_validation_prompt(arguments: Dictionary) -> Dictionary:
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var scene_path := str(scene_path_result.get("path", ""))

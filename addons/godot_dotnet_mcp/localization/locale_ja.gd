@@ -558,7 +558,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_name": "スクリプトテキスト",
 	"mcp_resource_template_script_desc": "プロジェクト相対パスで .gd または .cs スクリプトファイルを読み取ります。",
 	"mcp_resource_template_resource_name": "リソーステキスト",
-	"mcp_resource_template_resource_desc": "プロジェクト相対パスで .tres または .res リソースファイルを読み取ります。",
+	"mcp_resource_template_resource_desc": "プロジェクト相対パスで .tres リソースファイルを読み取ります。",
 	"tool_system_project_configure_name": "プロジェクトの構成",
 	"tool_system_project_configure_desc": "プロジェクト設定、入力アクション、および自動ロード構成を読み取りまたは変更します。",
 	"tool_system_resource_reference_audit_name": "リソース参照監査",
