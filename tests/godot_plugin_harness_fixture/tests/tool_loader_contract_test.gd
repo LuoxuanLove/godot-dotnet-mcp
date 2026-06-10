@@ -160,6 +160,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+	var all_tool_names: Array[String] = []
+	for tool_def in all_tools:
+		all_tool_names.append(str(tool_def.get("name", "")))
+	if all_tool_names.has("filesystem_file"):
+		return _failure("Tool loader should remove the legacy filesystem_file definition.")
+	for canonical_filesystem_tool_name in ["filesystem_directory", "filesystem_file_read", "filesystem_file_write", "filesystem_file_manage"]:
+		if not all_tool_names.has(canonical_filesystem_tool_name):
+			return _failure("Tool loader should keep canonical filesystem replacement tool '%s'." % canonical_filesystem_tool_name)
+	if _loader.is_tool_exposed("filesystem_file"):
+		return _failure("Tool loader should not keep legacy filesystem_file callable through public exposure.")
+	var removed_filesystem_result: Dictionary = await _loader.execute_tool_async("filesystem", "file", {"action": "read", "path": "res://project.godot"})
+	if bool(removed_filesystem_result.get("success", true)):
+		return _failure("Tool loader should not execute removed filesystem_file through the filesystem domain.")
 
 	_loader.set("_tool_definitions_by_category", {
 		"user": [

@@ -635,6 +635,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(((invalid_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
 		return _failure("Tool RPC router non-object arguments error should preserve the validation message.")
 
+	var removed_filesystem_file_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "filesystem_file",
+		"arguments": {"action": "read", "path": "res://project.godot"}
+	})
+	if not bool(removed_filesystem_file_result.get("isError", false)):
+		return _failure("Tool RPC router should reject removed filesystem_file legacy calls.")
+	var removed_filesystem_file_structured = removed_filesystem_file_result.get("structuredContent", {})
+	if not (removed_filesystem_file_structured is Dictionary) or bool((removed_filesystem_file_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router removed filesystem_file should return failing structuredContent.")
+	if str((removed_filesystem_file_structured as Dictionary).get("error", "")).find("filesystem_file") == -1:
+		return _failure("Tool RPC router removed filesystem_file error should include the legacy tool name.")
+
 	MCPDebugBuffer.clear()
 	var failing_callbacks = FakeCallbacks.new()
 	failing_callbacks.loader = FailingToolLoader.new()

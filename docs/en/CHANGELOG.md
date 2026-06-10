@@ -27,6 +27,7 @@ Target version: 1.4.0.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
+- Removed the legacy internal `filesystem_file` compatibility alias; use `filesystem_file_read`, `filesystem_file_write`, and `filesystem_file_manage` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
 ### Fixed
@@ -51,6 +52,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
 - Added removal guard coverage so `system_tool_catalog` stays absent from tools/list, tool-tree metadata, catalog resources, catalog search, and localization inventory while preserving explicit legacy-call guidance.
 - Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
+- Added removal guard coverage so `filesystem_file` cannot reappear in loader definitions, direct filesystem-domain execution, or localization inventory while the split filesystem tools stay available.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Updated version-policy CI to compare v1.4 pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
