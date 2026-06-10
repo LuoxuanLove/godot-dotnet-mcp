@@ -1110,14 +1110,12 @@ const TRANSLATIONS: Dictionary = {
 
 	# Filesystem tools
 	"tool_filesystem_directory_name": "Directory",
-	"tool_filesystem_file_name": "File",
 	"tool_filesystem_file_read_name": "File Read",
 	"tool_filesystem_file_write_name": "File Write",
 	"tool_filesystem_file_manage_name": "File Manage",
 	"tool_filesystem_json_name": "JSON",
 	"tool_filesystem_search_name": "Search",
 	"tool_filesystem_directory_desc": "Create, delete and list directories",
-	"tool_filesystem_file_desc": "Read, write and manage files",
 	"tool_filesystem_file_read_desc": "Read file contents and inspect file existence or metadata",
 	"tool_filesystem_file_write_desc": "Write or append plain-text files within the project",
 	"tool_filesystem_file_manage_desc": "Delete, copy or move files within the project",

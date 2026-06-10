@@ -32,6 +32,7 @@ Target version: 1.4.0.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
+- Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
 
 ### Fixed
 
@@ -62,6 +63,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so `resource_manage` cannot reappear in loader definitions, direct resource-domain execution, or localization inventory while the split resource tools stay available.
 - Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
 - Enforced absence guards for the removed audio, animation, signal, TileMap, and UI root monolith files now that their split executors own the domain implementations.
+- Enforced removal guards for the deleted filesystem root monolith, `filesystem_file` loader definition, direct filesystem-domain execution, and stale localization inventory keys.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.

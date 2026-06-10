@@ -1110,14 +1110,12 @@ const TRANSLATIONS: Dictionary = {
 
 	# Filesystem tools
 	"tool_filesystem_directory_name": "目录",
-	"tool_filesystem_file_name": "文件",
 	"tool_filesystem_file_read_name": "文件读取",
 	"tool_filesystem_file_write_name": "文件写入",
 	"tool_filesystem_file_manage_name": "文件管理",
 	"tool_filesystem_json_name": "JSON",
 	"tool_filesystem_search_name": "搜索",
 	"tool_filesystem_directory_desc": "创建、删除和列出目录",
-	"tool_filesystem_file_desc": "读取、写入和管理文件",
 	"tool_filesystem_file_read_desc": "读取文件内容并检查文件是否存在或其元数据",
 	"tool_filesystem_file_write_desc": "在项目内写入或追加纯文本文件",
 	"tool_filesystem_file_manage_desc": "在项目内删除、复制或移动文件",

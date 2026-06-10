@@ -161,8 +161,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
 	var all_tool_names: Array[String] = []
+	var all_full_tool_names: Array[String] = []
 	for tool_def in all_tools:
 		all_tool_names.append(str(tool_def.get("name", "")))
+		all_full_tool_names.append(str(tool_def.get("full_name", tool_def.get("name", ""))))
+	if all_tool_names.has("file") or all_full_tool_names.has("filesystem_file"):
+		return _failure("Tool loader should remove the legacy filesystem_file definition.")
+	if _loader.is_tool_exposed("filesystem_file"):
+		return _failure("Tool loader should not keep legacy filesystem_file callable through public exposure.")
+	for canonical_filesystem_tool_name in ["filesystem_directory", "filesystem_file_read", "filesystem_file_write", "filesystem_file_manage", "filesystem_json", "filesystem_search"]:
+		if not all_full_tool_names.has(canonical_filesystem_tool_name):
+			return _failure("Tool loader should keep canonical filesystem replacement tool '%s'." % canonical_filesystem_tool_name)
 	if all_tool_names.has("resource_manage"):
 		return _failure("Tool loader should remove the legacy resource_manage definition.")
 	for canonical_resource_tool_name in ["resource_query", "resource_create", "resource_file_ops"]:
