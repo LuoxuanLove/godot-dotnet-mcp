@@ -23,7 +23,9 @@ const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"tool_system_scene_analyze_name",
 	"tool_system_scene_analyze_desc",
 	"tool_system_editor_log_name",
-	"tool_system_editor_log_desc"
+	"tool_system_editor_log_desc",
+	"tool_debug_log_name",
+	"tool_debug_log_desc"
 ]
 
 
@@ -84,7 +86,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var locale_codes: Array[String] = localization.get_available_language_codes()
 	var forbidden_removed_keys := _find_forbidden_removed_public_tool_keys(localization, locale_codes)
 	if not forbidden_removed_keys.is_empty():
-		return _failure("Removed public tools should not keep visible localization keys: %s" % ", ".join(forbidden_removed_keys.slice(0, 120)))
+		return _failure("Removed tools should not keep visible localization keys: %s" % ", ".join(forbidden_removed_keys.slice(0, 120)))
 
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():

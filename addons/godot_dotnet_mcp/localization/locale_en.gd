@@ -1092,7 +1092,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_developer_usage_guide_desc": "Return recommended plugin usage, reload policy and development/debug loop guidance",
 
 	# Debug tools
-	"tool_debug_log_name": "Log",
 	"tool_debug_log_write_name": "Log Write",
 	"tool_debug_log_buffer_name": "Log Buffer",
 	"tool_debug_runtime_bridge_name": "Runtime Bridge",
@@ -1101,7 +1100,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_profiler_name": "Profiler",
 	"tool_debug_editor_log_name": "Editor Log Atomic",
 	"tool_debug_class_db_name": "Class DB",
-	"tool_debug_log_desc": "Print debug messages and errors",
 	"tool_debug_log_write_desc": "Print info, warning, error and rich-text messages",
 	"tool_debug_log_buffer_desc": "Read or clear the buffered MCP debug log events",
 	"tool_debug_runtime_bridge_desc": "Read structured runtime bridge events and debugger session states from the running project",

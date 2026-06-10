@@ -850,7 +850,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_developer_import_config_desc": "JSON 파일에서 도구 프로필 ID와 비활성 도구 선택을 가져와 적용합니다",
 	"tool_plugin_developer_usage_guide_name": "사용 가이드",
 	"tool_plugin_developer_usage_guide_desc": "권장 플러그인 사용법, 다시 로드 정책, 개발/디버그 루프 안내를 반환합니다",
-	"tool_debug_log_name": "로그",
 	"tool_debug_log_write_name": "로그 쓰기",
 	"tool_debug_log_buffer_name": "로그 버퍼",
 	"tool_debug_runtime_bridge_name": "런타임 브리지",
