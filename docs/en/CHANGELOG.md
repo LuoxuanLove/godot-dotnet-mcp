@@ -49,6 +49,7 @@ Target version: 1.4.0.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 - Clarified `system_help` protocol guidance so clients can choose MCP Resources for passive context, Prompts for workflow planning, and Tools for actions or computed workflow results.
 - Added a [v1.4.0 refactor progress tracker](process/v1.4.0-refactor-progress-tracker.md) that records completed guardrails, remaining cleanup axes, and the next PR queue.
+- Updated the v1.4.0 protocol refactor plan to target MCP 2025-11-25 conformance, including Streamable HTTP on `127.0.0.1:3000/mcp`, newline-delimited stdio, 2020-12 schema metadata, tool-name guards, optional capability boundaries, and Dock/Tools UI metadata adaptation.
 
 ### Internal
 
