@@ -435,7 +435,7 @@ func _empty_activity_recent() -> Dictionary:
 func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
-		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
+		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
 	var exposed_tools = loader.get_exposed_tool_definitions()
 	var all_tools_by_category := {}
 	if loader.has_method("get_all_tools_by_category"):
@@ -448,6 +448,7 @@ func _build_tool_catalog_payload() -> Dictionary:
 	var presentation = ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
 	return {
 		"tools": ToolPresentationServiceScript.build_mcp_tool_list(exposed_tools, presentation),
+		"domain_states": domain_states,
 		"presentationVersion": int(presentation.get("presentationVersion", 1)),
 		"toolTree": presentation.get("toolTree", []),
 		"toolGroups": presentation.get("toolGroups", []),

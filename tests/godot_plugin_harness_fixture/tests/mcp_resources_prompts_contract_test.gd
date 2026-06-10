@@ -284,7 +284,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(exposed_tool_catalog.get("ok", false)):
 		return _failure(str(exposed_tool_catalog.get("error", "exposed tool catalog resource failed")))
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
-	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree"):
+	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree") or exposed_tool_catalog_payload.has("domain_states"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
@@ -295,6 +295,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	if not (visible_tool_catalog_payload.get("domain_states", []) is Array):
+		return _failure("visible tool catalog should expose raw domain_states promised by its resource metadata.")
+	var system_domain_state := _find_domain_state(visible_tool_catalog_payload.get("domain_states", []), "system")
+	if system_domain_state.is_empty():
+		return _failure("visible tool catalog should preserve loader domain state entries.")
+	if str(system_domain_state.get("load_state", "")).is_empty() or int(system_domain_state.get("tool_count", -1)) < 1:
+		return _failure("visible tool catalog domain_states should keep raw loader state fields.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool_name):
 			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool_name)
@@ -699,6 +706,15 @@ func _find_resource(resources, uri: String) -> Dictionary:
 	for resource in resources:
 		if resource is Dictionary and str((resource as Dictionary).get("uri", "")) == uri:
 			return resource as Dictionary
+	return {}
+
+
+func _find_domain_state(states, category: String) -> Dictionary:
+	if not (states is Array):
+		return {}
+	for state in states:
+		if state is Dictionary and str((state as Dictionary).get("category", "")) == category:
+			return state as Dictionary
 	return {}
 
 

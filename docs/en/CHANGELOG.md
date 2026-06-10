@@ -38,6 +38,7 @@ Target version: 1.4.0.
 - Fixed the default tool profile so registered split visual authoring categories for materials, shaders, lighting, particles, TileMaps, and geometry are visible without switching to the full profile.
 - Fixed stdio `tools/call` disabled-tool checks to use the shared loader enabled state before exposure checks, matching HTTP transport error semantics.
 - Fixed `prompts/get` argument validation so non-string prompt arguments and invalid `include_runtime` true/false strings are rejected instead of being coerced.
+- Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
 
 ### Documentation
 
