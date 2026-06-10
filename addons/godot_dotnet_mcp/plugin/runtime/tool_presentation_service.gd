@@ -121,6 +121,8 @@ static func enrich_tools_for_presentation(tools: Array, presentation: Dictionary
 			tool["groupPath"] = metadata.get("groupPath", [])
 			tool["treeChildren"] = metadata.get("treeChildren", [])
 			tool["enabled"] = bool(metadata.get("enabled", tool.get("enabled", true)))
+		tool["inputSchema"] = build_tool_input_schema(tool)
+		tool["outputSchema"] = build_tool_output_schema(tool)
 		enriched.append(tool)
 	return enriched
 
