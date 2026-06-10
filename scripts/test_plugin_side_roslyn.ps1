@@ -92,6 +92,129 @@ function Get-ContractCaseManifest {
     return $manifest
 }
 
+# Historical runnable contract cases that predate the v1.4 manifest gate. New
+# runnable contract cases must be added to scripts\contract_case_manifest.json.
+$LegacyUnmanifestedContractCases = @(
+    "client_config_file_detector_contracts|res://tests/client_config_file_detector_contract_test.gd",
+    "client_config_file_transaction_contracts|res://tests/client_config_file_transaction_contract_test.gd",
+    "client_config_inspection_service_contracts|res://tests/client_config_inspection_service_contract_test.gd",
+    "client_config_launcher_adapter_contracts|res://tests/client_config_launcher_adapter_contract_test.gd",
+    "client_config_serializer_contracts|res://tests/client_config_serializer_contract_test.gd",
+    "client_executable_detector_contracts|res://tests/client_executable_detector_contract_test.gd",
+    "client_install_config_entry_inspector_contracts|res://tests/client_install_config_entry_inspector_contract_test.gd",
+    "client_install_path_resolver_contracts|res://tests/client_install_path_resolver_contract_test.gd",
+    "client_install_runtime_inspector_contracts|res://tests/client_install_runtime_inspector_contract_test.gd",
+    "debug_tool_executor_contracts|res://tests/debug_tool_executor_contract_test.gd",
+    "editor_lifecycle_action_service_contracts|res://tests/editor_lifecycle_action_service_contract_test.gd",
+    "editor_lifecycle_endpoint_contracts|res://tests/editor_lifecycle_endpoint_contract_test.gd",
+    "editor_lifecycle_state_builder_contracts|res://tests/editor_lifecycle_state_builder_contract_test.gd",
+    "filesystem_tool_executor_contracts|res://tests/filesystem_tool_executor_contract_test.gd",
+    "gdscript_lsp_diagnostics_service_contracts|res://tests/gdscript_lsp_diagnostics_service_contract_test.gd",
+    "geometry_tool_executor_contracts|res://tests/geometry_tool_executor_contract_test.gd",
+    "group_tool_executor_contracts|res://tests/group_tool_executor_contract_test.gd",
+    "http_request_decoder_contracts|res://tests/http_request_decoder_contract_test.gd",
+    "http_request_router_contracts|res://tests/http_request_router_contract_test.gd",
+    "http_response_service_contracts|res://tests/http_response_service_contract_test.gd",
+    "http_server_contracts|res://tests/http_server_contract_test.gd",
+    "http_transport_service_contracts|res://tests/http_transport_service_contract_test.gd",
+    "json_rpc_router_contracts|res://tests/json_rpc_router_contract_test.gd",
+    "lighting_tool_executor_contracts|res://tests/lighting_tool_executor_contract_test.gd",
+    "lsp_client_contracts|res://tests/lsp_client_contract_test.gd",
+    "lsp_service_access_contracts|res://tests/lsp_service_access_contract_test.gd",
+    "material_tool_executor_contracts|res://tests/material_tool_executor_contract_test.gd",
+    "mcp_dock_settings_tab_contracts|res://tests/mcp_dock_settings_tab_contract_test.gd",
+    "mcp_maintenance_contracts|res://tests/mcp_maintenance_contract_test.gd",
+    "navigation_tool_executor_contracts|res://tests/navigation_tool_executor_contract_test.gd",
+    "node_tool_executor_contracts|res://tests/node_tool_executor_contract_test.gd",
+    "particle_tool_executor_contracts|res://tests/particle_tool_executor_contract_test.gd",
+    "physics_tool_executor_contracts|res://tests/physics_tool_executor_contract_test.gd",
+    "plugin_dock_coordinator_contracts|res://tests/plugin_dock_coordinator_contract_test.gd",
+    "plugin_runtime_coordinator_contracts|res://tests/plugin_runtime_coordinator_contract_test.gd",
+    "plugin_self_diagnostic_store_contracts|res://tests/plugin_self_diagnostic_store_contract_test.gd",
+    "project_tool_executor_contracts|res://tests/project_tool_executor_contract_test.gd",
+    "resource_tool_executor_contracts|res://tests/resource_tool_executor_contract_test.gd",
+    "runtime_bridge_invalid_action_fallback|res://tests/runtime_bridge_contract_test.gd",
+    "runtime_control_contracts|res://tests/runtime_control_contract_test.gd",
+    "runtime_control_reply_resolver_contracts|res://tests/runtime_control_reply_resolver_contract_test.gd",
+    "runtime_control_request_coordinator_contracts|res://tests/runtime_control_request_coordinator_contract_test.gd",
+    "runtime_fallback_store_contracts|res://tests/runtime_fallback_store_contract_test.gd",
+    "runtime_reply_service_contracts|res://tests/runtime_reply_service_contract_test.gd",
+    "scene_tool_executor_contracts|res://tests/scene_tool_executor_contract_test.gd",
+    "script_edit_service_contracts|res://tests/script_edit_service_contract_test.gd",
+    "script_tool_executor_contracts|res://tests/script_tool_executor_contract_test.gd",
+    "server_runtime_lsp_diagnostics_snapshot_service_contracts|res://tests/server_runtime_lsp_diagnostics_snapshot_service_contract_test.gd",
+    "settings_tab_model_projection_contracts|res://tests/settings_tab_model_projection_contract_test.gd",
+    "settings_tab_rendering_contracts|res://tests/settings_tab_rendering_contract_test.gd",
+    "shader_tool_executor_contracts|res://tests/shader_tool_executor_contract_test.gd",
+    "stdio_tool_activity_contracts|res://tests/stdio_tool_activity_contract_test.gd",
+    "system_editor_control_contracts|res://tests/system_editor_control_contract_test.gd",
+    "system_index_impl_contracts|res://tests/system_index_impl_contract_test.gd",
+    "system_script_executor_contracts|res://tests/system_script_executor_contract_test.gd",
+    "system_settings_dialog_contracts|res://tests/system_settings_dialog_contract_test.gd",
+    "tool_activity_registry_contracts|res://tests/tool_activity_registry_contract_test.gd",
+    "tool_lsp_diagnostics_adapter_contracts|res://tests/tool_lsp_diagnostics_adapter_contract_test.gd",
+    "user_tool_maintenance_service_contracts|res://tests/user_tool_maintenance_service_contract_test.gd",
+    "user_tool_watch_service_contracts|res://tests/user_tool_watch_service_contract_test.gd"
+)
+
+function Assert-DiscoveredCasesAreManifested {
+    param(
+        [object[]]$Discovered,
+        [string[]]$ManifestCaseNames,
+        [string[]]$LegacyAllowlist = @()
+    )
+
+    $manifestLookup = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($caseName in $ManifestCaseNames) {
+        [void]$manifestLookup.Add([string]$caseName)
+    }
+    $legacyLookup = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($legacyCase in $LegacyAllowlist) {
+        [void]$legacyLookup.Add([string]$legacyCase)
+    }
+
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($case in $Discovered) {
+        $name = [string]$case.name
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        if ($manifestLookup.Contains($name)) {
+            continue
+        }
+
+        $status = ""
+        if ($case.PSObject.Properties.Name -contains "status") {
+            $status = [string]$case.status
+        }
+        if ($status -eq "headless_incompatible" -or $status -eq "load_error" -or $status -eq "missing_run_case") {
+            continue
+        }
+
+        $path = ""
+        if ($case.PSObject.Properties.Name -contains "path") {
+            $path = [string]$case.path
+        }
+        $caseKey = "{0}|{1}" -f $name, $path
+        if ($legacyLookup.Contains($caseKey)) {
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            $missing.Add($name)
+        }
+        else {
+            $missing.Add("$name ($path)")
+        }
+    }
+
+    if ($missing.Count -gt 0) {
+        $joined = [string]::Join(", ", [string[]]$missing.ToArray())
+        throw "Discovered runnable contract case(s) missing from scripts\contract_case_manifest.json or the legacy allowlist: $joined"
+    }
+}
+
 function Get-SuiteResults {
     param(
         [object]$HarnessJson
@@ -457,6 +580,7 @@ function Invoke-HarnessProcessCleanup {
 
 $GodotExe = Resolve-GodotPath -GodotPath $GodotPath
 $ContractCaseManifest = Get-ContractCaseManifest -ManifestPath (Join-Path $repoRoot "scripts\contract_case_manifest.json")
+$ManifestCaseNames = @($ContractCaseManifest | ForEach-Object { [string]$_.name })
 $RequiredCases = @($ContractCaseManifest | Where-Object { [string]$_.v1_4_disposition -ne "expires" } | ForEach-Object { [string]$_.name })
 $IsolatedHeadlessCases = @($ContractCaseManifest | Where-Object { [string]$_.name -eq "tools_tab_rendering_contracts" } | ForEach-Object { [string]$_.name })
 $EditorProbeCases = @($ContractCaseManifest | Where-Object { [string]$_.speed -eq "editor" -or [string]$_.isolation -eq "editor" } | ForEach-Object { [string]$_.name })
@@ -484,10 +608,14 @@ try {
 
     $manifestResult = Invoke-Harness -Description "List harness cases" -ExtraArgs @("--list-cases", "--keep-stage-root")
     $TimingRecords.Add((New-TimingRecord -Name "List harness cases" -Duration $manifestResult.Duration))
+    $discoveredManifestEntries = @()
     $discoveredCases = @()
     if ($manifestResult.Json -ne $null -and $manifestResult.Json.PSObject.Properties.Name -contains "discovered") {
-        $discoveredCases = @($manifestResult.Json.discovered | ForEach-Object { [string]$_.name })
+        $discoveredManifestEntries = @($manifestResult.Json.discovered)
+        $discoveredCases = @($discoveredManifestEntries | ForEach-Object { [string]$_.name })
     }
+
+    Assert-DiscoveredCasesAreManifested -Discovered $discoveredManifestEntries -ManifestCaseNames $ManifestCaseNames -LegacyAllowlist $LegacyUnmanifestedContractCases
 
     foreach ($caseName in $RequiredCases) {
         if ($discoveredCases -notcontains $caseName) {
