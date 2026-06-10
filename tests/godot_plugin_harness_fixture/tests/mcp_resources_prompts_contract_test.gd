@@ -824,7 +824,8 @@ func _has_icon_metadata(entry: Dictionary) -> bool:
 		if not (icon is Dictionary):
 			return false
 		var icon_dict := icon as Dictionary
-		if not str(icon_dict.get("src", "")).begins_with("godot-dotnet-mcp://icons/"):
+		var src := str(icon_dict.get("src", ""))
+		if not src.begins_with("data:image/svg+xml,") or src.find("%3Csvg") == -1:
 			return false
 		if str(icon_dict.get("mimeType", "")) != "image/svg+xml":
 			return false
