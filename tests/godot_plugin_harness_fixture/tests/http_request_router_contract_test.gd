@@ -135,13 +135,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(streamable_accept_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":2}":
 		return _failure("HTTP request router did not allow Streamable HTTP Accept headers for POST /mcp.")
 
-	var protocol_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": "1900-01-01"})
+	var protocol_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router did not reject unsupported MCP-Protocol-Version headers.")
 	if str(protocol_denied_response.get("expected_protocol_version", "")) != ProtocolFactsScript.get_protocol_version():
 		return _failure("HTTP request router should report the expected MCP protocol version.")
 
-	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if str(protocol_allowed_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":3}":
 		return _failure("HTTP request router rejected the configured MCP-Protocol-Version header.")
 
