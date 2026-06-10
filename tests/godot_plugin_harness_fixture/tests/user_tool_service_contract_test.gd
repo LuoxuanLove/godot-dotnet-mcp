@@ -10,6 +10,7 @@ const AUDIT_LOG_PATH := UserDataPathsScript.USER_TOOL_AUDIT_LOG_PATH
 var _service = null
 var _created_script_path := ""
 var _legacy_prefixed_script_path := ""
+var _invalid_name_script_path := ""
 var _invalid_script_path := ""
 var _backup_path := ""
 var _backup_uid_path := ""
@@ -79,6 +80,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not _has_warning_code(legacy_entry.get("tool_name_warnings", []), "user_prefix_normalized"):
 		return _failure("User tool catalog should warn when declared names include the public user_ prefix.")
 
+	_invalid_name_script_path = "%s/invalid_mcp_name_%d.gd" % [CUSTOM_TOOLS_DIR, randi()]
+	var invalid_name_file := FileAccess.open(_invalid_name_script_path, FileAccess.WRITE)
+	if invalid_name_file == null:
+		return _failure("User tool naming diagnostics fixture should create an invalid-name script.")
+	invalid_name_file.store_string(_build_invalid_name_tool())
+	invalid_name_file.close()
+
+	tools = _service.list_user_tools()
+	var invalid_name_entry := _find_script_entry(tools, _invalid_name_script_path)
+	if invalid_name_entry.is_empty():
+		return _failure("User tool catalog should include invalid-name tool fixtures for diagnostics.")
+	if not _has_warning_code(invalid_name_entry.get("tool_name_warnings", []), "invalid_mcp_public_tool_name"):
+		return _failure("User tool catalog should warn when public names violate MCP 2025-11-25 naming guidance.")
+
 	var compatibility_report: Dictionary = _service.get_compatibility_report()
 	if int(compatibility_report.get("user_tool_count", 0)) <= 0:
 		return _failure("Compatibility report should include at least one user tool.")
@@ -86,9 +101,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Compatibility report should include the created scaffold as compatible.")
 	if not _contains_script_path((compatibility_report.get("needs_review", []) as Array), _legacy_prefixed_script_path):
 		return _failure("Compatibility report should route user tool naming warnings to needs_review.")
+	if not _contains_script_path((compatibility_report.get("needs_review", []) as Array), _invalid_name_script_path):
+		return _failure("Compatibility report should route invalid MCP public user tool names to needs_review.")
 	var legacy_compat_entry := _find_script_entry(compatibility_report.get("needs_review", []) as Array, _legacy_prefixed_script_path)
 	if int(legacy_compat_entry.get("naming_warning_count", 0)) <= 0:
 		return _failure("Compatibility report should count user tool naming warnings.")
+	var invalid_create_result: Dictionary = _service.create_tool_scaffold(
+		("a").repeat(140),
+		"",
+		"Invalid MCP public name",
+		true,
+		"user_tool_service_contract_test"
+	)
+	if bool(invalid_create_result.get("success", false)):
+		return _failure("User tool scaffold creation should reject invalid MCP public tool names.")
+	if str((invalid_create_result.get("data", {}) as Dictionary).get("public_tool_name", "")).length() <= 128:
+		return _failure("Invalid scaffold rejection should report the rejected overlong public tool name.")
 
 	var audit_entries: Array[Dictionary] = _service.get_audit_entries(20, "create_user_tool")
 	if not _contains_script_path(audit_entries, _created_script_path):
@@ -157,6 +185,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"last_error": "unknown",
 			"discovery_source": "watcher",
 			"last_refresh_reason": "file_changed"
+		},
+		{
+			"script_path": "res://addons/godot_dotnet_mcp/custom_tools/runtime_invalid_name_user_tool.gd",
+			"runtime_domain": "user/runtime_invalid_name_user_tool",
+			"version": 6,
+			"state": "reload_failed",
+			"active_calls": 0,
+			"pending_reload": false,
+			"removed_pending": false,
+			"last_loaded_at_unix": 0,
+			"last_error": "User tool declared an invalid MCP public tool name: user_bad/name",
+			"discovery_source": "watcher",
+			"last_refresh_reason": "file_changed"
 		}
 	])
 	if int(diagnostics.get("discovered_script_count", 0)) < 2:
@@ -170,7 +211,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Runtime diagnostics should classify invalid user tool scripts with missing definition guidance.")
 	if str(invalid_failure.get("recommended_action", "")).find("get_tools()") == -1:
 		return _failure("Runtime diagnostics should explain how to recover missing user tool definitions.")
-	if int(diagnostics.get("runtime_failed_count", 0)) != 2:
+	if int(diagnostics.get("runtime_failed_count", 0)) != 3:
 		return _failure("Runtime diagnostics should report executor-level runtime failures without counting healthy null-error slots.")
 	if not _contains_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd"):
 		return _failure("Runtime diagnostics should merge executor-level reload failures into failed loads.")
@@ -187,9 +228,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var unknown_failure := _find_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_unknown_user_tool.gd")
 	if str(unknown_failure.get("diagnostic_code", "")) != "user_tool_load_unknown":
 		return _failure("Runtime diagnostics should classify empty runtime load errors as unknown user tool loads.")
+	var invalid_name_runtime_failure := _find_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_invalid_name_user_tool.gd")
+	if str(invalid_name_runtime_failure.get("diagnostic_code", "")) != "invalid_mcp_public_tool_name":
+		return _failure("Runtime diagnostics should classify invalid MCP public user tool names.")
+	if str(invalid_name_runtime_failure.get("recommended_action", "")).find("ASCII") == -1:
+		return _failure("Runtime diagnostics should explain how to recover invalid MCP public user tool names.")
 	if _contains_failed_load(diagnostics.get("failed_loads", []), "res://addons/godot_dotnet_mcp/custom_tools/runtime_healthy_user_tool.gd"):
 		return _failure("Runtime diagnostics should not turn healthy null-error runtime slots into failed loads.")
-	if int(diagnostics.get("runtime_state_count", 0)) != 4:
+	if int(diagnostics.get("runtime_state_count", 0)) != 5:
 		return _failure("Runtime diagnostics should preserve runtime state snapshot entries.")
 	var watch_status = diagnostics.get("watch", {})
 	if not (watch_status is Dictionary) or not bool((watch_status as Dictionary).get("watching", false)):
@@ -233,6 +279,8 @@ func cleanup_case(_tree: SceneTree) -> void:
 	_remove_path("%s.uid" % _created_script_path)
 	_remove_path(_legacy_prefixed_script_path)
 	_remove_path("%s.uid" % _legacy_prefixed_script_path)
+	_remove_path(_invalid_name_script_path)
+	_remove_path("%s.uid" % _invalid_name_script_path)
 	_remove_path(_invalid_script_path)
 	_remove_path("%s.uid" % _invalid_script_path)
 	_remove_path(_backup_path)
@@ -242,6 +290,7 @@ func cleanup_case(_tree: SceneTree) -> void:
 	_service = null
 	_created_script_path = ""
 	_legacy_prefixed_script_path = ""
+	_invalid_name_script_path = ""
 	_invalid_script_path = ""
 	_backup_path = ""
 	_backup_uid_path = ""
@@ -344,6 +393,37 @@ func execute(tool_name_value: String, _args: Dictionary) -> Dictionary:
 		_:
 			return {"success": false, "error": "Unknown user tool: %%s" %% tool_name_value}
 """ % [logical_name, logical_name]
+
+
+func _build_invalid_name_tool() -> String:
+	return """@tool
+extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
+
+const _SCAFFOLD_VERSION := "0.4.0"
+
+
+func get_registration() -> Dictionary:
+	return {
+		"category": "user",
+		"domain_key": "user",
+		"hot_reloadable": true,
+		"display_name": "Invalid Name Tool"
+	}
+
+
+func get_tools() -> Array[Dictionary]:
+	return [
+		{
+			"name": "bad/name",
+			"description": "Invalid public user tool name",
+			"inputSchema": {"type": "object", "properties": {}}
+		}
+	]
+
+
+func execute(tool_name_value: String, _args: Dictionary) -> Dictionary:
+	return {"success": false, "error": "Unknown user tool: %s" % tool_name_value}
+"""
 
 
 func _failure(message: String) -> Dictionary:

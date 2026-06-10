@@ -2,6 +2,7 @@
 extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools"
 const _CUSTOM_TOOLS_ENABLED_SETTING = "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const _CUSTOM_TOOLS_ENABLED_SETTING_LEGACY = "user_tools/enable_runtime_loading"
@@ -347,6 +348,10 @@ func _instantiate_user_tool(script_path: String, force_reload: bool) -> Dictiona
 		if logical_name.is_empty():
 			MCPDebugBuffer.record("warning", "user", "User tool declared empty logical name: %s" % script_path)
 			return {"success": false, "error": "User tool declared an empty tool name"}
+		var public_tool_name := _build_public_tool_name(logical_name)
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(public_tool_name):
+			MCPDebugBuffer.record("warning", "user", "User tool declared invalid MCP public tool name %s in %s" % [public_tool_name, script_path])
+			return {"success": false, "error": "User tool declared an invalid MCP public tool name: %s" % public_tool_name}
 		var tool_copy: Dictionary = (tool_def as Dictionary).duplicate(true)
 		tool_copy["name"] = logical_name
 		tool_copy["source"] = "user_tool"
@@ -451,6 +456,10 @@ func _normalize_logical_tool_name(tool_name: String) -> String:
 	if normalized.begins_with("user_"):
 		normalized = normalized.trim_prefix("user_")
 	return normalized
+
+
+func _build_public_tool_name(logical_name: String) -> String:
+	return "user_%s" % logical_name
 
 
 func _is_runtime_loading_enabled() -> bool:
