@@ -15,7 +15,6 @@ var _handle_editor_lifecycle_post_request := Callable()
 var _build_cors_response := Callable()
 var _allowed_cors_origins: Array[String] = []
 var _allowed_hosts: Array[String] = []
-var _generated_session_id := ""
 
 
 func configure(context = null) -> void:
@@ -208,13 +207,17 @@ func _resolve_mcp_session_id(headers: Dictionary) -> String:
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
 	if not requested_session.is_empty():
 		return requested_session
-	if _generated_session_id.is_empty():
-		_generated_session_id = "%s-%s-%s" % [
-			SESSION_ID_PREFIX,
-			MCPProtocolFacts.get_server_version().replace(".", "-"),
-			str(get_instance_id())
-		]
-	return _generated_session_id
+	return _generate_mcp_session_id()
+
+
+func _generate_mcp_session_id() -> String:
+	return "%s-%s-%s-%s-%s" % [
+		SESSION_ID_PREFIX,
+		MCPProtocolFacts.get_server_version().replace(".", "-"),
+		str(Time.get_ticks_usec()),
+		str(get_instance_id()),
+		str(randi())
+	]
 
 
 func _accepts_json_response(accept_header: String) -> bool:

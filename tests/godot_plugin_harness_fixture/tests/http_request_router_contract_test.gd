@@ -92,8 +92,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"host": "localhost:3000", "accept": "application/json"}
 	)
 	var repeated_generated_session_headers: Dictionary = repeated_generated_session_response.get("_headers", {})
-	if str(repeated_generated_session_headers.get("Mcp-Session-Id", "")) != generated_session_id:
-		return _failure("HTTP request router should keep generated MCP session ids stable per router instance.")
+	if str(repeated_generated_session_headers.get("Mcp-Session-Id", "")) == generated_session_id:
+		return _failure("HTTP request router should not reuse one generated MCP session id for independent requests.")
 
 	var second_router = HttpRequestRouterScript.new()
 	second_router.configure(context)
@@ -105,7 +105,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	)
 	var second_router_headers: Dictionary = second_router_response.get("_headers", {})
 	if str(second_router_headers.get("Mcp-Session-Id", "")) == generated_session_id:
-		return _failure("HTTP request router should not reuse one fixed generated MCP session id across router instances.")
+		return _failure("HTTP request router should not reuse one generated MCP session id across router instances.")
 
 	var existing_session_response: Dictionary = await router.route_request_async(
 		"POST",
