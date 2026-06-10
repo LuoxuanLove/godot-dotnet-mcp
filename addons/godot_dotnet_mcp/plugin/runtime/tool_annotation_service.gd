@@ -4,7 +4,6 @@ class_name ToolAnnotationService
 
 const READ_ONLY_ACTIONS := {
 	"analyze": true,
-	"capture": true,
 	"check": true,
 	"describe": true,
 	"diagnose": true,
@@ -145,11 +144,15 @@ static func _infer_action_behavior_hints(actions: Array) -> Dictionary:
 			all_known_mutations_are_idempotent = false
 
 	if has_mutation:
-		return {
-			"readOnlyHint": false,
-			"destructiveHint": has_destructive,
-			"idempotentHint": all_known_mutations_are_idempotent
+		var mutation_hints := {
+			"readOnlyHint": false
 		}
+		if has_destructive:
+			mutation_hints["destructiveHint"] = true
+		elif all_known_mutations_are_idempotent and not has_read_only:
+			mutation_hints["destructiveHint"] = false
+			mutation_hints["idempotentHint"] = true
+		return mutation_hints
 	if has_read_only:
 		return {
 			"readOnlyHint": true,
@@ -165,8 +168,7 @@ static func _infer_name_behavior_hints(tool_name: String) -> Dictionary:
 		if lowered.contains(str(marker)):
 			return {
 				"readOnlyHint": false,
-				"destructiveHint": true,
-				"idempotentHint": false
+				"destructiveHint": true
 			}
 	for marker in READ_ONLY_NAME_MARKERS:
 		if lowered.contains(str(marker)):

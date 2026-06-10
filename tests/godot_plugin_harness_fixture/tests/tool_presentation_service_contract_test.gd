@@ -22,6 +22,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
 		"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 	}, {
+		"name": "system_editor_evidence",
+		"description": "Capture editor evidence",
+		"category": "system",
+		"domain_key": "core",
+		"enabled": true,
+		"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["capture"]}}}
+	}, {
 		"name": "system_project_index_build",
 		"description": "Build project index",
 		"category": "system",
@@ -43,6 +50,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"enabled": true,
 			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
 			"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
+		}, {
+			"name": "editor_evidence",
+			"full_name": "system_editor_evidence",
+			"category": "system",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["capture"]}}}
 		}, {
 			"name": "project_index_build",
 			"full_name": "system_project_index_build",
@@ -107,7 +120,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_index_build := _find_node(system_category.get("children", []), "tool", "system_project_index_build")
 	if project_index_build.is_empty() or _find_node(project_index_build.get("children", []), "atomic", "script_inspect").is_empty():
 		return _failure("Presentation service should expose project index build through its real filesystem/script/resource atomic chain.")
-	var disabled_presentation := ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, [], ["system_project_state", "system_runtime_control", "system_project_index_build"])
+	var disabled_presentation := ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, [], ["system_project_state", "system_runtime_control", "system_editor_evidence", "system_project_index_build"])
 	var disabled_project_state := _find_node((_find_node((_find_node(disabled_presentation.get("toolTree", []), "domain", "core")).get("children", []), "category", "system")).get("children", []), "tool", "system_project_state")
 	if disabled_project_state.is_empty() or bool(disabled_project_state.get("enabled", true)):
 		return _failure("Presentation service should let disabled_tools override tool enabled metadata.")
@@ -153,6 +166,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_annotations = mcp_runtime_control.get("annotations", {})
 	if not (runtime_annotations is Dictionary) or bool((runtime_annotations as Dictionary).get("readOnlyHint", true)):
 		return _failure("Presentation service should not mark mixed runtime control actions as read-only.")
+	if (runtime_annotations as Dictionary).has("idempotentHint"):
+		return _failure("Presentation service should not claim mixed runtime control actions are idempotent.")
+	var mcp_editor_evidence := _find_mcp_tool(mcp_tools, "system_editor_evidence")
+	if mcp_editor_evidence.is_empty():
+		return _failure("Presentation service should include editor evidence in MCP tools/list output.")
+	var evidence_annotations = mcp_editor_evidence.get("annotations", {})
+	if not (evidence_annotations is Dictionary) or bool((evidence_annotations as Dictionary).get("readOnlyHint", true)):
+		return _failure("Presentation service should not mark capture actions as read-only because they can write evidence files.")
+	if (evidence_annotations as Dictionary).has("destructiveHint") and bool((evidence_annotations as Dictionary).get("destructiveHint", false)) == false:
+		return _failure("Presentation service should not claim capture actions are non-destructive.")
 	var explicit_output_schema = mcp_runtime_control.get("outputSchema", {})
 	if not (explicit_output_schema is Dictionary) or not (((explicit_output_schema as Dictionary).get("properties", {}) as Dictionary).has("data")):
 		return _failure("Presentation service should preserve explicit tool outputSchema definitions.")
