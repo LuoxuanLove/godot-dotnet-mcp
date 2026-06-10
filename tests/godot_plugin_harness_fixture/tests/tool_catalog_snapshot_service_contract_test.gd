@@ -138,6 +138,9 @@ class FakeToolLoader:
 	func get_tool_loader_status() -> Dictionary:
 		return {"healthy": true, "status": "ready", "tool_count": 4, "exposed_tool_count": 3}
 
+	func get_performance_summary() -> Dictionary:
+		return {"startup_ms": 12.5, "tool_calls": []}
+
 	func is_public_removed_tool(tool_name: String) -> bool:
 		return tool_name == "system_tool_activity"
 
@@ -148,7 +151,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(snapshot.get("success", false)):
 		return _failure("Snapshot build should succeed for a loader with exposed definitions.")
 
-	for key in ["exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status"]:
+	for key in ["exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status", "performance"]:
 		if not snapshot.has(key):
 			return _failure("Snapshot should include %s." % key)
 
@@ -197,14 +200,38 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var status: Dictionary = snapshot.get("tool_loader_status", {})
 	if str(status.get("status", "")) != "ready":
 		return _failure("Snapshot should preserve loader status.")
+	var performance: Dictionary = snapshot.get("performance", {})
+	if float(performance.get("startup_ms", 0.0)) != 12.5:
+		return _failure("Snapshot should preserve loader performance.")
 	status["status"] = "mutated"
 	var second_snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader)
 	if str((second_snapshot.get("tool_loader_status", {}) as Dictionary).get("status", "")) != "ready":
 		return _failure("Snapshot should return isolated status dictionaries.")
 
+	var mcp_payload: Dictionary = ToolCatalogSnapshotService.build_mcp_tools_list_payload(snapshot)
+	if _tool_names(mcp_payload.get("tools", [])) != ["system_project_state", "system_settings_dialog"]:
+		return _failure("Snapshot MCP payload helper should build tools/list from filtered exposed tools.")
+	if not (mcp_payload.get("toolTree", []) is Array) or (mcp_payload.get("toolTree", []) as Array).is_empty():
+		return _failure("Snapshot MCP payload helper should preserve tool tree metadata.")
+	if not (mcp_payload.get("toolGroups", []) is Array) or (mcp_payload.get("toolGroups", []) as Array).is_empty():
+		return _failure("Snapshot MCP payload helper should preserve tool group metadata.")
+
+	var presentation_payload: Dictionary = ToolCatalogSnapshotService.build_presentation_payload(snapshot)
+	if _tool_names(presentation_payload.get("tools", [])) != ["system_project_state", "system_settings_dialog"]:
+		return _failure("Snapshot presentation payload helper should enrich filtered exposed tools.")
+	if int(presentation_payload.get("tool_count", 0)) != visible_tools.size():
+		return _failure("Snapshot presentation payload helper should use filtered visible tool count.")
+	if int(presentation_payload.get("exposed_tool_count", 0)) != exposed_tools.size():
+		return _failure("Snapshot presentation payload helper should use filtered exposed tool count.")
+	if float((presentation_payload.get("performance", {}) as Dictionary).get("startup_ms", 0.0)) != 12.5:
+		return _failure("Snapshot presentation payload helper should preserve performance metadata.")
+
 	var unavailable: Dictionary = ToolCatalogSnapshotService.build_snapshot(null)
 	if bool(unavailable.get("success", true)) or str(unavailable.get("error", "")) != "tool_loader_unavailable":
 		return _failure("Snapshot should fail clearly when the loader is unavailable.")
+	var empty_mcp_payload: Dictionary = ToolCatalogSnapshotService.build_mcp_tools_list_payload(unavailable)
+	if not (empty_mcp_payload.get("tools", []) is Array) or not (empty_mcp_payload.get("tools", []) as Array).is_empty():
+		return _failure("Snapshot MCP payload helper should return an empty tools/list payload when unavailable.")
 
 	return {
 		"name": "tool_catalog_snapshot_service_contracts",

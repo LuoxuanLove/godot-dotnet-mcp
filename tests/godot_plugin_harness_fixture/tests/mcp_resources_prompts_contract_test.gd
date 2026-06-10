@@ -504,6 +504,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_recent_tool := str(((stdio_recent as Array)[0] as Dictionary).get("tool", ""))
 	if stdio_recent_tool != "system_project_state":
 		return _failure("stdio activity resources should preserve the stdio tool call record.")
+	var stdio_tools_list_response: Dictionary = stdio_server._handle_tools_list(25)
+	var stdio_tools_list_result = stdio_tools_list_response.get("result", {})
+	if not (stdio_tools_list_result is Dictionary):
+		return _failure("stdio tools/list should return a result object.")
+	var stdio_tools = (stdio_tools_list_result as Dictionary).get("tools", [])
+	if not (stdio_tools is Array) or (stdio_tools as Array).is_empty():
+		return _failure("stdio tools/list should return exposed tools from the catalog snapshot.")
+	if not ((stdio_tools_list_result as Dictionary).get("toolTree", []) is Array):
+		return _failure("stdio tools/list should preserve snapshot tool tree metadata.")
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",

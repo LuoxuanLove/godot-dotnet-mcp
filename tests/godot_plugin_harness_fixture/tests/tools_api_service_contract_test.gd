@@ -22,6 +22,12 @@ class FakeToolLoader:
 			"domain_key": "core",
 			"enabled": true,
 			"inputSchema": {"type": "object", "properties": {}}
+		}, {
+			"name": "system_tool_activity",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
 		}]
 
 	func get_tool_definitions() -> Array:
@@ -35,6 +41,12 @@ class FakeToolLoader:
 			"system": [{
 				"name": "project_state",
 				"full_name": "system_project_state",
+				"category": "system",
+				"enabled": true,
+				"inputSchema": {"type": "object", "properties": {}}
+			}, {
+				"name": "tool_activity",
+				"full_name": "system_tool_activity",
 				"category": "system",
 				"enabled": true,
 				"inputSchema": {"type": "object", "properties": {}}
@@ -57,6 +69,9 @@ class FakeToolLoader:
 
 	func get_performance_summary() -> Dictionary:
 		return {"slow_operations": 0}
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return tool_name == "system_tool_activity"
 
 
 class FakeCallbacks:
@@ -87,9 +102,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var response: Dictionary = service.build_tools_list_response()
 	var tools = response.get("tools", [])
 	if not (tools is Array) or (tools as Array).size() != 2:
-		return _failure("Tools API service did not preserve the exposed tool definitions.")
+		return _failure("Tools API service did not preserve the filtered exposed tool definitions.")
 	if int(response.get("tool_count", 0)) != 2:
-		return _failure("Tools API service did not preserve the tool count.")
+		return _failure("Tools API service did not preserve the filtered visible tool count.")
+	if _contains_tool_name_recursive(response, "system_tool_activity"):
+		return _failure("Tools API service should consume the snapshot-filtered tool catalog.")
 	if not (response.get("toolTree", []) is Array) or (response.get("toolTree", []) as Array).is_empty():
 		return _failure("Tools API service did not expose the unified tool tree.")
 	if not (response.get("toolGroups", []) is Array) or (response.get("toolGroups", []) as Array).is_empty():
@@ -118,3 +135,22 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _contains_tool_name_recursive(value, tool_name: String) -> bool:
+	if value is String:
+		return str(value) == tool_name
+	if value is Array:
+		for item in value:
+			if _contains_tool_name_recursive(item, tool_name):
+				return true
+		return false
+	if value is Dictionary:
+		var dict := value as Dictionary
+		for key in ["name", "fullName", "full_name"]:
+			if str(dict.get(key, "")) == tool_name:
+				return true
+		for nested in dict.values():
+			if _contains_tool_name_recursive(nested, tool_name):
+				return true
+	return false

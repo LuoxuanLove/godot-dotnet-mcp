@@ -4,7 +4,7 @@ class_name MCPResourcesService
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
-const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
@@ -436,23 +436,10 @@ func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
 		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
-	var exposed_tools = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = loader.get_all_tools_by_category()
-	elif loader.has_method("get_tools_by_category"):
-		all_tools_by_category = loader.get_tools_by_category()
-	var domain_states := []
-	if loader.has_method("get_domain_states"):
-		domain_states = loader.get_domain_states()
-	var presentation = ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
-	return {
-		"tools": ToolPresentationServiceScript.build_mcp_tool_list(exposed_tools, presentation),
-		"presentationVersion": int(presentation.get("presentationVersion", 1)),
-		"toolTree": presentation.get("toolTree", []),
-		"toolGroups": presentation.get("toolGroups", []),
-		"toolLoaderStatus": _get_loader_status_safe()
-	}
+	var snapshot := ToolCatalogSnapshotService.build_snapshot(loader)
+	var payload := ToolCatalogSnapshotService.build_mcp_tools_list_payload(snapshot)
+	payload["toolLoaderStatus"] = snapshot.get("tool_loader_status", _get_loader_status_safe())
+	return payload
 
 
 func _build_exposed_tool_catalog_payload() -> Dictionary:

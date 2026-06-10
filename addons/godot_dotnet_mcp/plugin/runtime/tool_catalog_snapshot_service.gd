@@ -30,7 +30,51 @@ static func build_snapshot(loader) -> Dictionary:
 		"category_states": category_states,
 		"domain_states": domain_states,
 		"presentation": presentation.duplicate(true),
-		"tool_loader_status": _get_loader_status(loader)
+		"tool_loader_status": _get_loader_status(loader),
+		"performance": _get_performance_summary(loader)
+	}
+
+
+static func build_mcp_tools_list_payload(snapshot: Dictionary) -> Dictionary:
+	if not bool(snapshot.get("success", false)):
+		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": []}
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	return {
+		"tools": ToolPresentationServiceScript.build_mcp_tool_list(exposed_tools, presentation),
+		"presentationVersion": int(presentation.get("presentationVersion", 1)),
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", [])
+	}
+
+
+static func build_presentation_payload(snapshot: Dictionary) -> Dictionary:
+	if not bool(snapshot.get("success", false)):
+		return {
+			"tools": [],
+			"domain_states": [],
+			"tool_count": 0,
+			"exposed_tool_count": 0,
+			"tool_loader_status": snapshot.get("tool_loader_status", {}),
+			"performance": {},
+			"presentationVersion": 1,
+			"toolTree": [],
+			"toolGroups": []
+		}
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var visible_tools: Array = snapshot.get("visible_tools", [])
+	var domain_states: Array = snapshot.get("domain_states", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	return {
+		"tools": ToolPresentationServiceScript.enrich_tools_for_presentation(exposed_tools, presentation),
+		"domain_states": domain_states,
+		"tool_count": visible_tools.size(),
+		"exposed_tool_count": exposed_tools.size(),
+		"tool_loader_status": snapshot.get("tool_loader_status", {}),
+		"performance": snapshot.get("performance", {}),
+		"presentationVersion": int(presentation.get("presentationVersion", 1)),
+		"toolTree": presentation.get("toolTree", []),
+		"toolGroups": presentation.get("toolGroups", [])
 	}
 
 
@@ -139,6 +183,14 @@ static func _get_loader_status(loader) -> Dictionary:
 		var status = loader.get_tool_loader_status()
 		if status is Dictionary:
 			return (status as Dictionary).duplicate(true)
+	return {}
+
+
+static func _get_performance_summary(loader) -> Dictionary:
+	if loader.has_method("get_performance_summary"):
+		var performance = loader.get_performance_summary()
+		if performance is Dictionary:
+			return (performance as Dictionary).duplicate(true)
 	return {}
 
 
