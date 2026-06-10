@@ -27,7 +27,7 @@ func dispose() -> void:
 
 
 func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
-	return {
+	var result := {
 		"prompts": [{
 			"name": PROJECT_ORIENTATION_PROMPT,
 			"title": _text("prompt_project_orientation_title", "Project orientation workflow"),
@@ -82,6 +82,10 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			]
 		}]
 	}
+	for index in range((result.get("prompts", []) as Array).size()):
+		var prompt := (result["prompts"] as Array)[index] as Dictionary
+		(result["prompts"] as Array)[index] = _with_prompt_metadata(prompt, _prompt_icon_for_name(str(prompt.get("name", ""))))
+	return result
 
 
 func build_prompts_get_result(params: Dictionary) -> Dictionary:
@@ -314,6 +318,37 @@ func _text(key: String, fallback: String) -> String:
 	if text == key or text.is_empty():
 		return fallback
 	return text
+
+
+func _with_prompt_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
+	var metadata := entry.duplicate(true)
+	metadata["icons"] = [_icon_metadata(icon_name)]
+	return metadata
+
+
+func _icon_metadata(name: String) -> Dictionary:
+	return {
+		"name": name,
+		"mimeType": "image/svg+xml"
+	}
+
+
+func _prompt_icon_for_name(prompt_name: String) -> String:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return "compass"
+		CONTENT_AUTHORING_PROMPT:
+			return "pen-tool"
+		DEBUG_TRIAGE_PROMPT:
+			return "bug"
+		REFERENCE_INTEGRITY_PROMPT:
+			return "link"
+		RUNTIME_VALIDATION_PROMPT:
+			return "play-circle"
+		EDITOR_UI_CONTROL_PROMPT:
+			return "panel-top"
+		_:
+			return "message-square-text"
 
 
 func _prompt_response(description: String, text: String) -> Dictionary:
