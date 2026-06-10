@@ -89,7 +89,7 @@ ACTIONS:
 - get_info: Get file information
 
 NOTE: For script files, prefer using script_read, script_inspect, or script_edit_gd tools.
-For resources, prefer using resource_manage tools.
+For resources, prefer resource_query, resource_create, or resource_file_ops tools.
 
 EXAMPLES:
 - Read file: {"action": "read", "path": "res://data/config.json"}

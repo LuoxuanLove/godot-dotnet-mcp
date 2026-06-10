@@ -89,17 +89,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var reload_result: Dictionary = executor.execute("file_ops", {
 		"action": "reload",
-		"path": MATERIAL_MOVED_PATH
+		"source": MATERIAL_MOVED_PATH
 	})
 	if not bool(reload_result.get("success", false)):
-		return _failure("Resource reload failed through the split file ops service.")
+		return _failure("Resource reload failed through the split file ops service with schema-advertised source.")
 
 	var delete_result: Dictionary = executor.execute("file_ops", {
 		"action": "delete",
-		"path": MATERIAL_MOVED_PATH
+		"source": MATERIAL_MOVED_PATH
 	})
 	if not bool(delete_result.get("success", false)):
-		return _failure("Resource delete failed through the split file ops service.")
+		return _failure("Resource delete failed through the split file ops service with schema-advertised source.")
 
 	if not _create_test_texture(TEXTURE_PATH):
 		return _failure("Failed to create a texture fixture for the split texture service.")

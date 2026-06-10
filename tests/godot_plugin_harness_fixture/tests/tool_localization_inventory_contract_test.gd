@@ -25,6 +25,8 @@ const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"tool_system_scene_analyze_desc",
 	"tool_system_editor_log_name",
 	"tool_system_editor_log_desc",
+	"tool_resource_manage_name",
+	"tool_resource_manage_desc",
 	"tool_debug_log_name",
 	"tool_debug_log_desc"
 ]
