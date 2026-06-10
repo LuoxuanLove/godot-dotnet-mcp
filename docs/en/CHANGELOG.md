@@ -73,6 +73,7 @@ Target version: 1.4.0.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.
+- Added initialize capability guard coverage so optional MCP 2025-11-25 Sampling, Elicitation, and Tasks capabilities cannot be advertised before implementation.
 
 ## [1.3.0] - 2026-06-08
 

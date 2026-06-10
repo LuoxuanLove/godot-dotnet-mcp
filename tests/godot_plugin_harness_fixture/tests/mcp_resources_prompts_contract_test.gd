@@ -98,6 +98,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("resources capability should declare listChanged=false for static built-ins.")
 	if bool(((capabilities as Dictionary).get("prompts", {}) as Dictionary).get("listChanged", true)):
 		return _failure("prompts capability should declare listChanged=false for static built-ins.")
+	for optional_capability in ["sampling", "elicitation", "tasks"]:
+		if (capabilities as Dictionary).has(optional_capability):
+			return _failure("initialize should not advertise optional MCP 2025-11-25 capability before implementation: %s" % optional_capability)
 
 	var resources_response: Dictionary = await _json_rpc("resources/list", {}, 2)
 	var resources_result = resources_response.get("result", {})
