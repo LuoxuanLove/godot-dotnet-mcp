@@ -13,6 +13,10 @@ Target version: 1.4.0.
 - Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 
+### Internal
+
+- Updated PR policy and version-policy CI to validate pull requests targeting the v1.4 refactor integration branch while keeping release version metadata changes limited to release branches targeting `dev`.
+
 ## [1.3.0] - 2026-06-08
 
 ### Added
