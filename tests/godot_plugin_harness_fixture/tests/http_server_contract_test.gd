@@ -219,10 +219,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (rpc_removed_filesystem_file_result is Dictionary) or not bool((rpc_removed_filesystem_file_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should reject removed filesystem_file legacy calls.")
 	var rpc_removed_filesystem_file_structured = (rpc_removed_filesystem_file_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_filesystem_file_structured is Dictionary) or bool((rpc_removed_filesystem_file_structured as Dictionary).get("success", true)):
-		return _failure("Removed filesystem_file should return failing structuredContent.")
-	if str((rpc_removed_filesystem_file_structured as Dictionary).get("error", "")).find("filesystem_file") == -1:
-		return _failure("Removed filesystem_file error should include the legacy tool name.")
+	if not _is_removed_filesystem_file_tool(rpc_removed_filesystem_file_structured, "read_file"):
+		return _failure("Removed filesystem_file should return removed_public_tool guidance for system_project_files(read_file).")
 
 	var rpc_removed_catalog: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -415,6 +413,29 @@ func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, repla
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_filesystem_file_tool(structured, replacement_action: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != "filesystem_file":
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://script/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_project_files" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
 
 
 func _first_replacement_arguments(data) -> Dictionary:

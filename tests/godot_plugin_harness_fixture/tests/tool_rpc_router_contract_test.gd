@@ -160,7 +160,8 @@ class FakeToolLoader:
 			"system_scene_analyze",
 			"system_scene_validate",
 			"system_tool_catalog",
-			"system_tool_activity"
+			"system_tool_activity",
+			"filesystem_file"
 		].has(tool_name)
 
 	func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
@@ -173,6 +174,11 @@ class FakeToolLoader:
 			return _removed_plugin_maintenance_tool(
 				tool_name,
 				_plugin_update_replacement_arguments(str(arguments.get("action", "")), arguments)
+			)
+		if tool_name == "filesystem_file":
+			return _removed_filesystem_file_tool(
+				tool_name,
+				_filesystem_file_replacement_arguments(str(arguments.get("action", "")), arguments)
 			)
 		return {}
 
@@ -214,6 +220,53 @@ class FakeToolLoader:
 				return {"action": "start_update"}
 			_:
 				return {"action": "status"}
+
+	func _removed_filesystem_file_tool(tool_name: String, replacement_arguments: Dictionary) -> Dictionary:
+		return {
+			"success": false,
+			"error": "%s has been removed from the public tool surface. Call system_project_files instead." % tool_name,
+			"data": {
+				"error_type": "removed_public_tool",
+				"removed_tool": tool_name,
+				"replacement_tools": [{
+					"name": "system_project_files",
+					"arguments": replacement_arguments
+				}],
+				"replacement_methods": ["tools/call", "resources/read", "resources/templates/list"],
+				"replacement_resources": [
+					"godot-dotnet-mcp://scene/{path}",
+					"godot-dotnet-mcp://script/{path}",
+					"godot-dotnet-mcp://resource/{path}"
+				]
+			}
+		}
+
+	func _filesystem_file_replacement_arguments(action: String, arguments: Dictionary) -> Dictionary:
+		match action:
+			"read", "exists", "get_info":
+				return {"action": "read_file", "path": str(arguments.get("path", ""))}
+			"write", "append":
+				return {
+					"action": "write_file",
+					"path": str(arguments.get("path", "")),
+					"content": str(arguments.get("content", ""))
+				}
+			"delete":
+				return {"action": "delete_file", "path": str(arguments.get("path", ""))}
+			"copy":
+				return {
+					"action": "copy_file",
+					"source": str(arguments.get("source", "")),
+					"dest": str(arguments.get("dest", ""))
+				}
+			"move":
+				return {
+					"action": "move_file",
+					"source": str(arguments.get("source", "")),
+					"dest": str(arguments.get("dest", ""))
+				}
+			_:
+				return {"action": "read_file", "path": str(arguments.get("path", ""))}
 
 	func get_all_tools_by_category() -> Dictionary:
 		return {
@@ -406,6 +459,7 @@ class FakeCallbacks:
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
+			or tool_name == "filesystem_file"
 		)
 
 	func is_tool_exposed(tool_name: String) -> bool:
@@ -419,6 +473,7 @@ class FakeCallbacks:
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
+			or tool_name == "filesystem_file"
 		)
 
 	func log(message: String, level: String) -> void:
@@ -453,7 +508,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "filesystem_file"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
 	for tool_entry in tools:
@@ -642,10 +697,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(removed_filesystem_file_result.get("isError", false)):
 		return _failure("Tool RPC router should reject removed filesystem_file legacy calls.")
 	var removed_filesystem_file_structured = removed_filesystem_file_result.get("structuredContent", {})
-	if not (removed_filesystem_file_structured is Dictionary) or bool((removed_filesystem_file_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router removed filesystem_file should return failing structuredContent.")
-	if str((removed_filesystem_file_structured as Dictionary).get("error", "")).find("filesystem_file") == -1:
-		return _failure("Tool RPC router removed filesystem_file error should include the legacy tool name.")
+	if not _is_removed_filesystem_file_tool(removed_filesystem_file_structured, "read_file"):
+		return _failure("Tool RPC router removed filesystem_file should return removed_public_tool guidance for system_project_files(read_file).")
+	callbacks.disabled_tools["filesystem_file"] = true
+	var disabled_removed_filesystem_file_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "filesystem_file",
+		"arguments": {"action": "read", "path": "res://project.godot"}
+	})
+	callbacks.disabled_tools.clear()
+	if not bool(disabled_removed_filesystem_file_result.get("isError", false)):
+		return _failure("Tool RPC router should keep removed filesystem_file guidance routable even when the legacy tool is disabled.")
+	var disabled_removed_filesystem_file_structured = disabled_removed_filesystem_file_result.get("structuredContent", {})
+	if not _is_removed_filesystem_file_tool(disabled_removed_filesystem_file_structured, "read_file"):
+		return _failure("Tool RPC router disabled filesystem_file path should still return removed_public_tool guidance.")
 
 	MCPDebugBuffer.clear()
 	var failing_callbacks = FakeCallbacks.new()
@@ -792,6 +856,29 @@ func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, repla
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_filesystem_file_tool(structured, replacement_action: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != "filesystem_file":
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://script/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_project_files" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
 
 
 func _first_replacement_arguments(data) -> Dictionary:

@@ -16,7 +16,8 @@ const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_scene_validate": true,
 	"system_editor_log": true,
 	"system_tool_catalog": true,
-	"system_tool_activity": true
+	"system_tool_activity": true,
+	"filesystem_file": true
 }
 
 var _registry := MCPToolRegistry.new()
@@ -231,6 +232,22 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 				"godot-dotnet-mcp://logs/editor/output",
 				"godot-dotnet-mcp://logs/editor/errors",
 				"godot-dotnet-mcp://diagnostics/summary"
+			]
+		)
+	if tool_name == "filesystem_file":
+		var action := str(arguments.get("action", "")).strip_edges()
+		return _removed_public_tool_result(
+			tool_name,
+			"Use system_project_files for project file actions, filesystem_file_read/write/manage as internal split executors, or resource templates for read-only context.",
+			[{
+				"name": "system_project_files",
+				"arguments": _filesystem_file_replacement_arguments(action, arguments)
+			}],
+			["tools/call", "resources/read", "resources/templates/list"],
+			[
+				"godot-dotnet-mcp://scene/{path}",
+				"godot-dotnet-mcp://script/{path}",
+				"godot-dotnet-mcp://resource/{path}"
 			]
 		)
 	return {}
@@ -1146,6 +1163,34 @@ func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> D
 			return {"action": "start_update"}
 		_:
 			return {"action": "status"}
+
+
+func _filesystem_file_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
+	match action:
+		"read", "exists", "get_info":
+			return {"action": "read_file", "path": str(args.get("path", ""))}
+		"write", "append":
+			return {
+				"action": "write_file",
+				"path": str(args.get("path", "")),
+				"content": str(args.get("content", ""))
+			}
+		"delete":
+			return {"action": "delete_file", "path": str(args.get("path", ""))}
+		"copy":
+			return {
+				"action": "copy_file",
+				"source": str(args.get("source", "")),
+				"dest": str(args.get("dest", ""))
+			}
+		"move":
+			return {
+				"action": "move_file",
+				"source": str(args.get("source", "")),
+				"dest": str(args.get("dest", ""))
+			}
+		_:
+			return {"action": "read_file", "path": str(args.get("path", ""))}
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:

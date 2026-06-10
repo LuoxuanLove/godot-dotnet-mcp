@@ -29,6 +29,7 @@
   { "name": "plugin_runtime_state_contracts", "layer": "plugin", "domain": "runtime", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "server_runtime_settings_projection_service_contracts", "layer": "server", "domain": "settings", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "external_host_removal_audit", "layer": "plugin", "domain": "external_host", "behavior": "removal_guard", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
+  { "name": "public_tool_surface_removal_guard", "layer": "protocol", "domain": "tools", "behavior": "removal_guard", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "system_help_contracts", "layer": "system", "domain": "help", "behavior": "deprecation", "speed": "headless", "isolation": "pure", "v1_4_disposition": "delete" },
   { "name": "system_inspector_contracts", "layer": "system", "domain": "inspector", "behavior": "current", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "keep" },
   { "name": "json_rpc_request_service_contracts", "layer": "transport", "domain": "json_rpc", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
