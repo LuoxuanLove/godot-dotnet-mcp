@@ -28,6 +28,7 @@ Target version: 1.4.0.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
 - Changed MCP `tools/list` to return only the flat callable tool list; tree/group presentation metadata now stays in catalog resources, while flat tool-entry presentation metadata remains in `/api/tools`.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
+- Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
 ### Fixed
@@ -53,6 +54,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
 - Added removal guard coverage so `system_tool_catalog` stays absent from tools/list, tool-tree metadata, catalog resources, catalog search, and localization inventory while preserving explicit legacy-call guidance.
 - Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
+- Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.

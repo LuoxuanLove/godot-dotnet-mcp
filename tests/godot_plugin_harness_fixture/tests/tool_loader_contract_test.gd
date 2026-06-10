@@ -160,6 +160,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+	var all_tool_names: Array[String] = []
+	for tool_def in all_tools:
+		all_tool_names.append(str(tool_def.get("name", "")))
+	if all_tool_names.has("debug_log"):
+		return _failure("Tool loader should remove the legacy debug_log definition.")
+	for canonical_debug_tool_name in ["debug_log_write", "debug_log_buffer"]:
+		if not all_tool_names.has(canonical_debug_tool_name):
+			return _failure("Tool loader should keep canonical debug replacement tool '%s'." % canonical_debug_tool_name)
+	if _loader.is_tool_exposed("debug_log"):
+		return _failure("Tool loader should not keep legacy debug_log callable through public exposure.")
+	var removed_debug_result: Dictionary = await _loader.execute_tool_async("debug", "log", {"action": "print", "message": "removed debug_log"})
+	if bool(removed_debug_result.get("success", true)):
+		return _failure("Tool loader should not execute removed debug_log through the debug domain.")
 
 	_loader.set("_tool_definitions_by_category", {
 		"user": [

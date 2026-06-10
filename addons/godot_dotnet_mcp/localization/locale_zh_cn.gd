@@ -74,7 +74,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings": "设置",
 	"port": "端口：",
 	"auto_start": "自动启动",
-	"debug_log": "调试日志",
 	"btn_start": "启动",
 	"btn_close": "关闭",
 	"btn_restart": "重启",
@@ -1092,7 +1091,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_plugin_developer_usage_guide_desc": "返回插件推荐使用方式、重载策略和开发/调试循环建议",
 
 	# Debug tools
-	"tool_debug_log_name": "日志",
 	"tool_debug_log_write_name": "日志写入",
 	"tool_debug_log_buffer_name": "日志缓冲",
 	"tool_debug_runtime_bridge_name": "运行时桥",
@@ -1101,7 +1099,6 @@ const TRANSLATIONS: Dictionary = {
 	"tool_debug_profiler_name": "分析器",
 	"tool_debug_editor_log_name": "编辑器日志原子接口",
 	"tool_debug_class_db_name": "类数据库",
-	"tool_debug_log_desc": "打印调试消息和错误",
 	"tool_debug_log_write_desc": "输出信息、警告、错误与富文本日志",
 	"tool_debug_log_buffer_desc": "读取或清空缓冲中的 MCP 调试日志事件",
 	"tool_debug_runtime_bridge_desc": "读取运行中项目的结构化运行时桥事件与调试会话状态",
