@@ -26,14 +26,18 @@ Target version: 1.4.0.
 - Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
+- Changed MCP `tools/list` to return only the flat callable tool list; tree/group presentation metadata now stays in catalog resources, while flat tool-entry presentation metadata remains in `/api/tools`.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Removed the legacy internal `filesystem_file` compatibility alias; use `filesystem_file_read`, `filesystem_file_write`, and `filesystem_file_manage` instead.
+- Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
+- Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
 ### Fixed
 
 - Fixed the default tool profile so registered split visual authoring categories for materials, shaders, lighting, particles, TileMaps, and geometry are visible without switching to the full profile.
 - Fixed stdio `tools/call` disabled-tool checks to use the shared loader enabled state before exposure checks, matching HTTP transport error semantics.
+- Fixed `prompts/get` argument validation so non-string prompt arguments and invalid `include_runtime` true/false strings are rejected instead of being coerced.
 
 ### Documentation
 
@@ -53,9 +57,11 @@ Target version: 1.4.0.
 - Added removal guard coverage so `system_tool_catalog` stays absent from tools/list, tool-tree metadata, catalog resources, catalog search, and localization inventory while preserving explicit legacy-call guidance.
 - Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
 - Added removal guard coverage so `filesystem_file` cannot reappear in loader definitions, direct filesystem-domain execution, or localization inventory while the split filesystem tools stay available.
+- Added removal guard coverage so `resource_manage` cannot reappear in loader definitions, direct resource-domain execution, or localization inventory while the split resource tools stay available.
+- Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
-- Updated version-policy CI to compare v1.4 pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
+- Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 
 ## [1.3.0] - 2026-06-08
 

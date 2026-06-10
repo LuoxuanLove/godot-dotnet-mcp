@@ -13,20 +13,6 @@ const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/dotnet_bridge/
 func get_tools() -> Array[Dictionary]:
 	return [
 		{
-			"name": "log",
-			"description": "COMPATIBILITY ALIAS: Legacy debug_log tool entry kept for existing MCP wrappers.",
-			"compatibility_alias": true,
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"action": {"type": "string"},
-					"message": {"type": "string"},
-					"limit": {"type": "integer"}
-				},
-				"required": ["action"]
-			}
-		},
-		{
 			"name": "log_write",
 			"description": """LOG WRITE: Write messages to Godot's console/output.
 
@@ -316,8 +302,6 @@ EXAMPLES:
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
-		"log":
-			return _execute_log_compat(args)
 		"log_write":
 			return _execute_log_write(args)
 		"log_buffer":
@@ -349,22 +333,22 @@ func _execute_log_write(args: Dictionary) -> Dictionary:
 			if message.is_empty():
 				return _error("Message is required")
 			print("[MCP] %s" % message)
-			MCPDebugBuffer.record("info", "debug_log", message)
+			MCPDebugBuffer.record("info", "debug_log_write", message)
 		"warning":
 			if message.is_empty():
 				return _error("Message is required")
 			push_warning("[MCP] %s" % message)
-			MCPDebugBuffer.record("warning", "debug_log", message)
+			MCPDebugBuffer.record("warning", "debug_log_write", message)
 		"error":
 			if message.is_empty():
 				return _error("Message is required")
 			push_error("[MCP] %s" % message)
-			MCPDebugBuffer.record("error", "debug_log", message)
+			MCPDebugBuffer.record("error", "debug_log_write", message)
 		"rich":
 			if message.is_empty():
 				return _error("Message is required")
 			print_rich(message)
-			MCPDebugBuffer.record("info", "debug_log", message)
+			MCPDebugBuffer.record("info", "debug_log_write", message)
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -392,13 +376,6 @@ func _execute_log_buffer(args: Dictionary) -> Dictionary:
 			return _success({"count": 0}, "Debug buffer cleared")
 		_:
 			return _error("Unknown action: %s" % str(args.get("action", "")))
-
-
-func _execute_log_compat(args: Dictionary) -> Dictionary:
-	var action = str(args.get("action", ""))
-	if action in ["print", "warning", "error", "rich"]:
-		return _execute_log_write(args)
-	return _execute_log_buffer(args)
 
 
 func _execute_runtime_bridge(args: Dictionary) -> Dictionary:

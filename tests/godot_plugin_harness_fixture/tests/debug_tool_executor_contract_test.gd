@@ -33,16 +33,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 9:
-		return _failure("Debug executor should expose 9 tool definitions after the split.")
+	if tool_defs.size() != 8:
+		return _failure("Debug executor should expose 8 canonical tool definitions without the compatibility log alias.")
 
 	var expected_names := ["log_write", "log_buffer", "runtime_bridge", "dotnet", "performance", "profiler", "editor_log", "class_db"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
+	if actual_names.has("log"):
+		return _failure("Debug executor should not expose the removed compatibility log alias.")
 	for expected_name in expected_names:
 		if not actual_names.has(expected_name):
 			return _failure("Debug executor is missing tool definition '%s'." % expected_name)
+	var removed_log_result: Dictionary = executor.execute("log", {"action": "print", "message": "removed debug_log"})
+	if bool(removed_log_result.get("success", true)):
+		return _failure("Debug executor should not execute the removed compatibility log alias.")
 
 	var clear_buffer_result: Dictionary = executor.execute("log_buffer", {"action": "clear_buffer"})
 	if not bool(clear_buffer_result.get("success", false)):

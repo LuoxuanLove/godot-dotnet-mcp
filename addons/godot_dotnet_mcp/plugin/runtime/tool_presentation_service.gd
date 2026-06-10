@@ -124,30 +124,18 @@ static func enrich_tools_for_presentation(tools: Array, presentation: Dictionary
 	return enriched
 
 
-static func build_mcp_tool_list(tools: Array, presentation: Dictionary = {}) -> Array[Dictionary]:
-	var source_tools := tools
-	if not presentation.is_empty():
-		source_tools = enrich_tools_for_presentation(tools, presentation)
+static func build_mcp_tool_list(tools: Array, _presentation: Dictionary = {}) -> Array[Dictionary]:
 	var tools_list: Array[Dictionary] = []
-	for tool_def in source_tools:
+	for tool_def in tools:
 		if not (tool_def is Dictionary):
 			continue
 		var tool := tool_def as Dictionary
 		var item := {
 			"name": tool.get("name", ""),
 			"description": tool.get("description", ""),
-			"category": tool.get("category", ""),
-			"domainKey": tool.get("domain_key", tool.get("domainKey", "other")),
-			"loadState": tool.get("load_state", tool.get("loadState", "definitions_only")),
-			"source": tool.get("source", "builtin"),
-			"enabled": bool(tool.get("enabled", true)),
 			"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
 			"outputSchema": _get_tool_output_schema(tool)
 		}
-		if tool.has("groupPath"):
-			item["groupPath"] = tool.get("groupPath", [])
-		if tool.has("treeChildren"):
-			item["treeChildren"] = tool.get("treeChildren", [])
 		tools_list.append(item)
 	return tools_list
 

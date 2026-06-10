@@ -17,7 +17,8 @@ const PUBLIC_REMOVED_MCP_TOOLS := {
 	"system_editor_log": true,
 	"system_tool_catalog": true,
 	"system_tool_activity": true,
-	"filesystem_file": true
+	"filesystem_file": true,
+	"resource_manage": true
 }
 
 var _registry := MCPToolRegistry.new()
@@ -249,6 +250,44 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 				"godot-dotnet-mcp://script/{path}",
 				"godot-dotnet-mcp://resource/{path}"
 			]
+		)
+	if tool_name == "resource_manage":
+		var action := str(arguments.get("action", "")).strip_edges()
+		var replacement_tool_name := "resource_file_ops"
+		var replacement_arguments: Dictionary = {}
+		match action:
+			"create":
+				replacement_tool_name = "resource_create"
+				replacement_arguments = {
+					"type": arguments.get("type", ""),
+					"path": arguments.get("path", "")
+				}
+			"copy", "move":
+				replacement_arguments = {
+					"action": action,
+					"source": arguments.get("source", ""),
+					"dest": arguments.get("dest", "")
+				}
+			"delete", "reload":
+				replacement_arguments = {
+					"action": action,
+					"source": arguments.get("path", arguments.get("source", ""))
+				}
+			"list", "search", "get_info", "get_dependencies":
+				replacement_tool_name = "resource_query"
+				replacement_arguments = arguments.duplicate(true)
+			_:
+				replacement_arguments = arguments.duplicate(true)
+		replacement_arguments.erase("_mcp_context")
+		return _removed_public_tool_result(
+			tool_name,
+			"Use resource_create for creation, resource_file_ops for copy/move/delete/reload, or resource_query for listing and dependency queries.",
+			[{
+				"name": replacement_tool_name,
+				"arguments": replacement_arguments
+			}],
+			["tools/call", "resources/read", "resources/list"],
+			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
 		)
 	return {}
 
