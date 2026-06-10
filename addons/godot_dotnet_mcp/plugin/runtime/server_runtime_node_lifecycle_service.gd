@@ -112,6 +112,11 @@ func ensure_stdio_server_node(plugin_root: EditorPlugin, existing_stdio_server: 
 		var stdio_disabled_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server.set_disabled_tools(settings.get("disabled_tools", []))
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.set_disabled_tools", stdio_disabled_started)
+	if stdio_server.has_method("set_framing_mode"):
+		var stdio_framing_started = PluginSelfDiagnosticStore.begin_phase()
+		var stdio_framing_mode := str(settings.get("stdio_framing_mode", "newline"))
+		stdio_server.set_framing_mode(stdio_framing_mode)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "stdio_server.set_framing_mode", stdio_framing_started, {"mode": stdio_framing_mode})
 	if stdio_server.has_method("start"):
 		var stdio_start_started = PluginSelfDiagnosticStore.begin_phase()
 		stdio_server.start()
