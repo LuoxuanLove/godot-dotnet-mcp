@@ -133,6 +133,16 @@ Download the ZIP archive from GitHub Releases and extract it into the project.
 
 Invoke-GuardrailScenario -Name "forbidden zip archive install wording" -RootReadmeText $zipArchiveReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
 
+$zipDownloadReadme = @"
+# Fixture
+
+## Installation
+
+Download a zip from GitHub Releases and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip download install wording" -RootReadmeText $zipDownloadReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
 $releaseDistReadme = @"
 # Fixture
 
