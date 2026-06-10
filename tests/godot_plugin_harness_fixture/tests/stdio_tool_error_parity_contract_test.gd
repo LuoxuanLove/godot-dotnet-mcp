@@ -6,6 +6,10 @@ const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const ToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
 const ToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd")
 
+const MAX_STDIN_CONTENT_BYTES := 1024 * 1024
+const MAX_STDIN_HEADER_BYTES := 64 * 1024
+const MAX_STDIN_PENDING_BYTES := MAX_STDIN_CONTENT_BYTES + MAX_STDIN_HEADER_BYTES
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -230,8 +234,12 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 	if not bool(oversized_check.get("success", false)):
 		return oversized_check
 
+	var max_content_check := await _assert_max_content_length_stdio_frame(stdio_server)
+	if not bool(max_content_check.get("success", false)):
+		return max_content_check
+
 	var pending_overflow := PackedByteArray()
-	pending_overflow.resize(1048577)
+	pending_overflow.resize(MAX_STDIN_PENDING_BYTES + 1)
 	pending_overflow.fill(65)
 	stdio_server.set("_buffer", pending_overflow)
 	stdio_server.set("_last_written_response", {})
@@ -277,6 +285,34 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 		return _failure("Stdio parser should drain valid pipelined frames exactly.")
 
 	stdio_server.stop()
+	return {"success": true, "error": ""}
+
+
+func _assert_max_content_length_stdio_frame(stdio_server) -> Dictionary:
+	var body_prefix := "{\"jsonrpc\":\"2.0\",\"id\":23,\"method\":\"ping\",\"params\":{\"padding\":\""
+	var body_suffix := "\"}}"
+	var padding_bytes := MAX_STDIN_CONTENT_BYTES - body_prefix.to_utf8_buffer().size() - body_suffix.to_utf8_buffer().size()
+	if padding_bytes < 0:
+		return _failure("Maximum stdio Content-Length fixture overhead exceeds the content limit.")
+	var body := body_prefix + "A".repeat(padding_bytes) + body_suffix
+	if body.to_utf8_buffer().size() != MAX_STDIN_CONTENT_BYTES:
+		return _failure("Maximum stdio Content-Length fixture must be exactly %d bytes." % MAX_STDIN_CONTENT_BYTES)
+	var frame := "Content-Length: %d\r\n\r\n%s" % [body.to_utf8_buffer().size(), body]
+	if frame.to_utf8_buffer().size() > MAX_STDIN_PENDING_BYTES:
+		return _failure("Maximum stdio Content-Length fixture must fit inside the pending buffer allowance.")
+
+	stdio_server.set("_buffer", frame.to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed):
+		return _failure("Maximum stdio Content-Length should parse successfully.")
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		return _failure("Maximum stdio Content-Length should drain the pending buffer.")
+	var response: Dictionary = stdio_server.get("_last_written_response")
+	if int(response.get("id", 0)) != 23:
+		return _failure("Maximum stdio Content-Length should preserve the response id.")
+	if response.has("error"):
+		return _failure("Maximum stdio Content-Length should not emit a framing error.")
 	return {"success": true, "error": ""}
 
 

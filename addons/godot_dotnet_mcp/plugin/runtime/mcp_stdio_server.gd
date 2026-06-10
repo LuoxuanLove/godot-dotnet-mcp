@@ -36,8 +36,9 @@ var _last_written_response: Dictionary = {}
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
 const MAX_STDIN_BYTES_PER_TICK := 8192
-const MAX_STDIN_PENDING_BYTES := 1024 * 1024
 const MAX_STDIN_CONTENT_LENGTH := 1024 * 1024
+const MAX_STDIN_HEADER_BYTES := 64 * 1024
+const MAX_STDIN_PENDING_BYTES := MAX_STDIN_CONTENT_LENGTH + MAX_STDIN_HEADER_BYTES
 
 
 func _ready() -> void:
