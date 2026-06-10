@@ -284,7 +284,8 @@ func _reload_slot(script_path: String, reason: String) -> void:
 		slot["last_error"] = str(load_result.get("error", "reload_failed"))
 		slot["last_refresh_reason"] = reason
 		slot["discovery_source"] = _get_discovery_source(reason)
-		slot["instance"] = old_instance
+		slot["instance"] = null
+		slot["tool_defs"] = []
 		_slots_by_script[script_path] = slot
 		MCPDebugBuffer.record("warning", "user", "Reload failed for %s: %s" % [script_path, slot["last_error"]])
 		return

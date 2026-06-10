@@ -1,16 +1,19 @@
 extends RefCounted
 
+const UserExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/user/executor.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const UserDataPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const BACKUP_DIR := "res://addons/godot_dotnet_mcp/custom_tools/.backup"
 const AUDIT_LOG_PATH := UserDataPathsScript.USER_TOOL_AUDIT_LOG_PATH
+const USER_TOOLS_ENABLED_SETTING := "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 
 
 var _service = null
 var _created_script_path := ""
 var _legacy_prefixed_script_path := ""
 var _invalid_name_script_path := ""
+var _reload_invalid_name_script_path := ""
 var _invalid_script_path := ""
 var _backup_path := ""
 var _backup_uid_path := ""
@@ -117,6 +120,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("User tool scaffold creation should reject invalid MCP public tool names.")
 	if str((invalid_create_result.get("data", {}) as Dictionary).get("public_tool_name", "")).length() <= 128:
 		return _failure("Invalid scaffold rejection should report the rejected overlong public tool name.")
+	var reload_guard_result := _verify_failed_reload_removes_public_user_tool()
+	if not bool(reload_guard_result.get("success", false)):
+		return reload_guard_result
 
 	var audit_entries: Array[Dictionary] = _service.get_audit_entries(20, "create_user_tool")
 	if not _contains_script_path(audit_entries, _created_script_path):
@@ -281,6 +287,8 @@ func cleanup_case(_tree: SceneTree) -> void:
 	_remove_path("%s.uid" % _legacy_prefixed_script_path)
 	_remove_path(_invalid_name_script_path)
 	_remove_path("%s.uid" % _invalid_name_script_path)
+	_remove_path(_reload_invalid_name_script_path)
+	_remove_path("%s.uid" % _reload_invalid_name_script_path)
 	_remove_path(_invalid_script_path)
 	_remove_path("%s.uid" % _invalid_script_path)
 	_remove_path(_backup_path)
@@ -291,6 +299,7 @@ func cleanup_case(_tree: SceneTree) -> void:
 	_created_script_path = ""
 	_legacy_prefixed_script_path = ""
 	_invalid_name_script_path = ""
+	_reload_invalid_name_script_path = ""
 	_invalid_script_path = ""
 	_backup_path = ""
 	_backup_uid_path = ""
@@ -352,6 +361,63 @@ func _find_failed_load(entries, script_path: String) -> Dictionary:
 	return {}
 
 
+func _verify_failed_reload_removes_public_user_tool() -> Dictionary:
+	var previous_setting_exists := ProjectSettings.has_setting(USER_TOOLS_ENABLED_SETTING)
+	var previous_setting_value = ProjectSettings.get_setting(USER_TOOLS_ENABLED_SETTING, false)
+	ProjectSettings.set_setting(USER_TOOLS_ENABLED_SETTING, true)
+
+	_reload_invalid_name_script_path = "%s/reload_invalid_mcp_name_%d.gd" % [CUSTOM_TOOLS_DIR, randi()]
+	var logical_name := "reload_valid_%d" % randi()
+	var valid_file := FileAccess.open(_reload_invalid_name_script_path, FileAccess.WRITE)
+	if valid_file == null:
+		_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+		return _failure("User tool reload guard fixture should create a valid script.")
+	valid_file.store_string(_build_reload_guard_user_tool(logical_name))
+	valid_file.close()
+
+	var executor = UserExecutorScript.new()
+	var initial_tools: Array[Dictionary] = executor.get_tools()
+	if not _array_has_tool_name(initial_tools, logical_name):
+		_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+		return _failure("User tool executor should expose the initial valid custom tool.")
+
+	var invalid_file := FileAccess.open(_reload_invalid_name_script_path, FileAccess.WRITE)
+	if invalid_file == null:
+		_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+		return _failure("User tool reload guard fixture should rewrite the script with an invalid name.")
+	invalid_file.store_string(_build_invalid_name_tool())
+	invalid_file.close()
+	executor.request_reload_by_script(_reload_invalid_name_script_path, "contract_invalid_name_reload")
+	var reloaded_tools: Array[Dictionary] = executor.get_tools()
+	var runtime_state := executor.get_runtime_state_snapshot()
+	_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+
+	if _array_has_tool_name(reloaded_tools, logical_name):
+		return _failure("Failed user tool reload should remove the previously exposed public tool name.")
+	if _array_has_tool_name(reloaded_tools, "bad/name"):
+		return _failure("Failed user tool reload should never expose the invalid tool name.")
+	var reload_state := _find_script_entry(runtime_state, _reload_invalid_name_script_path)
+	if str(reload_state.get("state", "")) != "reload_failed":
+		return _failure("Failed user tool reload should retain a reload_failed runtime diagnostic state.")
+	if str(reload_state.get("last_error", "")).find("invalid MCP public tool name") == -1:
+		return _failure("Failed user tool reload should explain the invalid MCP public tool name.")
+	return {"success": true}
+
+
+func _restore_user_tools_enabled_setting(previous_exists: bool, previous_value) -> void:
+	if previous_exists:
+		ProjectSettings.set_setting(USER_TOOLS_ENABLED_SETTING, previous_value)
+	else:
+		ProjectSettings.set_setting(USER_TOOLS_ENABLED_SETTING, null)
+
+
+func _array_has_tool_name(entries: Array, expected_name: String) -> bool:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == expected_name:
+			return true
+	return false
+
+
 func _remove_path(path: String) -> void:
 	if path.is_empty():
 		return
@@ -381,6 +447,32 @@ func get_tools() -> Array[Dictionary]:
 		{
 			"name": "user_%s",
 			"description": "Legacy prefixed user tool",
+			"inputSchema": {"type": "object", "properties": {}}
+		}
+	]
+
+
+func execute(tool_name_value: String, _args: Dictionary) -> Dictionary:
+	match tool_name_value:
+		"%s":
+			return {"success": true}
+		_:
+			return {"success": false, "error": "Unknown user tool: %%s" %% tool_name_value}
+""" % [logical_name, logical_name]
+
+
+func _build_reload_guard_user_tool(logical_name: String) -> String:
+	return """@tool
+extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
+
+const _SCAFFOLD_VERSION := "0.4.0"
+
+
+func get_tools() -> Array[Dictionary]:
+	return [
+		{
+			"name": "%s",
+			"description": "Reload guard user tool",
 			"inputSchema": {"type": "object", "properties": {}}
 		}
 	]
