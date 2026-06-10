@@ -87,6 +87,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary):
 		return _failure("initialize should return a result object.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("initialize should advertise the MCP 2025-11-25 protocol version.")
+	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
+	if not (server_info is Dictionary):
+		return _failure("initialize should expose serverInfo as an object.")
+	if str((server_info as Dictionary).get("name", "")) != ProtocolFactsScript.get_server_name():
+		return _failure("initialize serverInfo should include the protocol facts server name.")
+	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("initialize serverInfo should include the protocol facts server description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")

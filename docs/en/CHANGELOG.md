@@ -30,6 +30,7 @@ Target version: 1.4.0.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
+- Changed the default MCP protocol facts to `2025-11-25` and added `serverInfo.description` metadata to initialize responses.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
@@ -56,6 +57,7 @@ Target version: 1.4.0.
 - Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
 - Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
+- Extended protocol facts parity coverage to include the server description used by initialize metadata.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
 - Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
