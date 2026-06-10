@@ -92,6 +92,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bool(blocked_write.get("success", false)) or str(blocked_write.get("error", "")) != "precheck_confirmation_required":
 		return _failure("Opencode write should stop when confirmation is required.")
 
+	_write_text(OPENCODE_FILE, JSON.stringify({
+		"mcp": {
+			"godot-mcp": {
+				"transport": "stdio",
+				"command": "custom-godot-mcp-wrapper"
+			}
+		}
+	}, "  "))
+	var opencode_stdio_conflict_preflight: Dictionary = transaction.call("preflight_write_config", "opencode", OPENCODE_FILE, opencode_config)
+	if str(opencode_stdio_conflict_preflight.get("status", "")) != "conflicting_server_entry":
+		return _failure("Opencode preflight should require confirmation before replacing an existing stdio server entry.")
+	if not bool(opencode_stdio_conflict_preflight.get("requires_confirmation", false)):
+		return _failure("Opencode stdio conflicting_server_entry should require confirmation.")
+
 	return {
 		"name": "client_config_file_transaction_contracts",
 		"success": true,
@@ -101,6 +115,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"backup_created": FileAccess.file_exists("%s.bak" % DESKTOP_FILE),
 			"desktop_conflict_status": str(conflicting_preflight.get("status", "")),
 			"opencode_preflight_status": str(opencode_preflight.get("status", "")),
+			"opencode_stdio_conflict_status": str(opencode_stdio_conflict_preflight.get("status", "")),
 			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false))
 		}
 	}

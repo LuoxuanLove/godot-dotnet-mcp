@@ -819,9 +819,6 @@ func _is_managed_server_entry(config_type: String, value) -> bool:
 		return false
 	var entry: Dictionary = value
 	var url := str(entry.get("url", "")).strip_edges().to_lower()
-	if config_type == "opencode":
-		var transport := str(entry.get("transport", "")).strip_edges().to_lower()
-		return transport == "stdio" or _is_local_mcp_url(url)
 	return _is_local_mcp_url(url)
 
 
