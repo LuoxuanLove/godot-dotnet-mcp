@@ -33,6 +33,7 @@ Target version: 1.4.0.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
+- Moved the debug domain implementation behind `tools/debug/executor.gd` while keeping `debug_tools.gd` as a thin compatibility wrapper for existing script references.
 
 ### Fixed
 
@@ -65,6 +66,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
 - Enforced absence guards for the removed audio, animation, signal, TileMap, and UI root monolith files now that their split executors own the domain implementations.
 - Enforced removal guards for the deleted filesystem root monolith, `filesystem_file` loader definition, direct filesystem-domain execution, and stale localization inventory keys.
+- Added debug executor source guards so the canonical debug implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
 - Added `ToolCatalogManifest` as the single static catalog fact source for built-in tool entries, domain metadata, public category exposure, and removed public tool guards while keeping the existing registry and manifest adapters.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
