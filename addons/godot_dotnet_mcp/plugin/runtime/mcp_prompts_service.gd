@@ -51,7 +51,7 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			"description": _text("prompt_debug_triage_desc", "Triage Godot editor, build, runtime, or DAP failures with an evidence-first order that separates logs, project state, runtime diagnostics, and debugger data."),
 			"arguments": [
 				{"name": "error_summary", "description": _text("prompt_arg_error_summary_desc", "Optional observed error text or symptom that should be preserved in the triage plan."), "required": false},
-				{"name": "include_runtime", "description": _text("prompt_arg_include_runtime_desc", "Optional boolean indicating whether runtime diagnostics and capability checks are needed."), "required": false}
+				{"name": "include_runtime", "description": _text("prompt_arg_include_runtime_desc", "Optional true/false string indicating whether runtime diagnostics and capability checks are needed."), "required": false}
 			]
 		}, {
 			"name": REFERENCE_INTEGRITY_PROMPT,
@@ -134,13 +134,14 @@ func _validate_prompt_argument_types(prompt_name: String, arguments: Dictionary)
 			continue
 		var expected_type := str(expected_types.get(name, ""))
 		var value = arguments.get(key)
+		if not (value is String):
+			return _prompt_argument_type_error(prompt_name, name, "a string")
 		match expected_type:
-			"boolean":
-				if typeof(value) != TYPE_BOOL:
-					return _prompt_argument_type_error(prompt_name, name, "a boolean")
+			"boolean_string":
+				if not _is_prompt_boolean_string(str(value)):
+					return _prompt_argument_type_error(prompt_name, name, "the string 'true' or 'false'")
 			"string":
-				if not (value is String):
-					return _prompt_argument_type_error(prompt_name, name, "a string")
+				pass
 	return {"success": true}
 
 
@@ -188,7 +189,7 @@ func _prompt_argument_types(prompt_name: String) -> Dictionary:
 		CONTENT_AUTHORING_PROMPT:
 			return {"scene_path": "string", "script_path": "string", "goal": "string"}
 		DEBUG_TRIAGE_PROMPT:
-			return {"error_summary": "string", "include_runtime": "boolean"}
+			return {"error_summary": "string", "include_runtime": "boolean_string"}
 		REFERENCE_INTEGRITY_PROMPT:
 			return {"script_path": "string", "scene_path": "string", "resource_path": "string", "binding_name": "string"}
 		RUNTIME_VALIDATION_PROMPT:
@@ -232,13 +233,25 @@ func _build_content_authoring_prompt(arguments: Dictionary) -> Dictionary:
 
 func _build_debug_triage_prompt(arguments: Dictionary) -> Dictionary:
 	var error_summary := str(arguments.get("error_summary", "")).strip_edges()
-	var include_runtime := bool(arguments.get("include_runtime", false))
+	var include_runtime := _parse_prompt_boolean_string(arguments, "include_runtime", false)
 	var text := _text("prompt_debug_triage_body", "Use when: Start here when a Godot editor warning, build failure, runtime exception, DAP symptom, or unclear failure needs diagnosis before choosing a fix. Recommended workflow: 1. Call system_project_state to separate compile errors, runtime state, file enumeration, capability blockers, and project health. 2. Read godot-dotnet-mcp://logs/editor/errors with resources/read for current Output warnings and errors before changing code. 3. If runtime evidence is relevant, call system_runtime_diagnose and include runtime capability state before proposing a fix. 4. If normal logs are insufficient or a debugger session is required, use system_dap_debugger(status), then initialize or attach, configure breakpoints, continue or step, inspect threads, stack_trace, and output, and terminate or disconnect cleanly. 5. Fix the root cause with the smallest relevant content, reference, or configuration workflow, then re-run the same diagnostic surface. Validation: cite the failing evidence, the changed evidence after the fix, any DAP session facts used, and any remaining unrelated warnings. Avoid: do not create a separate DAP-only workflow, do not hide symptoms with broad guards, and do not skip compile or runtime evidence.")
 	if include_runtime:
 		text += " Include runtime_diagnose output and runtime capability state before proposing fixes."
 	if not error_summary.is_empty():
 		text += " Observed error summary: %s." % error_summary
 	return _prompt_response(_text("prompt_debug_triage_title", "Debug triage workflow"), text)
+
+
+func _is_prompt_boolean_string(value: String) -> bool:
+	var normalized := value.strip_edges().to_lower()
+	return normalized == "true" or normalized == "false"
+
+
+func _parse_prompt_boolean_string(arguments: Dictionary, argument_name: String, default_value: bool) -> bool:
+	if not arguments.has(argument_name):
+		return default_value
+	var normalized := str(arguments.get(argument_name, "")).strip_edges().to_lower()
+	return normalized == "true"
 
 
 func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
