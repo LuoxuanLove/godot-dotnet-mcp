@@ -189,7 +189,8 @@ function Assert-CleanAssetLibraryInstallBuild {
     $requiredFalseProperties = @(
         "fixtureHasRoslynPackageReference",
         "exportedRoslynRuntimeSources",
-        "exportedDotnetBridgeSources"
+        "exportedDotnetBridgeSources",
+        "exportedCompanionSources"
     )
 
     foreach ($propertyName in $requiredFalseProperties) {

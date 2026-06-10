@@ -9,6 +9,10 @@ const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared
 
 const DOTNET_DEFAULT_TIMEOUT_SEC := 30
 const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+const PLUGIN_OWNED_CSPROJ_PREFIXES := [
+	"res://addons/godot_dotnet_mcp/dotnet_bridge/",
+	"res://addons/godot_dotnet_mcp/companion/"
+]
 
 func get_tools() -> Array[Dictionary]:
 	return [
@@ -613,7 +617,7 @@ func _find_csproj_files(dir_path: String) -> Array[String]:
 			results.append_array(_find_csproj_files(child_path))
 		elif entry.ends_with(".csproj"):
 			var normalized_child_path = _normalize_res_path(child_path)
-			if not _is_plugin_bridge_csproj(normalized_child_path):
+			if not _is_plugin_owned_csproj(normalized_child_path):
 				results.append(normalized_child_path)
 	dir.list_dir_end()
 
@@ -623,6 +627,14 @@ func _find_csproj_files(dir_path: String) -> Array[String]:
 
 func _is_plugin_bridge_csproj(path: String) -> bool:
 	return _normalize_res_path(path) == DOTNET_BRIDGE_CSPROJ_PATH
+
+
+func _is_plugin_owned_csproj(path: String) -> bool:
+	var normalized_path := _normalize_res_path(path)
+	for prefix in PLUGIN_OWNED_CSPROJ_PREFIXES:
+		if normalized_path.begins_with(prefix):
+			return true
+	return false
 
 
 func _run_dotnet_command(action: String, project_path: String, timeout_sec: int) -> Dictionary:

@@ -4,6 +4,11 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Project management tools for Godot MCP
 ## Provides project settings, export, and configuration management
 
+const PLUGIN_OWNED_CSPROJ_PREFIXES := [
+	"res://addons/godot_dotnet_mcp/dotnet_bridge/",
+	"res://addons/godot_dotnet_mcp/companion/"
+]
+
 
 func get_tools() -> Array[Dictionary]:
 	return [
@@ -291,10 +296,20 @@ func _find_csproj_files(dir_path: String) -> Array[String]:
 		if dir.current_is_dir():
 			results.append_array(_find_csproj_files(child_path))
 		elif entry.ends_with(".csproj"):
-			results.append(_normalize_res_path(child_path))
+			var normalized_child_path := _normalize_res_path(child_path)
+			if not _is_plugin_owned_csproj(normalized_child_path):
+				results.append(normalized_child_path)
 	dir.list_dir_end()
 	results.sort()
 	return results
+
+
+func _is_plugin_owned_csproj(path: String) -> bool:
+	var normalized_path := _normalize_res_path(path)
+	for prefix in PLUGIN_OWNED_CSPROJ_PREFIXES:
+		if normalized_path.begins_with(prefix):
+			return true
+	return false
 
 
 func _parse_csproj_file(path: String) -> Dictionary:
