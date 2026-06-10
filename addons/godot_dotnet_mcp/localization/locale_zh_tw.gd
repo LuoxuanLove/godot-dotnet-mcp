@@ -1106,7 +1106,7 @@ const TRANSLATIONS: Dictionary = {
 	"prompt_arg_binding_name_desc": "可選的 export、signal 或 NodePath 繫結名稱，供流程集中檢查。",
 	"prompt_arg_error_summary_desc": "可選的已觀察錯誤文字或症狀，應保留在分診計畫中。",
 	"prompt_arg_goal_desc": "可選的使用者目標，用來調整工作流程與驗證檢查。",
-	"prompt_arg_include_runtime_desc": "可選布林值，表示是否需要運行時診斷與能力檢查。",
+	"prompt_arg_include_runtime_desc": "可選 true/false 字串，表示是否需要運行時診斷與能力檢查。",
 	"prompt_arg_resource_path_desc": "可選的 res:// .tscn 或 .tres 路徑，用於審計 UID、fallback path 或腳本參照一致性。",
 	"prompt_arg_scene_path_desc": "可選的 res:// 場景路徑，修改前應先驗證與分析。",
 	"prompt_arg_script_path_desc": "可選的 C# 或 GDScript 路徑，用於檢查宣告。",

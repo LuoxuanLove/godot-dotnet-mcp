@@ -368,6 +368,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("prompts/list should localize prompt titles through the active locale.")
 	if str(orientation_metadata.get("description", "")).find("Godot 项目") == -1:
 		return _failure("prompts/list should localize prompt descriptions through the active locale.")
+	var debug_metadata := _find_prompt(prompts, DEBUG_TRIAGE_PROMPT)
+	var include_runtime_desc := _find_prompt_argument_description(debug_metadata, "include_runtime")
+	if include_runtime_desc.find("true") == -1 or include_runtime_desc.find("false") == -1 or include_runtime_desc.find("字符串") == -1:
+		return _failure("prompts/list should describe include_runtime as a true/false string in localized metadata.")
 
 	var orientation_prompt := await _get_prompt_text(PROJECT_ORIENTATION_PROMPT, {"goal": "understand project", "symbol": "Player"}, 11)
 	if not bool(orientation_prompt.get("ok", false)):
@@ -749,6 +753,16 @@ func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
 		if not argument_dict.has("required"):
 			return false
 	return true
+
+
+func _find_prompt_argument_description(prompt: Dictionary, argument_name: String) -> String:
+	var arguments = prompt.get("arguments", [])
+	if not (arguments is Array):
+		return ""
+	for argument in arguments:
+		if argument is Dictionary and str((argument as Dictionary).get("name", "")) == argument_name:
+			return str((argument as Dictionary).get("description", ""))
+	return ""
 
 
 func _prompt_text_is_actionable(text: String, required_fragments: Array[String]) -> bool:

@@ -1013,7 +1013,7 @@ const TRANSLATIONS: Dictionary = {
 	"prompt_arg_goal_desc": "可选用户目标，用于影响工作流和验证检查。",
 	"prompt_arg_symbol_desc": "可选类、脚本、场景或符号名称，用于构建项目索引后搜索。",
 	"prompt_arg_error_summary_desc": "可选错误文本或症状，排查计划中会保留该证据。",
-	"prompt_arg_include_runtime_desc": "可选布尔值，表示是否需要运行时诊断和能力检查。",
+	"prompt_arg_include_runtime_desc": "可选 true/false 字符串，表示是否需要运行时诊断和能力检查。",
 	"prompt_arg_script_path_desc": "可选 C# 或 GDScript 路径，用于检查脚本声明。",
 	"prompt_arg_resource_path_desc": "可选 res:// .tscn 或 .tres 路径，用于审计 UID、fallback path 或脚本引用一致性。",
 	"prompt_arg_binding_name_desc": "可选导出属性、信号或 NodePath 绑定名称，用于聚焦排查。",

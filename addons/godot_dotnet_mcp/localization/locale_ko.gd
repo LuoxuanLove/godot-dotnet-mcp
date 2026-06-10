@@ -779,6 +779,7 @@ const TRANSLATIONS: Dictionary = {
 	"prompt_editor_ui_control_title": "에디터 UI control workflow",
 	"prompt_editor_ui_control_desc": "컨트롤 Godot editor docks, panels, popups, screenshots, visible and hidden controls, and control-local input through editor APIs.",
 	"prompt_arg_goal_desc": "Optional user goal that should shape the 워크플로 and validation checks.",
+	"prompt_arg_include_runtime_desc": "Optional true/false string indicating whether runtime diagnostics and capability checks are needed.",
 	"prompt_arg_script_path_desc": "Optional C# or GD스크립트 path whose declarations should be inspected.",
 	"prompt_arg_binding_name_desc": "Optional export, signal, or 노드경로 binding name that should receive focused attention.",
 	"prompt_arg_ui_goal_desc": "Optional editor UI outcome such as opening a dock, clicking a 버튼, entering text, or verifying 레이아웃.",

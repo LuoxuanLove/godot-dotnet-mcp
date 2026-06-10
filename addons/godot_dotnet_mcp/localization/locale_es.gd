@@ -881,7 +881,7 @@ const TRANSLATIONS: Dictionary = {
 	"prompt_arg_binding_name_desc": "Optional export, signal, or NodePath binding name that should receive focused attention.",
 	"prompt_arg_error_summary_desc": "Optional observed error text or symptom that should be preserved in the triage plan.",
 	"prompt_arg_goal_desc": "Optional user goal that should shape the workflow and validation checks.",
-	"prompt_arg_include_runtime_desc": "Optional boolean indicating whether runtime diagnostics and capability checks are needed.",
+	"prompt_arg_include_runtime_desc": "Optional true/false string indicating whether runtime diagnostics and capability checks are needed.",
 	"prompt_arg_resource_path_desc": "Optional res:// .tscn or .tres path to audit for UID, fallback path, or script reference consistency.",
 	"prompt_arg_scene_path_desc": "Optional res:// scene path to validate and analyze before editing.",
 	"prompt_arg_script_path_desc": "Optional C# or GDScript path whose declarations should be inspected.",
