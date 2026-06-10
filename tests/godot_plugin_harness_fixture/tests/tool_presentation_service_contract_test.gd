@@ -125,6 +125,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Presentation service should include project state in MCP tools/list output.")
 	if mcp_project_state.has("groupPath") or mcp_project_state.has("treeChildren"):
 		return _failure("Presentation service should keep MCP tools/list entries free of presentation metadata.")
+	for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+		if mcp_project_state.has(internal_key):
+			return _failure("Presentation service should keep MCP tools/list entries free of internal metadata key: %s" % internal_key)
 	var default_output_schema = mcp_project_state.get("outputSchema", {})
 	if not (default_output_schema is Dictionary):
 		return _failure("Presentation service should attach default outputSchema to MCP tools/list entries.")

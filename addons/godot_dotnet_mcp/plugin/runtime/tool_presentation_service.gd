@@ -133,11 +133,6 @@ static func build_mcp_tool_list(tools: Array, _presentation: Dictionary = {}) ->
 		var item := {
 			"name": tool.get("name", ""),
 			"description": tool.get("description", ""),
-			"category": tool.get("category", ""),
-			"domainKey": tool.get("domain_key", tool.get("domainKey", "other")),
-			"loadState": tool.get("load_state", tool.get("loadState", "definitions_only")),
-			"source": tool.get("source", "builtin"),
-			"enabled": bool(tool.get("enabled", true)),
 			"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
 			"outputSchema": _get_tool_output_schema(tool)
 		}

@@ -133,6 +133,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			continue
 		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
 			return _failure("JSON-RPC tools/list should not expose presentation metadata on flat tool entries.")
+		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+			if (tool_entry as Dictionary).has(internal_key):
+				return _failure("JSON-RPC tools/list should not expose internal metadata key: %s" % internal_key)
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",

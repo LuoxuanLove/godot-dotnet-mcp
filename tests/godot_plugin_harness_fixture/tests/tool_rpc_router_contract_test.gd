@@ -458,6 +458,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			continue
 		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
 			return _failure("Tool RPC router tools/list should not expose presentation metadata on flat tool entries.")
+		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+			if (tool_entry as Dictionary).has(internal_key):
+				return _failure("Tool RPC router tools/list should not expose internal metadata key: %s" % internal_key)
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_stop":
 			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
