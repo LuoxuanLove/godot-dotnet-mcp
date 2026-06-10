@@ -162,7 +162,7 @@ func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionar
 		}, {
 			"uriTemplate": RESOURCE_TEMPLATE_URI,
 			"name": _text("mcp_resource_template_resource_name", "Resource text"),
-			"description": _text("mcp_resource_template_resource_desc", "Read a .tres or .res resource file by project-relative path."),
+			"description": _text("mcp_resource_template_resource_desc", "Read a .tres resource file by project-relative path."),
 			"mimeType": "text/plain"
 		}]
 	}
@@ -470,13 +470,13 @@ func _read_template_resource(uri: String) -> Dictionary:
 	var allowed_extensions: Array[String] = []
 	if uri.begins_with("godot-dotnet-mcp://scene/"):
 		relative_path = uri.substr("godot-dotnet-mcp://scene/".length())
-		allowed_extensions = [".tscn", ".scn"]
+		allowed_extensions = [".tscn"]
 	elif uri.begins_with("godot-dotnet-mcp://script/"):
 		relative_path = uri.substr("godot-dotnet-mcp://script/".length())
 		allowed_extensions = [".gd", ".cs"]
 	elif uri.begins_with("godot-dotnet-mcp://resource/"):
 		relative_path = uri.substr("godot-dotnet-mcp://resource/".length())
-		allowed_extensions = [".tres", ".res"]
+		allowed_extensions = [".tres"]
 	else:
 		return {"success": false, "error": "Unknown resource URI: %s" % uri}
 	var res_path_result: Dictionary = MCPPathArgumentNormalizerScript.normalize_project_path(relative_path, allowed_extensions, "resource path")
@@ -505,9 +505,9 @@ func _mime_type_for_path(path: String) -> String:
 		return "text/x-gdscript"
 	if lower_path.ends_with(".cs"):
 		return "text/x-csharp"
-	if lower_path.ends_with(".tscn") or lower_path.ends_with(".scn"):
+	if lower_path.ends_with(".tscn"):
 		return "text/x-godot-scene"
-	if lower_path.ends_with(".tres") or lower_path.ends_with(".res"):
+	if lower_path.ends_with(".tres"):
 		return "text/x-godot-resource"
 	return "text/plain"
 

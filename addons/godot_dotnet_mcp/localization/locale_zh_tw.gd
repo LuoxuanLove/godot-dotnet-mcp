@@ -784,7 +784,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_name": "腳本文字",
 	"mcp_resource_template_script_desc": "依專案相對路徑讀取 .gd 或 .cs 腳本檔。",
 	"mcp_resource_template_resource_name": "資源文字",
-	"mcp_resource_template_resource_desc": "依專案相對路徑讀取 .tres 或 .res 資源檔。",
+	"mcp_resource_template_resource_desc": "依專案相對路徑讀取 .tres 資源檔。",
 	"tool_system_project_configure_name": "項目配置",
 	"tool_system_project_configure_desc": "讀取或修改項目設置、輸入動作與自動載入配置。",
 	"tool_system_resource_reference_audit_name": "資源引用審計",

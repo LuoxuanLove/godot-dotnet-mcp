@@ -558,7 +558,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_template_script_name": "Texte de script",
 	"mcp_resource_template_script_desc": "Lit un fichier de script .gd ou .cs via un chemin relatif au projet.",
 	"mcp_resource_template_resource_name": "Texte de ressource",
-	"mcp_resource_template_resource_desc": "Lit une ressource .tres ou .res via un chemin relatif au projet.",
+	"mcp_resource_template_resource_desc": "Lit une ressource .tres via un chemin relatif au projet.",
 	"tool_system_project_configure_name": "Configurer le projet",
 	"tool_system_project_configure_desc": "Lisez ou modifiez les paramètres du projet, les actions de saisie et la configuration de chargement automatique.",
 	"tool_system_resource_reference_audit_name": "Audit des références",

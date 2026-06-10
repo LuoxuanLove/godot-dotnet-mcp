@@ -342,6 +342,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(resource_read.get("error", "resource read failed")))
 	if str(resource_read.get("text", "")).find("resource_name") == -1:
 		return _failure("resource template resource should read resource text.")
+	var binary_scene_path := "res://tests_tmp/mcp_resources_prompts_contracts/binary_scene.scn"
+	var binary_resource_path := "res://tests_tmp/mcp_resources_prompts_contracts/binary_resource.res"
+	_write_binary_file(binary_scene_path)
+	_write_binary_file(binary_resource_path)
+	var binary_scene_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://scene/tests_tmp/mcp_resources_prompts_contracts/binary_scene.scn"}, 35)
+	if not _is_invalid_extension_response(binary_scene_response):
+		return _failure("scene text resource should reject binary .scn files with invalid params.")
+	var binary_resource_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://resource/tests_tmp/mcp_resources_prompts_contracts/binary_resource.res"}, 36)
+	if not _is_invalid_extension_response(binary_resource_response):
+		return _failure("resource text resource should reject binary .res files with invalid params.")
 	var large_script_path := "res://tests_tmp/mcp_resources_prompts_contracts/large_script.gd"
 	_write_large_text_file(large_script_path, 600000)
 	var large_resource_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://script/tests_tmp/mcp_resources_prompts_contracts/large_script.gd"}, 20)
@@ -428,6 +438,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure(str(content_prompt.get("error", "content authoring prompt failed")))
 	if str(content_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(content_prompt.get("text", "")).find("res://tests/headless_case_support.gd") == -1:
 		return _failure("content authoring prompt should normalize scene_path and script_path to res://.")
+	var invalid_content_scene_response: Dictionary = await _json_rpc("prompts/get", {"name": CONTENT_AUTHORING_PROMPT, "arguments": {"scene_path": "res://BinaryScene.scn"}}, 37)
+	if not _is_invalid_extension_response(invalid_content_scene_response):
+		return _failure("content authoring prompt should reject binary .scn scene_path arguments.")
 	if not _prompt_text_is_actionable(str(content_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_scene_inspect", "action=analyze", "system_script_patch"]):
 		return _failure("content authoring prompt should provide actionable scene and script authoring sections.")
 
@@ -487,12 +500,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_res_prompt_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"resource_path": "res://PackedResource.res"}}, 17)
 	if not (invalid_res_prompt_response.get("error", null) is Dictionary):
 		return _failure("reference integrity prompt should reject .res resource_path because resource_reference_audit accepts text scene/resource files.")
+	var invalid_reference_scene_response: Dictionary = await _json_rpc("prompts/get", {"name": REFERENCE_INTEGRITY_PROMPT, "arguments": {"scene_path": "res://BinaryScene.scn"}}, 38)
+	if not _is_invalid_extension_response(invalid_reference_scene_response):
+		return _failure("reference integrity prompt should reject binary .scn scene_path arguments.")
 
 	var runtime_prompt := await _get_prompt_text(RUNTIME_VALIDATION_PROMPT, {"scene_path": "tests/headless_suite_entry.tscn", "goal": "verify menu", "success_marker": "MENU_READY"}, 18)
 	if not bool(runtime_prompt.get("ok", false)):
 		return _failure(str(runtime_prompt.get("error", "runtime validation prompt failed")))
 	if str(runtime_prompt.get("text", "")).find("res://tests/headless_suite_entry.tscn") == -1 or str(runtime_prompt.get("text", "")).find("MENU_READY") == -1:
 		return _failure("runtime validation prompt should normalize scene_path and include success marker context.")
+	var invalid_runtime_scene_response: Dictionary = await _json_rpc("prompts/get", {"name": RUNTIME_VALIDATION_PROMPT, "arguments": {"scene_path": "res://BinaryScene.scn"}}, 39)
+	if not _is_invalid_extension_response(invalid_runtime_scene_response):
+		return _failure("runtime validation prompt should reject binary .scn scene_path arguments.")
 	if not _prompt_text_is_actionable(str(runtime_prompt.get("text", "")), ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", "system_project_lifecycle(action=start)", "system_project_lifecycle(action=stop)", "system_runtime_step"]):
 		return _failure("runtime validation prompt should provide actionable run/input/capture workflow sections.")
 
@@ -653,6 +672,20 @@ func _write_large_text_file(path: String, size: int) -> void:
 	_temp_paths.append(path)
 
 
+func _write_binary_file(path: String) -> void:
+	var dir_path := path.get_base_dir()
+	var absolute_dir := ProjectSettings.globalize_path(dir_path)
+	if not DirAccess.dir_exists_absolute(absolute_dir):
+		DirAccess.make_dir_recursive_absolute(absolute_dir)
+		_temp_paths.append(dir_path)
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_buffer(PackedByteArray([0, 1, 2, 3, 255]))
+	file.close()
+	_temp_paths.append(path)
+
+
 func _read_json_resource(uri: String, id: int) -> Dictionary:
 	var read_result := await _read_text_resource(uri, id)
 	if not bool(read_result.get("ok", false)):
@@ -677,6 +710,14 @@ func _read_text_resource(uri: String, id: int) -> Dictionary:
 	if str((content as Dictionary).get("uri", "")) != uri:
 		return {"ok": false, "error": "resources/read should preserve the requested URI for %s." % uri}
 	return {"ok": true, "mimeType": str((content as Dictionary).get("mimeType", "")), "text": str((content as Dictionary).get("text", ""))}
+
+
+func _is_invalid_extension_response(response: Dictionary) -> bool:
+	var error = response.get("error", null)
+	if not (error is Dictionary):
+		return false
+	var message := str((error as Dictionary).get("message", "")).to_lower()
+	return int((error as Dictionary).get("code", 0)) == -32602 and message.find("unsupported extension") != -1
 
 
 func _get_prompt_text(name: String, arguments: Dictionary, id: int) -> Dictionary:
