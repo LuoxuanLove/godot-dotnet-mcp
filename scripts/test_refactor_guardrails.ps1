@@ -88,9 +88,49 @@ $zipReadme = @"
 
 ## Installation
 
-Download `godot-dotnet-mcp-1.4.0.zip` from the local release package and extract it into the project.
+Download `godot-dotnet-mcp-1.4.0.zip` and extract it into the project.
 "@
 
 Invoke-GuardrailScenario -Name "forbidden zip install wording" -RootReadmeText $zipReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$releasePackageReadme = @"
+# Fixture
+
+## Installation
+
+Download the release-package build and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden release-package install wording" -RootReadmeText $releasePackageReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$localReleaseReadme = @"
+# Fixture
+
+## Installation
+
+Install from the local-release bundle and copy it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden local-release install wording" -RootReadmeText $localReleaseReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$zipPackageReadme = @"
+# Fixture
+
+## Installation
+
+Use the zip_package installer artifact for manual installation.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip_package install wording" -RootReadmeText $zipPackageReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$releaseDistReadme = @"
+# Fixture
+
+## Installation
+
+Copy files from release_dist into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden release_dist install wording" -RootReadmeText $releaseDistReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
 
 Write-Host "Refactor guardrail policy scenarios validated successfully."
