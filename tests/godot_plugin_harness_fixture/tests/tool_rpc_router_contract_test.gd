@@ -453,9 +453,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
 	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
 		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
-			return _failure("Tool RPC router tools/list should not expose removed public tool %s." % removed_tool_name)
+			return _failure("Tool RPC router tools/list should not expose removed tool %s." % removed_tool_name)
 	for tool_entry in tools:
 		if not (tool_entry is Dictionary):
 			continue
@@ -547,6 +547,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_help_data = (removed_help_structured as Dictionary).get("data", {})
 	if not (removed_help_data is Dictionary) or not (((removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
 		return _failure("Tool RPC router should preserve system_help replacement resource URIs.")
+
+	var removed_resource_manage_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "resource_manage",
+		"arguments": {"action": "create", "type": "Resource", "path": "res://Tmp/removed_resource_manage.tres"}
+	})
+	if not bool(removed_resource_manage_result.get("isError", false)):
+		return _failure("Tool RPC router should reject removed resource_manage legacy calls.")
+	var removed_resource_manage_structured = removed_resource_manage_result.get("structuredContent", {})
+	if not (removed_resource_manage_structured is Dictionary) or bool((removed_resource_manage_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router removed resource_manage should return failing structuredContent.")
+	if str((removed_resource_manage_structured as Dictionary).get("error", "")).find("resource_manage") == -1:
+		return _failure("Tool RPC router removed resource_manage error should include the legacy tool name.")
 
 	var removed_catalog_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_tool_catalog",
