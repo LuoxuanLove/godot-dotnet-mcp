@@ -481,18 +481,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tools = tools_list.get("tools", [])
 	if not (tools is Array) or (tools as Array).is_empty():
 		return _failure("Tool RPC router did not surface exposed tool definitions.")
-	if not (tools_list.get("toolTree", []) is Array) or (tools_list.get("toolTree", []) as Array).is_empty():
-		return _failure("Tool RPC router did not expose the unified tool tree.")
-	if _contains_tool_name_recursive(tools_list.get("toolTree", []), "system_help") or _contains_tool_name_recursive(tools_list.get("toolGroups", []), "system_help"):
-		return _failure("Tool RPC router tree and group metadata should omit removed system_help from tools/list.")
-	if not (((tools as Array)[0] as Dictionary).has("groupPath")):
-		return _failure("Tool RPC router should preserve flat tools while adding groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage"]:
+	for presentation_key in ["presentationVersion", "toolTree", "toolGroups"]:
+		if tools_list.has(presentation_key):
+			return _failure("Tool RPC router tools/list should not expose presentation key %s." % presentation_key)
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage", "debug_log"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tool RPC router tools/list should not expose removed tool %s." % removed_tool_name)
 	for tool_entry in tools:
 		if not (tool_entry is Dictionary):
 			continue
+		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
+			return _failure("Tool RPC router tools/list should not expose presentation metadata on flat tool entries.")
+		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+			if (tool_entry as Dictionary).has(internal_key):
+				return _failure("Tool RPC router tools/list should not expose internal metadata key: %s" % internal_key)
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_stop":
 			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
@@ -595,6 +597,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed resource_manage error should include the legacy tool name.")
 	if not _is_removed_resource_manage_tool(removed_resource_manage_structured, "resource_create"):
 		return _failure("Tool RPC router removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
+
+	var removed_debug_log_result: Dictionary = await router.build_tool_call_result_async({
+		"name": "debug_log",
+		"arguments": {"action": "print", "message": "removed debug_log"}
+	})
+	if not bool(removed_debug_log_result.get("isError", false)):
+		return _failure("Tool RPC router should reject removed debug_log legacy calls.")
+	var removed_debug_log_structured = removed_debug_log_result.get("structuredContent", {})
+	if not (removed_debug_log_structured is Dictionary) or bool((removed_debug_log_structured as Dictionary).get("success", true)):
+		return _failure("Tool RPC router removed debug_log should return failing structuredContent.")
+	if str((removed_debug_log_structured as Dictionary).get("error", "")).find("debug_log") == -1:
+		return _failure("Tool RPC router removed debug_log error should include the legacy tool name.")
 
 	var removed_catalog_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_tool_catalog",

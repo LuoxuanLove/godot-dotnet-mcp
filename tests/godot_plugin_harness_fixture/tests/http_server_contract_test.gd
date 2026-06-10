@@ -73,7 +73,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools list response did not expose the unified tool tree.")
 	if not _first_tool_has_group_path(tools_list.get("tools", [])):
 		return _failure("Tools list response did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage", "debug_log"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tools list response should not expose removed tool %s." % removed_tool_name)
 
@@ -93,7 +93,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(full_reload_summary.get("tool_count", 0)) <= 0:
 		return _failure("HTTP server full reload reinitialize did not report visible tools.")
 	var full_reload_tools_list: Dictionary = _server.build_tools_api_snapshot()
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage"]:
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage", "debug_log"]:
 		if _contains_tool_name_recursive(full_reload_tools_list, removed_tool_name):
 			return _failure("HTTP server full reload should not expose removed tool %s." % removed_tool_name)
 
@@ -120,15 +120,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not return tools as an array.")
 	if (rpc_tools as Array).is_empty():
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
-	if not ((rpc_tools_list_result as Dictionary).get("toolTree", []) is Array) or (((rpc_tools_list_result as Dictionary).get("toolTree", []) as Array).is_empty()):
-		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
-	if _has_tool(rpc_tools, "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolTree", []), "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolGroups", []), "system_help"):
-		return _failure("JSON-RPC tools/list flat, tree, and group metadata should not expose removed system_help.")
-	if not _first_tool_has_group_path(rpc_tools):
-		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
-	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage"]:
+	for presentation_key in ["presentationVersion", "toolTree", "toolGroups"]:
+		if (rpc_tools_list_result as Dictionary).has(presentation_key):
+			return _failure("JSON-RPC tools/list should not expose presentation key %s." % presentation_key)
+	if _has_tool(rpc_tools, "system_help"):
+		return _failure("JSON-RPC tools/list should not expose removed system_help.")
+	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage", "debug_log"]:
 		if _contains_tool_name_recursive(rpc_tools_list_result, removed_tool_name):
-			return _failure("JSON-RPC tools/list should not expose removed tool %s." % removed_tool_name)
+			return _failure("JSON-RPC tools/list should not expose removed public tool %s." % removed_tool_name)
+	for tool_entry in rpc_tools:
+		if not (tool_entry is Dictionary):
+			continue
+		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
+			return _failure("JSON-RPC tools/list should not expose presentation metadata on flat tool entries.")
+		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+			if (tool_entry as Dictionary).has(internal_key):
+				return _failure("JSON-RPC tools/list should not expose internal metadata key: %s" % internal_key)
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -225,6 +232,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Removed resource_manage error should include the legacy tool name.")
 	if not _is_removed_resource_manage_tool(rpc_removed_resource_manage_structured, "resource_create"):
 		return _failure("Removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
+
+	var rpc_removed_debug_log: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 35,
+		"method": "tools/call",
+		"params": {
+			"name": "debug_log",
+			"arguments": {"action": "print", "message": "removed debug_log"}
+		}
+	}))
+	var rpc_removed_debug_log_result = rpc_removed_debug_log.get("result", {})
+	if not (rpc_removed_debug_log_result is Dictionary) or not bool((rpc_removed_debug_log_result as Dictionary).get("isError", false)):
+		return _failure("JSON-RPC tools/call should reject removed debug_log legacy calls.")
+	var rpc_removed_debug_log_structured = (rpc_removed_debug_log_result as Dictionary).get("structuredContent", {})
+	if not (rpc_removed_debug_log_structured is Dictionary) or bool((rpc_removed_debug_log_structured as Dictionary).get("success", true)):
+		return _failure("Removed debug_log should return failing structuredContent.")
+	if str((rpc_removed_debug_log_structured as Dictionary).get("error", "")).find("debug_log") == -1:
+		return _failure("Removed debug_log error should include the legacy tool name.")
 
 	var rpc_removed_catalog: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
