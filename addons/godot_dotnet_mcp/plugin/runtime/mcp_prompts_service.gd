@@ -328,8 +328,9 @@ func _with_prompt_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 
 func _icon_metadata(name: String) -> Dictionary:
 	return {
-		"name": name,
-		"mimeType": "image/svg+xml"
+		"src": "godot-dotnet-mcp://icons/%s.svg" % name,
+		"mimeType": "image/svg+xml",
+		"sizes": ["any"]
 	}
 
 
