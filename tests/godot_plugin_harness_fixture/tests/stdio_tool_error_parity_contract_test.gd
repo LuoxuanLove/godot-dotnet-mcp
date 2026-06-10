@@ -6,6 +6,10 @@ const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const ToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
 const ToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd")
 
+const MAX_STDIN_CONTENT_BYTES := 1024 * 1024
+const MAX_STDIN_HEADER_BYTES := 64 * 1024
+const MAX_STDIN_PENDING_BYTES := MAX_STDIN_CONTENT_BYTES + MAX_STDIN_HEADER_BYTES
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -127,13 +131,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if loader.executed_count != 0:
 		return _failure("Malformed-name stdio cases should not execute the loader.")
 
+	var framing_check: Dictionary = await _assert_stdio_framing_guards(stdio_server)
+	if not bool(framing_check.get("success", false)):
+		return framing_check
+
 	stdio_server.free()
 	return {
 		"name": "stdio_tool_error_parity_contracts",
 		"success": true,
 		"error": "",
 		"details": {
-			"checked_errors": ["disabled", "not exposed", "stdio-local disabled", "malformed name"]
+			"checked_errors": ["disabled", "not exposed", "stdio-local disabled", "malformed name", "framing"]
 		}
 	}
 
@@ -175,6 +183,153 @@ func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label:
 		return _failure("Stdio %s error should preserve '%s'. actual=%s" % [label, expected_text, stdio_error])
 	if bool((stdio_structured as Dictionary).get("success", true)):
 		return _failure("Stdio %s structuredContent should report success=false." % label)
+	return {"success": true, "error": ""}
+
+
+func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
+	stdio_server.start()
+
+	var non_numeric_check := await _assert_rejected_stdio_frame(
+		stdio_server,
+		"Content-Length: nope\r\n\r\n{}",
+		"stdio_bad_content_length",
+		"non-numeric"
+	)
+	if not bool(non_numeric_check.get("success", false)):
+		return non_numeric_check
+
+	var negative_check := await _assert_rejected_stdio_frame(
+		stdio_server,
+		"Content-Length: -1\r\n\r\n{}",
+		"stdio_bad_content_length",
+		"negative"
+	)
+	if not bool(negative_check.get("success", false)):
+		return negative_check
+
+	var zero_check := await _assert_rejected_stdio_frame(
+		stdio_server,
+		"Content-Length: 0\r\n\r\n",
+		"stdio_bad_content_length",
+		"zero"
+	)
+	if not bool(zero_check.get("success", false)):
+		return zero_check
+
+	var duplicate_check := await _assert_rejected_stdio_frame(
+		stdio_server,
+		"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}",
+		"stdio_duplicate_content_length",
+		"duplicate"
+	)
+	if not bool(duplicate_check.get("success", false)):
+		return duplicate_check
+
+	var oversized_check := await _assert_rejected_stdio_frame(
+		stdio_server,
+		"Content-Length: 1048577\r\n\r\n{}",
+		"stdio_frame_too_large",
+		"oversized"
+	)
+	if not bool(oversized_check.get("success", false)):
+		return oversized_check
+
+	var max_content_check := await _assert_max_content_length_stdio_frame(stdio_server)
+	if not bool(max_content_check.get("success", false)):
+		return max_content_check
+
+	var pending_overflow := PackedByteArray()
+	pending_overflow.resize(MAX_STDIN_PENDING_BYTES + 1)
+	pending_overflow.fill(65)
+	stdio_server.set("_buffer", pending_overflow)
+	stdio_server.set("_last_written_response", {})
+	var rejected_pending_overflow: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if bool(rejected_pending_overflow):
+		stdio_server.stop()
+		return _failure("Oversized stdio pending buffer should not parse successfully.")
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		stdio_server.stop()
+		return _failure("Oversized stdio pending buffer should be cleared.")
+	var pending_overflow_response: Dictionary = stdio_server.get("_last_written_response")
+	var pending_overflow_error: Dictionary = pending_overflow_response.get("error", {})
+	if not str(pending_overflow_error.get("message", "")).contains("stdio_pending_buffer_exceeded"):
+		stdio_server.stop()
+		return _failure("Oversized stdio pending buffer should report stdio_pending_buffer_exceeded.")
+
+	var first_body := JSON.stringify({"jsonrpc": "2.0", "id": 21, "method": "ping", "params": {}})
+	var second_body := JSON.stringify({"jsonrpc": "2.0", "id": 22, "method": "ping", "params": {}})
+	var first_frame := "Content-Length: %d\r\n\r\n%s" % [first_body.to_utf8_buffer().size(), first_body]
+	var second_frame := "Content-Length: %d\r\n\r\n%s" % [second_body.to_utf8_buffer().size(), second_body]
+	stdio_server.set("_buffer", (first_frame + second_frame).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var generation := int(stdio_server.get("_transport_generation"))
+	var parsed_first: bool = bool(await stdio_server.call("_try_parse_frame", generation))
+	if not bool(parsed_first):
+		stdio_server.stop()
+		return _failure("Stdio should parse the first valid pipelined frame.")
+	if int((stdio_server.get("_last_written_response") as Dictionary).get("id", 0)) != 21:
+		stdio_server.stop()
+		return _failure("Stdio first pipelined frame should preserve response id.")
+	if (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		stdio_server.stop()
+		return _failure("Stdio parser should preserve the second pipelined frame after the first parse.")
+	var parsed_second: bool = bool(await stdio_server.call("_try_parse_frame", generation))
+	if not bool(parsed_second):
+		stdio_server.stop()
+		return _failure("Stdio should parse the second valid pipelined frame.")
+	if int((stdio_server.get("_last_written_response") as Dictionary).get("id", 0)) != 22:
+		stdio_server.stop()
+		return _failure("Stdio second pipelined frame should preserve response id.")
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		stdio_server.stop()
+		return _failure("Stdio parser should drain valid pipelined frames exactly.")
+
+	stdio_server.stop()
+	return {"success": true, "error": ""}
+
+
+func _assert_max_content_length_stdio_frame(stdio_server) -> Dictionary:
+	var body_prefix := "{\"jsonrpc\":\"2.0\",\"id\":23,\"method\":\"ping\",\"params\":{\"padding\":\""
+	var body_suffix := "\"}}"
+	var padding_bytes := MAX_STDIN_CONTENT_BYTES - body_prefix.to_utf8_buffer().size() - body_suffix.to_utf8_buffer().size()
+	if padding_bytes < 0:
+		return _failure("Maximum stdio Content-Length fixture overhead exceeds the content limit.")
+	var body := body_prefix + "A".repeat(padding_bytes) + body_suffix
+	if body.to_utf8_buffer().size() != MAX_STDIN_CONTENT_BYTES:
+		return _failure("Maximum stdio Content-Length fixture must be exactly %d bytes." % MAX_STDIN_CONTENT_BYTES)
+	var frame := "Content-Length: %d\r\n\r\n%s" % [body.to_utf8_buffer().size(), body]
+	if frame.to_utf8_buffer().size() > MAX_STDIN_PENDING_BYTES:
+		return _failure("Maximum stdio Content-Length fixture must fit inside the pending buffer allowance.")
+
+	stdio_server.set("_buffer", frame.to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed):
+		return _failure("Maximum stdio Content-Length should parse successfully.")
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		return _failure("Maximum stdio Content-Length should drain the pending buffer.")
+	var response: Dictionary = stdio_server.get("_last_written_response")
+	if int(response.get("id", 0)) != 23:
+		return _failure("Maximum stdio Content-Length should preserve the response id.")
+	if response.has("error"):
+		return _failure("Maximum stdio Content-Length should not emit a framing error.")
+	return {"success": true, "error": ""}
+
+
+func _assert_rejected_stdio_frame(stdio_server, frame: String, expected_type: String, label: String) -> Dictionary:
+	stdio_server.set("_buffer", frame.to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if bool(parsed):
+		return _failure("Invalid %s stdio frame should not parse successfully." % label)
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		return _failure("Invalid %s stdio frame should clear the pending buffer." % label)
+	var response: Dictionary = stdio_server.get("_last_written_response")
+	var error: Dictionary = response.get("error", {})
+	if int(error.get("code", 0)) != -32700:
+		return _failure("Invalid %s stdio frame should emit a JSON-RPC parse/framing error." % label)
+	if not str(error.get("message", "")).contains(expected_type):
+		return _failure("Invalid %s stdio frame should include %s. actual=%s" % [label, expected_type, str(error.get("message", ""))])
 	return {"success": true, "error": ""}
 
 

@@ -2,6 +2,8 @@
 extends RefCounted
 class_name MCPHttpRequestDecoder
 
+const MAX_CONTENT_LENGTH := 1024 * 1024
+
 
 func decode_pending_request(data: String) -> Dictionary:
 	if data.is_empty():
@@ -27,7 +29,14 @@ func decode_pending_request(data: String) -> Dictionary:
 	var content_length = 0
 	var is_chunked = false
 	if headers.has("content-length"):
-		content_length = int(headers["content-length"])
+		var content_length_result := _parse_content_length(str(headers["content-length"]))
+		if not bool(content_length_result.get("success", false)):
+			return _framing_error_result(
+				"bad_content_length",
+				str(content_length_result.get("error", "Invalid Content-Length header.")),
+				headers
+			)
+		content_length = int(content_length_result.get("content_length", 0))
 	elif headers.has("transfer-encoding") and str(headers["transfer-encoding"]).to_lower().contains("chunked"):
 		is_chunked = true
 
@@ -68,6 +77,33 @@ func decode_pending_request(data: String) -> Dictionary:
 		"content_length": content_length,
 		"body_byte_size": body_byte_size,
 		"is_chunked": false
+	}
+
+
+func _parse_content_length(value: String) -> Dictionary:
+	var text := value.strip_edges()
+	if not text.is_valid_int():
+		return {"success": false, "error": "Content-Length must be a positive integer."}
+	var parsed := int(text)
+	if parsed < 0:
+		return {"success": false, "error": "Content-Length must not be negative."}
+	if parsed > MAX_CONTENT_LENGTH:
+		return {"success": false, "error": "Content-Length exceeds maximum supported size of %d bytes." % MAX_CONTENT_LENGTH}
+	return {"success": true, "content_length": parsed}
+
+
+func _framing_error_result(error_type: String, message: String, headers: Dictionary = {}, content_length: int = 0, body_byte_size: int = 0, is_chunked: bool = false) -> Dictionary:
+	return {
+		"ready": true,
+		"framing_error": true,
+		"error": error_type,
+		"message": message,
+		"headers": headers,
+		"request_body": "",
+		"remaining_data": "",
+		"content_length": content_length,
+		"body_byte_size": body_byte_size,
+		"is_chunked": is_chunked
 	}
 
 

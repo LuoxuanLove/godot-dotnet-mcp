@@ -9,15 +9,18 @@ var _emit_client_disconnected := Callable()
 var _route_request_async := Callable()
 var _write_http_response := Callable()
 var _tick_loader := Callable()
+var _max_pending_request_bytes := DEFAULT_MAX_PENDING_REQUEST_BYTES
 
 const MAX_REQUESTS_PER_DRAIN := 16
 const MAX_ACCEPTS_PER_FRAME := 8
-const MAX_PENDING_REQUEST_BYTES := 1024 * 1024
+const MAX_REQUEST_HEADER_BYTES := 64 * 1024
+const DEFAULT_MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
 	_connection_state = connection_state
 	_request_decoder = request_decoder
+	_max_pending_request_bytes = DEFAULT_MAX_PENDING_REQUEST_BYTES
 	if context == null:
 		_reset_callbacks()
 		return
@@ -27,6 +30,8 @@ func configure(connection_state, request_decoder, context = null) -> void:
 	_route_request_async = context.route_request_async
 	_write_http_response = context.write_http_response
 	_tick_loader = context.tick_loader
+	if int(context.max_pending_request_bytes) > 0:
+		_max_pending_request_bytes = int(context.max_pending_request_bytes)
 
 
 func dispose() -> void:
@@ -86,7 +91,9 @@ func _process_client(client: StreamPeerTCP) -> bool:
 			var request_str = data[1].get_string_from_utf8()
 			var pending_data = _connection_state.get_pending_data(client) + request_str
 			var pending_byte_size: int = pending_data.to_utf8_buffer().size()
-			if pending_byte_size > MAX_PENDING_REQUEST_BYTES:
+			if pending_byte_size > _max_pending_request_bytes:
+				if _try_handle_pending_framing_error(client, pending_data):
+					return true
 				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_byte_size, "warning")
 				if _connection_state.has_method("record_rejected_request"):
 					_connection_state.record_rejected_request()
@@ -105,6 +112,18 @@ func _process_client(client: StreamPeerTCP) -> bool:
 	return false
 
 
+func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: String) -> bool:
+	if _request_decoder == null:
+		return false
+	var decoded_request: Dictionary = _request_decoder.decode_pending_request(pending_data)
+	if not bool(decoded_request.get("ready", false)):
+		return false
+	if not bool(decoded_request.get("framing_error", false)):
+		return false
+	_handle_framing_error(client, decoded_request)
+	return true
+
+
 func _process_http_request_async(client: StreamPeerTCP) -> void:
 	if _connection_state.is_processing(client):
 		return
@@ -119,6 +138,9 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		var decoded_request: Dictionary = _request_decoder.decode_pending_request(data)
 		if not bool(decoded_request.get("ready", false)):
 			_log_pending_request_wait(decoded_request, data)
+			return
+		if bool(decoded_request.get("framing_error", false)):
+			_handle_framing_error(client, decoded_request)
 			return
 
 		var headers: Dictionary = decoded_request.get("headers", {})
@@ -172,6 +194,28 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.get_pending_data(client).is_empty():
 			call_deferred("_process_http_request_async", client)
 			return
+
+
+func _handle_framing_error(client: StreamPeerTCP, decoded_request: Dictionary) -> void:
+	var error_type := str(decoded_request.get("error", "bad_request"))
+	var message := str(decoded_request.get("message", "Invalid HTTP request framing."))
+	_log("Rejecting malformed HTTP request: %s (%s)" % [message, error_type], "warning")
+	if _connection_state != null:
+		_connection_state.set_pending_data(client, "")
+		if _connection_state.has_method("record_rejected_request"):
+			_connection_state.record_rejected_request()
+	if _write_http_response.is_valid():
+		_write_http_response.call(client, {
+			"_status_code": 400,
+			"jsonrpc": "2.0",
+			"error": {
+				"code": -32700,
+				"message": message,
+				"data": {"type": error_type}
+			},
+			"id": null
+		}, false)
+	client.disconnect_from_host()
 
 
 func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:

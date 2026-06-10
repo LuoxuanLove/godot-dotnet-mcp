@@ -40,6 +40,7 @@ Target version: 1.4.0.
 - Fixed `prompts/get` argument validation so non-string prompt arguments and invalid `include_runtime` true/false strings are rejected instead of being coerced.
 - Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
+- Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
 
 ### Documentation
 
@@ -65,6 +66,7 @@ Target version: 1.4.0.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
 - Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
+- Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 
 ## [1.3.0] - 2026-06-08
