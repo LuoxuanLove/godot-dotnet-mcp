@@ -23,6 +23,10 @@ static func get_server_version() -> String:
 	return str(get_all().get("server_version", ""))
 
 
+static func get_server_description() -> String:
+	return str(get_all().get("server_description", ""))
+
+
 static func get_error_codes() -> Dictionary:
 	var error_codes = get_all().get("error_codes", {})
 	if error_codes is Dictionary:
@@ -38,7 +42,8 @@ static func get_error_code(key: String) -> String:
 static func build_server_info() -> Dictionary:
 	return {
 		"name": get_server_name(),
-		"version": get_server_version()
+		"version": get_server_version(),
+		"description": get_server_description()
 	}
 
 
@@ -46,6 +51,7 @@ static func build_server_facts() -> Dictionary:
 	return {
 		"server_name": get_server_name(),
 		"server_version": get_server_version(),
+		"server_description": get_server_description(),
 		"protocol_version": get_protocol_version(),
 		"tool_schema_version": get_tool_schema_version()
 	}
@@ -82,16 +88,18 @@ static func _load_facts() -> Dictionary:
 		"tool_schema_version": str(facts.get("tool_schema_version", "")),
 		"server_name": str(facts.get("server_name", "")),
 		"server_version": str(facts.get("server_version", "")),
+		"server_description": str(facts.get("server_description", "")),
 		"error_codes": error_codes
 	}
 
 
 static func _default_facts() -> Dictionary:
 	return {
-		"protocol_version": "2025-06-18",
+		"protocol_version": "2025-11-25",
 		"tool_schema_version": "2026-06-08.33",
 		"server_name": "godot-dotnet-mcp",
 		"server_version": "1.4.0",
+		"server_description": "Godot editor MCP server for .NET project inspection, automation, resources, prompts, and runtime diagnostics.",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch",
 			"runtime_not_running": "runtime_not_running",

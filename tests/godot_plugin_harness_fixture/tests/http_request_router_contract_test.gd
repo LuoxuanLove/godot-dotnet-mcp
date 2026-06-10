@@ -43,7 +43,7 @@ class FakeCallbacks:
 			"body": body
 		}
 
-	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept") -> Dictionary:
+	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id") -> Dictionary:
 		return {
 			"_status_code": 204,
 			"_no_body": true,
@@ -70,9 +70,52 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	router.set_allowed_cors_origins(["http://localhost:5173"])
 	router.set_allowed_hosts(["10.0.0.8"])
 
-	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}")
+	var mcp_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		"{\"jsonrpc\":\"2.0\"}",
+		{"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-protocol-version": "2025-11-25"}
+	)
 	if str(mcp_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\"}":
 		return _failure("HTTP request router did not forward POST /mcp to the MCP request handler.")
+	var mcp_headers: Dictionary = mcp_response.get("_headers", {})
+	if str(mcp_headers.get("MCP-Protocol-Version", "")) != "2025-11-25":
+		return _failure("HTTP request router did not attach the MCP protocol version response header.")
+	if str(mcp_headers.get("Mcp-Session-Id", "")).is_empty():
+		return _failure("HTTP request router did not attach a streamable HTTP session id.")
+
+	var existing_session_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		"{}",
+		{"host": "localhost:3000", "accept": "application/json", "mcp-session-id": "client-session-7"}
+	)
+	var existing_session_headers: Dictionary = existing_session_response.get("_headers", {})
+	if str(existing_session_headers.get("Mcp-Session-Id", "")) != "client-session-7":
+		return _failure("HTTP request router should echo an existing MCP session id.")
+
+	var accept_denied_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		"{}",
+		{"host": "localhost:3000", "accept": "text/event-stream"}
+	)
+	if int(accept_denied_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp when Accept omits application/json.")
+	var accept_denied_headers: Dictionary = accept_denied_response.get("_headers", {})
+	if str(accept_denied_headers.get("MCP-Protocol-Version", "")) != "2025-11-25":
+		return _failure("HTTP request router should attach protocol headers to MCP transport guard failures.")
+
+	var version_denied_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		"{}",
+		{"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": "2025-06-18"}
+	)
+	if int(version_denied_response.get("status", 0)) != 400:
+		return _failure("HTTP request router should reject mismatched MCP-Protocol-Version headers.")
+	if str(version_denied_response.get("supported_protocol_version", "")) != "2025-11-25":
+		return _failure("HTTP request router should report the supported MCP protocol version.")
 
 	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "")
 	if int(get_mcp_response.get("status", 0)) != 405 or not bool(get_mcp_response.get("_no_body", false)):
@@ -101,6 +144,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not allow configured CORS preflight origins.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
 		return _failure("HTTP request router did not echo the configured CORS origin.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP protocol headers.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP session headers.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) == "*":
 		return _failure("HTTP request router must not use wildcard CORS origins.")
 
