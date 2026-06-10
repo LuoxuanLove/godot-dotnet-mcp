@@ -90,13 +90,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")
+	for capability_name in (capabilities as Dictionary).keys():
+		if not ["tools", "resources", "prompts"].has(str(capability_name)):
+			return _failure("initialize should only advertise implemented top-level MCP capabilities, got: %s" % str(capability_name))
 	if not ((capabilities as Dictionary).get("resources", {}) is Dictionary):
 		return _failure("initialize should advertise MCP resources capability.")
 	if not ((capabilities as Dictionary).get("prompts", {}) is Dictionary):
 		return _failure("initialize should advertise MCP prompts capability.")
-	if bool(((capabilities as Dictionary).get("resources", {}) as Dictionary).get("listChanged", true)):
+	var resources_capability := (capabilities as Dictionary).get("resources", {}) as Dictionary
+	var prompts_capability := (capabilities as Dictionary).get("prompts", {}) as Dictionary
+	for capability_field in resources_capability.keys():
+		if str(capability_field) != "listChanged":
+			return _failure("resources capability should not advertise unsupported optional field: %s" % str(capability_field))
+	for capability_field in prompts_capability.keys():
+		if str(capability_field) != "listChanged":
+			return _failure("prompts capability should not advertise unsupported optional field: %s" % str(capability_field))
+	if bool(resources_capability.get("listChanged", true)):
 		return _failure("resources capability should declare listChanged=false for static built-ins.")
-	if bool(((capabilities as Dictionary).get("prompts", {}) as Dictionary).get("listChanged", true)):
+	if bool(prompts_capability.get("listChanged", true)):
 		return _failure("prompts capability should declare listChanged=false for static built-ins.")
 	for optional_capability in ["sampling", "elicitation", "tasks"]:
 		if (capabilities as Dictionary).has(optional_capability):

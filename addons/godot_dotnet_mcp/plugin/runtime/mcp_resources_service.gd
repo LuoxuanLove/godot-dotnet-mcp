@@ -208,7 +208,7 @@ func build_resources_read_result(params: Dictionary) -> Dictionary:
 func build_server_capabilities() -> Dictionary:
 	return {
 		"tools": {"listChanged": false},
-		"resources": {"subscribe": false, "listChanged": false},
+		"resources": {"listChanged": false},
 		"prompts": {"listChanged": false}
 	}
 

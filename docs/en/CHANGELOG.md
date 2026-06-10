@@ -31,6 +31,7 @@ Target version: 1.4.0.
 - Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
+- Stopped advertising unsupported resource subscription capability metadata in MCP `initialize` responses.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
 
