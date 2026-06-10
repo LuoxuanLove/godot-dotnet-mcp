@@ -123,6 +123,16 @@ Use the zip_package installer artifact for manual installation.
 
 Invoke-GuardrailScenario -Name "forbidden zip_package install wording" -RootReadmeText $zipPackageReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
 
+$zipArchiveReadme = @"
+# Fixture
+
+## Installation
+
+Download the ZIP archive from GitHub Releases and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip archive install wording" -RootReadmeText $zipArchiveReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
 $releaseDistReadme = @"
 # Fixture
 
