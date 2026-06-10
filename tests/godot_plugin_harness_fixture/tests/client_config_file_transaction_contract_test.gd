@@ -58,6 +58,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if (after_remove_servers as Dictionary).has("godot-mcp"):
 		return _failure("remove_config_entry should remove the godot-mcp entry.")
 
+	_write_text(DESKTOP_FILE, JSON.stringify({
+		"mcpServers": {
+			"godot-mcp": {
+				"url": "https://example.invalid/mcp"
+			}
+		}
+	}, "  "))
+	var conflicting_preflight: Dictionary = transaction.call("preflight_write_config", "", DESKTOP_FILE, new_desktop_config)
+	if str(conflicting_preflight.get("status", "")) != "conflicting_server_entry":
+		return _failure("Desktop preflight should require confirmation before replacing a non-local godot-mcp entry.")
+	if not bool(conflicting_preflight.get("requires_confirmation", false)):
+		return _failure("Desktop conflicting_server_entry should require confirmation.")
+	var conflicting_servers: PackedStringArray = conflicting_preflight.get("conflicting_servers", PackedStringArray())
+	if not conflicting_servers.has("godot-mcp"):
+		return _failure("Desktop conflicting_server_entry should identify the conflicting server name.")
+
 	_write_text(OPENCODE_FILE, "{\"mcp\":\"invalid\"}")
 	var opencode_config := JSON.stringify({
 		"mcp": {
@@ -83,6 +99,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"desktop_preflight_status": str(preflight.get("status", "")),
 			"backup_created": FileAccess.file_exists("%s.bak" % DESKTOP_FILE),
+			"desktop_conflict_status": str(conflicting_preflight.get("status", "")),
 			"opencode_preflight_status": str(opencode_preflight.get("status", "")),
 			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false))
 		}

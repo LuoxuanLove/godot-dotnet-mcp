@@ -139,6 +139,21 @@ func preflight_write_config(config_type: String, filepath: String, new_config: S
 		result["requires_confirmation"] = true
 		return result
 
+	var mcp_servers: Dictionary = existing_root.get(container_key, {})
+	var conflicting_servers := PackedStringArray()
+	for server_name in result.get("server_names", PackedStringArray()):
+		var server_key := str(server_name)
+		if not mcp_servers.has(server_key):
+			continue
+		var existing_entry = mcp_servers.get(server_key)
+		if not _is_managed_server_entry(config_type, existing_entry):
+			conflicting_servers.append(server_key)
+	if not conflicting_servers.is_empty():
+		result["status"] = "conflicting_server_entry"
+		result["requires_confirmation"] = true
+		result["conflicting_servers"] = conflicting_servers
+		return result
+
 	result["status"] = "mergeable"
 	return result
 
@@ -796,7 +811,22 @@ func _prepare_new_config(new_config: String, config_type: String = "") -> Dictio
 
 
 func _preflight_requires_confirmation(status: String) -> bool:
-	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp"
+	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp" or status == "conflicting_server_entry"
+
+
+func _is_managed_server_entry(config_type: String, value) -> bool:
+	if not (value is Dictionary):
+		return false
+	var entry: Dictionary = value
+	var url := str(entry.get("url", "")).strip_edges().to_lower()
+	if config_type == "opencode":
+		var transport := str(entry.get("transport", "")).strip_edges().to_lower()
+		return transport == "stdio" or _is_local_mcp_url(url)
+	return _is_local_mcp_url(url)
+
+
+func _is_local_mcp_url(url: String) -> bool:
+	return url.begins_with("http://127.0.0.1:") or url.begins_with("http://localhost:")
 
 
 func _get_backup_path(filepath: String) -> String:
