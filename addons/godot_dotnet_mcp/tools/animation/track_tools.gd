@@ -27,7 +27,7 @@ func execute(ei, args: Dictionary) -> Dictionary:
 		"remove_track":
 			return _remove_track(animation, args.get("track", -1))
 		"add_key":
-			return _add_key(animation, args)
+			return _add_key(player, animation, args)
 		"remove_key":
 			return _remove_key(animation, args.get("track", -1), args.get("key", -1))
 		_:
@@ -111,7 +111,7 @@ func _remove_track(animation: Animation, track_index: int) -> Dictionary:
 	return _success({"track": track_index}, "Track removed")
 
 
-func _add_key(animation: Animation, args: Dictionary) -> Dictionary:
+func _add_key(player: AnimationPlayer, animation: Animation, args: Dictionary) -> Dictionary:
 	var track_index := int(args.get("track", -1))
 	if not _is_valid_track(animation, track_index):
 		return _error("Track index out of range: %s" % track_index)
@@ -129,7 +129,7 @@ func _add_key(animation: Animation, args: Dictionary) -> Dictionary:
 	if key_value == null:
 		return _error("Key value is required")
 
-	var normalized_value = _normalize_input_value(key_value)
+	var normalized_value = _normalize_key_value(player, animation, track_index, key_value)
 	var key_index := animation.track_insert_key(track_index, time, normalized_value)
 	return _success({
 		"track": track_index,
@@ -155,3 +155,69 @@ func _remove_key(animation: Animation, track_index: int, key_index: int) -> Dict
 
 func _is_valid_track(animation: Animation, track_index: int) -> bool:
 	return track_index >= 0 and track_index < animation.get_track_count()
+
+
+func _normalize_key_value(player: AnimationPlayer, animation: Animation, track_index: int, key_value):
+	if animation.track_get_type(track_index) != Animation.TYPE_VALUE:
+		return _normalize_input_value(key_value)
+
+	var reference_result := _get_value_track_reference(player, animation.track_get_path(track_index))
+	if not bool(reference_result.get("success", false)):
+		return _normalize_input_value(key_value)
+
+	return _normalize_input_value(key_value, reference_result.get("reference"))
+
+
+func _get_value_track_reference(player: AnimationPlayer, track_path: NodePath) -> Dictionary:
+	var property_path := _get_track_property_path(track_path)
+	if property_path.is_empty():
+		return {"success": false}
+
+	var target_node := _get_track_target_node(player, track_path)
+	if target_node == null:
+		return {"success": false}
+
+	if not target_node.has_method("get_indexed"):
+		return {"success": false}
+
+	return {
+		"success": true,
+		"reference": target_node.get_indexed(NodePath(property_path))
+	}
+
+
+func _get_track_target_node(player: AnimationPlayer, track_path: NodePath) -> Node:
+	var node_path := _get_track_node_path(track_path)
+	var root_node := _get_animation_root_node(player)
+	if root_node == null:
+		return null
+	if node_path.is_empty() or node_path == ".":
+		return root_node
+	return root_node.get_node_or_null(NodePath(node_path))
+
+
+func _get_animation_root_node(player: AnimationPlayer) -> Node:
+	if player.root_node != NodePath(""):
+		var root_candidate := player.get_node_or_null(player.root_node)
+		if root_candidate != null:
+			return root_candidate
+	var scene_root: Node = _get_edited_scene_root()
+	return scene_root if scene_root != null else player
+
+
+func _get_track_node_path(track_path: NodePath) -> String:
+	if track_path.get_name_count() <= 0:
+		return "."
+	var parts: Array[String] = []
+	for index in range(track_path.get_name_count()):
+		parts.append(str(track_path.get_name(index)))
+	return "/".join(parts)
+
+
+func _get_track_property_path(track_path: NodePath) -> String:
+	if track_path.get_subname_count() <= 0:
+		return ""
+	var parts: Array[String] = []
+	for index in range(track_path.get_subname_count()):
+		parts.append(str(track_path.get_subname(index)))
+	return ":".join(parts)

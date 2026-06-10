@@ -48,6 +48,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(add_track_result.get("success", false)):
 		return _failure("Animation track creation failed through the split track service.")
 	var property_track_index := int(add_track_result.get("data", {}).get("track", -1))
+	var player := _scene_root.get_node("Player") as AnimationPlayer
+	var idle_animation := player.get_animation("idle")
 
 	var add_key_result: Dictionary = executor.execute("track", {
 		"action": "add_key",
@@ -55,17 +57,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"animation": "idle",
 		"track": property_track_index,
 		"time": 0.25,
-		"value": Vector2(8.0, 16.0)
+		"value": {"x": 8.0, "y": 16.0}
 	})
 	if not bool(add_key_result.get("success", false)):
 		return _failure("Animation track add_key failed through the split track service.")
+	var property_key_index := int(add_key_result.get("data", {}).get("key", -1))
+	var property_key_value = idle_animation.track_get_key_value(property_track_index, property_key_index)
+	if not property_key_value is Vector2:
+		return _failure("Animation property track JSON key should be converted to Vector2.")
 
 	var remove_key_result: Dictionary = executor.execute("track", {
 		"action": "remove_key",
 		"path": "Player",
 		"animation": "idle",
 		"track": property_track_index,
-		"key": int(add_key_result.get("data", {}).get("key", -1))
+		"key": property_key_index
 	})
 	if not bool(remove_key_result.get("success", false)):
 		return _failure("Animation track remove_key failed through the split track service.")
@@ -78,6 +84,24 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(add_method_track_result.get("success", false)):
 		return _failure("Animation method track creation failed through the split track service.")
+	var method_track_index := int(add_method_track_result.get("data", {}).get("track", -1))
+	var add_method_key_result: Dictionary = executor.execute("track", {
+		"action": "add_key",
+		"path": "Player",
+		"animation": "idle",
+		"track": method_track_index,
+		"time": 0.5,
+		"method": "show",
+		"args": []
+	})
+	if not bool(add_method_key_result.get("success", false)):
+		return _failure("Animation method track add_key failed through the split track service.")
+	var method_key_value = idle_animation.track_get_key_value(
+		method_track_index,
+		int(add_method_key_result.get("data", {}).get("key", -1))
+	)
+	if not method_key_value is Dictionary or str(method_key_value.get("method", "")) != "show":
+		return _failure("Animation method track key should preserve method call data.")
 
 	var list_tracks_result: Dictionary = executor.execute("track", {
 		"action": "list",
@@ -93,7 +117,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"action": "remove_track",
 		"path": "Player",
 		"animation": "idle",
-		"track": int(add_method_track_result.get("data", {}).get("track", -1))
+		"track": method_track_index
 	})
 	if not bool(remove_method_track_result.get("success", false)):
 		return _failure("Animation method track removal failed through the split track service.")
