@@ -13,6 +13,7 @@ Target version: 1.4.0.
 - Initialized the v1.4.0 protocol refactor version line and release-note source template.
 - Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
+- Added MCP tool annotations to `tools/list` entries so clients can distinguish read-only inspection tools from state-changing workflows.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
 

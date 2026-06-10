@@ -128,6 +128,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
 		if mcp_project_state.has(internal_key):
 			return _failure("Presentation service should keep MCP tools/list entries free of internal metadata key: %s" % internal_key)
+	var project_state_annotations = mcp_project_state.get("annotations", {})
+	if not (project_state_annotations is Dictionary):
+		return _failure("Presentation service should attach MCP annotations to tools/list entries.")
+	if str((project_state_annotations as Dictionary).get("title", "")) != "System Project State":
+		return _failure("Presentation service should attach a display title annotation to tools/list entries.")
+	if bool((project_state_annotations as Dictionary).get("readOnlyHint", false)) != true:
+		return _failure("Presentation service should mark clear state/query tools as read-only.")
+	if bool((project_state_annotations as Dictionary).get("destructiveHint", true)) != false:
+		return _failure("Presentation service should not mark read-only state tools as destructive.")
 	var default_output_schema = mcp_project_state.get("outputSchema", {})
 	if not (default_output_schema is Dictionary):
 		return _failure("Presentation service should attach default outputSchema to MCP tools/list entries.")
@@ -141,6 +150,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var mcp_runtime_control := _find_mcp_tool(mcp_tools, "system_runtime_control")
 	if mcp_runtime_control.is_empty():
 		return _failure("Presentation service should include runtime control in MCP tools/list output.")
+	var runtime_annotations = mcp_runtime_control.get("annotations", {})
+	if not (runtime_annotations is Dictionary) or bool((runtime_annotations as Dictionary).get("readOnlyHint", true)):
+		return _failure("Presentation service should not mark mixed runtime control actions as read-only.")
 	var explicit_output_schema = mcp_runtime_control.get("outputSchema", {})
 	if not (explicit_output_schema is Dictionary) or not (((explicit_output_schema as Dictionary).get("properties", {}) as Dictionary).has("data")):
 		return _failure("Presentation service should preserve explicit tool outputSchema definitions.")
