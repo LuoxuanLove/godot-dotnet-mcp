@@ -74,7 +74,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings": "设置",
 	"port": "端口：",
 	"auto_start": "自动启动",
-	"debug_log": "调试日志",
 	"btn_start": "启动",
 	"btn_close": "关闭",
 	"btn_restart": "重启",

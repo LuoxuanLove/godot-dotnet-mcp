@@ -74,7 +74,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings": "Settings",
 	"port": "Port:",
 	"auto_start": "Auto Start",
-	"debug_log": "Debug Log",
 	"btn_start": "Start",
 	"btn_restart": "Restart",
 	"btn_stop": "Stop",

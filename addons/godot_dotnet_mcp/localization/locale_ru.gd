@@ -70,7 +70,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings": "Настройки",
 	"port": "Порт:",
 	"auto_start": "Автозапуск",
-	"debug_log": "Журнал отладки",
 	"btn_start": "Запустить",
 	"btn_restart": "Перезапустить",
 	"btn_stop": "Остановить",

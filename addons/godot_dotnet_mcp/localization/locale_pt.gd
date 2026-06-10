@@ -65,7 +65,6 @@ const TRANSLATIONS: Dictionary = {
 	"btn_close": "Fechar",
 	"port": "Porta:",
 	"auto_start": "Início automático",
-	"debug_log": "Registro de depuração",
 	"btn_start": "Iniciar",
 	"btn_restart": "Reiniciar",
 	"btn_stop": "Parar",

@@ -69,7 +69,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings": "설정",
 	"port": "포트:",
 	"auto_start": "자동 시작",
-	"debug_log": "디버그 로그",
 	"btn_start": "시작",
 	"btn_restart": "다시 시작",
 	"btn_stop": "중지",
