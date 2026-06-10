@@ -12,7 +12,8 @@ var _tick_loader := Callable()
 
 const MAX_REQUESTS_PER_DRAIN := 16
 const MAX_ACCEPTS_PER_FRAME := 8
-const MAX_PENDING_REQUEST_BYTES := 1024 * 1024
+const MAX_REQUEST_HEADER_BYTES := 64 * 1024
+const MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
