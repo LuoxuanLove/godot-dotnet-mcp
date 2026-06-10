@@ -47,6 +47,56 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if not bool(add_track_result.get("success", false)):
 		return _failure("Animation track creation failed through the split track service.")
+	var property_track_index := int(add_track_result.get("data", {}).get("track", -1))
+
+	var add_key_result: Dictionary = executor.execute("track", {
+		"action": "add_key",
+		"path": "Player",
+		"animation": "idle",
+		"track": property_track_index,
+		"time": 0.25,
+		"value": Vector2(8.0, 16.0)
+	})
+	if not bool(add_key_result.get("success", false)):
+		return _failure("Animation track add_key failed through the split track service.")
+
+	var remove_key_result: Dictionary = executor.execute("track", {
+		"action": "remove_key",
+		"path": "Player",
+		"animation": "idle",
+		"track": property_track_index,
+		"key": int(add_key_result.get("data", {}).get("key", -1))
+	})
+	if not bool(remove_key_result.get("success", false)):
+		return _failure("Animation track remove_key failed through the split track service.")
+
+	var add_method_track_result: Dictionary = executor.execute("track", {
+		"action": "add_method_track",
+		"path": "Player",
+		"animation": "idle",
+		"node_path": "Sprite"
+	})
+	if not bool(add_method_track_result.get("success", false)):
+		return _failure("Animation method track creation failed through the split track service.")
+
+	var list_tracks_result: Dictionary = executor.execute("track", {
+		"action": "list",
+		"path": "Player",
+		"animation": "idle"
+	})
+	if not bool(list_tracks_result.get("success", false)):
+		return _failure("Animation track list failed through the split track service.")
+	if int(list_tracks_result.get("data", {}).get("count", 0)) < 2:
+		return _failure("Animation track list should include property and method tracks.")
+
+	var remove_method_track_result: Dictionary = executor.execute("track", {
+		"action": "remove_track",
+		"path": "Player",
+		"animation": "idle",
+		"track": int(add_method_track_result.get("data", {}).get("track", -1))
+	})
+	if not bool(remove_method_track_result.get("success", false)):
+		return _failure("Animation method track removal failed through the split track service.")
 
 	var tween_info_result: Dictionary = executor.execute("tween", {"action": "info"})
 	if not bool(tween_info_result.get("success", false)):

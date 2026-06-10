@@ -7,6 +7,7 @@ class_name MCPAnimationTools
 
 const PlayerTools = preload("res://addons/godot_dotnet_mcp/tools/animation/player_tools.gd")
 const AnimationResourceTools = preload("res://addons/godot_dotnet_mcp/tools/animation/animation_resource_tools.gd")
+const TrackTools = preload("res://addons/godot_dotnet_mcp/tools/animation/track_tools.gd")
 const StateMachineTools = preload("res://addons/godot_dotnet_mcp/tools/animation/state_machine_tools.gd")
 const TweenTools = preload("res://addons/godot_dotnet_mcp/tools/animation/tween_tools.gd")
 const BlendSpaceTools = preload("res://addons/godot_dotnet_mcp/tools/animation/blend_space_tools.gd")
@@ -14,10 +15,36 @@ const BlendTreeTools = preload("res://addons/godot_dotnet_mcp/tools/animation/bl
 
 var _player_tools := PlayerTools.new()
 var _animation_resource_tools := AnimationResourceTools.new()
+var _track_tools := TrackTools.new()
 var _state_machine_tools := StateMachineTools.new()
 var _tween_tools := TweenTools.new()
 var _blend_space_tools := BlendSpaceTools.new()
 var _blend_tree_tools := BlendTreeTools.new()
+
+
+func configure_context(context = null) -> void:
+	super.configure_context(context)
+	_configure_split_services()
+
+
+func dispose_context() -> void:
+	super.dispose_context()
+	_configure_split_services()
+
+
+func _configure_split_services() -> void:
+	var split_context := _context.duplicate(true)
+	for service in [
+		_player_tools,
+		_animation_resource_tools,
+		_track_tools,
+		_state_machine_tools,
+		_tween_tools,
+		_blend_space_tools,
+		_blend_tree_tools
+	]:
+		if service != null and service.has_method("configure_context"):
+			service.configure_context(split_context)
 
 
 func get_tools() -> Array[Dictionary]:
@@ -566,6 +593,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	match tool_name:
 		"player": return _player_tools.execute(null, args)
 		"animation": return _animation_resource_tools.execute(null, args)
+		"track": return _track_tools.execute(null, args)
 		"tween": return _tween_tools.execute(null, args)
 		"animation_tree": return _execute_animation_tree(args)
 		"state_machine": return _state_machine_tools.execute(null, args)
