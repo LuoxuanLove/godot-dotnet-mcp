@@ -190,6 +190,11 @@ class FakeToolLoader:
 					"type": arguments.get("type", ""),
 					"path": arguments.get("path", "")
 				}
+			"delete", "reload":
+				replacement_arguments = {
+					"action": action,
+					"source": arguments.get("path", arguments.get("source", ""))
+				}
 			"list", "search", "get_info", "get_dependencies":
 				replacement_tool = "resource_query"
 		replacement_arguments.erase("_mcp_context")
@@ -597,6 +602,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed resource_manage error should include the legacy tool name.")
 	if not _is_removed_resource_manage_tool(removed_resource_manage_structured, "resource_create"):
 		return _failure("Tool RPC router removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
+	for resource_file_action in ["delete", "reload"]:
+		var removed_resource_file_result: Dictionary = await router.build_tool_call_result_async({
+			"name": "resource_manage",
+			"arguments": {"action": resource_file_action, "path": "res://Tmp/removed_resource_manage.tres"}
+		})
+		if not bool(removed_resource_file_result.get("isError", false)):
+			return _failure("Tool RPC router should reject removed resource_manage %s legacy calls." % resource_file_action)
+		var removed_resource_file_structured = removed_resource_file_result.get("structuredContent", {})
+		if not _is_removed_resource_manage_tool(removed_resource_file_structured, "resource_file_ops"):
+			return _failure("Tool RPC router removed resource_manage %s should point to resource_file_ops." % resource_file_action)
+		var removed_resource_file_arguments := _first_replacement_arguments(((removed_resource_file_structured as Dictionary).get("data", {}) if removed_resource_file_structured is Dictionary else {}))
+		if str(removed_resource_file_arguments.get("action", "")) != resource_file_action:
+			return _failure("Tool RPC router removed resource_manage %s should preserve replacement action." % resource_file_action)
+		if str(removed_resource_file_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
+			return _failure("Tool RPC router removed resource_manage %s should map path to resource_file_ops source." % resource_file_action)
+		if removed_resource_file_arguments.has("path"):
+			return _failure("Tool RPC router removed resource_manage %s should not emit schema-invalid path argument." % resource_file_action)
 
 	var removed_debug_log_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "debug_log",

@@ -173,6 +173,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_resource_result: Dictionary = await _loader.execute_tool_async("resource", "manage", {"action": "create", "type": "Resource", "path": "res://Tmp/removed_resource_manage.tres"})
 	if bool(removed_resource_result.get("success", true)):
 		return _failure("Tool loader should not execute removed resource_manage through the resource domain.")
+	for resource_file_action in ["delete", "reload"]:
+		var removed_resource_guidance: Dictionary = _loader.build_removed_public_tool_result("resource_manage", {"action": resource_file_action, "path": "res://Tmp/removed_resource_manage.tres"})
+		var removed_resource_arguments := _replacement_arguments(removed_resource_guidance)
+		if str(removed_resource_arguments.get("action", "")) != resource_file_action:
+			return _failure("Tool loader removed resource_manage %s guidance should preserve replacement action." % resource_file_action)
+		if str(removed_resource_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
+			return _failure("Tool loader removed resource_manage %s guidance should map path to resource_file_ops source." % resource_file_action)
+		if removed_resource_arguments.has("path"):
+			return _failure("Tool loader removed resource_manage %s guidance should not emit schema-invalid path argument." % resource_file_action)
 	if all_tool_names.has("debug_log"):
 		return _failure("Tool loader should remove the legacy debug_log definition.")
 	for canonical_debug_tool_name in ["debug_log_write", "debug_log_buffer"]:

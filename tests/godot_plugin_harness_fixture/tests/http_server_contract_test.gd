@@ -232,6 +232,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Removed resource_manage error should include the legacy tool name.")
 	if not _is_removed_resource_manage_tool(rpc_removed_resource_manage_structured, "resource_create"):
 		return _failure("Removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
+	for resource_file_action in ["delete", "reload"]:
+		var rpc_removed_resource_file: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+			"jsonrpc": "2.0",
+			"id": 340,
+			"method": "tools/call",
+			"params": {
+				"name": "resource_manage",
+				"arguments": {"action": resource_file_action, "path": "res://Tmp/removed_resource_manage.tres"}
+			}
+		}))
+		var rpc_removed_resource_file_result = rpc_removed_resource_file.get("result", {})
+		if not (rpc_removed_resource_file_result is Dictionary) or not bool((rpc_removed_resource_file_result as Dictionary).get("isError", false)):
+			return _failure("JSON-RPC tools/call should reject removed resource_manage %s legacy calls." % resource_file_action)
+		var rpc_removed_resource_file_structured = (rpc_removed_resource_file_result as Dictionary).get("structuredContent", {})
+		if not _is_removed_resource_manage_tool(rpc_removed_resource_file_structured, "resource_file_ops"):
+			return _failure("Removed resource_manage %s should expose resource_file_ops replacement." % resource_file_action)
+		var rpc_removed_resource_file_arguments := _first_replacement_arguments(((rpc_removed_resource_file_structured as Dictionary).get("data", {}) if rpc_removed_resource_file_structured is Dictionary else {}))
+		if str(rpc_removed_resource_file_arguments.get("action", "")) != resource_file_action:
+			return _failure("Removed resource_manage %s should preserve replacement action." % resource_file_action)
+		if str(rpc_removed_resource_file_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
+			return _failure("Removed resource_manage %s should map path to resource_file_ops source." % resource_file_action)
+		if rpc_removed_resource_file_arguments.has("path"):
+			return _failure("Removed resource_manage %s should not emit schema-invalid path argument." % resource_file_action)
 
 	var rpc_removed_debug_log: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",

@@ -254,7 +254,7 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 			"delete", "reload":
 				replacement_arguments = {
 					"action": action,
-					"path": arguments.get("path", "")
+					"source": arguments.get("path", arguments.get("source", ""))
 				}
 			"list", "search", "get_info", "get_dependencies":
 				replacement_tool_name = "resource_query"
