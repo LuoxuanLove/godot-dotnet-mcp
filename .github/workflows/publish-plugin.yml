@@ -87,6 +87,8 @@ jobs:
             }
           }
 
+          .\scripts\validate_docs_i18n.ps1
+
       - name: Verify hosted .NET 8 SDK
         shell: pwsh
         run: |
