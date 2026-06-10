@@ -15,6 +15,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Animation executor should expose 8 tool definitions after the split.")
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/animation_tools.gd"):
 		return _failure("animation_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if FileAccess.file_exists("res://addons/godot_dotnet_mcp/tools/animation_tools.gd.uid"):
+		return _failure("animation_tools.gd.uid should be removed with the legacy animation monolith.")
 
 	var expected_names := ["player", "animation", "track", "tween", "animation_tree", "state_machine", "blend_space", "blend_tree"]
 	var actual_names: Array[String] = []

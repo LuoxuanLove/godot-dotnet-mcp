@@ -31,6 +31,7 @@ Target version: 1.4.0.
 - Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
+- Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 
 ### Fixed
 
@@ -57,6 +58,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
 - Added removal guard coverage so `resource_manage` cannot reappear in loader definitions, direct resource-domain execution, or localization inventory while the split resource tools stay available.
 - Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
+- Enforced absence guards for the removed audio, animation, signal, TileMap, and UI root monolith files now that their split executors own the domain implementations.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
