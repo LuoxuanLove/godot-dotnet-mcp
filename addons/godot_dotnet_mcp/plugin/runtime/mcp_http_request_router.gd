@@ -5,6 +5,7 @@ class_name MCPHttpRequestRouter
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
+const MCP_ALLOWED_REQUEST_HEADERS := "Content-Type, Accept, MCP-Protocol-Version"
 
 var _handle_mcp_request_async := Callable()
 var _build_health_response := Callable()
@@ -131,7 +132,7 @@ func _build_options_response(path: String, origin: String) -> Dictionary:
 		}
 	return _call_dict(
 		_build_cors_response,
-		[origin, allowed_methods, "Content-Type, Accept"],
+		[origin, allowed_methods, MCP_ALLOWED_REQUEST_HEADERS],
 		{
 			"_status_code": 204,
 			"_no_body": true,
@@ -158,7 +159,7 @@ func _build_cors_headers(origin: String, allow_methods: String) -> Dictionary:
 	return {
 		"Access-Control-Allow-Origin": origin.strip_edges(),
 		"Access-Control-Allow-Methods": allow_methods,
-		"Access-Control-Allow-Headers": "Content-Type, Accept",
+		"Access-Control-Allow-Headers": MCP_ALLOWED_REQUEST_HEADERS,
 		"Access-Control-Max-Age": "86400",
 		"Vary": "Origin"
 	}

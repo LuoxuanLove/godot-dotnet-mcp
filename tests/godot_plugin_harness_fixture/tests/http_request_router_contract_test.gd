@@ -104,6 +104,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not echo the configured CORS origin.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) == "*":
 		return _failure("HTTP request router must not use wildcard CORS origins.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP-Protocol-Version headers.")
 
 	var host_denied_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "example.com:3000"})
 	if int(host_denied_response.get("status", 0)) != 403:
