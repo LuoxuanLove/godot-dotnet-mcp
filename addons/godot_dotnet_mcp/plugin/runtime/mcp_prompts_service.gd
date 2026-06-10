@@ -122,7 +122,29 @@ func _validate_prompt_arguments(prompt_name: String, arguments: Dictionary) -> D
 		if not allowed_lookup.has(name):
 			unknown_args.append(name)
 	if unknown_args.is_empty():
-		return {"success": true}
+		return _validate_prompt_argument_types(prompt_name, arguments)
+	return _unknown_prompt_argument_error(prompt_name, unknown_args, allowed_args)
+
+
+func _validate_prompt_argument_types(prompt_name: String, arguments: Dictionary) -> Dictionary:
+	var expected_types := _prompt_argument_types(prompt_name)
+	for key in arguments.keys():
+		var name := str(key)
+		if not expected_types.has(name):
+			continue
+		var expected_type := str(expected_types.get(name, ""))
+		var value = arguments.get(key)
+		match expected_type:
+			"boolean":
+				if typeof(value) != TYPE_BOOL:
+					return _prompt_argument_type_error(prompt_name, name, "a boolean")
+			"string":
+				if not (value is String):
+					return _prompt_argument_type_error(prompt_name, name, "a string")
+	return {"success": true}
+
+
+func _unknown_prompt_argument_error(prompt_name: String, unknown_args: Array[String], allowed_args: Array[String]) -> Dictionary:
 	unknown_args.sort()
 	return {
 		"success": false,
@@ -131,6 +153,13 @@ func _validate_prompt_arguments(prompt_name: String, arguments: Dictionary) -> D
 			", ".join(unknown_args),
 			", ".join(allowed_args)
 		]
+	}
+
+
+func _prompt_argument_type_error(prompt_name: String, argument_name: String, expected_type: String) -> Dictionary:
+	return {
+		"success": false,
+		"error": "Prompt argument '%s' for %s must be %s." % [argument_name, prompt_name, expected_type]
 	}
 
 
@@ -150,6 +179,24 @@ func _prompt_argument_names(prompt_name: String) -> Array[String]:
 			return ["ui_goal", "target_path"]
 		_:
 			return []
+
+
+func _prompt_argument_types(prompt_name: String) -> Dictionary:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return {"goal": "string", "symbol": "string"}
+		CONTENT_AUTHORING_PROMPT:
+			return {"scene_path": "string", "script_path": "string", "goal": "string"}
+		DEBUG_TRIAGE_PROMPT:
+			return {"error_summary": "string", "include_runtime": "boolean"}
+		REFERENCE_INTEGRITY_PROMPT:
+			return {"script_path": "string", "scene_path": "string", "resource_path": "string", "binding_name": "string"}
+		RUNTIME_VALIDATION_PROMPT:
+			return {"scene_path": "string", "goal": "string", "success_marker": "string"}
+		EDITOR_UI_CONTROL_PROMPT:
+			return {"ui_goal": "string", "target_path": "string"}
+		_:
+			return {}
 
 
 func _build_project_orientation_prompt(arguments: Dictionary) -> Dictionary:

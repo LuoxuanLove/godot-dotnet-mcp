@@ -390,6 +390,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var unknown_argument_message := str(unknown_argument_error.get("message", ""))
 	if unknown_argument_message.find(PROJECT_ORIENTATION_PROMPT) == -1 or unknown_argument_message.find("bogus") == -1 or unknown_argument_message.find("goal") == -1 or unknown_argument_message.find("symbol") == -1:
 		return _failure("unknown prompt argument error should include the prompt name, unknown key, and allowed arguments.")
+	var invalid_goal_type_response: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": []}}, 31)
+	if not (invalid_goal_type_response.get("error", null) is Dictionary):
+		return _failure("prompts/get should reject non-string string prompt arguments.")
+	var invalid_goal_type_error: Dictionary = invalid_goal_type_response.get("error", {})
+	if int(invalid_goal_type_error.get("code", 0)) != -32602:
+		return _failure("non-string prompt arguments should return invalid params.")
+	var invalid_goal_type_message := str(invalid_goal_type_error.get("message", ""))
+	if invalid_goal_type_message.find(PROJECT_ORIENTATION_PROMPT) == -1 or invalid_goal_type_message.find("goal") == -1 or invalid_goal_type_message.find("string") == -1:
+		return _failure("non-string prompt argument error should include the prompt name, argument name, and expected type.")
 	var long_goal_prompt: Dictionary = await _json_rpc("prompts/get", {"name": PROJECT_ORIENTATION_PROMPT, "arguments": {"goal": "G".repeat(40000)}}, 21)
 	var long_goal_result = long_goal_prompt.get("result", {})
 	if not (long_goal_result is Dictionary):
@@ -421,6 +430,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("debug triage prompt should not recommend removed system_editor_log.")
 	if not _prompt_text_is_actionable(debug_prompt_text, ["Use when||适用场景", "Recommended workflow||推荐流程", "Validation||验证", "Avoid||避免事项", EDITOR_LOG_ERRORS_URI, "resources/read", "system_project_state"]):
 		return _failure("debug triage prompt should provide actionable workflow sections and resource-first diagnostic inputs.")
+	var debug_prompt_without_runtime := await _get_prompt_text(DEBUG_TRIAGE_PROMPT, {"include_runtime": false}, 32)
+	if not bool(debug_prompt_without_runtime.get("ok", false)):
+		return _failure(str(debug_prompt_without_runtime.get("error", "debug prompt without runtime failed")))
+	if str(debug_prompt_without_runtime.get("text", "")).find("Include runtime_diagnose output") != -1:
+		return _failure("debug triage prompt should not append runtime-specific guidance when include_runtime=false.")
+	var invalid_runtime_cases := [
+		{"value": "false", "label": "string"},
+		{"value": 0, "label": "number"},
+		{"value": [], "label": "array"},
+		{"value": {}, "label": "object"}
+	]
+	var invalid_runtime_id := 33
+	for invalid_runtime_case in invalid_runtime_cases:
+		var invalid_runtime_type_response: Dictionary = await _json_rpc("prompts/get", {"name": DEBUG_TRIAGE_PROMPT, "arguments": {"include_runtime": invalid_runtime_case.get("value")}}, invalid_runtime_id)
+		invalid_runtime_id += 1
+		if not (invalid_runtime_type_response.get("error", null) is Dictionary):
+			return _failure("prompts/get should reject non-boolean include_runtime %s values." % str(invalid_runtime_case.get("label", "")))
+		var invalid_runtime_type_error: Dictionary = invalid_runtime_type_response.get("error", {})
+		if int(invalid_runtime_type_error.get("code", 0)) != -32602:
+			return _failure("non-boolean include_runtime should return invalid params.")
+		var invalid_runtime_type_message := str(invalid_runtime_type_error.get("message", ""))
+		if invalid_runtime_type_message.find(DEBUG_TRIAGE_PROMPT) == -1 or invalid_runtime_type_message.find("include_runtime") == -1 or invalid_runtime_type_message.find("boolean") == -1:
+			return _failure("non-boolean include_runtime error should include the prompt name, argument name, and expected type.")
 
 	var reference_prompt := await _get_prompt_text(REFERENCE_INTEGRITY_PROMPT, {"script_path": "res://Player.cs", "scene_path": "Main.tscn", "resource_path": "tests/_fixtures/mcp_resources_prompts_sample.tres", "binding_name": "HealthLabel"}, 14)
 	if not bool(reference_prompt.get("ok", false)):
