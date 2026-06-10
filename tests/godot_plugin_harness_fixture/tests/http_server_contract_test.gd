@@ -120,15 +120,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("JSON-RPC tools/list did not return tools as an array.")
 	if (rpc_tools as Array).is_empty():
 		return _failure("JSON-RPC tools/list did not return any exposed tools.")
-	if not ((rpc_tools_list_result as Dictionary).get("toolTree", []) is Array) or (((rpc_tools_list_result as Dictionary).get("toolTree", []) as Array).is_empty()):
-		return _failure("JSON-RPC tools/list did not expose the unified tool tree.")
-	if _has_tool(rpc_tools, "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolTree", []), "system_help") or _contains_tool_name_recursive((rpc_tools_list_result as Dictionary).get("toolGroups", []), "system_help"):
-		return _failure("JSON-RPC tools/list flat, tree, and group metadata should not expose removed system_help.")
-	if not _first_tool_has_group_path(rpc_tools):
-		return _failure("JSON-RPC tools/list did not enrich flat tools with groupPath metadata.")
+	for presentation_key in ["presentationVersion", "toolTree", "toolGroups"]:
+		if (rpc_tools_list_result as Dictionary).has(presentation_key):
+			return _failure("JSON-RPC tools/list should not expose presentation key %s." % presentation_key)
+	if _has_tool(rpc_tools, "system_help"):
+		return _failure("JSON-RPC tools/list should not expose removed system_help.")
 	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "debug_log"]:
 		if _contains_tool_name_recursive(rpc_tools_list_result, removed_tool_name):
-			return _failure("JSON-RPC tools/list should not expose removed tool %s." % removed_tool_name)
+			return _failure("JSON-RPC tools/list should not expose removed public tool %s." % removed_tool_name)
+	for tool_entry in rpc_tools:
+		if not (tool_entry is Dictionary):
+			continue
+		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
+			return _failure("JSON-RPC tools/list should not expose presentation metadata on flat tool entries.")
+		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
+			if (tool_entry as Dictionary).has(internal_key):
+				return _failure("JSON-RPC tools/list should not expose internal metadata key: %s" % internal_key)
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
