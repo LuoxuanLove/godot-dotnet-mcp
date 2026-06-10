@@ -188,15 +188,19 @@ func _is_json_content_type(content_type: String) -> bool:
 func _accepts_mcp_response(accept_header: String) -> bool:
 	var normalized := accept_header.strip_edges().to_lower()
 	if normalized.is_empty():
-		return true
+		return false
+	var accepts_json := false
+	var accepts_sse := false
 	for raw_part in normalized.split(",", false):
 		var media_range := str(raw_part).strip_edges()
 		var semicolon := media_range.find(";")
 		if semicolon != -1:
 			media_range = media_range.substr(0, semicolon).strip_edges()
-		if media_range == "*/*" or media_range == "application/*" or media_range == "application/json" or media_range == "text/event-stream":
-			return true
-	return false
+		if media_range == "application/json":
+			accepts_json = true
+		elif media_range == "text/event-stream":
+			accepts_sse = true
+	return accepts_json and accepts_sse
 
 
 func _is_origin_allowed(origin: String) -> bool:

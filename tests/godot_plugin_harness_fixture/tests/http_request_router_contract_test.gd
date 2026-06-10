@@ -72,8 +72,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	router.set_allowed_hosts(["10.0.0.8"])
 
 	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}")
-	if str(mcp_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\"}":
-		return _failure("HTTP request router did not forward POST /mcp to the MCP request handler.")
+	if int(mcp_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should require explicit Streamable HTTP Accept headers for POST /mcp.")
 
 	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "")
 	if int(get_mcp_response.get("status", 0)) != 405 or not bool(get_mcp_response.get("_no_body", false)):
@@ -122,6 +122,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var accept_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "text/html"})
 	if int(accept_denied_response.get("status", 0)) != 406:
 		return _failure("HTTP request router did not reject POST /mcp requests that cannot accept JSON or SSE responses.")
+
+	var json_only_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json"})
+	if int(json_only_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that omit text/event-stream from Accept.")
+
+	var sse_only_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "text/event-stream"})
+	if int(sse_only_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that omit application/json from Accept.")
 
 	var streamable_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":2}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
 	if str(streamable_accept_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":2}":
