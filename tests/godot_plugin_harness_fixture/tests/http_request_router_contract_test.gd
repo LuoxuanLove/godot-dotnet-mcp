@@ -2,6 +2,7 @@ extends RefCounted
 
 const HttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
 const HttpRequestRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router_context.gd")
+const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
 class FakeCallbacks:
@@ -115,6 +116,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var content_type_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "text/plain"})
 	if int(content_type_denied_response.get("status", 0)) != 415:
 		return _failure("HTTP request router did not reject non-JSON POST content types.")
+
+	var accept_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "text/html"})
+	if int(accept_denied_response.get("status", 0)) != 406:
+		return _failure("HTTP request router did not reject POST /mcp requests that cannot accept JSON or SSE responses.")
+
+	var streamable_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":2}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
+	if str(streamable_accept_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":2}":
+		return _failure("HTTP request router did not allow Streamable HTTP Accept headers for POST /mcp.")
+
+	var protocol_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": "1900-01-01"})
+	if int(protocol_denied_response.get("status", 0)) != 400:
+		return _failure("HTTP request router did not reject unsupported MCP-Protocol-Version headers.")
+	if str(protocol_denied_response.get("expected_protocol_version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should report the expected MCP protocol version.")
+
+	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if str(protocol_allowed_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":3}":
+		return _failure("HTTP request router rejected the configured MCP-Protocol-Version header.")
 
 	var allowed_origin_health: Dictionary = await router.route_request_async("GET", "/health", "", {"origin": "http://localhost:5173", "host": "localhost:3000"})
 	var allowed_origin_health_headers: Dictionary = allowed_origin_health.get("_headers", {})

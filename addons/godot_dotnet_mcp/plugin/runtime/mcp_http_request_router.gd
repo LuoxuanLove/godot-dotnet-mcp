@@ -2,6 +2,8 @@
 extends RefCounted
 class_name MCPHttpRequestRouter
 
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
 
 var _handle_mcp_request_async := Callable()
@@ -66,6 +68,20 @@ func route_request_async(method: String, path: String, request_body: String, hea
 				"error": "Unsupported media type",
 				"status": 415
 			}
+		if path == "/mcp":
+			var accept_header := str(normalized_headers.get("accept", "")).strip_edges()
+			if not _accepts_mcp_response(accept_header):
+				return {
+					"error": "Not acceptable: POST /mcp requires Accept to allow application/json or text/event-stream",
+					"status": 406
+				}
+			var protocol_header := str(normalized_headers.get("mcp-protocol-version", "")).strip_edges()
+			if not protocol_header.is_empty() and protocol_header != MCPProtocolFacts.get_protocol_version():
+				return {
+					"error": "Unsupported MCP-Protocol-Version: %s" % protocol_header,
+					"status": 400,
+					"expected_protocol_version": MCPProtocolFacts.get_protocol_version()
+				}
 
 	var response: Dictionary
 	if method == "POST" and path == "/mcp":
@@ -166,6 +182,20 @@ func _requires_json_content_type(path: String) -> bool:
 
 func _is_json_content_type(content_type: String) -> bool:
 	return content_type == "application/json" or content_type.begins_with("application/json;")
+
+
+func _accepts_mcp_response(accept_header: String) -> bool:
+	var normalized := accept_header.strip_edges().to_lower()
+	if normalized.is_empty():
+		return true
+	for raw_part in normalized.split(",", false):
+		var media_range := str(raw_part).strip_edges()
+		var semicolon := media_range.find(";")
+		if semicolon != -1:
+			media_range = media_range.substr(0, semicolon).strip_edges()
+		if media_range == "*/*" or media_range == "application/*" or media_range == "application/json" or media_range == "text/event-stream":
+			return true
+	return false
 
 
 func _is_origin_allowed(origin: String) -> bool:
