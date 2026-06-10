@@ -17,6 +17,7 @@ $docMap = @(
     @{ Id = "readme"; Paths = @{ en = "README.md"; "zh-CN" = "说明.md"; ja = "はじめに.md"; ko = "소개.md" } },
     @{ Id = "changelog"; Paths = @{ en = "CHANGELOG.md"; "zh-CN" = "变更日志.md"; ja = "変更履歴.md"; ko = "변경-로그.md" } },
     @{ Id = "roadmap"; Paths = @{ en = "ROADMAP.md"; "zh-CN" = "路线图.md"; ja = "ロードマップ.md"; ko = "로드맵.md" } },
+    @{ Id = "contract-v2-bridge-upgrade"; Paths = @{ en = "contracts/v2-bridge-upgrade-contract.md"; "zh-CN" = "契约/v2-bridge-upgrade-contract.md"; ja = "契約/v2-bridge-upgrade-contract.md"; ko = "계약/v2-bridge-upgrade-contract.md" } },
     @{ Id = "overview"; Paths = @{ en = "overview.md"; "zh-CN" = "概述.md"; ja = "概要.md"; ko = "개요.md" } },
     @{ Id = "interface-overview"; Paths = @{ en = "interface/overview.md"; "zh-CN" = "界面/总览.md"; ja = "インターフェース/概要.md"; ko = "인터페이스/개요.md" } },
     @{ Id = "interface-server-config"; Paths = @{ en = "interface/server-and-config-pages.md"; "zh-CN" = "界面/服务与配置页实现.md"; ja = "インターフェース/サーバーと設定ページ実装.md"; ko = "인터페이스/서버와-설정-페이지-구현.md" } },

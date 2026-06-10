@@ -1,0 +1,47 @@
+name: v2-broker-manifest
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    paths:
+      - "companion/contracts/v2-broker-manifest.json"
+      - "scripts/validate_v2_broker_manifest.ps1"
+      - "scripts/test_v2_broker_manifest.ps1"
+      - ".github/workflows/v2-broker-manifest.yml"
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+      - v2.0
+      - release/v2.0.0-baseline
+    paths:
+      - "companion/contracts/v2-broker-manifest.json"
+      - "scripts/validate_v2_broker_manifest.ps1"
+      - "scripts/test_v2_broker_manifest.ps1"
+      - ".github/workflows/v2-broker-manifest.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  v2-broker-manifest:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate v2 broker manifest
+        shell: pwsh
+        run: .\scripts\validate_v2_broker_manifest.ps1
+
+      - name: Test v2 broker manifest policy
+        shell: pwsh
+        run: .\scripts\test_v2_broker_manifest.ps1

@@ -16,18 +16,32 @@ Target version: 2.0.0.
 - Added an unevaluated static .NET workspace graph that reports SDK, target frameworks, package references, project references, compile includes/removes, and Godot SDK/package hints without restoring or building projects.
 - Added a static resource reference graph for text `.tscn` and `.tres` files, covering external resources, sub-resources, `uid://` markers, `res://` usages, missing references, and unsupported binary `.res` files without opening the editor.
 
+### Fixed
+
+- Fixed the static resource graph so `preload()` usages are not also recorded as `load()` usages, damaged external-resource fallback paths are diagnosed, and `res://` references crossing reparse points are not resolved as ordinary in-project files.
+- Rejected editor-live upgrades from bridge statuses that omit `supports_live_editor_state`, lack a compatible v2 plugin version, or report missing, malformed, older-major, newer-major, or explicit version-mismatch plugin versions.
+- Aligned the bridge status `plugin_version` schema with the runtime compatibility parser for optional `v` prefixes, prerelease/build metadata, and whitespace rejection.
+- Bounded active project sessions globally and per project, and pruned expired sessions before accepting new sessions so stale entries cannot accumulate indefinitely.
+
 ### Documentation
 
 - Clarified source-copy installation guidance so users copy only the installable addon directory and do not install repository-level Companion, test, or script development directories into Godot projects.
 - Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.
+- Added the v2 editor bridge upgrade contract across localized docs, covering bridge states, explicit editor-live upgrade requirements, and project/session-scoped bridge use.
 - Initialized the v2.0.0 release-note sources across the four localized documentation trees so the version line has durable release narrative files before feature work begins.
 
 ### Internal
 
 - Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
+- Added a v2 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
+- Added v2 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
+- Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
+- Added regression coverage for static resource graph fallback diagnostics, preload/load classification, reparse-point references, bridge version policy samples, and project session limits.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
+- Mirrored the Companion contract and static analyzer build/test gates into release workflows, added dry-run cache markers for those checks, and guarded active v2 baseline push filters for v2 contract workflows.
+- Added v2 bridge contract and broker manifest validators to release workflow gates, including dry-run cache markers for those policy checks.
 - Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
 - Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
 
