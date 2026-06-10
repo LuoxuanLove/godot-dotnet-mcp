@@ -83,6 +83,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not attach the MCP protocol version response header.")
 	if str(mcp_headers.get("Mcp-Session-Id", "")).is_empty():
 		return _failure("HTTP request router did not attach a streamable HTTP session id.")
+	var generated_session_id := str(mcp_headers.get("Mcp-Session-Id", ""))
+
+	var repeated_generated_session_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		"{}",
+		{"host": "localhost:3000", "accept": "application/json"}
+	)
+	var repeated_generated_session_headers: Dictionary = repeated_generated_session_response.get("_headers", {})
+	if str(repeated_generated_session_headers.get("Mcp-Session-Id", "")) != generated_session_id:
+		return _failure("HTTP request router should keep generated MCP session ids stable per router instance.")
+
+	var second_router = HttpRequestRouterScript.new()
+	second_router.configure(context)
+	var second_router_response: Dictionary = await second_router.route_request_async(
+		"POST",
+		"/mcp",
+		"{}",
+		{"host": "localhost:3000", "accept": "application/json"}
+	)
+	var second_router_headers: Dictionary = second_router_response.get("_headers", {})
+	if str(second_router_headers.get("Mcp-Session-Id", "")) == generated_session_id:
+		return _failure("HTTP request router should not reuse one fixed generated MCP session id across router instances.")
 
 	var existing_session_response: Dictionary = await router.route_request_async(
 		"POST",
