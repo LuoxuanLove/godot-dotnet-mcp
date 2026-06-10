@@ -7,7 +7,8 @@ function Write-DocFixture {
     param(
         [string]$RepositoryRoot,
         [bool]$InvalidChangelogOrder,
-        [bool]$DuplicateChangelogSection
+        [bool]$DuplicateChangelogSection,
+        [bool]$UnfinishedReleaseNoteWording
     )
 
     $docsRoot = Join-Path $RepositoryRoot "docs"
@@ -67,6 +68,77 @@ function Write-DocFixture {
         $paths[$locale][$changelogPaths[$locale]] = ($changelogText -join "`n") + "`n"
     }
 
+    $releaseNoteSwitch = '<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/en/process/release-notes/release-notes-v1.4.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/zh-CN/流程/发布说明/发布说明-v1.4.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/ja/プロセス/リリースノート/リリースノート-v1.4.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.4.0.md">한국어</a></p>'
+    $releaseNoteBodies = @{
+        en = @(
+            "## Fixture v1.4.0 Release Notes",
+            "",
+            "Godot .NET MCP v1.4.0 fixture notes cover resource-first context, prompt guidance, and public tool cleanup.",
+            "",
+            $releaseNoteSwitch,
+            "",
+            "### Release Highlights",
+            "",
+            "The fixture describes finished release highlights for plugin behavior and validation gates.",
+            "",
+            "### Compatibility",
+            "",
+            "Clients should prefer Resources and Prompts for passive context and planning."
+        )
+        "zh-CN" = @(
+            "## Fixture v1.4.0 发布说明",
+            "",
+            "Godot .NET MCP v1.4.0 fixture 发布说明覆盖 resource-first 上下文、Prompt 指引和公开工具清理。",
+            "",
+            $releaseNoteSwitch,
+            "",
+            "### 发布亮点",
+            "",
+            "该 fixture 描述已经完成的插件行为与验证门禁。",
+            "",
+            "### 兼容性",
+            "",
+            "客户端应优先使用 Resources 与 Prompts 获取被动上下文和规划入口。"
+        )
+        ja = @(
+            "## Fixture v1.4.0 リリースノート",
+            "",
+            "Godot .NET MCP v1.4.0 fixture notes は resource-first context、Prompt guidance、public tool cleanup を扱います。",
+            "",
+            $releaseNoteSwitch,
+            "",
+            "### Release Highlights",
+            "",
+            "この fixture は完了済みの plugin behavior と validation gate を説明します。",
+            "",
+            "### Compatibility",
+            "",
+            "client は passive context と planning に Resources と Prompts を優先します。"
+        )
+        ko = @(
+            "## Fixture v1.4.0 릴리스 노트",
+            "",
+            "Godot .NET MCP v1.4.0 fixture notes는 resource-first context, Prompt guidance, public tool cleanup을 다룹니다.",
+            "",
+            $releaseNoteSwitch,
+            "",
+            "### Release Highlights",
+            "",
+            "이 fixture는 완료된 plugin behavior와 validation gate를 설명합니다.",
+            "",
+            "### Compatibility",
+            "",
+            "client는 passive context와 planning에 Resources 및 Prompts를 우선 사용합니다."
+        )
+    }
+    if ($UnfinishedReleaseNoteWording) {
+        $releaseNoteBodies.en[8] = "The final highlights will be written from the actual release contents."
+    }
+    $releaseNotePaths = @{ en = "process/release-notes/release-notes-v1.4.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.4.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.4.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.4.0.md" }
+    foreach ($locale in $releaseNoteBodies.Keys) {
+        $paths[$locale][$releaseNotePaths[$locale]] = ($releaseNoteBodies[$locale] -join "`n") + "`n"
+    }
+
     foreach ($locale in $paths.Keys) {
         $localeRoot = Join-Path $docsRoot $locale
         New-Item -ItemType Directory -Path $localeRoot -Force | Out-Null
@@ -83,13 +155,14 @@ function Invoke-DocsScenario {
         [string]$Name,
         [bool]$InvalidChangelogOrder,
         [bool]$DuplicateChangelogSection,
+        [bool]$UnfinishedReleaseNoteWording,
         [bool]$ShouldPass
     )
 
     $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-docs-policy-" + [System.Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $repo | Out-Null
     try {
-        Write-DocFixture -RepositoryRoot $repo -InvalidChangelogOrder $InvalidChangelogOrder -DuplicateChangelogSection $DuplicateChangelogSection
+        Write-DocFixture -RepositoryRoot $repo -InvalidChangelogOrder $InvalidChangelogOrder -DuplicateChangelogSection $DuplicateChangelogSection -UnfinishedReleaseNoteWording $UnfinishedReleaseNoteWording
         $passed = $true
         $failureMessage = ""
         try {
@@ -113,8 +186,9 @@ function Invoke-DocsScenario {
     }
 }
 
-Invoke-DocsScenario -Name "ordered changelog sections" -InvalidChangelogOrder $false -DuplicateChangelogSection $false -ShouldPass $true
-Invoke-DocsScenario -Name "invalid changelog section order" -InvalidChangelogOrder $true -DuplicateChangelogSection $false -ShouldPass $false
-Invoke-DocsScenario -Name "duplicate changelog section" -InvalidChangelogOrder $false -DuplicateChangelogSection $true -ShouldPass $false
+Invoke-DocsScenario -Name "ordered changelog sections" -InvalidChangelogOrder $false -DuplicateChangelogSection $false -UnfinishedReleaseNoteWording $false -ShouldPass $true
+Invoke-DocsScenario -Name "invalid changelog section order" -InvalidChangelogOrder $true -DuplicateChangelogSection $false -UnfinishedReleaseNoteWording $false -ShouldPass $false
+Invoke-DocsScenario -Name "duplicate changelog section" -InvalidChangelogOrder $false -DuplicateChangelogSection $true -UnfinishedReleaseNoteWording $false -ShouldPass $false
+Invoke-DocsScenario -Name "unfinished release-note wording" -InvalidChangelogOrder $false -DuplicateChangelogSection $false -UnfinishedReleaseNoteWording $true -ShouldPass $false
 
 Write-Host "Docs i18n policy scenarios validated successfully."
