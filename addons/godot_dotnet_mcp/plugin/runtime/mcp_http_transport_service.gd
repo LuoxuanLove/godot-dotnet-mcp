@@ -120,6 +120,9 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		if not bool(decoded_request.get("ready", false)):
 			_log_pending_request_wait(decoded_request, data)
 			return
+		if bool(decoded_request.get("framing_error", false)):
+			_handle_framing_error(client, decoded_request)
+			return
 
 		var headers: Dictionary = decoded_request.get("headers", {})
 		_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
@@ -172,6 +175,28 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.get_pending_data(client).is_empty():
 			call_deferred("_process_http_request_async", client)
 			return
+
+
+func _handle_framing_error(client: StreamPeerTCP, decoded_request: Dictionary) -> void:
+	var error_type := str(decoded_request.get("error", "bad_request"))
+	var message := str(decoded_request.get("message", "Invalid HTTP request framing."))
+	_log("Rejecting malformed HTTP request: %s (%s)" % [message, error_type], "warning")
+	if _connection_state != null:
+		_connection_state.set_pending_data(client, "")
+		if _connection_state.has_method("record_rejected_request"):
+			_connection_state.record_rejected_request()
+	if _write_http_response.is_valid():
+		_write_http_response.call(client, {
+			"_status_code": 400,
+			"jsonrpc": "2.0",
+			"error": {
+				"code": -32700,
+				"message": message,
+				"data": {"type": error_type}
+			},
+			"id": null
+		}, false)
+	client.disconnect_from_host()
 
 
 func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:

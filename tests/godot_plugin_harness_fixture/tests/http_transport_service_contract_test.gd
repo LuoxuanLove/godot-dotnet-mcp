@@ -15,6 +15,7 @@ var _last_path := ""
 var _last_body := ""
 var _last_headers: Dictionary = {}
 var _last_no_body := false
+var _last_response: Dictionary = {}
 var _routed_bodies: Array[String] = []
 
 
@@ -139,6 +140,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if str(disconnected_session.get("connection_id", "")) != "http-1":
 		return _failure("HTTP transport recent client session should preserve the stable connection id.")
 
+	var invalid_length_check: Dictionary = await _run_invalid_content_length_contract(tree)
+	if not bool(invalid_length_check.get("success", false)):
+		return invalid_length_check
+
 	return {
 		"name": "http_transport_service_contracts",
 		"success": true,
@@ -150,6 +155,68 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"last_method": _last_method
 		}
 	}
+
+
+func _run_invalid_content_length_contract(tree: SceneTree) -> Dictionary:
+	_reset_state()
+	var port := _pick_free_port(26370)
+	if port < 0:
+		return _failure("Could not reserve a TCP port for the invalid HTTP transport contract server.")
+
+	var tcp_server := TCPServer.new()
+	if tcp_server.listen(port, "127.0.0.1") != OK:
+		return _failure("Failed to start the invalid HTTP transport contract server.")
+
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+
+	var connection_state = HttpConnectionStateScript.new()
+	var decoder = HttpRequestDecoderScript.new()
+	var transport = HttpTransportServiceScript.new()
+	var context = HttpTransportContextScript.new()
+	context.log = Callable(self, "_log")
+	context.emit_client_connected = Callable(self, "_on_connected")
+	context.emit_client_disconnected = Callable(self, "_on_disconnected")
+	context.route_request_async = Callable(self, "_route_request_async")
+	context.write_http_response = Callable(self, "_write_response")
+	context.tick_loader = Callable(self, "_tick_loader")
+	transport.configure(connection_state, decoder, context)
+
+	var request_sent := false
+	for _i in range(40):
+		client.poll()
+		if not request_sent and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			client.put_data("POST /mcp HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}".to_utf8_buffer())
+			request_sent = true
+		transport.process_frame(tcp_server, true, 0.016)
+		if _write_count >= 1 and _disconnected_count >= 1:
+			break
+		await tree.process_frame
+
+	tcp_server.stop()
+
+	if _connected_count != 1:
+		return _failure("Invalid HTTP framing should still emit one client_connected event.")
+	if not _routed_bodies.is_empty():
+		return _failure("Invalid HTTP Content-Length should not route a request body.")
+	if _write_count != 1:
+		return _failure("Invalid HTTP Content-Length should write exactly one 400 response.")
+	if int(_last_response.get("_status_code", 0)) != 400:
+		return _failure("Invalid HTTP Content-Length should return HTTP 400.")
+	var error_payload: Dictionary = _last_response.get("error", {})
+	if int(error_payload.get("code", 0)) != -32700:
+		return _failure("Invalid HTTP Content-Length should return a JSON-RPC parse/framing error.")
+	var error_data: Dictionary = error_payload.get("data", {})
+	if str(error_data.get("type", "")) != "bad_content_length":
+		return _failure("Invalid HTTP Content-Length should report bad_content_length.")
+	var stats: Dictionary = connection_state.get_connection_stats()
+	if int(stats.get("rejected_requests", 0)) != 1:
+		return _failure("Invalid HTTP Content-Length should increment rejected request diagnostics.")
+	if int(stats.get("total_requests", 0)) != 0:
+		return _failure("Invalid HTTP Content-Length should not be recorded as a routed request.")
+	if _disconnected_count != 1:
+		return _failure("Invalid HTTP Content-Length should close and remove the client.")
+	return {"success": true, "error": ""}
 
 
 func _route_request_async(method: String, path: String, body: String, headers: Dictionary) -> Dictionary:
@@ -168,6 +235,7 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = false) -> bool:
 	_write_count += 1
 	_last_no_body = no_body
+	_last_response = _data.duplicate(true)
 	return true
 
 
@@ -206,6 +274,7 @@ func _reset_state() -> void:
 	_last_body = ""
 	_last_headers = {}
 	_last_no_body = false
+	_last_response = {}
 	_routed_bodies = []
 
 

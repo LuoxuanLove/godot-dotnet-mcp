@@ -42,6 +42,31 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bool(incomplete_body.get("ready", false)) or str(incomplete_body.get("waiting_for", "")) != "body":
 		return _failure("Decoder should wait for the full Content-Length body.")
 
+	var non_numeric_length := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}")
+	var non_numeric_check := _assert_bad_content_length(non_numeric_length, "non-numeric")
+	if not bool(non_numeric_check.get("success", false)):
+		return non_numeric_check
+
+	var negative_length := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: -1\r\n\r\n{}")
+	var negative_check := _assert_bad_content_length(negative_length, "negative")
+	if not bool(negative_check.get("success", false)):
+		return negative_check
+
+	var zero_length: Dictionary = decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: 0\r\n\r\nNEXT")
+	if not bool(zero_length.get("ready", false)):
+		return _failure("HTTP Content-Length zero should be accepted as a complete empty body.")
+	if bool(zero_length.get("framing_error", false)):
+		return _failure("HTTP Content-Length zero should not be marked as a framing error.")
+	if str(zero_length.get("request_body", "")) != "":
+		return _failure("HTTP Content-Length zero should preserve an empty request body.")
+	if str(zero_length.get("remaining_data", "")) != "NEXT":
+		return _failure("HTTP Content-Length zero should preserve trailing data.")
+
+	var oversized_length := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: 1048577\r\n\r\n{}")
+	var oversized_check := _assert_bad_content_length(oversized_length, "oversized")
+	if not bool(oversized_check.get("success", false)):
+		return oversized_check
+
 	var chunked_request := (
 		"POST /mcp HTTP/1.1\r\n"
 		+ "Transfer-Encoding: chunked\r\n\r\n"
@@ -74,6 +99,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"waiting_state": str(incomplete_body.get("waiting_for", ""))
 		}
 	}
+
+
+func _assert_bad_content_length(decoded: Dictionary, label: String) -> Dictionary:
+	if not bool(decoded.get("ready", false)):
+		return _failure("Invalid %s Content-Length should produce a ready framing error." % label)
+	if not bool(decoded.get("framing_error", false)):
+		return _failure("Invalid %s Content-Length should be marked as a framing error." % label)
+	if str(decoded.get("error", "")) != "bad_content_length":
+		return _failure("Invalid %s Content-Length should report bad_content_length." % label)
+	if not str(decoded.get("message", "")).contains("Content-Length"):
+		return _failure("Invalid %s Content-Length should describe the rejected header." % label)
+	return {"success": true, "error": ""}
 
 
 func _failure(message: String) -> Dictionary:

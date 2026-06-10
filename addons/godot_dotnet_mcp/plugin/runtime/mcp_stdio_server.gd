@@ -36,6 +36,8 @@ var _last_written_response: Dictionary = {}
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
 const MAX_STDIN_BYTES_PER_TICK := 8192
+const MAX_STDIN_PENDING_BYTES := 1024 * 1024
+const MAX_STDIN_CONTENT_LENGTH := 1024 * 1024
 
 
 func _ready() -> void:
@@ -103,6 +105,12 @@ func _process(_delta: float) -> void:
 				read_any = true
 				bytes_read += chunk.size()
 				_buffer.append_array(chunk)
+				if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+					_reject_stdio_frame(
+						"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+						"stdio_pending_buffer_exceeded"
+					)
+					break
 			if not read_any:
 				break
 		_processing_stdin = false
@@ -115,20 +123,26 @@ func _try_parse_frame(generation: int) -> bool:
 	while true:
 		if not _enabled or generation != _transport_generation:
 			return false
+		if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+			_reject_stdio_frame(
+				"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+				"stdio_pending_buffer_exceeded"
+			)
+			return false
 		var buffer_text: String = _buffer.get_string_from_ascii()
 		var header_end: int = buffer_text.find("\r\n\r\n")
 		if header_end == -1:
 			return false
 		var header_bytes: PackedByteArray = _buffer.slice(0, header_end)
 		var header: String = header_bytes.get_string_from_ascii()
-		var content_length: int = -1
-		for line in header.split("\r\n"):
-			if line.to_lower().begins_with("content-length:"):
-				content_length = int(line.substr(15).strip_edges())
-		if content_length < 0:
-			# Malformed header — discard buffer up to next potential header
-			_buffer = PackedByteArray()
+		var content_length_result := _parse_stdio_content_length(header)
+		if not bool(content_length_result.get("success", false)):
+			_reject_stdio_frame(
+				str(content_length_result.get("error", "Invalid stdio Content-Length header.")),
+				str(content_length_result.get("type", "stdio_bad_content_length"))
+			)
 			return false
+		var content_length := int(content_length_result.get("content_length", 0))
 		var body_start: int = header_end + 4
 		# Byte-level check (UTF-8 multi-byte safe)
 		if _buffer.size() - body_start < content_length:
@@ -140,6 +154,36 @@ func _try_parse_frame(generation: int) -> bool:
 		return true
 
 	return false
+
+
+func _parse_stdio_content_length(header: String) -> Dictionary:
+	var values: Array[String] = []
+	for line in header.split("\r\n"):
+		if line.to_lower().begins_with("content-length:"):
+			values.append(line.substr(15).strip_edges())
+	if values.is_empty():
+		return {"success": false, "type": "stdio_missing_content_length", "error": "Missing Content-Length header."}
+	if values.size() > 1:
+		return {"success": false, "type": "stdio_duplicate_content_length", "error": "Duplicate Content-Length headers are not supported."}
+	var text := values[0]
+	if not text.is_valid_int():
+		return {"success": false, "type": "stdio_bad_content_length", "error": "Content-Length must be a positive integer."}
+	var parsed := int(text)
+	if parsed <= 0:
+		return {"success": false, "type": "stdio_bad_content_length", "error": "Content-Length must be greater than zero."}
+	if parsed > MAX_STDIN_CONTENT_LENGTH:
+		return {
+			"success": false,
+			"type": "stdio_frame_too_large",
+			"error": "Content-Length exceeds maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH
+		}
+	return {"success": true, "content_length": parsed}
+
+
+func _reject_stdio_frame(message: String, error_type: String = "stdio_bad_framing") -> void:
+	_buffer = PackedByteArray()
+	_log("Rejecting malformed stdio frame: %s (%s)" % [message, error_type], "warning")
+	_write_response(_create_json_rpc_error(-32700, "%s [%s]" % [message, error_type], null))
 
 
 func _handle_request(body: String, generation: int = -1) -> void:
