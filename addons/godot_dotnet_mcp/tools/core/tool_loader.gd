@@ -3,22 +3,12 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 
-const PUBLIC_REMOVED_MCP_TOOLS := {
-	"system_help": true,
-	"system_plugin_reload": true,
-	"system_plugin_update": true,
-	"system_scene_analyze": true,
-	"system_scene_validate": true,
-	"system_editor_log": true,
-	"system_tool_catalog": true,
-	"system_tool_activity": true,
-	"resource_manage": true
-}
+const PUBLIC_REMOVED_MCP_TOOLS := ToolCatalogManifest.PUBLIC_REMOVED_MCP_TOOLS
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -1203,7 +1193,7 @@ func _is_callable_compatibility_alias(tool_name: String) -> bool:
 
 
 func _is_exposed_tool_category(category: String) -> bool:
-	return category in MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
+	return ToolCatalogManifest.is_public_category(category)
 
 
 func _get_tool_access_provider():

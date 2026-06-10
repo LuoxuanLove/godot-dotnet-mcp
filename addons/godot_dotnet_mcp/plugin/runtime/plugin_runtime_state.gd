@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"update_release_tag": ""
 }
 
-const ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.ALL_TOOL_CATEGORIES
+static var ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.get_all_tool_categories()
 const DEFAULT_COLLAPSED_DOMAINS: Array[String] = []
 
 const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL_PROFILES
