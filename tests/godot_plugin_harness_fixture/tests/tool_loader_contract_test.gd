@@ -173,7 +173,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var removed_resource_result: Dictionary = await _loader.execute_tool_async("resource", "manage", {"action": "create", "type": "Resource", "path": "res://Tmp/removed_resource_manage.tres"})
 	if bool(removed_resource_result.get("success", true)):
 		return _failure("Tool loader should not execute removed resource_manage through the resource domain.")
-	for resource_file_action in ["delete", "reload"]:
+	var replacement_resource_path := "res://Tmp/godot_dotnet_mcp_tool_loader_contracts/removed_resource_manage.tres"
+	var create_replacement_resource: Dictionary = await _loader.execute_tool_async("resource", "create", {"type": "Resource", "path": replacement_resource_path})
+	if not bool(create_replacement_resource.get("success", false)):
+		return _failure("Tool loader should create a resource fixture before executing resource_manage replacement guidance.")
+	for resource_file_action in ["reload", "delete"]:
 		var removed_resource_guidance: Dictionary = _loader.build_removed_public_tool_result("resource_manage", {"action": resource_file_action, "path": "res://Tmp/removed_resource_manage.tres"})
 		var removed_resource_arguments := _replacement_arguments(removed_resource_guidance)
 		if str(removed_resource_arguments.get("action", "")) != resource_file_action:
@@ -182,6 +186,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Tool loader removed resource_manage %s guidance should map path to resource_file_ops source." % resource_file_action)
 		if removed_resource_arguments.has("path"):
 			return _failure("Tool loader removed resource_manage %s guidance should not emit schema-invalid path argument." % resource_file_action)
+		var executable_replacement_args := removed_resource_arguments.duplicate(true)
+		executable_replacement_args["source"] = replacement_resource_path
+		var replacement_execution: Dictionary = await _loader.execute_tool_async("resource", "file_ops", executable_replacement_args)
+		if not bool(replacement_execution.get("success", false)):
+			return _failure("Tool loader resource_manage %s replacement guidance should execute successfully through resource_file_ops." % resource_file_action)
 	if all_tool_names.has("debug_log"):
 		return _failure("Tool loader should remove the legacy debug_log definition.")
 	for canonical_debug_tool_name in ["debug_log_write", "debug_log_buffer"]:
