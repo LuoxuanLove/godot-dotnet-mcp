@@ -53,7 +53,7 @@ Target version: 1.4.0.
 - Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
-- Updated version-policy CI to compare v1.4 pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
+- Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 
 ## [1.3.0] - 2026-06-08
 
