@@ -104,6 +104,55 @@ function Get-RelativePath {
     return $TargetPath
 }
 
+function Assert-FileContainsText {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [string[]]$RequiredText
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        $errors.Add("Required refactor document is missing: $Label ($Path)")
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($needle in $RequiredText) {
+        if ($text.IndexOf($needle, [System.StringComparison]::Ordinal) -lt 0) {
+            $errors.Add("Required refactor document '$Label' is missing expected MCP 2025-11-25 fact: $needle")
+        }
+    }
+}
+
+function Assert-V14PlanConsistency {
+    param(
+        [string]$RepositoryRoot
+    )
+
+    $planPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md"
+    $trackerPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md"
+
+    Assert-FileContainsText -Path $planPath -Label "v1.4 protocol refactor plan" -RequiredText @(
+        "MCP 2025-11-25",
+        "protocolVersion = 2025-11-25",
+        "http://127.0.0.1:3000/mcp",
+        "Accept: application/json, text/event-stream",
+        "MCP-Protocol-Version: 2025-11-25",
+        "Sampling, Elicitation, and Tasks as optional capabilities",
+        "do not implement or advertise them by default",
+        "legacy compatibility surfaces"
+    )
+
+    Assert-FileContainsText -Path $trackerPath -Label "v1.4 refactor progress tracker" -RequiredText @(
+        'MCP 2025-11-25 conformance by default',
+        '2025-06-18 alignment retained as a compatibility foundation',
+        'http://127.0.0.1:3000/mcp',
+        'MCP Streamable HTTP',
+        'legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio',
+        'A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
+    )
+}
+
 $trackedReleaseArtifacts = git ls-files "release_dist" "dist" | Where-Object {
     -not [string]::IsNullOrWhiteSpace($_)
 }
@@ -130,6 +179,8 @@ foreach ($pattern in $bannedSourcePatterns) {
         }
     }
 }
+
+Assert-V14PlanConsistency -RepositoryRoot $repoRoot
 
 if ($SkipVersionPolicy) {
     Write-Host "Version policy validation skipped: caller opted out."
