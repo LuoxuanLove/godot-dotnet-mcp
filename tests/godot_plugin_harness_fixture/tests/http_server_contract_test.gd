@@ -223,6 +223,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Removed resource_manage should return failing structuredContent.")
 	if str((rpc_removed_resource_manage_structured as Dictionary).get("error", "")).find("resource_manage") == -1:
 		return _failure("Removed resource_manage error should include the legacy tool name.")
+	if not _is_removed_resource_manage_tool(rpc_removed_resource_manage_structured, "resource_create"):
+		return _failure("Removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
 
 	var rpc_removed_catalog: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -415,6 +417,28 @@ func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, repla
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_resource_manage_tool(structured, expected_replacement_tool: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != "resource_manage":
+		return false
+	if not ((data_dict.get("replacement_methods", []) as Array).has("tools/call")):
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	return replacement is Dictionary and str((replacement as Dictionary).get("name", "")) == expected_replacement_tool
 
 
 func _first_replacement_arguments(data) -> Dictionary:

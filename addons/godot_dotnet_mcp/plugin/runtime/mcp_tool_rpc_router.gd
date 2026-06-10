@@ -77,6 +77,15 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	if tool_name.is_empty():
 		return _create_tool_result_payload({"success": false, "error": "Missing tool name"})
 
+	var loader = _get_loader()
+	if loader == null:
+		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
+	if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(tool_name)):
+		if loader.has_method("build_removed_public_tool_result"):
+			var removed_tool_result = loader.build_removed_public_tool_result(tool_name, arguments)
+			if removed_tool_result is Dictionary and not (removed_tool_result as Dictionary).is_empty():
+				return _create_tool_result_payload(removed_tool_result)
+
 	if not _call_bool(_is_tool_enabled, [tool_name], false):
 		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is disabled" % tool_name})
 	if not _call_bool(_is_tool_exposed, [tool_name], false):
@@ -89,16 +98,6 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var category = str(resolved.get("category", ""))
 	var actual_tool_name = str(resolved.get("tool", ""))
 	_log_message("Category: %s, Tool: %s" % [category, actual_tool_name], "debug")
-
-	var loader = _get_loader()
-	if loader == null:
-		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
-
-	if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(tool_name)):
-		if loader.has_method("build_removed_public_tool_result"):
-			var removed_tool_result = loader.build_removed_public_tool_result(tool_name, arguments)
-			if removed_tool_result is Dictionary and not (removed_tool_result as Dictionary).is_empty():
-				return _create_tool_result_payload(removed_tool_result)
 
 	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	result = _normalize_tool_result(result)

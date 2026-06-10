@@ -160,7 +160,8 @@ class FakeToolLoader:
 			"system_scene_analyze",
 			"system_scene_validate",
 			"system_tool_catalog",
-			"system_tool_activity"
+			"system_tool_activity",
+			"resource_manage"
 		].has(tool_name)
 
 	func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
@@ -174,7 +175,38 @@ class FakeToolLoader:
 				tool_name,
 				_plugin_update_replacement_arguments(str(arguments.get("action", "")), arguments)
 			)
+		if tool_name == "resource_manage":
+			return _removed_resource_manage_tool(arguments)
 		return {}
+
+	func _removed_resource_manage_tool(arguments: Dictionary) -> Dictionary:
+		var action := str(arguments.get("action", ""))
+		var replacement_tool := "resource_file_ops"
+		var replacement_arguments := arguments.duplicate(true)
+		match action:
+			"create":
+				replacement_tool = "resource_create"
+				replacement_arguments = {
+					"type": arguments.get("type", ""),
+					"path": arguments.get("path", "")
+				}
+			"list", "search", "get_info", "get_dependencies":
+				replacement_tool = "resource_query"
+		replacement_arguments.erase("_mcp_context")
+		return {
+			"success": false,
+			"error": "resource_manage has been removed from the public tool surface. Use canonical resource tools instead.",
+			"data": {
+				"error_type": "removed_public_tool",
+				"removed_tool": "resource_manage",
+				"replacement_tools": [{
+					"name": replacement_tool,
+					"arguments": replacement_arguments
+				}],
+				"replacement_methods": ["tools/call", "resources/read", "resources/list"],
+				"replacement_resources": ["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
+			}
+		}
 
 	func _removed_plugin_maintenance_tool(tool_name: String, replacement_arguments: Dictionary) -> Dictionary:
 		return {
@@ -406,6 +438,7 @@ class FakeCallbacks:
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
+			or tool_name == "resource_manage"
 		)
 
 	func is_tool_exposed(tool_name: String) -> bool:
@@ -419,6 +452,7 @@ class FakeCallbacks:
 			or tool_name == "system_tool_activity"
 			or tool_name == "system_scene_validate"
 			or tool_name == "system_scene_analyze"
+			or tool_name == "resource_manage"
 		)
 
 	func log(message: String, level: String) -> void:
@@ -559,6 +593,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router removed resource_manage should return failing structuredContent.")
 	if str((removed_resource_manage_structured as Dictionary).get("error", "")).find("resource_manage") == -1:
 		return _failure("Tool RPC router removed resource_manage error should include the legacy tool name.")
+	if not _is_removed_resource_manage_tool(removed_resource_manage_structured, "resource_create"):
+		return _failure("Tool RPC router removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
 
 	var removed_catalog_result: Dictionary = await router.build_tool_call_result_async({
 		"name": "system_tool_catalog",
@@ -792,6 +828,28 @@ func _is_removed_plugin_maintenance_tool(structured, removed_tool: String, repla
 		return false
 	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
 	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_resource_manage_tool(structured, expected_replacement_tool: String) -> bool:
+	if not (structured is Dictionary) or bool((structured as Dictionary).get("success", true)):
+		return false
+	var data = (structured as Dictionary).get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != "resource_manage":
+		return false
+	if not ((data_dict.get("replacement_methods", []) as Array).has("tools/call")):
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	return replacement is Dictionary and str((replacement as Dictionary).get("name", "")) == expected_replacement_tool
 
 
 func _first_replacement_arguments(data) -> Dictionary:
