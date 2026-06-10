@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LuoxuanLove/godot-dotnet-mcp/schemas/v2-bridge-status.schema.json",
+  "title": "Godot .NET MCP v2 Editor Bridge Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "project_id",
+    "editor_session_id",
+    "plugin_version",
+    "supports_live_editor_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "offline",
+        "online",
+        "version_mismatch"
+      ]
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^project_[0-9a-f]{16}$"
+    },
+    "editor_session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "plugin_version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^v?2\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "supports_live_editor_state": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "online"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "editor_session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plugin_version": {
+            "type": "string"
+          },
+          "supports_live_editor_state": {
+            "const": true
+          }
+        },
+        "required": [
+          "editor_session_id",
+          "plugin_version",
+          "supports_live_editor_state"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "disabled",
+              "offline",
+              "version_mismatch"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "supports_live_editor_state": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}

@@ -9,6 +9,8 @@ on:
   push:
     branches:
       - dev
+      - v2.0
+      - release/v2.0.0-baseline
 
 permissions:
   contents: read
@@ -56,6 +58,14 @@ jobs:
       - name: Run Companion contract tests
         shell: pwsh
         run: dotnet run --project ".\tests\companion_contracts\GodotDotnetMcp.Companion.Contracts.csproj" -c Release
+
+      - name: Build Companion static analyzer
+        shell: pwsh
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build Companion static analyzer" -ProjectPath ".\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" -Configuration Release
+
+      - name: Run Companion static analyzer tests
+        shell: pwsh
+        run: dotnet run --project ".\tests\static_project_analyzer\GodotDotnetMcp.Companion.StaticAnalysis.Tests.csproj" -c Release
 
       - name: Build harness runner
         shell: pwsh
