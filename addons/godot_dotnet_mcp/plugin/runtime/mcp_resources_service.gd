@@ -435,10 +435,16 @@ func _empty_activity_recent() -> Dictionary:
 func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
-		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
+		var unavailable_payload := ToolCatalogSnapshotService.build_presentation_payload({
+			"success": false,
+			"tool_loader_status": _get_loader_status_safe()
+		})
+		unavailable_payload["toolLoaderStatus"] = unavailable_payload.get("tool_loader_status", _get_loader_status_safe())
+		return unavailable_payload
 	var snapshot := ToolCatalogSnapshotService.build_snapshot(loader)
-	var payload := ToolCatalogSnapshotService.build_mcp_tools_list_payload(snapshot)
-	payload["toolLoaderStatus"] = snapshot.get("tool_loader_status", _get_loader_status_safe())
+	snapshot["tool_loader_status"] = _get_loader_status_safe(snapshot.get("tool_loader_status", {}))
+	var payload := ToolCatalogSnapshotService.build_presentation_payload(snapshot)
+	payload["toolLoaderStatus"] = payload.get("tool_loader_status", _get_loader_status_safe())
 	return payload
 
 
@@ -674,12 +680,12 @@ func _get_loader():
 	return null
 
 
-func _get_loader_status_safe() -> Dictionary:
+func _get_loader_status_safe(fallback: Dictionary = {}) -> Dictionary:
 	if _get_tool_loader_status.is_valid():
 		var status = _get_tool_loader_status.call()
 		if status is Dictionary:
 			return (status as Dictionary).duplicate(true)
-	return {}
+	return fallback.duplicate(true)
 
 
 func _get_activity_registry():

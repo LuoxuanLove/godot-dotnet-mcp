@@ -276,6 +276,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
+	var legacy_projection_error := _verify_visible_tool_catalog_projection(tool_catalog_payload, "legacy tool catalog resource")
+	if not legacy_projection_error.is_empty():
+		return _failure(legacy_projection_error)
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
 			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
@@ -295,6 +298,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	var visible_projection_error := _verify_visible_tool_catalog_projection(visible_tool_catalog_payload, "visible tool catalog")
+	if not visible_projection_error.is_empty():
+		return _failure(visible_projection_error)
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(visible_tool_catalog_payload, removed_tool_name):
 			return _failure("visible tool catalog should not expose removed public tool %s." % removed_tool_name)
@@ -634,6 +640,31 @@ func _read_text_resource(uri: String, id: int) -> Dictionary:
 	if str((content as Dictionary).get("uri", "")) != uri:
 		return {"ok": false, "error": "resources/read should preserve the requested URI for %s." % uri}
 	return {"ok": true, "mimeType": str((content as Dictionary).get("mimeType", "")), "text": str((content as Dictionary).get("text", ""))}
+
+
+func _verify_visible_tool_catalog_projection(payload: Dictionary, label: String) -> String:
+	if not (payload.get("domain_states", []) is Array) or (payload.get("domain_states", []) as Array).is_empty():
+		return "%s should include resource catalog domain_states." % label
+	if int(payload.get("tool_count", 0)) <= 0 or int(payload.get("exposed_tool_count", 0)) <= 0:
+		return "%s should include visible and exposed tool counts." % label
+	if not (payload.get("performance", {}) is Dictionary) or not (payload.get("performance", {}) as Dictionary).has("startup_ms"):
+		return "%s should preserve loader performance metadata." % label
+	if not (payload.get("tool_loader_status", {}) is Dictionary):
+		return "%s should include the snake_case loader status projection." % label
+	if not (payload.get("toolLoaderStatus", {}) is Dictionary):
+		return "%s should keep the camelCase loader status compatibility field." % label
+	var status: Dictionary = payload.get("toolLoaderStatus", {})
+	if str(status.get("status", "")).is_empty():
+		return "%s should preserve the loader status fallback from the resource service context." % label
+	var last_summary = status.get("last_summary", {})
+	if not (last_summary is Dictionary):
+		return "%s should include the supervisor last_summary in toolLoaderStatus." % label
+	if not ((last_summary as Dictionary).get("performance", {}) is Dictionary):
+		return "%s should use the resource service loader-status fallback instead of only the snapshot status." % label
+	var snake_status: Dictionary = payload.get("tool_loader_status", {})
+	if str(snake_status.get("status", "")) != str(status.get("status", "")):
+		return "%s should keep loader status fields aligned across compatibility keys." % label
+	return ""
 
 
 func _get_prompt_text(name: String, arguments: Dictionary, id: int) -> Dictionary:
