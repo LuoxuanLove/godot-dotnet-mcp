@@ -966,7 +966,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "Diagnostics summary",
 	"mcp_resource_diagnostics_summary_desc": "Plugin self-diagnostics and recent MCP log records.",
 	"mcp_resource_tool_catalog_name": "Tool catalog",
-	"mcp_resource_tool_catalog_desc": "Current MCP tool catalog with grouping metadata used by tools/list.",
+	"mcp_resource_tool_catalog_desc": "Current MCP tool catalog with grouping metadata served through resources.",
 	"mcp_resource_guides_index_name": "Guide index",
 	"mcp_resource_guides_index_desc": "Canonical MCP entry map for guides, state, activity, and tool catalog resources.",
 	"mcp_resource_guides_capabilities_name": "Capability guide",

@@ -136,7 +136,7 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 		}, {
 			"uri": TOOL_CATALOG_URI,
 			"name": _text("mcp_resource_tool_catalog_name", "Tool catalog"),
-			"description": _text("mcp_resource_tool_catalog_desc", "Current MCP tool catalog with grouping metadata used by tools/list."),
+			"description": _text("mcp_resource_tool_catalog_desc", "Current MCP tool catalog with grouping metadata served through resources."),
 			"mimeType": "application/json"
 		}]
 	}

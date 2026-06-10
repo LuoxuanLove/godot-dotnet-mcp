@@ -216,20 +216,8 @@ func _handle_tools_list(id) -> Dictionary:
 	if _tool_loader == null:
 		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
 	var exposed_tools = _tool_loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if _tool_loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = _tool_loader.get_all_tools_by_category()
-	elif _tool_loader.has_method("get_tools_by_category"):
-		all_tools_by_category = _tool_loader.get_tools_by_category()
-	var domain_states := []
-	if _tool_loader.has_method("get_domain_states"):
-		domain_states = _tool_loader.get_domain_states()
-	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
 	return _create_json_rpc_response({
-		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
-		"presentationVersion": int(presentation.get("presentationVersion", 1)),
-		"toolTree": presentation.get("toolTree", []),
-		"toolGroups": presentation.get("toolGroups", [])
+		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools)
 	}, id)
 
 

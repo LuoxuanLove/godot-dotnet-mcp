@@ -966,7 +966,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_diagnostics_summary_name": "诊断摘要",
 	"mcp_resource_diagnostics_summary_desc": "插件自身诊断与最近 MCP 日志记录。",
 	"mcp_resource_tool_catalog_name": "工具目录",
-	"mcp_resource_tool_catalog_desc": "当前 MCP 工具目录，以及 tools/list 使用的分组元数据。",
+	"mcp_resource_tool_catalog_desc": "当前 MCP 工具目录，以及通过 resources 提供、独立于 tools/list 的分组元数据。",
 	"mcp_resource_guides_index_name": "指南索引",
 	"mcp_resource_guides_index_desc": "指南、状态、活动与工具目录 resources 的 canonical MCP 入口映射。",
 	"mcp_resource_guides_capabilities_name": "能力指南",

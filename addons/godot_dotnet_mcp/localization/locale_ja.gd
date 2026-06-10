@@ -553,7 +553,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_editor_log_errors_name": "エディターログの警告とエラー",
 	"mcp_resource_editor_log_errors_desc": "Godot エディター Output パネルの警告とエラー項目を読み取ります。",
 	"mcp_resource_tool_catalog_name": "ツールカタログ",
-	"mcp_resource_tool_catalog_desc": "tools/list で使われるグループ化メタデータを含む現在の MCP ツールカタログ。",
+	"mcp_resource_tool_catalog_desc": "resources 経由で提供され tools/list とは分離されたグループ化メタデータを含む現在の MCP ツールカタログ。",
 	"mcp_resource_template_scene_name": "シーンテキスト",
 	"mcp_resource_template_scene_desc": "プロジェクト相対パスで .tscn シーンファイルを読み取ります。",
 	"mcp_resource_template_script_name": "スクリプトテキスト",

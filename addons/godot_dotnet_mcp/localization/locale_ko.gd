@@ -759,7 +759,7 @@ const TRANSLATIONS: Dictionary = {
 	"mcp_resource_editor_log_errors_name": "에디터 로그 경고 및 오류",
 	"mcp_resource_editor_log_errors_desc": "Godot 에디터 Output 패널의 경고 및 오류 항목을 읽습니다.",
 	"mcp_resource_tool_catalog_name": "도구 카탈로그",
-	"mcp_resource_tool_catalog_desc": "현재 MCP 도구 카탈로그와 tools/list에서 사용하는 그룹 메타데이터입니다.",
+	"mcp_resource_tool_catalog_desc": "resources를 통해 제공되고 tools/list와 분리된 그룹 메타데이터를 포함한 현재 MCP 도구 카탈로그입니다.",
 	"mcp_resource_template_scene_name": "씬 텍스트",
 	"mcp_resource_template_scene_desc": "프로젝트 상대 경로로 .tscn 씬 파일을 읽습니다.",
 	"mcp_resource_template_script_name": "스크립트 텍스트",

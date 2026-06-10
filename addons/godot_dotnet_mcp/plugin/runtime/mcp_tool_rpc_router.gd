@@ -35,24 +35,11 @@ func dispose() -> void:
 func build_tools_list_result() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
-		return {"tools": [], "presentationVersion": 1, "toolTree": [], "toolGroups": []}
+		return {"tools": []}
 
 	var exposed_tools = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = loader.get_all_tools_by_category()
-	elif loader.has_method("get_tools_by_category"):
-		all_tools_by_category = loader.get_tools_by_category()
-	var domain_states := []
-	if loader.has_method("get_domain_states"):
-		domain_states = loader.get_domain_states()
-	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
-
 	return {
-		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
-		"presentationVersion": int(presentation.get("presentationVersion", 1)),
-		"toolTree": presentation.get("toolTree", []),
-		"toolGroups": presentation.get("toolGroups", [])
+		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools)
 	}
 
 

@@ -26,6 +26,7 @@ Target version: 1.4.0.
 - Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
+- Changed MCP `tools/list` to return only the flat callable tool list; tree/group presentation metadata now stays in catalog resources, while flat tool-entry presentation metadata remains in `/api/tools`.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 
