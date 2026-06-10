@@ -66,13 +66,15 @@ addons/godot_dotnet_mcp
 4. 在右侧 Dock 中打开 `MCPDock`。
 5. 确认端口后启动服务。
 
-### 方式二：直接复制源文件
+### 方式二：直接复制可安装源文件
 
-将插件放到你的 Godot 项目内：
+只将可安装的插件目录放到你的 Godot 项目内：
 
 ```text
 addons/godot_dotnet_mcp
 ```
+
+`companion/`、`tests/`、`scripts/` 等仓库级开发目录不属于已安装的 Godot 插件。
 
 然后：
 

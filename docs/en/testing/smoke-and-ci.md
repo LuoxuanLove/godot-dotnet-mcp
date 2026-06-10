@@ -63,8 +63,8 @@ Current workflows:
 Current coverage:
 
 1. `actions-bot-relay`: accepts a manually provided base64 patch, creates an `actions-bot/*` branch and a PR targeting `dev` with `github-actions[bot]`, and appends base and head SHA, changed paths, diffstat, trigger actor, run URL, and validation-workflow links to the PR body
-2. `pr-policy`: blocks PRs that target the wrong branch, only allowing PRs that point to `dev`, and validates objective fields such as the title, summary, and testing notes
-3. `version-policy`: checks public version metadata through trusted `dev`-side workflows and scripts, and blocks non-`release/*` branches from bumping plugin versions too early
+2. `pr-policy`: blocks PRs that target the wrong branch, allowing the stable integration branches plus explicit v2 stacked bases, and validates objective fields such as the title, summary, and testing notes
+3. `version-policy`: checks public version metadata through trusted policy workflows and scripts, compares the real PR base/head refs, and blocks non-`release/*` branches from bumping plugin versions too early
 4. `dotnet-build`: runs a fast build of the plugin Roslyn library, the harness runner, and the fixture, and also runs refactor guardrails
 5. `lint-workflows`: runs `actionlint` on `.github/workflows/**`
 6. `validate-plugin-harness`: downloads Godot 4.6 and runs the plugin-harness required subset, based on `$RequiredCases` in `scripts/test_plugin_side_roslyn.ps1`. Normal headless cases run in a batch, while a few isolated headless cases and the editor probe case run separately
@@ -121,7 +121,7 @@ If the local machine does not have Godot or another required environment, the PR
 ### Already hard-gated
 
 - workflow YAML syntax lint, but only when workflow files change
-- PR target branch and light PR standards checks. Wrong-target PRs fail and are told to retarget `dev`, and missing required PR fields are called out
+- PR target branch and light PR standards checks. Wrong-target PRs fail and are told to retarget an allowed integration or explicit v2 stacked base branch, and missing required PR fields are called out
 - dotnet bridge library, harness runner, and fixture build
 - refactor guardrails
 - plugin headless harness required subset

@@ -19,7 +19,7 @@ This document defines the GitHub workflow for Agents or bots that participate in
 - After validation passes, the Agent may commit and push the current short branch
 - Each short branch and PR must contain only the changes that belong to that branch’s target scope
 - If other tasks, other fixes, or unmerged history are mixed in, split them into separate PRs or rebuild a clean branch from the latest `origin/dev`
-- All PRs must target `dev`; `pr-policy` will fail PRs that target the wrong branch
+- Normal integration PRs must target `dev`; explicit v2 predevelopment PRs may target `v2.0`, `release/v2.0.0-baseline`, or anchored `feature/v2-*`, `docs/v2-*`, and `ci/v2-*` stacked base branches. `pr-policy` fails PRs that target any other branch
 - Short branches created by `actions-bot-relay` must use the `actions-bot/*` prefix
 
 ---
@@ -55,7 +55,7 @@ Before submitting or updating a PR, the Agent must finish these checks:
 
 A PR may be reported as ready for maintainer merge only when all of the following are true:
 
-1. The PR targets `dev` and has been rechecked against the current verifiable `dev`
+1. The PR targets an allowed integration branch or explicit v2 stacked base and has been rechecked against that current verifiable base
 2. For normal PRs, `pr-policy` passes and the title and body contain the required objective fields. For `actions-bot-relay` PRs that do not trigger this check naturally, the relay metadata, the explicitly triggered validation workflow, and maintainer review must cover that confirmation
 3. `dotnet-build` passes
 4. `validate-plugin-harness` passes

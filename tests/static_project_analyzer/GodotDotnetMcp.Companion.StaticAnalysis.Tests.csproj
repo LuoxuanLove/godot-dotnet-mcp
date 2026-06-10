@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>GodotDotnetMcp.Companion.StaticAnalysis.Tests</AssemblyName>
+    <RootNamespace>GodotDotnetMcp.Companion.StaticAnalysis.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj" />
+    <ProjectReference Include="..\..\companion\GodotDotnetMcp.Companion.StaticAnalysis\GodotDotnetMcp.Companion.StaticAnalysis.csproj" />
+  </ItemGroup>
+</Project>

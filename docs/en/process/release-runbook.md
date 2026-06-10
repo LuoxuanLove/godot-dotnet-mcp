@@ -9,7 +9,7 @@ This document records the pre-release checks and remote release flow for Godot .
 - `dev` is the stable integration branch. Every change must land in `dev` through a short-branch PR before release
 - Normal `feature/*`, `fix/*`, `docs/*`, `chore/*`, and `hotfix/*` PRs must keep the plugin’s public version metadata aligned with `dev`. Only a `release/*` PR that targets `dev` may change that version
 - Formal GitHub Releases are created through the maintainer-triggered `publish-release` workflow. Pushing a `v*` tag runs tag validation and release-note artifact generation, but it does not create the formal GitHub Release
-- Installation paths are limited to the Godot Asset Library and direct copy of the `addons/godot_dotnet_mcp/` source files
+- Installation paths are limited to the Godot Asset Library and direct copy of the installable `addons/godot_dotnet_mcp/` addon directory. Repository-level development directories such as `companion/`, `tests/`, and `scripts/` are not installed into Godot projects
 - Do not create, upload, or document zip packages, release packages, local build artifacts, or their installation flow
 - `next` draft releases are only next-version release-note drafts, not formal releases, and they do not include package assets
 

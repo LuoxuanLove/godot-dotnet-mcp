@@ -336,6 +336,7 @@ internal static class Program
                 "Microsoft.CodeAnalysis.CSharp");
             var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
             var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var exportedCompanionSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "companion"));
 
             var stageBuildStopwatch = Stopwatch.StartNew();
             var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
@@ -345,7 +346,8 @@ internal static class Program
             var succeeded = stageBuild.Succeeded
                 && !fixtureHasRoslynPackageReference
                 && !exportedRoslynRuntimeSources
-                && !exportedDotnetBridgeSources;
+                && !exportedDotnetBridgeSources
+                && !exportedCompanionSources;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
             {
@@ -359,6 +361,7 @@ internal static class Program
                 fixtureHasRoslynPackageReference,
                 exportedRoslynRuntimeSources,
                 exportedDotnetBridgeSources,
+                exportedCompanionSources,
                 stdout = ToSerializedProcessOutput(stageBuild.StdOut),
                 stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                 phaseTimings,

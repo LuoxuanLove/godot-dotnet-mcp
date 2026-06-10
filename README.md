@@ -50,11 +50,13 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 
 ### From Source
 
-Copy the plugin source directory into your Godot project:
+Copy only the installable addon directory into your Godot project:
 
 ```text
 addons/godot_dotnet_mcp
 ```
+
+Do not copy repository-level development directories such as `companion/`, `tests/`, or `scripts/` into the Godot project.
 
 Then enable it from `Project Settings > Plugins`.
 

@@ -17,6 +17,7 @@ $docMap = @(
     @{ Id = "readme"; Paths = @{ en = "README.md"; "zh-CN" = "说明.md"; ja = "はじめに.md"; ko = "소개.md" } },
     @{ Id = "changelog"; Paths = @{ en = "CHANGELOG.md"; "zh-CN" = "变更日志.md"; ja = "変更履歴.md"; ko = "변경-로그.md" } },
     @{ Id = "roadmap"; Paths = @{ en = "ROADMAP.md"; "zh-CN" = "路线图.md"; ja = "ロードマップ.md"; ko = "로드맵.md" } },
+    @{ Id = "contract-v2-bridge-upgrade"; Paths = @{ en = "contracts/v2-bridge-upgrade-contract.md"; "zh-CN" = "契约/v2-bridge-upgrade-contract.md"; ja = "契約/v2-bridge-upgrade-contract.md"; ko = "계약/v2-bridge-upgrade-contract.md" } },
     @{ Id = "overview"; Paths = @{ en = "overview.md"; "zh-CN" = "概述.md"; ja = "概要.md"; ko = "개요.md" } },
     @{ Id = "interface-overview"; Paths = @{ en = "interface/overview.md"; "zh-CN" = "界面/总览.md"; ja = "インターフェース/概要.md"; ko = "인터페이스/개요.md" } },
     @{ Id = "interface-server-config"; Paths = @{ en = "interface/server-and-config-pages.md"; "zh-CN" = "界面/服务与配置页实现.md"; ja = "インターフェース/サーバーと設定ページ実装.md"; ko = "인터페이스/서버와-설정-페이지-구현.md" } },
@@ -28,6 +29,7 @@ $docMap = @(
     @{ Id = "process-release-notes-v1.2.0"; Paths = @{ en = "process/release-notes/release-notes-v1.2.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md" } },
     @{ Id = "process-release-notes-v1.3.0"; Paths = @{ en = "process/release-notes/release-notes-v1.3.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.3.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.3.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.3.0.md" } },
     @{ Id = "process-release-notes-v1.4.0"; Paths = @{ en = "process/release-notes/release-notes-v1.4.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.4.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.4.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.4.0.md" } },
+    @{ Id = "process-release-notes-v2.0.0"; Paths = @{ en = "process/release-notes/release-notes-v2.0.0.md"; "zh-CN" = "流程/发布说明/发布说明-v2.0.0.md"; ja = "プロセス/リリースノート/リリースノート-v2.0.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v2.0.0.md" } },
     @{ Id = "testing-overview"; Paths = @{ en = "testing/overview.md"; "zh-CN" = "测试/总览.md"; ja = "テスト/概要.md"; ko = "테스트/개요.md" } },
     @{ Id = "testing-smoke-ci"; Paths = @{ en = "testing/smoke-and-ci.md"; "zh-CN" = "测试/冒烟测试与持续集成.md"; ja = "テスト/スモークテストと継続的インテグレーション.md"; ko = "테스트/스모크-테스트와-지속적-통합.md" } },
     @{ Id = "testing-headless"; Paths = @{ en = "testing/plugin-headless-testing.md"; "zh-CN" = "测试/插件无头测试.md"; ja = "テスト/プラグインヘッドレステスト.md"; ko = "테스트/플러그인-헤드리스-테스트.md" } },
@@ -209,6 +211,56 @@ function Test-ReleaseNoteLanguageSwitch {
     }
 }
 
+function Get-PluginVersion {
+    $pluginConfigPath = Join-Path $repoRoot "addons/godot_dotnet_mcp/plugin.cfg"
+    if (-not (Test-Path -LiteralPath $pluginConfigPath)) {
+        $errors.Add("Cannot validate overview release-note links because addon plugin.cfg is missing.")
+        return ""
+    }
+
+    $pluginConfig = Get-Content -LiteralPath $pluginConfigPath -Raw -Encoding UTF8
+    $versionMatch = [regex]::Match($pluginConfig, '(?m)^\s*version\s*=\s*"([^"]+)"\s*$')
+    if (-not $versionMatch.Success) {
+        $errors.Add("Cannot validate overview release-note links because addon plugin.cfg version is missing.")
+        return ""
+    }
+
+    return $versionMatch.Groups[1].Value
+}
+
+function Test-OverviewReleaseNoteLinks {
+    param([string]$Version)
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return
+    }
+
+    $overviewDoc = $docMap | Where-Object { $_.Id -eq "overview" } | Select-Object -First 1
+    $releaseNoteDoc = $docMap | Where-Object { $_.Id -eq "process-release-notes-v$Version" } | Select-Object -First 1
+    if ($null -eq $releaseNoteDoc) {
+        $errors.Add("Missing docs map entry for current release notes: process-release-notes-v$Version")
+        return
+    }
+
+    foreach ($locale in $Locales) {
+        if (-not $overviewDoc.Paths.ContainsKey($locale) -or -not $releaseNoteDoc.Paths.ContainsKey($locale)) {
+            $errors.Add("Missing overview or release-note docs map path for current version $Version in $locale")
+            continue
+        }
+
+        $overviewPath = Join-Path (Join-Path $docsRootPath $locale) $overviewDoc.Paths[$locale]
+        if (-not (Test-Path -LiteralPath $overviewPath)) {
+            $errors.Add("Missing localized overview for release-note link validation: $DocsRoot/$locale/$($overviewDoc.Paths[$locale])")
+            continue
+        }
+
+        $overviewContent = Get-Content -LiteralPath $overviewPath -Raw -Encoding UTF8
+        $expectedTarget = $releaseNoteDoc.Paths[$locale]
+        if (-not $overviewContent.Contains("]($expectedTarget)")) {
+            $errors.Add("Localized overview release-prep section must link current release notes v${Version} in ${locale}: $expectedTarget")
+        }
+    }
+}
+
 function Test-MarkdownImages {
     param([System.IO.FileInfo[]]$Files, [string]$RepositoryRoot)
     foreach ($file in $Files) {
@@ -334,6 +386,11 @@ function Remove-AllowedReleaseNoteLanguageSwitch {
     return [regex]::Replace($Content, "(?m)^$expectedLine`r?`n?", '')
 }
 
+function Test-IsAllowedInitialReleaseNoteTemplate {
+    param([string]$RelativePath)
+    return $RelativePath -match 'v2\.0\.0\.md$'
+}
+
 function Test-DocumentQuality {
     param([string]$Locale, [string]$RelativePath, [System.IO.FileInfo]$File)
     $content = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8
@@ -345,7 +402,7 @@ function Test-DocumentQuality {
     if ($lines.Count -lt 10) {
         $errors.Add("Localized document is too short or stub-like: $relative")
     }
-    if ($naturalLanguageContent -match '(?i)\b(todo|tbd|to be filled|release theme pending|placeholder)\b|待填|待补|占位') {
+    if ((-not (Test-IsAllowedInitialReleaseNoteTemplate -RelativePath $RelativePath)) -and $naturalLanguageContent -match '(?i)\b(todo|tbd|to be filled|release theme pending|placeholder)\b|待填|待补|占位') {
         $errors.Add("Localized document contains placeholder wording: $relative")
     }
     if ($naturalLanguageContent -match '(?i)architectore|architecture|modules?|架构|模块|アーキテクチャ|モジュール|아키텍처|모듈') {
@@ -568,6 +625,8 @@ if (-not $SkipDocumentMapValidation) {
         Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
     }
 }
+
+Test-OverviewReleaseNoteLinks -Version (Get-PluginVersion)
 
 foreach ($locale in $Locales) {
     if (-not $treeHashes.ContainsKey($locale) -or -not $treeHashes.ContainsKey($referenceLocale)) {

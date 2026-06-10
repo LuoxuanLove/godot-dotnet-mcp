@@ -68,13 +68,15 @@ Then:
 4. Open `MCPDock` from the right-side dock.
 5. Confirm the port and start the service.
 
-### Option 2: Copy source files directly
+### Option 2: Copy installable source files directly
 
-Place the plugin in your Godot project:
+Place only the installable addon directory in your Godot project:
 
 ```text
 addons/godot_dotnet_mcp
 ```
+
+Repository-level development directories such as `companion/`, `tests/`, and `scripts/` are not part of the installed Godot addon.
 
 Then:
 
