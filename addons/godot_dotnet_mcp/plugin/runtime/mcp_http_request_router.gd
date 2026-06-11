@@ -172,11 +172,11 @@ func _requires_json_content_type(path: String) -> bool:
 
 func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 	var accept_header := str(headers.get("accept", "")).strip_edges()
-	if not accept_header.is_empty() and not _accepts_json_response(accept_header):
+	if not _accepts_mcp_response(accept_header):
 		return {
 			"error": "Not acceptable",
 			"status": 406,
-			"details": "POST /mcp requires Accept to include application/json or */* until SSE streaming is available."
+			"details": "POST /mcp requires Accept to include both application/json and text/event-stream."
 		}
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
@@ -233,6 +233,24 @@ func _accepts_json_response(accept_header: String) -> bool:
 
 func _is_json_content_type(content_type: String) -> bool:
 	return content_type == "application/json" or content_type.begins_with("application/json;")
+
+
+func _accepts_mcp_response(accept_header: String) -> bool:
+	var normalized := accept_header.strip_edges().to_lower()
+	if normalized.is_empty():
+		return false
+	var accepts_json := false
+	var accepts_sse := false
+	for raw_part in normalized.split(",", false):
+		var media_range := str(raw_part).strip_edges()
+		var semicolon := media_range.find(";")
+		if semicolon != -1:
+			media_range = media_range.substr(0, semicolon).strip_edges()
+		if media_range == "application/json":
+			accepts_json = true
+		elif media_range == "text/event-stream":
+			accepts_sse = true
+	return accepts_json and accepts_sse
 
 
 func _is_origin_allowed(origin: String) -> bool:
