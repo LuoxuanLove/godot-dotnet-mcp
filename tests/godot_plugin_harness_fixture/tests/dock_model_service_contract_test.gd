@@ -42,6 +42,24 @@ class FakeServerController extends RefCounted:
 				{"name": "project_state"},
 				{"name": "runtime_diagnose"}
 			],
+			"plugin_runtime": [
+				{"name": "state"}
+			],
+			"plugin_evolution": [
+				{"name": "update_status"}
+			],
+			"plugin_developer": [
+				{"name": "self_test"}
+			],
+			"material": [
+				{"name": "inspect"}
+			],
+			"physics": [
+				{"name": "inspect"}
+			],
+			"ui": [
+				{"name": "control"}
+			],
 			"scene": [
 				{"name": "scene_validate"}
 			],
@@ -161,6 +179,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should include the unified tool presentation model.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):
+		return _failure("Dock presentation should expose visible plugin runtime top-level tools.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_evolution_update_status"):
+		return _failure("Dock presentation should expose visible plugin evolution top-level tools.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_developer_self_test"):
+		return _failure("Dock presentation should expose visible plugin developer top-level tools.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "material_inspect"):
+		return _failure("Dock presentation should expose visible visual-domain top-level tools.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "physics_inspect"):
+		return _failure("Dock presentation should expose visible gameplay-domain top-level tools.")
+	if not _contains_presentation_tool(presentation.get("toolTree", []), "ui_control"):
+		return _failure("Dock presentation should expose visible interface-domain top-level tools.")
 	if not model.has("plugin_freshness") or not (model.get("plugin_freshness", {}) is Dictionary):
 		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
 	if not model.has("plugin_version"):
@@ -199,5 +229,17 @@ func _contains_presentation_category(nodes: Array, category: String) -> bool:
 		if str(node_dict.get("kind", "")) == "category" and str(node_dict.get("key", "")) == category:
 			return true
 		if _contains_presentation_category(node_dict.get("children", []), category):
+			return true
+	return false
+
+
+func _contains_presentation_tool(nodes: Array, tool_name: String) -> bool:
+	for node in nodes:
+		if not (node is Dictionary):
+			continue
+		var node_dict := node as Dictionary
+		if str(node_dict.get("kind", "")) == "tool" and str(node_dict.get("key", "")) == tool_name:
+			return true
+		if _contains_presentation_tool(node_dict.get("children", []), tool_name):
 			return true
 	return false

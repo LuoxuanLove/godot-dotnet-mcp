@@ -42,6 +42,7 @@ Target version: 1.4.0.
 - Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 - Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
+- Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
 
 ### Documentation
 
