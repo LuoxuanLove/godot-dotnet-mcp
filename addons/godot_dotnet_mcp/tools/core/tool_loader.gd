@@ -10,6 +10,7 @@ const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/too
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
 const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
+const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -25,6 +26,7 @@ var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
 var _runtime_manager = ToolRuntimeManagerScript.new()
 var _status_service = ToolLoaderStatusServiceScript.new()
+var _entry_service = ToolRegistryEntryServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -563,26 +565,12 @@ func _reset_state() -> void:
 
 
 func _refresh_entries() -> void:
-	_load_errors.clear()
-	var collected = _registry.collect_entries()
-	var new_entries: Dictionary = {}
+	var index: Dictionary = _entry_service.build_index(_registry.collect_entries())
+	var new_entries: Dictionary = index.get("entries_by_category", {})
 	var new_order: Array[String] = []
-	for error_info in collected.get("errors", []):
-		_load_errors.append(error_info.duplicate(true))
-	for entry in collected.get("entries", []):
-		var category = str(entry.get("category", ""))
-		if category.is_empty():
-			continue
-		if new_entries.has(category):
-			_load_errors.append({
-				"category": category,
-				"path": str(entry.get("path", "")),
-				"message": "Duplicate tool category registered",
-				"source": str(entry.get("source", "builtin"))
-			})
-			continue
-		new_entries[category] = entry.duplicate(true)
-		new_order.append(category)
+	new_order.assign(index.get("ordered_categories", []))
+	_load_errors.clear()
+	_load_errors.assign(index.get("load_errors", []))
 
 	for existing_category in _runtime_by_category.keys():
 		if not new_entries.has(existing_category):

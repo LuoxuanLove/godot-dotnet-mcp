@@ -69,6 +69,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader initialize() did not report any visible tools.")
 	if int(summary.get("exposed_tool_count", 0)) <= 0:
 		return _failure("Tool loader initialize() did not report any exposed tools.")
+	if int(summary.get("category_count", 0)) != _loader.get_all_domain_states().size():
+		return _failure("Tool loader category summary should match indexed domain states.")
 
 	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):
