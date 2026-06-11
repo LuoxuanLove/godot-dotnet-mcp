@@ -41,6 +41,7 @@ Target version: 1.4.0.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
 - Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
 - Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
+- Added a minimal `GET /mcp` Streamable HTTP SSE probe surface that requires `Accept: text/event-stream`, validates protocol-version headers, returns session/protocol response headers, and emits a small endpoint event for client transport discovery.
 - Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
 - Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
 - Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.
@@ -58,6 +59,7 @@ Target version: 1.4.0.
 - Fixed JSON-RPC envelope validation so HTTP and stdio reject malformed `jsonrpc`, `method`, and `id` fields before routing or emitting request activity.
 - Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
 - Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
+- Fixed raw HTTP response writing so SSE bodies can be sent without JSON encoding and 406 responses use `Not Acceptable` status text.
 - Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 - Fixed localized `system_project_state` descriptions so they document `summary=true` compact reads and `sections=[...]` selective reads.
 - Fixed the Traditional Chinese project-orientation prompt body so it no longer shows corrupted question-mark text.

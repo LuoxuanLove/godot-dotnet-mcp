@@ -79,14 +79,10 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		return _attach_cors_headers(_attach_mcp_transport_headers(response, normalized_headers), origin, path)
 
 	if method == "GET" and path == "/mcp":
-		response = {
-			"status": 405,
-			"_no_body": true,
-			"_headers": {
-				"Allow": "POST"
-			}
-		}
-		return _attach_cors_headers(response, origin, path)
+		var sse_guard := _validate_mcp_sse_headers(normalized_headers)
+		if not sse_guard.is_empty():
+			return _attach_cors_headers(_attach_mcp_transport_headers(sse_guard, normalized_headers), origin, path)
+		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_probe_response(), normalized_headers), origin, path)
 
 	if method == "GET" and path == "/health":
 		response = _call_dict(_build_health_response, [], {"status": "degraded", "error": "Health response builder is unavailable", "status_code": 500})
@@ -157,7 +153,7 @@ func _build_cors_headers(origin: String, allow_methods: String) -> Dictionary:
 func _allowed_methods_for_path(path: String) -> String:
 	match path:
 		"/mcp":
-			return "POST"
+			return "GET, POST"
 		"/health", "/api/tools":
 			return "GET"
 		"/api/editor/lifecycle":
@@ -190,6 +186,40 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 		}
 
 	return {}
+
+
+func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
+	var accept_header := str(headers.get("accept", "")).strip_edges()
+	if not _accepts_sse_response(accept_header):
+		return {
+			"error": "Not acceptable",
+			"status": 406,
+			"details": "GET /mcp requires Accept to include text/event-stream."
+		}
+
+	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
+	var supported_version := MCPProtocolFacts.get_protocol_version()
+	if not requested_version.is_empty() and requested_version != supported_version:
+		return {
+			"error": "Unsupported MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"requested_protocol_version": requested_version
+		}
+
+	return {}
+
+
+func _build_mcp_sse_probe_response() -> Dictionary:
+	return {
+		"status": 200,
+		"_raw_body": "event: endpoint\ndata: {\"endpoint\":\"/mcp\",\"transport\":\"streamable_http\",\"mode\":\"probe\"}\n\n",
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_headers": {
+			"Cache-Control": "no-cache",
+			"X-Accel-Buffering": "no"
+		}
+	}
 
 
 func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictionary) -> Dictionary:
@@ -251,6 +281,20 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 		elif media_range == "text/event-stream":
 			accepts_sse = true
 	return accepts_json and accepts_sse
+
+
+func _accepts_sse_response(accept_header: String) -> bool:
+	var normalized := accept_header.strip_edges().to_lower()
+	if normalized.is_empty():
+		return false
+	for raw_part in normalized.split(",", false):
+		var media_range := str(raw_part).strip_edges()
+		var semicolon := media_range.find(";")
+		if semicolon != -1:
+			media_range = media_range.substr(0, semicolon).strip_edges()
+		if media_range == "text/event-stream":
+			return true
+	return false
 
 
 func _is_origin_allowed(origin: String) -> bool:

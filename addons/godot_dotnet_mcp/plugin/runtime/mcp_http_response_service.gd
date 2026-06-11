@@ -137,6 +137,16 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 	var extra_headers = response_data.get("_headers", {})
 	if response_data.has("_headers"):
 		response_data.erase("_headers")
+	var content_type := "application/json; charset=utf-8"
+	if response_data.has("_content_type"):
+		content_type = str(response_data.get("_content_type", content_type))
+		response_data.erase("_content_type")
+	var raw_body := ""
+	var has_raw_body := false
+	if response_data.has("_raw_body"):
+		raw_body = str(response_data.get("_raw_body", ""))
+		response_data.erase("_raw_body")
+		has_raw_body = true
 
 	var status_code = 200
 	if response_data.has("_status_code"):
@@ -147,12 +157,17 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 		status_code = int(response_data["status"])
 
 	var sanitized = sanitize_for_json(response_data)
-	var body = "" if no_body else JSON.stringify(sanitized)
+	var body := ""
+	if not no_body:
+		if has_raw_body:
+			body = raw_body
+		else:
+			body = JSON.stringify(sanitized)
 	var body_bytes = body.to_utf8_buffer()
 
 	var headers = "HTTP/1.1 %d %s\r\n" % [status_code, _status_text_for(status_code)]
 	if not no_body:
-		headers += "Content-Type: application/json; charset=utf-8\r\n"
+		headers += "Content-Type: %s\r\n" % content_type
 	headers += "Content-Length: %d\r\n" % body_bytes.size()
 	headers += "Connection: keep-alive\r\n"
 	for header_name in extra_headers:
@@ -265,6 +280,7 @@ func _status_text_for(status_code: int) -> String:
 		400: "Bad Request",
 		404: "Not Found",
 		405: "Method Not Allowed",
+		406: "Not Acceptable",
 		415: "Unsupported Media Type",
 		500: "Internal Server Error"
 	}

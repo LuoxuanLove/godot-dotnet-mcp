@@ -255,6 +255,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
 		return _failure("CORS response should allow the Mcp-Session-Id header.")
 
+	var raw_sse_text := _send_raw_response_over_loopback(service, {
+		"status": 406,
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_raw_body": "event: endpoint\ndata: {}\n\n",
+		"_headers": {
+			"Cache-Control": "no-cache"
+		}
+	})
+	if raw_sse_text.is_empty():
+		return _failure("HTTP response service should send raw SSE responses.")
+	if raw_sse_text.find("HTTP/1.1 406 Not Acceptable") == -1:
+		return _failure("HTTP response service should use the correct 406 status text.")
+	if raw_sse_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should preserve raw SSE content type.")
+	if raw_sse_text.find("Connection: keep-alive") == -1:
+		return _failure("HTTP response service should keep raw SSE HTTP connections alive.")
+	if raw_sse_text.find("event: endpoint\ndata: {}\n\n") == -1:
+		return _failure("HTTP response service should write raw SSE bodies without JSON encoding.")
+
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,
 		"node_path": NodePath("root/player"),
@@ -290,3 +309,48 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _send_raw_response_over_loopback(service, response_data: Dictionary) -> String:
+	var port := _pick_free_port(34150)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_http_response(accepted, response_data):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("\r\n\r\n") != -1 and text.find("event: endpoint") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _pick_free_port(start_port: int) -> int:
+	for port in range(start_port, start_port + 20):
+		var probe := TCPServer.new()
+		if probe.listen(port, "127.0.0.1") == OK:
+			probe.stop()
+			return port
+	return -1
