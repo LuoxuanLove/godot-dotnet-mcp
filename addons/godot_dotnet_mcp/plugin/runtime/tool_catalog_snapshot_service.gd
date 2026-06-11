@@ -3,27 +3,32 @@ extends RefCounted
 class_name ToolCatalogSnapshotService
 
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 
 static func build_snapshot(loader) -> Dictionary:
 	if loader == null or not loader.has_method("get_exposed_tool_definitions"):
 		return {"success": false, "error": "tool_loader_unavailable", "message": "Tool loader is unavailable"}
 
+	var catalog_manifest := _build_catalog_manifest_snapshot()
 	var exposed_tools := _filter_removed_tools(loader, loader.get_exposed_tool_definitions())
 	var visible_tools := exposed_tools.duplicate(true)
 	if loader.has_method("get_tool_definitions"):
 		visible_tools = _filter_removed_tools(loader, loader.get_tool_definitions())
 	var all_tools_by_category := _filter_removed_tools_by_category(loader, _get_all_tools_by_category(loader))
 	var category_states := _duplicate_dictionary_array(_get_domain_states(loader))
-	var domain_states := _aggregate_domain_states(category_states)
+	var domain_states := _aggregate_domain_states(category_states, catalog_manifest.get("domain_defs", []))
 	var presentation := ToolPresentationServiceScript.build_tool_presentation(
 		exposed_tools,
 		all_tools_by_category,
-		domain_states
+		domain_states,
+		[],
+		catalog_manifest.get("domain_defs", [])
 	)
 
 	return {
 		"success": true,
+		"catalog_manifest": catalog_manifest,
 		"exposed_tools": exposed_tools,
 		"visible_tools": visible_tools,
 		"all_tools_by_category": all_tools_by_category,
@@ -53,7 +58,8 @@ static func _filter_removed_tools(loader, tools: Array) -> Array[Dictionary]:
 
 static func _filter_removed_tools_by_category(loader, tools_by_category: Dictionary) -> Dictionary:
 	var out := {}
-	for raw_category in tools_by_category.keys():
+	var ordered_categories := _ordered_categories(tools_by_category)
+	for raw_category in ordered_categories:
 		var category := str(raw_category)
 		var tools = tools_by_category.get(raw_category, [])
 		var filtered: Array[Dictionary] = []
@@ -84,10 +90,16 @@ static func _get_domain_states(loader) -> Array:
 	return []
 
 
-static func _aggregate_domain_states(category_states: Array[Dictionary]) -> Array[Dictionary]:
+static func _aggregate_domain_states(category_states: Array[Dictionary], domain_defs: Array) -> Array[Dictionary]:
+	var domain_order := _domain_order(domain_defs)
 	var by_domain := {}
 	for state in category_states:
-		var domain_key := str(state.get("domain_key", state.get("domain", state.get("category", ""))))
+		var category := str(state.get("category", state.get("domain", "")))
+		var domain_key := str(state.get("domain_key", ""))
+		if domain_key.is_empty():
+			domain_key = ToolCatalogManifest.get_domain_key_for_category(category)
+		if domain_key.is_empty():
+			domain_key = str(state.get("domain", category))
 		if domain_key.is_empty():
 			continue
 		if not by_domain.has(domain_key):
@@ -104,7 +116,6 @@ static func _aggregate_domain_states(category_states: Array[Dictionary]) -> Arra
 				"last_errors": []
 			}
 		var aggregate: Dictionary = by_domain[domain_key]
-		var category := str(state.get("category", state.get("domain", "")))
 		var categories: Array = aggregate.get("categories", [])
 		if not category.is_empty() and not categories.has(category):
 			categories.append(category)
@@ -123,8 +134,7 @@ static func _aggregate_domain_states(category_states: Array[Dictionary]) -> Arra
 			last_errors.append(last_error)
 			aggregate["last_errors"] = last_errors
 	var out: Array[Dictionary] = []
-	var keys := by_domain.keys()
-	keys.sort()
+	var keys := _ordered_keys(by_domain, domain_order)
 	for key in keys:
 		var aggregate: Dictionary = by_domain[key]
 		var categories: Array = aggregate.get("categories", [])
@@ -163,4 +173,66 @@ static func _get_full_name(category: String, tool: Dictionary) -> String:
 
 
 static func _is_public_removed_tool(loader, full_name: String) -> bool:
+	if ToolCatalogManifest.is_removed_public_tool(full_name):
+		return true
 	return loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(full_name))
+
+
+static func _build_catalog_manifest_snapshot() -> Dictionary:
+	return {
+		"domain_defs": ToolCatalogManifest.get_domain_defs(),
+		"categories": ToolCatalogManifest.get_all_tool_categories(),
+		"builtin_categories": ToolCatalogManifest.get_builtin_categories(),
+		"public_categories": ToolCatalogManifest.get_public_mcp_tool_categories(),
+		"removed_public_tools": ToolCatalogManifest.get_removed_public_tool_names()
+	}
+
+
+static func build_public_catalog_manifest(catalog_manifest: Dictionary) -> Dictionary:
+	return {
+		"domain_defs": catalog_manifest.get("domain_defs", []),
+		"categories": catalog_manifest.get("categories", []),
+		"builtin_categories": catalog_manifest.get("builtin_categories", []),
+		"public_categories": catalog_manifest.get("public_categories", []),
+		"removed_public_tool_count": (catalog_manifest.get("removed_public_tools", []) as Array).size()
+	}
+
+
+static func _ordered_categories(tools_by_category: Dictionary) -> Array[String]:
+	var ordered: Array[String] = []
+	var seen := {}
+	for category in ToolCatalogManifest.get_builtin_categories():
+		if tools_by_category.has(category):
+			ordered.append(category)
+			seen[category] = true
+	var extras: Array[String] = []
+	for raw_category in tools_by_category.keys():
+		var category := str(raw_category)
+		if not seen.has(category):
+			extras.append(category)
+	extras.sort()
+	ordered.append_array(extras)
+	return ordered
+
+
+static func _domain_order(domain_defs: Array) -> Dictionary:
+	var order := {}
+	for index in range(domain_defs.size()):
+		var domain_def = domain_defs[index]
+		if domain_def is Dictionary:
+			order[str((domain_def as Dictionary).get("key", ""))] = index
+	return order
+
+
+static func _ordered_keys(values: Dictionary, order: Dictionary) -> Array[String]:
+	var keys: Array[String] = []
+	for key in values.keys():
+		keys.append(str(key))
+	keys.sort_custom(func(a: String, b: String) -> bool:
+		var left_order := int(order.get(a, 9999))
+		var right_order := int(order.get(b, 9999))
+		if left_order == right_order:
+			return a < b
+		return left_order < right_order
+	)
+	return keys
