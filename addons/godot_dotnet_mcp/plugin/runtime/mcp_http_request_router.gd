@@ -7,6 +7,8 @@ const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
 const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
 const SESSION_ID_PREFIX := "godot-dotnet-mcp-http"
 const SSE_RETRY_MS := 1000
+const MAX_SSE_EVENTS_PER_SESSION := 16
+const MAX_SSE_SESSIONS := 32
 
 var _handle_mcp_request_async := Callable()
 var _build_health_response := Callable()
@@ -16,6 +18,9 @@ var _handle_editor_lifecycle_post_request := Callable()
 var _build_cors_response := Callable()
 var _allowed_cors_origins: Array[String] = []
 var _allowed_hosts: Array[String] = []
+var _sse_event_logs: Dictionary = {}
+var _sse_event_counters: Dictionary = {}
+var _sse_session_access_order: Array[String] = []
 
 
 func configure(context = null) -> void:
@@ -40,6 +45,9 @@ func dispose() -> void:
 	_build_cors_response = Callable()
 	_allowed_cors_origins = []
 	_allowed_hosts = []
+	_sse_event_logs.clear()
+	_sse_event_counters.clear()
+	_sse_session_access_order.clear()
 
 
 func set_allowed_cors_origins(value) -> void:
@@ -242,23 +250,13 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 func _build_mcp_sse_probe_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
-	var event_id := _build_sse_event_id(session_id)
-	var event_data := {
-		"jsonrpc": "2.0",
-		"method": "notifications/message",
-		"params": {
-			"level": "info",
-			"logger": "godot-dotnet-mcp.transport",
-			"data": {
-				"transport": "streamable_http",
-				"mode": "sse_probe",
-				"resume_from_event_id": last_event_id
-			}
-		}
-	}
+	var event := _append_sse_event(session_id, last_event_id)
+	var events := _events_after_sse_cursor(session_id, last_event_id)
+	if events.is_empty():
+		events = [event]
 	return {
 		"status": 200,
-		"_raw_body": "id: %s\nretry: %d\nevent: message\ndata: %s\n\n" % [event_id, SSE_RETRY_MS, JSON.stringify(event_data)],
+		"_raw_body": _format_sse_events(events),
 		"_content_type": "text/event-stream; charset=utf-8",
 		"_mcp_session_id": session_id,
 		"_headers": {
@@ -266,6 +264,94 @@ func _build_mcp_sse_probe_response(headers: Dictionary) -> Dictionary:
 			"X-Accel-Buffering": "no"
 		}
 	}
+
+
+func _append_sse_event(session_id: String, last_event_id: String) -> Dictionary:
+	_touch_sse_session(session_id)
+	var event_id := _build_sse_event_id(session_id)
+	var resume_status := _build_sse_resume_status(session_id, last_event_id)
+	var event := {
+		"id": event_id,
+		"event": "message",
+		"retry": SSE_RETRY_MS,
+		"data": {
+			"jsonrpc": "2.0",
+			"method": "notifications/message",
+			"params": {
+				"level": "info",
+				"logger": "godot-dotnet-mcp.transport",
+				"data": {
+					"transport": "streamable_http",
+					"mode": "sse_probe",
+					"resume_from_event_id": last_event_id,
+					"resume_cursor_found": bool(resume_status.get("found", false)),
+					"replay_event_count": int(resume_status.get("event_count_after_cursor", 0))
+				}
+			}
+		}
+	}
+	var log: Array = []
+	if _sse_event_logs.get(session_id, []) is Array:
+		log = (_sse_event_logs.get(session_id, []) as Array).duplicate(true)
+	log.append(event)
+	while log.size() > MAX_SSE_EVENTS_PER_SESSION:
+		log.pop_front()
+	_sse_event_logs[session_id] = log
+	return event
+
+
+func _touch_sse_session(session_id: String) -> void:
+	var existing_index := _sse_session_access_order.find(session_id)
+	if existing_index >= 0:
+		_sse_session_access_order.remove_at(existing_index)
+	_sse_session_access_order.append(session_id)
+	while _sse_session_access_order.size() > MAX_SSE_SESSIONS:
+		var evicted_session := _sse_session_access_order.pop_front()
+		_sse_event_logs.erase(evicted_session)
+		_sse_event_counters.erase(evicted_session)
+
+
+func _build_sse_resume_status(session_id: String, last_event_id: String) -> Dictionary:
+	if last_event_id.is_empty():
+		return {"found": false, "event_count_after_cursor": 0}
+	var log: Array = []
+	if _sse_event_logs.get(session_id, []) is Array:
+		log = _sse_event_logs.get(session_id, [])
+	for index in range(log.size()):
+		var event = log[index]
+		if event is Dictionary and str((event as Dictionary).get("id", "")) == last_event_id:
+			return {
+				"found": true,
+				"event_count_after_cursor": max(0, log.size() - index - 1)
+			}
+	return {"found": false, "event_count_after_cursor": 0}
+
+
+func _events_after_sse_cursor(session_id: String, last_event_id: String) -> Array:
+	var log: Array = []
+	if _sse_event_logs.get(session_id, []) is Array:
+		log = _sse_event_logs.get(session_id, [])
+	if last_event_id.is_empty():
+		return []
+	for index in range(log.size()):
+		var event = log[index]
+		if event is Dictionary and str((event as Dictionary).get("id", "")) == last_event_id:
+			return log.slice(index + 1)
+	return []
+
+
+func _format_sse_events(events: Array) -> String:
+	var body := ""
+	for event in events:
+		if not (event is Dictionary):
+			continue
+		body += "id: %s\nretry: %d\nevent: %s\ndata: %s\n\n" % [
+			str((event as Dictionary).get("id", "")),
+			int((event as Dictionary).get("retry", SSE_RETRY_MS)),
+			str((event as Dictionary).get("event", "message")),
+			JSON.stringify((event as Dictionary).get("data", {}))
+		]
+	return body
 
 
 func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictionary) -> Dictionary:
@@ -321,10 +407,12 @@ func _generate_mcp_session_id() -> String:
 
 
 func _build_sse_event_id(session_id: String) -> String:
-	return "streamable-http-get-%s-%s-%s" % [
-		_sanitize_sse_token(session_id),
-		str(Time.get_ticks_usec()),
-		str(randi())
+	var sanitized_session := _sanitize_sse_token(session_id)
+	var next_counter := int(_sse_event_counters.get(session_id, 0)) + 1
+	_sse_event_counters[session_id] = next_counter
+	return "streamable-http-get-%s-%d" % [
+		sanitized_session,
+		next_counter
 	]
 
 

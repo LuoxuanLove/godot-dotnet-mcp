@@ -146,6 +146,59 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should advertise an SSE retry interval before closing probe responses.")
 	if get_mcp_body.find("\"resume_from_event_id\":\"cursor-7\"") == -1:
 		return _failure("HTTP request router should surface Last-Event-ID as a GET /mcp resume cursor hint.")
+	if get_mcp_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report missing SSE resume cursors without replaying unrelated events.")
+	var first_sse_event_id := _extract_first_sse_event_id(get_mcp_body)
+	if first_sse_event_id.is_empty():
+		return _failure("HTTP request router should expose an SSE event id that clients can resume from.")
+	var resumed_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": first_sse_event_id})
+	if int(resumed_mcp_response.get("status", 0)) != 200:
+		return _failure("HTTP request router should accept Last-Event-ID cursors for SSE replay probes.")
+	var resumed_body := str(resumed_mcp_response.get("_raw_body", ""))
+	if _count_sse_event_id(resumed_body, first_sse_event_id) != 0:
+		return _failure("HTTP request router should replay events after the Last-Event-ID cursor, not repeat the cursor event.")
+	if _count_sse_events(resumed_body) != 1:
+		return _failure("HTTP request router should return exactly the new event when resuming from the latest known cursor.")
+	if resumed_body.find("\"resume_cursor_found\":true") == -1:
+		return _failure("HTTP request router should report matched SSE resume cursors in event data.")
+	if resumed_body.find("\"replay_event_count\":0") == -1:
+		return _failure("HTTP request router should report zero stored events after a latest-cursor resume before adding the new probe event.")
+	var second_sse_event_id := _extract_first_sse_event_id(resumed_body)
+	if second_sse_event_id.is_empty() or second_sse_event_id == first_sse_event_id:
+		return _failure("HTTP request router should assign a new SSE event id for each resumable probe event.")
+	var replay_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": first_sse_event_id})
+	var replay_body := str(replay_mcp_response.get("_raw_body", ""))
+	if replay_body.find(second_sse_event_id) == -1:
+		return _failure("HTTP request router should replay stored events after a matched Last-Event-ID cursor.")
+	if _count_sse_events(replay_body) != 2:
+		return _failure("HTTP request router should include stored replay events plus the current probe event for matched older cursors.")
+	if replay_body.find("\"replay_event_count\":1") == -1:
+		return _failure("HTTP request router should report the number of stored replay events after a matched older cursor.")
+	var underscore_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_first_event_id := _extract_first_sse_event_id(str(underscore_session_response.get("_raw_body", "")))
+	if not underscore_first_event_id.ends_with("-1"):
+		return _failure("HTTP request router should start SSE counters at one for a new session.")
+	await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client key"})
+	var underscore_second_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_second_event_id := _extract_first_sse_event_id(str(underscore_second_response.get("_raw_body", "")))
+	if not underscore_second_event_id.ends_with("-2"):
+		return _failure("HTTP request router should keep independent counters for sessions whose sanitized SSE tokens collide.")
+	for index in range(31):
+		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "collision-fill-%02d" % index})
+	var underscore_third_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_third_event_id := _extract_first_sse_event_id(str(underscore_third_response.get("_raw_body", "")))
+	if not underscore_third_event_id.ends_with("-3"):
+		return _failure("HTTP request router should not reset an active session counter when evicting another session with the same sanitized SSE token.")
+	for index in range(40):
+		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-session-%02d" % index})
+	var evicted_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": first_sse_event_id})
+	var evicted_body := str(evicted_mcp_response.get("_raw_body", ""))
+	if evicted_body.find(second_sse_event_id) != -1:
+		return _failure("HTTP request router should evict old SSE sessions instead of replaying them after the global session bound is exceeded.")
+	if _count_sse_events(evicted_body) != 1:
+		return _failure("HTTP request router should keep only the current event for an evicted SSE resume cursor.")
+	if evicted_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report evicted SSE resume cursors as missing.")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
@@ -328,3 +381,28 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _extract_first_sse_event_id(body: String) -> String:
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized.begins_with("id: "):
+			return normalized.substr(4).strip_edges()
+	return ""
+
+
+func _count_sse_events(body: String) -> int:
+	var count := 0
+	for line in body.split("\n", false):
+		if str(line).strip_edges().begins_with("event: "):
+			count += 1
+	return count
+
+
+func _count_sse_event_id(body: String, event_id: String) -> int:
+	var count := 0
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized == "id: %s" % event_id:
+			count += 1
+	return count
