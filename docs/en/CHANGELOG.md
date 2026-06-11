@@ -34,6 +34,10 @@ Target version: 1.4.0.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
 - Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
+- Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
+- Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
+- Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
+- Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.
 
 ### Fixed
 
@@ -70,6 +74,7 @@ Target version: 1.4.0.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
+- Added MCP 2025-11-25 tool-name guard coverage so manifest-owned removed public tool names, registry categories, loader-exposed tools, and final `tools/list` entries stay within the 1-128 character ASCII letter, digit, `_`, `-`, and `.` naming profile.
 - Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
