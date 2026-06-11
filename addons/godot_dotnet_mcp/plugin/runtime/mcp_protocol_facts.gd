@@ -42,16 +42,16 @@ static func get_error_code(key: String) -> String:
 static func build_server_info() -> Dictionary:
 	return {
 		"name": get_server_name(),
-		"description": get_server_description(),
-		"version": get_server_version()
+		"version": get_server_version(),
+		"description": get_server_description()
 	}
 
 
 static func build_server_facts() -> Dictionary:
 	return {
 		"server_name": get_server_name(),
-		"server_description": get_server_description(),
 		"server_version": get_server_version(),
+		"server_description": get_server_description(),
 		"protocol_version": get_protocol_version(),
 		"tool_schema_version": get_tool_schema_version()
 	}
@@ -87,8 +87,8 @@ static func _load_facts() -> Dictionary:
 		"protocol_version": str(facts.get("protocol_version", "")),
 		"tool_schema_version": str(facts.get("tool_schema_version", "")),
 		"server_name": str(facts.get("server_name", "")),
-		"server_description": str(facts.get("server_description", "")),
 		"server_version": str(facts.get("server_version", "")),
+		"server_description": str(facts.get("server_description", "")),
 		"error_codes": error_codes
 	}
 

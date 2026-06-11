@@ -34,6 +34,11 @@ Target version: 1.4.0.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
+- Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
+- Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
+- Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
+- Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
+- Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.
 
 ### Fixed
 
@@ -43,6 +48,7 @@ Target version: 1.4.0.
 - Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 - Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
+- Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 
 ### Documentation
 
@@ -71,7 +77,9 @@ Target version: 1.4.0.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
+- Added MCP 2025-11-25 tool-name guard coverage so manifest-owned removed public tool names, registry categories, loader-exposed tools, and final `tools/list` entries stay within the 1-128 character ASCII letter, digit, `_`, `-`, and `.` naming profile.
 - Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
+- Added MCP 2025-11-25 manifest taxonomy so each required harness case declares its protocol version and conformance role before it can enter the v1.4 verification gate.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.

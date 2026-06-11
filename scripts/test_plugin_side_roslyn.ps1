@@ -80,9 +80,19 @@ function Get-ContractCaseManifest {
         Assert-ManifestValue -Case $case -FieldName "layer" -AllowedValues @()
         Assert-ManifestValue -Case $case -FieldName "domain" -AllowedValues @()
         Assert-ManifestValue -Case $case -FieldName "behavior" -AllowedValues @("current", "migration", "deprecation", "removal_guard")
+        Assert-ManifestValue -Case $case -FieldName "mcp_version" -AllowedValues @("2025-11-25", "2025-06-18", "legacy")
+        Assert-ManifestValue -Case $case -FieldName "conformance" -AllowedValues @("required", "compat", "optional")
         Assert-ManifestValue -Case $case -FieldName "speed" -AllowedValues @("fast", "headless", "editor", "release")
         Assert-ManifestValue -Case $case -FieldName "isolation" -AllowedValues @("pure", "user_fs", "stage_root", "editor")
         Assert-ManifestValue -Case $case -FieldName "v1_4_disposition" -AllowedValues @("keep", "rewrite", "delete", "expires")
+
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
+            throw "Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'."
+        }
+        if (-not $isLegacyOrRemoval -and [string]$case.mcp_version -eq "legacy") {
+            throw "Contract case manifest entry '$($case.name)' targets current behavior and must not use mcp_version='legacy'."
+        }
 
         if (-not $names.Add([string]$case.name)) {
             throw "Contract case manifest contains duplicate case name: $($case.name)"

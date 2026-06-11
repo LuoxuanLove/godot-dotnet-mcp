@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolsApiService
 
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -33,28 +34,34 @@ func build_tools_list_response() -> Dictionary:
 			"performance": {}
 		}
 
-	var exposed_tools = loader.get_exposed_tool_definitions()
-	var domain_states = loader.get_domain_states()
-	var all_tools_by_category := {}
-	if loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = loader.get_all_tools_by_category()
-	elif loader.has_method("get_tools_by_category"):
-		all_tools_by_category = loader.get_tools_by_category()
-	var presentation = ToolPresentationService.build_tool_presentation(
-		exposed_tools,
-		all_tools_by_category,
-		domain_states
-	)
+	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader)
+	if not bool(snapshot.get("success", false)):
+		return {
+			"tools": [],
+			"domain_states": [],
+			"tool_count": 0,
+			"exposed_tool_count": 0,
+			"tool_loader_status": _get_loader_status_safe(),
+			"performance": {}
+		}
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var visible_tools: Array = snapshot.get("visible_tools", exposed_tools)
+	var category_states: Array = snapshot.get("category_states", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	var loader_status: Dictionary = snapshot.get("tool_loader_status", {})
+	if loader_status.is_empty():
+		loader_status = _get_loader_status_safe()
 	return {
 		"tools": ToolPresentationService.enrich_tools_for_presentation(exposed_tools, presentation),
-		"domain_states": domain_states,
-		"tool_count": loader.get_tool_definitions().size(),
+		"domain_states": category_states,
+		"tool_count": visible_tools.size(),
 		"exposed_tool_count": exposed_tools.size(),
-		"tool_loader_status": _get_loader_status_safe(),
-		"performance": loader.get_performance_summary(),
+		"tool_loader_status": loader_status,
+		"performance": loader.get_performance_summary() if loader.has_method("get_performance_summary") else {},
 		"presentationVersion": int(presentation.get("presentationVersion", 1)),
 		"toolTree": presentation.get("toolTree", []),
-		"toolGroups": presentation.get("toolGroups", [])
+		"toolGroups": presentation.get("toolGroups", []),
+		"catalogManifest": ToolCatalogSnapshotService.build_public_catalog_manifest(snapshot.get("catalog_manifest", {}))
 	}
 
 
