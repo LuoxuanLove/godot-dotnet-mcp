@@ -37,6 +37,8 @@ func add_client(client: StreamPeerTCP) -> void:
 		"last_request_at_unix": 0,
 		"last_json_rpc_method": "",
 		"transport_mode": "http",
+		"sse_session_id": "",
+		"sse_next_event_index": 0,
 		"sse_last_heartbeat_at_unix": 0,
 		"client_summary": _build_initial_client_summary(client),
 		"recent_requests": []
@@ -75,12 +77,14 @@ func clear_pending_data(client: StreamPeerTCP) -> void:
 	_pending_data.erase(client)
 
 
-func mark_sse_streaming(client: StreamPeerTCP) -> void:
+func mark_sse_streaming(client: StreamPeerTCP, session_id: String = "", next_event_index: int = 0) -> void:
 	if not _client_states.has(client):
 		return
 	var state: Dictionary = _client_states.get(client, {})
 	var now := _now_unix()
 	state["transport_mode"] = "sse"
+	state["sse_session_id"] = session_id.strip_edges()
+	state["sse_next_event_index"] = max(next_event_index, 0)
 	state["last_seen_at_unix"] = now
 	state["sse_last_heartbeat_at_unix"] = 0
 	_client_states[client] = state
@@ -98,6 +102,29 @@ func get_sse_last_heartbeat_at_unix(client: StreamPeerTCP) -> int:
 		return 0
 	var state: Dictionary = _client_states.get(client, {})
 	return int(state.get("sse_last_heartbeat_at_unix", 0))
+
+
+func get_sse_session_id(client: StreamPeerTCP) -> String:
+	if not _client_states.has(client):
+		return ""
+	var state: Dictionary = _client_states.get(client, {})
+	return str(state.get("sse_session_id", ""))
+
+
+func get_sse_next_event_index(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("sse_next_event_index", 0))
+
+
+func mark_sse_events_sent(client: StreamPeerTCP, next_event_index: int) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	state["sse_next_event_index"] = max(next_event_index, 0)
+	state["last_seen_at_unix"] = _now_unix()
+	_client_states[client] = state
 
 
 func mark_sse_heartbeat(client: StreamPeerTCP) -> void:
@@ -234,6 +261,8 @@ func _build_client_session_snapshot(state: Dictionary, active: bool) -> Dictiona
 		"last_request_at_unix": int(state.get("last_request_at_unix", 0)),
 		"last_json_rpc_method": str(state.get("last_json_rpc_method", "")),
 		"transport_mode": str(state.get("transport_mode", "http")),
+		"sse_session_id": str(state.get("sse_session_id", "")),
+		"sse_next_event_index": int(state.get("sse_next_event_index", 0)),
 		"sse_last_heartbeat_at_unix": int(state.get("sse_last_heartbeat_at_unix", 0)),
 		"client_summary": {},
 		"recent_requests": []

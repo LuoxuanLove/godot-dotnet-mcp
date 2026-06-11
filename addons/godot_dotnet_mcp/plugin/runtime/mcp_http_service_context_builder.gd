@@ -71,7 +71,7 @@ func build_tool_rpc_router_context(server, tool_loader_supervisor, http_response
 	context.tool_activity_registry = tool_activity_registry
 	return context
 
-func build_http_request_router_context(json_rpc_request_service, http_response_service, tools_api_service, editor_lifecycle_endpoint):
+func build_http_request_router_context(json_rpc_request_service, http_response_service, tools_api_service, editor_lifecycle_endpoint, sse_event_queue = null):
 	var context = MCPHttpRequestRouterContextScript.new()
 	context.handle_mcp_request_async = Callable(json_rpc_request_service, "handle_request_async")
 	context.build_health_response = Callable(http_response_service, "build_health_response")
@@ -79,9 +79,10 @@ func build_http_request_router_context(json_rpc_request_service, http_response_s
 	context.handle_editor_lifecycle_request = Callable(editor_lifecycle_endpoint, "handle_request")
 	context.handle_editor_lifecycle_post_request = Callable(editor_lifecycle_endpoint, "handle_post_request")
 	context.build_cors_response = Callable(http_response_service, "build_cors_response")
+	context.sse_event_queue = sse_event_queue
 	return context
 
-func build_http_transport_context(server, tool_loader_supervisor, http_request_router, http_response_service):
+func build_http_transport_context(server, tool_loader_supervisor, http_request_router, http_response_service, sse_event_queue = null):
 	var context = MCPHttpTransportContextScript.new()
 	context.log = func(message: String, level: String = "debug") -> void:
 		MCPDebugBuffer.record(level, "server", message)
@@ -95,6 +96,9 @@ func build_http_transport_context(server, tool_loader_supervisor, http_request_r
 	context.write_http_response = Callable(http_response_service, "send_http_response")
 	context.write_sse_stream_open = Callable(http_response_service, "send_sse_stream_open")
 	context.write_sse_heartbeat = Callable(http_response_service, "send_sse_heartbeat")
+	context.write_sse_events = Callable(http_response_service, "send_sse_events")
+	if sse_event_queue != null:
+		context.get_sse_events_since_index = Callable(sse_event_queue, "events_since_index_with_cursor")
 	context.tick_loader = Callable(tool_loader_supervisor, "tick")
 	return context
 

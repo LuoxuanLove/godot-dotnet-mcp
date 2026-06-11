@@ -4,6 +4,7 @@ const HttpTransportServiceScript = preload("res://addons/godot_dotnet_mcp/plugin
 const HttpTransportContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_context.gd")
 const HttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
 const HttpRequestDecoderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_decoder.gd")
+const HttpSseEventQueueScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_sse_event_queue.gd")
 
 const MAX_HTTP_BODY_BYTES := 1024 * 1024
 const TEST_PENDING_REQUEST_BYTES := 512
@@ -16,12 +17,16 @@ var _tick_count := 0
 var _write_count := 0
 var _sse_open_count := 0
 var _sse_heartbeat_count := 0
+var _sse_event_write_count := 0
 var _last_method := ""
 var _last_path := ""
 var _last_body := ""
 var _last_headers: Dictionary = {}
 var _last_no_body := false
 var _last_response: Dictionary = {}
+var _sse_event_bodies: Array[String] = []
+var _queued_sse_events: Array[Dictionary] = []
+var _queued_sse_next_index := 0
 var _routed_bodies: Array[String] = []
 var _record_routed_body_content := true
 
@@ -167,6 +172,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(sse_stream_check.get("success", false)):
 		return sse_stream_check
 
+	var sse_bounded_cursor_check: Dictionary = _run_sse_event_queue_bounded_cursor_contract()
+	if not bool(sse_bounded_cursor_check.get("success", false)):
+		return sse_bounded_cursor_check
+
 	var invalid_length_check: Dictionary = await _run_bad_content_length_contract(
 		tree,
 		"POST /mcp HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}",
@@ -230,6 +239,8 @@ func _run_bad_content_length_contract(tree: SceneTree, frame: String, label: Str
 	context.write_http_response = Callable(self, "_write_response")
 	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
 	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
 	context.tick_loader = Callable(self, "_tick_loader")
 	transport.configure(connection_state, decoder, context)
 
@@ -376,6 +387,8 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	context.write_http_response = Callable(self, "_write_response")
 	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
 	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
 	context.tick_loader = Callable(self, "_tick_loader")
 	transport.configure(connection_state, decoder, context)
 
@@ -394,6 +407,30 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 			request_sent = true
 		transport.process_frame(tcp_server, true, 0.016)
 		if _sse_open_count >= 1 and _sse_heartbeat_count >= 1:
+			break
+		await tree.process_frame
+
+	_queued_sse_events = [
+		{
+			"id": "server-notification-1",
+			"retry": 1000,
+			"event": "message",
+			"data": {
+				"jsonrpc": "2.0",
+				"method": "notifications/message",
+				"params": {
+					"level": "info",
+					"logger": "godot-dotnet-mcp.transport",
+					"data": {"delivered": true}
+				}
+			}
+		}
+	]
+	_queued_sse_next_index = 2
+	for _i in range(40):
+		client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if _sse_event_write_count >= 1:
 			break
 		await tree.process_frame
 
@@ -424,6 +461,18 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	if str(_last_response.get("_raw_body", "")).find("transport-sse-open") == -1:
 		tcp_server.stop()
 		return _failure("SSE lifecycle transport should pass initial stream events to the SSE writer.")
+	if _sse_event_write_count != 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should drain queued server-to-client events for open streams.")
+	if _sse_event_bodies.is_empty() or _sse_event_bodies[0].find("server-notification-1") == -1 or _sse_event_bodies[0].find("\"method\":\"notifications/message\"") == -1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should write queued server-to-client events as SSE messages.")
+	stats = connection_state.get_connection_stats()
+	client_sessions = stats.get("client_sessions", [])
+	active_session = (client_sessions as Array)[0]
+	if int(active_session.get("sse_next_event_index", 0)) < 2:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should advance the queued event cursor after delivery.")
 
 	client.disconnect_from_host()
 	for _i in range(40):
@@ -446,6 +495,43 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	var disconnected_session: Dictionary = (recent_client_sessions as Array)[0]
 	if str(disconnected_session.get("transport_mode", "")) != "sse":
 		return _failure("SSE lifecycle transport should preserve transport_mode=sse in recent diagnostics.")
+	return {"success": true, "error": ""}
+
+
+func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
+	var queue = HttpSseEventQueueScript.new()
+	for index in range(32):
+		queue.append_event("bounded-active-stream", "message", {"index": index + 1}, "bounded")
+	var next_event_index := int(queue.event_count("bounded-active-stream"))
+	if next_event_index != 32:
+		queue.dispose()
+		return _failure("SSE event queue should expose the next absolute event index before truncation.")
+	queue.append_event("bounded-active-stream", "message", {"index": 33}, "bounded")
+	var new_events: Array = queue.events_since_index("bounded-active-stream", next_event_index)
+	if new_events.size() != 1:
+		queue.dispose()
+		return _failure("SSE event queue should deliver events appended after a full bounded log to active stream cursors.")
+	var new_event: Dictionary = new_events[0]
+	if str(new_event.get("id", "")) != "bounded-bounded-active-stream-33":
+		queue.dispose()
+		return _failure("SSE event queue should preserve monotonic event ids after bounded log truncation.")
+	var retained_events: Array = queue.events_since_index("bounded-active-stream", 0)
+	if retained_events.size() != 32:
+		queue.dispose()
+		return _failure("SSE event queue should keep only the bounded retained window for stale absolute cursors.")
+	var first_retained: Dictionary = retained_events[0]
+	if str(first_retained.get("id", "")) != "bounded-bounded-active-stream-2":
+		queue.dispose()
+		return _failure("SSE event queue should advance the retained-window base index after truncation.")
+	var stale_batch: Dictionary = queue.events_since_index_with_cursor("bounded-active-stream", 0)
+	if int(stale_batch.get("next_index", 0)) != 33:
+		queue.dispose()
+		return _failure("SSE event queue should expose the true next absolute cursor for stale retained-window reads.")
+	var repeated_batch: Dictionary = queue.events_since_index_with_cursor("bounded-active-stream", int(stale_batch.get("next_index", 0)))
+	if not (repeated_batch.get("events", []) as Array).is_empty():
+		queue.dispose()
+		return _failure("SSE event queue should not repeat retained-window events after the true next cursor is acknowledged.")
+	queue.dispose()
 	return {"success": true, "error": ""}
 
 
@@ -532,6 +618,8 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 			"status": 200,
 			"_stream_mode": "sse",
 			"_raw_body": "id: transport-sse-open\nretry: 1000\nevent: message\ndata: {}\n\n",
+			"_sse_session_id": "transport-sse-1",
+			"_sse_next_event_index": 1,
 			"_headers": {
 				"MCP-Protocol-Version": "2025-11-25",
 				"Mcp-Session-Id": "transport-sse-1"
@@ -559,6 +647,23 @@ func _write_sse_stream_open(_client: StreamPeerTCP, _data: Dictionary) -> bool:
 func _write_sse_heartbeat(_client: StreamPeerTCP) -> bool:
 	_sse_heartbeat_count += 1
 	return true
+
+
+func _write_sse_events(_client: StreamPeerTCP, body: String) -> bool:
+	_sse_event_write_count += 1
+	_sse_event_bodies.append(body)
+	return true
+
+
+func _get_sse_events_since_index(session_id: String, start_index: int):
+	if session_id != "transport-sse-1":
+		return {"events": [], "next_index": start_index}
+	if start_index > 1:
+		return {"events": [], "next_index": start_index}
+	return {
+		"events": _queued_sse_events.duplicate(true),
+		"next_index": _queued_sse_next_index
+	}
 
 
 func _tick_loader(_delta: float) -> void:
@@ -593,12 +698,16 @@ func _reset_state() -> void:
 	_write_count = 0
 	_sse_open_count = 0
 	_sse_heartbeat_count = 0
+	_sse_event_write_count = 0
 	_last_method = ""
 	_last_path = ""
 	_last_body = ""
 	_last_headers = {}
 	_last_no_body = false
 	_last_response = {}
+	_sse_event_bodies = []
+	_queued_sse_events = []
+	_queued_sse_next_index = 0
 	_routed_bodies = []
 	_record_routed_body_content = true
 

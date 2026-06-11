@@ -3,12 +3,10 @@ extends RefCounted
 class_name MCPHttpRequestRouter
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const MCPHttpSseEventQueueScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_sse_event_queue.gd")
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
 const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
 const SESSION_ID_PREFIX := "godot-dotnet-mcp-http"
-const SSE_RETRY_MS := 1000
-const MAX_SSE_EVENTS_PER_SESSION := 16
-const MAX_SSE_SESSIONS := 32
 
 var _handle_mcp_request_async := Callable()
 var _build_health_response := Callable()
@@ -16,11 +14,10 @@ var _build_tools_list_response := Callable()
 var _handle_editor_lifecycle_request := Callable()
 var _handle_editor_lifecycle_post_request := Callable()
 var _build_cors_response := Callable()
+var _sse_event_queue = null
+var _owns_sse_event_queue := false
 var _allowed_cors_origins: Array[String] = []
 var _allowed_hosts: Array[String] = []
-var _sse_event_logs: Dictionary = {}
-var _sse_event_counters: Dictionary = {}
-var _sse_session_access_order: Array[String] = []
 
 
 func configure(context = null) -> void:
@@ -33,6 +30,11 @@ func configure(context = null) -> void:
 	_handle_editor_lifecycle_request = context.handle_editor_lifecycle_request
 	_handle_editor_lifecycle_post_request = context.handle_editor_lifecycle_post_request
 	_build_cors_response = context.build_cors_response
+	_sse_event_queue = context.sse_event_queue
+	_owns_sse_event_queue = false
+	if _sse_event_queue == null:
+		_sse_event_queue = MCPHttpSseEventQueueScript.new()
+		_owns_sse_event_queue = true
 	_allowed_cors_origins = _read_allowed_cors_origins()
 
 
@@ -43,11 +45,12 @@ func dispose() -> void:
 	_handle_editor_lifecycle_request = Callable()
 	_handle_editor_lifecycle_post_request = Callable()
 	_build_cors_response = Callable()
+	if _owns_sse_event_queue and _sse_event_queue != null and _sse_event_queue.has_method("dispose"):
+		_sse_event_queue.dispose()
+	_sse_event_queue = null
+	_owns_sse_event_queue = false
 	_allowed_cors_origins = []
 	_allowed_hosts = []
-	_sse_event_logs.clear()
-	_sse_event_counters.clear()
-	_sse_session_access_order.clear()
 
 
 func set_allowed_cors_origins(value) -> void:
@@ -250,16 +253,19 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
-	var event := _append_sse_event(session_id, last_event_id)
-	var events := _events_after_sse_cursor(session_id, last_event_id)
+	var event := _append_sse_open_event(session_id, last_event_id)
+	var events := _sse_events_after_cursor(session_id, last_event_id)
 	if events.is_empty():
 		events = [event]
+	var next_event_index := _sse_event_count(session_id)
 	return {
 		"status": 200,
 		"_stream_mode": "sse",
 		"_raw_body": _format_sse_events(events),
 		"_content_type": "text/event-stream; charset=utf-8",
 		"_mcp_session_id": session_id,
+		"_sse_session_id": session_id,
+		"_sse_next_event_index": next_event_index,
 		"_headers": {
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no"
@@ -267,92 +273,53 @@ func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	}
 
 
-func _append_sse_event(session_id: String, last_event_id: String) -> Dictionary:
-	_touch_sse_session(session_id)
-	var event_id := _build_sse_event_id(session_id)
-	var resume_status := _build_sse_resume_status(session_id, last_event_id)
-	var event := {
-		"id": event_id,
-		"event": "message",
-		"retry": SSE_RETRY_MS,
-		"data": {
-			"jsonrpc": "2.0",
-			"method": "notifications/message",
-			"params": {
-				"level": "info",
-				"logger": "godot-dotnet-mcp.transport",
-				"data": {
-					"transport": "streamable_http",
-					"mode": "sse_stream",
-					"resume_from_event_id": last_event_id,
-					"resume_cursor_found": bool(resume_status.get("found", false)),
-					"replay_event_count": int(resume_status.get("event_count_after_cursor", 0))
-				}
+func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictionary:
+	var resume_status := _sse_resume_status(session_id, last_event_id)
+	return _append_sse_event(session_id, {
+		"jsonrpc": "2.0",
+		"method": "notifications/message",
+		"params": {
+			"level": "info",
+			"logger": "godot-dotnet-mcp.transport",
+			"data": {
+				"transport": "streamable_http",
+				"mode": "sse_stream",
+				"resume_from_event_id": last_event_id,
+				"resume_cursor_found": bool(resume_status.get("found", false)),
+				"replay_event_count": int(resume_status.get("event_count_after_cursor", 0))
 			}
 		}
-	}
-	var log: Array = []
-	if _sse_event_logs.get(session_id, []) is Array:
-		log = (_sse_event_logs.get(session_id, []) as Array).duplicate(true)
-	log.append(event)
-	while log.size() > MAX_SSE_EVENTS_PER_SESSION:
-		log.pop_front()
-	_sse_event_logs[session_id] = log
-	return event
+	}, "streamable-http-get")
 
 
-func _touch_sse_session(session_id: String) -> void:
-	var existing_index := _sse_session_access_order.find(session_id)
-	if existing_index >= 0:
-		_sse_session_access_order.remove_at(existing_index)
-	_sse_session_access_order.append(session_id)
-	while _sse_session_access_order.size() > MAX_SSE_SESSIONS:
-		var evicted_session := _sse_session_access_order.pop_front()
-		_sse_event_logs.erase(evicted_session)
-		_sse_event_counters.erase(evicted_session)
+func _append_sse_event(session_id: String, payload: Dictionary, id_prefix: String) -> Dictionary:
+	if _sse_event_queue != null and _sse_event_queue.has_method("append_event"):
+		return _sse_event_queue.append_event(session_id, "message", payload, id_prefix)
+	return {}
 
 
-func _build_sse_resume_status(session_id: String, last_event_id: String) -> Dictionary:
-	if last_event_id.is_empty():
-		return {"found": false, "event_count_after_cursor": 0}
-	var log: Array = []
-	if _sse_event_logs.get(session_id, []) is Array:
-		log = _sse_event_logs.get(session_id, [])
-	for index in range(log.size()):
-		var event = log[index]
-		if event is Dictionary and str((event as Dictionary).get("id", "")) == last_event_id:
-			return {
-				"found": true,
-				"event_count_after_cursor": max(0, log.size() - index - 1)
-			}
-	return {"found": false, "event_count_after_cursor": 0}
-
-
-func _events_after_sse_cursor(session_id: String, last_event_id: String) -> Array:
-	var log: Array = []
-	if _sse_event_logs.get(session_id, []) is Array:
-		log = _sse_event_logs.get(session_id, [])
-	if last_event_id.is_empty():
-		return []
-	for index in range(log.size()):
-		var event = log[index]
-		if event is Dictionary and str((event as Dictionary).get("id", "")) == last_event_id:
-			return log.slice(index + 1)
+func _sse_events_after_cursor(session_id: String, last_event_id: String) -> Array:
+	if _sse_event_queue != null and _sse_event_queue.has_method("events_after_cursor"):
+		return _sse_event_queue.events_after_cursor(session_id, last_event_id)
 	return []
 
 
+func _sse_event_count(session_id: String) -> int:
+	if _sse_event_queue != null and _sse_event_queue.has_method("event_count"):
+		return int(_sse_event_queue.event_count(session_id))
+	return 0
+
+
+func _sse_resume_status(session_id: String, last_event_id: String) -> Dictionary:
+	if _sse_event_queue != null and _sse_event_queue.has_method("resume_status"):
+		return _sse_event_queue.resume_status(session_id, last_event_id)
+	return {"found": false, "event_count_after_cursor": 0}
+
+
 func _format_sse_events(events: Array) -> String:
-	var body := ""
-	for event in events:
-		if not (event is Dictionary):
-			continue
-		body += "id: %s\nretry: %d\nevent: %s\ndata: %s\n\n" % [
-			str((event as Dictionary).get("id", "")),
-			int((event as Dictionary).get("retry", SSE_RETRY_MS)),
-			str((event as Dictionary).get("event", "message")),
-			JSON.stringify((event as Dictionary).get("data", {}))
-		]
-	return body
+	if _sse_event_queue != null and _sse_event_queue.has_method("format_events"):
+		return str(_sse_event_queue.format_events(events))
+	return ""
 
 
 func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictionary) -> Dictionary:
@@ -405,23 +372,6 @@ func _generate_mcp_session_id() -> String:
 		str(get_instance_id()),
 		str(randi())
 	]
-
-
-func _build_sse_event_id(session_id: String) -> String:
-	var sanitized_session := _sanitize_sse_token(session_id)
-	var next_counter := int(_sse_event_counters.get(session_id, 0)) + 1
-	_sse_event_counters[session_id] = next_counter
-	return "streamable-http-get-%s-%d" % [
-		sanitized_session,
-		next_counter
-	]
-
-
-func _sanitize_sse_token(value: String) -> String:
-	var sanitized := value.strip_edges()
-	if sanitized.is_empty():
-		return "anonymous"
-	return sanitized.replace("\r", "_").replace("\n", "_").replace(" ", "_").replace(":", "-")
 
 
 func _accepts_json_response(accept_header: String) -> bool:

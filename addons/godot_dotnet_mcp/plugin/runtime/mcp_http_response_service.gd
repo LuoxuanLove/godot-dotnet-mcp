@@ -227,6 +227,15 @@ func send_sse_heartbeat(client: StreamPeerTCP) -> bool:
 	return error == OK
 
 
+func send_sse_events(client: StreamPeerTCP, event_body: String) -> bool:
+	if event_body.strip_edges().is_empty():
+		return true
+	var error = client.put_data(event_body.to_utf8_buffer())
+	if error != OK:
+		_log_message("SSE event write failed: %s" % error, "warning")
+	return error == OK
+
+
 func sanitize_for_json(value):
 	match typeof(value):
 		TYPE_DICTIONARY:
