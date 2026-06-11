@@ -120,7 +120,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"id": "godot.project_orientation",
 		"title": "Project Orientation",
 		"success": true,
-		"text": "Use resources/list before editing."
+		"text": "Use resources/list before editing.",
+		"arguments": {"goal": "map the project"}
 	}
 	prompts_tab.apply_model(preview_model)
 	await tree.process_frame
@@ -133,6 +134,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	copy_preview_button.emit_signal("pressed")
 	if recorder.copied_text != "Use resources/list before editing.":
 		return _failure("Copy Preview should emit generated prompt text.")
+	goal_input = _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("ArgumentInput_goal", true, false) as LineEdit
+	goal_input.text = "map the runtime"
+	goal_input.emit_signal("text_changed", "map the runtime")
+	prompts_tab.apply_model(preview_model)
+	await tree.process_frame
+	if _find_label_containing(prompts_tab, "Use resources/list before editing.") != null:
+		return _failure("Prompt preview results should disappear when current argument values no longer match the generated preview.")
+	copy_preview_button = _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("CopyPreviewButton", true, false) as Button
+	if copy_preview_button != null:
+		return _failure("Stale generated prompt text should not remain copyable after prompt arguments change.")
 
 	return {"name": "mcp_catalog_tab_rendering_contracts", "success": true, "error": ""}
 

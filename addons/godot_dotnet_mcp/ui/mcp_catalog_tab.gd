@@ -215,7 +215,7 @@ func _add_entry_actions(body: VBoxContainer, entry: Dictionary, entry_kind: Stri
 	)
 	action_row.add_child(preview_button)
 
-	_add_preview_panel(body, entry_kind, id)
+	_add_preview_panel(body, entry, entry_kind, id)
 
 
 func _add_prompt_argument_inputs(body: VBoxContainer, entry: Dictionary) -> void:
@@ -260,6 +260,7 @@ func _add_prompt_argument_inputs(body: VBoxContainer, entry: Dictionary) -> void
 			var values: Dictionary = _argument_values.get(prompt_name, {})
 			values[arg_name] = value
 			_argument_values[prompt_name] = values
+			_current_signature = ""
 		)
 		row.add_child(input)
 
@@ -272,8 +273,8 @@ func _collect_entry_arguments(entry: Dictionary, entry_kind: String) -> Dictiona
 	return values.duplicate(true)
 
 
-func _add_preview_panel(body: VBoxContainer, entry_kind: String, id: String) -> void:
-	var preview := _current_preview_for(entry_kind, id)
+func _add_preview_panel(body: VBoxContainer, entry: Dictionary, entry_kind: String, id: String) -> void:
+	var preview := _current_preview_for(entry, entry_kind, id)
 	if preview.is_empty():
 		return
 	var panel := PanelContainer.new()
@@ -326,7 +327,7 @@ func _add_preview_panel(body: VBoxContainer, entry_kind: String, id: String) -> 
 	preview_body.add_child(content)
 
 
-func _current_preview_for(entry_kind: String, id: String) -> Dictionary:
+func _current_preview_for(entry: Dictionary, entry_kind: String, id: String) -> Dictionary:
 	var preview = _last_preview()
 	if not (preview is Dictionary):
 		return {}
@@ -335,7 +336,28 @@ func _current_preview_for(entry_kind: String, id: String) -> Dictionary:
 		return {}
 	if str(preview_dict.get("id", "")) != id:
 		return {}
+	if entry_kind == "prompt" and not _preview_arguments_match_current(entry, entry_kind, preview_dict):
+		return {}
 	return preview_dict
+
+
+func _preview_arguments_match_current(entry: Dictionary, entry_kind: String, preview: Dictionary) -> bool:
+	var expected := _normalize_arguments(_collect_entry_arguments(entry, entry_kind))
+	var preview_arguments = preview.get("arguments", {})
+	if not (preview_arguments is Dictionary):
+		return expected.is_empty()
+	return _normalize_arguments(preview_arguments as Dictionary) == expected
+
+
+func _normalize_arguments(arguments: Dictionary) -> Dictionary:
+	var normalized := {}
+	for key in arguments.keys():
+		var name := str(key)
+		var value := str(arguments.get(key, "")).strip_edges()
+		if value.is_empty():
+			continue
+		normalized[name] = value
+	return normalized
 
 
 func _last_preview():
