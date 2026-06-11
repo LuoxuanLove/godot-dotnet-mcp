@@ -98,7 +98,7 @@ func build_http_transport_context(server, tool_loader_supervisor, http_request_r
 	context.write_sse_heartbeat = Callable(http_response_service, "send_sse_heartbeat")
 	context.write_sse_events = Callable(http_response_service, "send_sse_events")
 	if sse_event_queue != null:
-		context.get_sse_events_since_index = Callable(sse_event_queue, "events_since_index")
+		context.get_sse_events_since_index = Callable(sse_event_queue, "events_since_index_with_cursor")
 	context.tick_loader = Callable(tool_loader_supervisor, "tick")
 	return context
 

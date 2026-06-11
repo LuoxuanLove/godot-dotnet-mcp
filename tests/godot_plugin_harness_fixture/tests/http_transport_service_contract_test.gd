@@ -26,6 +26,7 @@ var _last_no_body := false
 var _last_response: Dictionary = {}
 var _sse_event_bodies: Array[String] = []
 var _queued_sse_events: Array[Dictionary] = []
+var _queued_sse_next_index := 0
 var _routed_bodies: Array[String] = []
 var _record_routed_body_content := true
 
@@ -425,6 +426,7 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 			}
 		}
 	]
+	_queued_sse_next_index = 2
 	for _i in range(40):
 		client.poll()
 		transport.process_frame(tcp_server, true, 0.016)
@@ -521,6 +523,14 @@ func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	if str(first_retained.get("id", "")) != "bounded-bounded-active-stream-2":
 		queue.dispose()
 		return _failure("SSE event queue should advance the retained-window base index after truncation.")
+	var stale_batch: Dictionary = queue.events_since_index_with_cursor("bounded-active-stream", 0)
+	if int(stale_batch.get("next_index", 0)) != 33:
+		queue.dispose()
+		return _failure("SSE event queue should expose the true next absolute cursor for stale retained-window reads.")
+	var repeated_batch: Dictionary = queue.events_since_index_with_cursor("bounded-active-stream", int(stale_batch.get("next_index", 0)))
+	if not (repeated_batch.get("events", []) as Array).is_empty():
+		queue.dispose()
+		return _failure("SSE event queue should not repeat retained-window events after the true next cursor is acknowledged.")
 	queue.dispose()
 	return {"success": true, "error": ""}
 
@@ -645,12 +655,15 @@ func _write_sse_events(_client: StreamPeerTCP, body: String) -> bool:
 	return true
 
 
-func _get_sse_events_since_index(session_id: String, start_index: int) -> Array:
+func _get_sse_events_since_index(session_id: String, start_index: int):
 	if session_id != "transport-sse-1":
-		return []
+		return {"events": [], "next_index": start_index}
 	if start_index > 1:
-		return []
-	return _queued_sse_events.duplicate(true)
+		return {"events": [], "next_index": start_index}
+	return {
+		"events": _queued_sse_events.duplicate(true),
+		"next_index": _queued_sse_next_index
+	}
 
 
 func _tick_loader(_delta: float) -> void:
@@ -694,6 +707,7 @@ func _reset_state() -> void:
 	_last_response = {}
 	_sse_event_bodies = []
 	_queued_sse_events = []
+	_queued_sse_next_index = 0
 	_routed_bodies = []
 	_record_routed_body_content = true
 

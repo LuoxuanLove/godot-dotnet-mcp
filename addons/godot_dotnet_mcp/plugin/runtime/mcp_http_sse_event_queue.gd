@@ -53,12 +53,21 @@ func events_after_cursor(session_id: String, last_event_id: String) -> Array:
 
 
 func events_since_index(session_id: String, start_index: int) -> Array:
+	return events_since_index_with_cursor(session_id, start_index).get("events", [])
+
+
+func events_since_index_with_cursor(session_id: String, start_index: int) -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
 	var log := _log_for_session(normalized_session)
 	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	var end_index := base_index + log.size()
 	var bounded_start: int = clamp(start_index, base_index, end_index)
-	return (log.slice(bounded_start - base_index) as Array).duplicate(true)
+	return {
+		"events": (log.slice(bounded_start - base_index) as Array).duplicate(true),
+		"next_index": end_index,
+		"start_index": bounded_start,
+		"base_index": base_index
+	}
 
 
 func event_count(session_id: String) -> int:

@@ -288,17 +288,27 @@ func _drain_sse_events(client: StreamPeerTCP) -> bool:
 	if session_id.is_empty():
 		return false
 	var next_event_index := int(_connection_state.get_sse_next_event_index(client))
-	var events = _get_sse_events_since_index.call(session_id, next_event_index)
-	if not (events is Array) or (events as Array).is_empty():
+	var event_batch = _get_sse_events_since_index.call(session_id, next_event_index)
+	var events: Array = []
+	var next_batch_index := next_event_index
+	if event_batch is Dictionary:
+		var batch_events = (event_batch as Dictionary).get("events", [])
+		if batch_events is Array:
+			events = batch_events
+		next_batch_index = int((event_batch as Dictionary).get("next_index", next_event_index))
+	elif event_batch is Array:
+		events = event_batch
+		next_batch_index = next_event_index + events.size()
+	if events.is_empty():
 		return false
-	var body := _format_sse_events(events as Array)
+	var body := _format_sse_events(events)
 	var write_ok := bool(_write_sse_events.call(client, body))
 	if not write_ok:
 		_log("Closing SSE stream after queued event write failure", "warning")
 		client.disconnect_from_host()
 		return true
 	if _connection_state.has_method("mark_sse_events_sent"):
-		_connection_state.mark_sse_events_sent(client, next_event_index + (events as Array).size())
+		_connection_state.mark_sse_events_sent(client, next_batch_index)
 	return false
 
 
