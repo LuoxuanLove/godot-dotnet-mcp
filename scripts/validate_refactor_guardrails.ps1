@@ -109,6 +109,104 @@ function Get-RelativePath {
     return $TargetPath
 }
 
+function Assert-FileContainsText {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [string[]]$RequiredText
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        $errors.Add("Required refactor document is missing: $Label ($Path)")
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($needle in $RequiredText) {
+        if ($text.IndexOf($needle, [System.StringComparison]::Ordinal) -lt 0) {
+            $errors.Add("Required refactor document '$Label' is missing expected MCP 2025-11-25 fact: $needle")
+        }
+    }
+}
+
+function Assert-FileDoesNotMatch {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [hashtable[]]$BannedPatterns
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($entry in $BannedPatterns) {
+        if ($text -match $entry.Pattern) {
+            $errors.Add("Required refactor document '$Label' contains contradictory MCP 2025-11-25 target fact: $($entry.Description)")
+        }
+    }
+}
+
+function Assert-V14PlanConsistency {
+    param(
+        [string]$RepositoryRoot
+    )
+
+    $planPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md"
+    $trackerPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md"
+
+    Assert-FileContainsText -Path $planPath -Label "v1.4 protocol refactor plan" -RequiredText @(
+        "MCP 2025-11-25",
+        "protocolVersion = 2025-11-25",
+        "http://127.0.0.1:3000/mcp",
+        "Accept: application/json, text/event-stream",
+        "MCP-Protocol-Version: 2025-11-25",
+        "Sampling, Elicitation, and Tasks as optional capabilities",
+        "do not implement or advertise them by default",
+        "legacy compatibility surfaces"
+    )
+
+    Assert-FileDoesNotMatch -Path $planPath -Label "v1.4 protocol refactor plan" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
+    )
+
+    Assert-FileContainsText -Path $trackerPath -Label "v1.4 refactor progress tracker" -RequiredText @(
+        'MCP 2025-11-25 conformance by default',
+        '2025-06-18 alignment retained as a compatibility foundation',
+        'http://127.0.0.1:3000/mcp',
+        'MCP Streamable HTTP',
+        'legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio',
+        'A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
+    )
+
+    Assert-FileDoesNotMatch -Path $trackerPath -Label "v1.4 refactor progress tracker" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
+    )
+}
+
 $trackedReleaseArtifacts = git ls-files "release_dist" "dist" | Where-Object {
     -not [string]::IsNullOrWhiteSpace($_)
 }
@@ -161,6 +259,8 @@ foreach ($pattern in $bannedSourcePatterns) {
         }
     }
 }
+
+Assert-V14PlanConsistency -RepositoryRoot $repoRoot
 
 $manifestPath = Join-Path $repoRoot "scripts\contract_case_manifest.json"
 if (Test-Path -LiteralPath $manifestPath) {

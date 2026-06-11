@@ -6,11 +6,26 @@ $scriptRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
 $manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
 
+function Write-Utf8NoBom {
+    param(
+        [string]$Path,
+        [string]$Text
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 function Write-GuardrailFixture {
     param(
         [string]$RepositoryRoot,
         [string]$RootReadmeText,
-        [string]$AddonReadmeText
+        [string]$AddonReadmeText,
+        [switch]$MissingTrackerFact,
+        [switch]$ContradictoryLegacyFacts
     )
 
     git -C $RepositoryRoot init | Out-Null
@@ -26,7 +41,50 @@ function Write-GuardrailFixture {
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json | Out-Null
+    $planText = @'
+# v1.4.0 Protocol Refactor Plan
+
+MCP 2025-11-25
+protocolVersion = 2025-11-25
+http://127.0.0.1:3000/mcp
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2025-11-25
+Sampling, Elicitation, and Tasks as optional capabilities
+do not implement or advertise them by default
+legacy compatibility surfaces
+'@
+
+    $trackerText = @'
+# v1.4.0 Refactor Progress Tracker
+
+MCP 2025-11-25 conformance by default
+2025-06-18 alignment retained as a compatibility foundation
+http://127.0.0.1:3000/mcp
+MCP Streamable HTTP
+legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio
+A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.
+'@
+
+    if ($MissingTrackerFact) {
+        $trackerText = $trackerText.Replace("MCP Streamable HTTP", "HTTP endpoint")
+    }
+    if ($ContradictoryLegacyFacts) {
+        $planText += @'
+
+protocolVersion = 2025-06-18
+/api/tools is the default endpoint.
+'@
+        $trackerText += @'
+
+MCP 2025-06-18 is the default target baseline.
+/api/tools is the canonical MCP endpoint.
+'@
+    }
+
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
+
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json docs/en/process/v1.4.0-protocol-refactor-plan.md docs/en/process/v1.4.0-refactor-progress-tracker.md | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 
@@ -35,14 +93,16 @@ function Invoke-GuardrailScenario {
         [string]$Name,
         [string]$RootReadmeText,
         [string]$AddonReadmeText,
-        [bool]$ShouldPass
+        [bool]$ShouldPass,
+        [switch]$MissingTrackerFact,
+        [switch]$ContradictoryLegacyFacts
     )
 
     $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-refactor-guardrails-" + [System.Guid]::NewGuid().ToString("N"))
     $previousLocation = (Get-Location).Path
     New-Item -ItemType Directory -Path $repo | Out-Null
     try {
-        Write-GuardrailFixture -RepositoryRoot $repo -RootReadmeText $RootReadmeText -AddonReadmeText $AddonReadmeText
+        Write-GuardrailFixture -RepositoryRoot $repo -RootReadmeText $RootReadmeText -AddonReadmeText $AddonReadmeText -MissingTrackerFact:$MissingTrackerFact -ContradictoryLegacyFacts:$ContradictoryLegacyFacts
         $passed = $true
         $failureMessage = ""
         try {
@@ -84,6 +144,8 @@ Use Godot Asset Library installation or direct source-copy installation.
 "@
 
 Invoke-GuardrailScenario -Name "release-facing README install paths" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $true
+Invoke-GuardrailScenario -Name "missing v1.4 tracker MCP fact" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -MissingTrackerFact
+Invoke-GuardrailScenario -Name "contradictory legacy MCP target facts" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -ContradictoryLegacyFacts
 
 $zipReadme = @"
 # Fixture
