@@ -8,7 +8,7 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
-const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 
 var _state
 var _localization
@@ -113,14 +113,8 @@ func build_model() -> Dictionary:
 	var settings = _get_settings()
 	var all_tools_by_category = _get_all_tools_by_category()
 	var tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
-	var domain_states = _server_controller.get_domain_states()
-	var tool_presentation = ToolPresentationService.build_tool_presentation(
-		_build_exposed_tool_definitions(tools_by_category),
-		tools_by_category,
-		domain_states,
-		settings.get("disabled_tools", []),
-		MCPToolManifest.TOOL_DOMAIN_DEFS
-	)
+	var catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
+	var tool_presentation = catalog_snapshot.get("presentation", {})
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var client_install_statuses := {}
 	var plugin_freshness := {}
@@ -150,7 +144,7 @@ func build_model() -> Dictionary:
 		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
+		"domain_defs": (catalog_snapshot.get("catalog_manifest", {}) as Dictionary).get("domain_defs", MCPToolManifest.TOOL_DOMAIN_DEFS),
 		"tool_presentation": tool_presentation,
 		"client_install_statuses": client_install_statuses,
 		"plugin_freshness": plugin_freshness,
@@ -218,6 +212,26 @@ func _build_exposed_tool_definitions(all_tools_by_category: Dictionary) -> Array
 			tool["category"] = category
 			exposed.append(tool)
 	return exposed
+
+
+func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dictionary) -> Dictionary:
+	var loader = _get_tool_loader()
+	if loader == null:
+		return {}
+	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
+		"all_tools_by_category": tools_by_category,
+		"exposed_tools": _build_exposed_tool_definitions(tools_by_category),
+		"disabled_tools": settings.get("disabled_tools", [])
+	})
+	if bool(snapshot.get("success", false)):
+		return snapshot
+	return {}
+
+
+func _get_tool_loader():
+	if _server_controller != null and _server_controller.has_method("get_tool_loader"):
+		return _server_controller.get_tool_loader()
+	return _server_controller
 
 
 func _get_exposed_tool_full_name(category: String, tool: Dictionary) -> String:

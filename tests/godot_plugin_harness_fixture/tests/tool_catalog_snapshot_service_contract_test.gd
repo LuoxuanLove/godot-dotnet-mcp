@@ -255,6 +255,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str((second_snapshot.get("tool_loader_status", {}) as Dictionary).get("status", "")) != "ready":
 		return _failure("Snapshot should return isolated status dictionaries.")
 
+	var filtered_snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
+		"all_tools_by_category": {
+			"system": loader.get_all_tools_by_category().get("system", [])
+		},
+		"exposed_tools": [{
+			"name": "system_project_state",
+			"category": "system",
+			"source": "builtin",
+			"load_state": "loaded"
+		}],
+		"disabled_tools": ["system_project_state"]
+	})
+	if not bool(filtered_snapshot.get("success", false)):
+		return _failure("Snapshot should build with dock-style catalog overrides.")
+	var filtered_categories: Dictionary = filtered_snapshot.get("all_tools_by_category", {})
+	if filtered_categories.has("project"):
+		return _failure("Snapshot overrides should preserve the caller's filtered category set.")
+	if filtered_categories.has("user"):
+		return _failure("Snapshot overrides should not re-add caller-filtered hidden categories.")
+	var filtered_metadata: Dictionary = (filtered_snapshot.get("presentation", {}) as Dictionary).get("toolMetadataByName", {})
+	if filtered_metadata.has("project_input"):
+		return _failure("Snapshot presentation should only expose caller-supplied filtered tools.")
+	var disabled_project_state: Dictionary = filtered_metadata.get("system_project_state", {})
+	if disabled_project_state.is_empty() or bool(disabled_project_state.get("enabled", true)):
+		return _failure("Snapshot presentation should honor caller-supplied disabled_tools overrides.")
+
 	var unavailable: Dictionary = ToolCatalogSnapshotService.build_snapshot(null)
 	if bool(unavailable.get("success", true)) or str(unavailable.get("error", "")) != "tool_loader_unavailable":
 		return _failure("Snapshot should fail clearly when the loader is unavailable.")

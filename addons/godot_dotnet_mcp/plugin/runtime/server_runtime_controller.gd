@@ -287,6 +287,10 @@ func get_tool_loader_status() -> Dictionary:
 	return {}
 
 
+func get_tool_loader():
+	return _resolve_tool_loader()
+
+
 func get_connection_count() -> int:
 	if _has_server_method("get_connection_count"):
 		return _server.get_connection_count()

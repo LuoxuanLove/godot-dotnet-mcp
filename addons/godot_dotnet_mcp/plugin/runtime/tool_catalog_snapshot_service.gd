@@ -6,23 +6,30 @@ const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plu
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 
-static func build_snapshot(loader) -> Dictionary:
+static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 	if loader == null or not loader.has_method("get_exposed_tool_definitions"):
 		return {"success": false, "error": "tool_loader_unavailable", "message": "Tool loader is unavailable"}
 
 	var catalog_manifest := _build_catalog_manifest_snapshot()
-	var exposed_tools := _filter_removed_tools(loader, loader.get_exposed_tool_definitions())
+	var exposed_source = overrides.get("exposed_tools", loader.get_exposed_tool_definitions())
+	var exposed_tools := _filter_removed_tools(loader, exposed_source if exposed_source is Array else [])
 	var visible_tools := exposed_tools.duplicate(true)
-	if loader.has_method("get_tool_definitions"):
+	if overrides.has("visible_tools"):
+		var visible_source = overrides.get("visible_tools", [])
+		visible_tools = _filter_removed_tools(loader, visible_source if visible_source is Array else [])
+	elif loader.has_method("get_tool_definitions"):
 		visible_tools = _filter_removed_tools(loader, loader.get_tool_definitions())
-	var all_tools_by_category := _filter_removed_tools_by_category(loader, _get_all_tools_by_category(loader))
-	var category_states := _duplicate_dictionary_array(_get_domain_states(loader))
+	var tools_by_category_source = overrides.get("all_tools_by_category", _get_all_tools_by_category(loader))
+	var all_tools_by_category := _filter_removed_tools_by_category(loader, tools_by_category_source if tools_by_category_source is Dictionary else {})
+	var category_state_source = overrides.get("category_states", _get_domain_states(loader))
+	var category_states := _duplicate_dictionary_array(category_state_source if category_state_source is Array else [])
 	var domain_states := _aggregate_domain_states(category_states, catalog_manifest.get("domain_defs", []))
+	var disabled_source = overrides.get("disabled_tools", [])
 	var presentation := ToolPresentationServiceScript.build_tool_presentation(
 		exposed_tools,
 		all_tools_by_category,
 		domain_states,
-		[],
+		disabled_source if disabled_source is Array else [],
 		catalog_manifest.get("domain_defs", [])
 	)
 
