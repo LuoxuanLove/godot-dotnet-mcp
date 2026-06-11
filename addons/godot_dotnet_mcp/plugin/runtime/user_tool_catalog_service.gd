@@ -2,6 +2,7 @@
 extends RefCounted
 
 const MCPBaseToolScript = preload("res://addons/godot_dotnet_mcp/tools/base_tools.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 var _custom_tools_dir := ""
 var _user_category := ""
@@ -151,6 +152,14 @@ func _inspect_script(script_path: String) -> Dictionary:
 						logical_name,
 						public_tool_name,
 						"Declared tool name includes the public user_ prefix; runtime strips it before exposing the tool through the User domain."
+					))
+				if not ToolCatalogManifest.is_valid_mcp_tool_name(public_tool_name):
+					tool_name_warnings.append(_build_tool_name_warning(
+						"invalid_mcp_public_tool_name",
+						declared_name,
+						logical_name,
+						public_tool_name,
+						"User tool public names must stay within the MCP 2025-11-25 1-128 character ASCII letter, digit, _, -, and . naming profile."
 					))
 				if seen_logical_names.has(logical_name):
 					tool_name_warnings.append(_build_tool_name_warning(
