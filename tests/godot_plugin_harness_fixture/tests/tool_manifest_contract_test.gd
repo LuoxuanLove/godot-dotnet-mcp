@@ -38,6 +38,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("ToolCatalogManifest should keep removed public tool guard: %s" % removed_tool)
 		if not ToolCatalogManifest.is_removed_public_tool(removed_tool):
 			return _failure("ToolCatalogManifest should identify removed public tool: %s" % removed_tool)
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(removed_tool):
+			return _failure("Removed public tool names should still follow MCP 2025-11-25 naming guidance for legacy-call guards: %s" % removed_tool)
+	for valid_name in ["system_project_state", "user.my-tool_1", "A", _repeat("a", 128)]:
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(valid_name):
+			return _failure("ToolCatalogManifest should accept MCP 2025-11-25 tool name: %s" % valid_name)
+	for invalid_name in ["", "system project state", "system/project_state", "工具", _repeat("a", 129)]:
+		if ToolCatalogManifest.is_valid_mcp_tool_name(invalid_name):
+			return _failure("ToolCatalogManifest should reject invalid MCP 2025-11-25 tool name: %s" % invalid_name)
 
 	var catalog := ToolCatalogService.new()
 	if catalog.find_domain_key_for_category(domain_defs, "plugin") != "":
@@ -78,6 +86,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var category := str(entry.get("category", ""))
 		if category.is_empty():
 			return _failure("ToolCatalogManifest registry entries should include a category.")
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(category):
+			return _failure("ToolCatalogManifest registry category should be a valid MCP tool-name segment: %s" % category)
 		if seen_categories.has(category):
 			return _failure("ToolCatalogManifest registry entries should not duplicate category: %s" % category)
 		seen_categories[category] = true
@@ -150,3 +160,10 @@ func _string_array(values: Array) -> Array[String]:
 	for value in values:
 		result.append(str(value))
 	return result
+
+
+func _repeat(character: String, count: int) -> String:
+	var value := ""
+	for _index in range(count):
+		value += character
+	return value
