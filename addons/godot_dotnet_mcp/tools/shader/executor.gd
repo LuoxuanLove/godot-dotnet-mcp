@@ -192,6 +192,13 @@ func _load_shader(path: String) -> Shader:
 	return null
 
 
+func _ensure_parent_dir(path: String) -> Error:
+	var parent_dir := path.get_base_dir()
+	if parent_dir.is_empty() or parent_dir == path:
+		return OK
+	return DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(parent_dir))
+
+
 func _create_shader(args: Dictionary) -> Dictionary:
 	var path = args.get("path", "")
 	var type = args.get("type", "spatial")
@@ -203,6 +210,9 @@ func _create_shader(args: Dictionary) -> Dictionary:
 		path = "res://" + path
 	if not path.ends_with(".gdshader"):
 		path += ".gdshader"
+	var dir_error := _ensure_parent_dir(path)
+	if dir_error != OK:
+		return _error("Failed to create shader directory: %s" % error_string(dir_error))
 
 	# Generate basic shader template
 	var code: String
@@ -325,6 +335,9 @@ func _write_shader(path: String, code: String) -> Dictionary:
 
 	if not path.begins_with("res://"):
 		path = "res://" + path
+	var dir_error := _ensure_parent_dir(path)
+	if dir_error != OK:
+		return _error("Failed to create shader directory: %s" % error_string(dir_error))
 
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	if not file:
@@ -549,6 +562,9 @@ func _create_shader_material(args: Dictionary) -> Dictionary:
 			save_path = "res://" + save_path
 		if not save_path.ends_with(".tres") and not save_path.ends_with(".res"):
 			save_path += ".tres"
+		var dir_error := _ensure_parent_dir(save_path)
+		if dir_error != OK:
+			return _error("Failed to create material directory: %s" % error_string(dir_error))
 
 		var error = ResourceSaver.save(material, save_path)
 		if error != OK:
