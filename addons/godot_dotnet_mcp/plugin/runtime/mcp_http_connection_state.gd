@@ -145,6 +145,30 @@ func remove_client(client: StreamPeerTCP) -> void:
 	_client_states.erase(client)
 
 
+func disconnect_sse_session(session_id: String) -> int:
+	var normalized_session := session_id.strip_edges()
+	if normalized_session.is_empty():
+		return 0
+	var disconnected_count := 0
+	for client in _clients.duplicate():
+		if not _client_states.has(client):
+			continue
+		var state: Dictionary = _client_states.get(client, {})
+		if str(state.get("transport_mode", "http")) != "sse":
+			continue
+		if str(state.get("sse_session_id", "")) != normalized_session:
+			continue
+		if client != null:
+			_archive_client_session(client)
+			client.disconnect_from_host()
+		_clients.erase(client)
+		_pending_data.erase(client)
+		_processing_clients.erase(client)
+		_client_states.erase(client)
+		disconnected_count += 1
+	return disconnected_count
+
+
 func disconnect_all_clients() -> void:
 	for client in _clients:
 		if client != null:

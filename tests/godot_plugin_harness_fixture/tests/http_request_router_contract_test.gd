@@ -256,7 +256,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "")
 	var options_headers: Dictionary = options_response.get("_headers", {})
-	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "GET, POST":
+	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "GET, POST, DELETE":
 		return _failure("HTTP request router did not reject non-CORS OPTIONS requests with the allowed methods.")
 
 	var denied_origin_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"origin": "https://example.com", "host": "localhost:3000"})
@@ -269,6 +269,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not allow configured CORS preflight origins.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
 		return _failure("HTTP request router did not echo the configured CORS origin.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Methods", "")) != "GET, POST, DELETE":
+		return _failure("HTTP request router CORS preflight should advertise DELETE /mcp support.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
 		return _failure("HTTP request router CORS preflight should allow MCP protocol headers.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
@@ -367,6 +369,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if str(protocol_allowed_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":3}":
 		return _failure("HTTP request router rejected the configured MCP-Protocol-Version header.")
+
+	var delete_missing_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(delete_missing_session_response.get("status", 0)) != 400 or str(delete_missing_session_response.get("error", "")) != "Missing MCP session id":
+		return _failure("HTTP request router should require Mcp-Session-Id for DELETE /mcp session termination.")
+	var delete_invalid_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\nInjected: yes"})
+	if int(delete_invalid_session_response.get("status", 0)) != 400 or str(delete_invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject unsafe DELETE /mcp session ids.")
+	var delete_missing_protocol_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-session-id": "delete-session"})
+	if int(delete_missing_protocol_response.get("status", 0)) != 400 or str(delete_missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
+		return _failure("HTTP request router should require MCP-Protocol-Version for DELETE /mcp.")
+	var delete_session_seed: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
+	if int(delete_session_seed.get("status", 0)) != 200:
+		return _failure("HTTP request router should allow a session to exist before DELETE /mcp termination.")
+	var delete_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
+	if int(delete_session_response.get("status", 0)) != 204 or not bool(delete_session_response.get("_no_body", false)):
+		return _failure("HTTP request router should return 204 no body for successful DELETE /mcp session termination.")
+	if str(delete_session_response.get("_terminate_mcp_session_id", "")) != "delete-session":
+		return _failure("HTTP request router should emit an internal termination directive for active SSE streams.")
+	var delete_session_headers: Dictionary = delete_session_response.get("_headers", {})
+	if str(delete_session_headers.get("X-MCP-Session-Terminated", "")) != "true":
+		return _failure("HTTP request router should expose session termination metadata on DELETE /mcp.")
+	var get_after_delete_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
+	if int(get_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should reject GET /mcp for a terminated session.")
+	var post_after_delete_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
+	if int(post_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should reject POST /mcp for a terminated session.")
+	var delete_after_delete_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
+	if int(delete_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should report terminated MCP sessions as not found on repeated DELETE /mcp.")
 
 	var response_post_router = HttpRequestRouterScript.new()
 	var response_post_service = ResponsePostService.new()

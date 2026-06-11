@@ -173,6 +173,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(sse_stream_check.get("success", false)):
 		return sse_stream_check
 
+	var sse_delete_check: Dictionary = await _run_sse_session_delete_contract(tree)
+	if not bool(sse_delete_check.get("success", false)):
+		return sse_delete_check
+
 	var finite_post_sse_check: Dictionary = await _run_finite_post_sse_response_contract(tree)
 	if not bool(finite_post_sse_check.get("success", false)):
 		return finite_post_sse_check
@@ -592,6 +596,119 @@ func _run_finite_post_sse_response_contract(tree: SceneTree) -> Dictionary:
 	return {"success": true, "error": ""}
 
 
+func _run_sse_session_delete_contract(tree: SceneTree) -> Dictionary:
+	_reset_state()
+	var port := _pick_free_port(26480)
+	if port < 0:
+		return _failure("Could not reserve a TCP port for the SSE session DELETE contract server.")
+
+	var tcp_server := TCPServer.new()
+	if tcp_server.listen(port, "127.0.0.1") != OK:
+		return _failure("Failed to start the SSE session DELETE contract server.")
+
+	var sse_client := StreamPeerTCP.new()
+	var delete_client := StreamPeerTCP.new()
+	sse_client.connect_to_host("127.0.0.1", port)
+	delete_client.connect_to_host("127.0.0.1", port)
+
+	var connection_state = HttpConnectionStateScript.new()
+	var decoder = HttpRequestDecoderScript.new()
+	var transport = HttpTransportServiceScript.new()
+	var context = HttpTransportContextScript.new()
+	context.log = Callable(self, "_log")
+	context.emit_client_connected = Callable(self, "_on_connected")
+	context.emit_client_disconnected = Callable(self, "_on_disconnected")
+	context.route_request_async = Callable(self, "_route_request_async")
+	context.write_http_response = Callable(self, "_write_response")
+	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
+	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
+	context.tick_loader = Callable(self, "_tick_loader")
+	transport.configure(connection_state, decoder, context)
+
+	var sse_request_sent := false
+	for _i in range(80):
+		sse_client.poll()
+		delete_client.poll()
+		if not sse_request_sent and sse_client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			var frame := (
+				"GET /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "Accept: text/event-stream\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: transport-sse-1\r\n\r\n"
+			)
+			sse_client.put_data(frame.to_utf8_buffer())
+			sse_request_sent = true
+		transport.process_frame(tcp_server, true, 0.016)
+		if _sse_open_count >= 1:
+			break
+		await tree.process_frame
+
+	if _sse_open_count != 1:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should first open one active SSE stream.")
+	var active_stats: Dictionary = connection_state.get_connection_stats()
+	var active_sessions = active_stats.get("client_sessions", [])
+	if not (active_sessions is Array) or (active_sessions as Array).size() < 1:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should expose the active streaming session before termination.")
+
+	var delete_request_sent := false
+	for _i in range(80):
+		sse_client.poll()
+		delete_client.poll()
+		if not delete_request_sent and delete_client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			var delete_frame := (
+				"DELETE /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: transport-sse-1\r\n\r\n"
+			)
+			delete_client.put_data(delete_frame.to_utf8_buffer())
+			delete_request_sent = true
+		transport.process_frame(tcp_server, true, 0.016)
+		if _write_count >= 1 and connection_state.get_connection_count() == 1:
+			break
+		await tree.process_frame
+
+	if _write_count != 1:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should write one ordinary DELETE response.")
+	if int(_last_response.get("status", 0)) != 204:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should return the routed 204 session termination response.")
+	if _last_response.has("_terminate_mcp_session_id"):
+		tcp_server.stop()
+		return _failure("HTTP transport should remove internal session termination directives before writing responses.")
+	var stats: Dictionary = connection_state.get_connection_stats()
+	var client_sessions = stats.get("client_sessions", [])
+	if not (client_sessions is Array) or (client_sessions as Array).size() != 1:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should close only the terminated SSE stream and keep the DELETE client.")
+	var remaining_session: Dictionary = (client_sessions as Array)[0]
+	if str(remaining_session.get("transport_mode", "")) == "sse":
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should remove active SSE sessions for the terminated MCP session.")
+	var recent_sessions = stats.get("recent_client_sessions", [])
+	if not (recent_sessions is Array) or (recent_sessions as Array).is_empty():
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should archive the disconnected streaming session.")
+	var archived_session: Dictionary = (recent_sessions as Array)[0]
+	if str(archived_session.get("transport_mode", "")) != "sse" or str(archived_session.get("sse_session_id", "")) != "transport-sse-1":
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should preserve terminated SSE stream diagnostics.")
+	if _disconnected_count != 1:
+		tcp_server.stop()
+		return _failure("SSE DELETE contract should emit one disconnection for the terminated SSE stream.")
+
+	sse_client.disconnect_from_host()
+	delete_client.disconnect_from_host()
+	tcp_server.stop()
+	return {"success": true, "error": ""}
+
+
 func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	var queue = HttpSseEventQueueScript.new()
 	for index in range(32):
@@ -753,6 +870,17 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 			"_headers": {
 				"MCP-Protocol-Version": "2025-11-25",
 				"Mcp-Session-Id": "finite-post-sse"
+			}
+		}
+	if method == "DELETE" and path == "/mcp":
+		return {
+			"status": 204,
+			"_no_body": true,
+			"_terminate_mcp_session_id": str(headers.get("mcp-session-id", "")),
+			"_headers": {
+				"MCP-Protocol-Version": "2025-11-25",
+				"Mcp-Session-Id": str(headers.get("mcp-session-id", "")),
+				"X-MCP-Session-Terminated": "true"
 			}
 		}
 	return {

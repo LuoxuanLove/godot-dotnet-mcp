@@ -93,6 +93,9 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		var transport_guard := _validate_mcp_transport_headers(normalized_headers)
 		if not transport_guard.is_empty():
 			return _attach_cors_headers(_attach_mcp_transport_headers(transport_guard, normalized_headers), origin, path)
+		var terminated_guard := _validate_mcp_session_active(normalized_headers)
+		if not terminated_guard.is_empty():
+			return _attach_cors_headers(_attach_mcp_transport_headers(terminated_guard, normalized_headers), origin, path)
 		response = await _call_async(_handle_mcp_request_async, [request_body], {"error": "MCP request handler is unavailable", "status": 500})
 		if _prefers_sse_response(str(normalized_headers.get("accept", ""))) and _is_json_rpc_message(response):
 			return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_post_sse_response(normalized_headers, response), normalized_headers), origin, path)
@@ -102,7 +105,16 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		var sse_guard := _validate_mcp_sse_headers(normalized_headers)
 		if not sse_guard.is_empty():
 			return _attach_cors_headers(_attach_mcp_transport_headers(sse_guard, normalized_headers), origin, path)
+		var terminated_sse_guard := _validate_mcp_session_active(normalized_headers)
+		if not terminated_sse_guard.is_empty():
+			return _attach_cors_headers(_attach_mcp_transport_headers(terminated_sse_guard, normalized_headers), origin, path)
 		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_stream_response(normalized_headers), normalized_headers), origin, path)
+
+	if method == "DELETE" and path == "/mcp":
+		var delete_guard := _validate_mcp_delete_headers(normalized_headers)
+		if not delete_guard.is_empty():
+			return _attach_cors_headers(_attach_mcp_transport_headers(delete_guard, normalized_headers), origin, path)
+		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_session_terminated_response(normalized_headers), normalized_headers), origin, path)
 
 	if method == "GET" and path == "/health":
 		response = _call_dict(_build_health_response, [], {"status": "degraded", "error": "Health response builder is unavailable", "status_code": 500})
@@ -173,7 +185,7 @@ func _build_cors_headers(origin: String, allow_methods: String) -> Dictionary:
 func _allowed_methods_for_path(path: String) -> String:
 	match path:
 		"/mcp":
-			return "GET, POST"
+			return "GET, POST, DELETE"
 		"/health", "/api/tools":
 			return "GET"
 		"/api/editor/lifecycle":
@@ -252,6 +264,55 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 	return {}
 
 
+func _validate_mcp_delete_headers(headers: Dictionary) -> Dictionary:
+	var session_guard := _validate_mcp_session_id_header(headers)
+	if not session_guard.is_empty():
+		return session_guard
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if requested_session.is_empty():
+		return {
+			"error": "Missing MCP session id",
+			"status": 400,
+			"details": "DELETE /mcp requires Mcp-Session-Id."
+		}
+	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
+	var supported_version := MCPProtocolFacts.get_protocol_version()
+	if requested_version.is_empty():
+		return {
+			"error": "Missing MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"details": "DELETE /mcp requires MCP-Protocol-Version: %s." % supported_version
+		}
+	if requested_version != supported_version:
+		return {
+			"error": "Unsupported MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"requested_protocol_version": requested_version
+		}
+	if _is_mcp_session_terminated(requested_session):
+		return {
+			"error": "MCP session not found",
+			"status": 404,
+			"details": "The MCP session has already been terminated."
+		}
+	return {}
+
+
+func _validate_mcp_session_active(headers: Dictionary) -> Dictionary:
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if requested_session.is_empty():
+		return {}
+	if _is_mcp_session_terminated(requested_session):
+		return {
+			"error": "MCP session not found",
+			"status": 404,
+			"details": "The MCP session has been terminated."
+		}
+	return {}
+
+
 func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
@@ -294,6 +355,22 @@ func _build_mcp_post_sse_response(headers: Dictionary, json_rpc_response: Dictio
 		"_headers": {
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no"
+		}
+	}
+
+
+func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
+	var session_id := _resolve_mcp_session_id(headers)
+	var termination := _terminate_mcp_session(session_id)
+	return {
+		"status": 204,
+		"_no_body": true,
+		"_mcp_session_id": session_id,
+		"_terminate_mcp_session_id": session_id,
+		"_headers": {
+			"Cache-Control": "no-cache, no-transform",
+			"X-MCP-Session-Terminated": "true",
+			"X-MCP-Terminated-Event-Count": str(int(termination.get("event_count_before", 0)))
 		}
 	}
 
@@ -343,6 +420,20 @@ func _sse_resume_status(session_id: String, last_event_id: String) -> Dictionary
 	if _sse_event_queue != null and _sse_event_queue.has_method("resume_status"):
 		return _sse_event_queue.resume_status(session_id, last_event_id)
 	return {"found": false, "event_count_after_cursor": 0}
+
+
+func _terminate_mcp_session(session_id: String) -> Dictionary:
+	if _sse_event_queue != null and _sse_event_queue.has_method("terminate_session"):
+		var result = _sse_event_queue.terminate_session(session_id)
+		if result is Dictionary:
+			return (result as Dictionary).duplicate(true)
+	return {"session_id": session_id, "terminated": false, "event_count_before": 0}
+
+
+func _is_mcp_session_terminated(session_id: String) -> bool:
+	if _sse_event_queue != null and _sse_event_queue.has_method("is_session_terminated"):
+		return bool(_sse_event_queue.is_session_terminated(session_id))
+	return false
 
 
 func _format_sse_events(events: Array) -> String:

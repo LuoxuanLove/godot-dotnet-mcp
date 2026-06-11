@@ -189,6 +189,9 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		var no_body := bool(response.get("_no_body", false))
 		if response.has("_no_body"):
 			response.erase("_no_body")
+		var terminate_mcp_session_id := str(response.get("_terminate_mcp_session_id", "")).strip_edges()
+		if response.has("_terminate_mcp_session_id"):
+			response.erase("_terminate_mcp_session_id")
 		var stream_mode := str(response.get("_stream_mode", "")).strip_edges()
 		if response.has("_stream_mode"):
 			response.erase("_stream_mode")
@@ -206,6 +209,10 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 				client.disconnect_from_host()
 				_connection_state.clear_processing(client)
 				return
+			if not terminate_mcp_session_id.is_empty():
+				_disconnect_mcp_sse_session(client, terminate_mcp_session_id)
+				if _connection_state == null or not _connection_state.has_client(client):
+					return
 			if stream_mode == "sse":
 				_connection_state.clear_processing(client)
 				return
@@ -275,6 +282,19 @@ func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
 	if _connection_state != null and _connection_state.has_method("mark_sse_heartbeat"):
 		_connection_state.mark_sse_heartbeat(client)
 	return false
+
+
+func _disconnect_mcp_sse_session(request_client: StreamPeerTCP, session_id: String) -> void:
+	if _connection_state == null or not _connection_state.has_method("disconnect_sse_session"):
+		return
+	var disconnected_count := int(_connection_state.disconnect_sse_session(session_id))
+	if disconnected_count > 0:
+		_log("Disconnected %d SSE stream(s) for terminated MCP session %s" % [disconnected_count, session_id], "info")
+		if _emit_client_disconnected.is_valid():
+			for _i in range(disconnected_count):
+				_emit_client_disconnected.call()
+	if _connection_state != null and _connection_state.has_client(request_client):
+		_connection_state.clear_processing(request_client)
 
 
 func _drain_sse_events(client: StreamPeerTCP) -> bool:
