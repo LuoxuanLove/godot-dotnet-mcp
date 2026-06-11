@@ -128,9 +128,9 @@ func build_model() -> Dictionary:
 	var plugin_version := ""
 	var mcp_catalog_projection := _build_mcp_catalog_projection()
 
-	if int(_state.current_tab) == 2:
+	if int(_state.current_tab) == 4:
 		client_install_statuses = _get_client_install_statuses(settings)
-	if int(_state.current_tab) == 3:
+	if int(_state.current_tab) == 5:
 		plugin_freshness = _get_plugin_freshness_snapshot()
 		plugin_version = _read_plugin_version()
 

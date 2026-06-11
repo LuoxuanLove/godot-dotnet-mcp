@@ -550,7 +550,7 @@ func _refresh_dock() -> void:
 	_sync_current_tab_from_dock()
 	if _ensure_saved_update_source_discovery_requested():
 		return
-	if _state != null and _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+	if _state != null and _state.current_tab == 5 and _ensure_update_refs_discovery_requested():
 		return
 	if _dock_model_service == null:
 		_dock_model_service = DockModelServiceScript.new()
@@ -610,9 +610,9 @@ func _configure_client_install_detection_service() -> void:
 
 func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
-	if _state.current_tab == 2:
+	if _state.current_tab == 4:
 		_invalidate_client_install_status_cache()
-	if _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+	if _state.current_tab == 5 and _ensure_update_refs_discovery_requested():
 		return
 	_refresh_dock()
 
@@ -2277,7 +2277,7 @@ func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 		_dock.restore_focus_snapshot(snapshot)
 	if _dock.has_method("focus_active_panel"):
 		_dock.call_deferred("focus_active_panel")
-	if _state != null and _state.current_tab == 3:
+	if _state != null and _state.current_tab == 5:
 		_ensure_update_refs_discovery_requested()
 
 
@@ -2751,7 +2751,7 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
-	if _state.current_tab == 3:
+	if _state.current_tab == 5:
 		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
