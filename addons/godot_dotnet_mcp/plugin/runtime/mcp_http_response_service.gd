@@ -4,6 +4,7 @@ class_name MCPHttpResponseService
 
 const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
 const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
+const SSE_HEARTBEAT_COMMENT := ": godot-dotnet-mcp heartbeat\n\n"
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -187,6 +188,43 @@ func send_http_response(client: StreamPeerTCP, data: Dictionary, no_body: bool =
 		"debug"
 	)
 	return header_error == OK and body_error == OK
+
+
+func send_sse_stream_open(client: StreamPeerTCP, stream_data: Dictionary) -> bool:
+	var extra_headers = {}
+	if stream_data.get("_headers", {}) is Dictionary:
+		extra_headers = (stream_data.get("_headers", {}) as Dictionary).duplicate(true)
+	var initial_body := str(stream_data.get("_raw_body", ""))
+	var headers = "HTTP/1.1 200 OK\r\n"
+	headers += "Content-Type: text/event-stream; charset=utf-8\r\n"
+	headers += "Connection: keep-alive\r\n"
+	if not extra_headers.has("Cache-Control"):
+		extra_headers["Cache-Control"] = "no-cache, no-transform"
+	if not extra_headers.has("X-Accel-Buffering"):
+		extra_headers["X-Accel-Buffering"] = "no"
+	for header_name in extra_headers:
+		headers += "%s: %s\r\n" % [header_name, extra_headers[header_name]]
+	headers += "\r\n"
+	var header_error = client.put_data(headers.to_utf8_buffer())
+	var body_error = OK
+	if not initial_body.is_empty():
+		body_error = client.put_data(initial_body.to_utf8_buffer())
+	_log_message(
+		"SSE stream opened: initial_size=%d bytes, errors=(h:%s, b:%s)" % [
+			initial_body.to_utf8_buffer().size(),
+			header_error,
+			body_error
+		],
+		"debug"
+	)
+	return header_error == OK and body_error == OK
+
+
+func send_sse_heartbeat(client: StreamPeerTCP) -> bool:
+	var error = client.put_data(SSE_HEARTBEAT_COMMENT.to_utf8_buffer())
+	if error != OK:
+		_log_message("SSE heartbeat write failed: %s" % error, "warning")
+	return error == OK
 
 
 func sanitize_for_json(value):

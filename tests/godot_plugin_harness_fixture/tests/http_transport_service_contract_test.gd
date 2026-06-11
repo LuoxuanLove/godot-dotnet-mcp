@@ -14,6 +14,8 @@ var _connected_count := 0
 var _disconnected_count := 0
 var _tick_count := 0
 var _write_count := 0
+var _sse_open_count := 0
+var _sse_heartbeat_count := 0
 var _last_method := ""
 var _last_path := ""
 var _last_body := ""
@@ -161,6 +163,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if str(disconnected_session.get("connection_id", "")) != "http-1":
 		return _failure("HTTP transport recent client session should preserve the stable connection id.")
 
+	var sse_stream_check: Dictionary = await _run_sse_stream_lifecycle_contract(tree)
+	if not bool(sse_stream_check.get("success", false)):
+		return sse_stream_check
+
 	var invalid_length_check: Dictionary = await _run_bad_content_length_contract(
 		tree,
 		"POST /mcp HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}",
@@ -222,6 +228,8 @@ func _run_bad_content_length_contract(tree: SceneTree, frame: String, label: Str
 	context.emit_client_disconnected = Callable(self, "_on_disconnected")
 	context.route_request_async = Callable(self, "_route_request_async")
 	context.write_http_response = Callable(self, "_write_response")
+	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
+	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
 	context.tick_loader = Callable(self, "_tick_loader")
 	transport.configure(connection_state, decoder, context)
 
@@ -344,6 +352,103 @@ func _run_pending_limit_oversized_content_length_contract(tree: SceneTree) -> Di
 	return {"success": true, "error": ""}
 
 
+func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
+	_reset_state()
+	var port := _pick_free_port(26450)
+	if port < 0:
+		return _failure("Could not reserve a TCP port for the SSE lifecycle HTTP transport contract server.")
+
+	var tcp_server := TCPServer.new()
+	if tcp_server.listen(port, "127.0.0.1") != OK:
+		return _failure("Failed to start the SSE lifecycle HTTP transport contract server.")
+
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+
+	var connection_state = HttpConnectionStateScript.new()
+	var decoder = HttpRequestDecoderScript.new()
+	var transport = HttpTransportServiceScript.new()
+	var context = HttpTransportContextScript.new()
+	context.log = Callable(self, "_log")
+	context.emit_client_connected = Callable(self, "_on_connected")
+	context.emit_client_disconnected = Callable(self, "_on_disconnected")
+	context.route_request_async = Callable(self, "_route_request_async")
+	context.write_http_response = Callable(self, "_write_response")
+	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
+	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.tick_loader = Callable(self, "_tick_loader")
+	transport.configure(connection_state, decoder, context)
+
+	var request_sent := false
+	for _i in range(80):
+		client.poll()
+		if not request_sent and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			var frame := (
+				"GET /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "Accept: text/event-stream\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: transport-sse-1\r\n\r\n"
+			)
+			client.put_data(frame.to_utf8_buffer())
+			request_sent = true
+		transport.process_frame(tcp_server, true, 0.016)
+		if _sse_open_count >= 1 and _sse_heartbeat_count >= 1:
+			break
+		await tree.process_frame
+
+	if _connected_count != 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should emit one client_connected event.")
+	if _write_count != 0:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should not use ordinary JSON response writing for streaming GET /mcp.")
+	if _sse_open_count != 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should open exactly one long-lived SSE stream.")
+	if _sse_heartbeat_count < 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should tick heartbeat delivery for open streams.")
+	var stats: Dictionary = connection_state.get_connection_stats()
+	var client_sessions = stats.get("client_sessions", [])
+	if not (client_sessions is Array) or (client_sessions as Array).size() != 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should expose one active streaming client session.")
+	var active_session: Dictionary = (client_sessions as Array)[0]
+	if str(active_session.get("transport_mode", "")) != "sse":
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should mark active client sessions with transport_mode=sse.")
+	if int(active_session.get("sse_last_heartbeat_at_unix", 0)) <= 0:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should record heartbeat time for diagnostics.")
+	if str(_last_response.get("_raw_body", "")).find("transport-sse-open") == -1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should pass initial stream events to the SSE writer.")
+
+	client.disconnect_from_host()
+	for _i in range(40):
+		client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if _disconnected_count > 0:
+			break
+		await tree.process_frame
+
+	tcp_server.stop()
+
+	if _disconnected_count != 1:
+		return _failure("SSE lifecycle transport should emit client_disconnected after stream disconnect.")
+	if connection_state.get_connection_count() != 0:
+		return _failure("SSE lifecycle transport should clear disconnected streaming clients.")
+	var disconnected_stats: Dictionary = connection_state.get_connection_stats()
+	var recent_client_sessions = disconnected_stats.get("recent_client_sessions", [])
+	if not (recent_client_sessions is Array) or (recent_client_sessions as Array).is_empty():
+		return _failure("SSE lifecycle transport should retain recent disconnected streaming sessions.")
+	var disconnected_session: Dictionary = (recent_client_sessions as Array)[0]
+	if str(disconnected_session.get("transport_mode", "")) != "sse":
+		return _failure("SSE lifecycle transport should preserve transport_mode=sse in recent diagnostics.")
+	return {"success": true, "error": ""}
+
+
 func _run_max_content_length_contract(tree: SceneTree) -> Dictionary:
 	_reset_state()
 	_record_routed_body_content = false
@@ -422,6 +527,16 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 		_routed_bodies.append(_last_body)
 	_last_headers = headers.duplicate(true)
 	await (Engine.get_main_loop() as SceneTree).process_frame
+	if method == "GET" and path == "/mcp":
+		return {
+			"status": 200,
+			"_stream_mode": "sse",
+			"_raw_body": "id: transport-sse-open\nretry: 1000\nevent: message\ndata: {}\n\n",
+			"_headers": {
+				"MCP-Protocol-Version": "2025-11-25",
+				"Mcp-Session-Id": "transport-sse-1"
+			}
+		}
 	return {
 		"status": 200,
 		"body": "ok"
@@ -432,6 +547,17 @@ func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = 
 	_write_count += 1
 	_last_no_body = no_body
 	_last_response = _data.duplicate(true)
+	return true
+
+
+func _write_sse_stream_open(_client: StreamPeerTCP, _data: Dictionary) -> bool:
+	_sse_open_count += 1
+	_last_response = _data.duplicate(true)
+	return true
+
+
+func _write_sse_heartbeat(_client: StreamPeerTCP) -> bool:
+	_sse_heartbeat_count += 1
 	return true
 
 
@@ -465,6 +591,8 @@ func _reset_state() -> void:
 	_disconnected_count = 0
 	_tick_count = 0
 	_write_count = 0
+	_sse_open_count = 0
+	_sse_heartbeat_count = 0
 	_last_method = ""
 	_last_path = ""
 	_last_body = ""

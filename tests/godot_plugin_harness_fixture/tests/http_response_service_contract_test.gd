@@ -276,6 +276,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if raw_sse_text.find("event: endpoint\ndata: {}\n\n") == -1:
 		return _failure("HTTP response service should write raw SSE bodies without JSON encoding.")
 
+	var stream_text := _send_sse_stream_open_over_loopback(service, {
+		"_raw_body": "id: stream-1\nretry: 1000\nevent: message\ndata: {}\n\n",
+		"_headers": {
+			"MCP-Protocol-Version": MCPProtocolFacts.get_protocol_version(),
+			"Mcp-Session-Id": "contract-sse-session"
+		}
+	})
+	if stream_text.is_empty():
+		return _failure("HTTP response service should open long-lived SSE streams.")
+	if stream_text.find("HTTP/1.1 200 OK") == -1:
+		return _failure("HTTP response service should open SSE streams with HTTP 200.")
+	if stream_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should set SSE stream content type.")
+	if stream_text.find("Content-Length:") != -1:
+		return _failure("HTTP response service must not send Content-Length on long-lived SSE streams.")
+	if stream_text.find("Mcp-Session-Id: contract-sse-session") == -1:
+		return _failure("HTTP response service should preserve MCP session headers on SSE streams.")
+	if stream_text.find("id: stream-1") == -1:
+		return _failure("HTTP response service should send initial SSE stream events.")
+
+	var heartbeat_text := _send_sse_heartbeat_over_loopback(service)
+	if heartbeat_text.find(": godot-dotnet-mcp heartbeat\n\n") == -1:
+		return _failure("HTTP response service should write SSE heartbeat comments.")
+
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,
 		"node_path": NodePath("root/player"),
@@ -343,6 +367,78 @@ func _send_raw_response_over_loopback(service, response_data: Dictionary) -> Str
 			if int(packet[0]) == OK:
 				text += (packet[1] as PackedByteArray).get_string_from_utf8()
 		if text.find("\r\n\r\n") != -1 and text.find("event: endpoint") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _send_sse_stream_open_over_loopback(service, response_data: Dictionary) -> String:
+	var port := _pick_free_port(34180)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_sse_stream_open(accepted, response_data):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("\r\n\r\n") != -1 and text.find("id: stream-1") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _send_sse_heartbeat_over_loopback(service) -> String:
+	var port := _pick_free_port(34210)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_sse_heartbeat(accepted):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("heartbeat") != -1:
 			break
 		Engine.get_main_loop().process_frame
 	server.stop()

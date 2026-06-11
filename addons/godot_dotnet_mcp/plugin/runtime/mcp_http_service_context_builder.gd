@@ -93,6 +93,8 @@ func build_http_transport_context(server, tool_loader_supervisor, http_request_r
 		server.call_deferred("emit_signal", "client_disconnected")
 	context.route_request_async = Callable(http_request_router, "route_request_async")
 	context.write_http_response = Callable(http_response_service, "send_http_response")
+	context.write_sse_stream_open = Callable(http_response_service, "send_sse_stream_open")
+	context.write_sse_heartbeat = Callable(http_response_service, "send_sse_heartbeat")
 	context.tick_loader = Callable(tool_loader_supervisor, "tick")
 	return context
 
