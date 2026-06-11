@@ -209,6 +209,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not expose the unified protocol version.")
 	if str(health.get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("Health response did not expose the unified tool schema version.")
+	var server_info := MCPProtocolFacts.build_server_info()
+	if str(server_info.get("description", "")).is_empty():
+		return _failure("Unified server info should expose an MCP 2025-11-25 implementation description.")
 	var freshness: Dictionary = health.get("freshness", {})
 	if str(freshness.get("status", "")) != "fresh" or bool(freshness.get("needs_lifecycle_reload", true)):
 		return _failure("Health response should expose plugin instance freshness.")
@@ -237,7 +240,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(active_maintenance.get("refetch_tools_required", false)) or int(active_maintenance.get("retry_after_ms", 0)) <= 0:
 		return _failure("Health maintenance window should tell clients to retry and refetch tools after reconnect.")
 
-	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST", "Content-Type, Accept")
+	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST")
 	var cors_headers: Dictionary = cors_response.get("_headers", {})
 	if int(cors_response.get("_status_code", 0)) != 204 or not bool(cors_response.get("_no_body", false)):
 		return _failure("CORS response did not preserve preflight no-body semantics.")
@@ -247,6 +250,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("CORS response must not emit wildcard origins.")
 	if str(cors_headers.get("Vary", "")) != "Origin":
 		return _failure("CORS response did not include Vary: Origin.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("CORS response should allow the MCP-Protocol-Version header.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
+		return _failure("CORS response should allow the Mcp-Session-Id header.")
 
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,

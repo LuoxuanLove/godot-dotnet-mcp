@@ -206,16 +206,28 @@ func build_model() -> Dictionary:
 
 func _build_exposed_tool_definitions(all_tools_by_category: Dictionary) -> Array[Dictionary]:
 	var exposed: Array[Dictionary] = []
-	for tool_def in all_tools_by_category.get("system", []):
-		if not (tool_def is Dictionary):
-			continue
-		var tool := (tool_def as Dictionary).duplicate(true)
-		if bool(tool.get("compatibility_alias", false)):
-			continue
-		tool["name"] = str(tool.get("full_name", "system_%s" % str(tool.get("name", ""))))
-		tool["category"] = "system"
-		exposed.append(tool)
+	for category_value in all_tools_by_category.keys():
+		var category := str(category_value)
+		for tool_def in all_tools_by_category.get(category, []):
+			if not (tool_def is Dictionary):
+				continue
+			var tool := (tool_def as Dictionary).duplicate(true)
+			if bool(tool.get("compatibility_alias", false)):
+				continue
+			tool["name"] = _get_exposed_tool_full_name(category, tool)
+			tool["category"] = category
+			exposed.append(tool)
 	return exposed
+
+
+func _get_exposed_tool_full_name(category: String, tool: Dictionary) -> String:
+	var full_name := str(tool.get("full_name", ""))
+	if not full_name.is_empty():
+		return full_name
+	var name := str(tool.get("name", ""))
+	if name.begins_with("%s_" % category):
+		return name
+	return "%s_%s" % [category, name]
 
 
 func _get_settings() -> Dictionary:
