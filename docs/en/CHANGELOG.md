@@ -34,6 +34,7 @@ Target version: 1.4.0.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the default MCP protocol facts to `2025-11-25` and added `serverInfo.description` metadata to initialize responses.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
+- Stopped advertising unsupported resource subscription capability metadata in MCP `initialize` responses.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
 - Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
@@ -87,6 +88,7 @@ Target version: 1.4.0.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.
 - Added refactor guardrail coverage so the v1.4 protocol plan and progress tracker keep the same MCP 2025-11-25 target facts.
+- Added initialize capability guard coverage so optional MCP 2025-11-25 Sampling, Elicitation, and Tasks capabilities cannot be advertised before implementation.
 - Added refactor guardrail coverage so release-facing README files cannot reintroduce zip, `release_dist`, local-release, or release-package installation paths.
 
 ## [1.3.0] - 2026-06-08
