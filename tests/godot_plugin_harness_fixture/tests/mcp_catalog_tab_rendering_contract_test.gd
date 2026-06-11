@@ -84,6 +84,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should render resource templates by URI template.")
 	if _find_entry_card(prompts_tab, "prompt", "godot.project_orientation") == null:
 		return _failure("Prompts tab should render workflow prompts by name.")
+	if _find_protocol_icon(resources_tab, "resource", "godot-dotnet-mcp://guides/index") == null:
+		return _failure("Resources tab should render MCP resource icons from protocol metadata.")
+	if _find_protocol_icon(resources_tab, "template", "godot-dotnet-mcp://scene/{path}") == null:
+		return _failure("Resources tab should render MCP resource template icons from protocol metadata.")
+	if _find_protocol_icon(prompts_tab, "prompt", "godot.project_orientation") == null:
+		return _failure("Prompts tab should render MCP prompt icons from protocol metadata.")
 	if _find_label_containing(resources_tab, "application/json") == null:
 		return _failure("Resources tab should display resource mime type metadata.")
 	if _find_label_containing(prompts_tab, "goal, include_scene") == null:
@@ -176,13 +182,15 @@ func _build_model() -> Dictionary:
 			"title": "Guide Index",
 			"description": "Canonical guide catalog.",
 			"mimeType": "application/json",
-			"resource_kind": "guide"
+			"resource_kind": "guide",
+			"icons": [_icon_metadata("guide")]
 		}, {
 			"uri": "godot-dotnet-mcp://state/editor",
 			"title": "Editor State",
 			"description": "Current editor state.",
 			"mimeType": "application/json",
-			"resource_kind": "state"
+			"resource_kind": "state",
+			"icons": [_icon_metadata("state")]
 		}],
 		"mcp_resource_templates": [{
 			"uri": "godot-dotnet-mcp://scene/{path}",
@@ -191,26 +199,38 @@ func _build_model() -> Dictionary:
 			"description": "Inspect a scene by path.",
 			"mimeType": "application/json",
 			"resource_kind": "template",
-			"is_template": true
+			"is_template": true,
+			"icons": [_icon_metadata("template")]
 		}],
 		"mcp_prompts": [{
 			"name": "godot.project_orientation",
 			"title": "Project Orientation",
 			"description": "Orient an agent inside the current project.",
 			"prompt_kind": "orientation",
-			"arguments": [{"name": "goal"}, {"name": "include_scene"}]
+			"arguments": [{"name": "goal"}, {"name": "include_scene"}],
+			"icons": [_icon_metadata("orientation")]
 		}, {
 			"name": "godot.runtime_validation",
 			"title": "Runtime Validation",
 			"description": "Validate runtime behavior.",
 			"prompt_kind": "runtime",
-			"arguments": [{"name": "scene"}]
+			"arguments": [{"name": "scene"}],
+			"icons": [_icon_metadata("runtime")]
 		}],
 		"mcp_catalog_counts": {
 			"resources": 2,
 			"resource_templates": 1,
 			"prompts": 2
 		}
+	}
+
+
+func _icon_metadata(name: String) -> Dictionary:
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><title>%s</title><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\"/></svg>" % name.xml_escape()
+	return {
+		"src": "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64(svg.to_utf8_buffer()),
+		"mimeType": "image/svg+xml",
+		"sizes": ["any"]
 	}
 
 
@@ -227,6 +247,18 @@ func _find_entry_card(root: Node, kind: String, id: String) -> Control:
 		if str(control.get_meta("mcp_catalog_kind", "")) == kind and str(control.get_meta("mcp_catalog_id", "")) == id:
 			return control
 	return null
+
+
+func _find_protocol_icon(root: Node, kind: String, id: String) -> Control:
+	var card := _find_entry_card(root, kind, id)
+	if card == null:
+		return null
+	var icon := card.find_child("ProtocolIcon", true, false)
+	if not (icon is Control):
+		return null
+	if str((icon as Control).get_meta("mcp_icon_src", "")).is_empty():
+		return null
+	return icon as Control
 
 
 func _find_label_containing(root: Node, text: String) -> Label:

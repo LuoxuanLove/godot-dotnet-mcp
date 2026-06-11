@@ -21,6 +21,7 @@ Target version: 1.4.0.
 - Added Dock model projections for MCP Resources, Resource Templates, and Prompts so the editor UI can consume resource-first and prompt-first metadata without polluting `tools/list`.
 - Added Dock Resources and Prompts tabs that render MCP protocol catalog metadata, entry counts, kind/MIME/argument summaries, and copy-ID affordances from the shared catalog projection.
 - Added Dock previews for MCP Resources and Prompts, including resource read previews, prompt argument inputs, `prompts/get` preview rendering, and copy-generated-prompt text affordances.
+- Added Dock rendering for MCP 2025-11-25 Resource, Resource Template, and Prompt `icons` metadata in the Resources and Prompts catalog tabs.
 
 ### Changed
 

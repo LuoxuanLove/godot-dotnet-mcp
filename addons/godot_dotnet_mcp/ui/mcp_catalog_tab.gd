@@ -33,6 +33,7 @@ var _current_signature := ""
 var _localization = null
 var _catalog_mode := "resources"
 var _argument_values: Dictionary = {}
+var _icon_texture_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -130,6 +131,8 @@ func _create_entry_card(entry: Dictionary, entry_kind: String) -> Control:
 	top_row.add_theme_constant_override("separation", int(round(8 * _scale())))
 	body.add_child(top_row)
 
+	_add_entry_icon(top_row, entry, entry_kind)
+
 	var title := Label.new()
 	title.name = "Title"
 	title.text = _entry_title(entry, entry_kind)
@@ -174,6 +177,67 @@ func _create_entry_card(entry: Dictionary, entry_kind: String) -> Control:
 	_add_entry_actions(body, entry, entry_kind)
 
 	return panel
+
+
+func _add_entry_icon(row: HBoxContainer, entry: Dictionary, entry_kind: String) -> void:
+	var icon_src := _entry_icon_src(entry)
+	if icon_src.is_empty():
+		return
+	var icon_size := int(round(18 * _scale()))
+	var texture := _texture_from_icon_src(icon_src)
+	if texture != null:
+		var icon := TextureRect.new()
+		icon.name = "ProtocolIcon"
+		icon.custom_minimum_size = Vector2(icon_size, icon_size)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture = texture
+		icon.tooltip_text = _entry_icon_tooltip(entry, entry_kind)
+		icon.set_meta("mcp_icon_src", icon_src)
+		row.add_child(icon)
+		return
+	var fallback := Label.new()
+	fallback.name = "ProtocolIcon"
+	fallback.custom_minimum_size = Vector2(icon_size, icon_size)
+	fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	fallback.text = "[]"
+	fallback.tooltip_text = _entry_icon_tooltip(entry, entry_kind)
+	fallback.add_theme_color_override("font_color", _get_meta_text_color())
+	fallback.set_meta("mcp_icon_src", icon_src)
+	row.add_child(fallback)
+
+
+func _entry_icon_src(entry: Dictionary) -> String:
+	var icons = entry.get("icons", [])
+	if not (icons is Array):
+		return ""
+	for raw_icon in icons as Array:
+		if not (raw_icon is Dictionary):
+			continue
+		var src := str((raw_icon as Dictionary).get("src", "")).strip_edges()
+		if not src.is_empty():
+			return src
+	return ""
+
+
+func _entry_icon_tooltip(entry: Dictionary, entry_kind: String) -> String:
+	return "%s: %s" % [_entry_title(entry, entry_kind), _entry_meta(entry, entry_kind)]
+
+
+func _texture_from_icon_src(src: String) -> Texture2D:
+	if _icon_texture_cache.has(src):
+		return _icon_texture_cache.get(src)
+	var texture: Texture2D = null
+	var svg_prefix := "data:image/svg+xml;base64,"
+	if src.begins_with(svg_prefix):
+		var bytes := Marshalls.base64_to_raw(src.substr(svg_prefix.length()))
+		if not bytes.is_empty():
+			var image := Image.new()
+			if image.load_svg_from_buffer(bytes) == OK:
+				texture = ImageTexture.create_from_image(image)
+	_icon_texture_cache[src] = texture
+	return texture
 
 
 func _add_entry_actions(body: VBoxContainer, entry: Dictionary, entry_kind: String) -> void:
