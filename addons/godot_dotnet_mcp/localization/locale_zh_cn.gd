@@ -817,7 +817,7 @@ const TRANSLATIONS: Dictionary = {
 
 	# System tools
 	"tool_system_project_state_name": "项目状态",
-	"tool_system_project_state_desc": "汇总当前项目状态，包括文件计数、最近错误与运行状态。",
+	"tool_system_project_state_desc": "汇总项目健康、错误、运行状态与能力。使用 summary=true 获取紧凑的仅计数读取，或使用 sections=[...] 只请求 summary、project、files、runtime、capabilities 或 health 数据。",
 	"tool_system_editor_state_name": "编辑器状态",
 	"tool_system_editor_state_desc": "汇总当前编辑器界面、Inspector、FileSystem、运行状态与运行时控制信息。",
 	"tool_system_plugin_maintenance_name": "插件维护",

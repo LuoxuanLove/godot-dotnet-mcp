@@ -817,7 +817,7 @@ const TRANSLATIONS: Dictionary = {
 
 	# System tools
 	"tool_system_project_state_name": "Project State",
-	"tool_system_project_state_desc": "Summarize the current project state, including counts, recent errors, and runtime status.",
+	"tool_system_project_state_desc": "Summarize project health, errors, runtime status, and capabilities. Use summary=true for a compact count-only read, or sections=[...] to request only summary, project, files, runtime, capabilities, or health data.",
 	"tool_system_editor_state_name": "Editor State",
 	"tool_system_editor_state_desc": "Summarize the current editor UI, Inspector, FileSystem, project runtime, and runtime control state.",
 	"tool_system_plugin_maintenance_name": "Plugin Maintenance",

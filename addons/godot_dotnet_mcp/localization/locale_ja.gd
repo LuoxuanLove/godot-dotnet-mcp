@@ -542,7 +542,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_bindings_desc": "シーンで使用されるエクスポートされたスクリプト バインディングを検査する",
 	"tool_scene_audit_desc": "エクスポートされたバインディングに起因するシーンの問題を報告する",
 	"tool_system_project_state_name": "プロジェクトの状態",
-	"tool_system_project_state_desc": "数、最近のエラー、実行時ステータスなど、プロジェクトの現在の状態を要約します。",
+	"tool_system_project_state_desc": "プロジェクトの健全性、エラー、実行状態、機能を要約します。summary=true でコンパクトな件数のみの読み取りを行い、sections=[...] で summary、project、files、runtime、capabilities、health の必要なデータだけを要求します。",
 	"mcp_resource_project_info_name": "プロジェクト情報",
 	"mcp_resource_project_info_desc": "現在の Godot プロジェクトパス、プロトコル情報、サーバー情報、ツールローダー状態。",
 	"mcp_resource_diagnostics_summary_name": "診断サマリー",

@@ -542,7 +542,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_bindings_desc": "Проверка привязок экспортированных сценариев, используемых сценой.",
 	"tool_scene_audit_desc": "Сообщать о проблемах со сценой, возникших из-за экспортированных привязок",
 	"tool_system_project_state_name": "Состояние проекта",
-	"tool_system_project_state_desc": "Суммируйте текущее состояние проекта, включая количество, недавние ошибки и статус выполнения.",
+	"tool_system_project_state_desc": "Суммируйте здоровье проекта, ошибки, состояние runtime и возможности. Используйте summary=true для компактного чтения только счетчиков или sections=[...] для запроса только данных summary, project, files, runtime, capabilities или health.",
 	"mcp_resource_project_info_name": "Сведения о проекте",
 	"mcp_resource_project_info_desc": "Текущий путь проекта Godot, сведения протокола, информация сервера и состояние загрузчика инструментов.",
 	"mcp_resource_diagnostics_summary_name": "Сводка диагностики",

@@ -542,7 +542,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_bindings_desc": "Inspeccionar enlaces de script exportados utilizados por una escena",
 	"tool_scene_audit_desc": "Informar problemas de escena derivados de enlaces exportados",
 	"tool_system_project_state_name": "Estado del proyecto",
-	"tool_system_project_state_desc": "Resuma el estado actual del proyecto, incluidos los recuentos, los errores recientes y el estado del tiempo de ejecución.",
+	"tool_system_project_state_desc": "Resume la salud, los errores, el estado de runtime y las capacidades del proyecto. Usa summary=true para una lectura compacta solo con conteos, o sections=[...] para pedir solo datos summary, project, files, runtime, capabilities o health.",
 	"mcp_resource_project_info_name": "Información del proyecto",
 	"mcp_resource_project_info_desc": "Ruta actual del proyecto Godot, datos del protocolo, información del servidor y estado del cargador de herramientas.",
 	"mcp_resource_diagnostics_summary_name": "Resumen de diagnósticos",

@@ -637,7 +637,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_hierarchy_desc": "가져오기 scene tree structure and node selection",
 	"tool_scene_run_desc": "에디터에서 씬을 실행하고 테스트합니다.",
 	"tool_system_project_state_name": "프로젝트 상태",
-	"tool_system_project_state_desc": "Summarize the current project 상태, including counts, recent errors, and runtime status.",
+	"tool_system_project_state_desc": "프로젝트 health, errors, runtime status, capabilities를 요약합니다. summary=true로 compact count-only read를 사용하거나 sections=[...]로 summary, project, files, runtime, capabilities, health 데이터만 요청합니다.",
 	"tool_system_editor_state_name": "에디터 상태",
 	"tool_system_editor_state_desc": "Summarize the current editor UI, 인스펙터, 파일System, project runtime, and runtime control state.",
 	"tool_action_reload_desc": "유지 관리 워크플로에서 전체 플러그인 수명 주기 다시 로드를 예약합니다.",
