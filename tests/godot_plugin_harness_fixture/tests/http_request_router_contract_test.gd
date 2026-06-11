@@ -122,6 +122,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var get_mcp_without_sse: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if int(get_mcp_without_sse.get("status", 0)) != 406:
 		return _failure("HTTP request router should reject GET /mcp requests that cannot accept SSE responses.")
+	var get_mcp_sse_q_zero: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(get_mcp_sse_q_zero.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject GET /mcp requests that declare text/event-stream with q=0.")
 	var get_missing_protocol_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream"})
 	if int(get_missing_protocol_response.get("status", 0)) != 400 or str(get_missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
 		return _failure("HTTP request router should require MCP-Protocol-Version on GET /mcp.")
