@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPJsonRpcRequestService
 
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 
 var _route_json_rpc_async := Callable()
 var _build_json_rpc_error := Callable()
@@ -41,10 +42,20 @@ func handle_request_async(body: String) -> Dictionary:
 		return _build_error(-32600, "Invalid Request", null)
 
 	var request_dict: Dictionary = request
-	var method = str(request_dict.get("method", ""))
+	var envelope_validation := MCPJsonRpcEnvelopeValidator.validate_request_envelope(request_dict)
+	var has_id = bool(envelope_validation.get("has_id", false))
+	var id = envelope_validation.get("id")
+	if not bool(envelope_validation.get("success", false)):
+		if not has_id:
+			return {"status": 202, "_no_body": true}
+		return _build_error(
+			int(envelope_validation.get("code", -32600)),
+			str(envelope_validation.get("message", "Invalid Request")),
+			id
+		)
+
+	var method = str(envelope_validation.get("method", ""))
 	var params = request_dict.get("params", {})
-	var has_id = request_dict.has("id")
-	var id = request_dict.get("id")
 	if not (params is Dictionary):
 		if not has_id:
 			return {"status": 202, "_no_body": true}

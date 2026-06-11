@@ -238,6 +238,10 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 	if not bool(max_content_check.get("success", false)):
 		return max_content_check
 
+	var envelope_check := await _assert_stdio_envelope_guards(stdio_server)
+	if not bool(envelope_check.get("success", false)):
+		return envelope_check
+
 	var pending_overflow := PackedByteArray()
 	pending_overflow.resize(MAX_STDIN_PENDING_BYTES + 1)
 	pending_overflow.fill(65)
@@ -285,6 +289,54 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 		return _failure("Stdio parser should drain valid pipelined frames exactly.")
 
 	stdio_server.stop()
+	return {"success": true, "error": ""}
+
+
+func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
+	var invalid_cases: Array[Dictionary] = [
+		{
+			"label": "wrong jsonrpc",
+			"request": {"jsonrpc": "1.0", "id": 31, "method": "ping", "params": {}},
+			"expected_id": 31
+		},
+		{
+			"label": "missing method",
+			"request": {"jsonrpc": "2.0", "id": 32, "params": {}},
+			"expected_id": 32
+		},
+		{
+			"label": "object method",
+			"request": {"jsonrpc": "2.0", "id": 33, "method": {}, "params": {}},
+			"expected_id": 33
+		},
+		{
+			"label": "object id",
+			"request": {"jsonrpc": "2.0", "id": {}, "method": "ping", "params": {}},
+			"expected_id": null
+		}
+	]
+	for invalid_case in invalid_cases:
+		var body := JSON.stringify(invalid_case.get("request", {}))
+		stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [body.to_utf8_buffer().size(), body]).to_utf8_buffer())
+		stdio_server.set("_last_written_response", {})
+		var parsed: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+		if not bool(parsed):
+			return _failure("Invalid %s stdio envelope should still consume its frame." % str(invalid_case.get("label", "")))
+		var response: Dictionary = stdio_server.get("_last_written_response")
+		var error: Dictionary = response.get("error", {})
+		if int(error.get("code", 0)) != -32600:
+			return _failure("Invalid %s stdio envelope should emit -32600. actual=%s" % [str(invalid_case.get("label", "")), str(error.get("code", ""))])
+		if response.get("id") != invalid_case.get("expected_id"):
+			return _failure("Invalid %s stdio envelope should preserve only valid ids." % str(invalid_case.get("label", "")))
+
+	var notification_body := JSON.stringify({"jsonrpc": "2.0", "method": [], "params": {}})
+	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [notification_body.to_utf8_buffer().size(), notification_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed_notification: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed_notification):
+		return _failure("Invalid stdio notification envelope should consume its frame.")
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("Invalid stdio notification envelope should not emit a response.")
 	return {"success": true, "error": ""}
 
 
