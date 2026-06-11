@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "editor_tool_executor_contracts"}
 
 const EditorExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/editor/executor.gd")
+const EditorCompatibilityScript = preload("res://addons/godot_dotnet_mcp/tools/editor_tools.gd")
 
 
 class FakeMainScreen:
@@ -651,6 +652,14 @@ var _scene_root: Node = null
 
 func run_case(tree: SceneTree) -> Dictionary:
 	var executor = EditorExecutorScript.new()
+	var executor_base_script = executor.get_script().get_base_script()
+	if executor_base_script == null or str(executor_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/base_tools.gd":
+		return _failure("editor/executor.gd should own the editor implementation and extend base_tools.gd directly.")
+	var compatibility_executor = EditorCompatibilityScript.new()
+	var compatibility_base_script = compatibility_executor.get_script().get_base_script()
+	if compatibility_base_script == null or str(compatibility_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/editor/executor.gd":
+		return _failure("editor_tools.gd should remain only as a compatibility wrapper around editor/executor.gd.")
+
 	var editor_interface := FakeEditorInterface.new()
 	var editor_plugin := FakeEditorPlugin.new(editor_interface)
 	_ensure_editor_plugin_fixture()
