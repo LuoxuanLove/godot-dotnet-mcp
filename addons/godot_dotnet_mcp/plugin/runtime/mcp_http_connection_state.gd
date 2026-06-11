@@ -36,6 +36,8 @@ func add_client(client: StreamPeerTCP) -> void:
 		"last_request_path": "",
 		"last_request_at_unix": 0,
 		"last_json_rpc_method": "",
+		"transport_mode": "http",
+		"sse_last_heartbeat_at_unix": 0,
 		"client_summary": _build_initial_client_summary(client),
 		"recent_requests": []
 	}
@@ -71,6 +73,41 @@ func set_pending_data(client: StreamPeerTCP, data: String) -> void:
 
 func clear_pending_data(client: StreamPeerTCP) -> void:
 	_pending_data.erase(client)
+
+
+func mark_sse_streaming(client: StreamPeerTCP) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	var now := _now_unix()
+	state["transport_mode"] = "sse"
+	state["last_seen_at_unix"] = now
+	state["sse_last_heartbeat_at_unix"] = 0
+	_client_states[client] = state
+
+
+func is_sse_streaming(client: StreamPeerTCP) -> bool:
+	if not _client_states.has(client):
+		return false
+	var state: Dictionary = _client_states.get(client, {})
+	return str(state.get("transport_mode", "http")) == "sse"
+
+
+func get_sse_last_heartbeat_at_unix(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("sse_last_heartbeat_at_unix", 0))
+
+
+func mark_sse_heartbeat(client: StreamPeerTCP) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	var now := _now_unix()
+	state["last_seen_at_unix"] = now
+	state["sse_last_heartbeat_at_unix"] = now
+	_client_states[client] = state
 
 
 func remove_client(client: StreamPeerTCP) -> void:
@@ -196,6 +233,8 @@ func _build_client_session_snapshot(state: Dictionary, active: bool) -> Dictiona
 		"last_request_path": str(state.get("last_request_path", "")),
 		"last_request_at_unix": int(state.get("last_request_at_unix", 0)),
 		"last_json_rpc_method": str(state.get("last_json_rpc_method", "")),
+		"transport_mode": str(state.get("transport_mode", "http")),
+		"sse_last_heartbeat_at_unix": int(state.get("sse_last_heartbeat_at_unix", 0)),
 		"client_summary": {},
 		"recent_requests": []
 	}

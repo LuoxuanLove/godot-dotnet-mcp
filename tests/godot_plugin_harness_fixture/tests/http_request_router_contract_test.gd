@@ -130,6 +130,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should allow GET /mcp as a Streamable HTTP SSE probe.")
 	if str(get_mcp_response.get("_content_type", "")) != "text/event-stream; charset=utf-8":
 		return _failure("HTTP request router should mark GET /mcp responses as SSE.")
+	if str(get_mcp_response.get("_stream_mode", "")) != "sse":
+		return _failure("HTTP request router should mark GET /mcp responses as streaming SSE connections.")
 	var get_mcp_headers: Dictionary = get_mcp_response.get("_headers", {})
 	if str(get_mcp_headers.get("Mcp-Session-Id", "")) != "client-sse-1":
 		return _failure("HTTP request router should echo the GET /mcp SSE session id.")
@@ -143,7 +145,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if get_mcp_body.find("id: streamable-http-get-client-sse-1-") == -1:
 		return _failure("HTTP request router should attach a stream-specific SSE event id.")
 	if get_mcp_body.find("retry: 1000") == -1:
-		return _failure("HTTP request router should advertise an SSE retry interval before closing probe responses.")
+		return _failure("HTTP request router should advertise an SSE retry interval for stream resumption.")
 	if get_mcp_body.find("\"resume_from_event_id\":\"cursor-7\"") == -1:
 		return _failure("HTTP request router should surface Last-Event-ID as a GET /mcp resume cursor hint.")
 	if get_mcp_body.find("\"resume_cursor_found\":false") == -1:

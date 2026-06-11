@@ -97,7 +97,7 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		var sse_guard := _validate_mcp_sse_headers(normalized_headers)
 		if not sse_guard.is_empty():
 			return _attach_cors_headers(_attach_mcp_transport_headers(sse_guard, normalized_headers), origin, path)
-		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_probe_response(normalized_headers), normalized_headers), origin, path)
+		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_stream_response(normalized_headers), normalized_headers), origin, path)
 
 	if method == "GET" and path == "/health":
 		response = _call_dict(_build_health_response, [], {"status": "degraded", "error": "Health response builder is unavailable", "status_code": 500})
@@ -247,7 +247,7 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 	return {}
 
 
-func _build_mcp_sse_probe_response(headers: Dictionary) -> Dictionary:
+func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
 	var event := _append_sse_event(session_id, last_event_id)
@@ -256,6 +256,7 @@ func _build_mcp_sse_probe_response(headers: Dictionary) -> Dictionary:
 		events = [event]
 	return {
 		"status": 200,
+		"_stream_mode": "sse",
 		"_raw_body": _format_sse_events(events),
 		"_content_type": "text/event-stream; charset=utf-8",
 		"_mcp_session_id": session_id,
@@ -282,7 +283,7 @@ func _append_sse_event(session_id: String, last_event_id: String) -> Dictionary:
 				"logger": "godot-dotnet-mcp.transport",
 				"data": {
 					"transport": "streamable_http",
-					"mode": "sse_probe",
+					"mode": "sse_stream",
 					"resume_from_event_id": last_event_id,
 					"resume_cursor_found": bool(resume_status.get("found", false)),
 					"replay_event_count": int(resume_status.get("event_count_after_cursor", 0))

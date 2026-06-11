@@ -8,6 +8,8 @@ var _emit_client_connected := Callable()
 var _emit_client_disconnected := Callable()
 var _route_request_async := Callable()
 var _write_http_response := Callable()
+var _write_sse_stream_open := Callable()
+var _write_sse_heartbeat := Callable()
 var _tick_loader := Callable()
 var _max_pending_request_bytes := DEFAULT_MAX_PENDING_REQUEST_BYTES
 
@@ -15,6 +17,7 @@ const MAX_REQUESTS_PER_DRAIN := 16
 const MAX_ACCEPTS_PER_FRAME := 8
 const MAX_REQUEST_HEADER_BYTES := 64 * 1024
 const DEFAULT_MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
+const SSE_HEARTBEAT_INTERVAL_SECONDS := 15
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
@@ -29,6 +32,8 @@ func configure(connection_state, request_decoder, context = null) -> void:
 	_emit_client_disconnected = context.emit_client_disconnected
 	_route_request_async = context.route_request_async
 	_write_http_response = context.write_http_response
+	_write_sse_stream_open = context.write_sse_stream_open
+	_write_sse_heartbeat = context.write_sse_heartbeat
 	_tick_loader = context.tick_loader
 	if int(context.max_pending_request_bytes) > 0:
 		_max_pending_request_bytes = int(context.max_pending_request_bytes)
@@ -82,6 +87,8 @@ func _process_client(client: StreamPeerTCP) -> bool:
 	if status == StreamPeerTCP.STATUS_CONNECTED:
 		if _connection_state.is_processing(client):
 			return false
+		if _connection_state.has_method("is_sse_streaming") and bool(_connection_state.is_sse_streaming(client)):
+			return _process_sse_streaming_client(client)
 		var available = client.get_available_bytes()
 		if available > 0:
 			var data = client.get_data(available)
@@ -178,14 +185,24 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		var no_body := bool(response.get("_no_body", false))
 		if response.has("_no_body"):
 			response.erase("_no_body")
+		var stream_mode := str(response.get("_stream_mode", "")).strip_edges()
+		if response.has("_stream_mode"):
+			response.erase("_stream_mode")
 
 		if _connection_state == null:
 			return
 		if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			var write_ok := bool(_write_http_response.call(client, response, no_body))
+			var write_ok := false
+			if stream_mode == "sse":
+				write_ok = _open_sse_stream(client, response)
+			else:
+				write_ok = bool(_write_http_response.call(client, response, no_body))
 			if not write_ok:
 				_log("Closing client after HTTP response write failure", "warning")
 				client.disconnect_from_host()
+				_connection_state.clear_processing(client)
+				return
+			if stream_mode == "sse":
 				_connection_state.clear_processing(client)
 				return
 		_connection_state.clear_processing(client)
@@ -218,6 +235,37 @@ func _handle_framing_error(client: StreamPeerTCP, decoded_request: Dictionary) -
 	client.disconnect_from_host()
 
 
+func _open_sse_stream(client: StreamPeerTCP, response: Dictionary) -> bool:
+	if not _write_sse_stream_open.is_valid():
+		return false
+	var write_ok := bool(_write_sse_stream_open.call(client, response))
+	if write_ok and _connection_state != null and _connection_state.has_method("mark_sse_streaming"):
+		_connection_state.mark_sse_streaming(client)
+		_connection_state.set_pending_data(client, "")
+	return write_ok
+
+
+func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
+	if client.get_available_bytes() > 0:
+		client.get_data(client.get_available_bytes())
+	if not _write_sse_heartbeat.is_valid():
+		return false
+	var last_heartbeat := 0
+	if _connection_state != null and _connection_state.has_method("get_sse_last_heartbeat_at_unix"):
+		last_heartbeat = int(_connection_state.get_sse_last_heartbeat_at_unix(client))
+	var now := int(Time.get_unix_time_from_system())
+	if last_heartbeat > 0 and now - last_heartbeat < SSE_HEARTBEAT_INTERVAL_SECONDS:
+		return false
+	var heartbeat_ok := bool(_write_sse_heartbeat.call(client))
+	if not heartbeat_ok:
+		_log("Closing SSE stream after heartbeat write failure", "warning")
+		client.disconnect_from_host()
+		return true
+	if _connection_state != null and _connection_state.has_method("mark_sse_heartbeat"):
+		_connection_state.mark_sse_heartbeat(client)
+	return false
+
+
 func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:
 	var waiting_for := str(decoded_request.get("waiting_for", ""))
 	if waiting_for == "headers" and data.length() > 0:
@@ -243,4 +291,6 @@ func _reset_callbacks() -> void:
 	_emit_client_disconnected = Callable()
 	_route_request_async = Callable()
 	_write_http_response = Callable()
+	_write_sse_stream_open = Callable()
+	_write_sse_heartbeat = Callable()
 	_tick_loader = Callable()
