@@ -88,6 +88,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary):
 		return _failure("initialize should return a result object.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("initialize should advertise the MCP 2025-11-25 protocol version.")
+	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
+	if not (server_info is Dictionary):
+		return _failure("initialize should expose serverInfo as an object.")
+	if str((server_info as Dictionary).get("name", "")) != ProtocolFactsScript.get_server_name():
+		return _failure("initialize serverInfo should include the protocol facts server name.")
+	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("initialize serverInfo should include the protocol facts server description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")
@@ -300,6 +309,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	var visible_catalog_manifest = visible_tool_catalog_payload.get("catalogManifest", {})
+	if not (visible_catalog_manifest is Dictionary) or int((visible_catalog_manifest as Dictionary).get("removed_public_tool_count", 0)) < 1:
+		return _failure("visible tool catalog should expose canonical catalog manifest metadata.")
+	if (visible_catalog_manifest as Dictionary).has("removed_public_tools"):
+		return _failure("visible tool catalog manifest should not expose removed public tool names.")
 	if not (visible_tool_catalog_payload.get("domain_states", []) is Array):
 		return _failure("visible tool catalog should expose raw domain_states promised by its resource metadata.")
 	var system_domain_state := _find_domain_state(visible_tool_catalog_payload.get("domain_states", []), "system")

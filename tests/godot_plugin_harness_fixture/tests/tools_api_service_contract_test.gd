@@ -106,6 +106,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_loader_status = response.get("tool_loader_status", {})
 	if not (tool_loader_status is Dictionary) or str((tool_loader_status as Dictionary).get("status", "")) != "ready":
 		return _failure("Tools API service did not preserve the loader status snapshot.")
+	var catalog_manifest = response.get("catalogManifest", {})
+	if not (catalog_manifest is Dictionary) or not (((catalog_manifest as Dictionary).get("public_categories", []) as Array).has("system")):
+		return _failure("Tools API service should reuse the canonical catalog manifest snapshot.")
+	if (catalog_manifest as Dictionary).has("removed_public_tools"):
+		return _failure("Tools API service should not expose removed public tool names in public catalog metadata.")
 
 	return {
 		"name": "tools_api_service_contracts",
