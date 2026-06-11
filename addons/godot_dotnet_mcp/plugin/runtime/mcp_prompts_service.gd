@@ -335,7 +335,8 @@ func _icon_metadata(name: String) -> Dictionary:
 
 
 func _icon_data_uri(name: String) -> String:
-	return "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ctitle%3E%s%3C%2Ftitle%3E%3Crect%20x%3D%222%22%20y%3D%222%22%20width%3D%2212%22%20height%3D%2212%22%20rx%3D%222%22%20fill%3D%22currentColor%22%2F%3E%3C%2Fsvg%3E" % name.uri_encode()
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><title>%s</title><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\"/></svg>" % name.xml_escape()
+	return "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64(svg.to_utf8_buffer())
 
 
 func _prompt_icon_for_name(prompt_name: String) -> String:
