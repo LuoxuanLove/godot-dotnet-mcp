@@ -105,6 +105,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var get_invalid_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-session-id": "client\r\nInjected: yes"})
 	if int(get_invalid_session_response.get("status", 0)) != 400 or str(get_invalid_session_response.get("error", "")) != "Invalid MCP session id":
 		return _failure("HTTP request router should reject invalid GET /mcp session ids before echoing response headers.")
+	var get_invalid_session_bad_version_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01", "mcp-session-id": "client\r\nInjected: yes"})
+	var get_invalid_session_bad_version_headers: Dictionary = get_invalid_session_bad_version_response.get("_headers", {})
+	if int(get_invalid_session_bad_version_response.get("status", 0)) != 400 or str(get_invalid_session_bad_version_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should prioritize unsafe GET session ids over protocol-version guard responses.")
+	if str(get_invalid_session_bad_version_headers.get("Mcp-Session-Id", "")).find("Injected") != -1:
+		return _failure("HTTP request router must not echo unsafe GET session ids on earlier transport guard failures.")
 
 	var health_response: Dictionary = await router.route_request_async("GET", "/health", "")
 	if str(health_response.get("status", "")) != "ok":
@@ -193,6 +199,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var invalid_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-session-id": "client\nInjected: yes"})
 	if int(invalid_session_response.get("status", 0)) != 400 or str(invalid_session_response.get("error", "")) != "Invalid MCP session id":
 		return _failure("HTTP request router should reject invalid POST /mcp session ids before echoing response headers.")
+	var invalid_session_bad_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "text/html", "mcp-session-id": "client\nInjected: yes"})
+	var invalid_session_bad_accept_headers: Dictionary = invalid_session_bad_accept_response.get("_headers", {})
+	if int(invalid_session_bad_accept_response.get("status", 0)) != 400 or str(invalid_session_bad_accept_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should prioritize unsafe POST session ids over accept guard responses.")
+	if str(invalid_session_bad_accept_headers.get("Mcp-Session-Id", "")).find("Injected") != -1:
+		return _failure("HTTP request router must not echo unsafe POST session ids on earlier transport guard failures.")
 
 	var accept_denied_headers: Dictionary = sse_only_accept_response.get("_headers", {})
 	if str(accept_denied_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():

@@ -168,6 +168,10 @@ func _requires_json_content_type(path: String) -> bool:
 
 
 func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
+	var session_guard := _validate_mcp_session_id_header(headers)
+	if not session_guard.is_empty():
+		return session_guard
+
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_mcp_response(accept_header):
 		return {
@@ -186,14 +190,14 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 			"requested_protocol_version": requested_version
 		}
 
-	var session_guard := _validate_mcp_session_id_header(headers)
-	if not session_guard.is_empty():
-		return session_guard
-
 	return {}
 
 
 func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
+	var session_guard := _validate_mcp_session_id_header(headers)
+	if not session_guard.is_empty():
+		return session_guard
+
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_sse_response(accept_header):
 		return {
@@ -211,10 +215,6 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
-
-	var session_guard := _validate_mcp_session_id_header(headers)
-	if not session_guard.is_empty():
-		return session_guard
 
 	return {}
 
@@ -264,7 +264,7 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 
 func _resolve_mcp_session_id(headers: Dictionary) -> String:
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
-	if not requested_session.is_empty():
+	if not requested_session.is_empty() and _is_safe_http_header_value(requested_session):
 		return requested_session
 	return _generate_mcp_session_id()
 
