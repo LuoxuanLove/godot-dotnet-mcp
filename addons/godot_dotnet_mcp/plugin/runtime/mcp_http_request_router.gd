@@ -186,6 +186,10 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 			"requested_protocol_version": requested_version
 		}
 
+	var session_guard := _validate_mcp_session_id_header(headers)
+	if not session_guard.is_empty():
+		return session_guard
+
 	return {}
 
 
@@ -207,6 +211,10 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
+
+	var session_guard := _validate_mcp_session_id_header(headers)
+	if not session_guard.is_empty():
+		return session_guard
 
 	return {}
 
@@ -259,6 +267,27 @@ func _resolve_mcp_session_id(headers: Dictionary) -> String:
 	if not requested_session.is_empty():
 		return requested_session
 	return _generate_mcp_session_id()
+
+
+func _validate_mcp_session_id_header(headers: Dictionary) -> Dictionary:
+	var requested_session := str(headers.get("mcp-session-id", ""))
+	if requested_session.strip_edges().is_empty():
+		return {}
+	if not _is_safe_http_header_value(requested_session):
+		return {
+			"error": "Invalid MCP session id",
+			"status": 400,
+			"details": "Mcp-Session-Id must be a single-line printable HTTP header value."
+		}
+	return {}
+
+
+func _is_safe_http_header_value(value: String) -> bool:
+	for index in range(value.length()):
+		var code := value.unicode_at(index)
+		if code < 32 or code == 127:
+			return false
+	return true
 
 
 func _generate_mcp_session_id() -> String:

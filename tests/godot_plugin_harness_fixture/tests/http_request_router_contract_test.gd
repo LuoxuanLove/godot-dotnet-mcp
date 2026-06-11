@@ -102,6 +102,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
+	var get_invalid_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-session-id": "client\r\nInjected: yes"})
+	if int(get_invalid_session_response.get("status", 0)) != 400 or str(get_invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject invalid GET /mcp session ids before echoing response headers.")
 
 	var health_response: Dictionary = await router.route_request_async("GET", "/health", "")
 	if str(health_response.get("status", "")) != "ok":
@@ -187,6 +190,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var existing_session_headers: Dictionary = existing_session_response.get("_headers", {})
 	if str(existing_session_headers.get("Mcp-Session-Id", "")) != "client-session-7":
 		return _failure("HTTP request router should echo an existing MCP session id.")
+	var invalid_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-session-id": "client\nInjected: yes"})
+	if int(invalid_session_response.get("status", 0)) != 400 or str(invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject invalid POST /mcp session ids before echoing response headers.")
 
 	var accept_denied_headers: Dictionary = sse_only_accept_response.get("_headers", {})
 	if str(accept_denied_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
