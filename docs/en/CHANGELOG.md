@@ -15,6 +15,7 @@ Target version: 1.4.0.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
+- Added MCP 2025-11-25 display metadata to Resources, Resource Templates, and built-in Prompts so clients can render titles and icons from protocol lists.
 
 ### Changed
 
