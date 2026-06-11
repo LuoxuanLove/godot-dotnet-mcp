@@ -7,6 +7,8 @@ const ToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -500,6 +502,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
 			if (tool_entry as Dictionary).has(internal_key):
 				return _failure("Tool RPC router tools/list should not expose internal metadata key: %s" % internal_key)
+		if not _has_json_schema_2020_12(tool_entry, "inputSchema"):
+			return _failure("Tool RPC router tools/list should advertise JSON Schema 2020-12 on inputSchema.")
+		if not _has_json_schema_2020_12(tool_entry, "outputSchema"):
+			return _failure("Tool RPC router tools/list should advertise JSON Schema 2020-12 on outputSchema.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_stop":
 			return _failure("Tool RPC router should omit removed project lifecycle entries from tools/list.")
 		if str((tool_entry as Dictionary).get("name", "")) == "system_project_run":
@@ -801,6 +807,13 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _has_json_schema_2020_12(tool_entry, key: String) -> bool:
+	if not (tool_entry is Dictionary):
+		return false
+	var schema = (tool_entry as Dictionary).get(key, {})
+	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI
 
 
 func _contains_tool_name_recursive(value, tool_name: String) -> bool:

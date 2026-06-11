@@ -4,6 +4,8 @@ extends RefCounted
 
 const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const ToolCatalogSearchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
+
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
@@ -194,9 +196,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(snapshot.get("success", false)):
 		return _failure("Snapshot build should succeed for a loader with exposed definitions.")
 
-	for key in ["exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status"]:
+	for key in ["catalog_manifest", "exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status"]:
 		if not snapshot.has(key):
 			return _failure("Snapshot should include %s." % key)
+	var catalog_manifest: Dictionary = snapshot.get("catalog_manifest", {})
+	if not ((catalog_manifest.get("public_categories", []) as Array).has("system")):
+		return _failure("Snapshot should expose ToolCatalogManifest public category metadata.")
+	if not ((catalog_manifest.get("removed_public_tools", []) as Array).has("system_tool_activity")):
+		return _failure("Snapshot should expose ToolCatalogManifest removed public tool metadata.")
 
 	var exposed_tools: Array = snapshot.get("exposed_tools", [])
 	var visible_tools: Array = snapshot.get("visible_tools", [])
@@ -443,7 +450,11 @@ func _assert_real_loader_snapshot_and_search(loader) -> Dictionary:
 	var material_input_schema: Dictionary = material_match.get("input_schema", {})
 	if material_input_schema.is_empty():
 		return _assertion_failure("Real loader catalog search should include input_schema when requested.")
+	if str(material_input_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _assertion_failure("Real loader catalog search should advertise JSON Schema 2020-12 on input_schema.")
 	var material_output_schema: Dictionary = material_match.get("output_schema", {})
+	if str(material_output_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _assertion_failure("Real loader catalog search should advertise JSON Schema 2020-12 on output_schema.")
 	if not ((material_output_schema.get("required", []) as Array).has("success")):
 		return _assertion_failure("Real loader catalog search should synthesize the default output schema.")
 	if JSON.stringify(material_input_schema) == JSON.stringify(material_output_schema):

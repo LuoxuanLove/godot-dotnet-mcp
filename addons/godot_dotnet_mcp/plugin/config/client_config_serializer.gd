@@ -37,7 +37,7 @@ func prepare_new_config(new_config: String, config_type: String = "") -> Diction
 
 
 func _preflight_requires_confirmation(status: String) -> bool:
-	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp"
+	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp" or status == "conflicting_server_entry"
 
 
 func _get_server_container_key(config_type: String) -> String:

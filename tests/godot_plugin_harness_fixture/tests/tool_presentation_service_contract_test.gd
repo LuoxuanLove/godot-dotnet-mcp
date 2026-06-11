@@ -4,6 +4,8 @@ extends RefCounted
 
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tools := [{
@@ -131,6 +133,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var default_output_schema = mcp_project_state.get("outputSchema", {})
 	if not (default_output_schema is Dictionary):
 		return _failure("Presentation service should attach default outputSchema to MCP tools/list entries.")
+	var default_input_schema = mcp_project_state.get("inputSchema", {})
+	if not (default_input_schema is Dictionary) or str((default_input_schema as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation service should advertise JSON Schema 2020-12 on MCP inputSchema.")
+	if str((default_output_schema as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation service should advertise JSON Schema 2020-12 on default MCP outputSchema.")
 	if not ((default_output_schema as Dictionary).get("properties", {}) is Dictionary) or not (((default_output_schema as Dictionary).get("properties", {}) as Dictionary).has("success")):
 		return _failure("Default outputSchema should document the normalized success envelope.")
 	if not ((default_output_schema as Dictionary).get("required", []) is Array) or not (((default_output_schema as Dictionary).get("required", []) as Array).has("success")):
@@ -144,6 +151,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var explicit_output_schema = mcp_runtime_control.get("outputSchema", {})
 	if not (explicit_output_schema is Dictionary) or not (((explicit_output_schema as Dictionary).get("properties", {}) as Dictionary).has("data")):
 		return _failure("Presentation service should preserve explicit tool outputSchema definitions.")
+	if str((mcp_runtime_control.get("inputSchema", {}) as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation service should advertise JSON Schema 2020-12 on explicit MCP inputSchema.")
+	if str((explicit_output_schema as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation service should advertise JSON Schema 2020-12 on explicit MCP outputSchema.")
 	if JSON.stringify(mcp_runtime_control.get("inputSchema", {})) == JSON.stringify(explicit_output_schema):
 		return _failure("Presentation service should not mirror inputSchema into outputSchema.")
 

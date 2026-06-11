@@ -15,6 +15,7 @@ Target version: 1.4.0.
 - Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
+- Added MCP 2025-11-25 display metadata to Resources, Resource Templates, and built-in Prompts so clients can render titles and icons from protocol lists.
 
 ### Changed
 
@@ -27,12 +28,22 @@ Target version: 1.4.0.
 - Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
 - Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
 - Changed MCP `tools/list` to return only the flat callable tool list; tree/group presentation metadata now stays in catalog resources, while flat tool-entry presentation metadata remains in `/api/tools`.
+- Changed MCP tool input/output schemas emitted by `tools/list`, catalog resources, and schema-inclusive catalog search to declare the JSON Schema 2020-12 dialect.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
+- Changed the default MCP protocol facts to `2025-11-25` and added `serverInfo.description` metadata to initialize responses.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
+- Stopped advertising unsupported resource subscription capability metadata in MCP `initialize` responses.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
+- Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
+- Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
+- Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
+- Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
+- Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.
+- Moved the debug domain implementation behind `tools/debug/executor.gd` while keeping `debug_tools.gd` as a thin compatibility wrapper for existing script references.
+- Moved the editor domain implementation behind `tools/editor/executor.gd` while keeping `editor_tools.gd` as a thin compatibility wrapper for existing script references.
 
 ### Fixed
 
@@ -43,6 +54,8 @@ Target version: 1.4.0.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 - Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
 - Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
+- Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
+- Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 
 ### Documentation
 
@@ -57,6 +70,7 @@ Target version: 1.4.0.
 - Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
 - Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
+- Extended protocol facts parity coverage to include the server description used by initialize metadata.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
 - Added docs i18n validation coverage for changelog section ordering across localized changelogs.
 - Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
@@ -66,14 +80,21 @@ Target version: 1.4.0.
 - Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
 - Enforced absence guards for the removed audio, animation, signal, TileMap, and UI root monolith files now that their split executors own the domain implementations.
 - Enforced removal guards for the deleted filesystem root monolith, `filesystem_file` loader definition, direct filesystem-domain execution, and stale localization inventory keys.
+- Added debug executor source guards so the canonical debug implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
+- Added editor executor source guards so the canonical editor implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
 - Added `ToolCatalogManifest` as the single static catalog fact source for built-in tool entries, domain metadata, public category exposure, and removed public tool guards while keeping the existing registry and manifest adapters.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
+- Added MCP 2025-11-25 tool-name guard coverage so manifest-owned removed public tool names, registry categories, loader-exposed tools, and final `tools/list` entries stay within the 1-128 character ASCII letter, digit, `_`, `-`, and `.` naming profile.
 - Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
+- Added MCP 2025-11-25 manifest taxonomy so each required harness case declares its protocol version and conformance role before it can enter the v1.4 verification gate.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.
+- Added refactor guardrail coverage so the v1.4 protocol plan and progress tracker keep the same MCP 2025-11-25 target facts.
+- Added initialize capability guard coverage so optional MCP 2025-11-25 Sampling, Elicitation, and Tasks capabilities cannot be advertised before implementation.
+- Added refactor guardrail coverage so release-facing README files cannot reintroduce zip, `release_dist`, local-release, or release-package installation paths.
 
 ## [1.3.0] - 2026-06-08
 
