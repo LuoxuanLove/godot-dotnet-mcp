@@ -436,6 +436,18 @@ func _terminate_mcp_session(session_id: String) -> Dictionary:
 	return {"session_id": session_id, "terminated": false, "event_count_before": 0}
 
 
+func _remember_mcp_session(session_id: String) -> void:
+	if _sse_event_queue != null and _sse_event_queue.has_method("remember_session"):
+		_sse_event_queue.remember_session(session_id)
+
+
+func _should_remember_mcp_session(response: Dictionary) -> bool:
+	if response.has("_terminate_mcp_session_id"):
+		return false
+	var status_code := int(response.get("status", response.get("_status_code", 200)))
+	return status_code < 400
+
+
 func _is_mcp_session_terminated(session_id: String) -> bool:
 	if _sse_event_queue != null and _sse_event_queue.has_method("is_session_terminated"):
 		return bool(_sse_event_queue.is_session_terminated(session_id))
@@ -463,7 +475,10 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	if enriched.has("_headers") and enriched["_headers"] is Dictionary:
 		response_headers = (enriched["_headers"] as Dictionary).duplicate(true)
 	response_headers["MCP-Protocol-Version"] = MCPProtocolFacts.get_protocol_version()
-	response_headers["Mcp-Session-Id"] = response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
+	var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
+	response_headers["Mcp-Session-Id"] = resolved_session_id
+	if _should_remember_mcp_session(enriched):
+		_remember_mcp_session(resolved_session_id)
 	enriched["_headers"] = response_headers
 	return enriched
 

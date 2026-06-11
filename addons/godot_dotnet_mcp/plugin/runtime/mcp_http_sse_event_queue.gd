@@ -10,6 +10,7 @@ var _event_logs: Dictionary = {}
 var _event_counters: Dictionary = {}
 var _event_base_indices: Dictionary = {}
 var _session_id_prefixes: Dictionary = {}
+var _issued_sessions: Dictionary = {}
 var _terminated_sessions: Dictionary = {}
 var _session_access_order: Array[String] = []
 
@@ -19,6 +20,7 @@ func dispose() -> void:
 	_event_counters.clear()
 	_event_base_indices.clear()
 	_session_id_prefixes.clear()
+	_issued_sessions.clear()
 	_terminated_sessions.clear()
 	_session_access_order.clear()
 
@@ -26,6 +28,7 @@ func dispose() -> void:
 func append_event(session_id: String, event_name: String, payload: Dictionary, id_prefix: String = "streamable-http") -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
 	_touch_session(normalized_session)
+	_issued_sessions[normalized_session] = true
 	_terminated_sessions.erase(normalized_session)
 	_remember_session_id_prefix(normalized_session, id_prefix)
 	var event_id := _build_event_id(normalized_session, id_prefix)
@@ -46,6 +49,13 @@ func append_event(session_id: String, event_name: String, payload: Dictionary, i
 	return event.duplicate(true)
 
 
+func remember_session(session_id: String) -> void:
+	var normalized_session := _normalize_session_id(session_id)
+	_issued_sessions[normalized_session] = true
+	_terminated_sessions.erase(normalized_session)
+	_touch_session(normalized_session)
+
+
 func terminate_session(session_id: String) -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
 	var had_history := _event_logs.has(normalized_session)
@@ -54,6 +64,7 @@ func terminate_session(session_id: String) -> Dictionary:
 	_event_counters.erase(normalized_session)
 	_event_base_indices.erase(normalized_session)
 	_session_id_prefixes.erase(normalized_session)
+	_issued_sessions.erase(normalized_session)
 	var existing_index := _session_access_order.find(normalized_session)
 	if existing_index >= 0:
 		_session_access_order.remove_at(existing_index)
@@ -73,7 +84,7 @@ func is_session_terminated(session_id: String) -> bool:
 
 func has_session(session_id: String) -> bool:
 	var normalized_session := _normalize_session_id(session_id)
-	return _event_logs.has(normalized_session) or _terminated_sessions.has(normalized_session)
+	return _issued_sessions.has(normalized_session) or _event_logs.has(normalized_session) or _terminated_sessions.has(normalized_session)
 
 
 func events_after_cursor(session_id: String, last_event_id: String) -> Array:
@@ -191,6 +202,7 @@ func _touch_session(session_id: String) -> void:
 		_event_counters.erase(evicted_session)
 		_event_base_indices.erase(evicted_session)
 		_session_id_prefixes.erase(evicted_session)
+		_issued_sessions.erase(evicted_session)
 		_terminated_sessions.erase(evicted_session)
 
 

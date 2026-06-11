@@ -346,6 +346,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var existing_session_headers: Dictionary = existing_session_response.get("_headers", {})
 	if str(existing_session_headers.get("Mcp-Session-Id", "")) != "client-session-7":
 		return _failure("HTTP request router should echo an existing MCP session id.")
+	var delete_post_only_session: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-session-7"})
+	if int(delete_post_only_session.get("status", 0)) != 204 or not bool(delete_post_only_session.get("_no_body", false)):
+		return _failure("HTTP request router should allow DELETE /mcp for a session issued by ordinary POST responses.")
 	var invalid_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\nInjected: yes"})
 	if int(invalid_session_response.get("status", 0)) != 400 or str(invalid_session_response.get("error", "")) != "Invalid MCP session id":
 		return _failure("HTTP request router should reject invalid POST /mcp session ids before echoing response headers.")
