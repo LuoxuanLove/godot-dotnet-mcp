@@ -3,6 +3,9 @@ extends RefCounted
 # {"name": "dock_model_service_contracts"}
 
 const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
+
+var _controllers: Array = []
 
 
 class FakeState extends RefCounted:
@@ -35,7 +38,42 @@ class FakeState extends RefCounted:
 	var update_sync_target_kind := ""
 
 
-class FakeServerController extends RefCounted:
+class FakeServerController extends ServerRuntimeController:
+	func _init() -> void:
+		_server = FakeServer.new()
+
+	func get_exposed_tool_definitions() -> Array:
+		return (_server as FakeServer).get_exposed_tool_definitions()
+
+	func get_tool_definitions() -> Array:
+		return (_server as FakeServer).get_tool_definitions()
+
+	func get_all_tools_by_category() -> Dictionary:
+		return (_server as FakeServer).get_all_tools_by_category()
+
+	func is_running() -> bool:
+		return true
+
+	func get_connection_stats() -> Dictionary:
+		return {"connections": 1}
+
+	func get_domain_states() -> Array:
+		return (_server as FakeServer).get_domain_states()
+
+	func get_reload_status() -> Dictionary:
+		return {}
+
+	func get_performance_summary() -> Dictionary:
+		return (_server as FakeServer).get_performance_summary()
+
+	func get_tool_load_errors() -> Array:
+		return []
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return (_server as FakeServer).is_public_removed_tool(tool_name)
+
+
+class FakeServer extends Node:
 	func get_tool_loader():
 		return self
 
@@ -110,23 +148,11 @@ class FakeServerController extends RefCounted:
 			]
 		}
 
-	func is_running() -> bool:
-		return true
-
-	func get_connection_stats() -> Dictionary:
-		return {"connections": 1}
-
 	func get_domain_states() -> Array:
 		return [{"category": "system", "domain_key": "core", "loaded": true, "tool_count": 3, "enabled_tool_count": 3}]
 
-	func get_reload_status() -> Dictionary:
-		return {}
-
 	func get_performance_summary() -> Dictionary:
 		return {}
-
-	func get_tool_load_errors() -> Array:
-		return []
 
 	func is_public_removed_tool(tool_name: String) -> bool:
 		return tool_name == "system_tool_activity"
@@ -190,6 +216,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_profile_id": "default"
 	}
 	var server_controller = FakeServerController.new()
+	_controllers.append(server_controller)
 	var context = FakeContext.new()
 	context.state = state
 	context.localization = FakeLocalization.new()
@@ -266,6 +293,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"all_categories": model.get("all_tools_by_category", {}).keys()
 		}
 	}
+
+
+func cleanup_case(_tree: SceneTree) -> void:
+	for controller in _controllers:
+		if controller != null and controller.has_method("detach"):
+			controller.detach()
+	_controllers.clear()
 
 
 func _failure(message: String) -> Dictionary:
