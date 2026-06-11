@@ -9,6 +9,7 @@ class_name MCPStdioServer
 ##   godot --headless --path /path/to/project --script res://addons/.../mcp_stdio_entry.gd
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
 const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
@@ -271,10 +272,19 @@ func _handle_request(body: String, generation: int = -1) -> void:
 		return
 
 	var request_dict: Dictionary = request
-	var method: String = str(request_dict.get("method", ""))
+	var envelope_validation := MCPJsonRpcEnvelopeValidator.validate_request_envelope(request_dict)
+	var has_id: bool = bool(envelope_validation.get("has_id", false))
+	var id: Variant = envelope_validation.get("id")
+	if not bool(envelope_validation.get("success", false)):
+		_write_response(_create_json_rpc_error(
+			int(envelope_validation.get("code", -32600)),
+			str(envelope_validation.get("message", "Invalid Request")),
+			id
+		))
+		return
+
+	var method: String = str(envelope_validation.get("method", ""))
 	var params: Variant = request_dict.get("params", {})
-	var has_id: bool = request_dict.has("id")
-	var id: Variant = request_dict.get("id")
 	if not (params is Dictionary):
 		if not has_id:
 			return
