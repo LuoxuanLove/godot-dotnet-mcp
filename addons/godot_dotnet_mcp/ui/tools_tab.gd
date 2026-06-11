@@ -169,7 +169,7 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(filtered_node.get("labelKey", ""))))
 		"tool":
 			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
-			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _find_tool_definition(str(filtered_node.get("category", "")), str(filtered_node.get("toolName", "")))))
+			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _get_tool_metadata(key)))
 		"atomic":
 			_configure_info_row(item, display_name, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, key))
 		"action":
@@ -207,8 +207,15 @@ func _presentation_node_matches_search(model: Dictionary, node: Dictionary, quer
 		return true
 	var kind := str(node.get("kind", ""))
 	if kind == "tool" or kind == "atomic":
-		var tool_def := _find_tool_definition(str(node.get("category", "")), str(node.get("toolName", "")))
-		return _get_tool_description(model.get("localization"), str(node.get("key", "")), tool_def).to_lower().contains(query)
+		var full_name := str(node.get("fullName", node.get("key", "")))
+		var metadata := _get_tool_metadata(full_name, node)
+		if _get_tool_description(model.get("localization"), full_name, metadata).to_lower().contains(query):
+			return true
+		if str(metadata.get("title", "")).to_lower().contains(query):
+			return true
+		var annotations = metadata.get("annotations", {})
+		if annotations is Dictionary and str((annotations as Dictionary).get("title", "")).to_lower().contains(query):
+			return true
 	return false
 
 
@@ -234,6 +241,15 @@ func _build_presentation_node_metadata(node: Dictionary, display_name: String) -
 		"label_key": str(node.get("labelKey", "")),
 		"category": str(node.get("category", "")),
 		"tool_name": str(node.get("toolName", node.get("tool_name", ""))),
+		"full_name": str(node.get("fullName", node.get("key", ""))),
+		"description": str(node.get("description", "")),
+		"title": str(node.get("title", "")),
+		"icons": _duplicate_array(node.get("icons", [])),
+		"annotations": _duplicate_dictionary(node.get("annotations", {})),
+		"inputSchema": _duplicate_dictionary(node.get("inputSchema", {})),
+		"outputSchema": _duplicate_dictionary(node.get("outputSchema", {})),
+		"enabled": bool(node.get("enabled", true)),
+		"treeChildren": _duplicate_array(node.get("treeChildren", [])),
 		"source": str(node.get("source", "")),
 		"script_path": str(node.get("script_path", node.get("scriptPath", ""))),
 		"domain_script_path": str(node.get("domain_script_path", node.get("domainScriptPath", ""))),
@@ -782,7 +798,7 @@ func _on_context_menu_id_pressed(id: int) -> void:
 			DisplayServer.clipboard_set(_get_context_menu_english_id())
 		_CTX_COPY_SCHEMA:
 			var full_name = str(_context_menu_metadata.get("key", ""))
-			var tool_def = _get_tool_def_by_full_name(_current_model, full_name)
+			var tool_def = _get_tool_metadata(full_name, _context_menu_metadata)
 			var schema = tool_def.get("inputSchema", {})
 			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
 		_CTX_DELETE_TOOL:
@@ -820,6 +836,18 @@ func _build_tree_node_metadata(kind: String, key: String, localized_name: String
 	for extra_key in extra.keys():
 		metadata[str(extra_key)] = extra[extra_key]
 	return metadata
+
+
+func _duplicate_dictionary(value) -> Dictionary:
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	return {}
+
+
+func _duplicate_array(value) -> Array:
+	if value is Array:
+		return (value as Array).duplicate(true)
+	return []
 
 
 func _get_context_menu_localized_name() -> String:
@@ -1260,7 +1288,7 @@ func _build_tool_preview() -> String:
 	var tool_name = _selected_tool_name
 	if category.is_empty() or tool_name.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
-	var tool_def = _find_tool_definition(category, tool_name)
+	var tool_def = _get_tool_metadata(_selected_tree_key)
 	if tool_def.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
 
@@ -1418,11 +1446,11 @@ func _build_atomic_item_preview() -> String:
 	var atomic_full_name = _selected_tree_key
 	if atomic_full_name.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
-	var tool_def = _get_tool_def_by_full_name(_current_model, atomic_full_name)
+	var tool_def = _get_tool_metadata(atomic_full_name)
 	if tool_def.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
-	var category = _extract_category_from_full_name(_current_model, atomic_full_name)
-	var tool_name = str(tool_def.get("name", ""))
+	var category = str(tool_def.get("category", _extract_category_from_full_name(_current_model, atomic_full_name)))
+	var tool_name = str(tool_def.get("toolName", tool_def.get("name", _tool_name_from_full_name(atomic_full_name, tool_def))))
 	var display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
 	var description = _get_tool_description(_localization, atomic_full_name, tool_def)
 	var actions = _extract_action_values(tool_def)
@@ -1458,9 +1486,9 @@ func _build_action_item_preview() -> String:
 		return str(_localization.get_text("tool_preview_empty"))
 	var parent_tool: String = key.left(dot_idx)
 	var action_name: String = key.substr(dot_idx + 1)
-	var tool_def = _get_tool_def_by_full_name(_current_model, parent_tool)
-	var category = _extract_category_from_full_name(_current_model, parent_tool)
-	var tool_name = str(tool_def.get("name", "")) if not tool_def.is_empty() else parent_tool
+	var tool_def = _get_tool_metadata(parent_tool)
+	var category = str(tool_def.get("category", _extract_category_from_full_name(_current_model, parent_tool)))
+	var tool_name = str(tool_def.get("toolName", tool_def.get("name", ""))) if not tool_def.is_empty() else parent_tool
 	var display_name = _get_tool_display_name(_localization, parent_tool, tool_name) if not tool_def.is_empty() else parent_tool
 	var lines: Array[String] = [
 		"%s: %s" % [_localization.get_text("tool_action"), _get_action_display_name(parent_tool, action_name)],
@@ -1525,6 +1553,52 @@ func _find_tool_definition(category: String, tool_name: String) -> Dictionary:
 	return {}
 
 
+func _get_tool_metadata(full_name: String, fallback: Dictionary = {}) -> Dictionary:
+	var presentation = _current_model.get("tool_presentation", {})
+	var metadata_by_name = (presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}
+	var metadata: Dictionary = {}
+	if metadata_by_name is Dictionary and (metadata_by_name as Dictionary).has(full_name):
+		var shared_metadata = (metadata_by_name as Dictionary).get(full_name, {})
+		if shared_metadata is Dictionary:
+			metadata = (shared_metadata as Dictionary).duplicate(true)
+	if metadata.is_empty() and not fallback.is_empty():
+		metadata = fallback.duplicate(true)
+	if metadata.is_empty():
+		metadata = _get_tool_def_by_full_name(_current_model, full_name)
+	else:
+		_merge_missing_tool_runtime_fields(metadata, _get_tool_def_by_full_name(_current_model, full_name))
+	if not metadata.has("fullName"):
+		metadata["fullName"] = full_name
+	if not metadata.has("full_name"):
+		metadata["full_name"] = full_name
+	if not metadata.has("key"):
+		metadata["key"] = full_name
+	if not metadata.has("name"):
+		metadata["name"] = _tool_name_from_full_name(full_name, metadata)
+	if not metadata.has("toolName"):
+		metadata["toolName"] = str(metadata.get("name", _tool_name_from_full_name(full_name, metadata)))
+	if not metadata.has("category"):
+		metadata["category"] = _extract_category_from_full_name(_current_model, full_name)
+	return metadata
+
+
+func _merge_missing_tool_runtime_fields(target: Dictionary, source: Dictionary) -> void:
+	for key in ["name", "category", "source", "script_path", "runtime_domain", "runtime_version", "state", "pending_reload", "last_error", "discovery_source", "last_refresh_reason"]:
+		if target.has(key):
+			continue
+		if source.has(key):
+			target[key] = source[key]
+
+
+func _tool_name_from_full_name(full_name: String, metadata: Dictionary = {}) -> String:
+	var category = str(metadata.get("category", ""))
+	if category.is_empty():
+		category = _extract_category_from_full_name(_current_model, full_name)
+	if not category.is_empty() and full_name.begins_with("%s_" % category):
+		return full_name.trim_prefix("%s_" % category)
+	return full_name
+
+
 func _get_tool_def_by_full_name(model: Dictionary, full_name: String) -> Dictionary:
 	var category = _extract_category_from_full_name(model, full_name)
 	if category.is_empty():
@@ -1548,6 +1622,9 @@ func _extract_category_from_full_name(model: Dictionary, full_name: String) -> S
 
 func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
 	var lines: Array[String] = []
+	var presentation_lines := _build_presentation_atomic_tool_preview_lines(system_full_name, depth, visited)
+	if not presentation_lines.is_empty():
+		return presentation_lines
 	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
 		var atomic_full_name: String
 		var actions: Array = []
@@ -1574,6 +1651,35 @@ func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, 
 			var next_visited = visited.duplicate()
 			next_visited[atomic_full_name] = true
 			lines.append_array(_build_atomic_tool_preview_lines(atomic_full_name, depth + 1, next_visited))
+	return lines
+
+
+func _build_presentation_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, visited: Dictionary = {}) -> Array[String]:
+	var parent_metadata := _get_tool_metadata(system_full_name)
+	var children = parent_metadata.get("treeChildren", [])
+	if not (children is Array) or (children as Array).is_empty():
+		return []
+	var lines: Array[String] = []
+	for child_id in children:
+		var atomic_full_name := str(child_id).trim_prefix("atomic:")
+		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
+			continue
+		var atomic_metadata := _get_tool_metadata(atomic_full_name)
+		if atomic_metadata.is_empty():
+			continue
+		var category = str(atomic_metadata.get("category", _extract_category_from_full_name(_current_model, atomic_full_name)))
+		var tool_name = str(atomic_metadata.get("toolName", atomic_metadata.get("name", _tool_name_from_full_name(atomic_full_name, atomic_metadata))))
+		if category.is_empty() or tool_name.is_empty():
+			continue
+		var display_name = _get_tool_display_name(_localization, atomic_full_name, tool_name)
+		var indent = "  ".repeat(depth)
+		lines.append("%s- %s" % [indent, display_name])
+		for action_name in _extract_action_values(atomic_metadata):
+			lines.append("%s  - %s" % [indent, _get_action_display_name(atomic_full_name, str(action_name))])
+		if category == SYSTEM_CATEGORY:
+			var next_visited = visited.duplicate()
+			next_visited[atomic_full_name] = true
+			lines.append_array(_build_presentation_atomic_tool_preview_lines(atomic_full_name, depth + 1, next_visited))
 	return lines
 
 

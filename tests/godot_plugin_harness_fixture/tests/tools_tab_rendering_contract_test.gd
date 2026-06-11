@@ -93,6 +93,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var tools_by_category := _build_tools_by_category()
 	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
+	_poison_raw_tool_definitions_after_presentation(tools_by_category)
 	var base_model := {
 		"localization": FakeLocalization.new(),
 		"current_language": "en",
@@ -241,6 +242,38 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should not leak raw English DAP schema parameter descriptions in localized previews.")
 	if not preview_text.text.contains("fallback_note | string | Fallback-only schema description"):
 		return _failure("Tools tab should keep schema descriptions as fallback when no localized parameter description exists.")
+	if preview_text.text.contains("RAW SHOULD NOT APPEAR") or preview_text.text.contains("raw_only_param"):
+		return _failure("Tools tab preview should consume shared presentation metadata instead of poisoned raw tool definitions.")
+	var copied_schema_metadata: Dictionary = _instance.call("_get_tool_metadata", "system_dap_debugger", dap_tool.get_metadata(0))
+	var copied_schema_json = copied_schema_metadata.get("inputSchema", {})
+	if not (copied_schema_json is Dictionary):
+		return _failure("Tools tab schema-copy metadata should expose an inputSchema object.")
+	var copied_properties = (copied_schema_json as Dictionary).get("properties", {})
+	if not (copied_properties is Dictionary) or not (copied_properties as Dictionary).has("adapter_args"):
+		return _failure("Tools tab schema-copy metadata should resolve shared presentation inputSchema.")
+	if (copied_properties as Dictionary).has("raw_only_param") or str((copied_schema_json as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Tools tab schema-copy metadata should not use poisoned raw schemas.")
+	var search_edit = _instance.get_node("ContentSplit/TopPane/SearchOuterMargin/ToolSearchEdit") as LineEdit
+	if search_edit == null:
+		return _failure("Tools tab rendering test could not resolve the search edit control.")
+	search_edit.text = "contract fixture for system_dap_debugger"
+	_instance.call("_on_search_text_changed", search_edit.text)
+	await tree.process_frame
+	var searched_root = tool_tree.get_root()
+	var searched_core_domain = _find_child_by_metadata(searched_root, "domain", "core")
+	var searched_system_category = _find_child_by_metadata(searched_core_domain, "category", "system")
+	var searched_dap_tool = _find_child_by_metadata(searched_system_category, "tool", "system_dap_debugger")
+	if searched_dap_tool == null:
+		return _failure("Tools tab search should match shared presentation metadata descriptions.")
+	search_edit.text = ""
+	_instance.call("_on_search_text_changed", "")
+	await tree.process_frame
+	root = tool_tree.get_root()
+	core_domain = _find_child_by_metadata(root, "domain", "core")
+	system_category = _find_child_by_metadata(core_domain, "category", "system")
+	dap_tool = _find_child_by_metadata(system_category, "tool", "system_dap_debugger")
+	if dap_tool == null:
+		return _failure("Tools tab should restore the DAP row after clearing metadata search.")
 	var atomic_dap_tool = _find_child_by_metadata(dap_tool, "atomic", "dap_debugger")
 	if atomic_dap_tool == null:
 		return _failure("Tools tab should render the DAP atomic tool under the high-level DAP debugger entry.")
@@ -353,6 +386,23 @@ func _build_tools_by_category() -> Dictionary:
 				atomic_full_name = str(entry)
 			_add_tool_def(tools_by_category, atomic_full_name, atomic_actions)
 	return tools_by_category
+
+
+func _poison_raw_tool_definitions_after_presentation(tools_by_category: Dictionary) -> void:
+	for raw_tool in tools_by_category.get("system", []):
+		if not (raw_tool is Dictionary):
+			continue
+		var tool_def := raw_tool as Dictionary
+		if str(tool_def.get("name", "")) != "dap_debugger":
+			continue
+		tool_def["description"] = "RAW SHOULD NOT APPEAR"
+		tool_def["inputSchema"] = {
+			"type": "object",
+			"properties": {
+				"action": {"type": "string", "enum": ["status"]},
+				"raw_only_param": {"type": "string", "description": "RAW SHOULD NOT APPEAR"}
+			}
+		}
 
 
 func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Array = []) -> void:
