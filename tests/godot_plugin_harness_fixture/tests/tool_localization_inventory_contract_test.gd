@@ -33,6 +33,10 @@ const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"tool_debug_log_desc"
 ]
 
+const TOOL_DESCRIPTION_KEYWORD_REQUIREMENTS := {
+	"tool_system_project_state_desc": ["summary", "sections"]
+}
+
 
 class FakeServerContext extends RefCounted:
 	var _tool_access_provider
@@ -92,6 +96,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var forbidden_removed_keys := _find_forbidden_removed_public_tool_keys(localization, locale_codes)
 	if not forbidden_removed_keys.is_empty():
 		return _failure("Removed tools should not keep visible localization keys: %s" % ", ".join(forbidden_removed_keys.slice(0, 120)))
+
+	var description_keyword_gaps := _find_tool_description_keyword_gaps(localization, locale_codes)
+	if not description_keyword_gaps.is_empty():
+		return _failure("Visible tool descriptions are missing schema keywords: %s" % ", ".join(description_keyword_gaps.slice(0, 120)))
 
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
@@ -271,6 +279,19 @@ func _find_forbidden_removed_public_tool_keys(localization, locale_codes: Array[
 				found.append("%s:%s" % [locale_name, key])
 	found.sort()
 	return found
+
+
+func _find_tool_description_keyword_gaps(localization, locale_codes: Array[String]) -> Array[String]:
+	var gaps: Array[String] = []
+	for locale_name in locale_codes:
+		for key in TOOL_DESCRIPTION_KEYWORD_REQUIREMENTS.keys():
+			var text := str(localization.get_text_for(locale_name, str(key)))
+			for keyword in TOOL_DESCRIPTION_KEYWORD_REQUIREMENTS[key]:
+				var keyword_text := str(keyword)
+				if not text.contains(keyword_text):
+					gaps.append("%s:%s missing '%s'" % [locale_name, key, keyword_text])
+	gaps.sort()
+	return gaps
 
 
 func _failure(message: String) -> Dictionary:

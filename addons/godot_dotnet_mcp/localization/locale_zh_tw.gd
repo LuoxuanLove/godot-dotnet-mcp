@@ -748,7 +748,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_scene_bindings_desc": "檢查場景中使用的導出腳本綁定",
 	"tool_scene_audit_desc": "報告由導出綁定推導出的場景問題",
 	"tool_system_project_state_name": "項目狀態",
-	"tool_system_project_state_desc": "彙總當前項目狀態，包括文件計數、最近錯誤與運行狀態。",
+	"tool_system_project_state_desc": "彙總專案健康、錯誤、執行狀態與能力。使用 summary=true 取得精簡的僅計數讀取，或使用 sections=[...] 只請求 summary、project、files、runtime、capabilities 或 health 資料。",
 	"mcp_resource_project_info_name": "專案資訊",
 	"mcp_resource_project_info_desc": "目前 Godot 專案路徑、協定事實、伺服器資訊與工具載入器狀態。",
 	"mcp_resource_diagnostics_summary_name": "診斷摘要",

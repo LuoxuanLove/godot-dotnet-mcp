@@ -59,6 +59,7 @@ Target version: 1.4.0.
 - Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
 - Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
 - Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
+- Fixed localized `system_project_state` descriptions so they document `summary=true` compact reads and `sections=[...]` selective reads.
 
 ### Documentation
 
@@ -67,6 +68,7 @@ Target version: 1.4.0.
 - Clarified `system_help` protocol guidance so clients can choose MCP Resources for passive context, Prompts for workflow planning, and Tools for actions or computed workflow results.
 - Added a [v1.4.0 refactor progress tracker](process/v1.4.0-refactor-progress-tracker.md) that records completed guardrails, remaining cleanup axes, and the next PR queue.
 - Updated the v1.4.0 protocol refactor plan to target MCP 2025-11-25 conformance, including Streamable HTTP on `127.0.0.1:3000/mcp`, newline-delimited stdio, 2020-12 schema metadata, tool-name guards, optional capability boundaries, and Dock/Tools UI metadata adaptation.
+- Added localization inventory coverage for schema keywords that must remain visible in translated tool descriptions.
 
 ### Internal
 
