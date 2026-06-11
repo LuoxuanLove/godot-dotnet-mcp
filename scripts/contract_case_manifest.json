@@ -13,6 +13,8 @@
   {"name":"system_runtime_impl_contracts","layer":"system","domain":"runtime","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"http_server_listen_diagnostics_contracts","layer":"transport","domain":"http","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"http_request_decoder_contracts","layer":"transport","domain":"http","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
+  {"name":"http_request_router_contracts","layer":"transport","domain":"http","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
+  {"name":"http_response_service_contracts","layer":"transport","domain":"http","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"http_transport_service_contracts","layer":"transport","domain":"http","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"stdio_tool_error_parity_contracts","layer":"transport","domain":"stdio","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"runtime_command_service_contracts","layer":"runtime","domain":"runtime","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},

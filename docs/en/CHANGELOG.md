@@ -60,6 +60,7 @@ Target version: 1.4.0.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 - Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
 - Fixed JSON-RPC envelope validation so HTTP and stdio reject malformed `jsonrpc`, `method`, and `id` fields before routing or emitting request activity.
+- Fixed Streamable HTTP POST handling so JSON-RPC response envelopes are accepted with `202 Accepted` and no response body instead of being rejected as invalid requests.
 - Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
 - Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
 - Fixed raw HTTP response writing so SSE bodies can be sent without JSON encoding and 406 responses use `Not Acceptable` status text.
