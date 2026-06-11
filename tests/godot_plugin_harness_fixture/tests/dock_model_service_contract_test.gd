@@ -36,10 +36,52 @@ class FakeState extends RefCounted:
 
 
 class FakeServerController extends RefCounted:
+	func get_tool_loader():
+		return self
+
+	func get_exposed_tool_definitions() -> Array:
+		return [{
+			"name": "system_project_state",
+			"category": "system",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+		}, {
+			"name": "system_tool_activity",
+			"category": "system",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"
+		}, {
+			"name": "plugin_runtime_state",
+			"category": "plugin_runtime",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/plugin/runtime.gd"
+		}, {
+			"name": "material_inspect",
+			"category": "material",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/material/inspect.gd"
+		}]
+
+	func get_tool_definitions() -> Array:
+		var tools := get_exposed_tool_definitions()
+		tools.append({
+			"name": "user_sample_tool",
+			"category": "user",
+			"source": "user_tool",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd"
+		})
+		return tools
+
 	func get_all_tools_by_category() -> Dictionary:
 		return {
 			"system": [
-				{"name": "project_state"},
+				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"},
+				{"name": "tool_activity", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"},
 				{"name": "runtime_diagnose"}
 			],
 			"plugin_runtime": [
@@ -75,7 +117,7 @@ class FakeServerController extends RefCounted:
 		return {"connections": 1}
 
 	func get_domain_states() -> Array:
-		return []
+		return [{"category": "system", "domain_key": "core", "loaded": true, "tool_count": 3, "enabled_tool_count": 3}]
 
 	func get_reload_status() -> Dictionary:
 		return {}
@@ -85,6 +127,9 @@ class FakeServerController extends RefCounted:
 
 	func get_tool_load_errors() -> Array:
 		return []
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return tool_name == "system_tool_activity"
 
 
 class FakeLocalization extends RefCounted:
@@ -177,6 +222,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var presentation: Dictionary = model.get("tool_presentation", {})
 	if presentation.is_empty() or not (presentation.get("toolTree", []) is Array):
 		return _failure("Dock model should include the unified tool presentation model.")
+	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})
+	var project_metadata: Dictionary = metadata_by_name.get("system_project_state", {})
+	if project_metadata.is_empty():
+		return _failure("Dock model should reuse snapshot presentation metadata for visible tools.")
+	if (project_metadata.get("groupPath", []) as Array).is_empty() or str(project_metadata.get("loadState", "")) != "loaded" or str(project_metadata.get("source", "")) != "builtin":
+		return _failure("Dock snapshot metadata should preserve groupPath, loadState, and source.")
+	if str(project_metadata.get("scriptPath", "")).is_empty():
+		return _failure("Dock snapshot metadata should preserve scriptPath.")
+	if metadata_by_name.has("system_tool_activity"):
+		return _failure("Dock presentation should filter removed public tools through the snapshot service.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
 	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):
