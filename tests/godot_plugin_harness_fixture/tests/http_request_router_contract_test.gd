@@ -75,9 +75,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(mcp_response.get("status", 0)) != 406:
 		return _failure("HTTP request router should require explicit Streamable HTTP Accept headers for POST /mcp.")
 
-	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "")
-	if int(get_mcp_response.get("status", 0)) != 405 or not bool(get_mcp_response.get("_no_body", false)):
-		return _failure("HTTP request router did not preserve the GET /mcp 405 semantics.")
+	var get_mcp_without_sse: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "application/json"})
+	if int(get_mcp_without_sse.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject GET /mcp requests that cannot accept SSE responses.")
+	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-session-id": "client-sse-1"})
+	if int(get_mcp_response.get("status", 0)) != 200:
+		return _failure("HTTP request router should allow GET /mcp as a Streamable HTTP SSE probe.")
+	if str(get_mcp_response.get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("HTTP request router should mark GET /mcp responses as SSE.")
+	var get_mcp_headers: Dictionary = get_mcp_response.get("_headers", {})
+	if str(get_mcp_headers.get("Mcp-Session-Id", "")) != "client-sse-1":
+		return _failure("HTTP request router should echo the GET /mcp SSE session id.")
+	if str(get_mcp_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should attach protocol headers to GET /mcp SSE responses.")
+	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache":
+		return _failure("HTTP request router should disable caching for GET /mcp SSE responses.")
+	var get_mcp_body := str(get_mcp_response.get("_raw_body", ""))
+	if get_mcp_body.find("event: message") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") == -1 or get_mcp_body.find("\"method\":\"notifications/message\"") == -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
+		return _failure("HTTP request router should return an observable Streamable HTTP SSE message for GET /mcp.")
+	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
+	if int(get_protocol_denied_response.get("status", 0)) != 400:
+		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
 
 	var health_response: Dictionary = await router.route_request_async("GET", "/health", "")
 	if str(health_response.get("status", "")) != "ok":
@@ -89,7 +107,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "")
 	var options_headers: Dictionary = options_response.get("_headers", {})
-	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "POST":
+	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "GET, POST":
 		return _failure("HTTP request router did not reject non-CORS OPTIONS requests with the allowed methods.")
 
 	var denied_origin_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"origin": "https://example.com", "host": "localhost:3000"})
