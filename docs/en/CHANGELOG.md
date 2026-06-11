@@ -33,6 +33,7 @@ Target version: 1.4.0.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
 - Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
 - Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
+- Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
 - Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
 - Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
 - Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
