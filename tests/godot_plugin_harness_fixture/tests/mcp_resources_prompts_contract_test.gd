@@ -35,6 +35,7 @@ const DEBUG_TRIAGE_PROMPT := "godot.debug_triage"
 const REFERENCE_INTEGRITY_PROMPT := "godot.reference_integrity"
 const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 
 var _server = null
 var _temp_paths: Array[String] = []
@@ -87,6 +88,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary):
 		return _failure("initialize should return a result object.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("initialize should advertise the MCP 2025-11-25 protocol version.")
+	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
+	if not (server_info is Dictionary):
+		return _failure("initialize should expose serverInfo as an object.")
+	if str((server_info as Dictionary).get("name", "")) != ProtocolFactsScript.get_server_name():
+		return _failure("initialize serverInfo should include the protocol facts server name.")
+	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("initialize serverInfo should include the protocol facts server description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")
@@ -276,6 +286,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
+	if not _all_tools_advertise_json_schema_2020_12(tool_catalog_payload.get("tools", [])):
+		return _failure("tool catalog resource should advertise JSON Schema 2020-12 on tool schemas.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
 			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
@@ -286,6 +298,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree") or exposed_tool_catalog_payload.has("domain_states"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
+	if not _all_tools_advertise_json_schema_2020_12(exposed_tool_catalog_payload.get("tools", [])):
+		return _failure("exposed tool catalog should advertise JSON Schema 2020-12 on tool schemas.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
 			return _failure("exposed tool catalog should not expose removed public tool %s." % removed_tool_name)
@@ -295,6 +309,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	var visible_catalog_manifest = visible_tool_catalog_payload.get("catalogManifest", {})
+	if not (visible_catalog_manifest is Dictionary) or int((visible_catalog_manifest as Dictionary).get("removed_public_tool_count", 0)) < 1:
+		return _failure("visible tool catalog should expose canonical catalog manifest metadata.")
+	if (visible_catalog_manifest as Dictionary).has("removed_public_tools"):
+		return _failure("visible tool catalog manifest should not expose removed public tool names.")
 	if not (visible_tool_catalog_payload.get("domain_states", []) is Array):
 		return _failure("visible tool catalog should expose raw domain_states promised by its resource metadata.")
 	var system_domain_state := _find_domain_state(visible_tool_catalog_payload.get("domain_states", []), "system")
@@ -575,6 +594,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_recent_tool := str(((stdio_recent as Array)[0] as Dictionary).get("tool", ""))
 	if stdio_recent_tool != "system_project_state":
 		return _failure("stdio activity resources should preserve the stdio tool call record.")
+	var stdio_tools_list_response: Dictionary = stdio_server._handle_tools_list(25)
+	var stdio_tools = (stdio_tools_list_response.get("result", {}) as Dictionary).get("tools", [])
+	if not (stdio_tools is Array) or (stdio_tools as Array).is_empty():
+		return _failure("stdio tools/list should expose tools for schema dialect verification.")
+	if not _all_tools_advertise_json_schema_2020_12(stdio_tools):
+		return _failure("stdio tools/list should advertise JSON Schema 2020-12 on tool schemas.")
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",
@@ -896,3 +921,21 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _all_tools_advertise_json_schema_2020_12(tools) -> bool:
+	if not (tools is Array) or (tools as Array).is_empty():
+		return false
+	for tool in tools:
+		if not _tool_advertises_json_schema_2020_12(tool, "inputSchema"):
+			return false
+		if not _tool_advertises_json_schema_2020_12(tool, "outputSchema"):
+			return false
+	return true
+
+
+func _tool_advertises_json_schema_2020_12(tool, key: String) -> bool:
+	if not (tool is Dictionary):
+		return false
+	var schema = (tool as Dictionary).get(key, {})
+	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI
