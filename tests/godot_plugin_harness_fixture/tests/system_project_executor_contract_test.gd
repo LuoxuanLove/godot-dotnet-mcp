@@ -345,11 +345,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not atomic_bridge._is_write_atomic_action("script_edit_gd", {}):
 		return _failure("AtomicBridge should infer script_edit_* atomic calls without an action as writes.")
 	var disposable_executor := FakeDisposableExecutor.new()
-	atomic_bridge._atomic_executors["script"] = disposable_executor
+	atomic_bridge._cache_atomic_executor_for_test("script", disposable_executor)
 	atomic_bridge._invalidate_atomic_executors()
 	if not disposable_executor.disposed or not disposable_executor.shutdown_called:
 		return _failure("AtomicBridge write invalidation should dispose and shutdown cached executors.")
-	if not atomic_bridge._atomic_executors.is_empty():
+	if atomic_bridge._get_cached_atomic_executor_count_for_test() != 0:
 		return _failure("AtomicBridge write invalidation should clear all cached executors.")
 	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
 	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
