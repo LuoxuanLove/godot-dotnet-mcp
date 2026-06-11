@@ -5,6 +5,8 @@ extends RefCounted
 const ToolsApiServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
 const ToolsApiServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service_context.gd")
 
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -96,6 +98,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tools API service did not expose tool groups.")
 	if not ((tools as Array)[0] as Dictionary).has("groupPath"):
 		return _failure("Tools API service should enrich flat tools with non-breaking groupPath metadata.")
+	for tool_entry in tools:
+		if not _tool_advertises_json_schema_2020_12(tool_entry, "inputSchema"):
+			return _failure("Tools API service should advertise JSON Schema 2020-12 on inputSchema.")
+		if not _tool_advertises_json_schema_2020_12(tool_entry, "outputSchema"):
+			return _failure("Tools API service should advertise JSON Schema 2020-12 on outputSchema.")
 	var tool_loader_status = response.get("tool_loader_status", {})
 	if not (tool_loader_status is Dictionary) or str((tool_loader_status as Dictionary).get("status", "")) != "ready":
 		return _failure("Tools API service did not preserve the loader status snapshot.")
@@ -123,3 +130,10 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _tool_advertises_json_schema_2020_12(tool_entry, key: String) -> bool:
+	if not (tool_entry is Dictionary):
+		return false
+	var schema = (tool_entry as Dictionary).get(key, {})
+	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI

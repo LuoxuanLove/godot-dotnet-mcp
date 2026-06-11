@@ -4,6 +4,8 @@ extends RefCounted
 
 const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const ToolCatalogSearchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
+
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
@@ -448,7 +450,11 @@ func _assert_real_loader_snapshot_and_search(loader) -> Dictionary:
 	var material_input_schema: Dictionary = material_match.get("input_schema", {})
 	if material_input_schema.is_empty():
 		return _assertion_failure("Real loader catalog search should include input_schema when requested.")
+	if str(material_input_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _assertion_failure("Real loader catalog search should advertise JSON Schema 2020-12 on input_schema.")
 	var material_output_schema: Dictionary = material_match.get("output_schema", {})
+	if str(material_output_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _assertion_failure("Real loader catalog search should advertise JSON Schema 2020-12 on output_schema.")
 	if not ((material_output_schema.get("required", []) as Array).has("success")):
 		return _assertion_failure("Real loader catalog search should synthesize the default output schema.")
 	if JSON.stringify(material_input_schema) == JSON.stringify(material_output_schema):

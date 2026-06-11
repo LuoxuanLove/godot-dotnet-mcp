@@ -4,6 +4,8 @@ extends RefCounted
 
 const ToolCatalogSearchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
 
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -384,7 +386,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("include_schema=true should preserve the full input schema.")
 	if not (visible_matches[0] as Dictionary).has("output_schema"):
 		return _failure("include_schema=true should preserve the output schema.")
+	var input_schema: Dictionary = (visible_matches[0] as Dictionary).get("input_schema", {})
+	if str(input_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("include_schema=true should advertise JSON Schema 2020-12 on input_schema.")
 	var output_schema: Dictionary = (visible_matches[0] as Dictionary).get("output_schema", {})
+	if str(output_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("include_schema=true should advertise JSON Schema 2020-12 on output_schema.")
 	if not ((output_schema.get("required", []) as Array).has("data")):
 		return _failure("Catalog search should preserve explicit output schema requirements.")
 	if not ((visible_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
