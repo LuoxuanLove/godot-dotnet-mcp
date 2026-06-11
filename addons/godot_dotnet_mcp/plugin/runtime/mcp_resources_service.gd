@@ -5,6 +5,7 @@ class_name MCPResourcesService
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
@@ -67,7 +68,7 @@ func dispose() -> void:
 
 
 func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
-	return {
+	var result := {
 		"resources": [{
 			"uri": GUIDES_INDEX_URI,
 			"name": _text("mcp_resource_guides_index_name", "Guide index"),
@@ -140,10 +141,14 @@ func build_resources_list_result(_params: Dictionary = {}) -> Dictionary:
 			"mimeType": "application/json"
 		}]
 	}
+	for index in range((result.get("resources", []) as Array).size()):
+		var resource := (result["resources"] as Array)[index] as Dictionary
+		(result["resources"] as Array)[index] = _with_catalog_metadata(resource, _resource_icon_for_uri(str(resource.get("uri", ""))))
+	return result
 
 
 func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionary:
-	return {
+	var result := {
 		"resourceTemplates": [{
 			"uriTemplate": ACTIVITY_CALL_TEMPLATE_URI,
 			"name": _text("mcp_resource_template_activity_call_name", "Activity call"),
@@ -166,6 +171,10 @@ func build_resource_templates_list_result(_params: Dictionary = {}) -> Dictionar
 			"mimeType": "text/plain"
 		}]
 	}
+	for index in range((result.get("resourceTemplates", []) as Array).size()):
+		var template := (result["resourceTemplates"] as Array)[index] as Dictionary
+		(result["resourceTemplates"] as Array)[index] = _with_catalog_metadata(template, _resource_template_icon_for_uri(str(template.get("uriTemplate", ""))))
+	return result
 
 
 func build_resources_read_result(params: Dictionary) -> Dictionary:
@@ -436,23 +445,24 @@ func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
 		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
-	var exposed_tools = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = loader.get_all_tools_by_category()
-	elif loader.has_method("get_tools_by_category"):
-		all_tools_by_category = loader.get_tools_by_category()
-	var domain_states := []
-	if loader.has_method("get_domain_states"):
-		domain_states = loader.get_domain_states()
-	var presentation = ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+	var snapshot: Dictionary = ToolCatalogSnapshotServiceScript.build_snapshot(loader)
+	if not bool(snapshot.get("success", false)):
+		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var category_states: Array = snapshot.get("category_states", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	var loader_status: Dictionary = snapshot.get("tool_loader_status", {})
+	if loader_status.is_empty():
+		loader_status = _get_loader_status_safe()
+	var public_catalog_manifest := ToolCatalogSnapshotServiceScript.build_public_catalog_manifest(snapshot.get("catalog_manifest", {}))
 	return {
 		"tools": ToolPresentationServiceScript.build_mcp_tool_list(exposed_tools, presentation),
-		"domain_states": domain_states,
+		"domain_states": category_states,
 		"presentationVersion": int(presentation.get("presentationVersion", 1)),
 		"toolTree": presentation.get("toolTree", []),
 		"toolGroups": presentation.get("toolGroups", []),
-		"toolLoaderStatus": _get_loader_status_safe()
+		"toolLoaderStatus": loader_status,
+		"catalogManifest": public_catalog_manifest
 	}
 
 
@@ -714,6 +724,76 @@ func _text(key: String, fallback: String) -> String:
 	if text == key or text.is_empty():
 		return fallback
 	return text
+
+
+func _with_catalog_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
+	var metadata := entry.duplicate(true)
+	var name := str(metadata.get("name", ""))
+	if not name.is_empty():
+		metadata["title"] = name
+	metadata["icons"] = [_icon_metadata(icon_name)]
+	return metadata
+
+
+func _icon_metadata(name: String) -> Dictionary:
+	return {
+		"src": _icon_data_uri(name),
+		"mimeType": "image/svg+xml",
+		"sizes": ["any"]
+	}
+
+
+func _icon_data_uri(name: String) -> String:
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><title>%s</title><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\"/></svg>" % name.xml_escape()
+	return "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64(svg.to_utf8_buffer())
+
+
+func _resource_icon_for_uri(uri: String) -> String:
+	match uri:
+		GUIDES_INDEX_URI:
+			return "book-open"
+		GUIDES_CAPABILITIES_URI:
+			return "list-checks"
+		GUIDES_UI_AUTOMATION_URI:
+			return "mouse-pointer-click"
+		STATE_PROJECT_SUMMARY_URI:
+			return "folder-kanban"
+		STATE_EDITOR_URI:
+			return "panel-top"
+		EDITOR_LOG_OUTPUT_URI:
+			return "scroll-text"
+		EDITOR_LOG_ERRORS_URI:
+			return "triangle-alert"
+		ACTIVITY_STATUS_URI:
+			return "activity"
+		ACTIVITY_RECENT_URI:
+			return "history"
+		TOOLS_CATALOG_EXPOSED_URI:
+			return "wrench"
+		TOOLS_CATALOG_VISIBLE_URI:
+			return "layout-list"
+		PROJECT_INFO_URI:
+			return "info"
+		DIAGNOSTICS_SUMMARY_URI:
+			return "stethoscope"
+		TOOL_CATALOG_URI:
+			return "boxes"
+		_:
+			return "file"
+
+
+func _resource_template_icon_for_uri(uri_template: String) -> String:
+	match uri_template:
+		ACTIVITY_CALL_TEMPLATE_URI:
+			return "activity"
+		SCENE_TEMPLATE_URI:
+			return "panel-top"
+		SCRIPT_TEMPLATE_URI:
+			return "file-code"
+		RESOURCE_TEMPLATE_URI:
+			return "file-json"
+		_:
+			return "file"
 
 
 func _limit_text_output(text: String, max_byte_size: int) -> Dictionary:

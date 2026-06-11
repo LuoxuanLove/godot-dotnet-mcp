@@ -35,6 +35,7 @@ const DEBUG_TRIAGE_PROMPT := "godot.debug_triage"
 const REFERENCE_INTEGRITY_PROMPT := "godot.reference_integrity"
 const RUNTIME_VALIDATION_PROMPT := "godot.runtime_validation"
 const EDITOR_UI_CONTROL_PROMPT := "godot.editor_ui_control"
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 
 var _server = null
 var _temp_paths: Array[String] = []
@@ -87,6 +88,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary):
 		return _failure("initialize should return a result object.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("initialize should advertise the MCP 2025-11-25 protocol version.")
+	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
+	if not (server_info is Dictionary):
+		return _failure("initialize should expose serverInfo as an object.")
+	if str((server_info as Dictionary).get("name", "")) != ProtocolFactsScript.get_server_name():
+		return _failure("initialize serverInfo should include the protocol facts server name.")
+	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("initialize serverInfo should include the protocol facts server description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")
@@ -141,9 +151,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]:
 		if not _has_resource(resources, expected_resource):
 			return _failure("resources/list should expose canonical v1.4 resource: %s" % expected_resource)
+	for resource in resources as Array:
+		if not _has_display_metadata(resource):
+			return _failure("resources/list should expose 2025-11-25 title/icons metadata for every resource.")
 	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
 	if str(project_info_metadata.get("name", "")) != "项目信息":
 		return _failure("resources/list should localize resource metadata through the active locale.")
+	if str(project_info_metadata.get("title", "")) != str(project_info_metadata.get("name", "")):
+		return _failure("resources/list should mirror localized resource names into title metadata.")
 	if str(project_info_metadata.get("description", "")).find("工具加载器状态") == -1:
 		return _failure("resources/list should localize resource descriptions through the active locale.")
 
@@ -157,9 +172,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_template in [ACTIVITY_CALL_TEMPLATE_URI, "godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
 		if not _has_template(templates, expected_template):
 			return _failure("resources/templates/list should expose template: %s" % expected_template)
+	for template in templates as Array:
+		if not _has_display_metadata(template):
+			return _failure("resources/templates/list should expose 2025-11-25 title/icons metadata for every template.")
 	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
 	if str(scene_template_metadata.get("name", "")) != "场景文本":
 		return _failure("resources/templates/list should localize template names through the active locale.")
+	if str(scene_template_metadata.get("title", "")) != str(scene_template_metadata.get("name", "")):
+		return _failure("resources/templates/list should mirror localized template names into title metadata.")
 	var activity_template_metadata := _find_template(templates, ACTIVITY_CALL_TEMPLATE_URI)
 	if str(activity_template_metadata.get("name", "")) != "活动调用":
 		return _failure("resources/templates/list should localize canonical activity call template names.")
@@ -290,6 +310,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
+	if not _all_tools_advertise_json_schema_2020_12(tool_catalog_payload.get("tools", [])):
+		return _failure("tool catalog resource should advertise JSON Schema 2020-12 on tool schemas.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
 			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
@@ -300,6 +322,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree") or exposed_tool_catalog_payload.has("domain_states"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
+	if not _all_tools_advertise_json_schema_2020_12(exposed_tool_catalog_payload.get("tools", [])):
+		return _failure("exposed tool catalog should advertise JSON Schema 2020-12 on tool schemas.")
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
 			return _failure("exposed tool catalog should not expose removed public tool %s." % removed_tool_name)
@@ -309,6 +333,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visible_tool_catalog_payload: Dictionary = visible_tool_catalog.get("payload", {})
 	if not (visible_tool_catalog_payload.get("toolTree", []) is Array) or not (visible_tool_catalog_payload.get("toolGroups", []) is Array):
 		return _failure("visible tool catalog should include tree and group presentation metadata.")
+	var visible_catalog_manifest = visible_tool_catalog_payload.get("catalogManifest", {})
+	if not (visible_catalog_manifest is Dictionary) or int((visible_catalog_manifest as Dictionary).get("removed_public_tool_count", 0)) < 1:
+		return _failure("visible tool catalog should expose canonical catalog manifest metadata.")
+	if (visible_catalog_manifest as Dictionary).has("removed_public_tools"):
+		return _failure("visible tool catalog manifest should not expose removed public tool names.")
 	if not (visible_tool_catalog_payload.get("domain_states", []) is Array):
 		return _failure("visible tool catalog should expose raw domain_states promised by its resource metadata.")
 	var system_domain_state := _find_domain_state(visible_tool_catalog_payload.get("domain_states", []), "system")
@@ -392,6 +421,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var prompt_metadata := _find_prompt(prompts, expected_prompt)
 		if str(prompt_metadata.get("description", "")).length() < 40:
 			return _failure("prompts/list should describe when and why to use prompt: %s" % expected_prompt)
+		if not _has_icon_metadata(prompt_metadata):
+			return _failure("prompts/list should expose 2025-11-25 icons metadata for prompt: %s" % expected_prompt)
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
 	var orientation_metadata := _find_prompt(prompts, PROJECT_ORIENTATION_PROMPT)
@@ -589,6 +620,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_recent_tool := str(((stdio_recent as Array)[0] as Dictionary).get("tool", ""))
 	if stdio_recent_tool != "system_project_state":
 		return _failure("stdio activity resources should preserve the stdio tool call record.")
+	var stdio_tools_list_response: Dictionary = stdio_server._handle_tools_list(25)
+	var stdio_tools = (stdio_tools_list_response.get("result", {}) as Dictionary).get("tools", [])
+	if not (stdio_tools is Array) or (stdio_tools as Array).is_empty():
+		return _failure("stdio tools/list should expose tools for schema dialect verification.")
+	if not _all_tools_advertise_json_schema_2020_12(stdio_tools):
+		return _failure("stdio tools/list should advertise JSON Schema 2020-12 on tool schemas.")
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",
@@ -809,6 +846,38 @@ func _find_prompt(prompts, name: String) -> Dictionary:
 	return {}
 
 
+func _has_display_metadata(entry) -> bool:
+	if not (entry is Dictionary):
+		return false
+	var metadata := entry as Dictionary
+	if str(metadata.get("title", "")).is_empty():
+		return false
+	return _has_icon_metadata(metadata)
+
+
+func _has_icon_metadata(entry: Dictionary) -> bool:
+	var icons = entry.get("icons", [])
+	if not (icons is Array) or (icons as Array).is_empty():
+		return false
+	for icon in icons as Array:
+		if not (icon is Dictionary):
+			return false
+		var icon_dict := icon as Dictionary
+		var src := str(icon_dict.get("src", ""))
+		if not src.begins_with("data:image/svg+xml;base64,"):
+			return false
+		if src.trim_prefix("data:image/svg+xml;base64,").strip_edges().is_empty():
+			return false
+		if src.find("%3Csvg") != -1:
+			return false
+		if str(icon_dict.get("mimeType", "")) != "image/svg+xml":
+			return false
+		var sizes = icon_dict.get("sizes", [])
+		if not (sizes is Array) or not (sizes as Array).has("any"):
+			return false
+	return true
+
+
 func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
 	var arguments = prompt.get("arguments", [])
 	if not (arguments is Array):
@@ -910,3 +979,21 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _all_tools_advertise_json_schema_2020_12(tools) -> bool:
+	if not (tools is Array) or (tools as Array).is_empty():
+		return false
+	for tool in tools:
+		if not _tool_advertises_json_schema_2020_12(tool, "inputSchema"):
+			return false
+		if not _tool_advertises_json_schema_2020_12(tool, "outputSchema"):
+			return false
+	return true
+
+
+func _tool_advertises_json_schema_2020_12(tool, key: String) -> bool:
+	if not (tool is Dictionary):
+		return false
+	var schema = (tool as Dictionary).get(key, {})
+	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI
