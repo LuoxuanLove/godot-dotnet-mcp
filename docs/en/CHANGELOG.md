@@ -42,6 +42,7 @@ Target version: 1.4.0.
 - Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
 - Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
 - Added a minimal `GET /mcp` Streamable HTTP SSE probe surface that requires `Accept: text/event-stream`, validates protocol-version headers, returns session/protocol response headers, and emits a small JSON-RPC notification event without using legacy endpoint discovery.
+- Added SSE cursor metadata to the `GET /mcp` probe, including event ids, retry hints, `Last-Event-ID` CORS allowance, and a resume cursor echo for Streamable HTTP clients.
 - Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
 - Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
 - Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.

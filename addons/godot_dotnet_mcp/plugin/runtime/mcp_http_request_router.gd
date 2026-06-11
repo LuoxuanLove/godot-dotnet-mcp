@@ -4,8 +4,9 @@ class_name MCPHttpRequestRouter
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
-const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id"
+const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
 const SESSION_ID_PREFIX := "godot-dotnet-mcp-http"
+const SSE_RETRY_MS := 1000
 
 var _handle_mcp_request_async := Callable()
 var _build_health_response := Callable()
@@ -82,7 +83,7 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		var sse_guard := _validate_mcp_sse_headers(normalized_headers)
 		if not sse_guard.is_empty():
 			return _attach_cors_headers(_attach_mcp_transport_headers(sse_guard, normalized_headers), origin, path)
-		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_probe_response(), normalized_headers), origin, path)
+		return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_sse_probe_response(normalized_headers), normalized_headers), origin, path)
 
 	if method == "GET" and path == "/health":
 		response = _call_dict(_build_health_response, [], {"status": "degraded", "error": "Health response builder is unavailable", "status_code": 500})
@@ -210,13 +211,30 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 	return {}
 
 
-func _build_mcp_sse_probe_response() -> Dictionary:
+func _build_mcp_sse_probe_response(headers: Dictionary) -> Dictionary:
+	var session_id := _resolve_mcp_session_id(headers)
+	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
+	var event_id := _build_sse_event_id(session_id)
+	var event_data := {
+		"jsonrpc": "2.0",
+		"method": "notifications/message",
+		"params": {
+			"level": "info",
+			"logger": "godot-dotnet-mcp.transport",
+			"data": {
+				"transport": "streamable_http",
+				"mode": "sse_probe",
+				"resume_from_event_id": last_event_id
+			}
+		}
+	}
 	return {
 		"status": 200,
-		"_raw_body": "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\",\"params\":{\"level\":\"info\",\"logger\":\"godot-dotnet-mcp.transport\",\"data\":{\"transport\":\"streamable_http\",\"mode\":\"sse_probe\"}}}\n\n",
+		"_raw_body": "id: %s\nretry: %d\nevent: message\ndata: %s\n\n" % [event_id, SSE_RETRY_MS, JSON.stringify(event_data)],
 		"_content_type": "text/event-stream; charset=utf-8",
+		"_mcp_session_id": session_id,
 		"_headers": {
-			"Cache-Control": "no-cache",
+			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no"
 		}
 	}
@@ -224,11 +242,14 @@ func _build_mcp_sse_probe_response() -> Dictionary:
 
 func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictionary) -> Dictionary:
 	var enriched := response.duplicate(true)
+	var response_session_id := str(enriched.get("_mcp_session_id", "")).strip_edges()
+	if enriched.has("_mcp_session_id"):
+		enriched.erase("_mcp_session_id")
 	var response_headers := {}
 	if enriched.has("_headers") and enriched["_headers"] is Dictionary:
 		response_headers = (enriched["_headers"] as Dictionary).duplicate(true)
 	response_headers["MCP-Protocol-Version"] = MCPProtocolFacts.get_protocol_version()
-	response_headers["Mcp-Session-Id"] = _resolve_mcp_session_id(request_headers)
+	response_headers["Mcp-Session-Id"] = response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
 	enriched["_headers"] = response_headers
 	return enriched
 
@@ -248,6 +269,21 @@ func _generate_mcp_session_id() -> String:
 		str(get_instance_id()),
 		str(randi())
 	]
+
+
+func _build_sse_event_id(session_id: String) -> String:
+	return "streamable-http-get-%s-%s-%s" % [
+		_sanitize_sse_token(session_id),
+		str(Time.get_ticks_usec()),
+		str(randi())
+	]
+
+
+func _sanitize_sse_token(value: String) -> String:
+	var sanitized := value.strip_edges()
+	if sanitized.is_empty():
+		return "anonymous"
+	return sanitized.replace("\r", "_").replace("\n", "_").replace(" ", "_").replace(":", "-")
 
 
 func _accepts_json_response(accept_header: String) -> bool:
