@@ -3,7 +3,7 @@ extends RefCounted
 class_name ToolPresentationService
 
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const PRESENTATION_VERSION := 1
 
@@ -13,8 +13,10 @@ static func build_tool_presentation(
 	all_tools_by_category: Dictionary,
 	domain_states: Array = [],
 	disabled_tools: Array = [],
-	domain_defs: Array = MCPToolManifest.TOOL_DOMAIN_DEFS
+	domain_defs: Array = []
 ) -> Dictionary:
+	if domain_defs.is_empty():
+		domain_defs = ToolCatalogManifest.get_domain_defs()
 	var tool_index := _build_tool_index(all_tools_by_category)
 	var exposed_lookup := _build_exposed_lookup(exposed_tools)
 	var disabled_lookup := _build_disabled_lookup(disabled_tools)
