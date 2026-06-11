@@ -174,6 +174,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should include stored replay events plus the current probe event for matched older cursors.")
 	if replay_body.find("\"replay_event_count\":1") == -1:
 		return _failure("HTTP request router should report the number of stored replay events after a matched older cursor.")
+	for index in range(40):
+		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-session-%02d" % index})
+	var evicted_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": first_sse_event_id})
+	var evicted_body := str(evicted_mcp_response.get("_raw_body", ""))
+	if evicted_body.find(second_sse_event_id) != -1:
+		return _failure("HTTP request router should evict old SSE sessions instead of replaying them after the global session bound is exceeded.")
+	if _count_sse_events(evicted_body) != 1:
+		return _failure("HTTP request router should keep only the current event for an evicted SSE resume cursor.")
+	if evicted_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report evicted SSE resume cursors as missing.")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
