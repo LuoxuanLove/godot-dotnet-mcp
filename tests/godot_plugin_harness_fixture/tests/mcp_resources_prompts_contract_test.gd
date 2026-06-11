@@ -4,6 +4,7 @@ extends RefCounted
 
 const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
+const JsonRpcMethodServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
@@ -98,16 +99,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
 		return _failure("initialize serverInfo should include the protocol facts server description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
-	if not (capabilities is Dictionary):
-		return _failure("initialize should expose capabilities as an object.")
-	if not ((capabilities as Dictionary).get("resources", {}) is Dictionary):
-		return _failure("initialize should advertise MCP resources capability.")
-	if not ((capabilities as Dictionary).get("prompts", {}) is Dictionary):
-		return _failure("initialize should advertise MCP prompts capability.")
-	if bool(((capabilities as Dictionary).get("resources", {}) as Dictionary).get("listChanged", true)):
-		return _failure("resources capability should declare listChanged=false for static built-ins.")
-	if bool(((capabilities as Dictionary).get("prompts", {}) as Dictionary).get("listChanged", true)):
-		return _failure("prompts capability should declare listChanged=false for static built-ins.")
+	var capability_failure := _validate_initialize_capabilities(capabilities, "initialize")
+	if not capability_failure.is_empty():
+		return _failure(capability_failure)
+	var fallback_method_service = JsonRpcMethodServiceScript.new()
+	var fallback_initialize := fallback_method_service.handle_initialize({}, 99)
+	var fallback_result = fallback_initialize.get("result", {})
+	if not (fallback_result is Dictionary):
+		return _failure("fallback initialize should return a result object.")
+	capability_failure = _validate_initialize_capabilities((fallback_result as Dictionary).get("capabilities", {}), "fallback initialize")
+	if not capability_failure.is_empty():
+		return _failure(capability_failure)
 
 	var resources_response: Dictionary = await _json_rpc("resources/list", {}, 2)
 	var resources_result = resources_response.get("result", {})
@@ -862,6 +864,34 @@ func _has_icon_metadata(entry: Dictionary) -> bool:
 		if not (sizes is Array) or not (sizes as Array).has("any"):
 			return false
 	return true
+
+
+func _validate_initialize_capabilities(capabilities, label: String) -> String:
+	if not (capabilities is Dictionary):
+		return "%s should expose capabilities as an object." % label
+	for capability_name in (capabilities as Dictionary).keys():
+		if not ["tools", "resources", "prompts"].has(str(capability_name)):
+			return "%s should only advertise implemented top-level MCP capabilities, got: %s" % [label, str(capability_name)]
+	if not ((capabilities as Dictionary).get("resources", {}) is Dictionary):
+		return "%s should advertise MCP resources capability." % label
+	if not ((capabilities as Dictionary).get("prompts", {}) is Dictionary):
+		return "%s should advertise MCP prompts capability." % label
+	var resources_capability := (capabilities as Dictionary).get("resources", {}) as Dictionary
+	var prompts_capability := (capabilities as Dictionary).get("prompts", {}) as Dictionary
+	for capability_field in resources_capability.keys():
+		if str(capability_field) != "listChanged":
+			return "%s resources capability should not advertise unsupported optional field: %s" % [label, str(capability_field)]
+	for capability_field in prompts_capability.keys():
+		if str(capability_field) != "listChanged":
+			return "%s prompts capability should not advertise unsupported optional field: %s" % [label, str(capability_field)]
+	if bool(resources_capability.get("listChanged", true)):
+		return "%s resources capability should declare listChanged=false for static built-ins." % label
+	if bool(prompts_capability.get("listChanged", true)):
+		return "%s prompts capability should declare listChanged=false for static built-ins." % label
+	for optional_capability in ["sampling", "elicitation", "tasks"]:
+		if (capabilities as Dictionary).has(optional_capability):
+			return "%s should not advertise optional MCP 2025-11-25 capability before implementation: %s" % [label, optional_capability]
+	return ""
 
 
 func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
