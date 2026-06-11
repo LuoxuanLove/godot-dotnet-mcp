@@ -473,11 +473,10 @@ func _accepts_sse_response(accept_header: String) -> bool:
 	if normalized.is_empty():
 		return false
 	for raw_part in normalized.split(",", false):
-		var media_range := str(raw_part).strip_edges()
-		var semicolon := media_range.find(";")
-		if semicolon != -1:
-			media_range = media_range.substr(0, semicolon).strip_edges()
-		if media_range == "text/event-stream":
+		var parsed := _parse_accept_part(str(raw_part))
+		var media_range := str(parsed.get("media_range", ""))
+		var quality := float(parsed.get("q", 1.0))
+		if media_range == "text/event-stream" and quality > 0.0:
 			return true
 	return false
 
