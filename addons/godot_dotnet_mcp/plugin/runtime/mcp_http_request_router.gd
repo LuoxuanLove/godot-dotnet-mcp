@@ -94,6 +94,8 @@ func route_request_async(method: String, path: String, request_body: String, hea
 		if not transport_guard.is_empty():
 			return _attach_cors_headers(_attach_mcp_transport_headers(transport_guard, normalized_headers), origin, path)
 		response = await _call_async(_handle_mcp_request_async, [request_body], {"error": "MCP request handler is unavailable", "status": 500})
+		if _prefers_sse_response(str(normalized_headers.get("accept", ""))) and _is_json_rpc_message(response):
+			return _attach_cors_headers(_attach_mcp_transport_headers(_build_mcp_post_sse_response(normalized_headers, response), normalized_headers), origin, path)
 		return _attach_cors_headers(_attach_mcp_transport_headers(response, normalized_headers), origin, path)
 
 	if method == "GET" and path == "/mcp":
@@ -273,6 +275,29 @@ func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	}
 
 
+func _build_mcp_post_sse_response(headers: Dictionary, json_rpc_response: Dictionary) -> Dictionary:
+	var session_id := _resolve_mcp_session_id(headers)
+	var event_id := "streamable-http-post-%s-%s" % [
+		_sanitize_sse_token(session_id),
+		str(Time.get_ticks_usec())
+	]
+	return {
+		"status": 200,
+		"_raw_body": _format_sse_events([{
+			"id": event_id,
+			"event": "message",
+			"retry": MCPHttpSseEventQueueScript.SSE_RETRY_MS,
+			"data": json_rpc_response.duplicate(true)
+		}]),
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_mcp_session_id": session_id,
+		"_headers": {
+			"Cache-Control": "no-cache, no-transform",
+			"X-Accel-Buffering": "no"
+		}
+	}
+
+
 func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictionary:
 	var resume_status := _sse_resume_status(session_id, last_event_id)
 	return _append_sse_event(session_id, {
@@ -400,15 +425,47 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 	var accepts_json := false
 	var accepts_sse := false
 	for raw_part in normalized.split(",", false):
-		var media_range := str(raw_part).strip_edges()
-		var semicolon := media_range.find(";")
-		if semicolon != -1:
-			media_range = media_range.substr(0, semicolon).strip_edges()
+		var parsed := _parse_accept_part(str(raw_part))
+		var media_range := str(parsed.get("media_range", ""))
+		var quality := float(parsed.get("q", 1.0))
+		if quality <= 0.0:
+			continue
 		if media_range == "application/json":
 			accepts_json = true
 		elif media_range == "text/event-stream":
 			accepts_sse = true
 	return accepts_json and accepts_sse
+
+
+func _prefers_sse_response(accept_header: String) -> bool:
+	var json_q := -1.0
+	var sse_q := -1.0
+	for raw_part in accept_header.split(",", false):
+		var parsed := _parse_accept_part(str(raw_part))
+		var media_range := str(parsed.get("media_range", ""))
+		var quality := float(parsed.get("q", 1.0))
+		if media_range == "text/event-stream":
+			sse_q = max(sse_q, quality)
+		elif media_range == "application/json":
+			json_q = max(json_q, quality)
+	return sse_q > json_q and sse_q > 0.0
+
+
+func _parse_accept_part(raw_part: String) -> Dictionary:
+	var parts := raw_part.strip_edges().to_lower().split(";", false)
+	var media_range := str(parts[0]).strip_edges() if parts.size() > 0 else ""
+	var quality := 1.0
+	for index in range(1, parts.size()):
+		var parameter := str(parts[index]).strip_edges()
+		if not parameter.begins_with("q="):
+			continue
+		var q_text := parameter.substr(2).strip_edges()
+		if q_text.is_valid_float():
+			quality = clamp(float(q_text), 0.0, 1.0)
+	return {
+		"media_range": media_range,
+		"q": quality
+	}
 
 
 func _accepts_sse_response(accept_header: String) -> bool:
@@ -423,6 +480,17 @@ func _accepts_sse_response(accept_header: String) -> bool:
 		if media_range == "text/event-stream":
 			return true
 	return false
+
+
+func _is_json_rpc_message(value: Dictionary) -> bool:
+	return str(value.get("jsonrpc", "")) == "2.0" and (value.has("result") or value.has("error"))
+
+
+func _sanitize_sse_token(value: String) -> String:
+	var sanitized := value.strip_edges()
+	if sanitized.is_empty():
+		return "anonymous"
+	return sanitized.replace("\r", "_").replace("\n", "_").replace(" ", "_").replace(":", "-")
 
 
 func _is_origin_allowed(origin: String) -> bool:

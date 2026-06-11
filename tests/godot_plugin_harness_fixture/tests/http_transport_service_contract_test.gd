@@ -24,6 +24,7 @@ var _last_body := ""
 var _last_headers: Dictionary = {}
 var _last_no_body := false
 var _last_response: Dictionary = {}
+var _written_responses: Array[Dictionary] = []
 var _sse_event_bodies: Array[String] = []
 var _queued_sse_events: Array[Dictionary] = []
 var _queued_sse_next_index := 0
@@ -171,6 +172,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var sse_stream_check: Dictionary = await _run_sse_stream_lifecycle_contract(tree)
 	if not bool(sse_stream_check.get("success", false)):
 		return sse_stream_check
+
+	var finite_post_sse_check: Dictionary = await _run_finite_post_sse_response_contract(tree)
+	if not bool(finite_post_sse_check.get("success", false)):
+		return finite_post_sse_check
 
 	var sse_bounded_cursor_check: Dictionary = _run_sse_event_queue_bounded_cursor_contract()
 	if not bool(sse_bounded_cursor_check.get("success", false)):
@@ -498,6 +503,95 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	return {"success": true, "error": ""}
 
 
+func _run_finite_post_sse_response_contract(tree: SceneTree) -> Dictionary:
+	_reset_state()
+	var port := _pick_free_port(26470)
+	if port < 0:
+		return _failure("Could not reserve a TCP port for the finite POST SSE response contract server.")
+
+	var tcp_server := TCPServer.new()
+	if tcp_server.listen(port, "127.0.0.1") != OK:
+		return _failure("Failed to start the finite POST SSE response contract server.")
+
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+
+	var connection_state = HttpConnectionStateScript.new()
+	var decoder = HttpRequestDecoderScript.new()
+	var transport = HttpTransportServiceScript.new()
+	var context = HttpTransportContextScript.new()
+	context.log = Callable(self, "_log")
+	context.emit_client_connected = Callable(self, "_on_connected")
+	context.emit_client_disconnected = Callable(self, "_on_disconnected")
+	context.route_request_async = Callable(self, "_route_request_async")
+	context.write_http_response = Callable(self, "_write_response")
+	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
+	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
+	context.tick_loader = Callable(self, "_tick_loader")
+	transport.configure(connection_state, decoder, context)
+
+	var request_sent := false
+	for _i in range(80):
+		client.poll()
+		if not request_sent and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			var body := "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}"
+			var followup_body := "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"ping\"}"
+			var frame := (
+				"POST /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "Content-Type: application/json\r\n"
+				+ "Accept: application/json;q=0.1, text/event-stream;q=1.0\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: finite-post-sse\r\n"
+				+ "Content-Length: %d\r\n\r\n%s"
+			) % [body.to_utf8_buffer().size(), body]
+			var followup_frame := (
+				"POST /mcp HTTP/1.1\r\n"
+				+ "Host: localhost\r\n"
+				+ "Content-Type: application/json\r\n"
+				+ "Accept: application/json, text/event-stream\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: finite-post-sse\r\n"
+				+ "Content-Length: %d\r\n\r\n%s"
+			) % [followup_body.to_utf8_buffer().size(), followup_body]
+			client.put_data((frame + followup_frame).to_utf8_buffer())
+			request_sent = true
+		transport.process_frame(tcp_server, true, 0.016)
+		if _write_count >= 2:
+			break
+		await tree.process_frame
+
+	tcp_server.stop()
+
+	if _connected_count != 1:
+		return _failure("Finite POST SSE response transport should emit one client_connected event.")
+	if _write_count != 2:
+		return _failure("Finite POST SSE response transport should keep the connection drainable for pipelined follow-up requests.")
+	if _sse_open_count != 0 or _sse_heartbeat_count != 0 or _sse_event_write_count != 0:
+		return _failure("Finite POST SSE responses should use ordinary response writing, not long-lived SSE stream callbacks.")
+	if _routed_bodies.size() != 2:
+		return _failure("Finite POST SSE response transport should route both pipelined POST bodies.")
+	if _written_responses.is_empty() or str((_written_responses[0] as Dictionary).get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("Finite POST SSE response transport should write the first response as a raw SSE HTTP response.")
+	if str((_written_responses[0] as Dictionary).get("_raw_body", "")).find("\"id\":9") == -1:
+		return _failure("Finite POST SSE response transport should preserve the JSON-RPC response event body.")
+	if str(_last_response.get("body", "")) != "ok":
+		return _failure("Finite POST SSE response transport should write the follow-up JSON response after the SSE response.")
+	var stats: Dictionary = connection_state.get_connection_stats()
+	if int(stats.get("total_requests", 0)) != 2:
+		return _failure("Finite POST SSE response transport should count both pipelined POST requests.")
+	var client_sessions = stats.get("client_sessions", [])
+	if not (client_sessions is Array) or (client_sessions as Array).size() != 1:
+		return _failure("Finite POST SSE response transport should keep one active HTTP client session.")
+	var active_session: Dictionary = (client_sessions as Array)[0]
+	if str(active_session.get("transport_mode", "")) == "sse":
+		return _failure("Finite POST SSE responses must not mark the client as a long-lived SSE stream.")
+	client.disconnect_from_host()
+	return {"success": true, "error": ""}
+
+
 func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	var queue = HttpSseEventQueueScript.new()
 	for index in range(32):
@@ -651,6 +745,16 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 				"Mcp-Session-Id": "transport-sse-1"
 			}
 		}
+	if method == "POST" and path == "/mcp" and str(headers.get("accept", "")).find("text/event-stream;q=1.0") != -1:
+		return {
+			"status": 200,
+			"_content_type": "text/event-stream; charset=utf-8",
+			"_raw_body": "id: finite-post-sse-1\nretry: 1000\nevent: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":9,\"result\":{\"ok\":true}}\n\n",
+			"_headers": {
+				"MCP-Protocol-Version": "2025-11-25",
+				"Mcp-Session-Id": "finite-post-sse"
+			}
+		}
 	return {
 		"status": 200,
 		"body": "ok"
@@ -661,6 +765,7 @@ func _write_response(_client: StreamPeerTCP, _data: Dictionary, no_body: bool = 
 	_write_count += 1
 	_last_no_body = no_body
 	_last_response = _data.duplicate(true)
+	_written_responses.append(_data.duplicate(true))
 	return true
 
 
@@ -731,6 +836,7 @@ func _reset_state() -> void:
 	_last_headers = {}
 	_last_no_body = false
 	_last_response = {}
+	_written_responses = []
 	_sse_event_bodies = []
 	_queued_sse_events = []
 	_queued_sse_next_index = 0
