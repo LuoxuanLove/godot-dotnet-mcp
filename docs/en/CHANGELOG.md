@@ -78,6 +78,7 @@ Target version: 1.4.0.
 - Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
 - Split AtomicBridge write-policy, path-reference, and issue helpers into a dedicated support service while keeping the bridge facade API stable.
 - Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
+- Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Extended protocol facts parity coverage to include the server description used by initialize metadata.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
