@@ -46,12 +46,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"enabled": true,
 			"inputSchema": {"type": "object", "properties": {}}
 		}, {
-			"name": "runtime_control",
-			"full_name": "system_runtime_control",
-			"category": "system",
-			"enabled": true,
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
-			"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
+		"name": "runtime_control",
+		"full_name": "system_runtime_control",
+		"description": "Control runtime sessions",
+		"title": "Runtime Control",
+		"icons": [{"src": "codicon:play", "mimeType": "image/svg+xml"}],
+		"category": "system",
+		"enabled": true,
+		"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["status", "enable", "disable"]}}},
+		"outputSchema": {"type": "object", "required": ["success"], "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}, {
 			"name": "editor_evidence",
 			"full_name": "system_editor_evidence",
@@ -131,6 +134,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var metadata: Dictionary = presentation.get("toolMetadataByName", {})
 	if not metadata.has("system_project_state"):
 		return _failure("Presentation service should index metadata by full tool name.")
+	var runtime_metadata: Dictionary = metadata.get("system_runtime_control", {})
+	if runtime_metadata.is_empty():
+		return _failure("Presentation service should index runtime control metadata by full tool name.")
+	if str(runtime_metadata.get("description", "")) != "Control runtime sessions":
+		return _failure("Presentation metadata should preserve tool descriptions for UI consumers.")
+	if str(runtime_metadata.get("title", "")) != "Runtime Control":
+		return _failure("Presentation metadata should preserve tool titles for UI consumers.")
+	var metadata_icons = runtime_metadata.get("icons", [])
+	if not (metadata_icons is Array) or (metadata_icons as Array).is_empty():
+		return _failure("Presentation metadata should preserve tool icons for UI consumers.")
+	var runtime_metadata_annotations = runtime_metadata.get("annotations", {})
+	if not (runtime_metadata_annotations is Dictionary) or str((runtime_metadata_annotations as Dictionary).get("title", "")) != "Runtime Control":
+		return _failure("Presentation metadata should preserve MCP annotations for UI consumers.")
+	if bool((runtime_metadata_annotations as Dictionary).get("readOnlyHint", true)):
+		return _failure("Presentation metadata should preserve behavior annotation hints.")
+	var runtime_metadata_input_schema = runtime_metadata.get("inputSchema", {})
+	if not (runtime_metadata_input_schema is Dictionary) or str((runtime_metadata_input_schema as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation metadata should preserve normalized input schemas.")
+	var runtime_metadata_output_schema = runtime_metadata.get("outputSchema", {})
+	if not (runtime_metadata_output_schema is Dictionary) or str((runtime_metadata_output_schema as Dictionary).get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("Presentation metadata should preserve normalized output schemas.")
 	var enriched := ToolPresentationService.enrich_tools_for_presentation(exposed_tools, presentation)
 	if enriched.is_empty() or not (enriched[0] as Dictionary).has("groupPath"):
 		return _failure("Presentation service should add non-breaking groupPath metadata to flat tools.")

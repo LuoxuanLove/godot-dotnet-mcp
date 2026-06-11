@@ -43,6 +43,7 @@ const SENSITIVE_TEXT_KEYS := [
 const URL_SCHEME_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
 const URL_SCHEME_FIRST_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const MAX_RESOURCE_TEXT_BYTES := 524288
+const MAX_BUILTIN_JSON_RESOURCE_TEXT_BYTES := 2097152
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -207,7 +208,7 @@ func build_resources_read_result(params: Dictionary) -> Dictionary:
 		DIAGNOSTICS_SUMMARY_URI:
 			return _build_text_resource(uri, _build_diagnostics_summary_payload(), "application/json")
 		TOOL_CATALOG_URI:
-			return _build_text_resource(uri, _build_tool_catalog_payload(), "application/json")
+			return _build_text_resource(uri, _build_exposed_tool_catalog_payload(), "application/json")
 		_:
 			if uri.begins_with(ACTIVITY_CALL_URI_PREFIX):
 				return _build_text_resource(uri, _build_activity_call_payload(uri.substr(ACTIVITY_CALL_URI_PREFIX.length())), "application/json")
@@ -224,14 +225,15 @@ func build_server_capabilities() -> Dictionary:
 
 func _build_text_resource(uri: String, payload, mime_type: String) -> Dictionary:
 	var text := JSON.stringify(_sanitize(payload)) if mime_type == "application/json" else str(payload)
-	var limited := _limit_text_output(text, MAX_RESOURCE_TEXT_BYTES)
+	var max_text_bytes := MAX_BUILTIN_JSON_RESOURCE_TEXT_BYTES if mime_type == "application/json" else MAX_RESOURCE_TEXT_BYTES
+	var limited := _limit_text_output(text, max_text_bytes)
 	var returned_text := str(limited.get("text", ""))
 	if mime_type == "application/json" and bool(limited.get("truncated", false)):
 		returned_text = JSON.stringify({
 			"truncated": true,
 			"originalByteSize": int(limited.get("original_byte_size", 0)),
 			"returnedByteSize": returned_text.to_utf8_buffer().size(),
-			"maxByteSize": int(limited.get("max_byte_size", MAX_RESOURCE_TEXT_BYTES)),
+			"maxByteSize": int(limited.get("max_byte_size", max_text_bytes)),
 			"message": "JSON resource output exceeded the byte limit."
 		})
 	var content := {

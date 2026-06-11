@@ -257,6 +257,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock snapshot metadata should preserve groupPath, loadState, and source.")
 	if str(project_metadata.get("scriptPath", "")).is_empty():
 		return _failure("Dock snapshot metadata should preserve scriptPath.")
+	if str(project_metadata.get("title", "")) != "System Project State":
+		return _failure("Dock snapshot metadata should preserve presentation titles for Tools UI consumers.")
+	var project_annotations = project_metadata.get("annotations", {})
+	if not (project_annotations is Dictionary) or bool((project_annotations as Dictionary).get("readOnlyHint", false)) != true:
+		return _failure("Dock snapshot metadata should preserve MCP annotations for Tools UI consumers.")
+	var project_input_schema = project_metadata.get("inputSchema", {})
+	if not (project_input_schema is Dictionary) or str((project_input_schema as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Dock snapshot metadata should preserve normalized input schemas for Tools UI consumers.")
+	var project_output_schema = project_metadata.get("outputSchema", {})
+	if not (project_output_schema is Dictionary) or str((project_output_schema as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Dock snapshot metadata should preserve normalized output schemas for Tools UI consumers.")
 	if metadata_by_name.has("system_tool_activity"):
 		return _failure("Dock presentation should filter removed public tools through the snapshot service.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
