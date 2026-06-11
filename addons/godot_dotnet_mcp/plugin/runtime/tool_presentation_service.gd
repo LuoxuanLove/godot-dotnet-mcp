@@ -3,6 +3,7 @@ extends RefCounted
 class_name ToolPresentationService
 
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
+const ToolAnnotationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_annotation_service.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const PRESENTATION_VERSION := 1
@@ -139,7 +140,8 @@ static func build_mcp_tool_list(tools: Array, _presentation: Dictionary = {}) ->
 			"name": tool.get("name", ""),
 			"description": tool.get("description", ""),
 			"inputSchema": build_tool_input_schema(tool),
-			"outputSchema": build_tool_output_schema(tool)
+			"outputSchema": build_tool_output_schema(tool),
+			"annotations": ToolAnnotationService.build_annotations(tool)
 		}
 		tools_list.append(item)
 	return tools_list
