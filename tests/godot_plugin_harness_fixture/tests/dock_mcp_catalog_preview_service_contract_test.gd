@@ -30,6 +30,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var prompt_error: Dictionary = service.build_preview("prompt", "godot.debug_triage", {"include_runtime": "maybe"})
 	if bool(prompt_error.get("success", true)) or not str(prompt_error.get("error", "")).contains("true") or not str(prompt_error.get("error", "")).contains("false"):
 		return _failure("Prompt previews should preserve prompts/get argument type validation errors.")
+	var non_string_prompt_error: Dictionary = service.build_preview("prompt", "godot.debug_triage", {"include_runtime": []})
+	if bool(non_string_prompt_error.get("success", true)) or not str(non_string_prompt_error.get("error", "")).contains("string"):
+		return _failure("Prompt previews should pass non-string values through prompts/get validation instead of stringifying them.")
 
 	return {"name": "dock_mcp_catalog_preview_service_contracts", "success": true, "error": ""}
 

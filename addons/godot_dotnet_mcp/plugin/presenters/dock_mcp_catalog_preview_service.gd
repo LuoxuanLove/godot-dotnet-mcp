@@ -107,10 +107,18 @@ func _compact_arguments(arguments: Dictionary) -> Dictionary:
 	var compacted := {}
 	for key in arguments.keys():
 		var name := str(key).strip_edges()
-		var value := str(arguments.get(key, "")).strip_edges()
-		if name.is_empty() or value.is_empty():
+		if name.is_empty():
 			continue
-		compacted[name] = value
+		var raw_value = arguments.get(key)
+		if raw_value is String:
+			var value := str(raw_value).strip_edges()
+			if value.is_empty():
+				continue
+			compacted[name] = value
+			continue
+		if raw_value == null:
+			continue
+		compacted[name] = raw_value
 	return compacted
 
 
