@@ -121,6 +121,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			if localization.get_text_for(locale_code, key) == key:
 				return _failure("All supported locales should resolve visible Tools-page key: %s" % key)
 	for key in [
+		"tab_resources",
+		"tab_prompts",
+		"mcp_resources_title",
+		"mcp_resources_description",
+		"mcp_resources_counts",
+		"mcp_prompts_title",
+		"mcp_prompts_description",
+		"mcp_prompts_counts",
+		"mcp_catalog_resources",
+		"mcp_catalog_resource_templates",
+		"mcp_catalog_prompts",
+		"mcp_catalog_empty",
+		"mcp_catalog_copy_id",
+		"mcp_catalog_kind",
+		"mcp_catalog_mime_type",
+		"mcp_catalog_arguments",
+	]:
+		for locale_code in supported_locale_codes:
+			if localization.get_text_for(locale_code, key) == key:
+				return _failure("All supported locales should resolve visible MCP catalog key: %s" % key)
+	for key in [
 		"tab_settings",
 		"settings_general_title",
 		"settings_updates_title",

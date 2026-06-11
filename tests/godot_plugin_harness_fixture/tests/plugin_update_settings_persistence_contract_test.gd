@@ -93,7 +93,7 @@ class SyncStartProbePlugin extends PluginScript:
 
 
 class CurrentTabProbeDock extends Control:
-	var current_tab := 3
+	var current_tab := 5
 	var apply_model_count := 0
 
 	func get_current_tab() -> int:
@@ -323,9 +323,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var focus_restore_probe := FocusRestoreProbePlugin.new()
 	focus_restore_probe._state.current_tab = 0
-	focus_restore_probe._state.settings["_pending_focus_snapshot"] = {"tab_index": 3, "focus_path": ""}
+	focus_restore_probe._state.settings["_pending_focus_snapshot"] = {"tab_index": 5, "focus_path": ""}
 	focus_restore_probe._restore_pending_focus_snapshot_if_needed()
-	if focus_restore_probe._state.current_tab != 3 or focus_restore_probe.discovery_request_count != 1 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
+	if focus_restore_probe._state.current_tab != 5 or focus_restore_probe.discovery_request_count != 1 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
 		focus_restore_probe.free()
 		return _failure("plugin.gd should restore the Settings tab index and request update refs after restoring Dock focus.")
 	focus_restore_probe._state.settings["update_source"] = "release_tag"
@@ -357,7 +357,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	current_tab_probe._dock = probe_dock
 	current_tab_probe._state.current_tab = 0
 	current_tab_probe._refresh_dock()
-	if current_tab_probe._state.current_tab != 3 or current_tab_probe.discovery_request_count != 1 or probe_dock.apply_model_count != 0:
+	if current_tab_probe._state.current_tab != 5 or current_tab_probe.discovery_request_count != 1 or probe_dock.apply_model_count != 0:
 		current_tab_probe.free()
 		probe_dock.free()
 		return _failure("plugin.gd should sync the visible Dock tab before building the model and auto-discover refs on Settings.")

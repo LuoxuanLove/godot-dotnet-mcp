@@ -38,7 +38,7 @@ func build_model(context: Dictionary) -> Dictionary:
 	if current_tab == 1 and user_tool_service != null:
 		user_tools = user_tool_service.list_user_tools()
 
-	if current_tab == 2:
+	if current_tab == 4:
 		var client_install_statuses: Dictionary = context.get("client_install_statuses", {})
 		var runtime_process: Dictionary = {}
 		desktop_clients = _client_config_presenter.build_desktop_client_models(

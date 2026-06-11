@@ -1,6 +1,6 @@
 # UI Overview
 
-This document explains the relationship between the scenes and scripts under `ui/`, and how the Dock root scene distributes a shared model to the `Home`, `Tools`, `Config`, and `Settings` tabs.
+This document explains the relationship between the scenes and scripts under `ui/`, and how the Dock root scene distributes a shared model to the `Home`, `Tools`, `Resources`, `Prompts`, `Config`, and `Settings` tabs.
 
 ---
 
@@ -17,6 +17,8 @@ The current `ui/` directory is made of these files:
 | `ui/server_tab_model_projection.gd` | Pure projection collaborator for the `Home` tab |
 | `ui/tools_tab.tscn` | `Tools` tab scene |
 | `ui/tools_tab.gd` | `Tools` tab controller |
+| `ui/mcp_catalog_tab.tscn` | Shared `Resources` and `Prompts` tab scene |
+| `ui/mcp_catalog_tab.gd` | Shared MCP protocol catalog tab controller |
 | `ui/config_panel.tscn` | `Config` tab scene |
 | `ui/config_tab.gd` | `Config` tab controller |
 | `ui/settings_panel.tscn` | `Settings` tab scene |
@@ -37,7 +39,7 @@ The current `ui/` directory is made of these files:
 
 `mcp_dock.gd` is responsible for:
 
-- instantiating the four tab scenes
+- instantiating the six tab scenes
 - connecting the signals emitted by each tab controller
 - receiving the shared model from `plugin.gd`
 - setting the tab titles, localized text, and root-level status light
@@ -53,7 +55,7 @@ The Dock currently uses one-way data flow:
 plugin.gd
   -> build and publish the Dock model
   -> mcp_dock.gd.apply_model(model)
-  -> server_tab.gd / tools_tab.gd / config_tab.gd / settings_tab.gd
+  -> server_tab.gd / tools_tab.gd / mcp_catalog_tab.gd / config_tab.gd / settings_tab.gd
   -> server_tab_model_projection.gd / settings_tab_model_projection.gd (pure projection inside each tab)
   -> user action signal
   -> plugin.gd
@@ -89,6 +91,10 @@ The signals currently bridged by `mcp_dock.gd` are roughly divided into four gro
 - `category_toggled`
 - `domain_toggled`
 - `tree_collapse_changed`
+
+### MCP Catalog Tab Actions
+
+- `copy_requested`
 
 ### Config Tab Actions
 
@@ -126,9 +132,13 @@ All of these signals flow back into `plugin.gd`, which then calls the service ob
 2. Load and instantiate the following scenes in order:
    - `server_panel.tscn` as the `Home` tab
    - `tools_tab.tscn`
+   - `mcp_catalog_tab.tscn` as the `Resources` tab
+   - `mcp_catalog_tab.tscn` as the `Prompts` tab
    - `config_panel.tscn`
    - `settings_panel.tscn`
 3. Check whether the tab controllers implement `apply_model()`
+
+The direct tab order is `Home` index 0, `Tools` index 1, `Resources` index 2, `Prompts` index 3, `Config` index 4, and `Settings` index 5. The shared catalog controller switches mode with `set_catalog_mode("resources")` or `set_catalog_mode("prompts")`.
 
 The direct effect is:
 
@@ -164,6 +174,7 @@ This means the tab scripts only keep the scaling-related hard constraints, while
 
 - tab controllers only handle the display and interaction for their own tab
 - the Dock root controller handles cross-tab coordination and signal forwarding
+- `Resources` and `Prompts` must render MCP protocol metadata from the shared Dock catalog projection instead of rebuilding private catalog facts
 - scene control names should stay semantically clear, preferably using `XxxPanel`, `XxxMargin`, `XxxSeparator`, and `XxxContent`
 - avoid overriding ordinary margins or separation in scripts unless it is necessary
 
