@@ -129,6 +129,25 @@ function Assert-FileContainsText {
     }
 }
 
+function Assert-FileDoesNotMatch {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [hashtable[]]$BannedPatterns
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($entry in $BannedPatterns) {
+        if ($text -match $entry.Pattern) {
+            $errors.Add("Required refactor document '$Label' contains contradictory MCP 2025-11-25 target fact: $($entry.Description)")
+        }
+    }
+}
+
 function Assert-V14PlanConsistency {
     param(
         [string]$RepositoryRoot
@@ -148,6 +167,21 @@ function Assert-V14PlanConsistency {
         "legacy compatibility surfaces"
     )
 
+    Assert-FileDoesNotMatch -Path $planPath -Label "v1.4 protocol refactor plan" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
+    )
+
     Assert-FileContainsText -Path $trackerPath -Label "v1.4 refactor progress tracker" -RequiredText @(
         'MCP 2025-11-25 conformance by default',
         '2025-06-18 alignment retained as a compatibility foundation',
@@ -155,6 +189,21 @@ function Assert-V14PlanConsistency {
         'MCP Streamable HTTP',
         'legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio',
         'A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
+    )
+
+    Assert-FileDoesNotMatch -Path $trackerPath -Label "v1.4 refactor progress tracker" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
     )
 }
 

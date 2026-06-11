@@ -24,7 +24,8 @@ function Write-GuardrailFixture {
         [string]$RepositoryRoot,
         [string]$RootReadmeText,
         [string]$AddonReadmeText,
-        [switch]$MissingTrackerFact
+        [switch]$MissingTrackerFact,
+        [switch]$ContradictoryLegacyFacts
     )
 
     git -C $RepositoryRoot init | Out-Null
@@ -67,6 +68,18 @@ A PR is not ready to merge into the v1.4 refactor branch until local validation,
     if ($MissingTrackerFact) {
         $trackerText = $trackerText.Replace("MCP Streamable HTTP", "HTTP endpoint")
     }
+    if ($ContradictoryLegacyFacts) {
+        $planText += @'
+
+protocolVersion = 2025-06-18
+/api/tools is the default endpoint.
+'@
+        $trackerText += @'
+
+MCP 2025-06-18 is the default target baseline.
+/api/tools is the canonical MCP endpoint.
+'@
+    }
 
     Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
     Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
@@ -81,14 +94,15 @@ function Invoke-GuardrailScenario {
         [string]$RootReadmeText,
         [string]$AddonReadmeText,
         [bool]$ShouldPass,
-        [switch]$MissingTrackerFact
+        [switch]$MissingTrackerFact,
+        [switch]$ContradictoryLegacyFacts
     )
 
     $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-refactor-guardrails-" + [System.Guid]::NewGuid().ToString("N"))
     $previousLocation = (Get-Location).Path
     New-Item -ItemType Directory -Path $repo | Out-Null
     try {
-        Write-GuardrailFixture -RepositoryRoot $repo -RootReadmeText $RootReadmeText -AddonReadmeText $AddonReadmeText -MissingTrackerFact:$MissingTrackerFact
+        Write-GuardrailFixture -RepositoryRoot $repo -RootReadmeText $RootReadmeText -AddonReadmeText $AddonReadmeText -MissingTrackerFact:$MissingTrackerFact -ContradictoryLegacyFacts:$ContradictoryLegacyFacts
         $passed = $true
         $failureMessage = ""
         try {
@@ -131,6 +145,7 @@ Use Godot Asset Library installation or direct source-copy installation.
 
 Invoke-GuardrailScenario -Name "release-facing README install paths" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $true
 Invoke-GuardrailScenario -Name "missing v1.4 tracker MCP fact" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -MissingTrackerFact
+Invoke-GuardrailScenario -Name "contradictory legacy MCP target facts" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -ContradictoryLegacyFacts
 
 $zipReadme = @"
 # Fixture
