@@ -11,16 +11,18 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 		return {"success": false, "error": "tool_loader_unavailable", "message": "Tool loader is unavailable"}
 
 	var catalog_manifest := _build_catalog_manifest_snapshot()
+	var tools_by_category_source = overrides.get("all_tools_by_category", _get_all_tools_by_category(loader))
+	var all_tools_by_category := _filter_removed_tools_by_category(loader, tools_by_category_source if tools_by_category_source is Dictionary else {})
 	var exposed_source = overrides.get("exposed_tools", loader.get_exposed_tool_definitions())
 	var exposed_tools := _filter_removed_tools(loader, exposed_source if exposed_source is Array else [])
+	if exposed_tools.is_empty() and not overrides.has("exposed_tools"):
+		exposed_tools = _derive_exposed_tools_from_categories(loader, all_tools_by_category, catalog_manifest)
 	var visible_tools := exposed_tools.duplicate(true)
 	if overrides.has("visible_tools"):
 		var visible_source = overrides.get("visible_tools", [])
 		visible_tools = _filter_removed_tools(loader, visible_source if visible_source is Array else [])
 	elif loader.has_method("get_tool_definitions"):
 		visible_tools = _filter_removed_tools(loader, loader.get_tool_definitions())
-	var tools_by_category_source = overrides.get("all_tools_by_category", _get_all_tools_by_category(loader))
-	var all_tools_by_category := _filter_removed_tools_by_category(loader, tools_by_category_source if tools_by_category_source is Dictionary else {})
 	var category_state_source = overrides.get("category_states", _get_domain_states(loader))
 	var category_states := _duplicate_dictionary_array(category_state_source if category_state_source is Array else [])
 	var domain_states := _aggregate_domain_states(category_states, catalog_manifest.get("domain_defs", []))
@@ -81,6 +83,37 @@ static func _filter_removed_tools_by_category(loader, tools_by_category: Diction
 				filtered.append(tool.duplicate(true))
 		out[category] = filtered
 	return out
+
+
+static func _derive_exposed_tools_from_categories(loader, tools_by_category: Dictionary, catalog_manifest: Dictionary) -> Array[Dictionary]:
+	var exposed: Array[Dictionary] = []
+	var seen := {}
+	var public_categories: Array = catalog_manifest.get("public_categories", [])
+	for raw_category in _ordered_categories(tools_by_category):
+		var category := str(raw_category)
+		if not public_categories.has(category):
+			continue
+		var tools = tools_by_category.get(raw_category, [])
+		if not (tools is Array):
+			continue
+		for raw_tool in tools:
+			if not (raw_tool is Dictionary):
+				continue
+			var tool := raw_tool as Dictionary
+			if bool(tool.get("compatibility_alias", false)):
+				continue
+			var full_name := _get_full_name(category, tool)
+			if full_name.is_empty() or seen.has(full_name):
+				continue
+			if _is_public_removed_tool(loader, full_name):
+				continue
+			var exposed_tool := tool.duplicate(true)
+			exposed_tool["name"] = full_name
+			exposed_tool["full_name"] = full_name
+			exposed_tool["category"] = category
+			seen[full_name] = true
+			exposed.append(exposed_tool)
+	return exposed
 
 
 static func _get_all_tools_by_category(loader) -> Dictionary:

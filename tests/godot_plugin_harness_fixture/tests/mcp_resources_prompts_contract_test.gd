@@ -298,8 +298,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var tool_catalog_payload: Dictionary = tool_catalog.get("payload", {})
 	if not (tool_catalog_payload.get("tools", []) is Array):
 		return _failure("tool catalog resource should include the MCP tools array.")
-	if not _all_tools_advertise_json_schema_2020_12(tool_catalog_payload.get("tools", [])):
-		return _failure("tool catalog resource should advertise JSON Schema 2020-12 on tool schemas.")
+	var tool_catalog_schema_error := _first_tool_json_schema_2020_12_error(tool_catalog_payload.get("tools", []))
+	if not tool_catalog_schema_error.is_empty():
+		return _failure("tool catalog resource should advertise JSON Schema 2020-12 on tool schemas: %s" % tool_catalog_schema_error)
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(tool_catalog_payload, removed_tool_name):
 			return _failure("tool catalog resource should not expose removed public tool %s." % removed_tool_name)
@@ -310,8 +311,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exposed_tool_catalog_payload: Dictionary = exposed_tool_catalog.get("payload", {})
 	if not (exposed_tool_catalog_payload.get("tools", []) is Array) or exposed_tool_catalog_payload.has("toolTree") or exposed_tool_catalog_payload.has("domain_states"):
 		return _failure("exposed tool catalog should include only the public tools slice, not visible tree metadata.")
-	if not _all_tools_advertise_json_schema_2020_12(exposed_tool_catalog_payload.get("tools", [])):
-		return _failure("exposed tool catalog should advertise JSON Schema 2020-12 on tool schemas.")
+	var exposed_tool_catalog_schema_error := _first_tool_json_schema_2020_12_error(exposed_tool_catalog_payload.get("tools", []))
+	if not exposed_tool_catalog_schema_error.is_empty():
+		return _failure("exposed tool catalog should advertise JSON Schema 2020-12 on tool schemas: %s" % exposed_tool_catalog_schema_error)
 	for removed_tool_name in ["system_help", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze"]:
 		if _contains_tool_name_recursive(exposed_tool_catalog_payload, removed_tool_name):
 			return _failure("exposed tool catalog should not expose removed public tool %s." % removed_tool_name)
@@ -612,8 +614,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_tools = (stdio_tools_list_response.get("result", {}) as Dictionary).get("tools", [])
 	if not (stdio_tools is Array) or (stdio_tools as Array).is_empty():
 		return _failure("stdio tools/list should expose tools for schema dialect verification.")
-	if not _all_tools_advertise_json_schema_2020_12(stdio_tools):
-		return _failure("stdio tools/list should advertise JSON Schema 2020-12 on tool schemas.")
+	var stdio_tool_schema_error := _first_tool_json_schema_2020_12_error(stdio_tools)
+	if not stdio_tool_schema_error.is_empty():
+		return _failure("stdio tools/list should advertise JSON Schema 2020-12 on tool schemas: %s" % stdio_tool_schema_error)
 	await stdio_server._handle_request(JSON.stringify({
 		"jsonrpc": "2.0",
 		"method": "tools/list",
@@ -893,7 +896,6 @@ func _validate_initialize_capabilities(capabilities, label: String) -> String:
 			return "%s should not advertise optional MCP 2025-11-25 capability before implementation: %s" % [label, optional_capability]
 	return ""
 
-
 func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
 	var arguments = prompt.get("arguments", [])
 	if not (arguments is Array):
@@ -997,19 +999,19 @@ func _failure(message: String) -> Dictionary:
 	}
 
 
-func _all_tools_advertise_json_schema_2020_12(tools) -> bool:
+func _first_tool_json_schema_2020_12_error(tools) -> String:
 	if not (tools is Array) or (tools as Array).is_empty():
-		return false
+		return "tools array is empty or missing"
 	for tool in tools:
-		if not _tool_advertises_json_schema_2020_12(tool, "inputSchema"):
-			return false
-		if not _tool_advertises_json_schema_2020_12(tool, "outputSchema"):
-			return false
-	return true
-
-
-func _tool_advertises_json_schema_2020_12(tool, key: String) -> bool:
-	if not (tool is Dictionary):
-		return false
-	var schema = (tool as Dictionary).get(key, {})
-	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI
+		if not (tool is Dictionary):
+			return "tool entry is not an object"
+		var tool_dict := tool as Dictionary
+		var tool_name := str(tool_dict.get("name", "<unnamed>"))
+		for key in ["inputSchema", "outputSchema"]:
+			var schema = tool_dict.get(key, {})
+			if not (schema is Dictionary):
+				return "%s %s is not an object" % [tool_name, key]
+			var actual_schema := str((schema as Dictionary).get("$schema", ""))
+			if actual_schema != JSON_SCHEMA_2020_12_URI:
+				return "%s %s has $schema '%s'" % [tool_name, key, actual_schema]
+	return ""

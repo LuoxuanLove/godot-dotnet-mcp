@@ -219,6 +219,7 @@ static func _build_tool_node(
 	for child in children:
 		child_ids.append(str(child.get("id", "")))
 	var enabled := _is_tool_enabled(tool, full_name, disabled_lookup)
+	var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(tool, full_name))
 	var node := {
 		"kind": "tool",
 		"id": "tool:%s" % full_name,
@@ -237,6 +238,10 @@ static func _build_tool_node(
 		"script_path": str(tool.get("script_path", tool.get("scriptPath", ""))),
 		"domainScriptPath": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
 		"domain_script_path": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
+		"description": str(tool.get("description", "")),
+		"title": str(annotations.get("title", "")),
+		"icons": _duplicate_array(tool.get("icons", [])),
+		"annotations": annotations,
 		"inputSchema": build_tool_input_schema(tool),
 		"outputSchema": build_tool_output_schema(tool),
 		"groupPath": group_path,
@@ -285,6 +290,7 @@ static func _build_atomic_children(
 		for child in children:
 			child_ids.append(str(child.get("id", "")))
 		var enabled := _is_tool_enabled(atomic_tool, atomic_full_name, disabled_lookup)
+		var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(atomic_tool, atomic_full_name))
 		var node := {
 			"kind": "atomic",
 			"id": "atomic:%s" % atomic_full_name,
@@ -303,6 +309,10 @@ static func _build_atomic_children(
 			"script_path": str(atomic_tool.get("script_path", atomic_tool.get("scriptPath", ""))),
 			"domainScriptPath": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
 			"domain_script_path": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
+			"description": str(atomic_tool.get("description", "")),
+			"title": str(annotations.get("title", "")),
+			"icons": _duplicate_array(atomic_tool.get("icons", [])),
+			"annotations": annotations,
 			"inputSchema": build_tool_input_schema(atomic_tool),
 			"outputSchema": build_tool_output_schema(atomic_tool),
 			"groupPath": next_path,
@@ -341,6 +351,12 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"toolName": str(node.get("toolName", "")),
 		"fullName": str(node.get("fullName", "")),
 		"labelKey": str(node.get("labelKey", "")),
+		"description": str(node.get("description", "")),
+		"title": str(node.get("title", "")),
+		"icons": _duplicate_array(node.get("icons", [])),
+		"annotations": _duplicate_dictionary(node.get("annotations", {})),
+		"inputSchema": _duplicate_dictionary(node.get("inputSchema", {})),
+		"outputSchema": _duplicate_dictionary(node.get("outputSchema", {})),
 		"enabled": bool(node.get("enabled", true)),
 		"source": str(node.get("source", "")),
 		"loadState": str(node.get("loadState", "")),
@@ -351,6 +367,25 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"groupPath": node.get("groupPath", []),
 		"treeChildren": node.get("treeChildren", [])
 	}
+
+
+static func _tool_with_full_name(tool: Dictionary, full_name: String) -> Dictionary:
+	var copy := tool.duplicate(true)
+	copy["name"] = full_name
+	copy["full_name"] = full_name
+	return copy
+
+
+static func _duplicate_dictionary(value) -> Dictionary:
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	return {}
+
+
+static func _duplicate_array(value) -> Array:
+	if value is Array:
+		return (value as Array).duplicate(true)
+	return []
 
 
 static func _build_default_tool_output_schema() -> Dictionary:

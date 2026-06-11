@@ -56,6 +56,7 @@ class FakeRuntimeControlService extends RefCounted:
 class FakeToolLoader:
 	extends RefCounted
 
+	var force_empty_exposed_tools := false
 	var exposed_tools := [{
 		"name": "system_project_state",
 		"description": "Inspect project state and runtime health",
@@ -92,6 +93,8 @@ class FakeToolLoader:
 	}
 
 	func get_exposed_tool_definitions() -> Array:
+		if force_empty_exposed_tools:
+			return []
 		var tools := exposed_tools.duplicate(true)
 		tools.append(removed_tool.duplicate(true))
 		return tools
@@ -280,6 +283,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_project_state: Dictionary = filtered_metadata.get("system_project_state", {})
 	if disabled_project_state.is_empty() or bool(disabled_project_state.get("enabled", true)):
 		return _failure("Snapshot presentation should honor caller-supplied disabled_tools overrides.")
+
+	loader.force_empty_exposed_tools = true
+	var derived_exposed_snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader)
+	if _tool_names(derived_exposed_snapshot.get("exposed_tools", [])) != ["system_project_state", "system_settings_dialog"]:
+		return _failure("Snapshot should derive public exposed tools from category facts when loader exposed definitions are temporarily empty.")
+	loader.force_empty_exposed_tools = false
 
 	var unavailable: Dictionary = ToolCatalogSnapshotService.build_snapshot(null)
 	if bool(unavailable.get("success", true)) or str(unavailable.get("error", "")) != "tool_loader_unavailable":
