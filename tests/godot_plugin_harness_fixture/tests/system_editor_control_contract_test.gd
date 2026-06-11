@@ -361,16 +361,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate semantic activate_ui.")
 	if str(activate_ui_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/config":
 		return _failure("system editor_control should preserve activate_ui semantic_path.")
+	var activate_resources_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/resources"
+	})
+	if not bool(activate_resources_result.get("success", false)):
+		return _failure("system editor_control should support semantic activation for the MCP Resources tab.")
+	if str(activate_resources_result.get("data", {}).get("semantic_path", "")) != "MCPDock/resources":
+		return _failure("system editor_control should preserve the MCP Resources semantic_path.")
+	var activate_prompts_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/prompts"
+	})
+	if not bool(activate_prompts_result.get("success", false)):
+		return _failure("system editor_control should support semantic activation for the MCP Prompts tab.")
+	if str(activate_prompts_result.get("data", {}).get("semantic_path", "")) != "MCPDock/prompts":
+		return _failure("system editor_control should preserve the MCP Prompts semantic_path.")
 
 	var activate_ui_tab_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_ui",
 		"target_path": "/root/Editor/MCP/TabContainer",
 		"tab_title": "ConfigTab",
-		"tab_index": 2
+		"tab_index": 4
 	})
 	if not bool(activate_ui_tab_result.get("success", false)):
 		return _failure("system editor_control should delegate TabContainer activate_ui.")
-	if int(activate_ui_tab_result.get("data", {}).get("tab_index", -1)) != 2:
+	if int(activate_ui_tab_result.get("data", {}).get("tab_index", -1)) != 4:
 		return _failure("system editor_control should preserve activate_ui tab_index.")
 
 	var activate_ui_bottom_result: Dictionary = impl.execute("editor_control", {
