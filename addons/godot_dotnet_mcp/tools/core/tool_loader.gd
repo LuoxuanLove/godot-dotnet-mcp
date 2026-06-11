@@ -3,12 +3,10 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
-
-const PUBLIC_REMOVED_MCP_TOOLS := ToolCatalogManifest.PUBLIC_REMOVED_MCP_TOOLS
+const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -20,6 +18,7 @@ var _disabled_tools: Dictionary = {}
 var _load_errors: Array[Dictionary] = []
 var _reload_status: Dictionary = {}
 var _tool_lsp_diagnostics_adapter = null
+var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -176,93 +175,11 @@ func is_tool_exposed(tool_name: String) -> bool:
 
 
 func is_public_removed_tool(tool_name: String) -> bool:
-	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
+	return _public_surface_policy.is_public_removed_tool(tool_name)
 
 
 func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
-	if tool_name == "system_plugin_reload":
-		var action := str(arguments.get("action", "")).strip_edges()
-		return _removed_public_tool_result(
-			tool_name,
-			"Call system_plugin_maintenance instead.",
-			[{
-				"name": "system_plugin_maintenance",
-				"arguments": {"action": "reload"} if action == "full_reload_plugin" else {"action": "status"}
-			}],
-			["tools/call", "resources/read", "resources/list"],
-			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
-		)
-	if tool_name == "system_plugin_update":
-		return _removed_public_tool_result(
-			tool_name,
-			"Call system_plugin_maintenance instead.",
-			[{
-				"name": "system_plugin_maintenance",
-				"arguments": _plugin_update_replacement_arguments(str(arguments.get("action", "")).strip_edges(), arguments)
-			}],
-			["tools/call", "resources/read", "resources/list"],
-			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
-		)
-	if tool_name == "system_editor_log":
-		var action := str(arguments.get("action", "")).strip_edges()
-		var replacement_tools: Array = []
-		var replacement_methods: Array = ["resources/read", "resources/list", "prompts/get"]
-		if action == "clear_output":
-			replacement_tools.append({
-				"name": "system_editor_control",
-				"arguments": {"action": "clear_output"}
-			})
-			replacement_methods.append("tools/call")
-		return _removed_public_tool_result(
-			tool_name,
-			"Read godot-dotnet-mcp://logs/editor/output or godot-dotnet-mcp://logs/editor/errors; use system_editor_control(action=clear_output) when clearing Output is required.",
-			replacement_tools,
-			replacement_methods,
-			[
-				"godot-dotnet-mcp://logs/editor/output",
-				"godot-dotnet-mcp://logs/editor/errors",
-				"godot-dotnet-mcp://diagnostics/summary"
-			]
-		)
-	if tool_name == "resource_manage":
-		var action := str(arguments.get("action", "")).strip_edges()
-		var replacement_tool_name := "resource_file_ops"
-		var replacement_arguments: Dictionary = {}
-		match action:
-			"create":
-				replacement_tool_name = "resource_create"
-				replacement_arguments = {
-					"type": arguments.get("type", ""),
-					"path": arguments.get("path", "")
-				}
-			"copy", "move":
-				replacement_arguments = {
-					"action": action,
-					"source": arguments.get("source", ""),
-					"dest": arguments.get("dest", "")
-				}
-			"delete", "reload":
-				replacement_arguments = {
-					"action": action,
-					"source": arguments.get("path", arguments.get("source", ""))
-				}
-			"list", "search", "get_info", "get_dependencies":
-				replacement_tool_name = "resource_query"
-				replacement_arguments = arguments.duplicate(true)
-			_:
-				replacement_arguments = arguments.duplicate(true)
-		replacement_arguments.erase("_mcp_context")
-		return _removed_public_tool_result(
-			tool_name,
-			"Use resource_create for creation, resource_file_ops for copy/move/delete/reload, or resource_query for listing and dependency queries.",
-			[{
-				"name": replacement_tool_name,
-				"arguments": replacement_arguments
-			}],
-			["tools/call", "resources/read", "resources/list"],
-			["godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://tools/catalog/visible"]
-		)
-	return {}
+	return _public_surface_policy.build_removed_public_tool_result(tool_name, arguments)
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
@@ -1113,87 +1030,23 @@ func _maybe_unload_idle_user_runtime(executor) -> void:
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
-	if _as_bool(tool_def.get("compatibility_alias", false)):
-		return false
-	if _is_public_removed_tool_definition(tool_def):
-		return false
-	var category := str(tool_def.get("category", ""))
-	return _is_exposed_tool_category(category)
+	return _public_surface_policy.is_exposed_tool_definition(tool_def)
 
 
 func _is_public_removed_tool_definition(tool_def: Dictionary) -> bool:
-	var name := str(tool_def.get("name", ""))
-	var full_name := str(tool_def.get("full_name", name))
-	return PUBLIC_REMOVED_MCP_TOOLS.has(full_name) or PUBLIC_REMOVED_MCP_TOOLS.has(name)
+	return _public_surface_policy.is_public_removed_tool_definition(tool_def)
 
 
 func _is_callable_removed_public_tool(tool_name: String) -> bool:
-	if not PUBLIC_REMOVED_MCP_TOOLS.has(tool_name):
-		return false
-	for tool_def in get_tool_definitions():
-		if str(tool_def.get("name", "")) != tool_name:
-			continue
-		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
-			return false
-		return _as_bool(tool_def.get("enabled", true))
-	return false
-
-
-func _removed_public_tool_result(tool_name: String, guidance: String, replacement_tools: Array, replacement_methods: Array, replacement_resources: Array) -> Dictionary:
-	return {
-		"success": false,
-		"error": "%s has been removed from the public tool surface. %s" % [tool_name, guidance],
-		"data": {
-			"error_type": "removed_public_tool",
-			"removed_tool": tool_name,
-			"replacement_tools": replacement_tools,
-			"replacement_methods": replacement_methods,
-			"replacement_resources": replacement_resources
-		}
-	}
-
-
-func _plugin_update_replacement_arguments(action: String, args: Dictionary) -> Dictionary:
-	match action:
-		"get_current":
-			return {"action": "status"}
-		"get_status":
-			return {"action": "update_status"}
-		"discover_refs":
-			return {
-				"action": "refresh_update_refs",
-				"force_refresh": args.get("force_refresh", true)
-			}
-		"set_source":
-			return {
-				"action": "set_update_source",
-				"source": args.get("source", args.get("update_source", "")),
-				"custom_branch": args.get("custom_branch", args.get("branch", "")),
-				"release_tag": args.get("release_tag", args.get("tag", ""))
-			}
-		"start_sync":
-			return {"action": "start_update"}
-		_:
-			return {"action": "status"}
+	return _public_surface_policy.is_callable_removed_public_tool(tool_name, get_tool_definitions(), Callable(self, "is_tool_enabled"))
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:
-	for tool_def in get_tool_definitions():
-		if str(tool_def.get("name", "")) != tool_name:
-			continue
-		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
-			return false
-		if not _as_bool(tool_def.get("enabled", true)):
-			return false
-		var replacement_tool := str(tool_def.get("compatibility_replacement", "")).strip_edges()
-		if not replacement_tool.is_empty() and not is_tool_enabled(replacement_tool):
-			return false
-		return _as_bool(tool_def.get("compatibility_alias", false))
-	return false
+	return _public_surface_policy.is_callable_compatibility_alias(tool_name, get_tool_definitions(), Callable(self, "is_tool_enabled"))
 
 
 func _is_exposed_tool_category(category: String) -> bool:
-	return ToolCatalogManifest.is_public_category(category)
+	return _public_surface_policy.is_exposed_tool_category(category)
 
 
 func _get_tool_access_provider():
