@@ -100,6 +100,7 @@ internal static class Program
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            CopyContractCaseManifest(repoRoot, stageRoot);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
             if (editorProbeMode)
@@ -695,6 +696,19 @@ internal static class Program
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
             File.Copy(file, destinationPath, overwrite: true);
         }
+    }
+
+    private static void CopyContractCaseManifest(string repoRoot, string stageRoot)
+    {
+        var sourcePath = Path.Combine(repoRoot, "scripts", "contract_case_manifest.json");
+        if (!File.Exists(sourcePath))
+        {
+            return;
+        }
+
+        var destinationDirectory = Path.Combine(stageRoot, "scripts");
+        Directory.CreateDirectory(destinationDirectory);
+        File.Copy(sourcePath, Path.Combine(destinationDirectory, "contract_case_manifest.json"), overwrite: true);
     }
 
     private static void DisableProductionPluginForEditorProbe(string stageRoot)
