@@ -10,18 +10,22 @@ const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/s
 class FakeRuntime:
 	extends RefCounted
 
-	var categories := {"sync": true, "async": true, "script": true}
+	var categories := {"sync": true, "async": true, "script": true, "filesystem": true}
 	var dispatch_calls: Array[Dictionary] = []
 	var async_calls: Array[Dictionary] = []
 	var invalidate_count := 0
 	var next_success := true
+	var next_data_by_tool := {}
 
 	func has_category(category: String) -> bool:
 		return categories.has(category)
 
 	func dispatch(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 		dispatch_calls.append({"category": category, "tool_name": tool_name, "args": args.duplicate(true)})
-		return {"success": next_success, "data": {"category": category, "tool_name": tool_name}}
+		var data: Dictionary = next_data_by_tool.get(tool_name, {})
+		if data.is_empty():
+			data = {"category": category, "tool_name": tool_name}
+		return {"success": next_success, "data": data.duplicate(true)}
 
 	func dispatch_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 		async_calls.append({"category": category, "tool_name": tool_name, "args": args.duplicate(true)})
@@ -114,6 +118,48 @@ func _verify_execution_service_facade() -> Dictionary:
 		return _failure("Atomic bridge execution service should expose write-action helpers for the facade.")
 	if service.extract_data({"data": {"ok": true}}).get("ok") != true:
 		return _failure("Atomic bridge execution service should expose result extraction helpers for the facade.")
+	var collection_result := _verify_execution_service_collection_helpers(service, runtime)
+	if not bool(collection_result.get("success", false)):
+		return collection_result
+	return {"success": true}
+
+
+func _verify_execution_service_collection_helpers(service, runtime: FakeRuntime) -> Dictionary:
+	runtime.next_success = true
+	runtime.dispatch_calls.clear()
+	runtime.next_data_by_tool = {
+		"directory": {
+			"files": ["res://A.gd"],
+			"count": 7,
+			"counts_by_filter": {"*.gd": 2, "*.cs": 5}
+		}
+	}
+	var files: Array = service.collect_files("*.gd")
+	if files != ["res://A.gd"]:
+		return _failure("Atomic bridge execution service should collect file lists through filesystem_directory.", {"files": files})
+	var file_count: int = service.collect_file_count("*.gd")
+	if file_count != 7:
+		return _failure("Atomic bridge execution service should collect file counts through filesystem_directory.", {"count": file_count})
+	var counts: Dictionary = service.collect_file_counts(["*.gd", "*.cs"])
+	if int(counts.get("*.gd", 0)) != 2 or int(counts.get("*.cs", 0)) != 5:
+		return _failure("Atomic bridge execution service should collect batched counts through filesystem_directory.", counts)
+	counts["*.gd"] = 99
+	if int(service.collect_file_counts(["*.gd"]).get("*.gd", 0)) != 2:
+		return _failure("Atomic bridge execution service should return a copy of batched count dictionaries.")
+	if runtime.dispatch_calls.size() != 4:
+		return _failure("Atomic bridge execution service collection helpers should dispatch once per call.")
+	var list_call: Dictionary = runtime.dispatch_calls[0]
+	if str(list_call.get("category", "")) != "filesystem" or str(list_call.get("tool_name", "")) != "directory":
+		return _failure("Atomic bridge execution service should route collection helpers to filesystem_directory.")
+	var list_args: Dictionary = list_call.get("args", {})
+	if str(list_args.get("path", "")) != "res://" or str(list_args.get("filter", "")) != "*.gd" or not bool(list_args.get("recursive", false)):
+		return _failure("Atomic bridge execution service collect_files should preserve filesystem_directory arguments.", list_args)
+	var count_args: Dictionary = runtime.dispatch_calls[1].get("args", {})
+	if not bool(count_args.get("count_only", false)):
+		return _failure("Atomic bridge execution service collect_file_count should request count_only enumeration.", count_args)
+	var counts_args: Dictionary = runtime.dispatch_calls[2].get("args", {})
+	if not bool(counts_args.get("count_only", false)) or not (counts_args.get("filters", []) is Array):
+		return _failure("Atomic bridge execution service collect_file_counts should request filters with count_only.", counts_args)
 	return {"success": true}
 
 
