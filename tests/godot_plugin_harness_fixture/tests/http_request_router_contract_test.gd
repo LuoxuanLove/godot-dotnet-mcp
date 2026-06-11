@@ -44,7 +44,7 @@ class FakeCallbacks:
 			"body": body
 		}
 
-	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id") -> Dictionary:
+	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID") -> Dictionary:
 		return {
 			"_status_code": 204,
 			"_no_body": true,
@@ -78,7 +78,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var get_mcp_without_sse: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "application/json"})
 	if int(get_mcp_without_sse.get("status", 0)) != 406:
 		return _failure("HTTP request router should reject GET /mcp requests that cannot accept SSE responses.")
-	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-session-id": "client-sse-1"})
+	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-session-id": "client-sse-1", "last-event-id": "cursor-7"})
 	if int(get_mcp_response.get("status", 0)) != 200:
 		return _failure("HTTP request router should allow GET /mcp as a Streamable HTTP SSE probe.")
 	if str(get_mcp_response.get("_content_type", "")) != "text/event-stream; charset=utf-8":
@@ -88,11 +88,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should echo the GET /mcp SSE session id.")
 	if str(get_mcp_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
 		return _failure("HTTP request router should attach protocol headers to GET /mcp SSE responses.")
-	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache":
+	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache, no-transform":
 		return _failure("HTTP request router should disable caching for GET /mcp SSE responses.")
 	var get_mcp_body := str(get_mcp_response.get("_raw_body", ""))
 	if get_mcp_body.find("event: message") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") == -1 or get_mcp_body.find("\"method\":\"notifications/message\"") == -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
 		return _failure("HTTP request router should return an observable Streamable HTTP SSE message for GET /mcp.")
+	if get_mcp_body.find("id: streamable-http-get-client-sse-1-") == -1:
+		return _failure("HTTP request router should attach a stream-specific SSE event id.")
+	if get_mcp_body.find("retry: 1000") == -1:
+		return _failure("HTTP request router should advertise an SSE retry interval before closing probe responses.")
+	if get_mcp_body.find("\"resume_from_event_id\":\"cursor-7\"") == -1:
+		return _failure("HTTP request router should surface Last-Event-ID as a GET /mcp resume cursor hint.")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
@@ -124,6 +130,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router CORS preflight should allow MCP protocol headers.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
 		return _failure("HTTP request router CORS preflight should allow MCP session headers.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Last-Event-ID") == -1:
+		return _failure("HTTP request router CORS preflight should allow SSE resume cursor headers.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) == "*":
 		return _failure("HTTP request router must not use wildcard CORS origins.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:

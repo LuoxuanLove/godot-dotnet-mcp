@@ -254,6 +254,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("CORS response should allow the MCP-Protocol-Version header.")
 	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
 		return _failure("CORS response should allow the Mcp-Session-Id header.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Last-Event-ID") == -1:
+		return _failure("CORS response should allow the Last-Event-ID resume cursor header.")
 
 	var raw_sse_text := _send_raw_response_over_loopback(service, {
 		"status": 406,

@@ -3,7 +3,7 @@ extends RefCounted
 class_name MCPHttpResponseService
 
 const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
-const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id"
+const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
