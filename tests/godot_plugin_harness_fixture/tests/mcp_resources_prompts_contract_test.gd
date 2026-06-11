@@ -137,9 +137,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]:
 		if not _has_resource(resources, expected_resource):
 			return _failure("resources/list should expose canonical v1.4 resource: %s" % expected_resource)
+	for resource in resources as Array:
+		if not _has_display_metadata(resource):
+			return _failure("resources/list should expose 2025-11-25 title/icons metadata for every resource.")
 	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
 	if str(project_info_metadata.get("name", "")) != "项目信息":
 		return _failure("resources/list should localize resource metadata through the active locale.")
+	if str(project_info_metadata.get("title", "")) != str(project_info_metadata.get("name", "")):
+		return _failure("resources/list should mirror localized resource names into title metadata.")
 	if str(project_info_metadata.get("description", "")).find("工具加载器状态") == -1:
 		return _failure("resources/list should localize resource descriptions through the active locale.")
 
@@ -153,9 +158,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_template in [ACTIVITY_CALL_TEMPLATE_URI, "godot-dotnet-mcp://scene/{path}", "godot-dotnet-mcp://script/{path}", "godot-dotnet-mcp://resource/{path}"]:
 		if not _has_template(templates, expected_template):
 			return _failure("resources/templates/list should expose template: %s" % expected_template)
+	for template in templates as Array:
+		if not _has_display_metadata(template):
+			return _failure("resources/templates/list should expose 2025-11-25 title/icons metadata for every template.")
 	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
 	if str(scene_template_metadata.get("name", "")) != "场景文本":
 		return _failure("resources/templates/list should localize template names through the active locale.")
+	if str(scene_template_metadata.get("title", "")) != str(scene_template_metadata.get("name", "")):
+		return _failure("resources/templates/list should mirror localized template names into title metadata.")
 	var activity_template_metadata := _find_template(templates, ACTIVITY_CALL_TEMPLATE_URI)
 	if str(activity_template_metadata.get("name", "")) != "活动调用":
 		return _failure("resources/templates/list should localize canonical activity call template names.")
@@ -397,6 +407,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var prompt_metadata := _find_prompt(prompts, expected_prompt)
 		if str(prompt_metadata.get("description", "")).length() < 40:
 			return _failure("prompts/list should describe when and why to use prompt: %s" % expected_prompt)
+		if not _has_icon_metadata(prompt_metadata):
+			return _failure("prompts/list should expose 2025-11-25 icons metadata for prompt: %s" % expected_prompt)
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
 	var orientation_metadata := _find_prompt(prompts, PROJECT_ORIENTATION_PROMPT)
@@ -818,6 +830,38 @@ func _find_prompt(prompts, name: String) -> Dictionary:
 		if prompt is Dictionary and str((prompt as Dictionary).get("name", "")) == name:
 			return (prompt as Dictionary)
 	return {}
+
+
+func _has_display_metadata(entry) -> bool:
+	if not (entry is Dictionary):
+		return false
+	var metadata := entry as Dictionary
+	if str(metadata.get("title", "")).is_empty():
+		return false
+	return _has_icon_metadata(metadata)
+
+
+func _has_icon_metadata(entry: Dictionary) -> bool:
+	var icons = entry.get("icons", [])
+	if not (icons is Array) or (icons as Array).is_empty():
+		return false
+	for icon in icons as Array:
+		if not (icon is Dictionary):
+			return false
+		var icon_dict := icon as Dictionary
+		var src := str(icon_dict.get("src", ""))
+		if not src.begins_with("data:image/svg+xml;base64,"):
+			return false
+		if src.trim_prefix("data:image/svg+xml;base64,").strip_edges().is_empty():
+			return false
+		if src.find("%3Csvg") != -1:
+			return false
+		if str(icon_dict.get("mimeType", "")) != "image/svg+xml":
+			return false
+		var sizes = icon_dict.get("sizes", [])
+		if not (sizes is Array) or not (sizes as Array).has("any"):
+			return false
+	return true
 
 
 func _prompt_arguments_are_documented(prompt: Dictionary) -> bool:
