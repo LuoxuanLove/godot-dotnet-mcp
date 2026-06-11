@@ -63,6 +63,7 @@ Target version: 1.4.0.
 - Fixed Streamable HTTP POST handling so JSON-RPC response envelopes are accepted with `202 Accepted` and no response body instead of being rejected as invalid requests.
 - Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
 - Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
+- Tightened `/mcp` Streamable HTTP negotiation so missing POST `Content-Type: application/json` and missing POST/GET `MCP-Protocol-Version` headers are rejected, with HTTP audit summaries retaining MCP session/version headers.
 - Fixed raw HTTP response writing so SSE bodies can be sent without JSON encoding and 406 responses use `Not Acceptable` status text.
 - Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 - Fixed localized `system_project_state` descriptions so they document `summary=true` compact reads and `sections=[...]` selective reads.

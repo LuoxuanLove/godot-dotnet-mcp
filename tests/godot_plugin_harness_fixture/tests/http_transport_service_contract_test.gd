@@ -62,6 +62,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 				+ "Origin: http://localhost:5173\r\n"
 				+ "User-Agent: ContractClient/1.0\r\n"
 				+ "Content-Type: application/json; charset=utf-8\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: transport-session-1\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [body.to_utf8_buffer().size(), body]
 			var second_frame := (
@@ -70,6 +72,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 				+ "Origin: http://localhost:5173\r\n"
 				+ "User-Agent: ContractClient/1.0\r\n"
 				+ "Content-Type: application/json; charset=utf-8\r\n"
+				+ "MCP-Protocol-Version: 2025-11-25\r\n"
+				+ "Mcp-Session-Id: transport-session-1\r\n"
 				+ "Content-Length: %d\r\n\r\n%s"
 			) % [second_body.to_utf8_buffer().size(), second_body]
 			client.put_data((frame + second_frame).to_utf8_buffer())
@@ -115,11 +119,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("HTTP transport client summary should retain the request Origin.")
 	if str(client_summary.get("user_agent", "")) != "ContractClient/1.0":
 		return _failure("HTTP transport client summary should retain the User-Agent.")
+	if str(client_summary.get("mcp_protocol_version", "")) != "2025-11-25":
+		return _failure("HTTP transport client summary should retain the MCP protocol version.")
+	if not bool(client_summary.get("mcp_session_present", false)):
+		return _failure("HTTP transport client summary should retain MCP session presence without exposing the session id.")
+	if client_summary.has("mcp_session_id"):
+		return _failure("HTTP transport client summary must not expose raw MCP session ids.")
 	var recent_requests = active_session.get("recent_requests", [])
 	if not (recent_requests is Array) or (recent_requests as Array).size() != 2:
 		return _failure("HTTP transport client session should retain recent request summaries.")
 	if str(((recent_requests as Array)[0] as Dictionary).get("request_id", "")) != "http-1-req-1":
 		return _failure("HTTP transport recent request audit should preserve the first request id.")
+	if str(((recent_requests as Array)[0] as Dictionary).get("mcp_protocol_version", "")) != "2025-11-25":
+		return _failure("HTTP transport recent request audit should preserve the MCP protocol version.")
+	if not bool(((recent_requests as Array)[0] as Dictionary).get("mcp_session_present", false)):
+		return _failure("HTTP transport recent request audit should preserve MCP session presence without exposing the session id.")
+	if ((recent_requests as Array)[0] as Dictionary).has("mcp_session_id"):
+		return _failure("HTTP transport recent request audit must not expose raw MCP session ids.")
 
 	client.disconnect_from_host()
 	for _i in range(20):
