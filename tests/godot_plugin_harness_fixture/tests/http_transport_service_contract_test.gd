@@ -4,6 +4,7 @@ const HttpTransportServiceScript = preload("res://addons/godot_dotnet_mcp/plugin
 const HttpTransportContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_context.gd")
 const HttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
 const HttpRequestDecoderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_decoder.gd")
+const HttpSseEventQueueScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_sse_event_queue.gd")
 
 const MAX_HTTP_BODY_BYTES := 1024 * 1024
 const TEST_PENDING_REQUEST_BYTES := 512
@@ -169,6 +170,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var sse_stream_check: Dictionary = await _run_sse_stream_lifecycle_contract(tree)
 	if not bool(sse_stream_check.get("success", false)):
 		return sse_stream_check
+
+	var sse_bounded_cursor_check: Dictionary = _run_sse_event_queue_bounded_cursor_contract()
+	if not bool(sse_bounded_cursor_check.get("success", false)):
+		return sse_bounded_cursor_check
 
 	var invalid_length_check: Dictionary = await _run_bad_content_length_contract(
 		tree,
@@ -488,6 +493,35 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	var disconnected_session: Dictionary = (recent_client_sessions as Array)[0]
 	if str(disconnected_session.get("transport_mode", "")) != "sse":
 		return _failure("SSE lifecycle transport should preserve transport_mode=sse in recent diagnostics.")
+	return {"success": true, "error": ""}
+
+
+func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
+	var queue = HttpSseEventQueueScript.new()
+	for index in range(32):
+		queue.append_event("bounded-active-stream", "message", {"index": index + 1}, "bounded")
+	var next_event_index := int(queue.event_count("bounded-active-stream"))
+	if next_event_index != 32:
+		queue.dispose()
+		return _failure("SSE event queue should expose the next absolute event index before truncation.")
+	queue.append_event("bounded-active-stream", "message", {"index": 33}, "bounded")
+	var new_events: Array = queue.events_since_index("bounded-active-stream", next_event_index)
+	if new_events.size() != 1:
+		queue.dispose()
+		return _failure("SSE event queue should deliver events appended after a full bounded log to active stream cursors.")
+	var new_event: Dictionary = new_events[0]
+	if str(new_event.get("id", "")) != "bounded-bounded-active-stream-33":
+		queue.dispose()
+		return _failure("SSE event queue should preserve monotonic event ids after bounded log truncation.")
+	var retained_events: Array = queue.events_since_index("bounded-active-stream", 0)
+	if retained_events.size() != 32:
+		queue.dispose()
+		return _failure("SSE event queue should keep only the bounded retained window for stale absolute cursors.")
+	var first_retained: Dictionary = retained_events[0]
+	if str(first_retained.get("id", "")) != "bounded-bounded-active-stream-2":
+		queue.dispose()
+		return _failure("SSE event queue should advance the retained-window base index after truncation.")
+	queue.dispose()
 	return {"success": true, "error": ""}
 
 

@@ -8,12 +8,14 @@ const MAX_SESSIONS := 64
 
 var _event_logs: Dictionary = {}
 var _event_counters: Dictionary = {}
+var _event_base_indices: Dictionary = {}
 var _session_access_order: Array[String] = []
 
 
 func dispose() -> void:
 	_event_logs.clear()
 	_event_counters.clear()
+	_event_base_indices.clear()
 	_session_access_order.clear()
 
 
@@ -29,9 +31,12 @@ func append_event(session_id: String, event_name: String, payload: Dictionary, i
 	}
 	var log := _log_for_session(normalized_session)
 	log.append(event)
+	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	while log.size() > MAX_EVENTS_PER_SESSION:
 		log.pop_front()
+		base_index += 1
 	_event_logs[normalized_session] = log
+	_event_base_indices[normalized_session] = base_index
 	return event.duplicate(true)
 
 
@@ -48,13 +53,17 @@ func events_after_cursor(session_id: String, last_event_id: String) -> Array:
 
 
 func events_since_index(session_id: String, start_index: int) -> Array:
-	var log := _log_for_session(_normalize_session_id(session_id))
-	var bounded_start: int = clamp(start_index, 0, log.size())
-	return (log.slice(bounded_start) as Array).duplicate(true)
+	var normalized_session := _normalize_session_id(session_id)
+	var log := _log_for_session(normalized_session)
+	var base_index := int(_event_base_indices.get(normalized_session, 0))
+	var end_index := base_index + log.size()
+	var bounded_start: int = clamp(start_index, base_index, end_index)
+	return (log.slice(bounded_start - base_index) as Array).duplicate(true)
 
 
 func event_count(session_id: String) -> int:
-	return _log_for_session(_normalize_session_id(session_id)).size()
+	var normalized_session := _normalize_session_id(session_id)
+	return int(_event_base_indices.get(normalized_session, 0)) + _log_for_session(normalized_session).size()
 
 
 func resume_status(session_id: String, last_event_id: String) -> Dictionary:
@@ -101,6 +110,7 @@ func _touch_session(session_id: String) -> void:
 		var evicted_session := _session_access_order.pop_front()
 		_event_logs.erase(evicted_session)
 		_event_counters.erase(evicted_session)
+		_event_base_indices.erase(evicted_session)
 
 
 func _build_event_id(session_id: String, id_prefix: String) -> String:
