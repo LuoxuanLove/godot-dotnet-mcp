@@ -90,7 +90,7 @@ func _index_symbol(symbols: Dictionary, symbol: String, kind: String, path: Stri
 	symbols[key] = entries
 
 
-func _build_project_index(include_resources: bool) -> Dictionary:
+func _collect_index_paths(include_resources: bool) -> Dictionary:
 	var gd_scripts: Array = bridge.collect_files("*.gd")
 	var cs_scripts: Array = bridge.collect_files("*.cs")
 	var scene_paths: Array = bridge.collect_files("*.tscn")
@@ -98,7 +98,38 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 	if include_resources:
 		resource_paths.append_array(bridge.collect_files("*.tres"))
 		resource_paths.append_array(bridge.collect_files("*.res"))
-		resource_paths.sort()
+	return {
+		"gd_scripts": gd_scripts,
+		"cs_scripts": cs_scripts,
+		"scene_paths": scene_paths,
+		"resource_paths": resource_paths
+	}
+
+
+func _sorted_copy(values: Array) -> Array:
+	var copy := values.duplicate()
+	copy.sort()
+	return copy
+
+
+func _make_source_signature(paths: Dictionary) -> Dictionary:
+	return {
+		"gd_scripts": _sorted_copy(paths.get("gd_scripts", [])),
+		"cs_scripts": _sorted_copy(paths.get("cs_scripts", [])),
+		"scene_paths": _sorted_copy(paths.get("scene_paths", [])),
+		"resource_paths": _sorted_copy(paths.get("resource_paths", []))
+	}
+
+
+func _build_project_index(include_resources: bool, collected_paths: Dictionary = {}) -> Dictionary:
+	var paths := collected_paths
+	if paths.is_empty():
+		paths = _collect_index_paths(include_resources)
+	var gd_scripts: Array = (paths.get("gd_scripts", []) as Array).duplicate()
+	var cs_scripts: Array = (paths.get("cs_scripts", []) as Array).duplicate()
+	var scene_paths: Array = (paths.get("scene_paths", []) as Array).duplicate()
+	var resource_paths: Array = (paths.get("resource_paths", []) as Array).duplicate()
+	resource_paths.sort()
 
 	var scripts := []
 	var symbols := {}
@@ -157,17 +188,33 @@ func _build_project_index(include_resources: bool) -> Dictionary:
 		"resources": resource_paths,
 		"symbols": symbols,
 		"scene_dependencies": scene_dependencies,
-		"dependency_records": dependency_records
+		"dependency_records": dependency_records,
+		"source_signature": _make_source_signature(paths)
 	}
 	return _project_index
 
 
-func _ensure_project_index(include_resources: bool = true) -> Dictionary:
+func _ensure_project_index_result(include_resources: bool = true) -> Dictionary:
+	var paths := _collect_index_paths(include_resources)
 	if _project_index.is_empty():
-		return _build_project_index(include_resources)
+		return {
+			"index": _build_project_index(include_resources, paths),
+			"index_state": "built"
+		}
 	if include_resources and not bool(_project_index.get("include_resources", true)):
-		return _build_project_index(true)
-	return _project_index
+		return {
+			"index": _build_project_index(true, paths),
+			"index_state": "stale_refreshed"
+		}
+	if (_project_index.get("source_signature", {}) as Dictionary) != _make_source_signature(paths):
+		return {
+			"index": _build_project_index(include_resources, paths),
+			"index_state": "stale_refreshed"
+		}
+	return {
+		"index": _project_index,
+		"index_state": "ready"
+	}
 
 
 func _traverse_scene_deps(current: String, max_depth: int, dep_map: Dictionary, visited: Dictionary, result: Dictionary, depth: int) -> void:
@@ -210,7 +257,9 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 	if symbol.is_empty():
 		return bridge.error("symbol is required")
 
-	var index := _ensure_project_index(true)
+	var index_result := _ensure_project_index_result(true)
+	var index: Dictionary = index_result.get("index", {})
+	var index_state := str(index_result.get("index_state", "ready"))
 	var exact_matches: Array = []
 	var partial_matches: Array = []
 	var lowered := symbol.to_lower()
@@ -236,6 +285,7 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 		"symbol_search: '%s' → %d exact, %d partial" % [symbol, exact_matches.size(), partial_matches.size()])
 	return bridge.success({
 		"symbol": symbol,
+		"index_state": index_state,
 		"exact_match_count": exact_matches.size(),
 		"partial_match_count": partial_matches.size(),
 		"match_count": matches.size(),
@@ -244,13 +294,16 @@ func _execute_project_symbol_search(args: Dictionary) -> Dictionary:
 
 
 func _execute_scene_dependency_graph(args: Dictionary) -> Dictionary:
-	var index := _ensure_project_index(true)
+	var index_result := _ensure_project_index_result(true)
+	var index: Dictionary = index_result.get("index", {})
+	var index_state := str(index_result.get("index_state", "ready"))
 	var root_scene := str(args.get("root_scene", "")).strip_edges()
 	var max_depth := max(int(args.get("max_depth", 4)), 0)
 	var dep_map: Dictionary = index.get("scene_dependencies", {})
 
 	if root_scene.is_empty():
 		return bridge.success({
+			"index_state": index_state,
 			"root": "", "max_depth": max_depth,
 			"count": dep_map.size(), "dependencies": dep_map
 		})
@@ -258,5 +311,5 @@ func _execute_scene_dependency_graph(args: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	var visited: Dictionary = {}
 	_traverse_scene_deps(root_scene, max_depth, dep_map, visited, result, 0)
-	return bridge.success({"root": root_scene, "max_depth": max_depth,
+	return bridge.success({"index_state": index_state, "root": root_scene, "max_depth": max_depth,
 		"count": result.size(), "dependencies": result})

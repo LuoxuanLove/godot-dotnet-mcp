@@ -75,6 +75,7 @@ Target version: 1.4.0.
 - Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 - Fixed localized `system_project_state` descriptions so they document `summary=true` compact reads and `sections=[...]` selective reads.
 - Fixed the Traditional Chinese project-orientation prompt body so it no longer shows corrupted question-mark text.
+- Fixed lazy project-index consumers so symbol search and scene dependency graph responses report `index_state` and refresh stale indexes when project file lists change.
 
 ### Documentation
 
