@@ -174,6 +174,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should include stored replay events plus the current probe event for matched older cursors.")
 	if replay_body.find("\"replay_event_count\":1") == -1:
 		return _failure("HTTP request router should report the number of stored replay events after a matched older cursor.")
+	var underscore_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_first_event_id := _extract_first_sse_event_id(str(underscore_session_response.get("_raw_body", "")))
+	if not underscore_first_event_id.ends_with("-1"):
+		return _failure("HTTP request router should start SSE counters at one for a new session.")
+	await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client key"})
+	var underscore_second_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_second_event_id := _extract_first_sse_event_id(str(underscore_second_response.get("_raw_body", "")))
+	if not underscore_second_event_id.ends_with("-2"):
+		return _failure("HTTP request router should keep independent counters for sessions whose sanitized SSE tokens collide.")
+	for index in range(31):
+		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "collision-fill-%02d" % index})
+	var underscore_third_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
+	var underscore_third_event_id := _extract_first_sse_event_id(str(underscore_third_response.get("_raw_body", "")))
+	if not underscore_third_event_id.ends_with("-3"):
+		return _failure("HTTP request router should not reset an active session counter when evicting another session with the same sanitized SSE token.")
 	for index in range(40):
 		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-session-%02d" % index})
 	var evicted_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": first_sse_event_id})

@@ -308,7 +308,7 @@ func _touch_sse_session(session_id: String) -> void:
 	while _sse_session_access_order.size() > MAX_SSE_SESSIONS:
 		var evicted_session := _sse_session_access_order.pop_front()
 		_sse_event_logs.erase(evicted_session)
-		_sse_event_counters.erase(_sanitize_sse_token(evicted_session))
+		_sse_event_counters.erase(evicted_session)
 
 
 func _build_sse_resume_status(session_id: String, last_event_id: String) -> Dictionary:
@@ -408,8 +408,8 @@ func _generate_mcp_session_id() -> String:
 
 func _build_sse_event_id(session_id: String) -> String:
 	var sanitized_session := _sanitize_sse_token(session_id)
-	var next_counter := int(_sse_event_counters.get(sanitized_session, 0)) + 1
-	_sse_event_counters[sanitized_session] = next_counter
+	var next_counter := int(_sse_event_counters.get(session_id, 0)) + 1
+	_sse_event_counters[session_id] = next_counter
 	return "streamable-http-get-%s-%d" % [
 		sanitized_session,
 		next_counter
