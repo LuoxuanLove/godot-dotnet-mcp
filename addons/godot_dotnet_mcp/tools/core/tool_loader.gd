@@ -8,6 +8,7 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
+const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -21,6 +22,7 @@ var _reload_status: Dictionary = {}
 var _tool_lsp_diagnostics_adapter = null
 var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
+var _runtime_manager = ToolRuntimeManagerScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -32,8 +34,13 @@ var _performance: Dictionary = {
 }
 
 
+func _init() -> void:
+	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
+
+
 func configure(server_context: Object) -> void:
 	_server_context = server_context
+	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	if Engine.has_singleton("MCPRuntimeBridge"):
 		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
 		if runtime_bridge != null and runtime_bridge.has_method("set_tool_loader"):
@@ -672,45 +679,18 @@ func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
 
 func _instantiate_executor(category: String, force_reload: bool, reason: String) -> Dictionary:
 	var entry: Dictionary = _entries_by_category.get(category, {})
-	if entry.is_empty():
-		return {"success": false, "error": "Tool domain is not registered"}
+	return _runtime_manager.instantiate_executor(category, entry, force_reload, reason)
 
-	var path = str(entry.get("path", ""))
-	if path.is_empty():
-		return {"success": false, "error": "Tool domain path is empty"}
 
-	var script_resource = _load_script_resource(path, force_reload)
-	if script_resource == null:
-		return {"success": false, "error": "Failed to load tool script"}
-	if script_resource is Script and not script_resource.can_instantiate():
-		# Stale cache recovery: reload from disk and refresh external script dependencies.
-		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
-		if script_resource == null:
-			return {"success": false, "error": "Failed to load tool script"}
-		if script_resource is Script and not script_resource.can_instantiate():
-			return {"success": false, "error": "Tool script could not be instantiated [replace_reload_failed]"}
-	if not script_resource.has_method("new"):
-		return {"success": false, "error": "Loaded tool resource is not instantiable"}
-
-	var executor = script_resource.new()
-	if executor == null:
-		return {"success": false, "error": "Tool executor instance creation returned null"}
-	if not executor.has_method("get_tools") or (not executor.has_method("execute") and not executor.has_method("execute_async")):
-		return {"success": false, "error": "Tool executor does not expose get_tools/execute or get_tools/execute_async"}
-	if executor.has_method("configure_runtime"):
-		executor.configure_runtime({
-			"tool_loader": self,
-			"server": _server_context,
-			"plugin_host": _get_plugin_host(),
-			"tool_activity_registry": _tool_activity_registry,
-			"category": category,
-			"reason": reason,
-			"entry": entry.duplicate(true)
-		})
-
+func _build_executor_runtime_context(category: String, entry: Dictionary, reason: String) -> Dictionary:
 	return {
-		"success": true,
-		"executor": executor
+		"tool_loader": self,
+		"server": _server_context,
+		"plugin_host": _get_plugin_host(),
+		"tool_activity_registry": _tool_activity_registry,
+		"category": category,
+		"reason": reason,
+		"entry": entry.duplicate(true)
 	}
 
 
@@ -742,13 +722,6 @@ func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> D
 	return _execution_observer.finish_tool_activity(result, activity_record)
 
 
-func _load_script_resource(path: String, force_reload: bool) -> Resource:
-	var cache_mode = ResourceLoader.CACHE_MODE_REUSE
-	if force_reload:
-		cache_mode = ResourceLoader.CACHE_MODE_IGNORE_DEEP
-	return ResourceLoader.load(path, "", cache_mode)
-
-
 func _reload_script_dependency_chain(_script_resource: Script, _visited: Dictionary) -> void:
 	pass
 
@@ -759,12 +732,7 @@ func _reload_script_dependency_chain(_script_resource: Script, _visited: Diction
 
 
 func _extract_tool_definitions(category: String, executor) -> Array:
-	var definitions: Array[Dictionary] = []
-	for tool_def in executor.get_tools():
-		if not (tool_def is Dictionary):
-			continue
-		definitions.append(tool_def.duplicate(true))
-	return definitions
+	return _runtime_manager.extract_tool_definitions(executor)
 
 
 func _record_load_error(category: String, path: String, message: String) -> void:
@@ -806,14 +774,7 @@ func _unload_runtime(category: String, reason: String) -> void:
 
 
 func _dispose_executor_instance(executor) -> void:
-	if executor == null:
-		return
-	if executor.has_method("dispose"):
-		executor.dispose()
-	if executor.has_method("shutdown"):
-		executor.shutdown()
-	if executor.has_method("clear"):
-		executor.clear()
+	_runtime_manager.dispose_executor(executor)
 
 
 func _failure(error_type: String, category: String, tool_name: String, message: String, data: Dictionary = {}) -> Dictionary:
