@@ -71,6 +71,11 @@ func is_session_terminated(session_id: String) -> bool:
 	return bool(_terminated_sessions.get(_normalize_session_id(session_id), false))
 
 
+func has_session(session_id: String) -> bool:
+	var normalized_session := _normalize_session_id(session_id)
+	return _event_logs.has(normalized_session) or _terminated_sessions.has(normalized_session)
+
+
 func events_after_cursor(session_id: String, last_event_id: String) -> Array:
 	var log := _log_for_session(_normalize_session_id(session_id))
 	var cursor := last_event_id.strip_edges()

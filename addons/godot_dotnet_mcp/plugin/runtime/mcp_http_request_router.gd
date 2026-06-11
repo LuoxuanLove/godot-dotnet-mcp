@@ -291,6 +291,12 @@ func _validate_mcp_delete_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
+	if not _has_mcp_session(requested_session):
+		return {
+			"error": "MCP session not found",
+			"status": 404,
+			"details": "The MCP session is unknown or expired."
+		}
 	if _is_mcp_session_terminated(requested_session):
 		return {
 			"error": "MCP session not found",
@@ -433,6 +439,12 @@ func _terminate_mcp_session(session_id: String) -> Dictionary:
 func _is_mcp_session_terminated(session_id: String) -> bool:
 	if _sse_event_queue != null and _sse_event_queue.has_method("is_session_terminated"):
 		return bool(_sse_event_queue.is_session_terminated(session_id))
+	return false
+
+
+func _has_mcp_session(session_id: String) -> bool:
+	if _sse_event_queue != null and _sse_event_queue.has_method("has_session"):
+		return bool(_sse_event_queue.has_session(session_id))
 	return false
 
 

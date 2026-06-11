@@ -379,6 +379,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var delete_missing_protocol_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-session-id": "delete-session"})
 	if int(delete_missing_protocol_response.get("status", 0)) != 400 or str(delete_missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
 		return _failure("HTTP request router should require MCP-Protocol-Version for DELETE /mcp.")
+	var delete_unknown_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-never-issued"})
+	if int(delete_unknown_session_response.get("status", 0)) != 404 or str(delete_unknown_session_response.get("error", "")) != "MCP session not found":
+		return _failure("HTTP request router should reject DELETE /mcp for a never-issued MCP session.")
 	var delete_session_seed: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-session"})
 	if int(delete_session_seed.get("status", 0)) != 200:
 		return _failure("HTTP request router should allow a session to exist before DELETE /mcp termination.")
