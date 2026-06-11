@@ -77,6 +77,7 @@ Target version: 1.4.0.
 - Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
 - Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
 - Split AtomicBridge write-policy, path-reference, and issue helpers into a dedicated support service while keeping the bridge facade API stable.
+- Split AtomicBridge executor loading, caching, runtime context wiring, and sync/async dispatch into a dedicated runtime service while keeping the bridge facade API stable.
 - Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
 - Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.

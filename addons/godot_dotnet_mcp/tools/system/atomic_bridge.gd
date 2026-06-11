@@ -6,6 +6,7 @@ extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
+const AtomicBridgeRuntimeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_runtime.gd")
 
 const EXECUTOR_SCRIPT_PATHS := {
 	"project": "res://addons/godot_dotnet_mcp/tools/project/executor.gd",
@@ -24,9 +25,13 @@ const EXECUTOR_DEPENDENCY_PATHS := {
 }
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
-var _atomic_executors := {}
 var _runtime_context: Dictionary = {}
 var _support = AtomicBridgeSupportScript.new()
+var _runtime = AtomicBridgeRuntimeScript.new()
+
+
+func _init() -> void:
+	_runtime.configure(EXECUTOR_SCRIPT_PATHS, EXECUTOR_DEPENDENCY_PATHS, Callable(self, "_build_atomic_runtime_context"))
 
 
 func success(data = null, message: String = "") -> Dictionary:
@@ -35,7 +40,7 @@ func success(data = null, message: String = "") -> Dictionary:
 
 func configure_runtime(context: Dictionary) -> void:
 	_runtime_context = context.duplicate()
-	_atomic_executors.clear()
+	_runtime.configure_runtime(_runtime_context)
 
 
 func get_tool_loader():
@@ -93,18 +98,19 @@ func _infer_write_action_from_atomic_name(full_name: String) -> String:
 
 
 func _dispose_executor(executor) -> void:
-	if executor == null:
-		return
-	if executor.has_method("dispose"):
-		executor.dispose()
-	if executor.has_method("shutdown"):
-		executor.shutdown()
+	_runtime.dispose_executor(executor)
 
 
 func _invalidate_atomic_executors() -> void:
-	for executor in _atomic_executors.values():
-		_dispose_executor(executor)
-	_atomic_executors.clear()
+	_runtime.invalidate()
+
+
+func _cache_atomic_executor_for_test(category: String, executor) -> void:
+	_runtime.cache_executor_for_test(category, executor)
+
+
+func _get_cached_atomic_executor_count_for_test() -> int:
+	return _runtime.get_cached_executor_count_for_test()
 
 
 func _find_path_in_args(args: Dictionary) -> String:
@@ -128,31 +134,10 @@ func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
 		return error("Invalid atomic tool name: %s" % full_name)
 	var category := parts[0]
 	var tool_name := parts[1]
-	if not EXECUTOR_SCRIPT_PATHS.has(category):
-		MCPDebugBuffer.record("debug", "atomic",
-			"Unknown category: %s (from %s)" % [category, full_name])
+	if not _runtime.has_category(category):
 		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
 
-	var executor = _atomic_executors.get(category)
-	if executor == null or not is_instance_valid(executor):
-		var path := str(EXECUTOR_SCRIPT_PATHS[category])
-		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
-			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
-		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
-		if script == null:
-			MCPDebugBuffer.record("error", "atomic",
-				"Failed to load executor for: %s (path: %s)" % [category, path])
-			return error("Failed to load atomic executor: %s" % path)
-		if _atomic_executors.has(category):
-			_dispose_executor(_atomic_executors[category])
-		_atomic_executors[category] = script.new()
-		executor = _atomic_executors[category]
-		if executor == null or not executor.has_method("execute"):
-			MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
-			return error("Atomic executor not available: %s" % category)
-		_configure_executor(executor, category)
-
-	var result: Dictionary = executor.execute(tool_name, args)
+	var result: Dictionary = _runtime.dispatch(category, tool_name, args)
 	if write_action and bool(result.get("success", false)):
 		_invalidate_atomic_executors()
 	return result
@@ -174,44 +159,16 @@ func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 		return error("Invalid atomic tool name: %s" % full_name)
 	var category := parts[0]
 	var tool_name := parts[1]
-	if not EXECUTOR_SCRIPT_PATHS.has(category):
-		MCPDebugBuffer.record("debug", "atomic",
-			"Unknown category: %s (from %s)" % [category, full_name])
-		return error("Unknown atomic category: %s (from %s)" % category)
+	if not _runtime.has_category(category):
+		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
 
-	var executor = _atomic_executors.get(category)
-	if executor == null or not is_instance_valid(executor):
-		var path := str(EXECUTOR_SCRIPT_PATHS[category])
-		for dependency_path in EXECUTOR_DEPENDENCY_PATHS.get(category, []):
-			ResourceLoader.load(str(dependency_path), "", ResourceLoader.CACHE_MODE_REPLACE)
-		var script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
-		if script == null:
-			MCPDebugBuffer.record("error", "atomic",
-				"Failed to load executor for: %s (path: %s)" % [category, path])
-			return error("Failed to load atomic executor: %s" % path)
-		if _atomic_executors.has(category):
-			_dispose_executor(_atomic_executors[category])
-		_atomic_executors[category] = script.new()
-		executor = _atomic_executors[category]
-		if executor == null:
-			MCPDebugBuffer.record("error", "atomic", "Executor not available: %s" % category)
-			return error("Atomic executor not available: %s" % category)
-		_configure_executor(executor, category)
-	var result: Dictionary
-	if executor.has_method("execute_async"):
-		result = await executor.execute_async(tool_name, args)
-		if write_action and bool(result.get("success", false)):
-			_invalidate_atomic_executors()
-		return result
-	if executor.has_method("execute"):
-		result = executor.execute(tool_name, args)
-		if write_action and bool(result.get("success", false)):
-			_invalidate_atomic_executors()
-		return result
-	return error("Atomic executor does not expose execute/execute_async: %s" % category)
+	var result: Dictionary = await _runtime.dispatch_async(category, tool_name, args)
+	if write_action and bool(result.get("success", false)):
+		_invalidate_atomic_executors()
+	return result
 
 
-func _configure_executor(executor, category: String) -> void:
+func _build_atomic_runtime_context(category: String, _runtime_context_source: Dictionary) -> Dictionary:
 	var context := _runtime_context.duplicate()
 	context["category"] = category
 	var plugin = _resolve_plugin_host(context)
@@ -219,10 +176,7 @@ func _configure_executor(executor, category: String) -> void:
 		context["plugin_host"] = plugin
 		if not context.has("editor_interface") and plugin.has_method("get_editor_interface"):
 			context["editor_interface"] = plugin.get_editor_interface()
-	if executor.has_method("configure_runtime"):
-		executor.configure_runtime(context.duplicate())
-	if executor.has_method("configure_context"):
-		executor.configure_context(context.duplicate())
+	return context
 
 
 func _resolve_plugin_host(context: Dictionary):
