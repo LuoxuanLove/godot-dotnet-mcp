@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "system_atomic_bridge_runtime_contracts"}
 
 const AtomicBridgeRuntimeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_runtime.gd")
+const AtomicBridgeExecutorManifest = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_executor_manifest.gd")
 const TEMP_ROOT := "res://Tmp/godot_dotnet_mcp_atomic_bridge_runtime_contracts"
 const EXECUTOR_PATH := TEMP_ROOT + "/atomic_contract_executor.gd"
 const ASYNC_EXECUTOR_PATH := TEMP_ROOT + "/atomic_async_contract_executor.gd"
@@ -16,6 +17,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var setup := _write_fixture_scripts()
 	if not bool(setup.get("success", false)):
 		return setup
+	var default_result := _verify_default_manifest_configuration()
+	if not bool(default_result.get("success", false)):
+		return default_result
 
 	var runtime = AtomicBridgeRuntimeScript.new()
 	runtime.configure({
@@ -82,6 +86,42 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"success": true,
 		"context_count": _provided_contexts.size()
 	}
+
+
+func _verify_default_manifest_configuration() -> Dictionary:
+	var expected_categories := [
+		"dap",
+		"debug",
+		"editor",
+		"filesystem",
+		"node",
+		"project",
+		"resource",
+		"runtime",
+		"scene",
+		"script"
+	]
+	if AtomicBridgeExecutorManifest.get_categories() != expected_categories:
+		return _failure("Atomic bridge executor manifest should expose the canonical category set.")
+	var dependency_paths := AtomicBridgeExecutorManifest.get_executor_dependency_paths()
+	if not dependency_paths.has("editor"):
+		return _failure("Atomic bridge executor manifest should preserve editor executor dependencies.")
+	var editor_dependencies: Array = dependency_paths.get("editor", [])
+	if not editor_dependencies.has("res://addons/godot_dotnet_mcp/tools/editor_tools.gd"):
+		return _failure("Atomic bridge executor manifest should keep the editor_tools compatibility dependency.")
+	editor_dependencies.clear()
+	var fresh_dependencies := AtomicBridgeExecutorManifest.get_executor_dependency_paths()
+	if fresh_dependencies.get("editor", []).is_empty():
+		return _failure("Atomic bridge executor manifest should not leak mutable dependency arrays.")
+
+	var default_runtime = AtomicBridgeRuntimeScript.new()
+	default_runtime.configure_default()
+	for category in expected_categories:
+		if not default_runtime.has_category(category):
+			return _failure("Atomic bridge runtime default configuration should include category: %s" % category)
+	if default_runtime.has_category("ghost"):
+		return _failure("Atomic bridge runtime default configuration should not include unknown categories.")
+	return {"success": true}
 
 
 func _build_context(category: String, runtime_context: Dictionary) -> Dictionary:
