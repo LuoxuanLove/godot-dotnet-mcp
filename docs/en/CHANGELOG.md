@@ -18,6 +18,7 @@ Target version: 1.4.0.
 - Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
 - Added MCP 2025-11-25 display metadata to Resources, Resource Templates, and built-in Prompts so clients can render titles and icons from protocol lists.
+- Added Dock model projections for MCP Resources, Resource Templates, and Prompts so the editor UI can consume resource-first and prompt-first metadata without polluting `tools/list`.
 
 ### Changed
 

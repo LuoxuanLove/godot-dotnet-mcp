@@ -9,6 +9,7 @@ const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
 const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
+const DockMcpCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_projection_service.gd")
 
 var _state
 var _localization
@@ -16,6 +17,7 @@ var _server_controller
 var _tool_catalog
 var _config_service
 var _dock_presenter = DockPresenterScript.new()
+var _mcp_catalog_projection_service = DockMcpCatalogProjectionServiceScript.new()
 var _user_tool_service
 var _client_install_detection_service
 var _user_tool_watch_service
@@ -40,6 +42,8 @@ func configure(
 ) -> void:
 	if _dock_presenter == null:
 		_dock_presenter = DockPresenterScript.new()
+	if _mcp_catalog_projection_service == null:
+		_mcp_catalog_projection_service = DockMcpCatalogProjectionServiceScript.new()
 	if localization == null and server_controller == null and tool_catalog == null and config_service == null and user_tool_service == null and client_install_detection_service == null and user_tool_watch_service == null:
 		if context_or_state == null:
 			dispose()
@@ -90,12 +94,15 @@ func _context_get(context, key: String, default_value = null):
 func dispose() -> void:
 	if _dock_presenter != null and _dock_presenter.has_method("dispose"):
 		_dock_presenter.dispose()
+	if _mcp_catalog_projection_service != null and _mcp_catalog_projection_service.has_method("dispose"):
+		_mcp_catalog_projection_service.dispose()
 	_state = null
 	_localization = null
 	_server_controller = null
 	_tool_catalog = null
 	_config_service = null
 	_dock_presenter = null
+	_mcp_catalog_projection_service = null
 	_user_tool_service = null
 	_client_install_detection_service = null
 	_user_tool_watch_service = null
@@ -119,6 +126,7 @@ func build_model() -> Dictionary:
 	var client_install_statuses := {}
 	var plugin_freshness := {}
 	var plugin_version := ""
+	var mcp_catalog_projection := _build_mcp_catalog_projection()
 
 	if int(_state.current_tab) == 2:
 		client_install_statuses = _get_client_install_statuses(settings)
@@ -146,6 +154,10 @@ func build_model() -> Dictionary:
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": (catalog_snapshot.get("catalog_manifest", {}) as Dictionary).get("domain_defs", MCPToolManifest.TOOL_DOMAIN_DEFS),
 		"tool_presentation": tool_presentation,
+		"mcp_resources": mcp_catalog_projection.get("mcp_resources", []),
+		"mcp_resource_templates": mcp_catalog_projection.get("mcp_resource_templates", []),
+		"mcp_prompts": mcp_catalog_projection.get("mcp_prompts", []),
+		"mcp_catalog_counts": mcp_catalog_projection.get("mcp_catalog_counts", {}),
 		"client_install_statuses": client_install_statuses,
 		"plugin_freshness": plugin_freshness,
 		"plugin_version": plugin_version,
@@ -226,6 +238,12 @@ func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dicti
 	if bool(snapshot.get("success", false)):
 		return snapshot
 	return {}
+
+
+func _build_mcp_catalog_projection() -> Dictionary:
+	if _mcp_catalog_projection_service == null:
+		return {}
+	return _mcp_catalog_projection_service.build_projection()
 
 
 func _get_tool_loader():
