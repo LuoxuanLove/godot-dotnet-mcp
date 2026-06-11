@@ -12,6 +12,7 @@ const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/co
 const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
 const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
 const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
+const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -29,6 +30,7 @@ var _runtime_manager = ToolRuntimeManagerScript.new()
 var _status_service = ToolLoaderStatusServiceScript.new()
 var _entry_service = ToolRegistryEntryServiceScript.new()
 var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
+var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -136,23 +138,7 @@ func get_all_tools_by_category() -> Dictionary:
 
 
 func _build_tools_by_category_internal(visible_only: bool) -> Dictionary:
-	var result: Dictionary = {}
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		var defs = _ensure_tool_definitions(category)
-		if defs.is_empty():
-			continue
-		var decorated_defs: Array[Dictionary] = []
-		for tool_def in defs:
-			var decorated_def := _decorate_tool_definition(category, tool_def)
-			if _is_public_removed_tool_definition(decorated_def):
-				continue
-			decorated_defs.append(decorated_def)
-		if decorated_defs.is_empty():
-			continue
-		result[category] = decorated_defs
-	return result
+	return _catalog_projection_service.build_tools_by_category(_build_catalog_projection_context(), visible_only)
 
 
 func get_tool_definitions() -> Array[Dictionary]:
@@ -168,14 +154,7 @@ func get_all_tool_definitions() -> Array[Dictionary]:
 
 
 func get_exposed_tool_definitions() -> Array[Dictionary]:
-	var definitions: Array[Dictionary] = []
-	for tool_def in get_tool_definitions():
-		if not _is_exposed_tool_definition(tool_def):
-			continue
-		if not _as_bool(tool_def.get("enabled", true)):
-			continue
-		definitions.append((tool_def as Dictionary).duplicate(true))
-	return definitions
+	return _catalog_projection_service.build_exposed_tool_definitions(_build_catalog_projection_context(), get_tool_definitions())
 
 
 func is_tool_exposed(tool_name: String) -> bool:
@@ -198,16 +177,7 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
-	var definitions: Array[Dictionary] = []
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		for tool_def in _ensure_tool_definitions(category):
-			var full_def = _decorate_tool_definition(category, tool_def)
-			full_def["name"] = "%s_%s" % [category, str(tool_def.get("name", ""))]
-			full_def["category"] = category
-			definitions.append(full_def)
-	return definitions
+	return _catalog_projection_service.build_tool_definitions(_build_catalog_projection_context(), visible_only)
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
@@ -227,30 +197,7 @@ func get_all_domain_states() -> Array[Dictionary]:
 
 
 func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
-	var states: Array[Dictionary] = []
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		var entry: Dictionary = _entries_by_category.get(category, {})
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var defs = _tool_definitions_by_category.get(category, [])
-		states.append({
-			"domain": category,
-			"category": category,
-			"domain_key": str(entry.get("domain_key", "other")),
-			"source": str(entry.get("source", "builtin")),
-			"script_path": str(entry.get("path", "")),
-			"hot_reloadable": _as_bool(entry.get("hot_reloadable", true)),
-			"loaded": runtime.get("instance", null) != null,
-			"load_state": _current_load_state(category),
-			"tool_count": defs.size(),
-			"enabled_tool_count": _count_enabled_tools_in_category(category),
-			"version": int(runtime.get("version", 0)),
-			"load_count": int(runtime.get("load_count", 0)),
-			"last_loaded_at_unix": int(runtime.get("last_loaded_at_unix", 0)),
-			"last_error": runtime.get("last_error", null)
-		})
-	return states
+	return _catalog_projection_service.build_domain_states(_build_catalog_projection_context(), visible_only)
 
 
 func get_reload_status() -> Dictionary:
@@ -769,19 +716,18 @@ func _elapsed_ms(started_usec: int) -> float:
 	return float(Time.get_ticks_usec() - started_usec) / 1000.0
 
 
-func _decorate_tool_definition(category: String, tool_def: Dictionary) -> Dictionary:
-	var decorated = tool_def.duplicate(true)
-	var entry: Dictionary = _entries_by_category.get(category, {})
-	var full_name = "%s_%s" % [category, str(tool_def.get("name", ""))]
-	decorated["category"] = category
-	decorated["full_name"] = full_name
-	decorated["enabled"] = is_tool_enabled(full_name)
-	decorated["load_state"] = _current_load_state(category)
-	decorated["source"] = str(decorated.get("source", str(entry.get("source", "builtin"))))
-	decorated["domain_script_path"] = str(entry.get("path", ""))
-	decorated["script_path"] = str(decorated.get("script_path", str(entry.get("path", ""))))
-	decorated["domain_key"] = str(entry.get("domain_key", "other"))
-	return decorated
+func _build_catalog_projection_context() -> Dictionary:
+	return {
+		"ordered_categories": _ordered_categories,
+		"entries_by_category": _entries_by_category,
+		"runtime_by_category": _runtime_by_category,
+		"tool_definitions_by_category": _tool_definitions_by_category,
+		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
+		"is_category_visible": Callable(self, "_is_category_visible"),
+		"is_tool_enabled": Callable(self, "is_tool_enabled"),
+		"is_exposed_tool_definition": Callable(self, "_is_exposed_tool_definition"),
+		"is_public_removed_tool_definition": Callable(self, "_is_public_removed_tool_definition")
+	}
 
 
 func _sync_user_tool_runtime_definitions(executor) -> void:
@@ -875,16 +821,6 @@ func _as_bool(value) -> bool:
 		var normalized = value.strip_edges().to_lower()
 		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
 	return value != null
-
-
-func _current_load_state(category: String) -> String:
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var defs = _tool_definitions_by_category.get(category, [])
-	if runtime.has("state"):
-		return str(runtime.get("state", "definitions_only"))
-	if defs.is_empty():
-		return "uninitialized"
-	return "definitions_only"
 
 
 func _sync_load_error_incidents(phase: String) -> void:
