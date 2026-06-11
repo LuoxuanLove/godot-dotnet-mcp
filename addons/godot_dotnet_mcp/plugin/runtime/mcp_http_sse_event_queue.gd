@@ -9,6 +9,7 @@ const MAX_SESSIONS := 64
 var _event_logs: Dictionary = {}
 var _event_counters: Dictionary = {}
 var _event_base_indices: Dictionary = {}
+var _session_id_prefixes: Dictionary = {}
 var _session_access_order: Array[String] = []
 
 
@@ -16,12 +17,14 @@ func dispose() -> void:
 	_event_logs.clear()
 	_event_counters.clear()
 	_event_base_indices.clear()
+	_session_id_prefixes.clear()
 	_session_access_order.clear()
 
 
 func append_event(session_id: String, event_name: String, payload: Dictionary, id_prefix: String = "streamable-http") -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
 	_touch_session(normalized_session)
+	_remember_session_id_prefix(normalized_session, id_prefix)
 	var event_id := _build_event_id(normalized_session, id_prefix)
 	var event := {
 		"id": event_id,
@@ -154,6 +157,7 @@ func _touch_session(session_id: String) -> void:
 		_event_logs.erase(evicted_session)
 		_event_counters.erase(evicted_session)
 		_event_base_indices.erase(evicted_session)
+		_session_id_prefixes.erase(evicted_session)
 
 
 func _build_event_id(session_id: String, id_prefix: String) -> String:
@@ -166,16 +170,30 @@ func _build_event_id(session_id: String, id_prefix: String) -> String:
 	]
 
 
+func _remember_session_id_prefix(session_id: String, id_prefix: String) -> void:
+	var sanitized_prefix := _sanitize_sse_token(id_prefix)
+	var prefixes = _session_id_prefixes.get(session_id, [])
+	var known_prefixes: Array = prefixes if prefixes is Array else []
+	if not known_prefixes.has(sanitized_prefix):
+		known_prefixes.append(sanitized_prefix)
+	_session_id_prefixes[session_id] = known_prefixes
+
+
 func _event_index_from_cursor(session_id: String, cursor: String) -> int:
 	var sanitized_session := _sanitize_sse_token(session_id)
-	var marker := "-%s-" % sanitized_session
-	var marker_index := cursor.find(marker)
-	if marker_index < 0:
-		return -1
-	var counter_text := cursor.substr(marker_index + marker.length())
-	if counter_text.is_empty() or not counter_text.is_valid_int():
-		return -1
-	return int(counter_text)
+	var prefixes = _session_id_prefixes.get(session_id, [])
+	var known_prefixes: Array = prefixes if prefixes is Array else []
+	for prefix in known_prefixes:
+		var expected_prefix := "%s-%s-" % [str(prefix), sanitized_session]
+		if not cursor.begins_with(expected_prefix):
+			continue
+		var counter_text := cursor.substr(expected_prefix.length())
+		if counter_text.is_empty() or not counter_text.is_valid_int():
+			return -1
+		return int(counter_text)
+	return -1
+
+
 
 
 func _normalize_session_id(session_id: String) -> String:

@@ -545,6 +545,10 @@ func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	if str(foreign_cursor_status.get("status", "")) != "unknown_cursor":
 		queue.dispose()
 		return _failure("SSE event queue should not report foreign session cursors as stale retained-window cursors.")
+	var bogus_prefix_status: Dictionary = queue.resume_status("bounded-active-stream", "bogus-bounded-active-stream-1")
+	if str(bogus_prefix_status.get("status", "")) != "unknown_cursor":
+		queue.dispose()
+		return _failure("SSE event queue should not report never-generated cursor prefixes as stale retained-window cursors.")
 	var unknown_resume_status: Dictionary = queue.resume_status("missing-bounded-stream", "bounded-missing-1")
 	if str(unknown_resume_status.get("status", "")) != "unknown_session":
 		queue.dispose()
