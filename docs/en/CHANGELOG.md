@@ -88,6 +88,7 @@ Target version: 1.4.0.
 - Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
 - Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.
+- Split tool loader health, performance, and reload status snapshots into a dedicated status service while keeping existing loader status APIs stable.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Extended protocol facts parity coverage to include the server description used by initialize metadata.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.

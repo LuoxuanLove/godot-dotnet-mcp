@@ -9,6 +9,7 @@ const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/t
 const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
+const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -23,6 +24,7 @@ var _tool_lsp_diagnostics_adapter = null
 var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
 var _runtime_manager = ToolRuntimeManagerScript.new()
+var _status_service = ToolLoaderStatusServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -256,36 +258,11 @@ func get_tool_loader_status() -> Dictionary:
 	var exposed_tool_count := get_exposed_tool_definitions().size()
 	var category_count := _ordered_categories.size()
 	var tool_load_error_count := _load_errors.size()
-	var status := "ready"
-	var healthy := true
-	if category_count <= 0 and tool_load_error_count <= 0:
-		status = "empty_registry"
-		healthy = false
-	elif tool_count <= 0 or exposed_tool_count <= 0:
-		status = "no_visible_tools"
-		healthy = false
-	elif tool_load_error_count > 0:
-		status = "degraded"
-	return {
-		"initialized": category_count > 0 or tool_count > 0 or tool_load_error_count > 0,
-		"healthy": healthy,
-		"status": status,
-		"tool_count": tool_count,
-		"exposed_tool_count": exposed_tool_count,
-		"category_count": category_count,
-		"tool_load_error_count": tool_load_error_count
-	}
+	return _status_service.build_tool_loader_status(tool_count, exposed_tool_count, category_count, tool_load_error_count)
 
 
 func get_performance_summary() -> Dictionary:
-	return {
-		"startup_ms": _performance.get("startup_ms", 0.0),
-		"definition_scan_ms": _performance.get("definition_scan_ms", 0.0),
-		"preload_ms": _performance.get("preload_ms", 0.0),
-		"reload_total_ms": _performance.get("reload_total_ms", 0.0),
-		"reload_count": _performance.get("reload_count", 0),
-		"tool_calls": _execution_observer.get_tool_call_metrics()
-	}
+	return _status_service.build_performance_summary(_performance, _execution_observer.get_tool_call_metrics())
 
 
 func get_tool_usage_stats() -> Array[Dictionary]:
@@ -794,15 +771,7 @@ func _failure(error_type: String, category: String, tool_name: String, message: 
 
 
 func _make_reload_status(action: String, reloaded_domains: Array = [], skipped_domains: Array = [], failed_domains: Array = [], elapsed_ms: float = 0.0) -> Dictionary:
-	return {
-		"action": action,
-		"reloaded_domains": reloaded_domains.duplicate(),
-		"skipped_domains": skipped_domains.duplicate(),
-		"failed_domains": failed_domains.duplicate(true),
-		"elapsed_ms": elapsed_ms,
-		"timestamp_unix": int(Time.get_unix_time_from_system()),
-		"performance": get_performance_summary()
-	}
+	return _status_service.make_reload_status(action, get_performance_summary(), reloaded_domains, skipped_domains, failed_domains, elapsed_ms)
 
 
 func _update_reload_status(status: Dictionary) -> Dictionary:
