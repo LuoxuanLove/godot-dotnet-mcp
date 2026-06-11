@@ -141,8 +141,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
 	if not (server_info is Dictionary) or str((server_info as Dictionary).get("name", "")) != MCPProtocolFacts.get_server_name():
 		return _failure("JSON-RPC router did not preserve the unified server info payload.")
-	if str((server_info as Dictionary).get("description", "")).is_empty():
-		return _failure("JSON-RPC router did not preserve the MCP 2025-11-25 serverInfo description.")
+	if str((server_info as Dictionary).get("description", "")) != MCPProtocolFacts.get_server_description():
+		return _failure("JSON-RPC router did not preserve the unified server description.")
 
 	var ping_response: Dictionary = await router.route_request_async("ping", {}, 2, true)
 	if not ping_response.has("result"):

@@ -19,12 +19,12 @@ static func get_server_name() -> String:
 	return str(get_all().get("server_name", ""))
 
 
-static func get_server_version() -> String:
-	return str(get_all().get("server_version", ""))
-
-
 static func get_server_description() -> String:
 	return str(get_all().get("server_description", ""))
+
+
+static func get_server_version() -> String:
+	return str(get_all().get("server_version", ""))
 
 
 static func get_error_codes() -> Dictionary:
@@ -98,8 +98,8 @@ static func _default_facts() -> Dictionary:
 		"protocol_version": "2025-11-25",
 		"tool_schema_version": "2026-06-08.33",
 		"server_name": "godot-dotnet-mcp",
+		"server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation.",
 		"server_version": "1.4.0",
-		"server_description": "Godot editor MCP server for .NET project inspection, automation, resources, prompts, and runtime diagnostics.",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch",
 			"runtime_not_running": "runtime_not_running",
