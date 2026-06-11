@@ -22,6 +22,7 @@ Target version: 1.4.0.
 - Added Dock Resources and Prompts tabs that render MCP protocol catalog metadata, entry counts, kind/MIME/argument summaries, and copy-ID affordances from the shared catalog projection.
 - Added Dock previews for MCP Resources and Prompts, including resource read previews, prompt argument inputs, `prompts/get` preview rendering, and copy-generated-prompt text affordances.
 - Added Dock rendering for MCP 2025-11-25 Resource, Resource Template, and Prompt `icons` metadata in the Resources and Prompts catalog tabs.
+- Added an MCP 2025-11-25 conformance gate that keeps lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, and Dock metadata contracts registered in the v1.4 harness manifest.
 
 ### Changed
 
