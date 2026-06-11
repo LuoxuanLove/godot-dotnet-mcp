@@ -194,9 +194,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(snapshot.get("success", false)):
 		return _failure("Snapshot build should succeed for a loader with exposed definitions.")
 
-	for key in ["exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status"]:
+	for key in ["catalog_manifest", "exposed_tools", "visible_tools", "all_tools_by_category", "category_states", "domain_states", "presentation", "tool_loader_status"]:
 		if not snapshot.has(key):
 			return _failure("Snapshot should include %s." % key)
+	var catalog_manifest: Dictionary = snapshot.get("catalog_manifest", {})
+	if not ((catalog_manifest.get("public_categories", []) as Array).has("system")):
+		return _failure("Snapshot should expose ToolCatalogManifest public category metadata.")
+	if not ((catalog_manifest.get("removed_public_tools", []) as Array).has("system_tool_activity")):
+		return _failure("Snapshot should expose ToolCatalogManifest removed public tool metadata.")
 
 	var exposed_tools: Array = snapshot.get("exposed_tools", [])
 	var visible_tools: Array = snapshot.get("visible_tools", [])
