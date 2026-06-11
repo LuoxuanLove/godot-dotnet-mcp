@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "system_atomic_bridge_dispatch_contracts"}
 
 const AtomicBridgeDispatchServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_dispatch_service.gd")
+const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
 
 
@@ -85,7 +86,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if runtime.invalidate_count != 1:
 		return _failure("Failed write atomic calls should not invalidate cached atomic executors.")
 
+	var execution_service_result := await _verify_execution_service_facade()
+	if not bool(execution_service_result.get("success", false)):
+		return execution_service_result
+
 	return {"name": "system_atomic_bridge_dispatch_contracts", "success": true, "error": ""}
+
+
+func _verify_execution_service_facade() -> Dictionary:
+	var service = AtomicBridgeExecutionServiceScript.new()
+	var runtime = FakeRuntime.new()
+	service._runtime = runtime
+
+	var sync_result: Dictionary = service.call_atomic("sync_probe", {"action": "get"})
+	if not bool(sync_result.get("success", false)):
+		return _failure("Atomic bridge execution service should route sync calls.", sync_result)
+	if runtime.dispatch_calls.size() != 1:
+		return _failure("Atomic bridge execution service should call its runtime for sync calls.")
+
+	var async_result: Dictionary = await service.call_atomic_async("async_probe", {"action": "get"})
+	if not bool(async_result.get("success", false)) or str(async_result.get("data", {}).get("mode", "")) != "async":
+		return _failure("Atomic bridge execution service should route async calls.", async_result)
+	if runtime.async_calls.size() != 1:
+		return _failure("Atomic bridge execution service should call its runtime for async calls.")
+
+	if not service.is_write_atomic_action("script_edit_gd", {}):
+		return _failure("Atomic bridge execution service should expose write-action helpers for the facade.")
+	if service.extract_data({"data": {"ok": true}}).get("ok") != true:
+		return _failure("Atomic bridge execution service should expose result extraction helpers for the facade.")
+	return {"success": true}
 
 
 func _failure(message: String, extra: Dictionary = {}) -> Dictionary:
