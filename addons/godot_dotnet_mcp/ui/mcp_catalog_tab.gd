@@ -261,6 +261,7 @@ func _add_prompt_argument_inputs(body: VBoxContainer, entry: Dictionary) -> void
 			values[arg_name] = value
 			_argument_values[prompt_name] = values
 			_current_signature = ""
+			_clear_prompt_preview_panels(prompt_name)
 		)
 		row.add_child(input)
 
@@ -280,6 +281,8 @@ func _add_preview_panel(body: VBoxContainer, entry: Dictionary, entry_kind: Stri
 	var panel := PanelContainer.new()
 	panel.name = "PreviewPanel"
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.set_meta("_mcp_catalog_kind", entry_kind)
+	panel.set_meta("_mcp_catalog_id", id)
 	panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
 	body.add_child(panel)
 
@@ -339,6 +342,19 @@ func _current_preview_for(entry: Dictionary, entry_kind: String, id: String) -> 
 	if entry_kind == "prompt" and not _preview_arguments_match_current(entry, entry_kind, preview_dict):
 		return {}
 	return preview_dict
+
+
+func _clear_prompt_preview_panels(prompt_name: String) -> void:
+	if _prompts_list == null:
+		return
+	for child in _prompts_list.get_children():
+		if not (child is Node):
+			continue
+		var preview_panel := (child as Node).find_child("PreviewPanel", true, false)
+		if preview_panel == null:
+			continue
+		if str(preview_panel.get_meta("_mcp_catalog_kind", "")) == "prompt" and str(preview_panel.get_meta("_mcp_catalog_id", "")) == prompt_name:
+			preview_panel.queue_free()
 
 
 func _preview_arguments_match_current(entry: Dictionary, entry_kind: String, preview: Dictionary) -> bool:
