@@ -2,7 +2,10 @@
 extends RefCounted
 class_name MCPHttpRequestRouter
 
+const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
+const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id"
+const SESSION_ID_PREFIX := "godot-dotnet-mcp-http"
 
 var _handle_mcp_request_async := Callable()
 var _build_health_response := Callable()
@@ -69,8 +72,11 @@ func route_request_async(method: String, path: String, request_body: String, hea
 
 	var response: Dictionary
 	if method == "POST" and path == "/mcp":
+		var transport_guard := _validate_mcp_transport_headers(normalized_headers)
+		if not transport_guard.is_empty():
+			return _attach_cors_headers(_attach_mcp_transport_headers(transport_guard, normalized_headers), origin, path)
 		response = await _call_async(_handle_mcp_request_async, [request_body], {"error": "MCP request handler is unavailable", "status": 500})
-		return _attach_cors_headers(response, origin, path)
+		return _attach_cors_headers(_attach_mcp_transport_headers(response, normalized_headers), origin, path)
 
 	if method == "GET" and path == "/mcp":
 		response = {
@@ -115,7 +121,7 @@ func _build_options_response(path: String, origin: String) -> Dictionary:
 		}
 	return _call_dict(
 		_build_cors_response,
-		[origin, allowed_methods, "Content-Type, Accept"],
+		[origin, allowed_methods, STREAMABLE_HTTP_ALLOW_HEADERS],
 		{
 			"_status_code": 204,
 			"_no_body": true,
@@ -142,7 +148,7 @@ func _build_cors_headers(origin: String, allow_methods: String) -> Dictionary:
 	return {
 		"Access-Control-Allow-Origin": origin.strip_edges(),
 		"Access-Control-Allow-Methods": allow_methods,
-		"Access-Control-Allow-Headers": "Content-Type, Accept",
+		"Access-Control-Allow-Headers": STREAMABLE_HTTP_ALLOW_HEADERS,
 		"Access-Control-Max-Age": "86400",
 		"Vary": "Origin"
 	}
@@ -162,6 +168,67 @@ func _allowed_methods_for_path(path: String) -> String:
 
 func _requires_json_content_type(path: String) -> bool:
 	return path == "/mcp" or path == "/api/editor/lifecycle"
+
+
+func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
+	var accept_header := str(headers.get("accept", "")).strip_edges()
+	if not accept_header.is_empty() and not _accepts_json_response(accept_header):
+		return {
+			"error": "Not acceptable",
+			"status": 406,
+			"details": "POST /mcp requires Accept to include application/json or */* until SSE streaming is available."
+		}
+
+	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
+	var supported_version := MCPProtocolFacts.get_protocol_version()
+	if not requested_version.is_empty() and requested_version != supported_version:
+		return {
+			"error": "Unsupported MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"requested_protocol_version": requested_version
+		}
+
+	return {}
+
+
+func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictionary) -> Dictionary:
+	var enriched := response.duplicate(true)
+	var response_headers := {}
+	if enriched.has("_headers") and enriched["_headers"] is Dictionary:
+		response_headers = (enriched["_headers"] as Dictionary).duplicate(true)
+	response_headers["MCP-Protocol-Version"] = MCPProtocolFacts.get_protocol_version()
+	response_headers["Mcp-Session-Id"] = _resolve_mcp_session_id(request_headers)
+	enriched["_headers"] = response_headers
+	return enriched
+
+
+func _resolve_mcp_session_id(headers: Dictionary) -> String:
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if not requested_session.is_empty():
+		return requested_session
+	return _generate_mcp_session_id()
+
+
+func _generate_mcp_session_id() -> String:
+	return "%s-%s-%s-%s-%s" % [
+		SESSION_ID_PREFIX,
+		MCPProtocolFacts.get_server_version().replace(".", "-"),
+		str(Time.get_ticks_usec()),
+		str(get_instance_id()),
+		str(randi())
+	]
+
+
+func _accepts_json_response(accept_header: String) -> bool:
+	for raw_part in accept_header.split(",", false):
+		var media_type := str(raw_part).strip_edges().to_lower()
+		var semicolon_pos := media_type.find(";")
+		if semicolon_pos >= 0:
+			media_type = media_type.substr(0, semicolon_pos).strip_edges()
+		if media_type == "application/json" or media_type == "*/*" or media_type == "application/*":
+			return true
+	return false
 
 
 func _is_json_content_type(content_type: String) -> bool:

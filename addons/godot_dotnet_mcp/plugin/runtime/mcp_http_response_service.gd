@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPHttpResponseService
 
 const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
+const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id"
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
@@ -116,7 +117,7 @@ func build_health_response() -> Dictionary:
 	}
 
 
-func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept") -> Dictionary:
+func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = STREAMABLE_HTTP_ALLOW_HEADERS) -> Dictionary:
 	var response_headers := {}
 	if not origin.strip_edges().is_empty():
 		response_headers["Access-Control-Allow-Origin"] = origin.strip_edges()
