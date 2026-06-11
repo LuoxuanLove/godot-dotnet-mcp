@@ -3,6 +3,7 @@ extends RefCounted
 class_name ToolCatalogSearchService
 
 const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 const DEFAULT_LIMIT := 25
 const MAX_LIMIT := 100
@@ -112,8 +113,8 @@ static func _build_catalog(snapshot: Dictionary, include_internal: bool, include
 			continue
 		seen[full_name] = true
 		var metadata: Dictionary = metadata_by_name.get(full_name, {})
-		var input_schema: Dictionary = tool.get("inputSchema", {"type": "object", "properties": {}})
-		var output_schema := _get_tool_output_schema(tool)
+		var input_schema: Dictionary = ToolPresentationService.build_tool_input_schema(tool)
+		var output_schema := ToolPresentationService.build_tool_output_schema(tool)
 		var item := {
 			"name": full_name,
 			"kind": "tool",
@@ -144,39 +145,6 @@ static func _extract_actions(input_schema: Dictionary) -> Array[String]:
 			actions.append(str(value))
 	actions.sort()
 	return actions
-
-
-static func _get_tool_output_schema(tool: Dictionary) -> Dictionary:
-	var explicit_schema = tool.get("outputSchema", tool.get("output_schema", null))
-	if explicit_schema is Dictionary:
-		return (explicit_schema as Dictionary).duplicate(true)
-	return _build_default_tool_output_schema()
-
-
-static func _build_default_tool_output_schema() -> Dictionary:
-	return {
-		"type": "object",
-		"additionalProperties": true,
-		"required": ["success"],
-		"properties": {
-			"success": {"type": "boolean"},
-			"data": {
-				"type": ["object", "array", "string", "number", "boolean", "null"],
-				"description": "Tool-specific structured payload.",
-				"additionalProperties": true
-			},
-			"message": {"type": "string"},
-			"error": {"type": "string"},
-			"hints": {
-				"type": "array",
-				"items": {"type": "string"}
-			},
-			"activity": {
-				"type": "object",
-				"additionalProperties": true
-			}
-		}
-	}
 
 
 static func _extract_params(input_schema: Dictionary) -> Array[Dictionary]:

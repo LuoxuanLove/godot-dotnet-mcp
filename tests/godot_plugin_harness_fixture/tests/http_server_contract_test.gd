@@ -4,6 +4,7 @@ const HttpServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const RESTART_CONTRACT_PORT := 39993
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 
 var _server
 
@@ -136,6 +137,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
 			if (tool_entry as Dictionary).has(internal_key):
 				return _failure("JSON-RPC tools/list should not expose internal metadata key: %s" % internal_key)
+		if not _has_json_schema_2020_12(tool_entry, "inputSchema"):
+			return _failure("JSON-RPC tools/list should advertise JSON Schema 2020-12 on inputSchema.")
+		if not _has_json_schema_2020_12(tool_entry, "outputSchema"):
+			return _failure("JSON-RPC tools/list should advertise JSON Schema 2020-12 on outputSchema.")
 
 	var rpc_missing_tool: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -393,6 +398,13 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _has_json_schema_2020_12(tool_entry, key: String) -> bool:
+	if not (tool_entry is Dictionary):
+		return false
+	var schema = (tool_entry as Dictionary).get(key, {})
+	return schema is Dictionary and str((schema as Dictionary).get("$schema", "")) == JSON_SCHEMA_2020_12_URI
 
 
 func _has_tool(tools, tool_name: String) -> bool:
