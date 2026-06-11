@@ -343,6 +343,11 @@ func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
 			"label": "object id",
 			"request": {"jsonrpc": "2.0", "id": {}, "method": "ping", "params": {}},
 			"expected_id": null
+		},
+		{
+			"label": "wrong jsonrpc with object id",
+			"request": {"jsonrpc": "1.0", "id": {}, "method": [], "params": {}},
+			"expected_id": null
 		}
 	]
 	for invalid_case in invalid_cases:

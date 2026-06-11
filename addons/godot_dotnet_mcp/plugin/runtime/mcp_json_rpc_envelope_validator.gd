@@ -6,14 +6,16 @@ class_name MCPJsonRpcEnvelopeValidator
 static func validate_request_envelope(request: Dictionary) -> Dictionary:
 	var has_id := request.has("id")
 	var id = request.get("id")
+	var valid_id := not has_id or _is_valid_request_id(id)
+	var safe_id = id if valid_id else null
 	if str(request.get("jsonrpc", "")) != "2.0":
-		return _invalid(has_id, id, "Invalid Request: jsonrpc must be \"2.0\"")
+		return _invalid(has_id, safe_id, "Invalid Request: jsonrpc must be \"2.0\"")
 
 	var method = request.get("method")
 	if not (method is String) or str(method).strip_edges().is_empty():
-		return _invalid(has_id, id, "Invalid Request: method must be a non-empty string")
+		return _invalid(has_id, safe_id, "Invalid Request: method must be a non-empty string")
 
-	if has_id and not _is_valid_request_id(id):
+	if has_id and not valid_id:
 		var invalid_id_result := _invalid(true, null, "Invalid Request: id must be a string, number, or null")
 		invalid_id_result["invalid_id"] = true
 		return invalid_id_result
@@ -21,7 +23,7 @@ static func validate_request_envelope(request: Dictionary) -> Dictionary:
 	return {
 		"success": true,
 		"has_id": has_id,
-		"id": id,
+		"id": safe_id,
 		"method": str(method)
 	}
 

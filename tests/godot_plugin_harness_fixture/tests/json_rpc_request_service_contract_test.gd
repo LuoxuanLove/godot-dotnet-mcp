@@ -80,6 +80,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if callbacks.received.size() != 0:
 		return _failure("JSON-RPC request service should not emit request_received for invalid jsonrpc envelopes.")
 
+	var wrong_jsonrpc_invalid_id: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "1.0",
+		"id": {},
+		"method": [],
+		"params": {}
+	}))
+	var wrong_jsonrpc_invalid_id_error = wrong_jsonrpc_invalid_id.get("error", {})
+	if not (wrong_jsonrpc_invalid_id_error is Dictionary) or int((wrong_jsonrpc_invalid_id_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject combined invalid jsonrpc/id envelopes with -32600.")
+	if wrong_jsonrpc_invalid_id.get("id") != null:
+		return _failure("JSON-RPC request service should not echo invalid ids from combined malformed envelopes.")
+
 	var missing_method: Dictionary = await service.handle_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 3,
