@@ -2,6 +2,8 @@ extends RefCounted
 
 const HttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
 const HttpRequestRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router_context.gd")
+const JsonRpcRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd")
+const JsonRpcRequestContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_context.gd")
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
@@ -55,6 +57,48 @@ class FakeCallbacks:
 				"Vary": "Origin"
 			}
 		}
+
+
+class ResponsePostService:
+	extends RefCounted
+
+	var _service = JsonRpcRequestServiceScript.new()
+	var routed_requests := 0
+
+	func _init() -> void:
+		var context = JsonRpcRequestContextScript.new()
+		context.route_json_rpc_async = Callable(self, "route_json_rpc_async")
+		context.build_json_rpc_error = Callable(self, "build_json_rpc_error")
+		context.emit_request_received = Callable(self, "emit_request_received")
+		context.log = Callable(self, "log")
+		_service.configure(context)
+
+	func handle_mcp_request_async(body: String) -> Dictionary:
+		return await _service.handle_request_async(body)
+
+	func route_json_rpc_async(_method: String, _params: Dictionary, id, _has_id: bool) -> Dictionary:
+		routed_requests += 1
+		return {
+			"jsonrpc": "2.0",
+			"result": {"routed": true},
+			"id": id
+		}
+
+	func build_json_rpc_error(code: int, message: String, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"error": {
+				"code": code,
+				"message": message
+			},
+			"id": id
+		}
+
+	func emit_request_received(_method: String, _params: Dictionary) -> void:
+		routed_requests += 1
+
+	func log(_message: String, _level: String) -> void:
+		pass
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -219,6 +263,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if str(protocol_allowed_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":3}":
 		return _failure("HTTP request router rejected the configured MCP-Protocol-Version header.")
+
+	var response_post_router = HttpRequestRouterScript.new()
+	var response_post_service = ResponsePostService.new()
+	var response_post_context = HttpRequestRouterContextScript.new()
+	response_post_context.handle_mcp_request_async = Callable(response_post_service, "handle_mcp_request_async")
+	response_post_context.build_health_response = Callable(callbacks, "build_health_response")
+	response_post_context.build_tools_list_response = Callable(callbacks, "build_tools_list_response")
+	response_post_context.handle_editor_lifecycle_request = Callable(callbacks, "handle_editor_lifecycle_request")
+	response_post_context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
+	response_post_context.build_cors_response = Callable(callbacks, "build_cors_response")
+	response_post_router.configure(response_post_context)
+	var json_rpc_response_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 44, "result": {"ok": true}}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"}
+	)
+	var json_rpc_response_headers: Dictionary = json_rpc_response_post.get("_headers", {})
+	if int(json_rpc_response_post.get("status", 0)) != 202 or not bool(json_rpc_response_post.get("_no_body", false)):
+		return _failure("HTTP request router should accept JSON-RPC response POST envelopes with 202 and no body.")
+	if str(json_rpc_response_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should attach protocol headers to accepted response POST envelopes.")
+	if str(json_rpc_response_headers.get("Mcp-Session-Id", "")).is_empty():
+		return _failure("HTTP request router should attach a session header to accepted response POST envelopes.")
+	if response_post_service.routed_requests != 0:
+		return _failure("HTTP request router should not route accepted JSON-RPC response POST envelopes as requests.")
 
 	var allowed_origin_health: Dictionary = await router.route_request_async("GET", "/health", "", {"origin": "http://localhost:5173", "host": "localhost:3000"})
 	var allowed_origin_health_headers: Dictionary = allowed_origin_health.get("_headers", {})

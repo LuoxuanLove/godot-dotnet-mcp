@@ -136,6 +136,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if callbacks.received.size() != 0:
 		return _failure("JSON-RPC request service should not emit request_received for invalid notification envelopes.")
 
+	var json_rpc_result_response: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 22,
+		"result": {"ack": true}
+	}))
+	if int(json_rpc_result_response.get("status", 0)) != 202 or not bool(json_rpc_result_response.get("_no_body", false)):
+		return _failure("JSON-RPC request service should accept response envelopes with 202 and no body.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for response envelopes.")
+
+	var json_rpc_error_response: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 23,
+		"error": {"code": -32800, "message": "Cancelled"}
+	}))
+	if int(json_rpc_error_response.get("status", 0)) != 202 or not bool(json_rpc_error_response.get("_no_body", false)):
+		return _failure("JSON-RPC request service should accept error response envelopes with 202 and no body.")
+
+	var missing_id_response_like_body: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"result": {"ok": true}
+	}))
+	var missing_id_response_like_error = missing_id_response_like_body.get("error", {})
+	if not (missing_id_response_like_error is Dictionary) or int((missing_id_response_like_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should not accept result envelopes without response ids.")
+
 	var invalid_params: Dictionary = await service.handle_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 8,
