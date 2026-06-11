@@ -76,6 +76,7 @@ Target version: 1.4.0.
 - Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
 - Added MCP 2025-11-25 tool-name guard coverage so manifest-owned removed public tool names, registry categories, loader-exposed tools, and final `tools/list` entries stay within the 1-128 character ASCII letter, digit, `_`, `-`, and `.` naming profile.
 - Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
+- Added MCP 2025-11-25 manifest taxonomy so each required harness case declares its protocol version and conformance role before it can enter the v1.4 verification gate.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.

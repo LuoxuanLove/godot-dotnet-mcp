@@ -13,6 +13,11 @@ $bannedSourcePatterns = @(
     "host_shared/"
 )
 
+$allowedManifestValues = @{
+    mcp_version = @("2025-11-25", "2025-06-18", "legacy")
+    conformance = @("required", "compat", "optional")
+}
+
 function Find-BannedSourceMatches {
     param(
         [string]$Pattern,
@@ -129,6 +134,36 @@ foreach ($pattern in $bannedSourcePatterns) {
             $errors.Add("Banned source identifier '$pattern' found: $match")
         }
     }
+}
+
+$manifestPath = Join-Path $repoRoot "scripts\contract_case_manifest.json"
+if (Test-Path -LiteralPath $manifestPath) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest -isnot [array]) {
+        $manifest = @($manifest)
+    }
+    foreach ($case in $manifest) {
+        foreach ($field in $allowedManifestValues.Keys) {
+            if (-not ($case.PSObject.Properties.Name -contains $field)) {
+                $errors.Add("Contract case manifest entry '$($case.name)' is missing required field: $field")
+                continue
+            }
+            $value = [string]$case.$field
+            if ($allowedManifestValues[$field] -notcontains $value) {
+                $errors.Add("Contract case manifest entry '$($case.name)' has invalid ${field}: '$value'")
+            }
+        }
+
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
+            $errors.Add("Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'.")
+        }
+        if (-not $isLegacyOrRemoval -and [string]$case.mcp_version -eq "legacy") {
+            $errors.Add("Contract case manifest entry '$($case.name)' targets current behavior and must not use mcp_version='legacy'.")
+        }
+    }
+} else {
+    $errors.Add("Contract case manifest was not found: $manifestPath")
 }
 
 if ($SkipVersionPolicy) {
