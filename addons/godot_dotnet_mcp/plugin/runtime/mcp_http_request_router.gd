@@ -213,7 +213,7 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 func _build_mcp_sse_probe_response() -> Dictionary:
 	return {
 		"status": 200,
-		"_raw_body": "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{\"transport\":\"streamable_http\",\"mode\":\"sse_probe\"}}\n\n",
+		"_raw_body": "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\",\"params\":{\"level\":\"info\",\"logger\":\"godot-dotnet-mcp.transport\",\"data\":{\"transport\":\"streamable_http\",\"mode\":\"sse_probe\"}}}\n\n",
 		"_content_type": "text/event-stream; charset=utf-8",
 		"_headers": {
 			"Cache-Control": "no-cache",
