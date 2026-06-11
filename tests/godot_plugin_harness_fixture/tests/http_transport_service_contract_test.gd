@@ -16,12 +16,15 @@ var _tick_count := 0
 var _write_count := 0
 var _sse_open_count := 0
 var _sse_heartbeat_count := 0
+var _sse_event_write_count := 0
 var _last_method := ""
 var _last_path := ""
 var _last_body := ""
 var _last_headers: Dictionary = {}
 var _last_no_body := false
 var _last_response: Dictionary = {}
+var _sse_event_bodies: Array[String] = []
+var _queued_sse_events: Array[Dictionary] = []
 var _routed_bodies: Array[String] = []
 var _record_routed_body_content := true
 
@@ -230,6 +233,8 @@ func _run_bad_content_length_contract(tree: SceneTree, frame: String, label: Str
 	context.write_http_response = Callable(self, "_write_response")
 	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
 	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
 	context.tick_loader = Callable(self, "_tick_loader")
 	transport.configure(connection_state, decoder, context)
 
@@ -376,6 +381,8 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	context.write_http_response = Callable(self, "_write_response")
 	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
 	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
 	context.tick_loader = Callable(self, "_tick_loader")
 	transport.configure(connection_state, decoder, context)
 
@@ -394,6 +401,29 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 			request_sent = true
 		transport.process_frame(tcp_server, true, 0.016)
 		if _sse_open_count >= 1 and _sse_heartbeat_count >= 1:
+			break
+		await tree.process_frame
+
+	_queued_sse_events = [
+		{
+			"id": "server-notification-1",
+			"retry": 1000,
+			"event": "message",
+			"data": {
+				"jsonrpc": "2.0",
+				"method": "notifications/message",
+				"params": {
+					"level": "info",
+					"logger": "godot-dotnet-mcp.transport",
+					"data": {"delivered": true}
+				}
+			}
+		}
+	]
+	for _i in range(40):
+		client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if _sse_event_write_count >= 1:
 			break
 		await tree.process_frame
 
@@ -424,6 +454,18 @@ func _run_sse_stream_lifecycle_contract(tree: SceneTree) -> Dictionary:
 	if str(_last_response.get("_raw_body", "")).find("transport-sse-open") == -1:
 		tcp_server.stop()
 		return _failure("SSE lifecycle transport should pass initial stream events to the SSE writer.")
+	if _sse_event_write_count != 1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should drain queued server-to-client events for open streams.")
+	if _sse_event_bodies.is_empty() or _sse_event_bodies[0].find("server-notification-1") == -1 or _sse_event_bodies[0].find("\"method\":\"notifications/message\"") == -1:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should write queued server-to-client events as SSE messages.")
+	stats = connection_state.get_connection_stats()
+	client_sessions = stats.get("client_sessions", [])
+	active_session = (client_sessions as Array)[0]
+	if int(active_session.get("sse_next_event_index", 0)) < 2:
+		tcp_server.stop()
+		return _failure("SSE lifecycle transport should advance the queued event cursor after delivery.")
 
 	client.disconnect_from_host()
 	for _i in range(40):
@@ -532,6 +574,8 @@ func _route_request_async(method: String, path: String, body: String, headers: D
 			"status": 200,
 			"_stream_mode": "sse",
 			"_raw_body": "id: transport-sse-open\nretry: 1000\nevent: message\ndata: {}\n\n",
+			"_sse_session_id": "transport-sse-1",
+			"_sse_next_event_index": 1,
 			"_headers": {
 				"MCP-Protocol-Version": "2025-11-25",
 				"Mcp-Session-Id": "transport-sse-1"
@@ -559,6 +603,20 @@ func _write_sse_stream_open(_client: StreamPeerTCP, _data: Dictionary) -> bool:
 func _write_sse_heartbeat(_client: StreamPeerTCP) -> bool:
 	_sse_heartbeat_count += 1
 	return true
+
+
+func _write_sse_events(_client: StreamPeerTCP, body: String) -> bool:
+	_sse_event_write_count += 1
+	_sse_event_bodies.append(body)
+	return true
+
+
+func _get_sse_events_since_index(session_id: String, start_index: int) -> Array:
+	if session_id != "transport-sse-1":
+		return []
+	if start_index > 1:
+		return []
+	return _queued_sse_events.duplicate(true)
 
 
 func _tick_loader(_delta: float) -> void:
@@ -593,12 +651,15 @@ func _reset_state() -> void:
 	_write_count = 0
 	_sse_open_count = 0
 	_sse_heartbeat_count = 0
+	_sse_event_write_count = 0
 	_last_method = ""
 	_last_path = ""
 	_last_body = ""
 	_last_headers = {}
 	_last_no_body = false
 	_last_response = {}
+	_sse_event_bodies = []
+	_queued_sse_events = []
 	_routed_bodies = []
 	_record_routed_body_content = true
 
