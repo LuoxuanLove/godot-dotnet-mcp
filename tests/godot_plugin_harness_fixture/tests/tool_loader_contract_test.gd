@@ -2,6 +2,8 @@ extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
@@ -100,6 +102,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
 		if not exposed_name.begins_with("%s_" % exposed_category):
 			return _failure("Public MCP exposure should prefix public tools with their manifest category: %s" % exposed_name)
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(exposed_name):
+			return _failure("Public MCP tool name should follow MCP 2025-11-25 naming guidance: %s" % exposed_name)
+	var listed_tools := ToolPresentationService.build_mcp_tool_list(exposed_tools)
+	for listed_tool in listed_tools:
+		if not (listed_tool is Dictionary):
+			return _failure("MCP tools/list entries should be dictionaries.")
+		var listed_name := str((listed_tool as Dictionary).get("name", ""))
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(listed_name):
+			return _failure("MCP tools/list item name should follow MCP 2025-11-25 naming guidance: %s" % listed_name)
 	if exposed_names.has("system_help"):
 		return _failure("Tool loader should remove system_help from the public tools/list surface.")
 	if not _loader.is_tool_exposed("system_help"):
