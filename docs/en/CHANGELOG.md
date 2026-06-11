@@ -84,6 +84,7 @@ Target version: 1.4.0.
 - Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
 - Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
 - Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.
+- Added refactor guardrail coverage so release-facing README files cannot reintroduce zip, `release_dist`, local-release, or release-package installation paths.
 
 ## [1.3.0] - 2026-06-08
 
