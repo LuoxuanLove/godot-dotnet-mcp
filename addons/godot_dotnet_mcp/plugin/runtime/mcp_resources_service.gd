@@ -5,6 +5,7 @@ class_name MCPResourcesService
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginSelfDiagnosticStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
@@ -436,23 +437,24 @@ func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
 		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
-	var exposed_tools = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = loader.get_all_tools_by_category()
-	elif loader.has_method("get_tools_by_category"):
-		all_tools_by_category = loader.get_tools_by_category()
-	var domain_states := []
-	if loader.has_method("get_domain_states"):
-		domain_states = loader.get_domain_states()
-	var presentation = ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+	var snapshot: Dictionary = ToolCatalogSnapshotServiceScript.build_snapshot(loader)
+	if not bool(snapshot.get("success", false)):
+		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var category_states: Array = snapshot.get("category_states", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	var loader_status: Dictionary = snapshot.get("tool_loader_status", {})
+	if loader_status.is_empty():
+		loader_status = _get_loader_status_safe()
+	var public_catalog_manifest := ToolCatalogSnapshotServiceScript.build_public_catalog_manifest(snapshot.get("catalog_manifest", {}))
 	return {
 		"tools": ToolPresentationServiceScript.build_mcp_tool_list(exposed_tools, presentation),
-		"domain_states": domain_states,
+		"domain_states": category_states,
 		"presentationVersion": int(presentation.get("presentationVersion", 1)),
 		"toolTree": presentation.get("toolTree", []),
 		"toolGroups": presentation.get("toolGroups", []),
-		"toolLoaderStatus": _get_loader_status_safe()
+		"toolLoaderStatus": loader_status,
+		"catalogManifest": public_catalog_manifest
 	}
 
 

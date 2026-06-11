@@ -117,6 +117,8 @@ const PUBLIC_REMOVED_MCP_TOOLS := {
 	"resource_manage": true
 }
 
+const MCP_TOOL_NAME_MAX_LENGTH := 128
+
 
 static func get_builtin_entries() -> Array[Dictionary]:
 	return BUILTIN_ENTRIES.duplicate(true)
@@ -171,3 +173,17 @@ static func is_public_category(category: String) -> bool:
 
 static func is_removed_public_tool(tool_name: String) -> bool:
 	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
+
+
+static func is_valid_mcp_tool_name(tool_name: String) -> bool:
+	if tool_name.is_empty() or tool_name.length() > MCP_TOOL_NAME_MAX_LENGTH:
+		return false
+	for index in range(tool_name.length()):
+		var code := tool_name.unicode_at(index)
+		var is_digit := code >= 48 and code <= 57
+		var is_upper := code >= 65 and code <= 90
+		var is_lower := code >= 97 and code <= 122
+		var is_symbol := code == 45 or code == 46 or code == 95
+		if not (is_digit or is_upper or is_lower or is_symbol):
+			return false
+	return true
