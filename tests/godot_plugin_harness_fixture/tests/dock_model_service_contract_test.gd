@@ -270,6 +270,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock snapshot metadata should preserve normalized output schemas for Tools UI consumers.")
 	if metadata_by_name.has("system_tool_activity"):
 		return _failure("Dock presentation should filter removed public tools through the snapshot service.")
+	var protocol_projection_result := _verify_mcp_protocol_projection(model)
+	if not bool(protocol_projection_result.get("success", false)):
+		return protocol_projection_result
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
 	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):
@@ -319,6 +322,84 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_mcp_protocol_projection(model: Dictionary) -> Dictionary:
+	var resources: Array = model.get("mcp_resources", [])
+	var resource_templates: Array = model.get("mcp_resource_templates", [])
+	var prompts: Array = model.get("mcp_prompts", [])
+	var counts: Dictionary = model.get("mcp_catalog_counts", {})
+	if resources.is_empty():
+		return _failure("Dock model should project MCP resources for the protocol catalog UI.")
+	if resource_templates.is_empty():
+		return _failure("Dock model should project MCP resource templates for the protocol catalog UI.")
+	if prompts.is_empty():
+		return _failure("Dock model should project MCP prompts for the protocol catalog UI.")
+	if int(counts.get("resources", -1)) != resources.size() or int(counts.get("resource_templates", -1)) != resource_templates.size() or int(counts.get("prompts", -1)) != prompts.size():
+		return _failure("Dock model should include MCP catalog counts matching the projected lists.")
+
+	var guide_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://guides/index")
+	if guide_resource.is_empty():
+		return _failure("Dock model should include the canonical guide index resource.")
+	if str(guide_resource.get("resource_kind", "")) != "guide":
+		return _failure("Dock resource projection should classify guide resources.")
+	if str(guide_resource.get("title", "")).is_empty() or str(guide_resource.get("description", "")).is_empty() or str(guide_resource.get("mimeType", "")) != "application/json":
+		return _failure("Dock resource projection should preserve title, description, and mime type.")
+	if (guide_resource.get("icons", []) as Array).is_empty():
+		return _failure("Dock resource projection should preserve MCP 2025-11-25 resource icons.")
+
+	var state_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://state/editor")
+	if str(state_resource.get("resource_kind", "")) != "state":
+		return _failure("Dock resource projection should classify state resources.")
+	var log_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://logs/editor/errors")
+	if str(log_resource.get("resource_kind", "")) != "log":
+		return _failure("Dock resource projection should classify editor log resources.")
+	var catalog_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://tools/catalog/visible")
+	if str(catalog_resource.get("resource_kind", "")) != "catalog":
+		return _failure("Dock resource projection should classify catalog resources.")
+	var activity_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://activity/recent")
+	if str(activity_resource.get("resource_kind", "")) != "activity":
+		return _failure("Dock resource projection should classify activity resources.")
+
+	var scene_template := _find_resource_by_uri(resource_templates, "godot-dotnet-mcp://scene/{path}")
+	if scene_template.is_empty() or str(scene_template.get("resource_kind", "")) != "template" or not bool(scene_template.get("is_template", false)):
+		return _failure("Dock resource projection should include and classify resource templates.")
+
+	var orientation_prompt := _find_prompt_by_name(prompts, "godot.project_orientation")
+	if orientation_prompt.is_empty():
+		return _failure("Dock prompt projection should include the project orientation workflow.")
+	if str(orientation_prompt.get("title", "")).is_empty() or str(orientation_prompt.get("description", "")).is_empty():
+		return _failure("Dock prompt projection should preserve prompt title and description.")
+	if (orientation_prompt.get("icons", []) as Array).is_empty():
+		return _failure("Dock prompt projection should preserve MCP 2025-11-25 prompt icons.")
+	var orientation_args: Array = orientation_prompt.get("arguments", [])
+	if not _array_has_argument(orientation_args, "goal"):
+		return _failure("Dock prompt projection should preserve prompt argument metadata.")
+	var runtime_prompt := _find_prompt_by_name(prompts, "godot.runtime_validation")
+	if str(runtime_prompt.get("prompt_kind", "")) != "runtime":
+		return _failure("Dock prompt projection should classify runtime workflows.")
+	return {"success": true}
+
+
+func _find_resource_by_uri(entries: Array, uri: String) -> Dictionary:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("uri", "")) == uri:
+			return entry as Dictionary
+	return {}
+
+
+func _find_prompt_by_name(entries: Array, name: String) -> Dictionary:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return entry as Dictionary
+	return {}
+
+
+func _array_has_argument(entries: Array, name: String) -> bool:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return true
+	return false
 
 
 func _contains_presentation_category(nodes: Array, category: String) -> bool:
