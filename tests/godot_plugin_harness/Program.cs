@@ -159,6 +159,7 @@ internal static class Program
             // so has_environment() correctly returns true throughout the test.
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_HOST"] = "10.0.0.8";
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_PORT"] = "4100";
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_STDIO_FRAMING"] = "legacy_content_length";
             process.StartInfo.ArgumentList.Add("--headless");
             if (editorProbeMode)
             {

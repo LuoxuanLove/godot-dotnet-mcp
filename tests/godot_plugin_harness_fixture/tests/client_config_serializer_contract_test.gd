@@ -12,6 +12,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Serializer should use mcp for opencode config files.")
 	if not serializer.preflight_requires_confirmation("incompatible_mcp"):
 		return _failure("Serializer should require confirmation for incompatible opencode MCP roots.")
+	if not serializer.preflight_requires_confirmation("conflicting_server_entry"):
+		return _failure("Serializer should require confirmation before replacing conflicting server entries.")
 
 	var desktop_prepare: Dictionary = serializer.prepare_new_config(JSON.stringify({
 		"mcpServers": {

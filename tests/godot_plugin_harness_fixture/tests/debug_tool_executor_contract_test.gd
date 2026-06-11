@@ -1,6 +1,7 @@
 extends RefCounted
 
 const DebugExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/debug/executor.gd")
+const DebugCompatibilityScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const TEMP_ROOT := "res://tests_tmp/godot_dotnet_mcp_debug_contracts"
 const TEMP_USER_DOTNET_BRIDGE_CSPROJ := "res://tests_tmp/godot_dotnet_mcp_debug_contracts/UserDotnetBridge/DotnetBridge.csproj"
 const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/dotnet_bridge"
@@ -12,6 +13,12 @@ var _created_plugin_bridge_fixture := false
 func run_case(_tree: SceneTree) -> Dictionary:
 	if not ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/debug_tools.gd"):
 		return _failure("debug_tools.gd compatibility entry should remain loadable for existing references.")
+	var executor_base_script = DebugExecutorScript.get_base_script()
+	if executor_base_script == null or str(executor_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/base_tools.gd":
+		return _failure("debug/executor.gd should own the debug implementation and extend base_tools.gd directly.")
+	var compatibility_base_script = DebugCompatibilityScript.get_base_script()
+	if compatibility_base_script == null or str(compatibility_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/debug/executor.gd":
+		return _failure("debug_tools.gd should remain only as a compatibility wrapper around debug/executor.gd.")
 
 	var executor = DebugExecutorScript.new()
 	_prepare_temp_root()

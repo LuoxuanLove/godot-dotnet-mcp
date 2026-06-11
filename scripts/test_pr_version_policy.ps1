@@ -36,9 +36,10 @@ script="plugin.gd"
 
     @"
 {
-  "protocol_version": "2025-06-18",
+  "protocol_version": "2025-11-25",
   "tool_schema_version": "2026-05-03.10",
   "server_name": "godot-dotnet-mcp",
+  "server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation.",
   "server_version": "$Version",
   "error_codes": {
     "invalid_argument": "invalid_argument",
@@ -50,9 +51,10 @@ script="plugin.gd"
     @"
 static func _default_facts() -> Dictionary:
 `treturn {
-`t`t"protocol_version": "2025-06-18",
+`t`t"protocol_version": "2025-11-25",
 `t`t"tool_schema_version": "2026-05-03.10",
 `t`t"server_name": "godot-dotnet-mcp",
+`t`t"server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation.",
 `t`t"server_version": "$Version",
 `t`t"error_codes": {
 `t`t`t"invalid_argument": "invalid_argument",
@@ -177,6 +179,7 @@ Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "
 Invoke-PolicyScenario -Name "non-release plugin cfg text change without version change" -HeadBranch "docs/plugin-metadata" -HeadVersion "1.0.0" -MutateHead { param($repo) Write-MetadataFixture -RepositoryRoot $repo -Version "1.0.0" -PluginDescription "Updated metadata" } -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release protocol version only" -HeadBranch "feature/protocol-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_version": "1.0.0"', '"server_version": "1.1.0"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Protocol facts parity failed for head server_version"
 Invoke-PolicyScenario -Name "protocol schema fallback drift" -HeadBranch "feature/protocol-schema-drift" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.gd"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"tool_schema_version": "2026-05-03.10"', '"tool_schema_version": "2026-05-03.11"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Protocol facts parity failed for head tool_schema_version"
+Invoke-PolicyScenario -Name "protocol description fallback drift" -HeadBranch "feature/protocol-description-drift" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.gd"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation."', '"server_description": "Drifted description"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Protocol facts parity failed for head server_description"
 Invoke-PolicyScenario -Name "protocol fallback missing error code" -HeadBranch "feature/protocol-error-code-drift" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.gd"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace("`r`n`t`t`t`"invalid_argument`": `"invalid_argument`",", ""); $content = $content.Replace("`n`t`t`t`"invalid_argument`": `"invalid_argument`",", ""); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "fallback is missing key(s): invalid_argument"
 Invoke-PolicyScenario -Name "protocol fallback error code value drift" -HeadBranch "feature/protocol-error-code-value-drift" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.gd"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"invalid_argument": "invalid_argument"', '"invalid_argument": "invalid_arg"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Protocol facts parity failed for head error_codes.invalid_argument"
 Invoke-PolicyScenario -Name "missing head version" -HeadBranch "feature/missing-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin.cfg"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content -replace 'version="[^"]+"\r?\n', ''; Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Cannot find plugin.cfg version"
