@@ -52,6 +52,7 @@ Target version: 1.4.0.
 - Added long-lived SSE stream lifecycle support for `GET /mcp`, including Content-Length-free stream opening, heartbeat comments, active `transport_mode=sse` diagnostics, and disconnected stream session history.
 - Added queued server-to-client event delivery for long-lived `GET /mcp` SSE streams so Streamable HTTP clients receive new JSON-RPC notifications without reopening the connection.
 - Added explicit Streamable HTTP SSE resume status metadata so clients can distinguish matched, stale, unknown-session, unknown-cursor, and empty `Last-Event-ID` cursors with retained-window indexes.
+- Added finite Streamable HTTP POST SSE responses for JSON-RPC requests that explicitly prefer `text/event-stream`, while keeping JSON-preferred POSTs on the existing JSON response path and preventing POST response events from replaying through unrelated GET SSE probes.
 - Hardened Streamable HTTP session handling so invalid multi-line `Mcp-Session-Id` headers are rejected before they can be echoed in response headers.
 - Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
 - Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.

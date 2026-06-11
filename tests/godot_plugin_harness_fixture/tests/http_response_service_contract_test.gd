@@ -275,6 +275,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP response service should keep raw SSE HTTP connections alive.")
 	if raw_sse_text.find("event: endpoint\ndata: {}\n\n") == -1:
 		return _failure("HTTP response service should write raw SSE bodies without JSON encoding.")
+	var post_sse_text := _send_raw_response_over_loopback(service, {
+		"status": 200,
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_raw_body": "id: post-1\nretry: 1000\nevent: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}\n\n",
+		"_headers": {
+			"MCP-Protocol-Version": MCPProtocolFacts.get_protocol_version(),
+			"Mcp-Session-Id": "post-sse-session"
+		}
+	})
+	if post_sse_text.find("HTTP/1.1 200 OK") == -1 or post_sse_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should send finite POST SSE responses as raw HTTP 200 event streams.")
+	if post_sse_text.find("Content-Length:") == -1:
+		return _failure("HTTP response service should keep Content-Length on finite raw POST SSE responses.")
+	if post_sse_text.find("Mcp-Session-Id: post-sse-session") == -1:
+		return _failure("HTTP response service should preserve MCP session headers on finite POST SSE responses.")
+	if post_sse_text.find("\"jsonrpc\":\"2.0\"") == -1 or post_sse_text.find("\"id\":7") == -1:
+		return _failure("HTTP response service should write finite POST SSE JSON-RPC response events without JSON encoding.")
 
 	var stream_text := _send_sse_stream_open_over_loopback(service, {
 		"_raw_body": "id: stream-1\nretry: 1000\nevent: message\ndata: {}\n\n",
