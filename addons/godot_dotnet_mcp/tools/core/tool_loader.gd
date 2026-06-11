@@ -4,12 +4,12 @@ class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
-const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
 const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
+const ToolLoaderDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_diagnostics_service.gd")
 const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
 const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
 const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
@@ -21,13 +21,12 @@ var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
 var _disabled_tools: Dictionary = {}
-var _load_errors: Array[Dictionary] = []
-var _reload_status: Dictionary = {}
 var _tool_lsp_diagnostics_adapter = null
 var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
 var _runtime_manager = ToolRuntimeManagerScript.new()
 var _status_service = ToolLoaderStatusServiceScript.new()
+var _diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
 var _entry_service = ToolRegistryEntryServiceScript.new()
 var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
 var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
@@ -76,7 +75,7 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 			_ensure_runtime_loaded(category, "preload")
 	_performance["preload_ms"] = _elapsed_ms(preload_started)
 	_performance["startup_ms"] = _elapsed_ms(started_usec)
-	_reload_status = _make_reload_status("initialize")
+	_update_reload_status(_make_reload_status("initialize"))
 	_sync_load_error_incidents("initialize")
 	_refresh_runtime_context()
 	_force_reload_script_load = false
@@ -85,7 +84,7 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 		"tool_count": get_tool_definitions().size(),
 		"exposed_tool_count": get_exposed_tool_definitions().size(),
 		"category_count": _ordered_categories.size(),
-		"tool_load_error_count": _load_errors.size()
+		"tool_load_error_count": _diagnostics_service.get_tool_load_error_count()
 	}
 
 
@@ -181,7 +180,7 @@ func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
-	return _load_errors.duplicate(true)
+	return _diagnostics_service.get_tool_load_errors()
 
 
 func get_domain_states() -> Array[Dictionary]:
@@ -201,14 +200,14 @@ func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
 
 
 func get_reload_status() -> Dictionary:
-	return _reload_status.duplicate(true)
+	return _diagnostics_service.get_reload_status()
 
 
 func get_tool_loader_status() -> Dictionary:
 	var tool_count := get_tool_definitions().size()
 	var exposed_tool_count := get_exposed_tool_definitions().size()
 	var category_count := _ordered_categories.size()
-	var tool_load_error_count := _load_errors.size()
+	var tool_load_error_count := _diagnostics_service.get_tool_load_error_count()
 	return _status_service.build_tool_loader_status(tool_count, exposed_tool_count, category_count, tool_load_error_count)
 
 
@@ -506,7 +505,7 @@ func _reset_state() -> void:
 	_ordered_categories.clear()
 	_runtime_by_category.clear()
 	_tool_definitions_by_category.clear()
-	_load_errors.clear()
+	_diagnostics_service.clear_load_errors()
 
 
 func _refresh_entries() -> void:
@@ -514,8 +513,7 @@ func _refresh_entries() -> void:
 	var new_entries: Dictionary = index.get("entries_by_category", {})
 	var new_order: Array[String] = []
 	new_order.assign(index.get("ordered_categories", []))
-	_load_errors.clear()
-	_load_errors.assign(index.get("load_errors", []))
+	_diagnostics_service.replace_load_errors(index.get("load_errors", []))
 
 	for existing_category in _runtime_by_category.keys():
 		if not new_entries.has(existing_category):
@@ -646,16 +644,10 @@ func _extract_tool_definitions(category: String, executor) -> Array:
 
 
 func _record_load_error(category: String, path: String, message: String) -> void:
-	var error_info = {
-		"category": category,
-		"path": path,
-		"message": message
-	}
-	_load_errors.append(error_info)
+	var error_info: Dictionary = _diagnostics_service.record_load_error(category, path, message)
 	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	runtime["last_error"] = error_info
+	runtime["last_error"] = error_info.duplicate(true)
 	_runtime_by_category[category] = runtime
-	_sync_load_error_incidents("record_load_error")
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
@@ -708,8 +700,7 @@ func _make_reload_status(action: String, reloaded_domains: Array = [], skipped_d
 
 
 func _update_reload_status(status: Dictionary) -> Dictionary:
-	_reload_status = status.duplicate(true)
-	return _reload_status.duplicate(true)
+	return _diagnostics_service.update_reload_status(status)
 
 
 func _elapsed_ms(started_usec: int) -> float:
@@ -824,43 +815,13 @@ func _as_bool(value) -> bool:
 
 
 func _sync_load_error_incidents(phase: String) -> void:
-	for error_info in _load_errors:
-		if not (error_info is Dictionary):
-			continue
-		var info := error_info as Dictionary
-		PluginSelfDiagnosticStore.record_incident(
-			"error",
-			"tool_load_error",
-			"tool_domain_load_failed",
-			str(info.get("message", "Tool domain load failed")),
-			"tool_loader",
-			phase,
-			str(info.get("path", "")),
-			"",
-			"",
-			true,
-			"Inspect the tool domain script and the editor output for the failing category.",
-			{
-				"category": str(info.get("category", "")),
-				"source": str(info.get("source", "builtin"))
-			}
-		)
+	_diagnostics_service.sync_load_error_incidents(phase)
 
 
 func _record_reload_incident(category: String, message: String, phase: String) -> void:
-	PluginSelfDiagnosticStore.record_incident(
-		"error",
-		"reload_conflict",
-		"tool_reload_failed",
-		message,
-		"tool_loader",
-		phase,
+	_diagnostics_service.record_reload_incident(
+		category,
 		str(_entries_by_category.get(category, {}).get("path", "")),
-		"",
-		"",
-		true,
-		"Inspect the last reload status and the failing tool domain script.",
-		{
-			"category": category
-		}
+		message,
+		phase
 	)

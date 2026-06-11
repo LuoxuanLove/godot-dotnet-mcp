@@ -99,6 +99,7 @@ Target version: 1.4.0.
 - Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.
 - Split tool loader health, performance, and reload status snapshots into a dedicated status service while keeping existing loader status APIs stable.
+- Split loader load/reload diagnostic incident handling into a dedicated diagnostics service while keeping loader error/status APIs stable.
 - Split registry entry indexing, duplicate-category detection, and loader entry ordering into a dedicated service while keeping runtime cache cleanup in `MCPToolLoader`.
 - Split tool-loader runtime context construction and loaded-runtime reconfiguration into a dedicated service while keeping executor lifecycle ownership in `MCPToolLoader`.
 - Split tool-loader catalog, flat definition, exposed-definition, and domain-state projections into a dedicated service while keeping lazy definition loading owned by `MCPToolLoader`.
