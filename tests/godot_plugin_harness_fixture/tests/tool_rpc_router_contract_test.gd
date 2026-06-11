@@ -497,11 +497,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for tool_entry in tools:
 		if not (tool_entry is Dictionary):
 			continue
+		var tool_dict := tool_entry as Dictionary
 		if (tool_entry as Dictionary).has("groupPath") or (tool_entry as Dictionary).has("treeChildren"):
 			return _failure("Tool RPC router tools/list should not expose presentation metadata on flat tool entries.")
 		for internal_key in ["category", "domainKey", "loadState", "source", "enabled"]:
 			if (tool_entry as Dictionary).has(internal_key):
 				return _failure("Tool RPC router tools/list should not expose internal metadata key: %s" % internal_key)
+		if not (tool_dict.get("annotations", {}) is Dictionary):
+			return _failure("Tool RPC router tools/list should include MCP tool annotations.")
+		if str(tool_dict.get("name", "")) == "system_project_state":
+			var annotations := tool_dict.get("annotations", {}) as Dictionary
+			if bool(annotations.get("readOnlyHint", false)) != true:
+				return _failure("Tool RPC router should preserve read-only annotations on tools/list entries.")
+			if bool(annotations.get("destructiveHint", true)) != false:
+				return _failure("Tool RPC router should preserve non-destructive annotations on tools/list entries.")
+			if bool(annotations.get("openWorldHint", true)) != false:
+				return _failure("Tool RPC router should explicitly preserve closed-world annotations on local tools/list entries.")
 		if not _has_json_schema_2020_12(tool_entry, "inputSchema"):
 			return _failure("Tool RPC router tools/list should advertise JSON Schema 2020-12 on inputSchema.")
 		if not _has_json_schema_2020_12(tool_entry, "outputSchema"):
