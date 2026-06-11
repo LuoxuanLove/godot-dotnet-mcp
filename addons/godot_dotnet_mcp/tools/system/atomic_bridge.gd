@@ -7,12 +7,14 @@ extends RefCounted
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
 const AtomicBridgeRuntimeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_runtime.gd")
+const AtomicBridgeDispatchServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_dispatch_service.gd")
 
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 var _runtime_context: Dictionary = {}
 var _support = AtomicBridgeSupportScript.new()
 var _runtime = AtomicBridgeRuntimeScript.new()
+var _dispatch_service = AtomicBridgeDispatchServiceScript.new()
 
 
 func _init() -> void:
@@ -103,54 +105,11 @@ func _find_path_in_args(args: Dictionary) -> String:
 
 
 func call_atomic(full_name: String, args: Dictionary = {}) -> Dictionary:
-	MCPDebugBuffer.record("debug", "atomic",
-		"%s action=%s" % [full_name, str(args.get("action", ""))])
-	# Write protection: block writes to plugin directory unless explicitly authorized
-	var write_action := _is_write_atomic_action(full_name, args)
-	if write_action:
-		var target_path := _find_path_in_args(args)
-		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
-			MCPDebugBuffer.record("warning", "atomic",
-				"Write blocked on protected path: %s (tool: %s)" % [target_path, full_name])
-			return error("Protected path: cannot write to MCP plugin directory via system tools. Use plugin_developer tools with explicit authorization.")
-	var parts := full_name.split("_", false, 1)
-	if parts.size() < 2:
-		MCPDebugBuffer.record("debug", "atomic", "Invalid atomic name: %s" % full_name)
-		return error("Invalid atomic tool name: %s" % full_name)
-	var category := parts[0]
-	var tool_name := parts[1]
-	if not _runtime.has_category(category):
-		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
-
-	var result: Dictionary = _runtime.dispatch(category, tool_name, args)
-	if write_action and bool(result.get("success", false)):
-		_invalidate_atomic_executors()
-	return result
+	return _dispatch_service.call_atomic(full_name, args, _support, _runtime)
 
 
 func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
-	MCPDebugBuffer.record("debug", "atomic",
-		"%s action=%s" % [full_name, str(args.get("action", ""))])
-	var write_action := _is_write_atomic_action(full_name, args)
-	if write_action:
-		var target_path := _find_path_in_args(args)
-		if is_protected_path(target_path) and not bool(args.get("allow_plugin_write", false)):
-			MCPDebugBuffer.record("warning", "atomic",
-				"Write blocked on protected path: %s (tool: %s)" % [target_path, full_name])
-			return error("Protected path: cannot write to MCP plugin directory via system tools. Use plugin_developer tools with explicit authorization.")
-	var parts := full_name.split("_", false, 1)
-	if parts.size() < 2:
-		MCPDebugBuffer.record("debug", "atomic", "Invalid atomic name: %s" % full_name)
-		return error("Invalid atomic tool name: %s" % full_name)
-	var category := parts[0]
-	var tool_name := parts[1]
-	if not _runtime.has_category(category):
-		return error("Unknown atomic category: %s (from %s)" % [category, full_name])
-
-	var result: Dictionary = await _runtime.dispatch_async(category, tool_name, args)
-	if write_action and bool(result.get("success", false)):
-		_invalidate_atomic_executors()
-	return result
+	return await _dispatch_service.call_atomic_async(full_name, args, _support, _runtime)
 
 
 func _build_atomic_runtime_context(category: String, _runtime_context_source: Dictionary) -> Dictionary:
