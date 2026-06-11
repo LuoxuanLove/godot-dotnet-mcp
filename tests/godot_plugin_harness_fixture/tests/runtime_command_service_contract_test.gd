@@ -118,6 +118,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Runtime mouse click should dispatch a released mouse button event.")
 	if int((_input_events[1] as InputEventMouseButton).button_index) != MOUSE_BUTTON_LEFT:
 		return _failure("Runtime mouse click should preserve the requested mouse button.")
+	if int((_input_events[1] as InputEventMouseButton).button_mask) != (1 << (MOUSE_BUTTON_LEFT - 1)):
+		return _failure("Runtime mouse click should set the press button_mask for Input.parse_input_event.")
+	if int((_input_events[2] as InputEventMouseButton).button_mask) != 0:
+		return _failure("Runtime mouse click should clear the release button_mask.")
 	if Vector2((_input_events[1] as InputEventMouseButton).position) != Vector2(24, 36):
 		return _failure("Runtime mouse click should preserve the requested position.")
 	var mouse_input_data = mouse_input_result.get("data", {})
@@ -134,6 +138,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if str(invalid_button_result.get("error", "")) != "invalid_argument":
 		return _failure("Runtime mouse input should reject unknown mouse buttons.")
+	var partial_top_level_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": 1}]
+	})
+	if str(partial_top_level_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial top-level coordinates.")
+	var partial_dictionary_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "position": {"x": 1}}]
+	})
+	if str(partial_dictionary_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial position dictionaries.")
+	var non_numeric_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": "left", "y": 2}]
+	})
+	if str(non_numeric_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject non-numeric coordinates.")
 
 	return {
 		"name": "runtime_command_service_contracts",

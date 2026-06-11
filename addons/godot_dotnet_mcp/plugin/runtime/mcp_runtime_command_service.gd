@@ -370,6 +370,7 @@ func _dispatch_mouse_button_event(button_name: String, position: Vector2, presse
 	event.position = position
 	event.global_position = position
 	event.pressed = pressed
+	event.button_mask = _mouse_button_mask(button_index) if pressed else 0
 	_dispatch_input_event(event)
 
 
@@ -393,9 +394,21 @@ func _extract_mouse_position(input_entry: Dictionary) -> Dictionary:
 		return {"success": true, "position": raw_position}
 	if raw_position is Dictionary:
 		var position_dict: Dictionary = raw_position
-		return {"success": true, "position": Vector2(float(position_dict.get("x", 0.0)), float(position_dict.get("y", 0.0)))}
+		if not position_dict.has("x") or not position_dict.has("y"):
+			return _failure("invalid_argument", "Mouse position dictionaries require numeric x and y coordinates.")
+		var dict_x = position_dict.get("x")
+		var dict_y = position_dict.get("y")
+		if not _is_finite_number(dict_x) or not _is_finite_number(dict_y):
+			return _failure("invalid_argument", "Mouse position dictionaries require numeric x and y coordinates.")
+		return {"success": true, "position": Vector2(float(dict_x), float(dict_y))}
 	if input_entry.has("x") or input_entry.has("y"):
-		return {"success": true, "position": Vector2(float(input_entry.get("x", 0.0)), float(input_entry.get("y", 0.0)))}
+		if not input_entry.has("x") or not input_entry.has("y"):
+			return _failure("invalid_argument", "Mouse runtime inputs require both numeric x and y coordinates.")
+		var raw_x = input_entry.get("x")
+		var raw_y = input_entry.get("y")
+		if not _is_finite_number(raw_x) or not _is_finite_number(raw_y):
+			return _failure("invalid_argument", "Mouse runtime inputs require both numeric x and y coordinates.")
+		return {"success": true, "position": Vector2(float(raw_x), float(raw_y))}
 	return _failure("invalid_argument", "Mouse runtime inputs require position, or x/y coordinates.")
 
 
@@ -411,6 +424,22 @@ func _mouse_button_index(button_name: String) -> int:
 			return 0
 		_:
 			return 0
+
+
+func _mouse_button_mask(button_index: int) -> int:
+	if button_index <= 0:
+		return 0
+	return 1 << (button_index - 1)
+
+
+func _is_finite_number(value) -> bool:
+	match typeof(value):
+		TYPE_INT:
+			return true
+		TYPE_FLOAT:
+			return not is_nan(value) and not is_inf(value)
+		_:
+			return false
 
 
 func _serialize_vector2(position: Vector2) -> Dictionary:
