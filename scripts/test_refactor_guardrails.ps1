@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
+$manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
 
 function Write-GuardrailFixture {
     param(
@@ -20,11 +21,12 @@ function Write-GuardrailFixture {
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "scripts") -Force | Out-Null
 
     Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_refactor_guardrails.ps1")
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $RepositoryRoot "scripts\contract_case_manifest.json")
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 | Out-Null
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 

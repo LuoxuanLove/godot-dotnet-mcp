@@ -125,8 +125,8 @@ $bannedReadmeInstallPatterns = @(
     @{ Pattern = '(?i)\brelease[_ -]?dist\b'; Description = "release_dist install path" },
     @{ Pattern = '(?i)\brelease[ _-]package\b'; Description = "release package install wording" },
     @{ Pattern = '(?i)\blocal[ _-]release\b'; Description = "local release install wording" },
-    @{ Pattern = '(?i)\bzip(?:[ _-]?(?:package|archive|file|bundle|installer|download))\b'; Description = "zip install wording" },
-    @{ Pattern = '(?i)\b(?:download|extract|install|release|releases)\b[^\r\n]{0,80}\bzip\b|\bzip\b[^\r\n]{0,80}\b(?:download|extract|install|release|releases)\b'; Description = "zip install context wording" },
+    @{ Pattern = '(?i)(?:^|[^A-Za-z0-9])zip(?:[ _-](?:package|archive|file|bundle|installer|download))?(?=$|[^A-Za-z0-9])'; Description = "zip install wording" },
+    @{ Pattern = '(?i)\b(?:download|extract|install|release|releases)\b[^\r\n]{0,80}(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])|(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])[^\r\n]{0,80}\b(?:download|extract|install|release|releases)\b'; Description = "zip install context wording" },
     @{ Pattern = '(?i)\bgodot-dotnet-mcp-[0-9][0-9A-Za-z_.-]*\.zip\b'; Description = "versioned zip artifact install wording" }
 )
 foreach ($relativeReadmePath in $releaseFacingReadmes) {
