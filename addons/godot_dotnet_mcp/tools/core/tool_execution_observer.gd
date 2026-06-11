@@ -164,14 +164,6 @@ func _failure(error_type: String, category: String, tool_name: String, message: 
 
 
 func _sort_tool_metric(a: Dictionary, b: Dictionary) -> bool:
-	var left_count = int(a.get("count", 0))
-	var right_count = int(b.get("count", 0))
-	if left_count != right_count:
-		return left_count > right_count
-	var left_time = int(a.get("last_called_at_unix", 0))
-	var right_time = int(b.get("last_called_at_unix", 0))
-	if left_time != right_time:
-		return left_time > right_time
 	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
 
 

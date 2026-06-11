@@ -79,9 +79,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var usage := observer.get_tool_usage_stats()
 	if _find_metric(metrics, "system_project_state").is_empty():
 		return _failure("Tool execution observer should expose per-tool call metrics.")
+	if metrics.size() < 2 or str(metrics[0].get("tool_name", "")) != "debug_dotnet":
+		return _failure("Tool execution observer performance metrics should keep stable tool-name ordering.")
 	var debug_usage := _find_usage(usage, "debug_dotnet")
 	if debug_usage.is_empty() or int(debug_usage.get("call_count", 0)) < 1:
 		return _failure("Tool execution observer should expose per-tool usage stats.")
+	if usage.size() < 2 or str(usage[0].get("tool_name", "")) != "system_project_state":
+		return _failure("Tool execution observer usage stats should remain sorted by call frequency.")
 
 	return {
 		"success": true,
