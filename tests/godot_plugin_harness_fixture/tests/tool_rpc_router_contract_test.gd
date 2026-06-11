@@ -511,6 +511,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				return _failure("Tool RPC router should preserve read-only annotations on tools/list entries.")
 			if bool(annotations.get("destructiveHint", true)) != false:
 				return _failure("Tool RPC router should preserve non-destructive annotations on tools/list entries.")
+			if bool(annotations.get("openWorldHint", true)) != false:
+				return _failure("Tool RPC router should explicitly preserve closed-world annotations on local tools/list entries.")
 		if not _has_json_schema_2020_12(tool_entry, "inputSchema"):
 			return _failure("Tool RPC router tools/list should advertise JSON Schema 2020-12 on inputSchema.")
 		if not _has_json_schema_2020_12(tool_entry, "outputSchema"):

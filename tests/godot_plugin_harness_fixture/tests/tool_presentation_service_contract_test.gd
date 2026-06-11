@@ -152,6 +152,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Presentation service should mark clear state/query tools as read-only.")
 	if bool((project_state_annotations as Dictionary).get("destructiveHint", true)) != false:
 		return _failure("Presentation service should not mark read-only state tools as destructive.")
+	if bool((project_state_annotations as Dictionary).get("openWorldHint", true)) != false:
+		return _failure("Presentation service should explicitly mark local project-state tools as closed-world.")
 	var default_output_schema = mcp_project_state.get("outputSchema", {})
 	if not (default_output_schema is Dictionary):
 		return _failure("Presentation service should attach default outputSchema to MCP tools/list entries.")

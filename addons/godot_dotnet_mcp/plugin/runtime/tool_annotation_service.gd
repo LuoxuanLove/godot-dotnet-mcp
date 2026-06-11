@@ -95,7 +95,7 @@ static func build_annotations(tool: Dictionary) -> Dictionary:
 		if not annotations.has(key):
 			annotations[key] = behavior_hints[key]
 
-	if not annotations.has("openWorldHint") and _infer_open_world_hint(tool_name):
+	if not annotations.has("openWorldHint"):
 		annotations["openWorldHint"] = _infer_open_world_hint(tool_name)
 
 	return annotations
