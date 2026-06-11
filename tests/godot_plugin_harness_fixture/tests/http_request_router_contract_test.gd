@@ -150,6 +150,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should surface Last-Event-ID as a GET /mcp resume cursor hint.")
 	if get_mcp_body.find("\"resume_cursor_found\":false") == -1:
 		return _failure("HTTP request router should report missing SSE resume cursors without replaying unrelated events.")
+	if get_mcp_body.find("\"resume_status\":\"unknown_session\"") == -1:
+		return _failure("HTTP request router should distinguish unknown SSE resume sessions from matched or stale cursors.")
+	if get_mcp_body.find("\"resume_start_index\":0") == -1 or get_mcp_body.find("\"resume_base_index\":0") == -1 or get_mcp_body.find("\"resume_next_index\":0") == -1:
+		return _failure("HTTP request router should expose stable SSE resume window indexes for unknown cursors.")
 	var first_sse_event_id := _extract_first_sse_event_id(get_mcp_body)
 	if first_sse_event_id.is_empty():
 		return _failure("HTTP request router should expose an SSE event id that clients can resume from.")
@@ -163,8 +167,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should return exactly the new event when resuming from the latest known cursor.")
 	if resumed_body.find("\"resume_cursor_found\":true") == -1:
 		return _failure("HTTP request router should report matched SSE resume cursors in event data.")
+	if resumed_body.find("\"resume_status\":\"matched\"") == -1:
+		return _failure("HTTP request router should report matched SSE resume status in event data.")
 	if resumed_body.find("\"replay_event_count\":0") == -1:
 		return _failure("HTTP request router should report zero stored events after a latest-cursor resume before adding the new probe event.")
+	if resumed_body.find("\"resume_start_index\":1") == -1 or resumed_body.find("\"resume_next_index\":1") == -1:
+		return _failure("HTTP request router should expose the absolute resume window after a matched cursor.")
 	var second_sse_event_id := _extract_first_sse_event_id(resumed_body)
 	if second_sse_event_id.is_empty() or second_sse_event_id == first_sse_event_id:
 		return _failure("HTTP request router should assign a new SSE event id for each resumable probe event.")
@@ -201,6 +209,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should keep only the current event for an evicted SSE resume cursor.")
 	if evicted_body.find("\"resume_cursor_found\":false") == -1:
 		return _failure("HTTP request router should report evicted SSE resume cursors as missing.")
+	if evicted_body.find("\"resume_status\":\"unknown_session\"") == -1:
+		return _failure("HTTP request router should report evicted SSE sessions as unknown sessions.")
+
+	var bounded_router = HttpRequestRouterScript.new()
+	bounded_router.configure(context)
+	var bounded_first_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-resume"})
+	var bounded_first_event_id := _extract_first_sse_event_id(str(bounded_first_response.get("_raw_body", "")))
+	for index in range(33):
+		await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-resume"})
+	var stale_cursor_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "bounded-resume", "last-event-id": bounded_first_event_id})
+	var stale_cursor_body := str(stale_cursor_response.get("_raw_body", ""))
+	if stale_cursor_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report stale retained-window cursors as not found.")
+	if stale_cursor_body.find("\"resume_status\":\"stale_cursor\"") == -1:
+		return _failure("HTTP request router should distinguish stale retained-window cursors from unknown sessions.")
+	if stale_cursor_body.find("\"resume_base_index\":2") == -1 or stale_cursor_body.find("\"resume_next_index\":34") == -1:
+		return _failure("HTTP request router should expose retained-window indexes for stale cursors.")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")

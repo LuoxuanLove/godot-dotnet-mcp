@@ -527,6 +527,20 @@ func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	if int(stale_batch.get("next_index", 0)) != 33:
 		queue.dispose()
 		return _failure("SSE event queue should expose the true next absolute cursor for stale retained-window reads.")
+	var stale_resume_status: Dictionary = queue.resume_status("bounded-active-stream", "bounded-bounded-active-stream-1")
+	if bool(stale_resume_status.get("found", true)):
+		queue.dispose()
+		return _failure("SSE event queue should report stale retained-window cursor ids as not found.")
+	if str(stale_resume_status.get("status", "")) != "stale_cursor":
+		queue.dispose()
+		return _failure("SSE event queue should distinguish stale retained-window cursors from unknown sessions.")
+	if int(stale_resume_status.get("base_index", 0)) != 1 or int(stale_resume_status.get("next_index", 0)) != 33:
+		queue.dispose()
+		return _failure("SSE event queue should expose retained-window bounds for stale cursor diagnostics.")
+	var unknown_resume_status: Dictionary = queue.resume_status("missing-bounded-stream", "bounded-missing-1")
+	if str(unknown_resume_status.get("status", "")) != "unknown_session":
+		queue.dispose()
+		return _failure("SSE event queue should distinguish unknown sessions from stale cursors.")
 	var repeated_batch: Dictionary = queue.events_since_index_with_cursor("bounded-active-stream", int(stale_batch.get("next_index", 0)))
 	if not (repeated_batch.get("events", []) as Array).is_empty():
 		queue.dispose()

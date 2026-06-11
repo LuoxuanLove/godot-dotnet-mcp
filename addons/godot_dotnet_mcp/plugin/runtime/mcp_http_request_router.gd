@@ -286,7 +286,11 @@ func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictio
 				"mode": "sse_stream",
 				"resume_from_event_id": last_event_id,
 				"resume_cursor_found": bool(resume_status.get("found", false)),
-				"replay_event_count": int(resume_status.get("event_count_after_cursor", 0))
+				"resume_status": str(resume_status.get("status", "matched" if bool(resume_status.get("found", false)) else "unknown_session")),
+				"replay_event_count": int(resume_status.get("event_count_after_cursor", 0)),
+				"resume_start_index": int(resume_status.get("start_index", 0)),
+				"resume_base_index": int(resume_status.get("base_index", 0)),
+				"resume_next_index": int(resume_status.get("next_index", 0))
 			}
 		}
 	}, "streamable-http-get")

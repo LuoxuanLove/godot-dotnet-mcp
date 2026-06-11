@@ -76,18 +76,42 @@ func event_count(session_id: String) -> int:
 
 
 func resume_status(session_id: String, last_event_id: String) -> Dictionary:
+	var normalized_session := _normalize_session_id(session_id)
 	var cursor := last_event_id.strip_edges()
 	if cursor.is_empty():
-		return {"found": false, "event_count_after_cursor": 0}
-	var log := _log_for_session(_normalize_session_id(session_id))
+		var current_base := int(_event_base_indices.get(normalized_session, 0))
+		var current_end := current_base + _log_for_session(normalized_session).size()
+		return {
+			"found": false,
+			"status": "no_cursor",
+			"event_count_after_cursor": 0,
+			"start_index": current_end,
+			"base_index": current_base,
+			"next_index": current_end
+		}
+	var has_session := _event_logs.has(normalized_session)
+	var log := _log_for_session(normalized_session)
+	var base_index := int(_event_base_indices.get(normalized_session, 0))
+	var end_index := base_index + log.size()
 	for index in range(log.size()):
 		var event = log[index]
 		if event is Dictionary and str((event as Dictionary).get("id", "")) == cursor:
 			return {
 				"found": true,
-				"event_count_after_cursor": max(0, log.size() - index - 1)
+				"status": "matched",
+				"event_count_after_cursor": max(0, log.size() - index - 1),
+				"start_index": base_index + index + 1,
+				"base_index": base_index,
+				"next_index": end_index
 			}
-	return {"found": false, "event_count_after_cursor": 0}
+	return {
+		"found": false,
+		"status": "stale_cursor" if has_session else "unknown_session",
+		"event_count_after_cursor": 0,
+		"start_index": end_index,
+		"base_index": base_index,
+		"next_index": end_index
+	}
 
 
 func format_events(events: Array) -> String:
