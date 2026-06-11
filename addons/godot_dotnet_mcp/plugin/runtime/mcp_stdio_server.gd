@@ -207,12 +207,11 @@ func _handle_request(body: String, generation: int = -1) -> void:
 	var has_id: bool = bool(envelope_validation.get("has_id", false))
 	var id: Variant = envelope_validation.get("id")
 	if not bool(envelope_validation.get("success", false)):
-		if has_id:
-			_write_response(_create_json_rpc_error(
-				int(envelope_validation.get("code", -32600)),
-				str(envelope_validation.get("message", "Invalid Request")),
-				id
-			))
+		_write_response(_create_json_rpc_error(
+			int(envelope_validation.get("code", -32600)),
+			str(envelope_validation.get("message", "Invalid Request")),
+			id
+		))
 		return
 
 	var method: String = str(envelope_validation.get("method", ""))

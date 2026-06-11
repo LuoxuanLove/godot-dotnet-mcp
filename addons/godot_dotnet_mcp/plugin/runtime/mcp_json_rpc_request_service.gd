@@ -46,8 +46,6 @@ func handle_request_async(body: String) -> Dictionary:
 	var has_id = bool(envelope_validation.get("has_id", false))
 	var id = envelope_validation.get("id")
 	if not bool(envelope_validation.get("success", false)):
-		if not has_id:
-			return {"status": 202, "_no_body": true}
 		return _build_error(
 			int(envelope_validation.get("code", -32600)),
 			str(envelope_validation.get("message", "Invalid Request")),

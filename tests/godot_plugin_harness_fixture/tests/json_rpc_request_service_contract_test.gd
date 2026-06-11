@@ -116,8 +116,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"method": [],
 		"params": {}
 	}))
-	if not bool(invalid_notification_method.get("_no_body", false)):
-		return _failure("JSON-RPC request service should not respond to invalid notification envelopes.")
+	var invalid_notification_method_error = invalid_notification_method.get("error", {})
+	if not (invalid_notification_method_error is Dictionary) or int((invalid_notification_method_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject invalid no-id envelopes with -32600 and id=null.")
+	if invalid_notification_method.get("id") != null:
+		return _failure("JSON-RPC request service should use id=null for invalid no-id envelopes.")
 	if callbacks.received.size() != 0:
 		return _failure("JSON-RPC request service should not emit request_received for invalid notification envelopes.")
 

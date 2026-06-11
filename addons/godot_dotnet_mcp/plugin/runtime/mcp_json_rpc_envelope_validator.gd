@@ -14,7 +14,9 @@ static func validate_request_envelope(request: Dictionary) -> Dictionary:
 		return _invalid(has_id, id, "Invalid Request: method must be a non-empty string")
 
 	if has_id and not _is_valid_request_id(id):
-		return _invalid(true, null, "Invalid Request: id must be a string, number, or null")
+		var invalid_id_result := _invalid(true, null, "Invalid Request: id must be a string, number, or null")
+		invalid_id_result["invalid_id"] = true
+		return invalid_id_result
 
 	return {
 		"success": true,
@@ -27,8 +29,9 @@ static func validate_request_envelope(request: Dictionary) -> Dictionary:
 static func _invalid(has_id: bool, id, message: String) -> Dictionary:
 	return {
 		"success": false,
-		"has_id": has_id,
+		"has_id": true,
 		"id": id,
+		"request_had_id": has_id,
 		"code": -32600,
 		"message": message
 	}

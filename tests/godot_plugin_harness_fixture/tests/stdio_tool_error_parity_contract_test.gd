@@ -295,6 +295,11 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
 	var invalid_cases: Array[Dictionary] = [
 		{
+			"label": "no-id object method",
+			"request": {"jsonrpc": "2.0", "method": [], "params": {}},
+			"expected_id": null
+		},
+		{
 			"label": "wrong jsonrpc",
 			"request": {"jsonrpc": "1.0", "id": 31, "method": "ping", "params": {}},
 			"expected_id": 31
@@ -329,14 +334,14 @@ func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
 		if response.get("id") != invalid_case.get("expected_id"):
 			return _failure("Invalid %s stdio envelope should preserve only valid ids." % str(invalid_case.get("label", "")))
 
-	var notification_body := JSON.stringify({"jsonrpc": "2.0", "method": [], "params": {}})
+	var notification_body := JSON.stringify({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
 	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [notification_body.to_utf8_buffer().size(), notification_body]).to_utf8_buffer())
 	stdio_server.set("_last_written_response", {})
 	var parsed_notification: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
 	if not bool(parsed_notification):
-		return _failure("Invalid stdio notification envelope should consume its frame.")
+		return _failure("Valid stdio notification envelope should consume its frame.")
 	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
-		return _failure("Invalid stdio notification envelope should not emit a response.")
+		return _failure("Valid stdio notification envelope should not emit a response.")
 	return {"success": true, "error": ""}
 
 
