@@ -10,16 +10,18 @@ var _get_viewport := Callable()
 var _get_current_scene_path := Callable()
 var _build_runtime_state := Callable()
 var _get_capture_availability := Callable()
+var _parse_input_event := Callable()
 var _capture_root_dir := MCPUserDataPaths.RUNTIME_CAPTURE_ROOT
 var _max_capture_files_per_session := 24
 var _capture_files_by_session: Dictionary = {}
 
 
-func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: Callable = Callable(), get_current_scene_path_callback: Callable = Callable(), build_runtime_state_callback: Callable = Callable(), capture_root_dir: String = MCPUserDataPaths.RUNTIME_CAPTURE_ROOT, max_capture_files_per_session: int = 24) -> void:
+func configure(get_tree_callback: Callable = Callable(), get_viewport_callback: Callable = Callable(), get_current_scene_path_callback: Callable = Callable(), build_runtime_state_callback: Callable = Callable(), capture_root_dir: String = MCPUserDataPaths.RUNTIME_CAPTURE_ROOT, max_capture_files_per_session: int = 24, parse_input_event_callback: Callable = Callable()) -> void:
 	_get_tree = get_tree_callback
 	_get_viewport = get_viewport_callback
 	_get_current_scene_path = get_current_scene_path_callback
 	_build_runtime_state = build_runtime_state_callback
+	_parse_input_event = parse_input_event_callback
 	_capture_root_dir = capture_root_dir
 	_max_capture_files_per_session = maxi(max_capture_files_per_session, 1)
 	_get_capture_availability = Callable()
@@ -49,6 +51,7 @@ func dispose() -> void:
 	_get_current_scene_path = Callable()
 	_build_runtime_state = Callable()
 	_get_capture_availability = Callable()
+	_parse_input_event = Callable()
 
 
 func _capture_async(session_id: int, args: Dictionary) -> Dictionary:
@@ -179,8 +182,10 @@ func _apply_single_input_async(input_entry: Dictionary) -> Dictionary:
 	var target := str(input_entry.get("target", ""))
 	var op := str(input_entry.get("op", "")).to_lower()
 	var duration_ms := maxi(int(input_entry.get("duration_ms", 60)), 1)
-	if kind.is_empty() or target.is_empty() or op.is_empty():
-		return _failure("invalid_argument", "Runtime input entries require kind, target, and op.")
+	if kind.is_empty() or op.is_empty():
+		return _failure("invalid_argument", "Runtime input entries require kind and op.")
+	if kind != "mouse" and target.is_empty():
+		return _failure("invalid_argument", "Runtime action/key input entries require target.")
 
 	match kind:
 		"action":
@@ -189,6 +194,8 @@ func _apply_single_input_async(input_entry: Dictionary) -> Dictionary:
 			return await _apply_action_input_async(target, op, duration_ms)
 		"key":
 			return await _apply_key_input_async(target, op, duration_ms)
+		"mouse":
+			return await _apply_mouse_input_async(input_entry, target, op, duration_ms)
 		_:
 			return _failure("invalid_argument", "Unsupported runtime input kind: %s" % kind)
 
@@ -235,6 +242,47 @@ func _apply_key_input_async(key_name: String, op: String, duration_ms: int) -> D
 		"op": op,
 		"duration_ms": duration_ms if op in ["tap", "hold"] else 0
 	}, "Runtime key input applied")
+
+
+func _apply_mouse_input_async(input_entry: Dictionary, target: String, op: String, duration_ms: int) -> Dictionary:
+	var button_name := str(input_entry.get("button", target)).strip_edges()
+	if button_name.is_empty():
+		button_name = "pointer"
+	var position_result := _extract_mouse_position(input_entry)
+	if not bool(position_result.get("success", false)):
+		return position_result
+	var position: Vector2 = position_result.get("position", Vector2.ZERO)
+	var button_index := _mouse_button_index(button_name)
+	if op != "move" and button_index == 0:
+		return _failure("invalid_argument", "Unsupported mouse button: %s" % button_name)
+	match op:
+		"move":
+			_dispatch_mouse_motion_event(position)
+			return _success({
+				"kind": "mouse",
+				"button": button_name,
+				"op": op,
+				"position": _serialize_vector2(position),
+				"duration_ms": 0
+			}, "Runtime mouse input applied")
+		"press":
+			_dispatch_mouse_button_event(button_name, position, true)
+		"release":
+			_dispatch_mouse_button_event(button_name, position, false)
+		"click", "tap", "hold":
+			_dispatch_mouse_button_event(button_name, position, true)
+			await _await_duration_ms(duration_ms)
+			_dispatch_mouse_button_event(button_name, position, false)
+		_:
+			return _failure("invalid_argument", "Unsupported mouse input op: %s" % op)
+	return _success({
+		"kind": "mouse",
+		"button": button_name,
+		"button_index": button_index,
+		"op": op,
+		"position": _serialize_vector2(position),
+		"duration_ms": duration_ms if op in ["click", "tap", "hold"] else 0
+	}, "Runtime mouse input applied")
 
 
 func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
@@ -302,7 +350,7 @@ func _dispatch_action_event(action_name: String, pressed: bool) -> void:
 	event.action = action_name
 	event.pressed = pressed
 	event.strength = 1.0 if pressed else 0.0
-	Input.parse_input_event(event)
+	_dispatch_input_event(event)
 
 
 func _dispatch_key_event(keycode: int, pressed: bool) -> void:
@@ -310,7 +358,95 @@ func _dispatch_key_event(keycode: int, pressed: bool) -> void:
 	event.keycode = keycode
 	event.pressed = pressed
 	event.echo = false
+	_dispatch_input_event(event)
+
+
+func _dispatch_mouse_button_event(button_name: String, position: Vector2, pressed: bool) -> void:
+	var button_index := _mouse_button_index(button_name)
+	if button_index == 0:
+		return
+	var event := InputEventMouseButton.new()
+	event.button_index = button_index
+	event.position = position
+	event.global_position = position
+	event.pressed = pressed
+	event.button_mask = _mouse_button_mask(button_index) if pressed else 0
+	_dispatch_input_event(event)
+
+
+func _dispatch_mouse_motion_event(position: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = position
+	event.global_position = position
+	_dispatch_input_event(event)
+
+
+func _dispatch_input_event(event: InputEvent) -> void:
+	if _parse_input_event.is_valid():
+		_parse_input_event.call(event)
+		return
 	Input.parse_input_event(event)
+
+
+func _extract_mouse_position(input_entry: Dictionary) -> Dictionary:
+	var raw_position = input_entry.get("position")
+	if raw_position is Vector2:
+		return {"success": true, "position": raw_position}
+	if raw_position is Dictionary:
+		var position_dict: Dictionary = raw_position
+		if not position_dict.has("x") or not position_dict.has("y"):
+			return _failure("invalid_argument", "Mouse position dictionaries require numeric x and y coordinates.")
+		var dict_x = position_dict.get("x")
+		var dict_y = position_dict.get("y")
+		if not _is_finite_number(dict_x) or not _is_finite_number(dict_y):
+			return _failure("invalid_argument", "Mouse position dictionaries require numeric x and y coordinates.")
+		return {"success": true, "position": Vector2(float(dict_x), float(dict_y))}
+	if input_entry.has("x") or input_entry.has("y"):
+		if not input_entry.has("x") or not input_entry.has("y"):
+			return _failure("invalid_argument", "Mouse runtime inputs require both numeric x and y coordinates.")
+		var raw_x = input_entry.get("x")
+		var raw_y = input_entry.get("y")
+		if not _is_finite_number(raw_x) or not _is_finite_number(raw_y):
+			return _failure("invalid_argument", "Mouse runtime inputs require both numeric x and y coordinates.")
+		return {"success": true, "position": Vector2(float(raw_x), float(raw_y))}
+	return _failure("invalid_argument", "Mouse runtime inputs require position, or x/y coordinates.")
+
+
+func _mouse_button_index(button_name: String) -> int:
+	match button_name.to_lower():
+		"left", "button_left", "mouse_left":
+			return MOUSE_BUTTON_LEFT
+		"right", "button_right", "mouse_right":
+			return MOUSE_BUTTON_RIGHT
+		"middle", "button_middle", "mouse_middle":
+			return MOUSE_BUTTON_MIDDLE
+		"pointer", "cursor", "mouse":
+			return 0
+		_:
+			return 0
+
+
+func _mouse_button_mask(button_index: int) -> int:
+	if button_index <= 0:
+		return 0
+	return 1 << (button_index - 1)
+
+
+func _is_finite_number(value) -> bool:
+	match typeof(value):
+		TYPE_INT:
+			return true
+		TYPE_FLOAT:
+			return not is_nan(value) and not is_inf(value)
+		_:
+			return false
+
+
+func _serialize_vector2(position: Vector2) -> Dictionary:
+	return {
+		"x": position.x,
+		"y": position.y
+	}
 
 
 func _track_capture_file(session_key: String, absolute_path: String) -> void:
