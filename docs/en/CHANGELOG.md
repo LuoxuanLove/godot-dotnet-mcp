@@ -50,6 +50,7 @@ Target version: 1.4.0.
 - Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
 - Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
 - Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
+- Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
 - Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
 
 ### Documentation
