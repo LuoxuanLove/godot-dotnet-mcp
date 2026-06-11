@@ -159,7 +159,7 @@ function Assert-ProtocolFactsParity {
     $jsonFacts = ConvertFrom-ProtocolFactsJson -Content (Read-VersionContent -Ref $Ref -Path $jsonPath -Label $Label) -Source $jsonSource
     $fallbackFacts = ConvertFrom-ProtocolFallbackFacts -Content (Read-VersionContent -Ref $Ref -Path $fallbackPath -Label $Label) -Source $fallbackSource
 
-    foreach ($field in @("protocol_version", "tool_schema_version", "server_name", "server_version")) {
+    foreach ($field in @("protocol_version", "tool_schema_version", "server_name", "server_description", "server_version")) {
         if ([string]$jsonFacts.$field -ne [string]$fallbackFacts.$field) {
             throw "Protocol facts parity failed for $Label ${field}: $jsonSource='$($jsonFacts.$field)' but $fallbackSource='$($fallbackFacts.$field)'."
         }

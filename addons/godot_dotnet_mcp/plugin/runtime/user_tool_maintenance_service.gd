@@ -2,6 +2,7 @@
 extends RefCounted
 class_name UserToolMaintenanceService
 
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
@@ -33,6 +34,16 @@ func create_tool_scaffold(tool_name: String, display_name: String, description: 
 	if declared_tool_name.is_empty():
 		return _authorization_required("create_user_tool", {"reason": "empty_declared_tool_name"})
 	var public_tool_name := _build_public_tool_name(declared_tool_name)
+	if not ToolCatalogManifest.is_valid_mcp_tool_name(public_tool_name):
+		return {
+			"success": false,
+			"error": "User tool public name must follow MCP 2025-11-25 naming guidance",
+			"data": {
+				"tool_name": declared_tool_name,
+				"public_tool_name": public_tool_name,
+				"requested_tool_name": tool_name
+			}
+		}
 
 	var preview = {
 		"category": USER_CATEGORY,
