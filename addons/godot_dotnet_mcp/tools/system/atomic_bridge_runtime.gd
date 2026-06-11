@@ -5,6 +5,7 @@ extends RefCounted
 ## AtomicBridge remains the public facade; this service owns executor caching.
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const AtomicBridgeExecutorManifest = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_executor_manifest.gd")
 
 var _executor_script_paths: Dictionary = {}
 var _executor_dependency_paths: Dictionary = {}
@@ -18,6 +19,14 @@ func configure(executor_script_paths: Dictionary, executor_dependency_paths: Dic
 	_executor_dependency_paths = executor_dependency_paths.duplicate(true)
 	_runtime_context_provider = runtime_context_provider
 	invalidate()
+
+
+func configure_default(runtime_context_provider: Callable = Callable()) -> void:
+	configure(
+		AtomicBridgeExecutorManifest.get_executor_script_paths(),
+		AtomicBridgeExecutorManifest.get_executor_dependency_paths(),
+		runtime_context_provider
+	)
 
 
 func configure_runtime(context: Dictionary) -> void:

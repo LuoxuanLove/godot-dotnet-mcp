@@ -8,21 +8,6 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
 const AtomicBridgeRuntimeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_runtime.gd")
 
-const EXECUTOR_SCRIPT_PATHS := {
-	"project": "res://addons/godot_dotnet_mcp/tools/project/executor.gd",
-	"script": "res://addons/godot_dotnet_mcp/tools/script/executor.gd",
-	"scene": "res://addons/godot_dotnet_mcp/tools/scene/executor.gd",
-	"node": "res://addons/godot_dotnet_mcp/tools/node/executor.gd",
-	"editor": "res://addons/godot_dotnet_mcp/tools/editor/executor.gd",
-	"resource": "res://addons/godot_dotnet_mcp/tools/resource/executor.gd",
-	"debug": "res://addons/godot_dotnet_mcp/tools/debug/executor.gd",
-	"dap": "res://addons/godot_dotnet_mcp/tools/dap/executor.gd",
-	"filesystem": "res://addons/godot_dotnet_mcp/tools/filesystem/executor.gd",
-	"runtime": "res://addons/godot_dotnet_mcp/tools/runtime/executor.gd"
-}
-const EXECUTOR_DEPENDENCY_PATHS := {
-	"editor": ["res://addons/godot_dotnet_mcp/tools/editor_tools.gd"]
-}
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 
 var _runtime_context: Dictionary = {}
@@ -31,7 +16,7 @@ var _runtime = AtomicBridgeRuntimeScript.new()
 
 
 func _init() -> void:
-	_runtime.configure(EXECUTOR_SCRIPT_PATHS, EXECUTOR_DEPENDENCY_PATHS, Callable(self, "_build_atomic_runtime_context"))
+	_runtime.configure_default(Callable(self, "_build_atomic_runtime_context"))
 
 
 func success(data = null, message: String = "") -> Dictionary:
