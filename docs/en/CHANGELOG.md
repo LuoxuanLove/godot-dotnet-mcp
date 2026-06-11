@@ -95,6 +95,7 @@ Target version: 1.4.0.
 - Split AtomicBridge write-policy, path-reference, and issue helpers into a dedicated support service while keeping the bridge facade API stable.
 - Split AtomicBridge executor loading, caching, runtime context wiring, and sync/async dispatch into a dedicated runtime service while keeping the bridge facade API stable.
 - Moved AtomicBridge support/runtime/dispatch composition into a dedicated execution service so `atomic_bridge.gd` remains a thinner compatibility facade.
+- Moved AtomicBridge file-collection helpers into the execution service while keeping the bridge facade API and filesystem enumeration semantics stable.
 - Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
 - Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.

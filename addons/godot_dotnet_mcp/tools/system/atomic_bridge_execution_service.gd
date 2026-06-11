@@ -84,6 +84,52 @@ func extract_array(result: Dictionary, key: String) -> Array:
 	return []
 
 
+func collect_files(filter: String, atomic_caller: Callable = Callable()) -> Array:
+	var result := _call_collection_atomic(atomic_caller, "filesystem_directory", {
+		"action": "get_files",
+		"path": "res://",
+		"filter": filter,
+		"recursive": true
+	})
+	return extract_array(result, "files")
+
+
+func collect_file_count(filter: String, atomic_caller: Callable = Callable()) -> int:
+	var result := _call_collection_atomic(atomic_caller, "filesystem_directory", {
+		"action": "get_files",
+		"path": "res://",
+		"filter": filter,
+		"recursive": true,
+		"count_only": true
+	})
+	var data := extract_data(result)
+	return int(data.get("count", 0))
+
+
+func collect_file_counts(filters: Array, atomic_caller: Callable = Callable()) -> Dictionary:
+	var result := _call_collection_atomic(atomic_caller, "filesystem_directory", {
+		"action": "get_files",
+		"path": "res://",
+		"filters": filters,
+		"recursive": true,
+		"count_only": true
+	})
+	var data := extract_data(result)
+	var counts_raw = data.get("counts_by_filter", {})
+	if counts_raw is Dictionary:
+		return (counts_raw as Dictionary).duplicate(true)
+	return {}
+
+
+func _call_collection_atomic(atomic_caller: Callable, full_name: String, args: Dictionary) -> Dictionary:
+	if atomic_caller.is_valid():
+		var result = atomic_caller.call(full_name, args)
+		if result is Dictionary:
+			return result
+		return {}
+	return call_atomic(full_name, args)
+
+
 func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
 	return _support.build_issue(severity, issue_type, message, extra)
 

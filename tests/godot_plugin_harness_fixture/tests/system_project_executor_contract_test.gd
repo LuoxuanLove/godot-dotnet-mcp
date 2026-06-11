@@ -307,6 +307,8 @@ class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
 		if tool_name != "filesystem_directory":
 			return error("Unexpected atomic tool: %s" % tool_name)
 		last_args = args.duplicate(true)
+		if args.has("filters"):
+			return success({"counts_by_filter": {"*.gd": 1, "*.cs": 0}})
 		if bool(args.get("count_only", false)):
 			return success({"count": 1, "count_only": true})
 		return success({"files": ["res://Player.gd"], "count": 1})
@@ -362,6 +364,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("AtomicBridge.collect_file_count should return count from filesystem_directory.")
 	if not bool(atomic_collect_bridge.last_args.get("count_only", false)):
 		return _failure("AtomicBridge.collect_file_count should request count_only filesystem enumeration.")
+	var atomic_file_counts: Dictionary = atomic_collect_bridge.collect_file_counts(["*.gd", "*.cs"])
+	if int(atomic_file_counts.get("*.gd", 0)) != 1:
+		return _failure("AtomicBridge.collect_file_counts should return counts from filesystem_directory.")
+	if not bool(atomic_collect_bridge.last_args.get("count_only", false)) or not (atomic_collect_bridge.last_args.get("filters", []) is Array):
+		return _failure("AtomicBridge.collect_file_counts should request filters with count_only filesystem enumeration.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var valid_resource_path := TEMP_ROOT.path_join("ValidNoteData.tres")
 	var quoted_id_path_resource_path := TEMP_ROOT.path_join("QuotedPathIdNoteData.tres")

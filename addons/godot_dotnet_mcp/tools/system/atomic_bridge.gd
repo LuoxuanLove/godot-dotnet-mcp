@@ -145,24 +145,15 @@ func extract_array(result: Dictionary, key: String) -> Array:
 
 
 func collect_files(filter: String) -> Array:
-	var result := call_atomic("filesystem_directory", {"action": "get_files", "path": "res://", "filter": filter, "recursive": true})
-	var files = extract_array(result, "files")
-	return files
+	return _execution_service.collect_files(filter, Callable(self, "call_atomic"))
 
 
 func collect_file_count(filter: String) -> int:
-	var result := call_atomic("filesystem_directory", {"action": "get_files", "path": "res://", "filter": filter, "recursive": true, "count_only": true})
-	var data := extract_data(result)
-	return int(data.get("count", 0))
+	return _execution_service.collect_file_count(filter, Callable(self, "call_atomic"))
 
 
 func collect_file_counts(filters: Array) -> Dictionary:
-	var result := call_atomic("filesystem_directory", {"action": "get_files", "path": "res://", "filters": filters, "recursive": true, "count_only": true})
-	var data := extract_data(result)
-	var counts_raw = data.get("counts_by_filter", {})
-	if counts_raw is Dictionary:
-		return (counts_raw as Dictionary).duplicate(true)
-	return {}
+	return _execution_service.collect_file_counts(filters, Callable(self, "call_atomic"))
 
 
 func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
