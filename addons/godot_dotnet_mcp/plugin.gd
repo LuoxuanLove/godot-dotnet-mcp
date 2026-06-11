@@ -10,6 +10,7 @@ const ToolCatalogServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/r
 const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_preview_service.gd")
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
 const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
@@ -56,6 +57,7 @@ var _tool_catalog = null
 var _config_service = null
 var _config_tab_action_service = null
 var _dock_model_service = null
+var _mcp_catalog_preview_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
@@ -158,6 +160,9 @@ func _exit_tree() -> void:
 	if _dock_model_service != null:
 		_dock_model_service.dispose()
 	_dock_model_service = null
+	if _mcp_catalog_preview_service != null:
+		_mcp_catalog_preview_service.dispose()
+	_mcp_catalog_preview_service = null
 	_runtime_coordinator = null
 	_client_install_detection_service = null
 	_tool_catalog = null
@@ -1975,6 +1980,14 @@ func _on_client_executable_file_selected(path: String) -> void:
 func _on_copy_requested(text: String, source: String) -> void:
 	DisplayServer.clipboard_set(text)
 	_show_message(_localization.get_text("msg_copied") % source)
+
+
+func _on_mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	if _mcp_catalog_preview_service == null:
+		_mcp_catalog_preview_service = DockMcpCatalogPreviewServiceScript.new()
+	_mcp_catalog_preview_service.configure(_server_controller)
+	_state.mcp_catalog_preview = _mcp_catalog_preview_service.build_preview(kind, id, arguments)
+	_refresh_dock()
 
 
 func _on_server_started() -> void:

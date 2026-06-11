@@ -83,6 +83,7 @@ var update_sync_status := ""
 var update_sync_error := ""
 var update_sync_target_ref := ""
 var update_sync_target_kind := ""
+var mcp_catalog_preview: Dictionary = {}
 
 
 func resolve_active_language(localization) -> String:

@@ -137,6 +137,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"mcp_catalog_kind",
 		"mcp_catalog_mime_type",
 		"mcp_catalog_arguments",
+		"mcp_catalog_preview",
+		"mcp_catalog_preview_title",
+		"mcp_catalog_preview_empty",
+		"mcp_catalog_preview_error",
+		"mcp_catalog_copy_preview",
+		"mcp_catalog_argument_placeholder",
+		"mcp_catalog_template_preview_unavailable",
 	]:
 		for locale_code in supported_locale_codes:
 			if localization.get_text_for(locale_code, key) == key:
