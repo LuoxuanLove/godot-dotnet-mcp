@@ -65,6 +65,12 @@ func route_request_async(method: String, path: String, request_body: String, hea
 
 	if method == "POST" and _requires_json_content_type(path):
 		var content_type := str(normalized_headers.get("content-type", "")).strip_edges().to_lower()
+		if content_type.is_empty() and path == "/mcp":
+			return {
+				"error": "Unsupported media type",
+				"status": 415,
+				"details": "POST /mcp requires Content-Type: application/json."
+			}
 		if not content_type.is_empty() and not _is_json_content_type(content_type):
 			return {
 				"error": "Unsupported media type",
@@ -182,7 +188,14 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
 	var supported_version := MCPProtocolFacts.get_protocol_version()
-	if not requested_version.is_empty() and requested_version != supported_version:
+	if requested_version.is_empty():
+		return {
+			"error": "Missing MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"details": "POST /mcp requires MCP-Protocol-Version: %s." % supported_version
+		}
+	if requested_version != supported_version:
 		return {
 			"error": "Unsupported MCP protocol version",
 			"status": 400,
@@ -208,7 +221,14 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
 	var supported_version := MCPProtocolFacts.get_protocol_version()
-	if not requested_version.is_empty() and requested_version != supported_version:
+	if requested_version.is_empty():
+		return {
+			"error": "Missing MCP protocol version",
+			"status": 400,
+			"supported_protocol_version": supported_version,
+			"details": "GET /mcp requires MCP-Protocol-Version: %s." % supported_version
+		}
+	if requested_version != supported_version:
 		return {
 			"error": "Unsupported MCP protocol version",
 			"status": 400,

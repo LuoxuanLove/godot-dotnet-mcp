@@ -116,6 +116,8 @@ func record_request(method: String, client: StreamPeerTCP = null, path: String =
 		"path": path,
 		"at_unix": _last_request_at_unix,
 		"content_type": str(headers.get("content-type", "")),
+		"mcp_protocol_version": str(headers.get("mcp-protocol-version", "")),
+		"mcp_session_id": str(headers.get("mcp-session-id", "")),
 		"body_byte_size": body_byte_size,
 		"json_rpc_method": str(json_rpc_summary.get("method", "")),
 		"json_rpc_id": json_rpc_summary.get("id", null)
@@ -217,7 +219,7 @@ func _build_client_summary(client: StreamPeerTCP, headers: Dictionary, previous_
 		summary["remote_address"] = remote_address
 	if remote_port > 0:
 		summary["remote_port"] = remote_port
-	for key in ["host", "origin", "user-agent", "accept", "content-type"]:
+	for key in ["host", "origin", "user-agent", "accept", "content-type", "mcp-protocol-version", "mcp-session-id"]:
 		var value := str(headers.get(key, "")).strip_edges()
 		if not value.is_empty():
 			summary[_summary_key_for_header(key)] = value
@@ -232,6 +234,10 @@ func _summary_key_for_header(header_name: String) -> String:
 			return "user_agent"
 		"content-type":
 			return "content_type"
+		"mcp-protocol-version":
+			return "mcp_protocol_version"
+		"mcp-session-id":
+			return "mcp_session_id"
 		_:
 			return header_name
 
