@@ -49,6 +49,7 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "config_client_open_config_file_requested", "callable": Callable(self, "config_client_open_config_file_requested")},
 		{"signal": "config_write_requested", "callable": Callable(self, "config_write_requested")},
 		{"signal": "config_remove_requested", "callable": Callable(self, "config_remove_requested")},
+		{"signal": "mcp_catalog_preview_requested", "callable": Callable(self, "mcp_catalog_preview_requested")},
 		{"signal": "copy_requested", "callable": Callable(self, "copy_requested")}
 	]
 
@@ -168,6 +169,10 @@ func config_remove_requested(config_type: String, filepath: String, client_name:
 
 func copy_requested(text: String, source: String) -> void:
 	_call_plugin_method("_on_copy_requested", [text, source])
+
+
+func mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	_call_plugin_method("_on_mcp_catalog_preview_requested", [kind, id, arguments])
 
 
 func show_message(message: String) -> void:

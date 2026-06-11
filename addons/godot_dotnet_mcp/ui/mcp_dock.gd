@@ -46,6 +46,7 @@ signal config_client_open_config_dir_requested(client_id: String)
 signal config_client_open_config_file_requested(client_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
 signal config_remove_requested(config_type: String, filepath: String, client_name: String)
+signal mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary)
 signal copy_requested(text: String, source: String)
 
 @onready var _status_indicator: ColorRect = %StatusIndicator
@@ -88,8 +89,12 @@ func _ready() -> void:
 
 	if _resources_tab and _resources_tab.has_signal("copy_requested"):
 		_resources_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
+	if _resources_tab and _resources_tab.has_signal("preview_requested"):
+		_resources_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
 	if _prompts_tab and _prompts_tab.has_signal("copy_requested"):
 		_prompts_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
+	if _prompts_tab and _prompts_tab.has_signal("preview_requested"):
+		_prompts_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
 
 	if _config_tab:
 		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
@@ -328,6 +333,10 @@ func _on_tools_tab_tree_collapse_changed(kind: String, key: String, collapsed: b
 
 func _on_mcp_catalog_tab_copy_requested(text: String, source: String) -> void:
 	copy_requested.emit(text, source)
+
+
+func _on_mcp_catalog_tab_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	mcp_catalog_preview_requested.emit(kind, id, arguments)
 
 
 func _on_config_tab_cli_scope_changed(scope: String) -> void:

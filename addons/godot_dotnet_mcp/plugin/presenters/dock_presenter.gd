@@ -88,6 +88,7 @@ func build_model(context: Dictionary) -> Dictionary:
 		"mcp_resource_templates": context.get("mcp_resource_templates", []),
 		"mcp_prompts": context.get("mcp_prompts", []),
 		"mcp_catalog_counts": context.get("mcp_catalog_counts", {}),
+		"mcp_catalog_preview": context.get("mcp_catalog_preview", {}),
 		"presentationVersion": int(context.get("tool_presentation", {}).get("presentationVersion", 1)) if context.get("tool_presentation", {}) is Dictionary else 1,
 		"toolTree": context.get("tool_presentation", {}).get("toolTree", []) if context.get("tool_presentation", {}) is Dictionary else [],
 		"toolGroups": context.get("tool_presentation", {}).get("toolGroups", []) if context.get("tool_presentation", {}) is Dictionary else [],

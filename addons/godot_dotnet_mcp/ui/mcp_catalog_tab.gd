@@ -2,6 +2,7 @@
 extends VBoxContainer
 
 signal copy_requested(text: String, source: String)
+signal preview_requested(kind: String, id: String, arguments: Dictionary)
 
 @onready var _margin: MarginContainer = %Margin
 @onready var _content: VBoxContainer = %Content
@@ -31,6 +32,7 @@ var _current_scale := -1.0
 var _current_signature := ""
 var _localization = null
 var _catalog_mode := "resources"
+var _argument_values: Dictionary = {}
 
 
 func _ready() -> void:
@@ -169,7 +171,189 @@ func _create_entry_card(entry: Dictionary, entry_kind: String) -> Control:
 		meta_label.add_theme_color_override("font_color", _get_hint_text_color())
 		body.add_child(meta_label)
 
+	_add_entry_actions(body, entry, entry_kind)
+
 	return panel
+
+
+func _add_entry_actions(body: VBoxContainer, entry: Dictionary, entry_kind: String) -> void:
+	var id := _entry_id(entry, entry_kind)
+	if entry_kind == "template":
+		var action_row := HBoxContainer.new()
+		action_row.name = "ActionRow"
+		action_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		action_row.add_theme_constant_override("separation", int(round(6 * _scale())))
+		body.add_child(action_row)
+		var preview_button := Button.new()
+		preview_button.name = "PreviewButton"
+		preview_button.text = _text("mcp_catalog_preview")
+		preview_button.tooltip_text = id
+		preview_button.disabled = true
+		action_row.add_child(preview_button)
+		var hint := Label.new()
+		hint.name = "PreviewUnavailable"
+		hint.text = _text("mcp_catalog_template_preview_unavailable")
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.add_theme_color_override("font_color", _get_hint_text_color())
+		body.add_child(hint)
+		return
+	if entry_kind == "prompt":
+		_add_prompt_argument_inputs(body, entry)
+
+	var action_row := HBoxContainer.new()
+	action_row.name = "ActionRow"
+	action_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_row.add_theme_constant_override("separation", int(round(6 * _scale())))
+	body.add_child(action_row)
+
+	var preview_button := Button.new()
+	preview_button.name = "PreviewButton"
+	preview_button.text = _text("mcp_catalog_preview")
+	preview_button.tooltip_text = id
+	preview_button.pressed.connect(func() -> void:
+		preview_requested.emit(entry_kind, id, _collect_entry_arguments(entry, entry_kind))
+	)
+	action_row.add_child(preview_button)
+
+	_add_preview_panel(body, entry_kind, id)
+
+
+func _add_prompt_argument_inputs(body: VBoxContainer, entry: Dictionary) -> void:
+	var arguments = entry.get("arguments", [])
+	if not (arguments is Array) or (arguments as Array).is_empty():
+		return
+	var args_box := VBoxContainer.new()
+	args_box.name = "ArgumentInputs"
+	args_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	args_box.add_theme_constant_override("separation", int(round(4 * _scale())))
+	body.add_child(args_box)
+	var prompt_name := _entry_id(entry, "prompt")
+	if not _argument_values.has(prompt_name):
+		_argument_values[prompt_name] = {}
+	var prompt_values: Dictionary = _argument_values.get(prompt_name, {})
+	for raw_arg in arguments:
+		if not (raw_arg is Dictionary):
+			continue
+		var arg := raw_arg as Dictionary
+		var arg_name := str(arg.get("name", "")).strip_edges()
+		if arg_name.is_empty():
+			continue
+		var row := HBoxContainer.new()
+		row.name = "Arg_%s" % arg_name
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_theme_constant_override("separation", int(round(6 * _scale())))
+		args_box.add_child(row)
+
+		var label := Label.new()
+		label.name = "ArgumentLabel"
+		label.text = "%s%s" % [arg_name, " *" if bool(arg.get("required", false)) else ""]
+		label.custom_minimum_size.x = 92.0 * _scale()
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		row.add_child(label)
+
+		var input := LineEdit.new()
+		input.name = "ArgumentInput_%s" % arg_name
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		input.placeholder_text = str(arg.get("description", _text("mcp_catalog_argument_placeholder")))
+		input.text = str(prompt_values.get(arg_name, ""))
+		input.text_changed.connect(func(value: String) -> void:
+			var values: Dictionary = _argument_values.get(prompt_name, {})
+			values[arg_name] = value
+			_argument_values[prompt_name] = values
+		)
+		row.add_child(input)
+
+
+func _collect_entry_arguments(entry: Dictionary, entry_kind: String) -> Dictionary:
+	if entry_kind != "prompt":
+		return {}
+	var prompt_name := _entry_id(entry, entry_kind)
+	var values: Dictionary = _argument_values.get(prompt_name, {})
+	return values.duplicate(true)
+
+
+func _add_preview_panel(body: VBoxContainer, entry_kind: String, id: String) -> void:
+	var preview := _current_preview_for(entry_kind, id)
+	if preview.is_empty():
+		return
+	var panel := PanelContainer.new()
+	panel.name = "PreviewPanel"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
+	body.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", int(round(8 * _scale())))
+	margin.add_theme_constant_override("margin_top", int(round(6 * _scale())))
+	margin.add_theme_constant_override("margin_right", int(round(8 * _scale())))
+	margin.add_theme_constant_override("margin_bottom", int(round(6 * _scale())))
+	panel.add_child(margin)
+
+	var preview_body := VBoxContainer.new()
+	preview_body.name = "PreviewBody"
+	preview_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_body.add_theme_constant_override("separation", int(round(5 * _scale())))
+	margin.add_child(preview_body)
+
+	var title_row := HBoxContainer.new()
+	title_row.name = "PreviewTitleRow"
+	title_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_theme_constant_override("separation", int(round(6 * _scale())))
+	preview_body.add_child(title_row)
+
+	var title := Label.new()
+	title.name = "PreviewTitle"
+	title.text = _text("mcp_catalog_preview_title")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_color_override("font_color", _get_meta_text_color())
+	title_row.add_child(title)
+
+	var preview_text := _preview_text(preview)
+	var copy_button := Button.new()
+	copy_button.name = "CopyPreviewButton"
+	copy_button.text = _text("mcp_catalog_copy_preview")
+	copy_button.disabled = preview_text.strip_edges().is_empty()
+	copy_button.pressed.connect(func() -> void:
+		copy_requested.emit(preview_text, "%s %s" % [_entry_title_from_preview(preview), _text("mcp_catalog_preview_title")])
+	)
+	title_row.add_child(copy_button)
+
+	var content := Label.new()
+	content.name = "PreviewText"
+	content.text = preview_text if bool(preview.get("success", false)) else _text("mcp_catalog_preview_error") % str(preview.get("error", ""))
+	content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_theme_color_override("font_color", _get_description_text_color())
+	preview_body.add_child(content)
+
+
+func _current_preview_for(entry_kind: String, id: String) -> Dictionary:
+	var preview = _last_preview()
+	if not (preview is Dictionary):
+		return {}
+	var preview_dict := preview as Dictionary
+	if str(preview_dict.get("kind", "")) != entry_kind:
+		return {}
+	if str(preview_dict.get("id", "")) != id:
+		return {}
+	return preview_dict
+
+
+func _last_preview():
+	return get_meta("_mcp_catalog_preview", {})
+
+
+func _preview_text(preview: Dictionary) -> String:
+	if not bool(preview.get("success", false)):
+		return ""
+	var text := str(preview.get("text", ""))
+	return text if not text.strip_edges().is_empty() else _text("mcp_catalog_preview_empty")
+
+
+func _entry_title_from_preview(preview: Dictionary) -> String:
+	var title := str(preview.get("title", "")).strip_edges()
+	if not title.is_empty():
+		return title
+	return str(preview.get("id", ""))
 
 
 func _entry_id(entry: Dictionary, entry_kind: String) -> String:
@@ -209,13 +393,16 @@ func _entry_meta(entry: Dictionary, entry_kind: String) -> String:
 
 
 func _build_signature(model: Dictionary) -> String:
+	set_meta("_mcp_catalog_preview", model.get("mcp_catalog_preview", {}))
 	return JSON.stringify({
 		"language": str(model.get("current_language", "")),
 		"mode": _catalog_mode,
 		"resources": model.get("mcp_resources", []),
 		"templates": model.get("mcp_resource_templates", []),
 		"prompts": model.get("mcp_prompts", []),
-		"counts": model.get("mcp_catalog_counts", {})
+		"counts": model.get("mcp_catalog_counts", {}),
+		"preview": model.get("mcp_catalog_preview", {}),
+		"argument_values": _argument_values
 	})
 
 

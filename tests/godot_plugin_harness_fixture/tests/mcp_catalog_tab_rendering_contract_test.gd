@@ -22,7 +22,14 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_copy_id": "Copy ID",
 		"mcp_catalog_kind": "Kind",
 		"mcp_catalog_mime_type": "MIME",
-		"mcp_catalog_arguments": "Arguments"
+		"mcp_catalog_arguments": "Arguments",
+		"mcp_catalog_preview": "Preview",
+		"mcp_catalog_preview_title": "Preview",
+		"mcp_catalog_preview_empty": "Preview returned no text.",
+		"mcp_catalog_preview_error": "Preview failed: %s",
+		"mcp_catalog_copy_preview": "Copy Preview",
+		"mcp_catalog_argument_placeholder": "Enter argument value",
+		"mcp_catalog_template_preview_unavailable": "Provide a concrete resource URI from this template before reading it."
 	}
 
 	func get_text(key: String) -> String:
@@ -32,10 +39,18 @@ class FakeLocalization extends RefCounted:
 class CopyRecorder extends RefCounted:
 	var copied_text := ""
 	var copied_source := ""
+	var preview_kind := ""
+	var preview_id := ""
+	var preview_arguments: Dictionary = {}
 
 	func on_copy_requested(text: String, source: String) -> void:
 		copied_text = text
 		copied_source = source
+
+	func on_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+		preview_kind = kind
+		preview_id = id
+		preview_arguments = arguments.duplicate(true)
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -48,6 +63,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var recorder := CopyRecorder.new()
 	resources_tab.copy_requested.connect(Callable(recorder, "on_copy_requested"))
 	prompts_tab.copy_requested.connect(Callable(recorder, "on_copy_requested"))
+	resources_tab.preview_requested.connect(Callable(recorder, "on_preview_requested"))
+	prompts_tab.preview_requested.connect(Callable(recorder, "on_preview_requested"))
 	var model := _build_model()
 	resources_tab.apply_model(model)
 	prompts_tab.apply_model(model)
@@ -77,6 +94,45 @@ func run_case(tree: SceneTree) -> Dictionary:
 	copy_button.emit_signal("pressed")
 	if recorder.copied_text != "godot.project_orientation" or recorder.copied_source != "Project Orientation":
 		return _failure("MCP catalog copy buttons should emit the protocol identifier and display title.")
+	var resource_preview_button := _find_entry_card(resources_tab, "resource", "godot-dotnet-mcp://guides/index").find_child("PreviewButton", true, false) as Button
+	if resource_preview_button == null:
+		return _failure("Resource cards should expose a read/preview button.")
+	resource_preview_button.emit_signal("pressed")
+	if recorder.preview_kind != "resource" or recorder.preview_id != "godot-dotnet-mcp://guides/index":
+		return _failure("Resource preview buttons should request resources/read for the selected URI.")
+	if _find_label_containing(resources_tab, "concrete resource URI") == null:
+		return _failure("Resource templates should explain that preview requires a concrete URI.")
+	var prompt_card := _find_entry_card(prompts_tab, "prompt", "godot.project_orientation")
+	var goal_input := prompt_card.find_child("ArgumentInput_goal", true, false) as LineEdit
+	if goal_input == null:
+		return _failure("Prompt cards should render simple argument inputs from MCP prompt metadata.")
+	goal_input.text = "map the project"
+	goal_input.emit_signal("text_changed", "map the project")
+	var prompt_preview_button := prompt_card.find_child("PreviewButton", true, false) as Button
+	if prompt_preview_button == null:
+		return _failure("Prompt cards should expose a preview button.")
+	prompt_preview_button.emit_signal("pressed")
+	if recorder.preview_kind != "prompt" or recorder.preview_id != "godot.project_orientation" or str(recorder.preview_arguments.get("goal", "")) != "map the project":
+		return _failure("Prompt preview should emit the prompt name and current argument values.")
+	var preview_model := _build_model()
+	preview_model["mcp_catalog_preview"] = {
+		"kind": "prompt",
+		"id": "godot.project_orientation",
+		"title": "Project Orientation",
+		"success": true,
+		"text": "Use resources/list before editing."
+	}
+	prompts_tab.apply_model(preview_model)
+	await tree.process_frame
+	var preview_text := _find_label_containing(prompts_tab, "Use resources/list before editing.")
+	if preview_text == null:
+		return _failure("Prompt preview results should render generated prompts/get text.")
+	var copy_preview_button := _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("CopyPreviewButton", true, false) as Button
+	if copy_preview_button == null:
+		return _failure("Rendered preview results should expose a copy generated text button.")
+	copy_preview_button.emit_signal("pressed")
+	if recorder.copied_text != "Use resources/list before editing.":
+		return _failure("Copy Preview should emit generated prompt text.")
 
 	return {"name": "mcp_catalog_tab_rendering_contracts", "success": true, "error": ""}
 

@@ -78,6 +78,7 @@
   {"name":"user_tool_service_contracts","layer":"plugin","domain":"user_tools","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"user_fs","v1_4_disposition":"keep"},
   {"name":"plugin_evolution_runtime_diagnostics_contracts","layer":"plugin","domain":"diagnostics","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"dock_model_service_contracts","layer":"dock","domain":"model","behavior":"current","mcp_version":"2025-11-25","conformance":"optional","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
+  {"name":"dock_mcp_catalog_preview_service_contracts","layer":"dock","domain":"resources_prompts","behavior":"current","mcp_version":"2025-11-25","conformance":"optional","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"mcp_catalog_tab_rendering_contracts","layer":"dock","domain":"resources_prompts","behavior":"current","mcp_version":"2025-11-25","conformance":"optional","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"tools_tab_rendering_contracts","layer":"dock","domain":"tools","behavior":"current","mcp_version":"2025-11-25","conformance":"optional","speed":"headless","isolation":"stage_root","v1_4_disposition":"rewrite"}
 ]

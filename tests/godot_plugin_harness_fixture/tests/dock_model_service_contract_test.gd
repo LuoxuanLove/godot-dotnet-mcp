@@ -36,6 +36,7 @@ class FakeState extends RefCounted:
 	var update_sync_error := ""
 	var update_sync_target_ref := ""
 	var update_sync_target_kind := ""
+	var mcp_catalog_preview: Dictionary = {}
 
 
 class FakeServerController extends ServerRuntimeController:
@@ -208,6 +209,7 @@ class FakeContext extends RefCounted:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = DockModelService.new()
 	var state = FakeState.new()
+	state.mcp_catalog_preview = {"kind": "prompt", "id": "godot.project_orientation", "success": true, "text": "Preview text"}
 	state.settings = {
 		"disabled_tools": [],
 		"language": "en",
@@ -273,6 +275,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var protocol_projection_result := _verify_mcp_protocol_projection(model)
 	if not bool(protocol_projection_result.get("success", false)):
 		return protocol_projection_result
+	if str((model.get("mcp_catalog_preview", {}) as Dictionary).get("text", "")) != "Preview text":
+		return _failure("Dock model should expose the current MCP catalog preview result to Resources/Prompts tabs.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
 	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):
