@@ -95,6 +95,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not tools_by_category.has(required_internal_category) or (tools_by_category[required_internal_category] as Array).is_empty():
 			return _failure("Tool loader should keep strongest internal category available: %s" % required_internal_category)
 
+	var replacement_activity_registry = ToolActivityRegistryScript.new()
+	_loader.set_tool_activity_registry(replacement_activity_registry)
+	var system_runtime: Dictionary = _loader._runtime_by_category.get("system", {})
+	var system_executor = system_runtime.get("instance", null)
+	if system_executor == null or not ("_runtime_context" in system_executor):
+		return _failure("Tool loader should keep the system executor runtime context observable after initialization.")
+	if (system_executor._runtime_context as Dictionary).get("tool_activity_registry", null) != replacement_activity_registry:
+		return _failure("Tool loader should refresh loaded executor runtime contexts when the activity registry changes.")
+
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
 		var exposed_name := str(tool_def.get("name", ""))
