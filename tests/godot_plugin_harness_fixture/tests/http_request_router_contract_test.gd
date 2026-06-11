@@ -304,6 +304,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var sse_only_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if int(sse_only_accept_response.get("status", 0)) != 406:
 		return _failure("HTTP request router should reject POST /mcp requests that omit application/json from Accept.")
+	var json_q_zero_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0, text/event-stream;q=1", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(json_q_zero_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that declare application/json with q=0.")
+	var sse_q_zero_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=1, text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(sse_q_zero_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that declare text/event-stream with q=0.")
 
 	var missing_protocol_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
 	if int(missing_protocol_response.get("status", 0)) != 400 or str(missing_protocol_response.get("error", "")) != "Missing MCP protocol version":

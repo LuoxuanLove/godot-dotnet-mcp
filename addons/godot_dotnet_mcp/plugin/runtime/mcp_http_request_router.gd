@@ -425,10 +425,11 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 	var accepts_json := false
 	var accepts_sse := false
 	for raw_part in normalized.split(",", false):
-		var media_range := str(raw_part).strip_edges()
-		var semicolon := media_range.find(";")
-		if semicolon != -1:
-			media_range = media_range.substr(0, semicolon).strip_edges()
+		var parsed := _parse_accept_part(str(raw_part))
+		var media_range := str(parsed.get("media_range", ""))
+		var quality := float(parsed.get("q", 1.0))
+		if quality <= 0.0:
+			continue
 		if media_range == "application/json":
 			accepts_json = true
 		elif media_range == "text/event-stream":
