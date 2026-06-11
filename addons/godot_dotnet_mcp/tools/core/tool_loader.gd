@@ -11,6 +11,7 @@ const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
 const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
 const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
+const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -27,6 +28,7 @@ var _execution_observer = ToolExecutionObserverScript.new()
 var _runtime_manager = ToolRuntimeManagerScript.new()
 var _status_service = ToolLoaderStatusServiceScript.new()
 var _entry_service = ToolRegistryEntryServiceScript.new()
+var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -389,17 +391,13 @@ func _get_runtime_bridge():
 
 
 func _refresh_runtime_context() -> void:
-	var context: Dictionary = {
-		"tool_loader": self,
-		"server": _server_context,
-		"plugin_host": _get_plugin_host(),
-		"tool_activity_registry": _tool_activity_registry
-	}
-	for category in _runtime_by_category.keys():
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var executor = runtime.get("instance", null)
-		if executor != null and executor.has_method("configure_runtime"):
-			executor.configure_runtime(context.duplicate())
+	var context: Dictionary = _runtime_context_service.build_runtime_context(
+		self,
+		_server_context,
+		_get_plugin_host(),
+		_tool_activity_registry
+	)
+	_runtime_context_service.configure_loaded_runtimes(_runtime_by_category, context)
 
 
 func reload_domain(category: String) -> Dictionary:
@@ -648,15 +646,15 @@ func _instantiate_executor(category: String, force_reload: bool, reason: String)
 
 
 func _build_executor_runtime_context(category: String, entry: Dictionary, reason: String) -> Dictionary:
-	return {
-		"tool_loader": self,
-		"server": _server_context,
-		"plugin_host": _get_plugin_host(),
-		"tool_activity_registry": _tool_activity_registry,
-		"category": category,
-		"reason": reason,
-		"entry": entry.duplicate(true)
-	}
+	return _runtime_context_service.build_executor_runtime_context(
+		self,
+		_server_context,
+		_get_plugin_host(),
+		_tool_activity_registry,
+		category,
+		entry,
+		reason
+	)
 
 
 func _get_plugin_host():
