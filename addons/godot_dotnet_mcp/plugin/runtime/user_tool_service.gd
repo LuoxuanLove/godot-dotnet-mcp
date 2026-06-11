@@ -159,6 +159,12 @@ func _build_recovery_guidance(failure: Dictionary) -> Dictionary:
 	var error_text := str(failure.get("load_error", "")).strip_edges()
 	var normalized := error_text.to_lower()
 	var runtime_state := str(failure.get("runtime_state", "")).strip_edges()
+	if normalized.find("invalid mcp public tool name") != -1:
+		return {
+			"diagnostic_code": "invalid_mcp_public_tool_name",
+			"recommended_action": "Rename the user tool so its public user_ tool name uses only ASCII letters, digits, underscores, hyphens, or dots and is at most 128 characters.",
+			"next_tool_hint": "Run plugin_evolution_runtime_diagnostics after renaming to confirm the invalid MCP public tool name cleared."
+		}
 	if normalized.find("duplicate") != -1 and normalized.find("logical name") != -1:
 		return {
 			"diagnostic_code": "duplicate_user_tool_logical_name",

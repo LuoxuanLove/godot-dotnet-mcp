@@ -3,7 +3,7 @@ extends Node
 class_name MCPStdioServer
 
 ## MCP Stdio Transport Server
-## Reads JSON-RPC 2.0 requests from stdin (Content-Length framed, same as LSP protocol)
+## Reads JSON-RPC 2.0 requests from stdin (newline-delimited by default)
 ## Writes responses to stdout
 ## Designed for Claude Desktop and headless Godot usage:
 ##   godot --headless --path /path/to/project --script res://addons/.../mcp_stdio_entry.gd
@@ -34,6 +34,10 @@ var _tool_activity_registry = MCPToolActivityRegistry.new()
 var _processing_stdin := false
 var _transport_generation := 0
 var _last_written_response: Dictionary = {}
+var _last_written_frame := ""
+var _stdio_framing_mode := "newline"
+const STDIO_FRAMING_NEWLINE := "newline"
+const STDIO_FRAMING_LEGACY_CONTENT_LENGTH := "legacy_content_length"
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
 const MAX_STDIN_BYTES_PER_TICK := 8192
@@ -70,6 +74,15 @@ func stop() -> void:
 
 func is_running() -> bool:
 	return _enabled
+
+
+func set_framing_mode(mode: String) -> void:
+	if mode == STDIO_FRAMING_NEWLINE or mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		_stdio_framing_mode = mode
+
+
+func get_framing_mode() -> String:
+	return _stdio_framing_mode
 
 
 func set_disabled_tools(disabled: Array) -> void:
@@ -122,6 +135,55 @@ func _process(_delta: float) -> void:
 
 
 func _try_parse_frame(generation: int) -> bool:
+	if _stdio_framing_mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		return await _try_parse_legacy_content_length_frame(generation)
+	return await _try_parse_newline_frame(generation)
+
+
+func _try_parse_newline_frame(generation: int) -> bool:
+	while true:
+		if not _enabled or generation != _transport_generation:
+			return false
+		if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+			_reject_stdio_frame(
+				"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+				"stdio_pending_buffer_exceeded"
+			)
+			return false
+		if _buffer.size() > 0 and _buffer.get_string_from_utf8().begins_with("Content-Length:"):
+			_reject_stdio_frame(
+				"Legacy Content-Length stdio framing requires explicit compatibility mode.",
+				"stdio_legacy_content_length_requires_compat"
+			)
+			return false
+		var newline_index := _find_byte(_buffer, 10)
+		if newline_index == -1:
+			if _buffer.size() > MAX_STDIN_CONTENT_LENGTH:
+				_reject_stdio_frame(
+					"Stdio newline-delimited frame exceeded maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH,
+					"stdio_line_too_large"
+				)
+			return false
+		var line_bytes: PackedByteArray = _buffer.slice(0, newline_index)
+		_buffer = _buffer.slice(newline_index + 1)
+		if line_bytes.size() > 0 and line_bytes[line_bytes.size() - 1] == 13:
+			line_bytes = line_bytes.slice(0, line_bytes.size() - 1)
+		if line_bytes.is_empty():
+			continue
+		if line_bytes.size() > MAX_STDIN_CONTENT_LENGTH:
+			_reject_stdio_frame(
+				"Stdio newline-delimited frame exceeded maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH,
+				"stdio_line_too_large"
+			)
+			return false
+		var body: String = line_bytes.get_string_from_utf8()
+		await _handle_request(body, generation)
+		return true
+
+	return false
+
+
+func _try_parse_legacy_content_length_frame(generation: int) -> bool:
 	while true:
 		if not _enabled or generation != _transport_generation:
 			return false
@@ -156,6 +218,13 @@ func _try_parse_frame(generation: int) -> bool:
 		return true
 
 	return false
+
+
+func _find_byte(bytes: PackedByteArray, byte_value: int) -> int:
+	for index in range(bytes.size()):
+		if bytes[index] == byte_value:
+			return index
+	return -1
 
 
 func _parse_stdio_content_length(header: String) -> Dictionary:
@@ -486,8 +555,11 @@ func _write_response(obj: Dictionary) -> void:
 	_last_written_response = obj.duplicate(true)
 	var body := JSON.stringify(_sanitize_for_json(obj))
 	var body_bytes := body.to_utf8_buffer()
-	# Content-Length frame; print() appends \n which is fine as inter-frame whitespace
-	print("Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body])
+	if _stdio_framing_mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		_last_written_frame = "Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body]
+	else:
+		_last_written_frame = body
+	print(_last_written_frame)
 
 
 func _sanitize_for_json(value):

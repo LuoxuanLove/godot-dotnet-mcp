@@ -29,8 +29,7 @@ const EXECUTOR_SCRIPT_PATHS := {
 	"runtime": "res://addons/godot_dotnet_mcp/tools/runtime/executor.gd"
 }
 const EXECUTOR_DEPENDENCY_PATHS := {
-	"editor": ["res://addons/godot_dotnet_mcp/tools/editor_tools.gd"],
-	"debug": ["res://addons/godot_dotnet_mcp/tools/debug_tools.gd"]
+	"editor": ["res://addons/godot_dotnet_mcp/tools/editor_tools.gd"]
 }
 const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
 

@@ -13,6 +13,11 @@ $bannedSourcePatterns = @(
     "host_shared/"
 )
 
+$allowedManifestValues = @{
+    mcp_version = @("2025-11-25", "2025-06-18", "legacy")
+    conformance = @("required", "compat", "optional")
+}
+
 function Find-BannedSourceMatches {
     param(
         [string]$Pattern,
@@ -104,11 +109,135 @@ function Get-RelativePath {
     return $TargetPath
 }
 
+function Assert-FileContainsText {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [string[]]$RequiredText
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        $errors.Add("Required refactor document is missing: $Label ($Path)")
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($needle in $RequiredText) {
+        if ($text.IndexOf($needle, [System.StringComparison]::Ordinal) -lt 0) {
+            $errors.Add("Required refactor document '$Label' is missing expected MCP 2025-11-25 fact: $needle")
+        }
+    }
+}
+
+function Assert-FileDoesNotMatch {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [hashtable[]]$BannedPatterns
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    foreach ($entry in $BannedPatterns) {
+        if ($text -match $entry.Pattern) {
+            $errors.Add("Required refactor document '$Label' contains contradictory MCP 2025-11-25 target fact: $($entry.Description)")
+        }
+    }
+}
+
+function Assert-V14PlanConsistency {
+    param(
+        [string]$RepositoryRoot
+    )
+
+    $planPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md"
+    $trackerPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md"
+
+    Assert-FileContainsText -Path $planPath -Label "v1.4 protocol refactor plan" -RequiredText @(
+        "MCP 2025-11-25",
+        "protocolVersion = 2025-11-25",
+        "http://127.0.0.1:3000/mcp",
+        "Accept: application/json, text/event-stream",
+        "MCP-Protocol-Version: 2025-11-25",
+        "Sampling, Elicitation, and Tasks as optional capabilities",
+        "do not implement or advertise them by default",
+        "legacy compatibility surfaces"
+    )
+
+    Assert-FileDoesNotMatch -Path $planPath -Label "v1.4 protocol refactor plan" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
+    )
+
+    Assert-FileContainsText -Path $trackerPath -Label "v1.4 refactor progress tracker" -RequiredText @(
+        'MCP 2025-11-25 conformance by default',
+        '2025-06-18 alignment retained as a compatibility foundation',
+        'http://127.0.0.1:3000/mcp',
+        'MCP Streamable HTTP',
+        'legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio',
+        'A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
+    )
+
+    Assert-FileDoesNotMatch -Path $trackerPath -Label "v1.4 refactor progress tracker" -BannedPatterns @(
+        @{
+            Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
+            Description = 'protocolVersion = 2025-06-18'
+        },
+        @{
+            Pattern = '(?im)\b(?:MCP\s+)?2025-06-18\b\s+(?:is|as|serves as|should be|must be)\s+(?:the\s+)?(?:default|target|goal|baseline)\b|\b(?:default|target|goal|baseline)\s+(?:protocol|version|baseline|target|goal)?\s*(?:is|:|=)\s*(?:MCP\s+)?2025-06-18\b'
+            Description = 'MCP 2025-06-18 described as the default or target baseline'
+        },
+        @{
+            Pattern = '(?im)/api/tools\s+(?:is|serves as|should be|must be)\s+(?:the\s+)?(?:default|primary|canonical)\b|(?:default|primary|canonical)\s+(?:MCP\s+)?endpoint\s+(?:is|:)\s+/api/tools\b'
+            Description = '/api/tools described as the default, primary, or canonical MCP endpoint'
+        }
+    )
+}
+
 $trackedReleaseArtifacts = git ls-files "release_dist" "dist" | Where-Object {
     -not [string]::IsNullOrWhiteSpace($_)
 }
 foreach ($artifact in $trackedReleaseArtifacts) {
     $errors.Add("Build output must not be tracked in source control: $artifact")
+}
+
+$releaseFacingReadmes = @(
+    "README.md",
+    "addons/godot_dotnet_mcp/README.md",
+    "addons/godot_dotnet_mcp/README.zh-CN.md"
+)
+$bannedReadmeInstallPatterns = @(
+    @{ Pattern = '(?i)\brelease[_ -]?dist\b'; Description = "release_dist install path" },
+    @{ Pattern = '(?i)\brelease[ _-]package\b'; Description = "release package install wording" },
+    @{ Pattern = '(?i)\blocal[ _-]release\b'; Description = "local release install wording" },
+    @{ Pattern = '(?i)(?:^|[^A-Za-z0-9])zip(?:[ _-](?:package|archive|file|bundle|installer|download))?(?=$|[^A-Za-z0-9])'; Description = "zip install wording" },
+    @{ Pattern = '(?i)\b(?:download|extract|install|release|releases)\b[^\r\n]{0,80}(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])|(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])[^\r\n]{0,80}\b(?:download|extract|install|release|releases)\b'; Description = "zip install context wording" },
+    @{ Pattern = '(?i)\bgodot-dotnet-mcp-[0-9][0-9A-Za-z_.-]*\.zip\b'; Description = "versioned zip artifact install wording" }
+)
+foreach ($relativeReadmePath in $releaseFacingReadmes) {
+    $absoluteReadmePath = Join-Path $repoRoot $relativeReadmePath
+    if (-not (Test-Path -LiteralPath $absoluteReadmePath)) {
+        continue
+    }
+    $readmeText = Get-Content -LiteralPath $absoluteReadmePath -Encoding UTF8 -Raw
+    foreach ($entry in $bannedReadmeInstallPatterns) {
+        if ($readmeText -match $entry.Pattern) {
+            $errors.Add("Release-facing README must only document Asset Library or direct source-copy installs; found $($entry.Description) in ${relativeReadmePath}.")
+        }
+    }
 }
 
 $distRoot = Join-Path $repoRoot "dist"
@@ -129,6 +258,38 @@ foreach ($pattern in $bannedSourcePatterns) {
             $errors.Add("Banned source identifier '$pattern' found: $match")
         }
     }
+}
+
+Assert-V14PlanConsistency -RepositoryRoot $repoRoot
+
+$manifestPath = Join-Path $repoRoot "scripts\contract_case_manifest.json"
+if (Test-Path -LiteralPath $manifestPath) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest -isnot [array]) {
+        $manifest = @($manifest)
+    }
+    foreach ($case in $manifest) {
+        foreach ($field in $allowedManifestValues.Keys) {
+            if (-not ($case.PSObject.Properties.Name -contains $field)) {
+                $errors.Add("Contract case manifest entry '$($case.name)' is missing required field: $field")
+                continue
+            }
+            $value = [string]$case.$field
+            if ($allowedManifestValues[$field] -notcontains $value) {
+                $errors.Add("Contract case manifest entry '$($case.name)' has invalid ${field}: '$value'")
+            }
+        }
+
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
+            $errors.Add("Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'.")
+        }
+        if (-not $isLegacyOrRemoval -and [string]$case.mcp_version -eq "legacy") {
+            $errors.Add("Contract case manifest entry '$($case.name)' targets current behavior and must not use mcp_version='legacy'.")
+        }
+    }
+} else {
+    $errors.Add("Contract case manifest was not found: $manifestPath")
 }
 
 if ($SkipVersionPolicy) {

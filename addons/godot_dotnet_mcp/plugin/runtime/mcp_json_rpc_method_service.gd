@@ -93,7 +93,7 @@ func _build_capabilities() -> Dictionary:
 		return _resources_service.build_server_capabilities()
 	return {
 		"tools": {"listChanged": false},
-		"resources": {"subscribe": false, "listChanged": false},
+		"resources": {"listChanged": false},
 		"prompts": {"listChanged": false}
 	}
 

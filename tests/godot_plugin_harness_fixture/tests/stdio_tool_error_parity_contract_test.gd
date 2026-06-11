@@ -189,6 +189,31 @@ func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label:
 func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 	stdio_server.start()
 
+	if str(stdio_server.call("get_framing_mode")) != "newline":
+		stdio_server.stop()
+		return _failure("Stdio should default to newline-delimited JSON-RPC framing.")
+
+	var newline_check := await _assert_newline_stdio_frames(stdio_server)
+	if not bool(newline_check.get("success", false)):
+		stdio_server.stop()
+		return newline_check
+
+	stdio_server.set("_buffer", "Content-Length: 2\r\n\r\n{}".to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var legacy_default_parsed: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if bool(legacy_default_parsed):
+		stdio_server.stop()
+		return _failure("Default newline stdio mode should not parse legacy Content-Length frames.")
+	var legacy_default_error: Dictionary = (stdio_server.get("_last_written_response") as Dictionary).get("error", {})
+	if not str(legacy_default_error.get("message", "")).contains("stdio_legacy_content_length_requires_compat"):
+		stdio_server.stop()
+		return _failure("Default newline stdio mode should direct legacy Content-Length users to compatibility mode.")
+
+	stdio_server.call("set_framing_mode", "legacy_content_length")
+	if str(stdio_server.call("get_framing_mode")) != "legacy_content_length":
+		stdio_server.stop()
+		return _failure("Stdio should allow explicit legacy Content-Length compatibility mode.")
+
 	var non_numeric_check := await _assert_rejected_stdio_frame(
 		stdio_server,
 		"Content-Length: nope\r\n\r\n{}",
@@ -342,6 +367,37 @@ func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
 		return _failure("Valid stdio notification envelope should consume its frame.")
 	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
 		return _failure("Valid stdio notification envelope should not emit a response.")
+	return {"success": true, "error": ""}
+
+
+func _assert_newline_stdio_frames(stdio_server) -> Dictionary:
+	var first_body := JSON.stringify({"jsonrpc": "2.0", "id": 31, "method": "ping", "params": {}})
+	var second_body := JSON.stringify({"jsonrpc": "2.0", "id": 32, "method": "ping", "params": {}})
+	stdio_server.set("_buffer", ("%s\n%s\r\n" % [first_body, second_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var generation := int(stdio_server.get("_transport_generation"))
+	var parsed_first: bool = bool(await stdio_server.call("_try_parse_frame", generation))
+	if not bool(parsed_first):
+		return _failure("Default stdio should parse the first newline-delimited JSON-RPC frame.")
+	if int((stdio_server.get("_last_written_response") as Dictionary).get("id", 0)) != 31:
+		return _failure("Default stdio first newline frame should preserve response id.")
+	var first_written_frame := str(stdio_server.get("_last_written_frame"))
+	if first_written_frame.begins_with("Content-Length:"):
+		return _failure("Default stdio should write newline-delimited JSON-RPC responses, not Content-Length frames.")
+	if first_written_frame.find("\r\n\r\n") != -1:
+		return _failure("Default stdio newline response should not include legacy Content-Length separators.")
+	var parsed_first_response = JSON.parse_string(first_written_frame)
+	if not (parsed_first_response is Dictionary):
+		return _failure("Default stdio newline response should be a JSON object string.")
+	if (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		return _failure("Default stdio parser should preserve the second newline frame after the first parse.")
+	var parsed_second: bool = bool(await stdio_server.call("_try_parse_frame", generation))
+	if not bool(parsed_second):
+		return _failure("Default stdio should parse the second newline-delimited JSON-RPC frame.")
+	if int((stdio_server.get("_last_written_response") as Dictionary).get("id", 0)) != 32:
+		return _failure("Default stdio second newline frame should preserve response id.")
+	if not (stdio_server.get("_buffer") as PackedByteArray).is_empty():
+		return _failure("Default stdio parser should drain newline-delimited frames exactly.")
 	return {"success": true, "error": ""}
 
 
