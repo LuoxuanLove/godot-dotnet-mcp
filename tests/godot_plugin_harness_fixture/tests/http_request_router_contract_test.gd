@@ -91,7 +91,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache":
 		return _failure("HTTP request router should disable caching for GET /mcp SSE responses.")
 	var get_mcp_body := str(get_mcp_response.get("_raw_body", ""))
-	if get_mcp_body.find("event: message") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") == -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
+	if get_mcp_body.find("event: message") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") == -1 or get_mcp_body.find("\"method\":\"notifications/message\"") == -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
 		return _failure("HTTP request router should return an observable Streamable HTTP SSE message for GET /mcp.")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
