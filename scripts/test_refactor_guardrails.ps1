@@ -1,9 +1,10 @@
-﻿param()
+param()
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $repoRoot
+$scriptRoot = Split-Path -Parent $PSScriptRoot
+$validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
+$manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
 
 function Write-Utf8NoBom {
     param(
@@ -18,17 +19,26 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
-function New-GuardrailFixture {
+function Write-GuardrailFixture {
     param(
-        [string]$Root,
+        [string]$RepositoryRoot,
+        [string]$RootReadmeText,
+        [string]$AddonReadmeText,
         [switch]$MissingTrackerFact
     )
 
-    New-Item -ItemType Directory -Path $Root -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $Root "scripts") -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $Root "dist") -Force | Out-Null
-    git -C $Root init --quiet
-    Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\validate_refactor_guardrails.ps1") -Destination (Join-Path $Root "scripts\validate_refactor_guardrails.ps1") -Force
+    git -C $RepositoryRoot init | Out-Null
+    git -C $RepositoryRoot config user.email "fixture@example.com" | Out-Null
+    git -C $RepositoryRoot config user.name "Fixture" | Out-Null
+
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "scripts") -Force | Out-Null
+
+    Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_refactor_guardrails.ps1")
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $RepositoryRoot "scripts\contract_case_manifest.json")
+    Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
 
     $planText = @'
 # v1.4.0 Protocol Refactor Plan
@@ -58,58 +68,138 @@ A PR is not ready to merge into the v1.4 refactor branch until local validation,
         $trackerText = $trackerText.Replace("MCP Streamable HTTP", "HTTP endpoint")
     }
 
-    Write-Utf8NoBom -Path (Join-Path $Root "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
-    Write-Utf8NoBom -Path (Join-Path $Root "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
+
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json docs/en/process/v1.4.0-protocol-refactor-plan.md docs/en/process/v1.4.0-refactor-progress-tracker.md | Out-Null
+    git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 
-function Invoke-GuardrailFixture {
+function Invoke-GuardrailScenario {
     param(
-        [string]$Root
+        [string]$Name,
+        [string]$RootReadmeText,
+        [string]$AddonReadmeText,
+        [bool]$ShouldPass,
+        [switch]$MissingTrackerFact
     )
 
-    Push-Location $Root
-    $output = @()
+    $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-refactor-guardrails-" + [System.Guid]::NewGuid().ToString("N"))
+    $previousLocation = (Get-Location).Path
+    New-Item -ItemType Directory -Path $repo | Out-Null
     try {
-        $output = & (Join-Path $Root "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy 2>&1
-        return @{
-            ExitCode = $LASTEXITCODE
-            Output = ($output | Out-String)
-            Succeeded = $true
+        Write-GuardrailFixture -RepositoryRoot $repo -RootReadmeText $RootReadmeText -AddonReadmeText $AddonReadmeText -MissingTrackerFact:$MissingTrackerFact
+        $passed = $true
+        $failureMessage = ""
+        try {
+            $output = & (Join-Path $repo "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy 2>&1
+            $output | Out-Host
+        } catch {
+            $passed = $false
+            $failureMessage = $_.Exception.Message
+            Write-Host "Scenario '$Name' failed as expected candidate: $failureMessage"
         }
-    }
-    catch {
-        $combinedOutput = (($output | Out-String) + [Environment]::NewLine + $_.Exception.Message).Trim()
-        return @{
-            ExitCode = 1
-            Output = $combinedOutput
-            Succeeded = $false
+
+        if ($passed -ne $ShouldPass) {
+            throw "Scenario '$Name' expected pass=$ShouldPass but got pass=$passed."
         }
-    }
-    finally {
-        Pop-Location
-    }
-}
-
-$fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-refactor-guardrails-" + [Guid]::NewGuid().ToString("N"))
-try {
-    $validRoot = Join-Path $fixtureRoot "valid"
-    New-GuardrailFixture -Root $validRoot
-    $validResult = Invoke-GuardrailFixture -Root $validRoot
-    if (-not $validResult.Succeeded) {
-        throw "Expected valid refactor guardrail fixture to pass, got: $($validResult.Output)"
-    }
-
-    $invalidRoot = Join-Path $fixtureRoot "invalid"
-    New-GuardrailFixture -Root $invalidRoot -MissingTrackerFact
-    $invalidResult = Invoke-GuardrailFixture -Root $invalidRoot
-	if ($invalidResult.Succeeded) {
-		throw "Expected invalid refactor guardrail fixture to fail."
-	}
-}
-finally {
-    if (Test-Path -LiteralPath $fixtureRoot) {
-        Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
+        if (-not $ShouldPass -and $failureMessage -notlike "*Refactor guardrail validation failed*") {
+            throw "Scenario '$Name' failed with unexpected message: $failureMessage"
+        }
+        Write-Host "Scenario '$Name' passed."
+    } finally {
+        Set-Location $previousLocation
+        Remove-Item -LiteralPath $repo -Recurse -Force
     }
 }
 
-Write-Host "Refactor guardrail tests passed."
+$cleanRootReadme = @"
+# Fixture
+
+## Installation
+
+Install from the Godot Asset Library or copy `addons/godot_dotnet_mcp` directly into a Godot project.
+"@
+
+$cleanAddonReadme = @"
+# Addon Fixture
+
+## Installation
+
+Use Godot Asset Library installation or direct source-copy installation.
+"@
+
+Invoke-GuardrailScenario -Name "release-facing README install paths" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $true
+Invoke-GuardrailScenario -Name "missing v1.4 tracker MCP fact" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -MissingTrackerFact
+
+$zipReadme = @"
+# Fixture
+
+## Installation
+
+Download `godot-dotnet-mcp-1.4.0.zip` and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip install wording" -RootReadmeText $zipReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$releasePackageReadme = @"
+# Fixture
+
+## Installation
+
+Download the release-package build and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden release-package install wording" -RootReadmeText $releasePackageReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$localReleaseReadme = @"
+# Fixture
+
+## Installation
+
+Install from the local-release bundle and copy it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden local-release install wording" -RootReadmeText $localReleaseReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$zipPackageReadme = @"
+# Fixture
+
+## Installation
+
+Use the zip_package installer artifact for manual installation.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip_package install wording" -RootReadmeText $zipPackageReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$zipArchiveReadme = @"
+# Fixture
+
+## Installation
+
+Download the ZIP archive from GitHub Releases and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip archive install wording" -RootReadmeText $zipArchiveReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$zipDownloadReadme = @"
+# Fixture
+
+## Installation
+
+Download a zip from GitHub Releases and extract it into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden zip download install wording" -RootReadmeText $zipDownloadReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+$releaseDistReadme = @"
+# Fixture
+
+## Installation
+
+Copy files from release_dist into the project.
+"@
+
+Invoke-GuardrailScenario -Name "forbidden release_dist install wording" -RootReadmeText $releaseDistReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false
+
+Write-Host "Refactor guardrail policy scenarios validated successfully."

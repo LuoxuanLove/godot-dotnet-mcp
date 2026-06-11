@@ -13,6 +13,11 @@ $bannedSourcePatterns = @(
     "host_shared/"
 )
 
+$allowedManifestValues = @{
+    mcp_version = @("2025-11-25", "2025-06-18", "legacy")
+    conformance = @("required", "compat", "optional")
+}
+
 function Find-BannedSourceMatches {
     param(
         [string]$Pattern,
@@ -160,6 +165,32 @@ foreach ($artifact in $trackedReleaseArtifacts) {
     $errors.Add("Build output must not be tracked in source control: $artifact")
 }
 
+$releaseFacingReadmes = @(
+    "README.md",
+    "addons/godot_dotnet_mcp/README.md",
+    "addons/godot_dotnet_mcp/README.zh-CN.md"
+)
+$bannedReadmeInstallPatterns = @(
+    @{ Pattern = '(?i)\brelease[_ -]?dist\b'; Description = "release_dist install path" },
+    @{ Pattern = '(?i)\brelease[ _-]package\b'; Description = "release package install wording" },
+    @{ Pattern = '(?i)\blocal[ _-]release\b'; Description = "local release install wording" },
+    @{ Pattern = '(?i)(?:^|[^A-Za-z0-9])zip(?:[ _-](?:package|archive|file|bundle|installer|download))?(?=$|[^A-Za-z0-9])'; Description = "zip install wording" },
+    @{ Pattern = '(?i)\b(?:download|extract|install|release|releases)\b[^\r\n]{0,80}(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])|(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])[^\r\n]{0,80}\b(?:download|extract|install|release|releases)\b'; Description = "zip install context wording" },
+    @{ Pattern = '(?i)\bgodot-dotnet-mcp-[0-9][0-9A-Za-z_.-]*\.zip\b'; Description = "versioned zip artifact install wording" }
+)
+foreach ($relativeReadmePath in $releaseFacingReadmes) {
+    $absoluteReadmePath = Join-Path $repoRoot $relativeReadmePath
+    if (-not (Test-Path -LiteralPath $absoluteReadmePath)) {
+        continue
+    }
+    $readmeText = Get-Content -LiteralPath $absoluteReadmePath -Encoding UTF8 -Raw
+    foreach ($entry in $bannedReadmeInstallPatterns) {
+        if ($readmeText -match $entry.Pattern) {
+            $errors.Add("Release-facing README must only document Asset Library or direct source-copy installs; found $($entry.Description) in ${relativeReadmePath}.")
+        }
+    }
+}
+
 $distRoot = Join-Path $repoRoot "dist"
 $expectedDirs = @(
     (Join-Path $distRoot "godot-dotnet-mcp-plugin")
@@ -181,6 +212,36 @@ foreach ($pattern in $bannedSourcePatterns) {
 }
 
 Assert-V14PlanConsistency -RepositoryRoot $repoRoot
+
+$manifestPath = Join-Path $repoRoot "scripts\contract_case_manifest.json"
+if (Test-Path -LiteralPath $manifestPath) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest -isnot [array]) {
+        $manifest = @($manifest)
+    }
+    foreach ($case in $manifest) {
+        foreach ($field in $allowedManifestValues.Keys) {
+            if (-not ($case.PSObject.Properties.Name -contains $field)) {
+                $errors.Add("Contract case manifest entry '$($case.name)' is missing required field: $field")
+                continue
+            }
+            $value = [string]$case.$field
+            if ($allowedManifestValues[$field] -notcontains $value) {
+                $errors.Add("Contract case manifest entry '$($case.name)' has invalid ${field}: '$value'")
+            }
+        }
+
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
+            $errors.Add("Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'.")
+        }
+        if (-not $isLegacyOrRemoval -and [string]$case.mcp_version -eq "legacy") {
+            $errors.Add("Contract case manifest entry '$($case.name)' targets current behavior and must not use mcp_version='legacy'.")
+        }
+    }
+} else {
+    $errors.Add("Contract case manifest was not found: $manifestPath")
+}
 
 if ($SkipVersionPolicy) {
     Write-Host "Version policy validation skipped: caller opted out."

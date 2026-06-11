@@ -12,6 +12,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/physics_tools.gd"):
 		return _failure("physics_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if FileAccess.file_exists("res://addons/godot_dotnet_mcp/tools/physics_tools.gd.uid"):
+		return _failure("physics_tools.gd.uid should be removed with the legacy physics monolith.")
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 4:
