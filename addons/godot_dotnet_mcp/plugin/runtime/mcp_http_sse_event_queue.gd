@@ -104,9 +104,19 @@ func resume_status(session_id: String, last_event_id: String) -> Dictionary:
 				"base_index": base_index,
 				"next_index": end_index
 			}
+	var cursor_index := _event_index_from_cursor(normalized_session, cursor)
+	if has_session and cursor_index > 0 and cursor_index <= base_index:
+		return {
+			"found": false,
+			"status": "stale_cursor",
+			"event_count_after_cursor": 0,
+			"start_index": end_index,
+			"base_index": base_index,
+			"next_index": end_index
+		}
 	return {
 		"found": false,
-		"status": "stale_cursor" if has_session else "unknown_session",
+		"status": "unknown_cursor" if has_session else "unknown_session",
 		"event_count_after_cursor": 0,
 		"start_index": end_index,
 		"base_index": base_index,
@@ -154,6 +164,18 @@ func _build_event_id(session_id: String, id_prefix: String) -> String:
 		_sanitize_sse_token(session_id),
 		next_counter
 	]
+
+
+func _event_index_from_cursor(session_id: String, cursor: String) -> int:
+	var sanitized_session := _sanitize_sse_token(session_id)
+	var marker := "-%s-" % sanitized_session
+	var marker_index := cursor.find(marker)
+	if marker_index < 0:
+		return -1
+	var counter_text := cursor.substr(marker_index + marker.length())
+	if counter_text.is_empty() or not counter_text.is_valid_int():
+		return -1
+	return int(counter_text)
 
 
 func _normalize_session_id(session_id: String) -> String:

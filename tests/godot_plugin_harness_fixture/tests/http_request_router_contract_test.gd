@@ -184,6 +184,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should include stored replay events plus the current probe event for matched older cursors.")
 	if replay_body.find("\"replay_event_count\":1") == -1:
 		return _failure("HTTP request router should report the number of stored replay events after a matched older cursor.")
+	var unknown_active_cursor_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-sse-1", "last-event-id": "streamable-http-get-client-sse-1-999"})
+	var unknown_active_cursor_body := str(unknown_active_cursor_response.get("_raw_body", ""))
+	if unknown_active_cursor_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
+		return _failure("HTTP request router should distinguish active-session unknown SSE cursors from stale retained-window cursors.")
 	var underscore_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client_key"})
 	var underscore_first_event_id := _extract_first_sse_event_id(str(underscore_session_response.get("_raw_body", "")))
 	if not underscore_first_event_id.ends_with("-1"):

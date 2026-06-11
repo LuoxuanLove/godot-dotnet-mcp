@@ -537,6 +537,14 @@ func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 	if int(stale_resume_status.get("base_index", 0)) != 1 or int(stale_resume_status.get("next_index", 0)) != 33:
 		queue.dispose()
 		return _failure("SSE event queue should expose retained-window bounds for stale cursor diagnostics.")
+	var unknown_cursor_status: Dictionary = queue.resume_status("bounded-active-stream", "bounded-bounded-active-stream-999")
+	if str(unknown_cursor_status.get("status", "")) != "unknown_cursor":
+		queue.dispose()
+		return _failure("SSE event queue should distinguish existing-session unknown cursors from stale retained-window cursors.")
+	var foreign_cursor_status: Dictionary = queue.resume_status("bounded-active-stream", "bounded-other-stream-1")
+	if str(foreign_cursor_status.get("status", "")) != "unknown_cursor":
+		queue.dispose()
+		return _failure("SSE event queue should not report foreign session cursors as stale retained-window cursors.")
 	var unknown_resume_status: Dictionary = queue.resume_status("missing-bounded-stream", "bounded-missing-1")
 	if str(unknown_resume_status.get("status", "")) != "unknown_session":
 		queue.dispose()
