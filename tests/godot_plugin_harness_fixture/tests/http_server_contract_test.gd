@@ -86,8 +86,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_initialize_result = rpc_initialize.get("result", {})
 	if not (rpc_initialize_result is Dictionary):
 		return _failure("JSON-RPC initialize did not return a result object.")
+	if str((rpc_initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("JSON-RPC initialize did not expose the MCP 2025-11-25 protocol version.")
 	if str((rpc_initialize_result as Dictionary).get("toolSchemaVersion", "")) != expected_schema_version:
 		return _failure("JSON-RPC initialize did not expose the current tool schema version.")
+	var rpc_server_info = (rpc_initialize_result as Dictionary).get("serverInfo", {})
+	if not (rpc_server_info is Dictionary):
+		return _failure("JSON-RPC initialize did not return serverInfo.")
+	if str((rpc_server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("JSON-RPC initialize did not expose serverInfo.description.")
 
 	var full_reload_summary: Dictionary = _server.reinitialize(0, "127.0.0.1", false, [], "tool_full_reload")
 	if int(full_reload_summary.get("tool_count", 0)) <= 0:

@@ -40,6 +40,7 @@
   { "name": "system_help_contracts", "layer": "system", "domain": "help", "behavior": "deprecation", "speed": "headless", "isolation": "pure", "v1_4_disposition": "delete" },
   { "name": "system_inspector_contracts", "layer": "system", "domain": "inspector", "behavior": "current", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "keep" },
   { "name": "json_rpc_request_service_contracts", "layer": "transport", "domain": "json_rpc", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
+  { "name": "mcp_2025_baseline_contracts", "layer": "protocol", "domain": "baseline", "behavior": "current", "speed": "headless", "isolation": "pure", "v1_4_disposition": "keep" },
   { "name": "mcp_resources_prompts_contracts", "layer": "protocol", "domain": "resources_prompts", "behavior": "migration", "speed": "headless", "isolation": "pure", "v1_4_disposition": "rewrite" },
   { "name": "system_project_executor_contracts", "layer": "system", "domain": "project", "behavior": "current", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "rewrite" },
   { "name": "system_scene_executor_contracts", "layer": "system", "domain": "scene", "behavior": "deprecation", "speed": "headless", "isolation": "stage_root", "v1_4_disposition": "rewrite" },

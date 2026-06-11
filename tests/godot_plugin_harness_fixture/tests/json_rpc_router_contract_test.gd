@@ -136,11 +136,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary) or str((initialize_result as Dictionary).get("protocolVersion", "")) != MCPProtocolFacts.get_protocol_version():
 		return _failure("JSON-RPC router did not dispatch initialize requests.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("JSON-RPC router initialize should advertise MCP 2025-11-25.")
 	if str((initialize_result as Dictionary).get("toolSchemaVersion", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("JSON-RPC router did not preserve the unified tool schema version.")
 	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
 	if not (server_info is Dictionary) or str((server_info as Dictionary).get("name", "")) != MCPProtocolFacts.get_server_name():
 		return _failure("JSON-RPC router did not preserve the unified server info payload.")
+	if str((server_info as Dictionary).get("description", "")) != MCPProtocolFacts.get_server_description():
+		return _failure("JSON-RPC router initialize should expose serverInfo.description.")
 
 	var ping_response: Dictionary = await router.route_request_async("ping", {}, 2, true)
 	if not ping_response.has("result"):

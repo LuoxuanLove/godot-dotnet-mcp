@@ -36,9 +36,10 @@ script="plugin.gd"
 
     @"
 {
-  "protocol_version": "2025-06-18",
+  "protocol_version": "2025-11-25",
   "tool_schema_version": "2026-05-03.10",
   "server_name": "godot-dotnet-mcp",
+  "server_description": "Godot .NET MCP editor automation server",
   "server_version": "$Version",
   "error_codes": {
     "invalid_argument": "invalid_argument",
@@ -50,9 +51,10 @@ script="plugin.gd"
     @"
 static func _default_facts() -> Dictionary:
 `treturn {
-`t`t"protocol_version": "2025-06-18",
+`t`t"protocol_version": "2025-11-25",
 `t`t"tool_schema_version": "2026-05-03.10",
 `t`t"server_name": "godot-dotnet-mcp",
+`t`t"server_description": "Godot .NET MCP editor automation server",
 `t`t"server_version": "$Version",
 `t`t"error_codes": {
 `t`t`t"invalid_argument": "invalid_argument",

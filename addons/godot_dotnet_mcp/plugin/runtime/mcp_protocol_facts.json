@@ -1,7 +1,8 @@
 {
-  "protocol_version": "2025-06-18",
+  "protocol_version": "2025-11-25",
   "tool_schema_version": "2026-06-08.33",
   "server_name": "godot-dotnet-mcp",
+  "server_description": "Godot .NET MCP editor automation server",
   "server_version": "1.4.0",
   "error_codes": {
     "bridge_version_mismatch": "bridge_version_mismatch",

@@ -87,6 +87,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary):
 		return _failure("initialize should return a result object.")
+	if str((initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("initialize should advertise MCP 2025-11-25.")
+	var initialize_server_info = (initialize_result as Dictionary).get("serverInfo", {})
+	if not (initialize_server_info is Dictionary):
+		return _failure("initialize should expose serverInfo.")
+	if str((initialize_server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("initialize should expose serverInfo.description.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	if not (capabilities is Dictionary):
 		return _failure("initialize should expose capabilities as an object.")
@@ -551,8 +558,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var shared_stdio_registry = ToolActivityRegistryScript.new()
 	shared_stdio_loader.set_tool_activity_registry(shared_stdio_registry)
 	stdio_server.initialize(shared_stdio_loader)
+	stdio_server.start()
 	if shared_stdio_loader.get_tool_activity_registry() != shared_stdio_registry:
 		return _failure("stdio initialization should not replace an existing shared tool activity registry.")
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 25,
+		"method": "initialize",
+		"params": {}
+	}))
+	var stdio_initialize_response = stdio_server.get("_last_written_response")
+	if not (stdio_initialize_response is Dictionary):
+		return _failure("stdio initialize should write a JSON-RPC response.")
+	var stdio_initialize_result = (stdio_initialize_response as Dictionary).get("result", {})
+	if not (stdio_initialize_result is Dictionary):
+		return _failure("stdio initialize should return a result object.")
+	if str((stdio_initialize_result as Dictionary).get("protocolVersion", "")) != "2025-11-25":
+		return _failure("stdio initialize should advertise MCP 2025-11-25.")
+	var stdio_server_info = (stdio_initialize_result as Dictionary).get("serverInfo", {})
+	if not (stdio_server_info is Dictionary) or str((stdio_server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
+		return _failure("stdio initialize should expose serverInfo.description.")
+	stdio_server.set("_last_written_response", {})
 	var stdio_tool_call_result: Dictionary = await stdio_server._handle_tools_call_async({
 		"name": "system_project_state",
 		"arguments": {"summary": true}
