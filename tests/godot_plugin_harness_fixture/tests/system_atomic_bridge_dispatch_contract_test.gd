@@ -5,6 +5,7 @@ extends RefCounted
 const AtomicBridgeDispatchServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_dispatch_service.gd")
 const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
+const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 
 
 class FakeRuntime:
@@ -93,6 +94,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var execution_service_result := await _verify_execution_service_facade()
 	if not bool(execution_service_result.get("success", false)):
 		return execution_service_result
+	var bridge_facade_result := _verify_atomic_bridge_facade_is_thin()
+	if not bool(bridge_facade_result.get("success", false)):
+		return bridge_facade_result
 
 	return {"name": "system_atomic_bridge_dispatch_contracts", "success": true, "error": ""}
 
@@ -160,6 +164,44 @@ func _verify_execution_service_collection_helpers(service, runtime: FakeRuntime)
 	var counts_args: Dictionary = runtime.dispatch_calls[2].get("args", {})
 	if not bool(counts_args.get("count_only", false)) or not (counts_args.get("filters", []) is Array):
 		return _failure("Atomic bridge execution service collect_file_counts should request filters with count_only.", counts_args)
+	return {"success": true}
+
+
+func _verify_atomic_bridge_facade_is_thin() -> Dictionary:
+	var bridge = AtomicBridgeScript.new()
+	var allowed_methods := [
+		"success",
+		"error",
+		"configure_runtime",
+		"get_tool_loader",
+		"get_gdscript_lsp_diagnostics_service",
+		"call_atomic",
+		"call_atomic_async"
+	]
+	for method_name in allowed_methods:
+		if not bridge.has_method(method_name):
+			return _failure("AtomicBridge facade should keep required execution method: %s" % method_name)
+	var removed_helper_methods := [
+		"extract_data",
+		"extract_array",
+		"collect_files",
+		"collect_file_count",
+		"collect_file_counts",
+		"build_issue",
+		"append_unique_issue",
+		"has_severity",
+		"normalize_dependency_path",
+		"parse_dependency_reference",
+		"_is_write_action",
+		"_is_write_atomic_action",
+		"_find_path_in_args",
+		"_cache_atomic_executor_for_test",
+		"_invalidate_atomic_executors",
+		"_get_cached_atomic_executor_count_for_test"
+	]
+	for method_name in removed_helper_methods:
+		if bridge.has_method(method_name):
+			return _failure("AtomicBridge facade should not expose helper method after demotion: %s" % method_name)
 	return {"success": true}
 
 
