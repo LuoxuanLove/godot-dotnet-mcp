@@ -225,7 +225,8 @@ $bannedReadmeInstallPatterns = @(
     @{ Pattern = '(?i)\blocal[ _-]release\b'; Description = "local release install wording" },
     @{ Pattern = '(?i)(?:^|[^A-Za-z0-9])zip(?:[ _-](?:package|archive|file|bundle|installer|download))?(?=$|[^A-Za-z0-9])'; Description = "zip install wording" },
     @{ Pattern = '(?i)\b(?:download|extract|install|release|releases)\b[^\r\n]{0,80}(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])|(?:^|[^A-Za-z0-9])zip(?=$|[^A-Za-z0-9])[^\r\n]{0,80}\b(?:download|extract|install|release|releases)\b'; Description = "zip install context wording" },
-    @{ Pattern = '(?i)\bgodot-dotnet-mcp-[0-9][0-9A-Za-z_.-]*\.zip\b'; Description = "versioned zip artifact install wording" }
+    @{ Pattern = '(?i)\bgodot-dotnet-mcp-[0-9][0-9A-Za-z_.-]*\.zip\b'; Description = "versioned zip artifact install wording" },
+    @{ Pattern = '(?i)\bcopy source files directly\b|\bdirect copy of the `addons/godot_dotnet_mcp/` source files\b|\bcopy (?:the )?raw repository\b|\bcopy raw source\b'; Description = "raw source-copy install wording" }
 )
 foreach ($relativeReadmePath in $releaseFacingReadmes) {
     $absoluteReadmePath = Join-Path $repoRoot $relativeReadmePath
@@ -236,6 +237,24 @@ foreach ($relativeReadmePath in $releaseFacingReadmes) {
     foreach ($entry in $bannedReadmeInstallPatterns) {
         if ($readmeText -match $entry.Pattern) {
             $errors.Add("Release-facing README must only document Asset Library or direct source-copy installs; found $($entry.Description) in ${relativeReadmePath}.")
+        }
+    }
+}
+
+$workflowGuardSpecs = @(
+    @{ Path = ".github/workflows/pr-policy.yml"; Required = @("merge_group:", "python scripts/test_validate_pr_policy.py") },
+    @{ Path = ".github/workflows/version-policy.yml"; Required = @("merge_group:") }
+)
+foreach ($spec in $workflowGuardSpecs) {
+    $workflowPath = Join-Path $repoRoot $spec.Path
+    if (-not (Test-Path -LiteralPath $workflowPath)) {
+        $errors.Add("Required workflow guard file is missing: $($spec.Path)")
+        continue
+    }
+    $workflowText = Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8
+    foreach ($requiredText in $spec.Required) {
+        if (-not $workflowText.Contains($requiredText)) {
+            $errors.Add("Workflow guard '$($spec.Path)' must contain '$requiredText'.")
         }
     }
 }
