@@ -83,6 +83,7 @@ var _selected_tree_kind := ""
 var _selected_tree_key := ""
 var _selected_tool_category := ""
 var _selected_tool_name := ""
+var _selected_tree_metadata: Dictionary = {}
 var _selection_sync_queued := false
 var _last_tree_signature := ""
 var _last_preview_key := ""
@@ -178,7 +179,8 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 		"atomic":
 			_configure_info_row(item, display_name, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, key))
 		"action":
-			_configure_action_item(item, str(filtered_node.get("actionName", filtered_node.get("action", ""))), str(filtered_node.get("parentTool", filtered_node.get("parent_tool", ""))))
+			_configure_item_text(item, display_name, metadata)
+			item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 		_:
 			_configure_item_text(item, display_name, metadata)
 	var children: Array = filtered_node.get("children", [])
@@ -235,7 +237,7 @@ func _get_presentation_node_display_name(node: Dictionary) -> String:
 			var full_name := str(node.get("fullName", node.get("key", "")))
 			return _get_tool_display_name(_localization, full_name, str(node.get("toolName", node.get("tool_name", ""))))
 		"action":
-			return _get_action_display_name(str(node.get("parentTool", node.get("parent_tool", ""))), str(node.get("actionName", node.get("action", ""))))
+			return _get_action_display_name_from_metadata(node, str(node.get("parentTool", node.get("parent_tool", ""))), str(node.get("actionName", node.get("action", ""))))
 	return str(node.get("key", node.get("id", "")))
 
 
@@ -265,6 +267,7 @@ func _build_presentation_node_metadata(node: Dictionary, display_name: String) -
 		extra["action"] = str(node.get("actionName", node.get("action", "")))
 		extra["tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
 		extra["parent_tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
+		extra["description_key"] = str(node.get("descriptionKey", ""))
 	return _build_tree_node_metadata(kind, key, display_name, key, extra)
 
 
@@ -667,8 +670,14 @@ func _get_tool_description(localization, full_name: String, tool_def: Dictionary
 
 
 func _get_action_display_name(parent_tool: String, action_name: String) -> String:
+	return _get_action_display_name_from_metadata({}, parent_tool, action_name)
+
+
+func _get_action_display_name_from_metadata(metadata: Dictionary, parent_tool: String, action_name: String) -> String:
 	if _localization != null:
-		var specific_key = SystemTreeCatalog.get_action_name_key(parent_tool, action_name)
+		var specific_key = str(metadata.get("labelKey", metadata.get("label_key", "")))
+		if specific_key.is_empty():
+			specific_key = SystemTreeCatalog.get_action_name_key(parent_tool, action_name)
 		var translated = _localization.get_text(specific_key)
 		if translated != specific_key:
 			return translated
@@ -684,14 +693,20 @@ func _get_action_display_name(parent_tool: String, action_name: String) -> Strin
 
 
 func _get_action_description(parent_tool: String, action_name: String, tool_def: Dictionary) -> String:
-	var action_display_name = _get_action_display_name(parent_tool, action_name)
+	return _get_action_description_from_metadata({}, parent_tool, action_name, tool_def)
+
+
+func _get_action_description_from_metadata(metadata: Dictionary, parent_tool: String, action_name: String, tool_def: Dictionary) -> String:
+	var action_display_name = _get_action_display_name_from_metadata(metadata, parent_tool, action_name)
 	var parent_display_name = parent_tool
 	if not tool_def.is_empty():
 		var tool_name = str(tool_def.get("name", ""))
 		if not tool_name.is_empty():
 			parent_display_name = _get_tool_display_name(_localization, parent_tool, tool_name)
 	if _localization != null:
-		var specific_key = SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+		var specific_key = str(metadata.get("descriptionKey", metadata.get("description_key", "")))
+		if specific_key.is_empty():
+			specific_key = SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
 		var translated = _localization.get_text(specific_key)
 		if translated != specific_key:
 			return translated
@@ -1167,6 +1182,7 @@ func _apply_selection_metadata(metadata) -> void:
 	_clear_selection_metadata()
 	if metadata is Dictionary:
 		var metadata_dict := metadata as Dictionary
+		_selected_tree_metadata = metadata_dict.duplicate(true)
 		_selected_tree_kind = str(metadata_dict.get("kind", ""))
 		_selected_tree_key = str(metadata_dict.get("key", ""))
 		_selected_tool_category = str(metadata_dict.get("category", ""))
@@ -1179,6 +1195,7 @@ func _clear_selection_metadata() -> void:
 	_selected_tree_key = ""
 	_selected_tool_category = ""
 	_selected_tool_name = ""
+	_selected_tree_metadata = {}
 	_last_preview_key = ""
 
 
@@ -1566,18 +1583,19 @@ func _build_action_item_preview() -> String:
 		return str(_localization.get_text("tool_preview_empty"))
 	var parent_tool: String = key.left(dot_idx)
 	var action_name: String = key.substr(dot_idx + 1)
+	var action_metadata := _context_for_selected_action()
 	var tool_def = _get_tool_metadata(parent_tool)
 	var category = str(tool_def.get("category", _extract_category_from_full_name(_current_model, parent_tool)))
 	var tool_name = str(tool_def.get("toolName", tool_def.get("name", ""))) if not tool_def.is_empty() else parent_tool
 	var display_name = _get_tool_display_name(_localization, parent_tool, tool_name) if not tool_def.is_empty() else parent_tool
 	var lines: Array[String] = [
-		"%s: %s" % [_localization.get_text("tool_action"), _get_action_display_name(parent_tool, action_name)],
+		"%s: %s" % [_localization.get_text("tool_action"), _get_action_display_name_from_metadata(action_metadata, parent_tool, action_name)],
 		"%s: %s" % [_localization.get_text("tool_preview_action_id"), action_name],
 		"%s: %s" % [_localization.get_text("tool_preview_parent_tool"), display_name],
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
 		"",
 		_localization.get_text("tool_preview_description"),
-		_get_action_description(parent_tool, action_name, tool_def),
+		_get_action_description_from_metadata(action_metadata, parent_tool, action_name, tool_def),
 	]
 	if not tool_def.is_empty():
 		var param_lines = _build_action_parameter_lines(tool_def, parent_tool)
@@ -1586,6 +1604,12 @@ func _build_action_item_preview() -> String:
 			lines.append(_localization.get_text("tool_preview_params"))
 			lines.append_array(param_lines)
 	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _context_for_selected_action() -> Dictionary:
+	if str(_selected_tree_metadata.get("kind", "")) != "action":
+		return {}
+	return _selected_tree_metadata.duplicate(true)
 
 
 func _build_action_parameter_lines(tool_def: Dictionary, full_name: String) -> Array[String]:
