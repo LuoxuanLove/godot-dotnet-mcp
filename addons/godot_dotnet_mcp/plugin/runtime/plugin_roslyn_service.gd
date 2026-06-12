@@ -71,7 +71,7 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 	func patch_file(script_path: String, request: Dictionary) -> Dictionary:
 		var bridge_request: Dictionary = request.duplicate(true)
 		bridge_request["path"] = script_path
-		var response: Dictionary = _owner._execute_runtime_tool("cs_file_patch", bridge_request)
+		var response: Dictionary = _owner._execute_runtime_tool("cs_plugin_patch", bridge_request)
 		return _owner._convert_bridge_patch_response(response, script_path)
 
 
@@ -371,7 +371,7 @@ func _convert_bridge_read_response(response: Dictionary, script_path: String) ->
 	data["usings"] = _coerce_array(structured.get("usings", []))
 	data["types"] = _coerce_array(structured.get("types", []))
 	data["methods"] = _coerce_array(structured.get("methods", []))
-	data["exports"] = []
+	data["exports"] = _coerce_array(structured.get("exports", []))
 	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
 	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
 	return {
@@ -402,12 +402,22 @@ func _convert_bridge_patch_response(response: Dictionary, script_path: String) -
 	var structured := _coerce_dictionary(payload.get("structuredContent", {}))
 	var data := _base_metadata(false)
 	data["path"] = str(structured.get("path", script_path))
-	data["source_hash"] = str(structured.get("contentHash", ""))
-	data["operation"] = _first_operation(_coerce_array(structured.get("operations", [])))
-	data["operations"] = _coerce_array(structured.get("operations", []))
+	data["source_hash"] = str(structured.get("sourceHash", structured.get("contentHash", "")))
+	var operations := _coerce_array(structured.get("operations", []))
+	if operations.is_empty() and structured.has("operation"):
+		operations = [_coerce_dictionary(structured.get("operation", {}))]
+	data["operation"] = _first_operation(operations)
+	data["operations"] = operations
 	data["preview"] = str(structured.get("preview", ""))
-	data["written"] = bool(structured.get("written", false))
-	data["dry_run"] = bool(structured.get("dryRun", true))
+	data["written"] = bool(structured.get("written", true))
+	data["dry_run"] = bool(structured.get("dryRun", false))
+	data["action"] = str(structured.get("action", ""))
+	data["type_name"] = str(structured.get("typeName", structured.get("type_name", "")))
+	data["member_name"] = str(structured.get("memberName", structured.get("member_name", "")))
+	data["types"] = _coerce_array(structured.get("types", []))
+	data["methods"] = _coerce_array(structured.get("methods", []))
+	data["exports"] = _coerce_array(structured.get("exports", []))
+	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
 	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
 	return {
 		"success": true,

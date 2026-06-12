@@ -793,23 +793,16 @@ internal static class Program
 
         var probePath = Path.Combine(stageRoot, "RoslynRuntimeProbe.cs");
         var requestPath = Path.Combine(stageRoot, "roslyn-runtime-probe-request.json");
-        await File.WriteAllTextAsync(probePath, "public partial class RoslynRuntimeProbe { public void Run() { } }", Encoding.UTF8);
+        await File.WriteAllTextAsync(probePath, "public partial class RoslynRuntimeProbe { [Export] public int Speed = 1; public void Run() { } }", Encoding.UTF8);
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new
         {
             path = "res://RoslynRuntimeProbe.cs",
-            dryRun = true,
-            patches = new[]
-            {
-                new
-                {
-                    kind = "method_upsert",
-                    typeName = "RoslynRuntimeProbe",
-                    memberName = "AddedByRuntimeProbe",
-                    returnType = "int",
-                    parameters = Array.Empty<string>(),
-                    body = "return 1;",
-                },
-            },
+            action = "upsert_method",
+            type_name = "RoslynRuntimeProbe",
+            member_name = "AddedByRuntimeProbe",
+            return_type = "int",
+            parameters = Array.Empty<string>(),
+            body = "return 1;",
         }), Encoding.UTF8);
 
         Process? process = null;
@@ -831,7 +824,7 @@ internal static class Program
             process.StartInfo.Environment["GODOT_DOTNET_MCP_PROJECT_ROOT"] = stageRoot;
             process.StartInfo.ArgumentList.Add(runtimeDll);
             process.StartInfo.ArgumentList.Add("--call-json-file");
-            process.StartInfo.ArgumentList.Add("cs_file_patch");
+            process.StartInfo.ArgumentList.Add("cs_plugin_patch");
             process.StartInfo.ArgumentList.Add(requestPath);
             process.Start();
             processRegistry.Register(process, "roslyn-runtime-probe", "dotnet", stageRoot, process.StartInfo.ArgumentList);
@@ -846,7 +839,9 @@ internal static class Program
             return (
                 process.ExitCode == 0
                     && stdout.Contains("\"success\":true", StringComparison.Ordinal)
-                    && stdout.Contains("\"semanticRuntime\":\"Roslyn\"", StringComparison.Ordinal),
+                    && stdout.Contains("\"semanticRuntime\":\"Roslyn\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"action\":\"upsert_method\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"name\":\"Speed\"", StringComparison.Ordinal),
                 process.ExitCode,
                 stdout,
                 stderr,
