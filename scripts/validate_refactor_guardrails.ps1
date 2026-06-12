@@ -372,4 +372,5 @@ if ($SkipReleaseChangelogPolicy) {
     if ($LASTEXITCODE -ne 0) {
         throw "Release changelog section policy tests failed with exit code $LASTEXITCODE."
     }
+    $global:LASTEXITCODE = 0
 }

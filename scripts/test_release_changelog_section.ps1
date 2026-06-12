@@ -100,3 +100,4 @@ Invoke-ReleaseChangelogScenario -Name "unreleased target is not formal release" 
 Invoke-ReleaseChangelogScenario -Name "duplicate formal release sections" -ChangelogPath "docs/en/CHANGELOG.md" -ChangelogText $duplicateChangelog -ShouldPass $false
 
 Write-Host "Release changelog section policy scenarios validated successfully."
+$global:LASTEXITCODE = 0
