@@ -9,6 +9,7 @@ const ServerRuntimeControllerScript = preload("res://addons/godot_dotnet_mcp/plu
 const ToolCatalogServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
 const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
+const PluginLifecycleContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_context_service.gd")
 const PluginConfigReloadWiringServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_wiring_service.gd")
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_preview_service.gd")
@@ -60,6 +61,7 @@ var _dock_model_service = null
 var _mcp_catalog_preview_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _plugin_lifecycle_service := PluginLifecycleServiceScript.new()
+var _plugin_lifecycle_context_service := PluginLifecycleContextServiceScript.new()
 var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
 var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
 var _client_install_detection_service = null
@@ -122,41 +124,10 @@ func _process(delta: float) -> void:
 
 
 func _build_plugin_lifecycle_context() -> Dictionary:
-	return {
+	return _plugin_lifecycle_context_service.build_plugin_lifecycle_context(self, {
 		"runtime_bridge_autoload_name": RUNTIME_BRIDGE_AUTOLOAD_NAME,
-		"runtime_bridge_autoload_path": RUNTIME_BRIDGE_AUTOLOAD_PATH,
-		"refresh_service_instances": Callable(self, "_refresh_service_instances"),
-		"load_state": Callable(self, "_load_state"),
-		"configure_lifecycle_enter_state": Callable(self, "_configure_lifecycle_enter_state"),
-		"ensure_action_router": Callable(self, "_ensure_action_router"),
-		"ensure_dock_coordinator": Callable(self, "_ensure_dock_coordinator"),
-		"attach_server_controller": Callable(self, "_attach_server_controller"),
-		"configure_user_tool_watch_service": Callable(self, "_configure_user_tool_watch_service"),
-		"configure_config_tab_action_service": Callable(self, "_configure_config_tab_action_service"),
-		"ensure_runtime_bridge_autoload": Callable(self, "_ensure_runtime_bridge_autoload"),
-		"install_editor_debugger_bridge": Callable(self, "_install_editor_debugger_bridge"),
-		"create_dock": Callable(self, "_create_dock"),
-		"apply_initial_tool_profile_if_needed": Callable(self, "_apply_initial_tool_profile_if_needed"),
-		"refresh_dock": Callable(self, "_refresh_dock"),
-		"set_process_enabled": Callable(self, "_set_plugin_process_enabled"),
-		"should_auto_start_server": Callable(self, "_should_auto_start_server"),
-		"start_server_for_lifecycle": Callable(self, "_start_server_for_lifecycle"),
-		"restore_pending_focus_snapshot_if_needed": Callable(self, "_restore_pending_focus_snapshot_if_needed"),
-		"ensure_saved_update_source_discovery_requested": Callable(self, "_defer_saved_update_source_discovery_request"),
-		"save_settings": Callable(self, "_save_settings"),
-		"stop_user_tool_watch_service": Callable(self, "_stop_user_tool_watch_service"),
-		"remove_dock": Callable(self, "_remove_dock"),
-		"remove_client_executable_dialog": Callable(self, "_remove_client_executable_dialog"),
-		"uninstall_editor_debugger_bridge": Callable(self, "_uninstall_editor_debugger_bridge"),
-		"remove_runtime_bridge_autoload": Callable(self, "_remove_runtime_bridge_autoload"),
-		"dispose_action_router": Callable(self, "_dispose_action_router"),
-		"dispose_server_controller": Callable(self, "_dispose_server_controller"),
-		"dispose_lifecycle_services": Callable(self, "_dispose_lifecycle_services"),
-		"is_runtime_bridge_currently_owned": Callable(self, "_is_runtime_bridge_currently_owned"),
-		"tick_user_tool_watch_service": Callable(self, "_tick_user_tool_watch_service"),
-		"ensure_update_refs_discovery_requested": Callable(self, "_ensure_update_refs_discovery_requested"),
-		"finish_self_operation": Callable(self, "_finish_self_operation")
-	}
+		"runtime_bridge_autoload_path": RUNTIME_BRIDGE_AUTOLOAD_PATH
+	})
 
 
 func _build_config_reload_wiring_context() -> Dictionary:
