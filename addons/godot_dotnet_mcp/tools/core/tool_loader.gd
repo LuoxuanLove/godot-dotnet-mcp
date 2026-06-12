@@ -61,6 +61,7 @@ func _init() -> void:
 	_lsp_diagnostics_service.configure(self)
 	_execution_context_service.configure(_execution_observer)
 	_context_service.configure(_state_store)
+	_context_service.configure_loader(self, _execution_context_service)
 
 
 func _bind_state_refs() -> void:
@@ -351,13 +352,7 @@ func _elapsed_ms(started_usec: int) -> float:
 
 
 func _build_catalog_projection_context() -> Dictionary:
-	return _context_service.build_catalog_projection_context({
-		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
-		"is_category_visible": Callable(self, "_is_category_visible"),
-		"is_tool_enabled": Callable(self, "is_tool_enabled"),
-		"is_exposed_tool_definition": Callable(self, "_is_exposed_tool_definition"),
-		"is_public_removed_tool_definition": Callable(self, "_is_public_removed_tool_definition")
-	})
+	return _context_service.build_loader_catalog_projection_context()
 
 
 func _build_execution_context() -> Dictionary:
@@ -369,31 +364,11 @@ func _build_execution_context() -> Dictionary:
 
 
 func _build_reload_context() -> Dictionary:
-	return _context_service.build_reload_context({
-		"refresh_entries": Callable(self, "_refresh_entries"),
-		"instantiate_executor": Callable(self, "_instantiate_executor"),
-		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
-		"record_reload_incident": Callable(self, "_record_reload_incident"),
-		"sync_load_error_incidents": Callable(self, "_sync_load_error_incidents"),
-		"refresh_runtime_context": Callable(self, "_refresh_runtime_context"),
-		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
-		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
-		"unload_runtime": Callable(self, "_unload_runtime"),
-		"make_reload_status": Callable(self, "_make_reload_status"),
-		"update_reload_status": Callable(self, "_update_reload_status"),
-		"get_disabled_tools": Callable(self, "get_disabled_tools"),
-		"set_disabled_tools": Callable(self, "_set_disabled_tools")
-	})
+	return _context_service.build_loader_reload_context()
 
 
 func _build_user_reload_context() -> Dictionary:
-	return _context_service.build_user_reload_context({
-		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
-		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
-		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_user_reload"),
-		"apply_tick_result": Callable(self, "_apply_tick_result"),
-		"refresh_runtime_context": Callable(self, "_refresh_runtime_context")
-	})
+	return _context_service.build_loader_user_reload_context()
 
 
 func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, definitions_by_category: Dictionary, delta: float) -> Dictionary:
@@ -415,36 +390,11 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 
 
 func _build_runtime_state_context() -> Dictionary:
-	return _context_service.build_runtime_state_context({
-		"instantiate_executor": Callable(self, "_instantiate_executor"),
-		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
-		"record_load_error": Callable(self, "_record_load_error"),
-		"dispose_executor": Callable(self, "_dispose_executor_instance"),
-		"failure": Callable(_execution_context_service, "failure")
-	})
+	return _context_service.build_loader_runtime_state_context()
 
 
 func _build_lifecycle_context() -> Dictionary:
-	return _context_service.build_lifecycle_context({
-		"reset_state": Callable(self, "_reset_state"),
-		"set_disabled_tools": Callable(self, "_set_disabled_tools"),
-		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
-		"dispose_gdscript_lsp_diagnostics_adapter": Callable(self, "_dispose_gdscript_lsp_diagnostics_adapter"),
-		"tick_gdscript_lsp_diagnostics": Callable(self, "_tick_gdscript_lsp_diagnostics"),
-		"refresh_entries": Callable(self, "_refresh_entries"),
-		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
-		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
-		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
-		"unload_runtime": Callable(self, "_unload_runtime"),
-		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_lifecycle"),
-		"make_reload_status": Callable(self, "_make_reload_status"),
-		"update_reload_status": Callable(self, "_update_reload_status"),
-		"sync_load_error_incidents": Callable(self, "_sync_load_error_incidents"),
-		"refresh_runtime_context": Callable(self, "_refresh_runtime_context"),
-		"get_tool_definitions": Callable(self, "get_tool_definitions"),
-		"get_exposed_tool_definitions": Callable(self, "get_exposed_tool_definitions"),
-		"get_tool_load_error_count": Callable(self, "_get_tool_load_error_count")
-	})
+	return _context_service.build_loader_lifecycle_context()
 
 
 func _set_force_reload_script_load(enabled: bool) -> void:
@@ -465,26 +415,6 @@ func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
 
 func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
 	_lsp_diagnostics_service.tick(delta)
-
-
-func _get_ordered_categories_for_reload() -> Array:
-	return _state_store.get_ordered_categories()
-
-
-func _get_entries_by_category_for_reload() -> Dictionary:
-	return _state_store.get_entries_by_category()
-
-
-func _get_runtime_by_category_for_reload() -> Dictionary:
-	return _state_store.get_runtime_by_category()
-
-
-func _get_tool_definitions_by_category_for_reload() -> Dictionary:
-	return _state_store.get_tool_definitions_by_category()
-
-
-func _get_performance_for_reload() -> Dictionary:
-	return _state_store.get_performance()
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:

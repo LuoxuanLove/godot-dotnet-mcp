@@ -202,6 +202,40 @@ func _verify_atomic_bridge_facade_is_thin() -> Dictionary:
 	for method_name in removed_helper_methods:
 		if bridge.has_method(method_name):
 			return _failure("AtomicBridge facade should not expose helper method after demotion: %s" % method_name)
+	var source_guard := _verify_atomic_bridge_source_guard()
+	if not bool(source_guard.get("success", false)):
+		return source_guard
+	return {"success": true}
+
+
+func _verify_atomic_bridge_source_guard() -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
+	if source.is_empty():
+		return _failure("AtomicBridge source should be readable for facade guard coverage.")
+	for forbidden in [
+		"func extract_data",
+		"func extract_array",
+		"func collect_files",
+		"func collect_file_count",
+		"func collect_file_counts",
+		"func build_issue",
+		"func append_unique_issue",
+		"func has_severity",
+		"func normalize_dependency_path",
+		"func parse_dependency_reference",
+		"AtomicBridgeSupportScript",
+		"AtomicBridgeRuntimeScript",
+		"AtomicBridgeDispatchServiceScript"
+	]:
+		if source.find(forbidden) != -1:
+			return _failure("AtomicBridge facade source should not regain helper/runtime implementation wiring: %s" % forbidden)
+	for required in [
+		"AtomicBridgeExecutionServiceScript",
+		"_execution_service.call_atomic(full_name, args)",
+		"_execution_service.call_atomic_async(full_name, args)"
+	]:
+		if source.find(required) == -1:
+			return _failure("AtomicBridge facade source should delegate execution through AtomicBridgeExecutionService: %s" % required)
 	return {"success": true}
 
 
