@@ -30,6 +30,7 @@ Target version: 1.4.0.
 - Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Split `MCPToolLoader` lifecycle orchestration into a dedicated lifecycle service covering initialization, shutdown, disabled-tool changes, and frame maintenance while preserving the public loader facade.
 - Split plugin runtime reload requests into a dedicated request service so `PluginReloadCoordinator` only coordinates plugin re-enable lifecycle work.
+- Split stdio JSON-RPC method dispatch and service assembly into dedicated stdio services so the transport server stays focused on framing and response writes.
 - Routed shared system implementation helpers through a dedicated helper service so data extraction, file collection, issue, and dependency helpers no longer require production impls to call the AtomicBridge compatibility facade or execution service.
 - Slimmed the AtomicBridge facade to execution, context, success, and error operations by removing helper-method forwarding; helper coverage now lives on the support, atomic helper, and system implementation helper services.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
