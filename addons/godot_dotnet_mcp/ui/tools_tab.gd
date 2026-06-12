@@ -1314,11 +1314,14 @@ func _build_preview_text() -> String:
 
 func _build_domain_preview() -> String:
 	var domain_def = _find_domain_definition(_selected_tree_key)
-	if domain_def.is_empty():
+	var domain_node := _find_presentation_node("domain", _selected_tree_key) if _has_presentation_tree(_current_model) else {}
+	if domain_def.is_empty() and domain_node.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
 
-	var label_key = str(domain_def.get("label", "domain_other"))
-	var categories: Array = domain_def.get("categories", [])
+	var label_key = str(domain_node.get("labelKey", domain_def.get("label", "domain_other")))
+	var categories: Array = _get_presentation_domain_category_keys(_selected_tree_key)
+	if categories.is_empty():
+		categories = domain_def.get("categories", [])
 	var lines: Array[String] = [
 		"%s: %s" % [_localization.get_text("tool_preview_domain"), _localization.get_text(label_key)],
 		"",
@@ -1327,15 +1330,14 @@ func _build_domain_preview() -> String:
 		_localization.get_text("tool_preview_category_count") % categories.size()
 	]
 	for category in categories:
-		if not _current_model.get("tools_by_category", {}).has(category):
-			continue
 		lines.append("- %s" % _get_category_label(_localization, str(category)))
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
 func _build_category_preview() -> String:
 	var category = _selected_tree_key
-	var tools: Array = _get_filtered_tool_definitions(_current_model, category)
+	var presentation_tools: Array = _get_presentation_category_tool_metadata(category)
+	var tools: Array = presentation_tools if _has_presentation_tree(_current_model) else _get_filtered_tool_definitions(_current_model, category)
 	var lines: Array[String] = [
 		"%s: %s" % [_localization.get_text("tool_preview_category"), _get_category_label(_localization, category)],
 		"",
@@ -1346,8 +1348,10 @@ func _build_category_preview() -> String:
 	for tool_def in tools:
 		if bool(tool_def.get("compatibility_alias", false)):
 			continue
-		var tool_name = str(tool_def.get("name", ""))
-		var full_name = "%s_%s" % [category, tool_name]
+		var full_name = str(tool_def.get("fullName", tool_def.get("full_name", "")))
+		var tool_name = str(tool_def.get("toolName", tool_def.get("tool_name", tool_def.get("name", ""))))
+		if full_name.is_empty():
+			full_name = "%s_%s" % [category, tool_name]
 		lines.append("- %s" % _get_tool_display_name(_localization, full_name, tool_name))
 	if category == "user":
 		var watch_lines = _build_user_watch_preview_lines()
@@ -1361,6 +1365,70 @@ func _build_category_preview() -> String:
 		var hint_text = _localization.get_text(hint_key)
 		lines.append(hint_text)
 	return "\n".join(_filter_empty_preview_lines(lines))
+
+
+func _get_presentation_domain_category_keys(domain_key: String) -> Array:
+	if not _has_presentation_tree(_current_model):
+		return []
+	var domain_node := _find_presentation_node("domain", domain_key)
+	if domain_node.is_empty():
+		return []
+	var categories: Array = []
+	for child in domain_node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var child_dict := child as Dictionary
+		if str(child_dict.get("kind", "")) != "category":
+			continue
+		var category_key := str(child_dict.get("category", child_dict.get("key", "")))
+		if not category_key.is_empty():
+			categories.append(category_key)
+	return categories
+
+
+func _get_presentation_category_tool_metadata(category: String) -> Array:
+	if not _has_presentation_tree(_current_model):
+		return []
+	var category_node := _find_presentation_node("category", category)
+	if category_node.is_empty():
+		return []
+	var tools: Array = []
+	for child in category_node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var child_dict := child as Dictionary
+		if str(child_dict.get("kind", "")) != "tool":
+			continue
+		var full_name := str(child_dict.get("fullName", child_dict.get("key", "")))
+		var metadata := _get_tool_metadata(full_name, child_dict)
+		if not metadata.is_empty():
+			tools.append(metadata)
+	return tools
+
+
+func _find_presentation_node(kind: String, key: String) -> Dictionary:
+	for node in _current_model.get("toolTree", []):
+		if not (node is Dictionary):
+			continue
+		var found := _find_presentation_node_recursive(node as Dictionary, kind, key)
+		if not found.is_empty():
+			return found
+	return {}
+
+
+func _find_presentation_node_recursive(node: Dictionary, kind: String, key: String) -> Dictionary:
+	if str(node.get("kind", "")) == kind:
+		var node_key := str(node.get("key", node.get("id", "")))
+		var category_key := str(node.get("category", ""))
+		if node_key == key or category_key == key:
+			return node
+	for child in node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var found := _find_presentation_node_recursive(child as Dictionary, kind, key)
+		if not found.is_empty():
+			return found
+	return {}
 
 
 func _build_tool_preview() -> String:
