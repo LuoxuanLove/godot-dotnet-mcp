@@ -74,6 +74,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if int(explicit_float_port_projection.get("port", 0)) != 3001:
 		return _failure("Runtime settings projection should preserve JSON-loaded float ports over the environment port.")
+	var controller_guard := _assert_stdio_transport_controller_guard()
+	if not bool(controller_guard.get("success", false)):
+		return controller_guard
 
 	return {
 		"name": "server_runtime_settings_projection_service_contracts",
@@ -100,6 +103,21 @@ func _clear_runtime_environment() -> void:
 	OS.set_environment(ServerRuntimeSettingsProjectionService.ENV_RUNTIME_SERVER_HOST, "")
 	OS.set_environment(ServerRuntimeSettingsProjectionService.ENV_RUNTIME_SERVER_PORT, "")
 	OS.set_environment(ServerRuntimeSettingsProjectionService.ENV_RUNTIME_STDIO_FRAMING, "")
+
+
+func _assert_stdio_transport_controller_guard() -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
+	if source.find('if transport_mode == "stdio":') == -1:
+		return _failure("ServerRuntimeController should special-case stdio transport before starting the HTTP listener.")
+	var stdio_branch_pos := source.find('if transport_mode == "stdio":')
+	var http_start_pos := source.find('var started = _server.start(operation_id)')
+	if stdio_branch_pos == -1 or http_start_pos == -1 or stdio_branch_pos > http_start_pos:
+		return _failure("ServerRuntimeController should ensure stdio mode before the HTTP server start call.")
+	if source.find('if transport_mode in ["stdio", "both"]') != -1:
+		return _failure("ServerRuntimeController should not tie stdio-only startup to the HTTP listener result.")
+	if source.find('if _active_transport_mode == "stdio":') == -1 or source.find("return is_stdio_running()") == -1:
+		return _failure("ServerRuntimeController.is_running should report stdio server state in stdio-only mode.")
+	return {"success": true, "error": ""}
 
 
 func _failure(message: String) -> Dictionary:

@@ -372,6 +372,14 @@ func _assert_stdio_envelope_guards(stdio_server) -> Dictionary:
 		return _failure("Valid stdio notification envelope should consume its frame.")
 	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
 		return _failure("Valid stdio notification envelope should not emit a response.")
+	var response_body := JSON.stringify({"jsonrpc": "2.0", "id": 40, "result": {"ok": true}})
+	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [response_body.to_utf8_buffer().size(), response_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed_response_envelope: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed_response_envelope):
+		return _failure("Stdio JSON-RPC response envelope should consume its frame.")
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("Stdio JSON-RPC response envelope should be ignored instead of treated as an invalid request.")
 	return {"success": true, "error": ""}
 
 
