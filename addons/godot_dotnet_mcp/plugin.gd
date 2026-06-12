@@ -17,6 +17,7 @@ const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugi
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const ClientInstallDetectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
+const PluginRuntimeReloadRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_request_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -60,6 +61,7 @@ var _mcp_catalog_preview_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _plugin_lifecycle_service := PluginLifecycleServiceScript.new()
 var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
+var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -2173,12 +2175,11 @@ func _refresh_user_tool_registry() -> Array[Dictionary]:
 
 
 func _reload_user_tool_runtime(script_path: String, reason: String) -> Dictionary:
-	var coordinator = _create_reload_coordinator()
-	if coordinator == null:
-		return {"success": false, "error": "Reload coordinator is unavailable"}
+	if _runtime_reload_request_service == null:
+		_runtime_reload_request_service = PluginRuntimeReloadRequestServiceScript.new()
 	if not script_path.is_empty():
-		return coordinator.request_reload_by_script(script_path, reason)
-	return coordinator.request_reload("user", reason)
+		return _runtime_reload_request_service.request_reload_by_script(script_path, reason, _server_controller)
+	return _runtime_reload_request_service.request_reload("user", reason, _server_controller)
 
 
 func _rebuild_user_tool_ui_model() -> void:

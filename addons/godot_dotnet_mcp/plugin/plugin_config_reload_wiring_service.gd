@@ -46,8 +46,7 @@ func create_reload_coordinator(context: Dictionary):
 	var coordinator = PluginReloadCoordinator.new()
 	coordinator.configure(
 		str(context.get("plugin_id", "")),
-		_call_value(context.get("get_editor_interface", Callable()), null),
-		context.get("server_controller", null)
+		_call_value(context.get("get_editor_interface", Callable()), null)
 	)
 	return coordinator
 
