@@ -7,7 +7,7 @@ signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
 
-const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 
 const CATEGORY_LABEL_KEYS := {
@@ -347,7 +347,7 @@ func _configure_action_item(item: TreeItem, action_name: String, parent_tool: St
 		"action": action_name,
 		"tool": parent_tool,
 		"parent_tool": parent_tool,
-		"description_key": SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+		"description_key": ToolPresentationService.get_action_desc_key(parent_tool, action_name)
 	}))
 	item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 
@@ -479,8 +479,7 @@ func _create_tool_item(parent: TreeItem, model: Dictionary, category: String, to
 	_configure_tool_row(item, model, full_name, category, tool_name, tool_def)
 	if category == SYSTEM_CATEGORY:
 		var action_values := _extract_action_values(tool_def)
-		var atomic_children: Array = SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(full_name, [])
-		var has_children := not action_values.is_empty() or not atomic_children.is_empty()
+		var has_children := not action_values.is_empty() or ToolPresentationService.has_atomic_children(full_name)
 		if has_children:
 			var settings: Dictionary = model.get("settings", {})
 			item.collapsed = TreeCollapseState.is_node_collapsed(settings, TreeCollapseState.KIND_TOOL, full_name)
@@ -510,21 +509,16 @@ func _configure_tool_row(item: TreeItem, model: Dictionary, full_name: String, c
 
 
 func _create_atomic_tool_children(parent: TreeItem, model: Dictionary, system_full_name: String, visited: Dictionary = {}) -> void:
-	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
-		var atomic_full_name: String
-		var actions: Array = []
-		if entry is Dictionary:
-			atomic_full_name = str(entry.get("tool", ""))
-			actions = entry.get("actions", [])
-		else:
-			atomic_full_name = str(entry)
+	for entry in ToolPresentationService.get_atomic_child_specs(system_full_name):
+		var atomic_full_name := str(entry.get("tool", ""))
+		var actions: Array = entry.get("actions", [])
 
 		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
 			continue
 		var atomic_tool_def = _get_tool_def_by_full_name(model, atomic_full_name)
 		if atomic_tool_def.is_empty():
 			continue
-		if not _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
+		if not _matches_atomic_tool_or_action_search(model, atomic_full_name, atomic_tool_def, actions):
 			continue
 		var category = _extract_category_from_full_name(model, atomic_full_name)
 		var tool_name = str(atomic_tool_def.get("name", ""))
@@ -677,11 +671,11 @@ func _get_action_display_name_from_metadata(metadata: Dictionary, parent_tool: S
 	if _localization != null:
 		var specific_key = str(metadata.get("labelKey", metadata.get("label_key", "")))
 		if specific_key.is_empty():
-			specific_key = SystemTreeCatalog.get_action_name_key(parent_tool, action_name)
+			specific_key = ToolPresentationService.get_action_name_key(parent_tool, action_name)
 		var translated = _localization.get_text(specific_key)
 		if translated != specific_key:
 			return translated
-		var generic_key = SystemTreeCatalog.get_generic_action_name_key(action_name)
+		var generic_key = ToolPresentationService.get_generic_action_name_key(action_name)
 		translated = _localization.get_text(generic_key)
 		if translated != generic_key:
 			return translated
@@ -706,11 +700,11 @@ func _get_action_description_from_metadata(metadata: Dictionary, parent_tool: St
 	if _localization != null:
 		var specific_key = str(metadata.get("descriptionKey", metadata.get("description_key", "")))
 		if specific_key.is_empty():
-			specific_key = SystemTreeCatalog.get_action_desc_key(parent_tool, action_name)
+			specific_key = ToolPresentationService.get_action_desc_key(parent_tool, action_name)
 		var translated = _localization.get_text(specific_key)
 		if translated != specific_key:
 			return translated
-		var generic_key = SystemTreeCatalog.get_generic_action_desc_key(action_name)
+		var generic_key = ToolPresentationService.get_generic_action_desc_key(action_name)
 		translated = _localization.get_text(generic_key)
 		if translated != generic_key:
 			return translated
@@ -1124,6 +1118,15 @@ func _matches_atomic_tool_search(model: Dictionary, atomic_full_name: String, at
 	return description.to_lower().contains(query)
 
 
+func _matches_atomic_tool_or_action_search(model: Dictionary, atomic_full_name: String, atomic_tool_def: Dictionary, actions: Array) -> bool:
+	if _matches_atomic_tool_search(model, atomic_full_name, atomic_tool_def):
+		return true
+	for action_name in actions:
+		if _matches_action_search(atomic_full_name, str(action_name), atomic_tool_def):
+			return true
+	return false
+
+
 func _matches_action_search(parent_tool: String, action_name: String, tool_def: Dictionary) -> bool:
 	var query = _get_search_query()
 	if query.is_empty():
@@ -1137,14 +1140,9 @@ func _matches_action_search(parent_tool: String, action_name: String, tool_def: 
 
 
 func _matches_atomic_tool_search_recursive(model: Dictionary, system_full_name: String, visited: Dictionary) -> bool:
-	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
-		var atomic_full_name: String
-		var actions: Array = []
-		if entry is Dictionary:
-			atomic_full_name = str(entry.get("tool", ""))
-			actions = entry.get("actions", [])
-		else:
-			atomic_full_name = str(entry)
+	for entry in ToolPresentationService.get_atomic_child_specs(system_full_name):
+		var atomic_full_name := str(entry.get("tool", ""))
+		var actions: Array = entry.get("actions", [])
 		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
 			continue
 		var atomic_tool_def = _get_tool_def_by_full_name(model, atomic_full_name)
@@ -1729,14 +1727,9 @@ func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, 
 	var presentation_lines := _build_presentation_atomic_tool_preview_lines(system_full_name, depth, visited)
 	if not presentation_lines.is_empty():
 		return presentation_lines
-	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(system_full_name, []):
-		var atomic_full_name: String
-		var actions: Array = []
-		if entry is Dictionary:
-			atomic_full_name = str(entry.get("tool", ""))
-			actions = entry.get("actions", [])
-		else:
-			atomic_full_name = str(entry)
+	for entry in ToolPresentationService.get_atomic_child_specs(system_full_name):
+		var atomic_full_name := str(entry.get("tool", ""))
+		var actions: Array = entry.get("actions", [])
 		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
 			continue
 		var atomic_tool_def = _get_tool_def_by_full_name(_current_model, atomic_full_name)
