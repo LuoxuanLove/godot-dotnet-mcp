@@ -353,8 +353,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var registry_context = (((registry_recent as Array)[0] as Dictionary).get("agent_context", {}) as Dictionary)
 	if str(registry_context.get("agent_id", "")) != "loader-contract-agent":
 		return _failure("Tool loader should retain sanitized _mcp_context in the activity registry.")
-	var plain_activity_record: Dictionary = _loader.call("_begin_tool_activity", "system", "project_state", {"summary": true}, {})
-	var plain_activity_result: Dictionary = _loader.call("_finish_tool_activity", {
+	var execution_context: Dictionary = _loader.call("_build_execution_context")
+	var begin_tool_activity: Callable = execution_context.get("begin_tool_activity", Callable())
+	var finish_tool_activity: Callable = execution_context.get("finish_tool_activity", Callable())
+	if not begin_tool_activity.is_valid() or not finish_tool_activity.is_valid():
+		return _failure("Tool loader execution context should expose activity callbacks.")
+	var plain_activity_record: Dictionary = begin_tool_activity.call("system", "project_state", {"summary": true}, {})
+	var plain_activity_result: Dictionary = finish_tool_activity.call({
 		"success": true,
 		"data": {"summary": true},
 		"activity": {
