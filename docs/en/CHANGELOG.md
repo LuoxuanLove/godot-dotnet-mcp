@@ -89,6 +89,7 @@ Target version: 1.4.0.
 
 ### Documentation
 
+- Refreshed the v1.4.0 refactor progress tracker so completed MCP 2025-11-25 baseline, public-tool cleanup, Streamable HTTP release contracts, and UI metadata work are no longer tracked as open blockers.
 - Removed external project validation narrative from release-facing README, localized entry pages, and v1.4.0 release notes so documentation claims stay focused on plugin-owned capabilities and reproducible checks.
 - Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
 - Clarified `system_help` protocol guidance so clients can choose MCP Resources for passive context, Prompts for workflow planning, and Tools for actions or computed workflow results.
