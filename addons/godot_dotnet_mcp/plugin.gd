@@ -7,18 +7,16 @@ const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeControllerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
-const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
 const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
+const PluginConfigReloadWiringServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_wiring_service.gd")
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_preview_service.gd")
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
 const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
-const ConfigTabActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
 const ClientInstallDetectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
-const UserToolWatchServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -61,6 +59,7 @@ var _dock_model_service = null
 var _mcp_catalog_preview_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _plugin_lifecycle_service := PluginLifecycleServiceScript.new()
+var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -155,6 +154,34 @@ func _build_plugin_lifecycle_context() -> Dictionary:
 		"tick_user_tool_watch_service": Callable(self, "_tick_user_tool_watch_service"),
 		"ensure_update_refs_discovery_requested": Callable(self, "_ensure_update_refs_discovery_requested"),
 		"finish_self_operation": Callable(self, "_finish_self_operation")
+	}
+
+
+func _build_config_reload_wiring_context() -> Dictionary:
+	return {
+		"plugin_id": PLUGIN_ID,
+		"plugin_host": self,
+		"server_controller": _server_controller,
+		"state": _state,
+		"localization": _localization,
+		"config_service": _config_service,
+		"client_install_detection_service": _client_install_detection_service,
+		"user_tool_service": _user_tool_service,
+		"get_editor_interface": Callable(self, "get_editor_interface"),
+		"is_inside_tree": Callable(self, "is_inside_tree"),
+		"get_tree": Callable(self, "get_tree"),
+		"schedule_plugin_reenable": Callable(self, "_schedule_plugin_reenable"),
+		"complete_plugin_reenable_schedule": Callable(self, "_complete_plugin_reenable_schedule"),
+		"apply_external_user_tool_catalog_refresh": Callable(self, "_apply_external_user_tool_catalog_refresh"),
+		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
+		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
+		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
+		"refresh_dock": Callable(self, "_refresh_dock"),
+		"save_settings": Callable(self, "_save_settings"),
+		"show_message": Callable(self, "_show_message"),
+		"show_confirmation": Callable(self, "_show_confirmation"),
+		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
+		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
 	}
 
 
@@ -2812,35 +2839,11 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return false
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return false
-
-	var coordinator = PluginReloadCoordinator.new()
-	coordinator.name = "MCPPluginReloadCoordinator"
-	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
-	base_control.add_child(coordinator)
-	return true
+	return _config_reload_wiring_service.schedule_plugin_reenable(_build_config_reload_wiring_context())
 
 
 func _schedule_plugin_reenable_deferred() -> bool:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return false
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return false
-	if not is_inside_tree():
-		return _schedule_plugin_reenable()
-	var tree := get_tree()
-	if tree == null:
-		return _schedule_plugin_reenable()
-	var timer := tree.create_timer(0.05)
-	timer.timeout.connect(Callable(self, "_complete_plugin_reenable_schedule"), CONNECT_ONE_SHOT)
-	return true
+	return _config_reload_wiring_service.schedule_plugin_reenable_deferred(_build_config_reload_wiring_context())
 
 
 func _complete_plugin_reenable_schedule() -> void:
@@ -2849,37 +2852,21 @@ func _complete_plugin_reenable_schedule() -> void:
 
 
 func _create_reload_coordinator():
-	var coordinator = PluginReloadCoordinator.new()
-	coordinator.configure(PLUGIN_ID, get_editor_interface(), _server_controller)
-	return coordinator
+	return _config_reload_wiring_service.create_reload_coordinator(_build_config_reload_wiring_context())
 
 
 func _configure_user_tool_watch_service() -> void:
-	if _user_tool_watch_service == null:
-		_user_tool_watch_service = UserToolWatchServiceScript.new()
-	_user_tool_watch_service.stop()
-	_user_tool_watch_service.configure(self, _create_reload_coordinator(), _user_tool_service)
-	_user_tool_watch_service.start()
+	_user_tool_watch_service = _config_reload_wiring_service.configure_user_tool_watch_service(
+		_user_tool_watch_service,
+		_build_config_reload_wiring_context()
+	)
 
 
 func _configure_config_tab_action_service() -> void:
-	if _config_tab_action_service == null:
-		_config_tab_action_service = ConfigTabActionServiceScript.new()
-	_config_tab_action_service.configure({
-		"state": _state,
-		"localization": _localization,
-		"config_service": _config_service,
-		"client_install_detection_service": _client_install_detection_service,
-		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
-		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
-		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
-		"refresh_dock": Callable(self, "_refresh_dock"),
-		"save_settings": Callable(self, "_save_settings"),
-		"show_message": Callable(self, "_show_message"),
-		"show_confirmation": Callable(self, "_show_confirmation"),
-		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
-		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
-	})
+	_config_tab_action_service = _config_reload_wiring_service.configure_config_tab_action_service(
+		_config_tab_action_service,
+		_build_config_reload_wiring_context()
+	)
 
 
 func _get_user_tool_watch_status() -> Dictionary:
@@ -2912,7 +2899,6 @@ func _refresh_service_instances() -> void:
 		_dock_model_service = DockModelServiceScript.new()
 	_client_install_detection_service = ClientInstallDetectionServiceScript.new()
 	_user_tool_service = UserToolServiceScript.new()
-	_user_tool_watch_service = UserToolWatchServiceScript.new()
 
 
 func _ensure_runtime_state() -> void:
