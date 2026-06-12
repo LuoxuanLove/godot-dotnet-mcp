@@ -5,11 +5,11 @@ extends RefCounted
 ## call_atomic() is the single abstraction point for the v1 Backend Router.
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const AtomicBridgeContextResolverScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_context_resolver.gd")
 const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
 
-const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd")
-
 var _runtime_context: Dictionary = {}
+var _context_resolver = AtomicBridgeContextResolverScript.new()
 var _execution_service = AtomicBridgeExecutionServiceScript.new()
 
 
@@ -27,28 +27,11 @@ func configure_runtime(context: Dictionary) -> void:
 
 
 func get_tool_loader():
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("get_tool_loader"):
-			var loader = runtime_bridge.get_tool_loader()
-			if loader != null:
-				return loader
-	return _runtime_context.get("tool_loader", null)
+	return _context_resolver.get_tool_loader(_runtime_context)
 
 
 func get_gdscript_lsp_diagnostics_service():
-	var loader = get_tool_loader()
-	if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
-		var loader_service = loader.get_gdscript_lsp_diagnostics_service()
-		if loader_service != null:
-			return loader_service
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
-		if runtime_bridge != null and runtime_bridge.has_method("get_gdscript_lsp_diagnostics_service"):
-			var service = runtime_bridge.get_gdscript_lsp_diagnostics_service()
-			if service != null:
-				return service
-	return GDScriptLspDiagnosticsService.get_singleton()
+	return _context_resolver.get_gdscript_lsp_diagnostics_service(_runtime_context)
 
 
 func error(message: String, data = null, hints: Array = []) -> Dictionary:

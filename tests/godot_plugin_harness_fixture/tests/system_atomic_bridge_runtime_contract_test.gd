@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "system_atomic_bridge_runtime_contracts"}
 
 const AtomicBridgeRuntimeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_runtime.gd")
+const AtomicBridgeContextResolverScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_context_resolver.gd")
 const AtomicBridgeExecutorManifest = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_executor_manifest.gd")
 const TEMP_ROOT := "res://Tmp/godot_dotnet_mcp_atomic_bridge_runtime_contracts"
 const EXECUTOR_PATH := TEMP_ROOT + "/atomic_contract_executor.gd"
@@ -17,6 +18,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var setup := _write_fixture_scripts()
 	if not bool(setup.get("success", false)):
 		return setup
+	var context_resolver_result := _verify_context_resolver()
+	if not bool(context_resolver_result.get("success", false)):
+		return context_resolver_result
 	var default_result := _verify_default_manifest_configuration()
 	if not bool(default_result.get("success", false)):
 		return default_result
@@ -88,6 +92,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 
 
+func _verify_context_resolver() -> Dictionary:
+	var loader := FakeLoader.new()
+	var resolver = AtomicBridgeContextResolverScript.new()
+	if resolver.get_tool_loader({"tool_loader": loader}) != loader:
+		return _failure("Atomic bridge context resolver should expose the runtime-context tool loader when no runtime singleton is available.")
+	if resolver.get_gdscript_lsp_diagnostics_service({"tool_loader": loader}) != loader.service:
+		return _failure("Atomic bridge context resolver should prefer the loader diagnostics service from runtime context.")
+	var fallback_service = resolver.get_gdscript_lsp_diagnostics_service({})
+	if fallback_service == null:
+		return _failure("Atomic bridge context resolver should fall back to the singleton diagnostics service.")
+	return {"success": true}
+
+
 func _verify_default_manifest_configuration() -> Dictionary:
 	var expected_categories := [
 		"dap",
@@ -143,6 +160,13 @@ func _write_fixture_scripts() -> Dictionary:
 	if not bool(write_async.get("success", false)):
 		return write_async
 	return _write_text(INVALID_EXECUTOR_PATH, invalid_source)
+
+
+class FakeLoader extends RefCounted:
+	var service := RefCounted.new()
+
+	func get_gdscript_lsp_diagnostics_service():
+		return service
 
 
 func _write_text(path: String, content: String) -> Dictionary:
