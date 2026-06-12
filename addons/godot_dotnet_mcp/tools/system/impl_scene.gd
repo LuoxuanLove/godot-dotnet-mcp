@@ -6,6 +6,7 @@ extends RefCounted
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
+var bridge_helpers
 const HANDLED_TOOLS := ["scene_inspect", "scene_validate", "scene_analyze", "scene_tree", "scene_patch"]
 const SCENE_RESOURCE_TEMPLATE_URI := "godot-dotnet-mcp://scene/{path}"
 const CAPABILITIES_GUIDE_URI := "godot-dotnet-mcp://guides/capabilities"
@@ -13,6 +14,10 @@ const CAPABILITIES_GUIDE_URI := "godot-dotnet-mcp://guides/capabilities"
 
 func handles(tool_name: String) -> bool:
 	return tool_name in HANDLED_TOOLS
+
+
+func configure_bridge_helpers(helpers) -> void:
+	bridge_helpers = helpers
 
 
 func get_tools() -> Array[Dictionary]:
@@ -126,6 +131,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 # --- private helpers ---
+
+func _helpers():
+	if bridge_helpers != null:
+		return bridge_helpers
+	return bridge
+
 
 func _removed_public_scene_tool(removed_tool: String, replacement_action: String, args: Dictionary) -> Dictionary:
 	var scene_path := str(args.get("scene", "")).strip_edges()
@@ -265,7 +276,7 @@ func _execute_scene_inspect(args: Dictionary) -> Dictionary:
 
 func _execute_scene_inspect_full(args: Dictionary) -> Dictionary:
 	var validation_result: Dictionary = _execute_scene_validate(args)
-	var validation_data: Dictionary = bridge.extract_data(validation_result).duplicate(true)
+	var validation_data: Dictionary = _helpers().extract_data(validation_result).duplicate(true)
 	if not bool(validation_result.get("success", false)):
 		return bridge.error("Scene validation failed before analysis.", {
 			"scene": str(validation_data.get("scene", args.get("scene", ""))),
@@ -277,7 +288,7 @@ func _execute_scene_inspect_full(args: Dictionary) -> Dictionary:
 			"validation_error": str(validation_result.get("error", validation_result.get("message", "")))
 		})
 	var analysis_result: Dictionary = _execute_scene_analyze(args)
-	var analysis_data: Dictionary = bridge.extract_data(analysis_result).duplicate(true)
+	var analysis_data: Dictionary = _helpers().extract_data(analysis_result).duplicate(true)
 	if not bool(analysis_result.get("success", false)):
 		return bridge.error("Scene analysis failed after validation.", {
 			"scene": str(validation_data.get("scene", args.get("scene", ""))),
@@ -309,18 +320,19 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 		return bridge.error("Scene file not found: %s" % scene_path)
 	MCPDebugBuffer.record("debug", "system", "scene_validate: %s" % scene_path)
 	var audit_result: Dictionary = bridge.call_atomic("scene_audit", {"action": "from_path", "path": scene_path})
-	var audit_data: Dictionary = bridge.extract_data(audit_result)
+	var audit_data: Dictionary = _helpers().extract_data(audit_result)
 	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": scene_path})
-	var dep_data: Dictionary = bridge.extract_data(dep_result)
+	var dep_data: Dictionary = _helpers().extract_data(dep_result)
 	var issues: Array = []
 	for raw_issue in audit_data.get("issues", []):
 		if raw_issue is Dictionary:
 			var typed_issue: Dictionary = raw_issue
-			bridge.append_unique_issue(issues, typed_issue.duplicate(true))
+			_helpers().append_unique_issue(issues, typed_issue.duplicate(true))
 	var missing_deps: Array = []
 	var dependency_reference_issues: Array = []
+	var helpers = _helpers()
 	for raw_dep in dep_data.get("dependencies", []):
-		var dep_ref: Dictionary = bridge.parse_dependency_reference(str(raw_dep), scene_path) if bridge.has_method("parse_dependency_reference") else {"normalized_path": bridge.normalize_dependency_path(str(raw_dep)), "risk": "none"}
+		var dep_ref: Dictionary = helpers.parse_dependency_reference(str(raw_dep), scene_path) if helpers.has_method("parse_dependency_reference") else {"normalized_path": helpers.normalize_dependency_path(str(raw_dep)), "risk": "none"}
 		var dep_path: String = str(dep_ref.get("normalized_path", ""))
 		if dep_path.is_empty():
 			continue
@@ -328,7 +340,7 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 		if ref_risk == "warning" or ref_risk == "error":
 			var ref_issue_type := str(dep_ref.get("consistency", "dependency_reference_inconsistent"))
 			var ref_message := _build_dependency_reference_message(dep_ref)
-			var ref_issue: Dictionary = bridge.build_issue(ref_risk, ref_issue_type, ref_message, {
+			var ref_issue: Dictionary = _helpers().build_issue(ref_risk, ref_issue_type, ref_message, {
 				"scene": scene_path,
 				"raw": str(dep_ref.get("raw", str(raw_dep))),
 				"uid": str(dep_ref.get("uid", "")),
@@ -339,7 +351,7 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 				"build_status": "build_may_pass"
 			})
 			dependency_reference_issues.append(ref_issue.duplicate(true))
-			bridge.append_unique_issue(issues, ref_issue)
+			_helpers().append_unique_issue(issues, ref_issue)
 		var is_tscn: bool = dep_path.ends_with(".tscn")
 		var is_gd: bool = dep_path.ends_with(".gd")
 		var is_cs: bool = dep_path.ends_with(".cs")
@@ -356,9 +368,9 @@ func _execute_scene_validate(args: Dictionary) -> Dictionary:
 			extra["declared_path"] = str(dep_ref.get("declared_path", ""))
 			extra["resolved_uid_path"] = str(dep_ref.get("resolved_uid_path", ""))
 			extra["hint"] = "Reimport, fix the resource path, or re-save the scene/resource to normalize UID references."
-		var new_issue: Dictionary = bridge.build_issue("error", "missing_dependency", msg, extra)
-		bridge.append_unique_issue(issues, new_issue)
-	var is_valid: bool = not bridge.has_severity(issues, "error")
+		var new_issue: Dictionary = _helpers().build_issue("error", "missing_dependency", msg, extra)
+		_helpers().append_unique_issue(issues, new_issue)
+	var is_valid: bool = not _helpers().has_severity(issues, "error")
 	var out: Dictionary = {"scene": scene_path, "valid": is_valid, "issue_count": issues.size(), "issues": issues, "missing_dependency_count": missing_deps.size(), "missing_dependencies": missing_deps, "dependency_reference_issue_count": dependency_reference_issues.size(), "dependency_reference_issues": dependency_reference_issues}
 	return bridge.success(out)
 
@@ -395,26 +407,26 @@ func _execute_scene_analyze(args: Dictionary) -> Dictionary:
 		return bridge.error("Scene file not found: %s" % scene_path)
 	MCPDebugBuffer.record("debug", "system", "scene_analyze: %s" % scene_path)
 	var bindings_result: Dictionary = bridge.call_atomic("scene_bindings", {"action": "from_path", "path": scene_path})
-	var bindings_data: Dictionary = bridge.extract_data(bindings_result)
+	var bindings_data: Dictionary = _helpers().extract_data(bindings_result)
 	var audit_result: Dictionary = bridge.call_atomic("scene_audit", {"action": "from_path", "path": scene_path})
-	var audit_data: Dictionary = bridge.extract_data(audit_result)
+	var audit_data: Dictionary = _helpers().extract_data(audit_result)
 	var hierarchy_result: Dictionary = bridge.call_atomic("scene_hierarchy", {"path": scene_path})
-	var hierarchy_data: Dictionary = bridge.extract_data(hierarchy_result)
+	var hierarchy_data: Dictionary = _helpers().extract_data(hierarchy_result)
 	var issues: Array = []
 	for raw_issue in audit_data.get("issues", []):
 		if raw_issue is Dictionary:
 			var typed_issue: Dictionary = raw_issue
-			bridge.append_unique_issue(issues, typed_issue.duplicate(true))
+			_helpers().append_unique_issue(issues, typed_issue.duplicate(true))
 	for raw_issue in bindings_data.get("issues", []):
 		if raw_issue is Dictionary:
 			var typed_issue: Dictionary = raw_issue
-			bridge.append_unique_issue(issues, typed_issue.duplicate(true))
+			_helpers().append_unique_issue(issues, typed_issue.duplicate(true))
 	var scripts: Array = []
 	var sp_raw = bindings_data.get("script_path", "")
 	if not str(sp_raw).is_empty():
 		var sp: String = str(sp_raw)
 		var inspect_result: Dictionary = bridge.call_atomic("script_inspect", {"path": sp})
-		var inspect_data: Dictionary = bridge.extract_data(inspect_result)
+		var inspect_data: Dictionary = _helpers().extract_data(inspect_result)
 		var sentry: Dictionary = {"path": sp, "class_name": str(inspect_data.get("class_name", "")), "base_type": str(inspect_data.get("base_type", ""))}
 		scripts.append(sentry)
 	var binding_count: int = int(bindings_data.get("binding_count", bindings_data.get("count", 0)))

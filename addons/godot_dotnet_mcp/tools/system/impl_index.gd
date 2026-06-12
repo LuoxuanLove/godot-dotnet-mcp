@@ -7,6 +7,7 @@ extends RefCounted
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 var bridge
+var bridge_helpers
 var _project_index: Dictionary = {}
 
 const HANDLED_TOOLS := ["project_index_build", "project_symbol_search", "scene_dependency_graph"]
@@ -65,6 +66,10 @@ func get_tools() -> Array[Dictionary]:
 	]
 
 
+func configure_bridge_helpers(helpers) -> void:
+	bridge_helpers = helpers
+
+
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
 	match tool_name:
@@ -75,6 +80,12 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 # --- private helpers ---
+
+func _helpers():
+	if bridge_helpers != null:
+		return bridge_helpers
+	return bridge
+
 
 func _index_symbol(symbols: Dictionary, symbol: String, kind: String, path: String, extra: Dictionary = {}) -> void:
 	var key := symbol.strip_edges()
@@ -91,13 +102,13 @@ func _index_symbol(symbols: Dictionary, symbol: String, kind: String, path: Stri
 
 
 func _collect_index_paths(include_resources: bool) -> Dictionary:
-	var gd_scripts: Array = bridge.collect_files("*.gd")
-	var cs_scripts: Array = bridge.collect_files("*.cs")
-	var scene_paths: Array = bridge.collect_files("*.tscn")
+	var gd_scripts: Array = _helpers().collect_files("*.gd")
+	var cs_scripts: Array = _helpers().collect_files("*.cs")
+	var scene_paths: Array = _helpers().collect_files("*.tscn")
 	var resource_paths: Array = []
 	if include_resources:
-		resource_paths.append_array(bridge.collect_files("*.tres"))
-		resource_paths.append_array(bridge.collect_files("*.res"))
+		resource_paths.append_array(_helpers().collect_files("*.tres"))
+		resource_paths.append_array(_helpers().collect_files("*.res"))
 	return {
 		"gd_scripts": gd_scripts,
 		"cs_scripts": cs_scripts,
@@ -140,7 +151,7 @@ func _build_project_index(include_resources: bool, collected_paths: Dictionary =
 		var inspect_result: Dictionary = bridge.call_atomic("script_inspect", {"path": script_path})
 		if not bool(inspect_result.get("success", false)):
 			continue
-		var metadata: Dictionary = bridge.extract_data(inspect_result)
+		var metadata: Dictionary = _helpers().extract_data(inspect_result)
 		var entry := {
 			"path": script_path,
 			"language": str(metadata.get("language", "unknown")),
@@ -163,8 +174,8 @@ func _build_project_index(include_resources: bool, collected_paths: Dictionary =
 			"action": "get_dependencies", "path": scene_path
 		})
 		var normalized_deps: Array = []
-		for raw_dep in bridge.extract_array(dep_result, "dependencies"):
-			var dep_path: String = bridge.normalize_dependency_path(str(raw_dep))
+		for raw_dep in _helpers().extract_array(dep_result, "dependencies"):
+			var dep_path: String = _helpers().normalize_dependency_path(str(raw_dep))
 			if dep_path.is_empty():
 				continue
 			normalized_deps.append(dep_path)
