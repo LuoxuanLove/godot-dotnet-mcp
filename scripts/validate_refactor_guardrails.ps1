@@ -259,6 +259,29 @@ foreach ($spec in $workflowGuardSpecs) {
     }
 }
 
+$roslynRuntimeBundleScript = Join-Path $repoRoot "scripts\validate_roslyn_runtime_bundle.ps1"
+if (-not (Test-Path -LiteralPath $roslynRuntimeBundleScript)) {
+    $errors.Add("Roslyn runtime release guard script is missing: scripts\validate_roslyn_runtime_bundle.ps1")
+}
+else {
+    $roslynRuntimeBundleScriptText = Get-Content -LiteralPath $roslynRuntimeBundleScript -Raw -Encoding UTF8
+    foreach ($requiredText in @("dotnet publish", "roslyn-runtime-manifest.json", "Get-FileHash", "isolated-runtime-bundle")) {
+        if (-not $roslynRuntimeBundleScriptText.Contains($requiredText)) {
+            $errors.Add("Roslyn runtime release guard script must contain '$requiredText'.")
+        }
+    }
+}
+
+$roslynHarnessScript = Join-Path $repoRoot "scripts\test_plugin_side_roslyn.ps1"
+if (Test-Path -LiteralPath $roslynHarnessScript) {
+    $roslynHarnessScriptText = Get-Content -LiteralPath $roslynHarnessScript -Raw -Encoding UTF8
+    foreach ($requiredText in @("validate_roslyn_runtime_bundle.ps1", "exportedPluginRoslynServiceProbeSucceeded")) {
+        if (-not $roslynHarnessScriptText.Contains($requiredText)) {
+            $errors.Add("Plugin-side Roslyn harness must contain '$requiredText'.")
+        }
+    }
+}
+
 $distRoot = Join-Path $repoRoot "dist"
 $expectedDirs = @(
     (Join-Path $distRoot "godot-dotnet-mcp-plugin")

@@ -1,5 +1,6 @@
 [
   {"name":"plugin_roslyn_service_contracts","layer":"plugin","domain":"roslyn","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
+  {"name":"plugin_roslyn_service_exported_runtime_contracts","layer":"plugin","domain":"roslyn","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"stage_root","v1_4_disposition":"keep"},
   {"name":"roslyn_parsing_contracts","layer":"plugin","domain":"roslyn","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"csharp_tool_engine_contracts","layer":"tool","domain":"csharp","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"plugin_path_csharp_registration_probe","layer":"plugin","domain":"csharp","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"stage_root","v1_4_disposition":"keep"},
