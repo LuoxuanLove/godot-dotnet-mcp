@@ -29,8 +29,8 @@ Target version: 1.4.0.
 
 - Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Split `MCPToolLoader` lifecycle orchestration into a dedicated lifecycle service covering initialization, shutdown, disabled-tool changes, and frame maintenance while preserving the public loader facade.
-- Routed shared system implementation helpers through a dedicated helper service so data extraction, file collection, issue, and dependency helpers no longer require production impls to call the AtomicBridge compatibility facade.
-- Slimmed the AtomicBridge facade to execution, context, success, and error operations by removing helper-method forwarding; helper coverage now lives on the support, execution, and system implementation helper services.
+- Routed shared system implementation helpers through a dedicated helper service so data extraction, file collection, issue, and dependency helpers no longer require production impls to call the AtomicBridge compatibility facade or execution service.
+- Slimmed the AtomicBridge facade to execution, context, success, and error operations by removing helper-method forwarding; helper coverage now lives on the support, atomic helper, and system implementation helper services.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
 - Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
 - Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
@@ -126,7 +126,7 @@ Target version: 1.4.0.
 - Split AtomicBridge write-policy, path-reference, and issue helpers into a dedicated support service while keeping the bridge facade API stable.
 - Split AtomicBridge executor loading, caching, runtime context wiring, and sync/async dispatch into a dedicated runtime service while keeping the bridge facade API stable.
 - Moved AtomicBridge support/runtime/dispatch composition into a dedicated execution service so `atomic_bridge.gd` remains a thinner compatibility facade.
-- Moved AtomicBridge file-collection helpers into the execution service while keeping the bridge facade API and filesystem enumeration semantics stable.
+- Split AtomicBridge data extraction, file-collection, issue, and dependency helpers into a dedicated helper service while keeping filesystem enumeration semantics stable.
 - Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
 - Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
 - Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.
