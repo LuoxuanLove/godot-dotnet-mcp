@@ -68,9 +68,9 @@ Then:
 4. Open `MCPDock` from the right-side dock.
 5. Confirm the port and start the service.
 
-### Option 2: Copy source files directly
+### Option 2: Direct copy
 
-Place the installable plugin directory in your Godot project. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle without exposing plugin C# sources to your project build:
+Place the installable addon contents in your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle:
 
 ```text
 addons/godot_dotnet_mcp

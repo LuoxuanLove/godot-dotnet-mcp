@@ -3,6 +3,7 @@ name: pr-policy
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
   workflow_dispatch:
     inputs:
       pull_number:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   pr-target-dev:
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
 
     steps:
@@ -43,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate objective PR fields
+        if: github.event_name != 'merge_group'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pull_number }}
@@ -58,3 +61,6 @@ jobs:
           gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title,body > "$pr_fields_file"
 
           python scripts/validate_pr_policy.py --fields-json "$pr_fields_file"
+
+      - name: Run PR policy regression tests
+        run: python scripts/test_validate_pr_policy.py

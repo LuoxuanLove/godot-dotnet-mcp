@@ -48,9 +48,9 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 5. Go to `Project Settings > Plugins` and enable `Godot .NET MCP`.
 6. Open `MCPDock` and start the service from `Home`.
 
-### From Source
+### Direct Copy
 
-Copy the installable plugin directory into your Godot project. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle without exposing plugin C# sources to your project build:
+Copy the installable addon contents into your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle:
 
 ```text
 addons/godot_dotnet_mcp

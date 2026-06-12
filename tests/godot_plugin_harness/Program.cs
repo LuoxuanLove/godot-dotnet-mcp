@@ -338,6 +338,9 @@ internal static class Program
                 "Microsoft.CodeAnalysis.CSharp");
             var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
             var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var rawSourceCopyRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            var rawSourceCopyDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var releaseDocsAdvertiseRawSourceCopy = ReleaseDocsAdvertiseRawSourceCopy(repoRoot);
             var exportedRoslynRuntimeManifest = File.Exists(Path.Combine(
                 stageRoot,
                 "addons",
@@ -372,6 +375,7 @@ internal static class Program
                 && !fixtureHasRoslynPackageReference
                 && !exportedRoslynRuntimeSources
                 && !exportedDotnetBridgeSources
+                && !releaseDocsAdvertiseRawSourceCopy
                 && exportedRoslynRuntimeManifest
                 && missingRoslynRuntimeManifestFiles.Length == 0
                 && exportedRoslynRuntimeExecutable
@@ -381,7 +385,11 @@ internal static class Program
             {
                 success = succeeded,
                 skipped = false,
-                reason = succeeded ? string.Empty : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed"),
+                reason = succeeded
+                    ? string.Empty
+                    : (releaseDocsAdvertiseRawSourceCopy
+                        ? "clean_asset_library_raw_source_copy_documented"
+                        : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed")),
                 exitCode = stageBuild.ExitCode,
                 exportedWithGitArchive = true,
                 stageRoot,
@@ -389,6 +397,9 @@ internal static class Program
                 fixtureHasRoslynPackageReference,
                 exportedRoslynRuntimeSources,
                 exportedDotnetBridgeSources,
+                rawSourceCopyRoslynRuntimeSources,
+                rawSourceCopyDotnetBridgeSources,
+                releaseDocsAdvertiseRawSourceCopy,
                 exportedRoslynRuntimeManifest,
                 missingRoslynRuntimeManifestFiles,
                 exportedRoslynRuntimeExecutable,
@@ -481,6 +492,39 @@ internal static class Program
                 await archiveStream.DisposeAsync();
             }
         }
+    }
+
+    private static bool ReleaseDocsAdvertiseRawSourceCopy(string repoRoot)
+    {
+        var releaseFacingDocs = new[]
+        {
+            Path.Combine(repoRoot, "README.md"),
+            Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "README.md"),
+            Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "README.zh-CN.md"),
+            Path.Combine(repoRoot, "docs", "en", "process", "release-runbook.md"),
+        };
+        var rawCopyPatterns = new[]
+        {
+            "copy source files directly",
+            "direct copy of the `addons/godot_dotnet_mcp/` source files",
+            "copy raw source",
+        };
+        foreach (var docPath in releaseFacingDocs)
+        {
+            if (!File.Exists(docPath))
+            {
+                continue;
+            }
+            var text = File.ReadAllText(docPath);
+            foreach (var pattern in rawCopyPatterns)
+            {
+                if (text.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static string[] ParseSelectedCases(string? rawCases)

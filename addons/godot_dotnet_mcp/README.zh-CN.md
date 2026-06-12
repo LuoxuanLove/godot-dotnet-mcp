@@ -66,9 +66,9 @@ addons/godot_dotnet_mcp
 4. 在右侧 Dock 中打开 `MCPDock`。
 5. 确认端口后启动服务。
 
-### 方式二：直接复制源文件
+### 方式二：直接复制
 
-将插件放到你的 Godot 项目内：
+将可安装的插件内容放到你的 Godot 项目内。请使用 Asset Library 下载内容或已准备好的可安装插件目录，不要直接复制原始仓库源码树；原始源码树包含内部 bridge 项目，这些内容不应进入宿主项目编译面。复制后的插件应保留 `plugin/runtime/roslyn_runtime/`，以便 C# 语义工具继续使用隔离的 Roslyn runtime bundle：
 
 ```text
 addons/godot_dotnet_mcp
