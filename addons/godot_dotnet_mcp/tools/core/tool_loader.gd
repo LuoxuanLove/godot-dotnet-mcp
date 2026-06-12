@@ -4,7 +4,6 @@ class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
-const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
 const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
@@ -22,6 +21,7 @@ const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_m
 const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
 const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
 const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
+const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -30,7 +30,6 @@ var _entries_by_category: Dictionary = {}
 var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
-var _tool_lsp_diagnostics_adapter = null
 var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
 var _runtime_manager = ToolRuntimeManagerScript.new()
@@ -47,6 +46,7 @@ var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
 var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
 var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
 var _access_service = ToolLoaderAccessServiceScript.new()
+var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 
@@ -54,6 +54,7 @@ var _performance: Dictionary = {}
 func _init() -> void:
 	_bind_state_refs()
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
+	_lsp_diagnostics_service.configure(self)
 
 
 func _bind_state_refs() -> void:
@@ -71,7 +72,7 @@ func configure(server_context: Object) -> void:
 		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
 		if runtime_bridge != null and runtime_bridge.has_method("set_tool_loader"):
 			runtime_bridge.set_tool_loader(self)
-	_ensure_lsp_diagnostics_adapter()
+	_lsp_diagnostics_service.configure(self)
 	_refresh_runtime_context()
 
 
@@ -211,44 +212,15 @@ func tick(delta: float) -> void:
 
 
 func get_gdscript_lsp_diagnostics_service():
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_service"):
-		return diagnostics_adapter.get_service()
-	return null
+	return _lsp_diagnostics_service.get_service()
 
 
 func get_lsp_diagnostics_debug_snapshot() -> Dictionary:
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_debug_snapshot"):
-		return diagnostics_adapter.get_debug_snapshot(get_tool_loader_status())
-	return {
-		"has_tool_loader": true,
-		"service_available": false,
-		"service_generation": 0,
-		"tool_loader_status": get_tool_loader_status()
-	}
+	return _lsp_diagnostics_service.get_debug_snapshot(get_tool_loader_status())
 
 
 func _reset_gdscript_lsp_diagnostics_service() -> void:
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("reset"):
-		diagnostics_adapter.reset()
-
-
-func _ensure_lsp_diagnostics_adapter():
-	if _tool_lsp_diagnostics_adapter == null:
-		_tool_lsp_diagnostics_adapter = ToolLspDiagnosticsAdapterScript.new()
-	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("configure"):
-		_tool_lsp_diagnostics_adapter.configure(self, {
-			"runtime_bridge": _get_runtime_bridge()
-		})
-	return _tool_lsp_diagnostics_adapter
-
-
-func _get_runtime_bridge():
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		return Engine.get_singleton("MCPRuntimeBridge")
-	return null
+	_lsp_diagnostics_service.reset()
 
 
 func _refresh_runtime_context() -> void:
@@ -523,15 +495,11 @@ func _get_tool_load_error_count() -> int:
 
 
 func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
-	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("dispose"):
-		_tool_lsp_diagnostics_adapter.dispose()
-	_tool_lsp_diagnostics_adapter = null
+	_lsp_diagnostics_service.release_loader()
 
 
 func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
-		diagnostics_adapter.tick(delta)
+	_lsp_diagnostics_service.tick(delta)
 
 
 func _get_ordered_categories_for_reload() -> Array:
