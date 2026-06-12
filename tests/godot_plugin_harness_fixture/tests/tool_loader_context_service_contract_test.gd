@@ -198,11 +198,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 func _verify_loader_wiring_contexts(store) -> Dictionary:
 	var loader = FakeLoader.new()
+	var execution_context_service = FakeExecutionContextService.new()
 	var service = ContextServiceScript.new()
 	service.configure(store)
-	service.configure_loader(loader, FakeExecutionContextService.new())
 
-	var catalog_context := service.build_loader_catalog_projection_context()
+	var catalog_context := service.build_loader_catalog_projection_context(loader)
 	for key in [
 		"ensure_tool_definitions",
 		"is_category_visible",
@@ -213,7 +213,7 @@ func _verify_loader_wiring_contexts(store) -> Dictionary:
 		if not (catalog_context.get(key, Callable()) is Callable) or not (catalog_context[key] as Callable).is_valid():
 			return _failure("Loader catalog context should expose callable: %s" % key)
 
-	var reload_context := service.build_loader_reload_context()
+	var reload_context := service.build_loader_reload_context(loader)
 	for key in [
 		"refresh_entries",
 		"instantiate_executor",
@@ -232,7 +232,7 @@ func _verify_loader_wiring_contexts(store) -> Dictionary:
 		if not (reload_context.get(key, Callable()) is Callable) or not (reload_context[key] as Callable).is_valid():
 			return _failure("Loader reload context should expose callable: %s" % key)
 
-	var user_reload_context := service.build_loader_user_reload_context()
+	var user_reload_context := service.build_loader_user_reload_context(loader)
 	for key in [
 		"category_has_enabled_tools",
 		"ensure_runtime_loaded",
@@ -243,7 +243,7 @@ func _verify_loader_wiring_contexts(store) -> Dictionary:
 		if not (user_reload_context.get(key, Callable()) is Callable) or not (user_reload_context[key] as Callable).is_valid():
 			return _failure("Loader user reload context should expose callable: %s" % key)
 
-	var runtime_state_context := service.build_loader_runtime_state_context()
+	var runtime_state_context := service.build_loader_runtime_state_context(loader, execution_context_service)
 	for key in [
 		"instantiate_executor",
 		"extract_tool_definitions",
@@ -254,7 +254,7 @@ func _verify_loader_wiring_contexts(store) -> Dictionary:
 		if not (runtime_state_context.get(key, Callable()) is Callable) or not (runtime_state_context[key] as Callable).is_valid():
 			return _failure("Loader runtime-state context should expose callable: %s" % key)
 
-	var lifecycle_context := service.build_loader_lifecycle_context()
+	var lifecycle_context := service.build_loader_lifecycle_context(loader)
 	for key in [
 		"reset_state",
 		"set_disabled_tools",
@@ -300,14 +300,26 @@ func _verify_loader_source_uses_context_service() -> Dictionary:
 		if source.find(forbidden) != -1:
 			return _failure("MCPToolLoader should delegate loader context wiring to ToolLoaderContextService, not rebuild callback maps: %s" % forbidden)
 	for required in [
-		"build_loader_catalog_projection_context()",
-		"build_loader_reload_context()",
-		"build_loader_user_reload_context()",
-		"build_loader_runtime_state_context()",
-		"build_loader_lifecycle_context()"
+		"build_loader_catalog_projection_context(self)",
+		"build_loader_reload_context(self)",
+		"build_loader_user_reload_context(self)",
+		"build_loader_runtime_state_context(self, _execution_context_service)",
+		"build_loader_lifecycle_context(self)"
 	]:
 		if source.find(required) == -1:
 			return _failure("MCPToolLoader should call the loader-specific context service method: %s" % required)
+	var context_service_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader_context_service.gd")
+	if context_service_source.is_empty():
+		return _failure("ToolLoaderContextService source should be readable for ownership guards.")
+	for forbidden in [
+		"var _loader",
+		"var _execution_context_service",
+		"configure_loader(",
+		"= loader",
+		"= execution_context_service"
+	]:
+		if context_service_source.find(forbidden) != -1:
+			return _failure("ToolLoaderContextService must not retain loader-owned objects: %s" % forbidden)
 	return {"success": true}
 
 

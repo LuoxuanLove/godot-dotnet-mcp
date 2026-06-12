@@ -61,7 +61,6 @@ func _init() -> void:
 	_lsp_diagnostics_service.configure(self)
 	_execution_context_service.configure(_execution_observer)
 	_context_service.configure(_state_store)
-	_context_service.configure_loader(self, _execution_context_service)
 
 
 func _bind_state_refs() -> void:
@@ -352,7 +351,7 @@ func _elapsed_ms(started_usec: int) -> float:
 
 
 func _build_catalog_projection_context() -> Dictionary:
-	return _context_service.build_loader_catalog_projection_context()
+	return _context_service.build_loader_catalog_projection_context(self)
 
 
 func _build_execution_context() -> Dictionary:
@@ -364,11 +363,11 @@ func _build_execution_context() -> Dictionary:
 
 
 func _build_reload_context() -> Dictionary:
-	return _context_service.build_loader_reload_context()
+	return _context_service.build_loader_reload_context(self)
 
 
 func _build_user_reload_context() -> Dictionary:
-	return _context_service.build_loader_user_reload_context()
+	return _context_service.build_loader_user_reload_context(self)
 
 
 func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, definitions_by_category: Dictionary, delta: float) -> Dictionary:
@@ -390,11 +389,11 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 
 
 func _build_runtime_state_context() -> Dictionary:
-	return _context_service.build_loader_runtime_state_context()
+	return _context_service.build_loader_runtime_state_context(self, _execution_context_service)
 
 
 func _build_lifecycle_context() -> Dictionary:
-	return _context_service.build_loader_lifecycle_context()
+	return _context_service.build_loader_lifecycle_context(self)
 
 
 func _set_force_reload_script_load(enabled: bool) -> void:
