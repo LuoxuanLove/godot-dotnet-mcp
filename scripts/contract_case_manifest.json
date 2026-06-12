@@ -60,6 +60,7 @@
   {"name":"locale_key_parity_contracts","layer":"tooling","domain":"localization","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"keep"},
   {"name":"tool_manifest_contracts","layer":"tooling","domain":"catalog","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
   {"name":"plugin_action_router_contracts","layer":"plugin","domain":"action_router","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
+  {"name":"plugin_lifecycle_service_contracts","layer":"plugin","domain":"lifecycle","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
   {"name":"plugin_entrypoint_contracts","layer":"plugin","domain":"entrypoint","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"editor","isolation":"editor","v1_4_disposition":"keep"},
   {"name":"plugin_update_settings_persistence_contracts","layer":"plugin","domain":"settings","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"editor","isolation":"editor","v1_4_disposition":"keep"},
   {"name":"plugin_reload_coordinator_contracts","layer":"plugin","domain":"reload","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
