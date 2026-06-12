@@ -70,6 +70,7 @@ Target version: 1.4.0.
 - Moved the editor domain implementation behind `tools/editor/executor.gd` while keeping `editor_tools.gd` as a thin compatibility wrapper for existing script references.
 - Moved `MCPToolLoader` frame tick, user-tool definition refresh, and idle user-runtime unload decisions into a dedicated loader tick service.
 - Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
+- Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
 
 ### Fixed
 

@@ -102,6 +102,47 @@ func _verify_context_resolver() -> Dictionary:
 	var fallback_service = resolver.get_gdscript_lsp_diagnostics_service({})
 	if fallback_service == null:
 		return _failure("Atomic bridge context resolver should fall back to the singleton diagnostics service.")
+	var direct_plugin := FakePluginHost.new()
+	var source_context := {"plugin_host": direct_plugin, "tool_loader": loader}
+	var direct_context: Dictionary = resolver.build_atomic_runtime_context("scene", source_context)
+	if str(direct_context.get("category", "")) != "scene" or direct_context.get("plugin_host") != direct_plugin:
+		return _failure("Atomic bridge context resolver should inject category and preserve direct plugin hosts.")
+	if direct_context.get("tool_loader") != loader:
+		return _failure("Atomic bridge context resolver should preserve runtime context values.")
+	if direct_context.get("editor_interface") != direct_plugin.editor_interface:
+		return _failure("Atomic bridge context resolver should derive editor_interface from direct plugin hosts.")
+	direct_context["tool_loader"] = "mutated"
+	if source_context.get("tool_loader") != loader:
+		return _failure("Atomic bridge context resolver should return a duplicate context.")
+	var explicit_editor := RefCounted.new()
+	var explicit_context: Dictionary = resolver.build_atomic_runtime_context("script", {
+		"plugin_host": direct_plugin,
+		"editor_interface": explicit_editor
+	})
+	if explicit_context.get("editor_interface") != explicit_editor:
+		return _failure("Atomic bridge context resolver should not replace an explicit editor_interface.")
+	var getter_plugin := FakePluginHost.new()
+	var getter_context: Dictionary = resolver.build_atomic_runtime_context("resource", {
+		"get_plugin_host": Callable(FakePluginHostProvider.new(getter_plugin), "get_plugin_host")
+	})
+	if getter_context.get("plugin_host") != getter_plugin:
+		return _failure("Atomic bridge context resolver should resolve plugin hosts from runtime getter callables.")
+	var server_plugin := FakePluginHost.new()
+	var server_context: Dictionary = resolver.build_atomic_runtime_context("project", {
+		"server": FakeServerHost.new(server_plugin)
+	})
+	if server_context.get("plugin_host") != server_plugin:
+		return _failure("Atomic bridge context resolver should resolve plugin hosts from server parents.")
+	var fallback_plugin := FakePluginHost.new()
+	var fallback_context: Dictionary = resolver.build_atomic_runtime_context("debug", {
+		"get_plugin_host": Callable(FakePluginHostProvider.new(null), "get_plugin_host"),
+		"server": FakeServerHost.new(fallback_plugin)
+	})
+	if fallback_context.get("plugin_host") != fallback_plugin:
+		return _failure("Atomic bridge context resolver should fall back to server parents when getter callables return null.")
+	var empty_context: Dictionary = resolver.build_atomic_runtime_context("runtime", {})
+	if empty_context.has("plugin_host") or str(empty_context.get("category", "")) != "runtime":
+		return _failure("Atomic bridge context resolver should omit plugin_host when no plugin source is available.")
 	return {"success": true}
 
 
@@ -167,6 +208,33 @@ class FakeLoader extends RefCounted:
 
 	func get_gdscript_lsp_diagnostics_service():
 		return service
+
+
+class FakePluginHost extends RefCounted:
+	var editor_interface := RefCounted.new()
+
+	func get_editor_interface():
+		return editor_interface
+
+
+class FakePluginHostProvider extends RefCounted:
+	var plugin_host = null
+
+	func _init(host) -> void:
+		plugin_host = host
+
+	func get_plugin_host():
+		return plugin_host
+
+
+class FakeServerHost extends RefCounted:
+	var plugin_host = null
+
+	func _init(host) -> void:
+		plugin_host = host
+
+	func get_parent():
+		return plugin_host
 
 
 func _write_text(path: String, content: String) -> Dictionary:
