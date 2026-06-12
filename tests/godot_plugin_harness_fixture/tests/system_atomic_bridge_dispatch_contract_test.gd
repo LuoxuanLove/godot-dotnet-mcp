@@ -4,6 +4,7 @@ extends RefCounted
 
 const AtomicBridgeDispatchServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_dispatch_service.gd")
 const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
 const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 
@@ -27,6 +28,12 @@ class FakeRuntime:
 		if data.is_empty():
 			data = {"category": category, "tool_name": tool_name}
 		return {"success": next_success, "data": data.duplicate(true)}
+
+	func call_atomic_for_helper(full_name: String, args: Dictionary) -> Dictionary:
+		var parts := full_name.split("_", true, 1)
+		if parts.size() != 2:
+			return {"success": false, "error": "Invalid atomic tool name: %s" % full_name}
+		return dispatch(str(parts[0]), str(parts[1]), args)
 
 	func dispatch_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
 		async_calls.append({"category": category, "tool_name": tool_name, "args": args.duplicate(true)})
@@ -120,15 +127,17 @@ func _verify_execution_service_facade() -> Dictionary:
 
 	if not service.is_write_atomic_action("script_edit_gd", {}):
 		return _failure("Atomic bridge execution service should expose write-action helpers for the facade.")
-	if service.extract_data({"data": {"ok": true}}).get("ok") != true:
-		return _failure("Atomic bridge execution service should expose result extraction helpers for the facade.")
-	var collection_result := _verify_execution_service_collection_helpers(service, runtime)
-	if not bool(collection_result.get("success", false)):
-		return collection_result
+	var execution_source_guard := _verify_execution_service_source_guard()
+	if not bool(execution_source_guard.get("success", false)):
+		return execution_source_guard
+	var helper_result := _verify_helper_service_collection_helpers(runtime)
+	if not bool(helper_result.get("success", false)):
+		return helper_result
 	return {"success": true}
 
 
-func _verify_execution_service_collection_helpers(service, runtime: FakeRuntime) -> Dictionary:
+func _verify_helper_service_collection_helpers(runtime: FakeRuntime) -> Dictionary:
+	var service = AtomicBridgeHelperServiceScript.new()
 	runtime.next_success = true
 	runtime.dispatch_calls.clear()
 	runtime.next_data_by_tool = {
@@ -138,32 +147,58 @@ func _verify_execution_service_collection_helpers(service, runtime: FakeRuntime)
 			"counts_by_filter": {"*.gd": 2, "*.cs": 5}
 		}
 	}
-	var files: Array = service.collect_files("*.gd")
+	var caller := Callable(runtime, "call_atomic_for_helper")
+	var files: Array = service.collect_files("*.gd", caller)
 	if files != ["res://A.gd"]:
-		return _failure("Atomic bridge execution service should collect file lists through filesystem_directory.", {"files": files})
-	var file_count: int = service.collect_file_count("*.gd")
+		return _failure("Atomic bridge helper service should collect file lists through filesystem_directory.", {"files": files})
+	var file_count: int = service.collect_file_count("*.gd", caller)
 	if file_count != 7:
-		return _failure("Atomic bridge execution service should collect file counts through filesystem_directory.", {"count": file_count})
-	var counts: Dictionary = service.collect_file_counts(["*.gd", "*.cs"])
+		return _failure("Atomic bridge helper service should collect file counts through filesystem_directory.", {"count": file_count})
+	var counts: Dictionary = service.collect_file_counts(["*.gd", "*.cs"], caller)
 	if int(counts.get("*.gd", 0)) != 2 or int(counts.get("*.cs", 0)) != 5:
-		return _failure("Atomic bridge execution service should collect batched counts through filesystem_directory.", counts)
+		return _failure("Atomic bridge helper service should collect batched counts through filesystem_directory.", counts)
 	counts["*.gd"] = 99
-	if int(service.collect_file_counts(["*.gd"]).get("*.gd", 0)) != 2:
-		return _failure("Atomic bridge execution service should return a copy of batched count dictionaries.")
+	if int(service.collect_file_counts(["*.gd"], caller).get("*.gd", 0)) != 2:
+		return _failure("Atomic bridge helper service should return a copy of batched count dictionaries.")
 	if runtime.dispatch_calls.size() != 4:
-		return _failure("Atomic bridge execution service collection helpers should dispatch once per call.")
+		return _failure("Atomic bridge helper service collection helpers should dispatch once per call.")
 	var list_call: Dictionary = runtime.dispatch_calls[0]
 	if str(list_call.get("category", "")) != "filesystem" or str(list_call.get("tool_name", "")) != "directory":
-		return _failure("Atomic bridge execution service should route collection helpers to filesystem_directory.")
+		return _failure("Atomic bridge helper service should route collection helpers to filesystem_directory.")
 	var list_args: Dictionary = list_call.get("args", {})
 	if str(list_args.get("path", "")) != "res://" or str(list_args.get("filter", "")) != "*.gd" or not bool(list_args.get("recursive", false)):
-		return _failure("Atomic bridge execution service collect_files should preserve filesystem_directory arguments.", list_args)
+		return _failure("Atomic bridge helper service collect_files should preserve filesystem_directory arguments.", list_args)
 	var count_args: Dictionary = runtime.dispatch_calls[1].get("args", {})
 	if not bool(count_args.get("count_only", false)):
-		return _failure("Atomic bridge execution service collect_file_count should request count_only enumeration.", count_args)
+		return _failure("Atomic bridge helper service collect_file_count should request count_only enumeration.", count_args)
 	var counts_args: Dictionary = runtime.dispatch_calls[2].get("args", {})
 	if not bool(counts_args.get("count_only", false)) or not (counts_args.get("filters", []) is Array):
-		return _failure("Atomic bridge execution service collect_file_counts should request filters with count_only.", counts_args)
+		return _failure("Atomic bridge helper service collect_file_counts should request filters with count_only.", counts_args)
+	if service.extract_data({"data": {"ok": true}}).get("ok") != true:
+		return _failure("Atomic bridge helper service should expose result extraction helpers.")
+	return {"success": true}
+
+
+func _verify_execution_service_source_guard() -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
+	if source.is_empty():
+		return _failure("AtomicBridgeExecutionService source should be readable for helper demotion guards.")
+	for forbidden in [
+		"func extract_data",
+		"func extract_array",
+		"func collect_files",
+		"func collect_file_count",
+		"func collect_file_counts",
+		"func build_issue",
+		"func append_unique_issue",
+		"func has_severity",
+		"func normalize_dependency_path",
+		"func normalize_resource_path",
+		"func parse_dependency_reference",
+		"func resource_path_exists"
+	]:
+		if source.find(forbidden) != -1:
+			return _failure("AtomicBridgeExecutionService should stay execution-only and not regain helper methods: %s" % forbidden)
 	return {"success": true}
 
 

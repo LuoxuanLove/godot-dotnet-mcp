@@ -5,6 +5,7 @@ extends RefCounted
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 const DebugToolsScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPRuntimeDebugStoreShared = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
@@ -19,7 +20,7 @@ class FakeBridge extends RefCounted:
 	var collect_files_calls := 0
 	var collect_file_count_calls := 0
 	var collect_file_counts_calls := 0
-	var helpers = AtomicBridgeExecutionServiceScript.new()
+	var helpers = AtomicBridgeHelperServiceScript.new()
 
 	func _init(tool_loader = null) -> void:
 		_tool_loader = tool_loader
@@ -319,6 +320,12 @@ class FakeFilesystemRuntime:
 			return {"success": true, "data": {"count": 1, "count_only": true}}
 		return {"success": true, "data": {"files": ["res://Player.gd"], "count": 1}}
 
+	func call_atomic_for_helper(full_name: String, args: Dictionary) -> Dictionary:
+		var parts := full_name.split("_", true, 1)
+		if parts.size() != 2:
+			return {"success": false, "error": "Invalid atomic tool name: %s" % full_name}
+		return dispatch(str(parts[0]), str(parts[1]), args)
+
 	func dispose_executor(executor) -> void:
 		if executor == null:
 			return
@@ -380,21 +387,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("AtomicBridgeExecutionService invalidation should dispose and shutdown cached executors.")
 	if execution_service.get_cached_executor_count_for_test() != 0:
 		return _failure("AtomicBridgeExecutionService invalidation should clear all cached executors.")
-	var atomic_files: Array = execution_service.collect_files("*.gd")
+	var helper_service = AtomicBridgeHelperServiceScript.new()
+	var atomic_caller := Callable(filesystem_runtime, "call_atomic_for_helper")
+	var atomic_files: Array = helper_service.collect_files("*.gd", atomic_caller)
 	if atomic_files.size() != 1:
-		return _failure("AtomicBridgeExecutionService.collect_files should return files from filesystem_directory.")
+		return _failure("AtomicBridgeHelperService.collect_files should return files from filesystem_directory.")
 	if str(filesystem_runtime.last_args.get("path", "")) != "res://":
-		return _failure("AtomicBridgeExecutionService.collect_files should pass res:// as the filesystem_directory root path.")
-	var atomic_file_count: int = execution_service.collect_file_count("*.gd")
+		return _failure("AtomicBridgeHelperService.collect_files should pass res:// as the filesystem_directory root path.")
+	var atomic_file_count: int = helper_service.collect_file_count("*.gd", atomic_caller)
 	if atomic_file_count != 1:
-		return _failure("AtomicBridgeExecutionService.collect_file_count should return count from filesystem_directory.")
+		return _failure("AtomicBridgeHelperService.collect_file_count should return count from filesystem_directory.")
 	if not bool(filesystem_runtime.last_args.get("count_only", false)):
-		return _failure("AtomicBridgeExecutionService.collect_file_count should request count_only filesystem enumeration.")
-	var atomic_file_counts: Dictionary = execution_service.collect_file_counts(["*.gd", "*.cs"])
+		return _failure("AtomicBridgeHelperService.collect_file_count should request count_only filesystem enumeration.")
+	var atomic_file_counts: Dictionary = helper_service.collect_file_counts(["*.gd", "*.cs"], atomic_caller)
 	if int(atomic_file_counts.get("*.gd", 0)) != 1:
-		return _failure("AtomicBridgeExecutionService.collect_file_counts should return counts from filesystem_directory.")
+		return _failure("AtomicBridgeHelperService.collect_file_counts should return counts from filesystem_directory.")
 	if not bool(filesystem_runtime.last_args.get("count_only", false)) or not (filesystem_runtime.last_args.get("filters", []) is Array):
-		return _failure("AtomicBridgeExecutionService.collect_file_counts should request filters with count_only filesystem enumeration.")
+		return _failure("AtomicBridgeHelperService.collect_file_counts should request filters with count_only filesystem enumeration.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var valid_resource_path := TEMP_ROOT.path_join("ValidNoteData.tres")
 	var quoted_id_path_resource_path := TEMP_ROOT.path_join("QuotedPathIdNoteData.tres")

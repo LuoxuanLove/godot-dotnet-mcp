@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "system_impl_helper_service_contracts"}
 
 const SystemImplHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/system_impl_helper_service.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 
 const SOURCE_PATH := "res://tests_tmp/system_impl_helper_service_contracts/scenes/Main.tscn"
 
@@ -25,12 +26,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var service = SystemImplHelperServiceScript.new()
 	var bridge = FakeBridge.new()
 	service.configure(bridge)
+	var direct_helper = AtomicBridgeHelperServiceScript.new()
 
 	var payload := {"data": {"items": [1, 2, 3], "value": "ok"}}
 	if service.extract_data(payload).get("value", "") != "ok":
 		return _failure("SystemImplHelperService should preserve dictionary data extraction.")
 	if service.extract_array(payload, "items").size() != 3:
 		return _failure("SystemImplHelperService should preserve array extraction.")
+	if direct_helper.extract_data(payload).get("value", "") != "ok":
+		return _failure("AtomicBridgeHelperService should own dictionary data extraction.")
 
 	var files := service.collect_files("*.gd")
 	if files.size() != 2 or str(files[0]) != "res://A.gd":
@@ -87,6 +91,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var source_guard := _verify_production_impl_helper_guard()
 	if not bool(source_guard.get("success", false)):
 		return source_guard
+	var helper_source_guard := _verify_helper_service_source_guard()
+	if not bool(helper_source_guard.get("success", false)):
+		return helper_source_guard
 
 	return {"name": "system_impl_helper_service_contracts", "success": true, "error": ""}
 
@@ -113,6 +120,30 @@ func _verify_production_impl_helper_guard() -> Dictionary:
 		]:
 			if source.find(forbidden) != -1:
 				return _failure("System impls should use SystemImplHelperService for helper behavior, not AtomicBridge facade: %s in %s" % [forbidden, path])
+	return {"success": true}
+
+
+func _verify_helper_service_source_guard() -> Dictionary:
+	var impl_helper_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/system/system_impl_helper_service.gd")
+	if impl_helper_source.is_empty():
+		return _failure("SystemImplHelperService source should be readable for helper ownership guards.")
+	if impl_helper_source.find("AtomicBridgeExecutionServiceScript") != -1:
+		return _failure("SystemImplHelperService should depend on AtomicBridgeHelperService, not AtomicBridgeExecutionService.")
+	if impl_helper_source.find("AtomicBridgeHelperServiceScript") == -1:
+		return _failure("SystemImplHelperService should preload AtomicBridgeHelperService.")
+	var helper_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
+	if helper_source.is_empty():
+		return _failure("AtomicBridgeHelperService source should be readable for helper ownership guards.")
+	for required in [
+		"func extract_data",
+		"func collect_files",
+		"func collect_file_count",
+		"func collect_file_counts",
+		"func build_issue",
+		"func parse_dependency_reference"
+	]:
+		if helper_source.find(required) == -1:
+			return _failure("AtomicBridgeHelperService should own helper method: %s" % required)
 	return {"success": true}
 
 

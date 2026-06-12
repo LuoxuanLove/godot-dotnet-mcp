@@ -3,13 +3,13 @@ extends RefCounted
 # {"name": "system_scene_executor_contracts"}
 
 const SystemSceneExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_scene.gd")
-const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 const TEMP_ROOT := "res://tests_tmp/system_scene_executor_contracts"
 
 
 class FakeBridge extends RefCounted:
 	var calls: Array[Dictionary] = []
-	var helpers = AtomicBridgeExecutionServiceScript.new()
+	var helpers = AtomicBridgeHelperServiceScript.new()
 	var existing_missing_uid_text := ""
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
