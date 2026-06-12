@@ -67,6 +67,7 @@ Target version: 1.4.0.
 - Changed the Tools tab preview and context menu to expose shared presentation output schemas alongside input schemas, keeping Dock schema inspection aligned with MCP 2025-11-25 metadata.
 - Moved the debug domain implementation behind `tools/debug/executor.gd` while keeping `debug_tools.gd` as a thin compatibility wrapper for existing script references.
 - Moved the editor domain implementation behind `tools/editor/executor.gd` while keeping `editor_tools.gd` as a thin compatibility wrapper for existing script references.
+- Moved `MCPToolLoader` frame tick, user-tool definition refresh, and idle user-runtime unload decisions into a dedicated loader tick service.
 
 ### Fixed
 
