@@ -233,15 +233,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bool(removed_debug_result.get("success", true)):
 		return _failure("Tool loader should not execute removed debug_log through the debug domain.")
 
-	_loader.set("_tool_definitions_by_category", {
-		"user": [
-			{
-				"name": "contract_probe",
-				"description": "Contract probe user tool",
-				"parameters": {}
-			}
-		]
-	})
+	_loader._state_store.tool_definitions_by_category.clear()
+	_loader._state_store.tool_definitions_by_category["user"] = [
+		{
+			"name": "contract_probe",
+			"description": "Contract probe user tool",
+			"parameters": {}
+		}
+	]
 	if not _loader.is_tool_exposed("user_contract_probe"):
 		return _failure("Tool loader should expose user tools when the manifest marks the user category public.")
 	var user_probe_found := false

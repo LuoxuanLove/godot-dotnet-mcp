@@ -20,9 +20,11 @@ const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/too
 const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
 const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
 const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
+const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
+var _state_store = ToolLoaderStateStoreScript.new()
 var _entries_by_category: Dictionary = {}
 var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
@@ -43,19 +45,21 @@ var _reload_service = ToolLoaderReloadServiceScript.new()
 var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
 var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
 var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
-var _force_reload_script_load := false
 var _tool_activity_registry = null
-var _performance: Dictionary = {
-	"startup_ms": 0.0,
-	"definition_scan_ms": 0.0,
-	"preload_ms": 0.0,
-	"reload_total_ms": 0.0,
-	"reload_count": 0
-}
+var _performance: Dictionary = {}
 
 
 func _init() -> void:
+	_bind_state_refs()
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
+
+
+func _bind_state_refs() -> void:
+	_entries_by_category = _state_store.entries_by_category
+	_ordered_categories = _state_store.ordered_categories
+	_runtime_by_category = _state_store.runtime_by_category
+	_tool_definitions_by_category = _state_store.tool_definitions_by_category
+	_performance = _state_store.performance
 
 
 func configure(server_context: Object) -> void:
@@ -285,28 +289,11 @@ func is_tool_enabled(tool_name: String) -> bool:
 
 
 func _reset_state() -> void:
-	_entries_by_category.clear()
-	_ordered_categories.clear()
-	_runtime_by_category.clear()
-	_tool_definitions_by_category.clear()
-	_diagnostics_service.clear_load_errors()
+	_state_store.reset(_diagnostics_service)
 
 
 func _refresh_entries() -> void:
-	var index: Dictionary = _entry_service.build_index(_registry.collect_entries())
-	var new_entries: Dictionary = index.get("entries_by_category", {})
-	var new_order: Array[String] = []
-	new_order.assign(index.get("ordered_categories", []))
-	_diagnostics_service.replace_load_errors(index.get("load_errors", []))
-
-	for existing_category in _runtime_by_category.keys():
-		if not new_entries.has(existing_category):
-			_runtime_by_category.erase(existing_category)
-			_tool_definitions_by_category.erase(existing_category)
-
-	_entries_by_category = new_entries
-	_ordered_categories = new_order
-	_sync_load_error_incidents("refresh_entries")
+	_state_store.refresh_entries(_registry, _entry_service, _diagnostics_service, Callable(self, "_sync_load_error_incidents"))
 
 
 func _set_disabled_tools(disabled_tools: Array) -> void:
@@ -322,7 +309,7 @@ func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
 
 
 func _instantiate_executor(category: String, force_reload: bool, reason: String) -> Dictionary:
-	var entry: Dictionary = _entries_by_category.get(category, {})
+	var entry: Dictionary = _state_store.entry_for(category)
 	return _runtime_manager.instantiate_executor(category, entry, force_reload, reason)
 
 
@@ -372,10 +359,7 @@ func _extract_tool_definitions(category: String, executor) -> Array:
 
 
 func _record_load_error(category: String, path: String, message: String) -> void:
-	var error_info: Dictionary = _diagnostics_service.record_load_error(category, path, message)
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	runtime["last_error"] = error_info.duplicate(true)
-	_runtime_by_category[category] = runtime
+	_state_store.record_load_error(category, path, message, _diagnostics_service)
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
@@ -423,17 +407,13 @@ func _elapsed_ms(started_usec: int) -> float:
 
 
 func _build_catalog_projection_context() -> Dictionary:
-	return {
-		"ordered_categories": _ordered_categories,
-		"entries_by_category": _entries_by_category,
-		"runtime_by_category": _runtime_by_category,
-		"tool_definitions_by_category": _tool_definitions_by_category,
+	return _state_store.build_catalog_projection_context({
 		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
 		"is_category_visible": Callable(self, "_is_category_visible"),
 		"is_tool_enabled": Callable(self, "is_tool_enabled"),
 		"is_exposed_tool_definition": Callable(self, "_is_exposed_tool_definition"),
 		"is_public_removed_tool_definition": Callable(self, "_is_public_removed_tool_definition")
-	}
+	})
 
 
 func _build_execution_context() -> Dictionary:
@@ -450,17 +430,7 @@ func _build_execution_context() -> Dictionary:
 
 
 func _build_reload_context() -> Dictionary:
-	return {
-		"ordered_categories": _ordered_categories,
-		"entries_by_category": _entries_by_category,
-		"runtime_by_category": _runtime_by_category,
-		"tool_definitions_by_category": _tool_definitions_by_category,
-		"performance": _performance,
-		"get_ordered_categories": Callable(self, "_get_ordered_categories_for_reload"),
-		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
-		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
-		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
-		"get_performance": Callable(self, "_get_performance_for_reload"),
+	return _state_store.build_reload_context({
 		"refresh_entries": Callable(self, "_refresh_entries"),
 		"instantiate_executor": Callable(self, "_instantiate_executor"),
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
@@ -474,23 +444,17 @@ func _build_reload_context() -> Dictionary:
 		"update_reload_status": Callable(self, "_update_reload_status"),
 		"get_disabled_tools": Callable(self, "get_disabled_tools"),
 		"set_disabled_tools": Callable(self, "_set_disabled_tools")
-	}
+	})
 
 
 func _build_user_reload_context() -> Dictionary:
-	return {
-		"entries_by_category": _entries_by_category,
-		"runtime_by_category": _runtime_by_category,
-		"tool_definitions_by_category": _tool_definitions_by_category,
-		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
-		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
-		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
+	return _state_store.build_reload_context({
 		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
 		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
 		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_user_reload"),
 		"apply_tick_result": Callable(self, "_apply_tick_result"),
 		"refresh_runtime_context": Callable(self, "_refresh_runtime_context")
-	}
+	})
 
 
 func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, definitions_by_category: Dictionary, delta: float) -> Dictionary:
@@ -512,33 +476,17 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 
 
 func _build_runtime_state_context() -> Dictionary:
-	return {
-		"entries_by_category": _entries_by_category,
-		"runtime_by_category": _runtime_by_category,
-		"tool_definitions_by_category": _tool_definitions_by_category,
-		"force_reload_script_load": _force_reload_script_load,
-		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
-		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
-		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
-		"get_force_reload_script_load": Callable(self, "_get_force_reload_script_load"),
+	return _state_store.build_runtime_state_context({
 		"instantiate_executor": Callable(self, "_instantiate_executor"),
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
 		"record_load_error": Callable(self, "_record_load_error"),
 		"dispose_executor": Callable(self, "_dispose_executor_instance"),
 		"failure": Callable(self, "_failure")
-	}
+	})
 
 
 func _build_lifecycle_context() -> Dictionary:
-	return {
-		"ordered_categories": _ordered_categories,
-		"runtime_by_category": _runtime_by_category,
-		"tool_definitions_by_category": _tool_definitions_by_category,
-		"performance": _performance,
-		"set_force_reload_script_load": Callable(self, "_set_force_reload_script_load"),
-		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
-		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
-		"get_ordered_categories": Callable(self, "_get_ordered_categories_for_reload"),
+	return _state_store.build_lifecycle_context({
 		"reset_state": Callable(self, "_reset_state"),
 		"set_disabled_tools": Callable(self, "_set_disabled_tools"),
 		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
@@ -557,15 +505,15 @@ func _build_lifecycle_context() -> Dictionary:
 		"get_tool_definitions": Callable(self, "get_tool_definitions"),
 		"get_exposed_tool_definitions": Callable(self, "get_exposed_tool_definitions"),
 		"get_tool_load_error_count": Callable(self, "_get_tool_load_error_count")
-	}
+	})
 
 
 func _set_force_reload_script_load(enabled: bool) -> void:
-	_force_reload_script_load = enabled
+	_state_store.set_force_reload_script_load(enabled)
 
 
 func _get_force_reload_script_load() -> bool:
-	return _force_reload_script_load
+	return _state_store.get_force_reload_script_load()
 
 
 func _get_tool_load_error_count() -> int:
@@ -585,23 +533,23 @@ func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
 
 
 func _get_ordered_categories_for_reload() -> Array:
-	return _ordered_categories
+	return _state_store.get_ordered_categories()
 
 
 func _get_entries_by_category_for_reload() -> Dictionary:
-	return _entries_by_category
+	return _state_store.get_entries_by_category()
 
 
 func _get_runtime_by_category_for_reload() -> Dictionary:
-	return _runtime_by_category
+	return _state_store.get_runtime_by_category()
 
 
 func _get_tool_definitions_by_category_for_reload() -> Dictionary:
-	return _tool_definitions_by_category
+	return _state_store.get_tool_definitions_by_category()
 
 
 func _get_performance_for_reload() -> Dictionary:
-	return _performance
+	return _state_store.get_performance()
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
