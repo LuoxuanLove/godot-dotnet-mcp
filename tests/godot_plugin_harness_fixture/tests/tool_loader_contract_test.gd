@@ -24,14 +24,18 @@ class FakeServerContext extends RefCounted:
 
 
 class FakeToolAccessProvider extends RefCounted:
-	func is_tool_category_visible(_category: String) -> bool:
-		return true
+	var hidden_categories: Dictionary = {}
+	var blocked_categories: Dictionary = {}
+	var denied_messages: Dictionary = {}
 
-	func is_tool_category_executable(_category: String) -> bool:
-		return true
+	func is_tool_category_visible(category: String):
+		return not bool(hidden_categories.get(category, false))
 
-	func get_tool_access_denied_message(_category: String) -> String:
-		return "Tool category disabled"
+	func is_tool_category_executable(category: String):
+		return not bool(blocked_categories.get(category, false))
+
+	func get_tool_access_denied_message(category: String) -> String:
+		return str(denied_messages.get(category, "Tool category disabled"))
 
 
 class FakeRuntimeControlService extends RefCounted:
@@ -94,6 +98,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for required_internal_category in ["debug", "editor", "project", "scene", "script", "node", "filesystem"]:
 		if not tools_by_category.has(required_internal_category) or (tools_by_category[required_internal_category] as Array).is_empty():
 			return _failure("Tool loader should keep strongest internal category available: %s" % required_internal_category)
+	tool_access_provider.hidden_categories = {"debug": true}
+	var hidden_tools_by_category: Dictionary = _loader.get_tools_by_category()
+	if hidden_tools_by_category.has("debug"):
+		return _failure("Tool loader access service should hide categories denied by the tool access provider.")
+	tool_access_provider.hidden_categories.clear()
 
 	var replacement_activity_registry = ToolActivityRegistryScript.new()
 	_loader.set_tool_activity_registry(replacement_activity_registry)
@@ -269,6 +278,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_editor_state should include the editor section.")
 	if bool((editor_section as Dictionary).get("available", true)):
 		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
+	tool_access_provider.blocked_categories = {"system": true}
+	tool_access_provider.denied_messages = {"system": "System tools disabled by contract."}
+	var access_denied_result: Dictionary = await _loader.execute_tool_async("system", "editor_state", {})
+	if bool(access_denied_result.get("success", true)):
+		return _failure("Tool loader access service should block execution for non-executable categories.")
+	if str(access_denied_result.get("error", "")) != "System tools disabled by contract.":
+		return _failure("Tool loader access service should return provider denied messages for blocked execution.")
+	tool_access_provider.blocked_categories.clear()
+	tool_access_provider.denied_messages.clear()
 
 	var editor_evidence_result: Dictionary = await _loader.execute_tool_async("system", "editor_evidence", {"action": "status"})
 	if not bool(editor_evidence_result.get("success", false)):

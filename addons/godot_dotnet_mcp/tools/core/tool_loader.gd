@@ -21,6 +21,7 @@ const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp
 const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
 const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
 const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
+const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -45,6 +46,7 @@ var _reload_service = ToolLoaderReloadServiceScript.new()
 var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
 var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
 var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
+var _access_service = ToolLoaderAccessServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 
@@ -573,47 +575,19 @@ func _is_exposed_tool_category(category: String) -> bool:
 
 
 func _get_tool_access_provider():
-	if _server_context == null:
-		return null
-	if _server_context.has_method("get_tool_access_provider"):
-		return _server_context.get_tool_access_provider()
-	if _server_context.has_method("get_parent"):
-		return _server_context.get_parent()
-	return null
+	return _access_service.get_tool_access_provider(_server_context)
 
 
 func _is_category_visible(category: String) -> bool:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("is_tool_category_visible"):
-		return _as_bool(provider.is_tool_category_visible(category))
-	return true
+	return _access_service.is_category_visible(category, _server_context)
 
 
 func _is_category_executable(category: String) -> bool:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("is_tool_category_executable"):
-		return _as_bool(provider.is_tool_category_executable(category))
-	return true
+	return _access_service.is_category_executable(category, _server_context)
 
 
 func _get_tool_access_error(category: String) -> String:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("get_tool_access_denied_message"):
-		return str(provider.get_tool_access_denied_message(category))
-	return "Tool category is disabled."
-
-
-func _as_bool(value) -> bool:
-	if value is bool:
-		return value
-	if value is int:
-		return value != 0
-	if value is float:
-		return !is_zero_approx(value)
-	if value is String:
-		var normalized = value.strip_edges().to_lower()
-		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
-	return value != null
+	return _access_service.get_tool_access_error(category, _server_context)
 
 
 func _sync_load_error_incidents(phase: String) -> void:
