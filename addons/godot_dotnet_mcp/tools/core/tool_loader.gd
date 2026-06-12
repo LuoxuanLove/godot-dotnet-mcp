@@ -18,6 +18,7 @@ const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools
 const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
 const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
 const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
+const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -39,6 +40,7 @@ var _tick_service = ToolLoaderTickServiceScript.new()
 var _enablement_service = ToolLoaderEnablementServiceScript.new()
 var _reload_service = ToolLoaderReloadServiceScript.new()
 var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
+var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -359,57 +361,11 @@ func _set_disabled_tools(disabled_tools: Array) -> void:
 
 
 func _ensure_tool_definitions(category: String) -> Array:
-	if _tool_definitions_by_category.has(category):
-		return _tool_definitions_by_category[category]
-
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var executor = runtime.get("instance", null)
-	if executor == null:
-		var instantiate_result = _instantiate_executor(category, _force_reload_script_load, "definitions")
-		if not instantiate_result.get("success", false):
-			_record_load_error(category, str(_entries_by_category.get(category, {}).get("path", "")), str(instantiate_result.get("error", "Failed to load tool definitions")))
-			_tool_definitions_by_category[category] = []
-			return []
-		executor = instantiate_result.get("executor")
-
-	var definitions = _extract_tool_definitions(category, executor)
-	_tool_definitions_by_category[category] = definitions
-	return definitions
+	return _runtime_state_service.ensure_tool_definitions(category, _build_runtime_state_context())
 
 
 func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	if runtime.get("instance", null) != null:
-		return {"success": true, "runtime": runtime}
-
-	var instantiate_result = _instantiate_executor(category, false, reason)
-	if _force_reload_script_load:
-		instantiate_result = _instantiate_executor(category, true, reason)
-	if not instantiate_result.get("success", false):
-		return _failure("tool_load_failed", category, "", str(instantiate_result.get("error", "Failed to load tool runtime")))
-
-	var executor = instantiate_result.get("executor")
-	var version = int(runtime.get("version", 0))
-	if version <= 0:
-		version = 1
-	else:
-		version += 1
-
-	var runtime_state := "loaded"
-	if reason == "tool_call":
-		runtime_state = "loaded_on_demand"
-
-	runtime = {
-		"instance": executor,
-		"state": runtime_state,
-		"version": version,
-		"load_count": int(runtime.get("load_count", 0)) + 1,
-		"last_loaded_at_unix": int(Time.get_unix_time_from_system()),
-		"last_error": null
-	}
-	_runtime_by_category[category] = runtime
-	_tool_definitions_by_category[category] = _extract_tool_definitions(category, executor)
-	return {"success": true, "runtime": runtime}
+	return _runtime_state_service.ensure_runtime_loaded(category, reason, _build_runtime_state_context())
 
 
 func _instantiate_executor(category: String, force_reload: bool, reason: String) -> Dictionary:
@@ -478,15 +434,7 @@ func _category_has_enabled_tools(category: String) -> bool:
 
 
 func _unload_runtime(category: String, reason: String) -> void:
-	if not _runtime_by_category.has(category):
-		return
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var executor = runtime.get("instance", null)
-	_dispose_executor_instance(executor)
-	runtime["instance"] = null
-	runtime["state"] = "definitions_only"
-	runtime["last_unloaded_reason"] = reason
-	_runtime_by_category[category] = runtime
+	_runtime_state_service.unload_runtime(category, reason, _build_runtime_state_context())
 
 
 func _dispose_executor_instance(executor) -> void:
@@ -599,6 +547,28 @@ func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, defi
 		delta,
 		Callable(self, "_extract_tool_definitions")
 	)
+
+
+func _build_runtime_state_context() -> Dictionary:
+	return {
+		"entries_by_category": _entries_by_category,
+		"runtime_by_category": _runtime_by_category,
+		"tool_definitions_by_category": _tool_definitions_by_category,
+		"force_reload_script_load": _force_reload_script_load,
+		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
+		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
+		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
+		"get_force_reload_script_load": Callable(self, "_get_force_reload_script_load"),
+		"instantiate_executor": Callable(self, "_instantiate_executor"),
+		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
+		"record_load_error": Callable(self, "_record_load_error"),
+		"dispose_executor": Callable(self, "_dispose_executor_instance"),
+		"failure": Callable(self, "_failure")
+	}
+
+
+func _get_force_reload_script_load() -> bool:
+	return _force_reload_script_load
 
 
 func _get_ordered_categories_for_reload() -> Array:
