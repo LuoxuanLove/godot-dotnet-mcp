@@ -19,6 +19,7 @@ const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp
 const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
 const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
 const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
+const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -41,6 +42,7 @@ var _enablement_service = ToolLoaderEnablementServiceScript.new()
 var _reload_service = ToolLoaderReloadServiceScript.new()
 var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
 var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
+var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -68,35 +70,7 @@ func configure(server_context: Object) -> void:
 
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
-	var started_usec = Time.get_ticks_usec()
-	_force_reload_script_load = force_reload_scripts
-	_set_disabled_tools(disabled_tools)
-	_reset_state()
-	_reset_gdscript_lsp_diagnostics_service()
-	_refresh_entries()
-
-	var definition_started = Time.get_ticks_usec()
-	for category in _ordered_categories:
-		_ensure_tool_definitions(category)
-	_performance["definition_scan_ms"] = _elapsed_ms(definition_started)
-
-	var preload_started = Time.get_ticks_usec()
-	for category in _ordered_categories:
-		if _category_has_enabled_tools(category):
-			_ensure_runtime_loaded(category, "preload")
-	_performance["preload_ms"] = _elapsed_ms(preload_started)
-	_performance["startup_ms"] = _elapsed_ms(started_usec)
-	_update_reload_status(_make_reload_status("initialize"))
-	_sync_load_error_incidents("initialize")
-	_refresh_runtime_context()
-	_force_reload_script_load = false
-
-	return {
-		"tool_count": get_tool_definitions().size(),
-		"exposed_tool_count": get_exposed_tool_definitions().size(),
-		"category_count": _ordered_categories.size(),
-		"tool_load_error_count": _diagnostics_service.get_tool_load_error_count()
-	}
+	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
 
 
 func set_tool_activity_registry(registry) -> void:
@@ -116,23 +90,11 @@ func reload_registry(disabled_tools: Array = []) -> Dictionary:
 
 
 func shutdown() -> void:
-	for category in _runtime_by_category.keys():
-		_unload_runtime(str(category), "shutdown")
-	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("dispose"):
-		_tool_lsp_diagnostics_adapter.dispose()
-	_tool_lsp_diagnostics_adapter = null
-	_force_reload_script_load = false
-	_reset_state()
+	_lifecycle_service.shutdown(_build_lifecycle_context())
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
-	_set_disabled_tools(disabled_tools)
-	for category in _ordered_categories:
-		if _category_has_enabled_tools(category):
-			_ensure_runtime_loaded(category, "disabled_tools_changed")
-		else:
-			_unload_runtime(category, "disabled_tools_changed")
-	_refresh_runtime_context()
+	_lifecycle_service.set_disabled_tools(disabled_tools, _build_lifecycle_context())
 
 
 func get_tools_by_category() -> Dictionary:
@@ -239,16 +201,7 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 
 
 func tick(delta: float) -> void:
-	var tick_result: Dictionary = _tick_service.tick_loaded_runtimes(
-		_runtime_by_category,
-		_tool_definitions_by_category,
-		delta,
-		Callable(self, "_extract_tool_definitions")
-	)
-	_apply_tick_result(tick_result)
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
-		diagnostics_adapter.tick(delta)
+	_lifecycle_service.tick(delta, _build_lifecycle_context())
 
 
 func get_gdscript_lsp_diagnostics_service():
@@ -549,6 +502,15 @@ func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, defi
 	)
 
 
+func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
+	return _tick_service.tick_loaded_runtimes(
+		_runtime_by_category,
+		_tool_definitions_by_category,
+		delta,
+		Callable(self, "_extract_tool_definitions")
+	)
+
+
 func _build_runtime_state_context() -> Dictionary:
 	return {
 		"entries_by_category": _entries_by_category,
@@ -567,8 +529,59 @@ func _build_runtime_state_context() -> Dictionary:
 	}
 
 
+func _build_lifecycle_context() -> Dictionary:
+	return {
+		"ordered_categories": _ordered_categories,
+		"runtime_by_category": _runtime_by_category,
+		"tool_definitions_by_category": _tool_definitions_by_category,
+		"performance": _performance,
+		"set_force_reload_script_load": Callable(self, "_set_force_reload_script_load"),
+		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
+		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
+		"get_ordered_categories": Callable(self, "_get_ordered_categories_for_reload"),
+		"reset_state": Callable(self, "_reset_state"),
+		"set_disabled_tools": Callable(self, "_set_disabled_tools"),
+		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
+		"dispose_gdscript_lsp_diagnostics_adapter": Callable(self, "_dispose_gdscript_lsp_diagnostics_adapter"),
+		"tick_gdscript_lsp_diagnostics": Callable(self, "_tick_gdscript_lsp_diagnostics"),
+		"refresh_entries": Callable(self, "_refresh_entries"),
+		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
+		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
+		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
+		"unload_runtime": Callable(self, "_unload_runtime"),
+		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_lifecycle"),
+		"make_reload_status": Callable(self, "_make_reload_status"),
+		"update_reload_status": Callable(self, "_update_reload_status"),
+		"sync_load_error_incidents": Callable(self, "_sync_load_error_incidents"),
+		"refresh_runtime_context": Callable(self, "_refresh_runtime_context"),
+		"get_tool_definitions": Callable(self, "get_tool_definitions"),
+		"get_exposed_tool_definitions": Callable(self, "get_exposed_tool_definitions"),
+		"get_tool_load_error_count": Callable(self, "_get_tool_load_error_count")
+	}
+
+
+func _set_force_reload_script_load(enabled: bool) -> void:
+	_force_reload_script_load = enabled
+
+
 func _get_force_reload_script_load() -> bool:
 	return _force_reload_script_load
+
+
+func _get_tool_load_error_count() -> int:
+	return _diagnostics_service.get_tool_load_error_count()
+
+
+func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
+	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("dispose"):
+		_tool_lsp_diagnostics_adapter.dispose()
+	_tool_lsp_diagnostics_adapter = null
+
+
+func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
+	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
+	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
+		diagnostics_adapter.tick(delta)
 
 
 func _get_ordered_categories_for_reload() -> Array:
@@ -589,19 +602,6 @@ func _get_tool_definitions_by_category_for_reload() -> Dictionary:
 
 func _get_performance_for_reload() -> Dictionary:
 	return _performance
-
-
-func _apply_tick_result(tick_result: Dictionary) -> void:
-	var refresh_context := false
-	if bool(tick_result.get("user_definitions_changed", false)):
-		_tool_definitions_by_category["user"] = (tick_result.get("user_definitions", []) as Array).duplicate(true)
-		refresh_context = true
-	if bool(tick_result.get("user_should_unload", false)) and _runtime_by_category.has("user"):
-		_runtime_by_category.erase("user")
-		_tool_definitions_by_category.erase("user")
-		refresh_context = true
-	if refresh_context:
-		_refresh_runtime_context()
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
