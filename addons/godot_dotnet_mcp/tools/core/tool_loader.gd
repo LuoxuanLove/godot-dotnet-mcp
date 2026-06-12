@@ -17,6 +17,7 @@ const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/
 const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
 const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
 const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
+const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -37,6 +38,7 @@ var _execution_service = ToolExecutionServiceScript.new()
 var _tick_service = ToolLoaderTickServiceScript.new()
 var _enablement_service = ToolLoaderEnablementServiceScript.new()
 var _reload_service = ToolLoaderReloadServiceScript.new()
+var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -307,40 +309,16 @@ func reload_all_domains() -> Dictionary:
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
-	var normalized_path = script_path.strip_edges()
-	if normalized_path.is_empty():
-		return {"success": false, "error": "Missing script path"}
-	if not _entries_by_category.has("user"):
-		return {"success": false, "error": "User domain is not registered"}
-	if not _category_has_enabled_tools("user"):
-		_ensure_runtime_loaded("user", "request_reload_by_script")
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var executor = runtime.get("instance", null)
-	if executor == null or not executor.has_method("request_reload_by_script"):
-		return {"success": false, "error": "User runtime is unavailable"}
-	executor.request_reload_by_script(normalized_path, reason)
-	_apply_tick_result(_tick_service.tick_loaded_runtimes(
-		{"user": runtime},
-		_tool_definitions_by_category,
-		0.0,
-		Callable(self, "_extract_tool_definitions")
-	))
-	if _runtime_by_category.has("user"):
-		_refresh_runtime_context()
-	return {
-		"success": true,
-		"script_path": normalized_path,
-		"reason": reason,
-		"runtime_state": executor.get_runtime_state_snapshot() if executor.has_method("get_runtime_state_snapshot") else []
-	}
+	return _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
 
 
 func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var executor = runtime.get("instance", null)
-	if executor != null and executor.has_method("get_runtime_state_snapshot"):
-		return executor.get_runtime_state_snapshot()
-	return []
+	var snapshot: Array = _user_reload_service.get_user_tool_runtime_snapshot(_build_user_reload_context())
+	var typed_snapshot: Array[Dictionary] = []
+	for entry in snapshot:
+		if entry is Dictionary:
+			typed_snapshot.append((entry as Dictionary).duplicate(true))
+	return typed_snapshot
 
 
 func get_disabled_tools() -> Array:
@@ -596,6 +574,31 @@ func _build_reload_context() -> Dictionary:
 		"get_disabled_tools": Callable(self, "get_disabled_tools"),
 		"set_disabled_tools": Callable(self, "_set_disabled_tools")
 	}
+
+
+func _build_user_reload_context() -> Dictionary:
+	return {
+		"entries_by_category": _entries_by_category,
+		"runtime_by_category": _runtime_by_category,
+		"tool_definitions_by_category": _tool_definitions_by_category,
+		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
+		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
+		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
+		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
+		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
+		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_user_reload"),
+		"apply_tick_result": Callable(self, "_apply_tick_result"),
+		"refresh_runtime_context": Callable(self, "_refresh_runtime_context")
+	}
+
+
+func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, definitions_by_category: Dictionary, delta: float) -> Dictionary:
+	return _tick_service.tick_loaded_runtimes(
+		runtime_by_category,
+		definitions_by_category,
+		delta,
+		Callable(self, "_extract_tool_definitions")
+	)
 
 
 func _get_ordered_categories_for_reload() -> Array:

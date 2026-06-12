@@ -72,6 +72,7 @@ Target version: 1.4.0.
 - Moved `MCPToolLoader` disabled-tool normalization and enabled-tool counting into a dedicated loader enablement service.
 - Moved `MCPToolLoader` plugin-host resolution into the loader runtime-context service.
 - Moved `MCPToolLoader` domain reload orchestration into a dedicated loader reload service while preserving reload status, rollback, disabled-tool restoration, and runtime-context refresh behavior.
+- Moved `MCPToolLoader` user-tool script reload requests and runtime snapshots into a dedicated loader user reload service.
 - Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
 - Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
 
