@@ -30,6 +30,7 @@ Target version: 1.4.0.
 - Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Split `MCPToolLoader` read-side projections, exposure checks, empty-visible diagnostics, and status snapshots into a dedicated query service while preserving the public loader facade.
 - Split `MCPToolLoader` lifecycle orchestration into a dedicated lifecycle service covering initialization, shutdown, disabled-tool changes, and frame maintenance while preserving the public loader facade.
+- Split plugin lifecycle context wiring into a dedicated context service so `plugin.gd` delegates lifecycle callback-map assembly instead of rebuilding it in the entrypoint.
 - Split plugin runtime reload requests into a dedicated request service so `PluginReloadCoordinator` only coordinates plugin re-enable lifecycle work.
 - Split stdio JSON-RPC method dispatch and service assembly into dedicated stdio services so the transport server stays focused on framing and response writes.
 - Routed Tools tab domain and category previews through shared presentation metadata so preview counts and tool lists no longer fall back to raw catalog definitions when a presentation snapshot is available.

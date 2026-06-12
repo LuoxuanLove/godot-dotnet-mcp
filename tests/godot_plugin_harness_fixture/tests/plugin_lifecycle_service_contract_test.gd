@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "plugin_lifecycle_service_contracts"}
 
 const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
+const PluginLifecycleContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_context_service.gd")
 
 
 class FakeLifecycleContext:
@@ -104,11 +105,47 @@ class FakeLifecycleContext:
 			"phase": phase
 		})
 
+	func _refresh_service_instances() -> void: refresh_service_instances()
+	func _load_state() -> void: load_state()
+	func _configure_lifecycle_enter_state() -> void: configure_lifecycle_enter_state()
+	func _ensure_action_router() -> void: ensure_action_router()
+	func _ensure_dock_coordinator() -> void: ensure_dock_coordinator()
+	func _attach_server_controller() -> void: attach_server_controller()
+	func _configure_user_tool_watch_service() -> void: configure_user_tool_watch_service()
+	func _configure_config_tab_action_service() -> void: configure_config_tab_action_service()
+	func _ensure_runtime_bridge_autoload() -> void: ensure_runtime_bridge_autoload()
+	func _install_editor_debugger_bridge() -> void: install_editor_debugger_bridge()
+	func _create_dock() -> void: create_dock()
+	func _apply_initial_tool_profile_if_needed() -> void: apply_initial_tool_profile_if_needed()
+	func _refresh_dock() -> void: refresh_dock()
+	func _set_plugin_process_enabled(enabled: bool) -> void: set_process_enabled(enabled)
+	func _should_auto_start_server() -> bool: return should_auto_start_server()
+	func _start_server_for_lifecycle() -> void: start_server_for_lifecycle()
+	func _restore_pending_focus_snapshot_if_needed() -> void: restore_pending_focus_snapshot_if_needed()
+	func _defer_saved_update_source_discovery_request() -> void: ensure_saved_update_source_discovery_requested()
+	func _save_settings() -> void: save_settings()
+	func _stop_user_tool_watch_service() -> void: stop_user_tool_watch_service()
+	func _remove_dock() -> void: remove_dock()
+	func _remove_client_executable_dialog() -> void: remove_client_executable_dialog()
+	func _uninstall_editor_debugger_bridge() -> void: uninstall_editor_debugger_bridge()
+	func _remove_runtime_bridge_autoload() -> void: remove_runtime_bridge_autoload()
+	func _dispose_action_router() -> void: dispose_action_router()
+	func _dispose_server_controller() -> void: dispose_server_controller()
+	func _dispose_lifecycle_services() -> void: dispose_lifecycle_services()
+	func _is_runtime_bridge_currently_owned() -> bool: return is_runtime_bridge_currently_owned()
+	func _tick_user_tool_watch_service() -> void: tick_user_tool_watch_service()
+	func _ensure_update_refs_discovery_requested() -> bool: return ensure_update_refs_discovery_requested()
+	func _finish_self_operation(operation: Dictionary, success: bool, component: String, phase: String) -> void:
+		finish_self_operation(operation, success, component, phase)
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var source_guard := _assert_plugin_entrypoint_delegates_to_lifecycle_service()
 	if not source_guard.is_empty():
 		return _failure(source_guard)
+	var context_guard := _assert_plugin_lifecycle_context_service_builds_entrypoint_context()
+	if not context_guard.is_empty():
+		return _failure(context_guard)
 
 	var service = PluginLifecycleServiceScript.new()
 	var enter_context := FakeLifecycleContext.new()
@@ -204,6 +241,8 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		return "Plugin entrypoint source should exist for lifecycle delegation guard."
 	var source := FileAccess.get_file_as_string(source_path)
 	for required in [
+		"PluginLifecycleContextServiceScript.new()",
+		"_plugin_lifecycle_context_service.build_plugin_lifecycle_context(self,",
 		"_plugin_lifecycle_service.enter_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())",
@@ -211,6 +250,35 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 	]:
 		if source.find(required) == -1:
 			return "Plugin entrypoint should delegate lifecycle wiring through PluginLifecycleService: %s" % required
+	for forbidden in [
+		"\"refresh_service_instances\": Callable(self",
+		"\"load_state\": Callable(self",
+		"\"finish_self_operation\": Callable(self"
+	]:
+		if source.find(forbidden) != -1:
+			return "Plugin entrypoint should not rebuild lifecycle context callback maps: %s" % forbidden
+	return ""
+
+
+func _assert_plugin_lifecycle_context_service_builds_entrypoint_context() -> String:
+	var service = PluginLifecycleContextServiceScript.new()
+	var fake := FakeLifecycleContext.new()
+	var context: Dictionary = service.build_plugin_lifecycle_context(fake, {
+		"runtime_bridge_autoload_name": "MCPRuntimeBridge",
+		"runtime_bridge_autoload_path": "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
+	})
+	for key in fake.build().keys():
+		if not context.has(key):
+			return "PluginLifecycleContextService should preserve lifecycle context key: %s" % str(key)
+		if key.ends_with("_name") or key.ends_with("_path"):
+			continue
+		if not (context.get(key, Callable()) is Callable) or not (context[key] as Callable).is_valid():
+			return "PluginLifecycleContextService should expose a valid callable for key: %s" % str(key)
+	if str(context.get("runtime_bridge_autoload_name", "")) != "MCPRuntimeBridge":
+		return "PluginLifecycleContextService should preserve runtime bridge autoload name."
+	(context["refresh_service_instances"] as Callable).call()
+	if fake.calls != ["refresh_service_instances"]:
+		return "PluginLifecycleContextService should wire callbacks to the plugin host."
 	return ""
 
 
