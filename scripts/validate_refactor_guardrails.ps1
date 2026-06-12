@@ -1,6 +1,7 @@
 ﻿param(
     [switch]$SkipVersionPolicy,
-    [switch]$SkipBridgeSafeWrites
+    [switch]$SkipBridgeSafeWrites,
+    [switch]$SkipReleaseChangelogPolicy
 )
 
 $ErrorActionPreference = "Stop"
@@ -362,4 +363,14 @@ if ($SkipBridgeSafeWrites) {
     if ($LASTEXITCODE -ne 0) {
         throw "Dotnet bridge safe-write regression tests failed with exit code $LASTEXITCODE."
     }
+}
+
+if ($SkipReleaseChangelogPolicy) {
+    Write-Host "Release changelog section policy tests skipped: caller opted out."
+} else {
+    & "$PSScriptRoot\test_release_changelog_section.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release changelog section policy tests failed with exit code $LASTEXITCODE."
+    }
+    $global:LASTEXITCODE = 0
 }
