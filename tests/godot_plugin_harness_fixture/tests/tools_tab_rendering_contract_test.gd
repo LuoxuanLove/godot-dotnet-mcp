@@ -70,7 +70,11 @@ class FakeLocalization extends RefCounted:
 		"tool_runtime_capture_desc": "内部运行时捕获：通过已启用的运行时会话，将正在运行游戏的视口捕获为 PNG。",
 		"tool_plugin_runtime_state_name": "插件状态",
 		"tool_project_info_name": "Project Info",
-		"tool_user_sample_tool_name": "Sample Tool"
+		"tool_user_sample_tool_name": "Sample Tool",
+		"tool_ctx_copy_input_schema_json": "Copy Input Schema JSON",
+		"tool_ctx_copy_output_schema_json": "Copy Output Schema JSON",
+		"tool_preview_output": "Output",
+		"tool_preview_no_output": "No output schema"
 	}
 
 	func get_text(key: String) -> String:
@@ -242,6 +246,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should not leak raw English DAP schema parameter descriptions in localized previews.")
 	if not preview_text.text.contains("fallback_note | string | Fallback-only schema description"):
 		return _failure("Tools tab should keep schema descriptions as fallback when no localized parameter description exists.")
+	if not preview_text.text.contains("Output") or not preview_text.text.contains("structuredContent | object") or not preview_text.text.contains("Contract structured output"):
+		return _failure("Tools tab preview should render outputSchema summaries from shared presentation metadata.")
 	if preview_text.text.contains("RAW SHOULD NOT APPEAR") or preview_text.text.contains("raw_only_param"):
 		return _failure("Tools tab preview should consume shared presentation metadata instead of poisoned raw tool definitions.")
 	var copied_schema_metadata: Dictionary = _instance.call("_get_tool_metadata", "system_dap_debugger", dap_tool.get_metadata(0))
@@ -253,6 +259,21 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab schema-copy metadata should resolve shared presentation inputSchema.")
 	if (copied_properties as Dictionary).has("raw_only_param") or str((copied_schema_json as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
 		return _failure("Tools tab schema-copy metadata should not use poisoned raw schemas.")
+	var copied_output_schema_json = copied_schema_metadata.get("outputSchema", {})
+	if not (copied_output_schema_json is Dictionary):
+		return _failure("Tools tab schema-copy metadata should expose an outputSchema object.")
+	var copied_output_properties = (copied_output_schema_json as Dictionary).get("properties", {})
+	if not (copied_output_properties is Dictionary) or not (copied_output_properties as Dictionary).has("structuredContent"):
+		return _failure("Tools tab output-schema metadata should resolve shared presentation outputSchema.")
+	if (copied_output_properties as Dictionary).has("raw_output_only") or str((copied_output_schema_json as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Tools tab output-schema metadata should not use poisoned raw schemas.")
+	_instance.call("_show_tree_context_menu", dap_tool, expected_context_position)
+	var schema_popup := _find_context_popup(_instance)
+	if schema_popup == null:
+		return _failure("Tools tab should expose schema context menu actions for selected tools.")
+	if _find_popup_item(schema_popup, "Copy Input Schema JSON") < 0 or _find_popup_item(schema_popup, "Copy Output Schema JSON") < 0:
+		return _failure("Tools tab context menu should expose separate input and output schema copy actions.")
+	schema_popup.hide()
 	var search_edit = _instance.get_node("ContentSplit/TopPane/SearchOuterMargin/ToolSearchEdit") as LineEdit
 	if search_edit == null:
 		return _failure("Tools tab rendering test could not resolve the search edit control.")
@@ -403,6 +424,12 @@ func _poison_raw_tool_definitions_after_presentation(tools_by_category: Dictiona
 				"raw_only_param": {"type": "string", "description": "RAW SHOULD NOT APPEAR"}
 			}
 		}
+		tool_def["outputSchema"] = {
+			"type": "object",
+			"properties": {
+				"raw_output_only": {"type": "string", "description": "RAW SHOULD NOT APPEAR"}
+			}
+		}
 
 
 func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Array = []) -> void:
@@ -439,6 +466,14 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 				"fallback_note": {"type": "string", "description": "Fallback-only schema description"}
 			},
 			"required": ["action"]
+		}
+		tool_def["outputSchema"] = {
+			"type": "object",
+			"properties": {
+				"structuredContent": {"type": "object", "description": "Contract structured output"},
+				"isError": {"type": "boolean", "description": "Tool error marker"}
+			},
+			"required": ["structuredContent"]
 		}
 	tools_by_category[category].append(tool_def)
 
@@ -591,6 +626,13 @@ func _collect_context_popups_recursive(root: Node, popups: Array) -> void:
 			popups.append(child)
 			continue
 		_collect_context_popups_recursive(child, popups)
+
+
+func _find_popup_item(popup: PopupMenu, label: String) -> int:
+	for index in range(popup.get_item_count()):
+		if popup.get_item_text(index) == label:
+			return index
+	return -1
 
 
 func _failure(message: String) -> Dictionary:

@@ -63,8 +63,9 @@ const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 
 const _CTX_COPY_LOCALIZED_NAME := 0
 const _CTX_COPY_ENGLISH_ID := 1
-const _CTX_COPY_SCHEMA := 2
-const _CTX_DELETE_TOOL := 3
+const _CTX_COPY_INPUT_SCHEMA := 2
+const _CTX_COPY_OUTPUT_SCHEMA := 3
+const _CTX_DELETE_TOOL := 4
 const _CTX_EXPAND_ALL := 10
 const _CTX_COLLAPSE_ALL := 11
 
@@ -772,7 +773,8 @@ func _show_tree_context_menu(item: TreeItem, screen_position: Vector2) -> Rect2i
 	match kind:
 		"tool":
 			_context_menu.add_separator()
-			_add_context_menu_item(_localization.get_text("tool_ctx_copy_schema_json"), _CTX_COPY_SCHEMA)
+			_add_context_menu_item(_localization.get_text("tool_ctx_copy_input_schema_json"), _CTX_COPY_INPUT_SCHEMA)
+			_add_context_menu_item(_localization.get_text("tool_ctx_copy_output_schema_json"), _CTX_COPY_OUTPUT_SCHEMA)
 			if _is_user_tool_metadata(meta):
 				_add_context_menu_item(_localization.get_text("btn_delete_user_tool"), _CTX_DELETE_TOOL)
 		_:
@@ -796,10 +798,15 @@ func _on_context_menu_id_pressed(id: int) -> void:
 			DisplayServer.clipboard_set(_get_context_menu_localized_name())
 		_CTX_COPY_ENGLISH_ID:
 			DisplayServer.clipboard_set(_get_context_menu_english_id())
-		_CTX_COPY_SCHEMA:
+		_CTX_COPY_INPUT_SCHEMA:
 			var full_name = str(_context_menu_metadata.get("key", ""))
 			var tool_def = _get_tool_metadata(full_name, _context_menu_metadata)
 			var schema = tool_def.get("inputSchema", {})
+			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
+		_CTX_COPY_OUTPUT_SCHEMA:
+			var full_name = str(_context_menu_metadata.get("key", ""))
+			var tool_def = _get_tool_metadata(full_name, _context_menu_metadata)
+			var schema = tool_def.get("outputSchema", {})
 			DisplayServer.clipboard_set(JSON.stringify(schema, "\t"))
 		_CTX_DELETE_TOOL:
 			var script_path = _get_context_menu_user_tool_script_path()
@@ -1318,6 +1325,14 @@ func _build_tool_preview() -> String:
 	else:
 		lines.append_array(parameter_lines)
 
+	lines.append("")
+	lines.append(_localization.get_text("tool_preview_output"))
+	var output_lines = _build_output_preview_lines(tool_def)
+	if output_lines.is_empty():
+		lines.append(_localization.get_text("tool_preview_no_output"))
+	else:
+		lines.append_array(output_lines)
+
 	if category == "user":
 		var runtime_lines = _build_user_runtime_preview_lines(tool_def)
 		if not runtime_lines.is_empty():
@@ -1474,6 +1489,13 @@ func _build_atomic_item_preview() -> String:
 		lines.append(_localization.get_text("tool_preview_no_params"))
 	else:
 		lines.append_array(parameter_lines)
+	lines.append("")
+	lines.append(_localization.get_text("tool_preview_output"))
+	var output_lines = _build_output_preview_lines(tool_def)
+	if output_lines.is_empty():
+		lines.append(_localization.get_text("tool_preview_no_output"))
+	else:
+		lines.append_array(output_lines)
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
@@ -1722,8 +1744,48 @@ func _build_parameter_preview_lines(tool_def: Dictionary, full_name: String) -> 
 	return lines
 
 
+func _build_output_preview_lines(tool_def: Dictionary) -> Array[String]:
+	var output_schema = tool_def.get("outputSchema", {})
+	if not (output_schema is Dictionary):
+		return []
+	var properties = (output_schema as Dictionary).get("properties", {})
+	if not (properties is Dictionary):
+		return []
+
+	var required_lookup: Dictionary = {}
+	for required_name in (output_schema as Dictionary).get("required", []):
+		required_lookup[str(required_name)] = true
+
+	var property_names: Array = (properties as Dictionary).keys()
+	property_names.sort()
+	var lines: Array[String] = []
+	for property_name in property_names:
+		var property_def = (properties as Dictionary).get(property_name, {})
+		if not (property_def is Dictionary):
+			continue
+		lines.append("- %s" % _format_schema_property_summary(str(property_name), property_def as Dictionary, required_lookup))
+	return lines
+
+
 func _format_parameter_summary(property_name: String, property_def: Dictionary, required_lookup: Dictionary, full_name: String = "") -> String:
 	var parts: Array[String] = [property_name]
+	_append_schema_property_parts(parts, property_def, required_lookup, property_name)
+	var description = _get_parameter_description(full_name, property_name, property_def)
+	if not description.is_empty():
+		parts.append(description)
+	return " | ".join(parts)
+
+
+func _format_schema_property_summary(property_name: String, property_def: Dictionary, required_lookup: Dictionary) -> String:
+	var parts: Array[String] = [property_name]
+	_append_schema_property_parts(parts, property_def, required_lookup, property_name)
+	var description := str(property_def.get("description", ""))
+	if not description.is_empty():
+		parts.append(description)
+	return " | ".join(parts)
+
+
+func _append_schema_property_parts(parts: Array[String], property_def: Dictionary, required_lookup: Dictionary, property_name: String) -> void:
 	var type_name = str(property_def.get("type", "any"))
 	parts.append(type_name)
 	if required_lookup.has(property_name):
@@ -1733,10 +1795,6 @@ func _format_parameter_summary(property_name: String, property_def: Dictionary, 
 		for value in property_def.get("enum", []):
 			values.append(str(value))
 		parts.append("enum=%s" % ", ".join(values))
-	var description = _get_parameter_description(full_name, property_name, property_def)
-	if not description.is_empty():
-		parts.append(description)
-	return " | ".join(parts)
 
 
 func _get_parameter_description(full_name: String, property_name: String, property_def: Dictionary) -> String:
