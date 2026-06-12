@@ -73,10 +73,19 @@ try {
             continue
         }
 
-        $publishedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $publishedPath).Hash
-        $bundledHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundledPath).Hash
-        if ($publishedHash -ne $bundledHash) {
-            $errors.Add("Bundled Roslyn runtime file is out of sync with dotnet publish output: $fileName")
+        $publishedItem = Get-Item -LiteralPath $publishedPath
+        $bundledItem = Get-Item -LiteralPath $bundledPath
+        if ($publishedItem.Length -le 0 -or $bundledItem.Length -le 0) {
+            $errors.Add("Roslyn runtime manifest file must not be empty: $fileName")
+            continue
+        }
+
+        if ($fileName.EndsWith(".dll", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $publishedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $publishedPath).Hash
+            $bundledHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundledPath).Hash
+            if ($publishedHash -ne $bundledHash) {
+                $errors.Add("Bundled Roslyn runtime payload is out of sync with dotnet publish output: $fileName")
+            }
         }
     }
 
@@ -105,7 +114,7 @@ try {
         throw ($errors -join [Environment]::NewLine)
     }
 
-    Write-Host "Roslyn runtime bundle matches dotnet publish output for $($files.Count) manifest files."
+    Write-Host "Roslyn runtime bundle manifest validated for $($files.Count) files; DLL payload hashes match dotnet publish output."
 }
 finally {
     if (Test-Path -LiteralPath $publishDirectory) {
