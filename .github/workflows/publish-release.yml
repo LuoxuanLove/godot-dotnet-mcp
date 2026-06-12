@@ -105,18 +105,7 @@ jobs:
           }
 
           $versionMentionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($version))(?![0-9A-Za-z.-])"
-          $changelogPaths = @(
-            "docs/en/CHANGELOG.md",
-            "docs/zh-CN/变更日志.md",
-            "docs/ja/変更履歴.md",
-            "docs/ko/변경-로그.md"
-          )
-          foreach ($path in $changelogPaths) {
-            $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
-            if ($content -notmatch $versionMentionPattern) {
-              throw "$path does not mention release version $version"
-            }
-          }
+          .\scripts\validate_release_changelog_section.ps1 -Version $version
 
           $releaseNotePaths = @(
             "docs/en/process/release-notes/release-notes-v$version.md",
@@ -134,6 +123,8 @@ jobs:
               throw "$releaseNotesPath does not mention release version $version"
             }
           }
+
+          .\scripts\validate_docs_i18n.ps1
 
           $isPrerelease = (($version -match '^\d+\.\d+\.\d+-').ToString().ToLowerInvariant())
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

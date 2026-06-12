@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPJsonRpcRequestService
 
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 
 var _route_json_rpc_async := Callable()
 var _build_json_rpc_error := Callable()
@@ -41,10 +42,21 @@ func handle_request_async(body: String) -> Dictionary:
 		return _build_error(-32600, "Invalid Request", null)
 
 	var request_dict: Dictionary = request
-	var method = str(request_dict.get("method", ""))
+	if _is_json_rpc_response_envelope(request_dict):
+		return {"status": 202, "_no_body": true}
+
+	var envelope_validation := MCPJsonRpcEnvelopeValidator.validate_request_envelope(request_dict)
+	var has_id = bool(envelope_validation.get("has_id", false))
+	var id = envelope_validation.get("id")
+	if not bool(envelope_validation.get("success", false)):
+		return _build_error(
+			int(envelope_validation.get("code", -32600)),
+			str(envelope_validation.get("message", "Invalid Request")),
+			id
+		)
+
+	var method = str(envelope_validation.get("method", ""))
 	var params = request_dict.get("params", {})
-	var has_id = request_dict.has("id")
-	var id = request_dict.get("id")
 	if not (params is Dictionary):
 		if not has_id:
 			return {"status": 202, "_no_body": true}
@@ -57,6 +69,34 @@ func handle_request_async(body: String) -> Dictionary:
 	if _route_json_rpc_async.is_valid():
 		return await _route_json_rpc_async.call(method, params, id, has_id)
 	return _build_error(-32603, "JSON-RPC router is unavailable", id)
+
+
+func _is_json_rpc_response_envelope(request: Dictionary) -> bool:
+	if str(request.get("jsonrpc", "")) != "2.0":
+		return false
+	if request.has("method"):
+		return false
+	if not request.has("id") or not _is_valid_json_rpc_id(request.get("id")):
+		return false
+	var has_result := request.has("result")
+	var has_error := request.has("error")
+	if has_result == has_error:
+		return false
+	if has_error and not (request.get("error") is Dictionary):
+		return false
+	return true
+
+
+func _is_valid_json_rpc_id(id) -> bool:
+	if id == null:
+		return true
+	if id is String:
+		return true
+	if id is int:
+		return true
+	if id is float:
+		return true
+	return false
 
 
 func _build_error(code: int, message: String, id) -> Dictionary:

@@ -26,21 +26,17 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"update_release_tag": ""
 }
 
-const ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.ALL_TOOL_CATEGORIES
+static var ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.get_all_tool_categories()
 const DEFAULT_COLLAPSED_DOMAINS: Array[String] = []
 
 const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL_PROFILES
 const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
 const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_bindings_audit",
-	"system_editor_log",
 	"system_editor_evidence",
 	"system_editor_state",
-	"system_help",
 	"system_inspector",
 	"system_plugin_maintenance",
-	"system_plugin_reload",
-	"system_plugin_update",
 	"system_project_configure",
 	"system_project_files",
 	"system_project_index_build",
@@ -50,12 +46,10 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_runtime_control",
 	"system_runtime_diagnose",
 	"system_runtime_step",
-	"system_scene_analyze",
 	"system_scene_dependency_graph",
 	"system_scene_inspect",
 	"system_scene_patch",
 	"system_scene_tree",
-	"system_scene_validate",
 	"system_script_analyze",
 	"system_script_patch"
 ]
@@ -89,6 +83,7 @@ var update_sync_status := ""
 var update_sync_error := ""
 var update_sync_target_ref := ""
 var update_sync_target_kind := ""
+var mcp_catalog_preview: Dictionary = {}
 
 
 func resolve_active_language(localization) -> String:

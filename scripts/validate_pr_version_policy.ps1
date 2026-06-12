@@ -159,7 +159,7 @@ function Assert-ProtocolFactsParity {
     $jsonFacts = ConvertFrom-ProtocolFactsJson -Content (Read-VersionContent -Ref $Ref -Path $jsonPath -Label $Label) -Source $jsonSource
     $fallbackFacts = ConvertFrom-ProtocolFallbackFacts -Content (Read-VersionContent -Ref $Ref -Path $fallbackPath -Label $Label) -Source $fallbackSource
 
-    foreach ($field in @("protocol_version", "tool_schema_version", "server_name", "server_version")) {
+    foreach ($field in @("protocol_version", "tool_schema_version", "server_name", "server_description", "server_version")) {
         if ([string]$jsonFacts.$field -ne [string]$fallbackFacts.$field) {
             throw "Protocol facts parity failed for $Label ${field}: $jsonSource='$($jsonFacts.$field)' but $fallbackSource='$($fallbackFacts.$field)'."
         }
@@ -305,6 +305,18 @@ foreach ($field in $versionFields) {
 
 if ($changes.Count -eq 0) {
     Write-Host "Version policy validated: public version metadata remains unchanged."
+    exit 0
+}
+
+if ($BaseBranch -eq "refactor/v1.4.0" -and $HeadBranch -eq "chore/v1.4-version-baseline") {
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v1.4 refactor baseline version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
+
+    Write-Host "Version policy validated: v1.4 refactor baseline branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
     exit 0
 }
 

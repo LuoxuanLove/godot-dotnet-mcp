@@ -111,6 +111,8 @@ func _looks_like_generated_fallback(text: String) -> bool:
 func _looks_like_placeholder_translation(text: String) -> bool:
 	if text.begins_with("Localized "):
 		return true
+	if text.contains("????"):
+		return true
 	for marker in ["쓰기s", "읽기-back", "열기ed", "구성uration", "설정ting", "설정up", "디버그gee", "오류s", "작업s", "생성 and", "읽기 or", "실행 and", "구성ure"]:
 		if text.contains(marker):
 			return true

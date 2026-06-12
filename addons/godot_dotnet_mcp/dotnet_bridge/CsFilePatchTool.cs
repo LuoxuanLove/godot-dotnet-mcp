@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace GodotDotnetMcp.DotnetBridge;
@@ -40,11 +39,12 @@ internal static class CsFilePatchTool
                 Preview: WriteToolHelpers.PreviewText(text),
                 ContentHash: WriteToolHelpers.ComputeSha256(text),
                 OriginalLength: originalLength,
-                NewLength: text.Length);
+                NewLength: text.Length,
+                SemanticRuntime: "Roslyn");
 
             if (!dryRun)
             {
-                File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                WriteToolHelpers.WriteUtf8NoBom(path, text);
             }
 
             return Task.FromResult(BridgeToolCallResponse.Success(result));
@@ -94,33 +94,33 @@ internal static class CsFilePatchTool
             case "method_upsert":
             {
                 var patch = ParseSemanticPatch(patchElement);
-                var updated = SemanticCSharpEditor.UpsertMethod(text, patch, out var operation);
+                var updated = GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynSyntaxCore.UpsertMethod(text, patch, out var operation);
                 ValidateExpectedCount("method_upsert", $"{patch.TypeName}.{patch.MemberName}", operation.MatchCount, expectedCount);
-                operations.Add(operation);
+                operations.Add(ConvertOperation(operation));
                 return updated;
             }
             case "method_remove":
             {
                 var patch = ParseSemanticPatch(patchElement);
-                var updated = SemanticCSharpEditor.RemoveMethod(text, patch.TypeName, patch.MemberName, patch.Parameters, patch.SignatureHint, out var operation);
+                var updated = GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynSyntaxCore.RemoveMethod(text, patch.TypeName, patch.MemberName, patch.Parameters, patch.SignatureHint, out var operation);
                 ValidateExpectedCount("method_remove", $"{patch.TypeName}.{patch.MemberName}", operation.MatchCount, expectedCount);
-                operations.Add(operation);
+                operations.Add(ConvertOperation(operation));
                 return updated;
             }
             case "field_upsert":
             {
                 var patch = ParseSemanticPatch(patchElement);
-                var updated = SemanticCSharpEditor.UpsertField(text, patch, out var operation);
+                var updated = GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynSyntaxCore.UpsertField(text, patch, out var operation);
                 ValidateExpectedCount("field_upsert", $"{patch.TypeName}.{patch.MemberName}", operation.MatchCount, expectedCount);
-                operations.Add(operation);
+                operations.Add(ConvertOperation(operation));
                 return updated;
             }
             case "field_remove":
             {
                 var patch = ParseSemanticPatch(patchElement);
-                var updated = SemanticCSharpEditor.RemoveField(text, patch.TypeName, patch.MemberName, patch.SignatureHint, out var operation);
+                var updated = GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynSyntaxCore.RemoveField(text, patch.TypeName, patch.MemberName, patch.SignatureHint, out var operation);
                 ValidateExpectedCount("field_remove", $"{patch.TypeName}.{patch.MemberName}", operation.MatchCount, expectedCount);
-                operations.Add(operation);
+                operations.Add(ConvertOperation(operation));
                 return updated;
             }
             default:
@@ -274,6 +274,16 @@ internal static class CsFilePatchTool
         return text.LastIndexOf(value, StringComparison.Ordinal);
     }
 
+    private static PatchOperationResult ConvertOperation(GodotDotnetMcp.PluginRuntime.Roslyn.PatchOperationResult operation)
+    {
+        return new PatchOperationResult(
+            operation.Kind,
+            operation.Target,
+            operation.MatchCount,
+            operation.AppliedCount,
+            operation.Note);
+    }
+
     private static void ValidateExpectedCount(string kind, string target, int actualCount, int? expectedCount)
     {
         if (expectedCount.HasValue && expectedCount.Value != actualCount)
@@ -343,14 +353,14 @@ internal static class CsFilePatchTool
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static SemanticMemberPatch ParseSemanticPatch(JsonElement patchElement)
+    private static GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynMemberPatch ParseSemanticPatch(JsonElement patchElement)
     {
         var typeName = ReadRequiredString(patchElement, "typeName");
         var memberName = ReadRequiredString(patchElement, "memberName");
         var modifiers = BridgeArgumentReader.GetStringArray(patchElement, "modifiers");
         var parameters = BridgeArgumentReader.GetStringArray(patchElement, "parameters");
 
-        return new SemanticMemberPatch(
+        return new GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynMemberPatch(
             TypeName: typeName,
             MemberName: memberName,
             Modifiers: modifiers,
@@ -359,6 +369,7 @@ internal static class CsFilePatchTool
             Body: ReadOptionalString(patchElement, "body"),
             FieldType: ReadOptionalString(patchElement, "fieldType"),
             Initializer: ReadOptionalString(patchElement, "initializer"),
-            SignatureHint: ReadOptionalString(patchElement, "signatureHint"));
+            SignatureHint: ReadOptionalString(patchElement, "signatureHint"),
+            Exported: TryGetBoolean(patchElement, "exported", out var exported) && exported);
     }
 }

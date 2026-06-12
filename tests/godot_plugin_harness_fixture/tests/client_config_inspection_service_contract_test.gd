@@ -37,6 +37,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(opencode_preflight.get("requires_confirmation", false)):
 		return _failure("Inspection preflight should require confirmation for incompatible_mcp.")
 
+	_write_text(INSPECTION_FILE, JSON.stringify({
+		"mcpServers": {
+			"godot-mcp": "not-an-object"
+		}
+	}, "  "))
+	var conflicting_preflight: Dictionary = inspection.preflight_write_config("", INSPECTION_FILE, JSON.stringify({
+		"mcpServers": {
+			"godot-mcp": {
+				"url": "http://127.0.0.1:3000/mcp"
+			}
+		}
+	}, "  "))
+	if str(conflicting_preflight.get("status", "")) != "conflicting_server_entry":
+		return _failure("Inspection preflight should report conflicting_server_entry for non-object existing server entries.")
+	if not bool(conflicting_preflight.get("requires_confirmation", false)):
+		return _failure("Inspection conflicting_server_entry should require confirmation.")
+
 	return {
 		"name": "client_config_inspection_service_contracts",
 		"success": true,
@@ -45,7 +62,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"missing_status": str(missing_result.get("status", "")),
 			"incompatible_status": str(incompatible_result.get("status", "")),
 			"opencode_status": str(opencode_preflight.get("status", "")),
-			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false))
+			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false)),
+			"conflicting_status": str(conflicting_preflight.get("status", ""))
 		}
 	}
 

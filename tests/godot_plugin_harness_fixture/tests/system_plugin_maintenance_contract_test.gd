@@ -17,6 +17,7 @@ class FakePlugin extends Node:
 	var lifecycle_reload_called := false
 	var selected_sources: Array[Dictionary] = []
 	var sync_requested := false
+	var discovery_requests: Array[bool] = []
 
 	func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 		lifecycle_reload_called = true
@@ -65,6 +66,10 @@ class FakePlugin extends Node:
 	func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
 		selected_sources.append({"source": source, "custom_branch": custom_branch, "release_tag": release_tag})
 		return {"success": true, "data": {"source": source, "custom_branch": custom_branch, "release_tag": release_tag}}
+
+	func discover_plugin_update_refs_from_tools(force_refresh: bool = true) -> Dictionary:
+		discovery_requests.append(force_refresh)
+		return {"success": true, "accepted": true, "data": {"refs": [], "force_refresh": force_refresh}}
 
 	func start_plugin_update_sync_from_tools() -> Dictionary:
 		sync_requested = true
@@ -117,6 +122,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance set_update_source should route selected source.")
 	if str(plugin.selected_sources[0].get("custom_branch", "")) != "feature/plugin-maintenance-tool":
 		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance set_update_source should preserve the custom branch.")
+
+	var refresh_refs_result: Dictionary = executor.execute("plugin_maintenance", {"action": "refresh_update_refs", "force_refresh": false})
+	if not bool(refresh_refs_result.get("success", false)) or plugin.discovery_requests.size() != 1:
+		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance refresh_update_refs should delegate to ref discovery.")
+	if bool(plugin.discovery_requests[0]):
+		return await _cleanup_failure(tree, plugin, "system_plugin_maintenance refresh_update_refs should preserve force_refresh=false.")
 
 	var start_result: Dictionary = executor.execute("plugin_maintenance", {"action": "start_update"})
 	if not bool(start_result.get("success", false)) or not bool(start_result.get("accepted", false)) or not plugin.sync_requested:

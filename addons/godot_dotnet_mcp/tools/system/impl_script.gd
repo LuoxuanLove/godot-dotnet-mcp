@@ -8,6 +8,7 @@ const GDScriptLspDiagnosticsService = preload("res://addons/godot_dotnet_mcp/plu
 const GDScriptLspDiagnosticsServicePath = "res://addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd"
 
 var bridge
+var bridge_helpers
 var _tool_loader_context
 
 const HANDLED_TOOLS := ["bindings_audit", "script_analyze", "script_patch"]
@@ -15,6 +16,10 @@ const HANDLED_TOOLS := ["bindings_audit", "script_analyze", "script_patch"]
 
 func handles(tool_name: String) -> bool:
 	return tool_name in HANDLED_TOOLS
+
+
+func configure_bridge_helpers(helpers) -> void:
+	bridge_helpers = helpers
 
 
 func configure_runtime(_context: Dictionary) -> void:
@@ -105,19 +110,25 @@ func tick(delta: float) -> void:
 
 # --- private helpers ---
 
+func _helpers():
+	if bridge_helpers != null:
+		return bridge_helpers
+	return bridge
+
+
 func _audit_scene(scene_path: String, include_warnings: bool, scene_cache: Dictionary) -> Dictionary:
 	if scene_cache.has(scene_path):
 		return scene_cache[scene_path]
 
-	var bindings_data: Dictionary = bridge.extract_data(bridge.call_atomic("scene_bindings", {
+	var bindings_data: Dictionary = _helpers().extract_data(bridge.call_atomic("scene_bindings", {
 		"action": "from_path", "path": scene_path
 	}))
 	var issues: Array = []
 	for issue in bindings_data.get("issues", []):
 		if issue is Dictionary:
-			bridge.append_unique_issue(issues, (issue as Dictionary).duplicate(true))
+			_helpers().append_unique_issue(issues, (issue as Dictionary).duplicate(true))
 	if include_warnings and issues.is_empty():
-		bridge.append_unique_issue(issues, bridge.build_issue("info", "scene_clean",
+		_helpers().append_unique_issue(issues, _helpers().build_issue("info", "scene_clean",
 			"Scene bindings and audit checks returned no issues.", {"scene": scene_path}))
 	var result := {
 		"kind": "scene", "scene": scene_path,
@@ -129,11 +140,11 @@ func _audit_scene(scene_path: String, include_warnings: bool, scene_cache: Dicti
 
 
 func _audit_script(script_path: String, include_warnings: bool, scene_cache: Dictionary) -> Dictionary:
-	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
-	var references_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_references", {
+	var inspect_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var references_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
 		"action": "get_scene_refs", "path": script_path
 	}))
-	var base_type_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_references", {
+	var base_type_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
 		"action": "get_base_type", "path": script_path
 	}))
 
@@ -143,18 +154,18 @@ func _audit_script(script_path: String, include_warnings: bool, scene_cache: Dic
 		scenes.append(str(sp))
 
 	if scenes.is_empty():
-		bridge.append_unique_issue(issues, bridge.build_issue(
+		_helpers().append_unique_issue(issues, _helpers().build_issue(
 			"warning" if include_warnings else "info", "no_scene_reference",
 			"Script is not referenced by any discovered scene.", {"script": script_path}))
 
 	var exports = inspect_data.get("exports", [])
 	if include_warnings and exports is Array and (exports as Array).is_empty():
-		bridge.append_unique_issue(issues, bridge.build_issue("info", "no_exports",
+		_helpers().append_unique_issue(issues, _helpers().build_issue("info", "no_exports",
 			"Script declares no exported members.", {"script": script_path}))
 
 	var signals_list = inspect_data.get("signals", [])
 	if include_warnings and signals_list is Array and (signals_list as Array).is_empty():
-		bridge.append_unique_issue(issues, bridge.build_issue("info", "no_signals",
+		_helpers().append_unique_issue(issues, _helpers().build_issue("info", "no_signals",
 			"Script declares no signals.", {"script": script_path}))
 
 	for sp in scenes:
@@ -164,7 +175,7 @@ func _audit_script(script_path: String, include_warnings: bool, scene_cache: Dic
 				continue
 			var scene_issue: Dictionary = (issue as Dictionary).duplicate(true)
 			scene_issue["script"] = script_path
-			bridge.append_unique_issue(issues, scene_issue)
+			_helpers().append_unique_issue(issues, scene_issue)
 
 	return {
 		"kind": "script", "script": script_path,
@@ -309,7 +320,7 @@ func _execute_bindings_audit(args: Dictionary) -> Dictionary:
 			"bindings_audit: scene=%s" % target_scene)
 		results.append(_audit_scene(target_scene, include_warnings, {}))
 	else:
-		var cs_scripts: Array = bridge.collect_files("*.cs")
+		var cs_scripts: Array = _helpers().collect_files("*.cs")
 		MCPDebugBuffer.record("debug", "system",
 			"bindings_audit: scanning %d C# scripts" % cs_scripts.size())
 		var scene_cache: Dictionary = {}
@@ -346,13 +357,13 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 		return bridge.error("Script file not found: %s" % script_path)
 	MCPDebugBuffer.record("debug", "system", "script_analyze: %s" % script_path)
 
-	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
-	var symbols_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_symbols", {"path": script_path}))
-	var exports_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_exports", {"path": script_path}))
-	var refs_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_references", {
+	var inspect_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var symbols_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_symbols", {"path": script_path}))
+	var exports_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_exports", {"path": script_path}))
+	var refs_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
 		"action": "get_scene_refs", "path": script_path
 	}))
-	var base_type_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_references", {
+	var base_type_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
 		"action": "get_base_type", "path": script_path
 	}))
 
@@ -380,7 +391,7 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 
 	var issues: Array = []
 	if scene_refs.is_empty():
-		issues.append(bridge.build_issue("info", "no_scene_reference",
+		issues.append(_helpers().build_issue("info", "no_scene_reference",
 			"Script is not referenced by any discovered scene.", {"script": script_path}))
 
 	var result_data: Dictionary = {
@@ -480,7 +491,7 @@ func _execute_script_patch(args: Dictionary) -> Dictionary:
 	var is_gd := script_path.ends_with(".gd")
 	var atomic_tool := "script_edit_gd" if is_gd else "script_edit_cs"
 
-	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var inspect_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
 	if inspect_data.is_empty():
 		return bridge.error("Failed to inspect script: %s" % script_path)
 

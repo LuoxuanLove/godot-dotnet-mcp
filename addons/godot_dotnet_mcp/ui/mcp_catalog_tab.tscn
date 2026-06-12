@@ -1,0 +1,122 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd" id="1"]
+
+[node name="McpCatalogTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="Scroll/Margin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="HeaderCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="HeaderMargin" type="MarginContainer" parent="Scroll/Margin/Content/HeaderCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="HeaderBody" type="VBoxContainer" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 6
+
+[node name="HeaderTitle" type="Label" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody"]
+unique_name_in_owner = true
+
+[node name="HeaderDescription" type="Label" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="HeaderCounts" type="Label" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody"]
+unique_name_in_owner = true
+
+[node name="ResourcesCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="ResourcesMargin" type="MarginContainer" parent="Scroll/Margin/Content/ResourcesCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="ResourcesBody" type="VBoxContainer" parent="Scroll/Margin/Content/ResourcesCard/ResourcesMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="ResourcesTitle" type="Label" parent="Scroll/Margin/Content/ResourcesCard/ResourcesMargin/ResourcesBody"]
+unique_name_in_owner = true
+
+[node name="ResourcesList" type="VBoxContainer" parent="Scroll/Margin/Content/ResourcesCard/ResourcesMargin/ResourcesBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TemplatesCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="TemplatesMargin" type="MarginContainer" parent="Scroll/Margin/Content/TemplatesCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="TemplatesBody" type="VBoxContainer" parent="Scroll/Margin/Content/TemplatesCard/TemplatesMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="TemplatesTitle" type="Label" parent="Scroll/Margin/Content/TemplatesCard/TemplatesMargin/TemplatesBody"]
+unique_name_in_owner = true
+
+[node name="TemplatesList" type="VBoxContainer" parent="Scroll/Margin/Content/TemplatesCard/TemplatesMargin/TemplatesBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PromptsCard" type="PanelContainer" parent="Scroll/Margin/Content"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="PromptsMargin" type="MarginContainer" parent="Scroll/Margin/Content/PromptsCard"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="PromptsBody" type="VBoxContainer" parent="Scroll/Margin/Content/PromptsCard/PromptsMargin"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="PromptsTitle" type="Label" parent="Scroll/Margin/Content/PromptsCard/PromptsMargin/PromptsBody"]
+unique_name_in_owner = true
+
+[node name="PromptsList" type="VBoxContainer" parent="Scroll/Margin/Content/PromptsCard/PromptsMargin/PromptsBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

@@ -3,83 +3,96 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
-const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
-const ToolLspDiagnosticsAdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
-
-const PUBLIC_REMOVED_MCP_TOOLS := {
-	"system_tool_activity": true
-}
+const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
+const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
+const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
+const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
+const ToolLoaderDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_diagnostics_service.gd")
+const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
+const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
+const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
+const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
+const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
+const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
+const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
+const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
+const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
+const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
+const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
+const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
+const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
+const ToolLoaderExecutionContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_execution_context_service.gd")
+const ToolLoaderContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_context_service.gd")
+const ToolLoaderQueryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_query_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
+var _state_store = ToolLoaderStateStoreScript.new()
 var _entries_by_category: Dictionary = {}
 var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
-var _disabled_tools: Dictionary = {}
-var _load_errors: Array[Dictionary] = []
-var _reload_status: Dictionary = {}
-var _tool_lsp_diagnostics_adapter = null
-var _force_reload_script_load := false
+var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
+var _execution_observer = ToolExecutionObserverScript.new()
+var _runtime_manager = ToolRuntimeManagerScript.new()
+var _status_service = ToolLoaderStatusServiceScript.new()
+var _diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
+var _entry_service = ToolRegistryEntryServiceScript.new()
+var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
+var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
+var _execution_service = ToolExecutionServiceScript.new()
+var _tick_service = ToolLoaderTickServiceScript.new()
+var _enablement_service = ToolLoaderEnablementServiceScript.new()
+var _reload_service = ToolLoaderReloadServiceScript.new()
+var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
+var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
+var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
+var _access_service = ToolLoaderAccessServiceScript.new()
+var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
+var _execution_context_service = ToolLoaderExecutionContextServiceScript.new()
+var _context_service = ToolLoaderContextServiceScript.new()
+var _query_service = ToolLoaderQueryServiceScript.new()
 var _tool_activity_registry = null
-var _performance: Dictionary = {
-	"startup_ms": 0.0,
-	"definition_scan_ms": 0.0,
-	"preload_ms": 0.0,
-	"reload_total_ms": 0.0,
-	"reload_count": 0,
-	"tool_calls": {}
-}
+var _performance: Dictionary = {}
+
+
+func _init() -> void:
+	_bind_state_refs()
+	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
+	_lsp_diagnostics_service.configure(self)
+	_execution_context_service.configure(_execution_observer)
+	_context_service.configure(_state_store)
+
+
+func _bind_state_refs() -> void:
+	_entries_by_category = _state_store.entries_by_category
+	_ordered_categories = _state_store.ordered_categories
+	_runtime_by_category = _state_store.runtime_by_category
+	_tool_definitions_by_category = _state_store.tool_definitions_by_category
+	_performance = _state_store.performance
 
 
 func configure(server_context: Object) -> void:
 	_server_context = server_context
+	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	if Engine.has_singleton("MCPRuntimeBridge"):
 		var runtime_bridge = Engine.get_singleton("MCPRuntimeBridge")
 		if runtime_bridge != null and runtime_bridge.has_method("set_tool_loader"):
 			runtime_bridge.set_tool_loader(self)
-	_ensure_lsp_diagnostics_adapter()
+	_lsp_diagnostics_service.configure(self)
 	_refresh_runtime_context()
 
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
-	var started_usec = Time.get_ticks_usec()
-	_force_reload_script_load = force_reload_scripts
-	_set_disabled_tools(disabled_tools)
-	_reset_state()
-	_reset_gdscript_lsp_diagnostics_service()
-	_refresh_entries()
-
-	var definition_started = Time.get_ticks_usec()
-	for category in _ordered_categories:
-		_ensure_tool_definitions(category)
-	_performance["definition_scan_ms"] = _elapsed_ms(definition_started)
-
-	var preload_started = Time.get_ticks_usec()
-	for category in _ordered_categories:
-		if _category_has_enabled_tools(category):
-			_ensure_runtime_loaded(category, "preload")
-	_performance["preload_ms"] = _elapsed_ms(preload_started)
-	_performance["startup_ms"] = _elapsed_ms(started_usec)
-	_reload_status = _make_reload_status("initialize")
-	_sync_load_error_incidents("initialize")
-	_refresh_runtime_context()
-	_force_reload_script_load = false
-
-	return {
-		"tool_count": get_tool_definitions().size(),
-		"exposed_tool_count": get_exposed_tool_definitions().size(),
-		"category_count": _ordered_categories.size(),
-		"tool_load_error_count": _load_errors.size()
-	}
+	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
 
 
 func set_tool_activity_registry(registry) -> void:
 	if _tool_activity_registry == registry:
 		return
 	_tool_activity_registry = registry
+	_execution_observer.set_activity_registry(registry)
 	_refresh_runtime_context()
 
 
@@ -92,31 +105,15 @@ func reload_registry(disabled_tools: Array = []) -> Dictionary:
 
 
 func shutdown() -> void:
-	for category in _runtime_by_category.keys():
-		_unload_runtime(str(category), "shutdown")
-	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("dispose"):
-		_tool_lsp_diagnostics_adapter.dispose()
-	_tool_lsp_diagnostics_adapter = null
-	_force_reload_script_load = false
-	_reset_state()
+	_lifecycle_service.shutdown(_build_lifecycle_context())
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
-	_set_disabled_tools(disabled_tools)
-	for category in _ordered_categories:
-		if _category_has_enabled_tools(category):
-			_ensure_runtime_loaded(category, "disabled_tools_changed")
-		else:
-			_unload_runtime(category, "disabled_tools_changed")
-	_refresh_runtime_context()
+	_lifecycle_service.set_disabled_tools(disabled_tools, _build_lifecycle_context())
 
 
 func get_tools_by_category() -> Dictionary:
-	var visible := _build_tools_by_category_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible tools by category resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_tools_by_category_internal(true)
 
 
 func get_all_tools_by_category() -> Dictionary:
@@ -124,31 +121,17 @@ func get_all_tools_by_category() -> Dictionary:
 
 
 func _build_tools_by_category_internal(visible_only: bool) -> Dictionary:
-	var result: Dictionary = {}
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		var defs = _ensure_tool_definitions(category)
-		if defs.is_empty():
-			continue
-		var decorated_defs: Array[Dictionary] = []
-		for tool_def in defs:
-			var decorated_def := _decorate_tool_definition(category, tool_def)
-			if _is_public_removed_tool_definition(decorated_def):
-				continue
-			decorated_defs.append(decorated_def)
-		if decorated_defs.is_empty():
-			continue
-		result[category] = decorated_defs
-	return result
+	return _query_service.build_tools_by_category(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_tool_definitions() -> Array[Dictionary]:
-	var visible := _build_tool_definitions_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible tool definitions resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_tool_definitions_internal(true)
 
 
 func get_all_tool_definitions() -> Array[Dictionary]:
@@ -156,52 +139,43 @@ func get_all_tool_definitions() -> Array[Dictionary]:
 
 
 func get_exposed_tool_definitions() -> Array[Dictionary]:
-	var definitions: Array[Dictionary] = []
-	for tool_def in get_tool_definitions():
-		if not _is_exposed_tool_definition(tool_def):
-			continue
-		if not _as_bool(tool_def.get("enabled", true)):
-			continue
-		definitions.append((tool_def as Dictionary).duplicate(true))
-	return definitions
+	return _query_service.build_exposed_tool_definitions(_catalog_projection_service, _build_catalog_projection_context(), get_tool_definitions())
 
 
 func is_tool_exposed(tool_name: String) -> bool:
-	for tool_def in get_exposed_tool_definitions():
-		if str(tool_def.get("name", "")) == tool_name:
-			return true
-	if _is_callable_removed_public_tool(tool_name):
-		return true
-	return _is_callable_compatibility_alias(tool_name)
+	return _query_service.is_tool_exposed(
+		tool_name,
+		get_exposed_tool_definitions(),
+		_public_surface_policy,
+		get_tool_definitions(),
+		Callable(self, "is_tool_enabled")
+	)
 
 
 func is_public_removed_tool(tool_name: String) -> bool:
-	return PUBLIC_REMOVED_MCP_TOOLS.has(tool_name)
+	return _public_surface_policy.is_public_removed_tool(tool_name)
+
+
+func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
+	return _public_surface_policy.build_removed_public_tool_result(tool_name, arguments)
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
-	var definitions: Array[Dictionary] = []
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		for tool_def in _ensure_tool_definitions(category):
-			var full_def = _decorate_tool_definition(category, tool_def)
-			full_def["name"] = "%s_%s" % [category, str(tool_def.get("name", ""))]
-			full_def["category"] = category
-			definitions.append(full_def)
-	return definitions
+	return _query_service.build_tool_definitions(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
-	return _load_errors.duplicate(true)
+	return _diagnostics_service.get_tool_load_errors()
 
 
 func get_domain_states() -> Array[Dictionary]:
-	var visible := _build_domain_states_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible domain states resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_domain_states_internal(true)
 
 
 func get_all_domain_states() -> Array[Dictionary]:
@@ -209,635 +183,135 @@ func get_all_domain_states() -> Array[Dictionary]:
 
 
 func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
-	var states: Array[Dictionary] = []
-	for category in _ordered_categories:
-		if visible_only and not _is_category_visible(category):
-			continue
-		var entry: Dictionary = _entries_by_category.get(category, {})
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var defs = _tool_definitions_by_category.get(category, [])
-		states.append({
-			"domain": category,
-			"category": category,
-			"domain_key": str(entry.get("domain_key", "other")),
-			"source": str(entry.get("source", "builtin")),
-			"script_path": str(entry.get("path", "")),
-			"hot_reloadable": _as_bool(entry.get("hot_reloadable", true)),
-			"loaded": runtime.get("instance", null) != null,
-			"load_state": _current_load_state(category),
-			"tool_count": defs.size(),
-			"enabled_tool_count": _count_enabled_tools_in_category(category),
-			"version": int(runtime.get("version", 0)),
-			"load_count": int(runtime.get("load_count", 0)),
-			"last_loaded_at_unix": int(runtime.get("last_loaded_at_unix", 0)),
-			"last_error": runtime.get("last_error", null)
-		})
-	return states
+	return _query_service.build_domain_states(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_reload_status() -> Dictionary:
-	return _reload_status.duplicate(true)
+	return _diagnostics_service.get_reload_status()
 
 
 func get_tool_loader_status() -> Dictionary:
-	var tool_count := get_tool_definitions().size()
-	var exposed_tool_count := get_exposed_tool_definitions().size()
-	var category_count := _ordered_categories.size()
-	var tool_load_error_count := _load_errors.size()
-	var status := "ready"
-	var healthy := true
-	if category_count <= 0 and tool_load_error_count <= 0:
-		status = "empty_registry"
-		healthy = false
-	elif tool_count <= 0 or exposed_tool_count <= 0:
-		status = "no_visible_tools"
-		healthy = false
-	elif tool_load_error_count > 0:
-		status = "degraded"
-	return {
-		"initialized": category_count > 0 or tool_count > 0 or tool_load_error_count > 0,
-		"healthy": healthy,
-		"status": status,
-		"tool_count": tool_count,
-		"exposed_tool_count": exposed_tool_count,
-		"category_count": category_count,
-		"tool_load_error_count": tool_load_error_count
-	}
+	return _query_service.build_tool_loader_status(
+		_status_service,
+		get_tool_definitions(),
+		get_exposed_tool_definitions(),
+		_ordered_categories,
+		_diagnostics_service.get_tool_load_error_count()
+	)
 
 
 func get_performance_summary() -> Dictionary:
-	var per_tool: Array[Dictionary] = []
-	for tool_name in _performance.get("tool_calls", {}).keys():
-		per_tool.append(_performance["tool_calls"][tool_name].duplicate(true))
-	per_tool.sort_custom(Callable(self, "_sort_tool_metric"))
-	return {
-		"startup_ms": _performance.get("startup_ms", 0.0),
-		"definition_scan_ms": _performance.get("definition_scan_ms", 0.0),
-		"preload_ms": _performance.get("preload_ms", 0.0),
-		"reload_total_ms": _performance.get("reload_total_ms", 0.0),
-		"reload_count": _performance.get("reload_count", 0),
-		"tool_calls": per_tool
-	}
+	return _status_service.build_performance_summary(_performance, _execution_observer.get_tool_call_metrics())
 
 
 func get_tool_usage_stats() -> Array[Dictionary]:
-	var stats: Array[Dictionary] = []
-	for tool_name in _performance.get("tool_calls", {}).keys():
-		var metric: Dictionary = _performance["tool_calls"][tool_name]
-		stats.append({
-			"tool_name": str(metric.get("tool_name", tool_name)),
-			"category": str(metric.get("category", "")),
-			"call_count": int(metric.get("count", 0)),
-			"last_called_at_unix": int(metric.get("last_called_at_unix", 0)),
-			"total_ms": float(metric.get("total_ms", 0.0)),
-			"avg_ms": float(metric.get("avg_ms", 0.0)),
-			"last_ms": float(metric.get("last_ms", 0.0))
-		})
-	stats.sort_custom(Callable(self, "_sort_tool_usage_stats"))
-	return stats
+	return _execution_observer.get_tool_usage_stats()
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
-	var execution_args := args.duplicate(true)
-	var agent_context := _extract_agent_context(execution_args)
-	if not _is_category_executable(category):
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
-			"%s_%s" % [category, tool_name])
-		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
-
-	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
-		"%s_%s" % [category, tool_name])
-
-	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
-	if not runtime_result.get("success", false):
-		return runtime_result
-
-	var runtime: Dictionary = runtime_result.get("runtime", {})
-	var executor = runtime.get("instance")
-	if executor == null:
-		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
-
-	var started_usec = Time.get_ticks_usec()
-	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
-	var result = executor.execute(tool_name, execution_args)
-	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
-	return _finish_tool_activity(result, activity_record)
+	return _execution_service.execute_tool(category, tool_name, args, _build_execution_context())
 
 
 func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
-	var execution_args := args.duplicate(true)
-	var agent_context := _extract_agent_context(execution_args)
-	if not _is_category_executable(category):
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
-			"%s_%s" % [category, tool_name])
-		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
-
-	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
-		"%s_%s" % [category, tool_name])
-
-	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
-	if not runtime_result.get("success", false):
-		return runtime_result
-
-	var runtime: Dictionary = runtime_result.get("runtime", {})
-	var executor = runtime.get("instance")
-	if executor == null:
-		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
-
-	var started_usec = Time.get_ticks_usec()
-	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
-	var result
-	if executor.has_method("execute_async"):
-		result = await executor.execute_async(tool_name, execution_args)
-	else:
-		result = executor.execute(tool_name, execution_args)
-	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
-	return _finish_tool_activity(result, activity_record)
+	return await _execution_service.execute_tool_async(category, tool_name, args, _build_execution_context())
 
 
 func tick(delta: float) -> void:
-	for category in _runtime_by_category.keys():
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var executor = runtime.get("instance", null)
-		if executor != null and executor.has_method("tick"):
-			executor.tick(delta)
-		if category == "user":
-			_sync_user_tool_runtime_definitions(executor)
-			_maybe_unload_idle_user_runtime(executor)
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
-		diagnostics_adapter.tick(delta)
+	_lifecycle_service.tick(delta, _build_lifecycle_context())
 
 
 func get_gdscript_lsp_diagnostics_service():
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_service"):
-		return diagnostics_adapter.get_service()
-	return null
+	return _lsp_diagnostics_service.get_service()
 
 
 func get_lsp_diagnostics_debug_snapshot() -> Dictionary:
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("get_debug_snapshot"):
-		return diagnostics_adapter.get_debug_snapshot(get_tool_loader_status())
-	return {
-		"has_tool_loader": true,
-		"service_available": false,
-		"service_generation": 0,
-		"tool_loader_status": get_tool_loader_status()
-	}
+	return _lsp_diagnostics_service.get_debug_snapshot(get_tool_loader_status())
 
 
 func _reset_gdscript_lsp_diagnostics_service() -> void:
-	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
-	if diagnostics_adapter != null and diagnostics_adapter.has_method("reset"):
-		diagnostics_adapter.reset()
-
-
-func _ensure_lsp_diagnostics_adapter():
-	if _tool_lsp_diagnostics_adapter == null:
-		_tool_lsp_diagnostics_adapter = ToolLspDiagnosticsAdapterScript.new()
-	if _tool_lsp_diagnostics_adapter != null and _tool_lsp_diagnostics_adapter.has_method("configure"):
-		_tool_lsp_diagnostics_adapter.configure(self, {
-			"runtime_bridge": _get_runtime_bridge()
-		})
-	return _tool_lsp_diagnostics_adapter
-
-
-func _get_runtime_bridge():
-	if Engine.has_singleton("MCPRuntimeBridge"):
-		return Engine.get_singleton("MCPRuntimeBridge")
-	return null
+	_lsp_diagnostics_service.reset()
 
 
 func _refresh_runtime_context() -> void:
-	var context: Dictionary = {
-		"tool_loader": self,
-		"server": _server_context,
-		"plugin_host": _get_plugin_host(),
-		"tool_activity_registry": _tool_activity_registry
-	}
-	for category in _runtime_by_category.keys():
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var executor = runtime.get("instance", null)
-		if executor != null and executor.has_method("configure_runtime"):
-			executor.configure_runtime(context.duplicate())
+	var context: Dictionary = _runtime_context_service.build_runtime_context(
+		self,
+		_server_context,
+		_runtime_context_service.resolve_plugin_host(_server_context),
+		_tool_activity_registry
+	)
+	_runtime_context_service.configure_loaded_runtimes(_runtime_by_category, context)
 
 
 func reload_domain(category: String) -> Dictionary:
-	MCPDebugBuffer.record("info", "tool_loader", "Reloading domain: %s" % category)
-	if category == "user":
-		_refresh_entries()
-
-	if not _entries_by_category.has(category):
-		if category == "user":
-			return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
-		MCPDebugBuffer.record("warning", "tool_loader", "Unknown domain: %s" % category)
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": "Unknown tool domain"
-		}]))
-
-	var entry: Dictionary = _entries_by_category.get(category, {})
-	if not (true if entry.get("hot_reloadable", true) else false):
-		return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
-
-	var old_runtime: Dictionary = _runtime_by_category.get(category, {}).duplicate(true)
-	var definitions_before = _tool_definitions_by_category.get(category, []).duplicate(true)
-	var reload_started = Time.get_ticks_usec()
-
-	var instantiate_result = _instantiate_executor(category, true, "reload")
-	if not instantiate_result.get("success", false):
-		var reload_err := str(instantiate_result.get("error", "Failed to reload tool domain"))
-		MCPDebugBuffer.record("error", "tool_loader",
-			"Domain %s reload failed: %s" % [category, reload_err])
-		_record_reload_incident(category, reload_err, "reload_domain")
-		if not old_runtime.is_empty():
-			_runtime_by_category[category] = old_runtime
-		if not definitions_before.is_empty():
-			_tool_definitions_by_category[category] = definitions_before
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": reload_err
-		}], _elapsed_ms(reload_started)))
-
-	var executor = instantiate_result.get("executor")
-	var version = int(old_runtime.get("version", 0)) + 1
-	var allow_empty_definitions = true if entry.get("allow_empty_definitions", false) else false
-	_runtime_by_category[category] = {
-		"instance": executor,
-		"state": "loaded",
-		"version": version,
-		"load_count": int(old_runtime.get("load_count", 0)) + 1,
-		"last_loaded_at_unix": int(Time.get_unix_time_from_system()),
-		"last_error": null
-	}
-	var definitions = _extract_tool_definitions(category, executor)
-	if definitions.is_empty():
-		if allow_empty_definitions:
-			_tool_definitions_by_category[category] = []
-			_sync_load_error_incidents("reload_domain")
-			_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
-			_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
-			MCPDebugBuffer.record("info", "tool_loader",
-				"Domain %s reloaded with no tool definitions (allowed) (%.0fms)" % [category, _elapsed_ms(reload_started)])
-			_refresh_runtime_context()
-			_reset_gdscript_lsp_diagnostics_service()
-			if not _category_has_enabled_tools(category):
-				_unload_runtime(category, "reload_completed_disabled")
-			return _update_reload_status(_make_reload_status("reload_domain", [category], [], [], _elapsed_ms(reload_started)))
-		_record_reload_incident(category, "Reloaded tool domain did not expose any tool definitions", "reload_domain")
-		if not old_runtime.is_empty():
-			_runtime_by_category[category] = old_runtime
-		if not definitions_before.is_empty():
-			_tool_definitions_by_category[category] = definitions_before
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": "Reloaded tool domain did not expose any tool definitions"
-		}], _elapsed_ms(reload_started)))
-
-	_tool_definitions_by_category[category] = definitions
-	_sync_load_error_incidents("reload_domain")
-	_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
-	_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
-
-	MCPDebugBuffer.record("info", "tool_loader",
-		"Domain %s reloaded: %d tools (%.0fms)" % [category, definitions.size(), _elapsed_ms(reload_started)])
-
-	_refresh_runtime_context()
-	_reset_gdscript_lsp_diagnostics_service()
-	if not _category_has_enabled_tools(category):
-		_unload_runtime(category, "reload_completed_disabled")
-
-	return _update_reload_status(_make_reload_status("reload_domain", [category], [], [], _elapsed_ms(reload_started)))
+	return _reload_service.reload_domain(category, _build_reload_context())
 
 
 func reload_all_domains() -> Dictionary:
-	var started_usec = Time.get_ticks_usec()
-	var disabled_tools = get_disabled_tools()
-	_refresh_entries()
-	_set_disabled_tools(disabled_tools)
-
-	var reloaded: Array = []
-	var skipped: Array = []
-	var failed: Array = []
-	for category in _ordered_categories:
-		var entry: Dictionary = _entries_by_category.get(category, {})
-		if not _as_bool(entry.get("hot_reloadable", true)):
-			skipped.append(category)
-			continue
-		var status = reload_domain(category)
-		reloaded.append_array(status.get("reloaded_domains", []))
-		skipped.append_array(status.get("skipped_domains", []))
-		failed.append_array(status.get("failed_domains", []))
-	_sync_load_error_incidents("reload_all_domains")
-	_refresh_runtime_context()
-	_reset_gdscript_lsp_diagnostics_service()
-
-	return _update_reload_status(_make_reload_status("reload_all_domains", reloaded, skipped, failed, _elapsed_ms(started_usec)))
+	return _reload_service.reload_all_domains(_build_reload_context())
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
-	var normalized_path = script_path.strip_edges()
-	if normalized_path.is_empty():
-		return {"success": false, "error": "Missing script path"}
-	if not _entries_by_category.has("user"):
-		return {"success": false, "error": "User domain is not registered"}
-	if not _category_has_enabled_tools("user"):
-		_ensure_runtime_loaded("user", "request_reload_by_script")
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var executor = runtime.get("instance", null)
-	if executor == null or not executor.has_method("request_reload_by_script"):
-		return {"success": false, "error": "User runtime is unavailable"}
-	executor.request_reload_by_script(normalized_path, reason)
-	if executor.has_method("tick"):
-		executor.tick(0.0)
-	_sync_user_tool_runtime_definitions(executor)
-	_refresh_runtime_context()
-	return {
-		"success": true,
-		"script_path": normalized_path,
-		"reason": reason,
-		"runtime_state": executor.get_runtime_state_snapshot() if executor.has_method("get_runtime_state_snapshot") else []
-	}
+	return _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
 
 
 func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var executor = runtime.get("instance", null)
-	if executor != null and executor.has_method("get_runtime_state_snapshot"):
-		return executor.get_runtime_state_snapshot()
-	return []
+	var snapshot: Array = _user_reload_service.get_user_tool_runtime_snapshot(_build_user_reload_context())
+	var typed_snapshot: Array[Dictionary] = []
+	for entry in snapshot:
+		if entry is Dictionary:
+			typed_snapshot.append((entry as Dictionary).duplicate(true))
+	return typed_snapshot
 
 
 func get_disabled_tools() -> Array:
-	return _disabled_tools.keys()
+	return _enablement_service.get_disabled_tools()
 
 
 func is_tool_enabled(tool_name: String) -> bool:
-	return not _disabled_tools.has(tool_name)
+	return _enablement_service.is_tool_enabled(tool_name)
 
 
 func _reset_state() -> void:
-	_entries_by_category.clear()
-	_ordered_categories.clear()
-	_runtime_by_category.clear()
-	_tool_definitions_by_category.clear()
-	_load_errors.clear()
+	_state_store.reset(_diagnostics_service)
 
 
 func _refresh_entries() -> void:
-	_load_errors.clear()
-	var collected = _registry.collect_entries()
-	var new_entries: Dictionary = {}
-	var new_order: Array[String] = []
-	for error_info in collected.get("errors", []):
-		_load_errors.append(error_info.duplicate(true))
-	for entry in collected.get("entries", []):
-		var category = str(entry.get("category", ""))
-		if category.is_empty():
-			continue
-		if new_entries.has(category):
-			_load_errors.append({
-				"category": category,
-				"path": str(entry.get("path", "")),
-				"message": "Duplicate tool category registered",
-				"source": str(entry.get("source", "builtin"))
-			})
-			continue
-		new_entries[category] = entry.duplicate(true)
-		new_order.append(category)
-
-	for existing_category in _runtime_by_category.keys():
-		if not new_entries.has(existing_category):
-			_runtime_by_category.erase(existing_category)
-			_tool_definitions_by_category.erase(existing_category)
-
-	_entries_by_category = new_entries
-	_ordered_categories = new_order
-	_sync_load_error_incidents("refresh_entries")
+	_state_store.refresh_entries(_registry, _entry_service, _diagnostics_service, Callable(self, "_sync_load_error_incidents"))
 
 
 func _set_disabled_tools(disabled_tools: Array) -> void:
-	_disabled_tools.clear()
-	for tool_name in disabled_tools:
-		_disabled_tools[str(tool_name)] = true
+	_enablement_service.configure_disabled_tools(disabled_tools)
 
 
 func _ensure_tool_definitions(category: String) -> Array:
-	if _tool_definitions_by_category.has(category):
-		return _tool_definitions_by_category[category]
-
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var executor = runtime.get("instance", null)
-	if executor == null:
-		var instantiate_result = _instantiate_executor(category, _force_reload_script_load, "definitions")
-		if not instantiate_result.get("success", false):
-			_record_load_error(category, str(_entries_by_category.get(category, {}).get("path", "")), str(instantiate_result.get("error", "Failed to load tool definitions")))
-			_tool_definitions_by_category[category] = []
-			return []
-		executor = instantiate_result.get("executor")
-
-	var definitions = _extract_tool_definitions(category, executor)
-	_tool_definitions_by_category[category] = definitions
-	return definitions
+	return _runtime_state_service.ensure_tool_definitions(category, _build_runtime_state_context())
 
 
 func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	if runtime.get("instance", null) != null:
-		return {"success": true, "runtime": runtime}
-
-	var instantiate_result = _instantiate_executor(category, false, reason)
-	if _force_reload_script_load:
-		instantiate_result = _instantiate_executor(category, true, reason)
-	if not instantiate_result.get("success", false):
-		return _failure("tool_load_failed", category, "", str(instantiate_result.get("error", "Failed to load tool runtime")))
-
-	var executor = instantiate_result.get("executor")
-	var version = int(runtime.get("version", 0))
-	if version <= 0:
-		version = 1
-	else:
-		version += 1
-
-	var runtime_state := "loaded"
-	if reason == "tool_call":
-		runtime_state = "loaded_on_demand"
-
-	runtime = {
-		"instance": executor,
-		"state": runtime_state,
-		"version": version,
-		"load_count": int(runtime.get("load_count", 0)) + 1,
-		"last_loaded_at_unix": int(Time.get_unix_time_from_system()),
-		"last_error": null
-	}
-	_runtime_by_category[category] = runtime
-	_tool_definitions_by_category[category] = _extract_tool_definitions(category, executor)
-	return {"success": true, "runtime": runtime}
+	return _runtime_state_service.ensure_runtime_loaded(category, reason, _build_runtime_state_context())
 
 
 func _instantiate_executor(category: String, force_reload: bool, reason: String) -> Dictionary:
-	var entry: Dictionary = _entries_by_category.get(category, {})
-	if entry.is_empty():
-		return {"success": false, "error": "Tool domain is not registered"}
-
-	var path = str(entry.get("path", ""))
-	if path.is_empty():
-		return {"success": false, "error": "Tool domain path is empty"}
-
-	var script_resource = _load_script_resource(path, force_reload)
-	if script_resource == null:
-		return {"success": false, "error": "Failed to load tool script"}
-	if script_resource is Script and not script_resource.can_instantiate():
-		# Stale cache recovery: reload from disk and refresh external script dependencies.
-		script_resource = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
-		if script_resource == null:
-			return {"success": false, "error": "Failed to load tool script"}
-		if script_resource is Script and not script_resource.can_instantiate():
-			return {"success": false, "error": "Tool script could not be instantiated [replace_reload_failed]"}
-	if not script_resource.has_method("new"):
-		return {"success": false, "error": "Loaded tool resource is not instantiable"}
-
-	var executor = script_resource.new()
-	if executor == null:
-		return {"success": false, "error": "Tool executor instance creation returned null"}
-	if not executor.has_method("get_tools") or (not executor.has_method("execute") and not executor.has_method("execute_async")):
-		return {"success": false, "error": "Tool executor does not expose get_tools/execute or get_tools/execute_async"}
-	if executor.has_method("configure_runtime"):
-		executor.configure_runtime({
-			"tool_loader": self,
-			"server": _server_context,
-			"plugin_host": _get_plugin_host(),
-			"tool_activity_registry": _tool_activity_registry,
-			"category": category,
-			"reason": reason,
-			"entry": entry.duplicate(true)
-		})
-
-	return {
-		"success": true,
-		"executor": executor
-	}
+	var entry: Dictionary = _state_store.entry_for(category)
+	return _runtime_manager.instantiate_executor(category, entry, force_reload, reason)
 
 
-func _get_plugin_host():
-	if _server_context != null and is_instance_valid(_server_context) and _server_context.has_method("get_parent"):
-		var plugin = _server_context.get_parent()
-		if plugin != null and is_instance_valid(plugin):
-			return plugin
-	return null
-
-
-func _finalize_tool_execution(category: String, tool_name: String, args: Dictionary, started_usec: int, result) -> Dictionary:
-	var elapsed_ms = _elapsed_ms(started_usec)
-	_record_tool_call_metric("%s_%s" % [category, tool_name], category, elapsed_ms)
-
-	if result is Dictionary and _as_bool(result.get("success", true)):
-		MCPDebugBuffer.record("info", "tool_loader",
-			"%s_%s ok (%.0fms)" % [category, tool_name, elapsed_ms],
-			"%s_%s" % [category, tool_name])
-		return result
-
-	var error_message = "Tool execution failed"
-	if result is Dictionary:
-		error_message = str(result.get("error", error_message))
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
-			"%s_%s" % [category, tool_name])
-		var failure_result: Dictionary = result.duplicate(true)
-		var failure_data = failure_result.get("data", {})
-		if not (failure_data is Dictionary):
-			failure_data = {"details": failure_data}
-		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
-		failure_data["action"] = str(args.get("action", ""))
-		failure_data["error_type"] = str(failure_data.get("error_type", "tool_execution_failed"))
-		failure_data["domain"] = category
-		failure_data["elapsed_ms"] = elapsed_ms
-		failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
-		failure_result["data"] = failure_data
-		return failure_result
-
-	MCPDebugBuffer.record("warning", "tool_loader",
-		"%s_%s failed (%.0fms): %s" % [category, tool_name, elapsed_ms, error_message],
-		"%s_%s" % [category, tool_name])
-	return _failure("tool_execution_failed", category, tool_name, error_message, {
-		"action": str(args.get("action", "")),
-		"elapsed_ms": elapsed_ms
-	})
-
-
-func _extract_agent_context(args: Dictionary) -> Dictionary:
-	var context := {}
-	if args.get("_mcp_context", null) is Dictionary:
-		context = (args.get("_mcp_context", {}) as Dictionary).duplicate(true)
-	args.erase("_mcp_context")
-	return context
-
-
-func _begin_tool_activity(category: String, tool_name: String, args: Dictionary, agent_context: Dictionary) -> Dictionary:
-	if _tool_activity_registry == null or not _tool_activity_registry.has_method("begin_call"):
-		return {}
-	return _tool_activity_registry.begin_call("%s_%s" % [category, tool_name], category, tool_name, args, agent_context, {})
-
-
-func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> Dictionary:
-	if activity_record.is_empty() or _tool_activity_registry == null:
-		return result
-	var out := result.duplicate(true)
-	_preserve_non_protocol_activity_payload(out)
-	var error_message := ""
-	if not bool(out.get("success", true)):
-		error_message = str(out.get("error", out.get("message", "")))
-	var finished := {}
-	if _tool_activity_registry.has_method("finish_call"):
-		finished = _tool_activity_registry.finish_call(str(activity_record.get("call_id", "")), bool(out.get("success", true)), error_message)
-	if _tool_activity_registry.has_method("summarize_record"):
-		out["activity"] = _tool_activity_registry.summarize_record(finished if not finished.is_empty() else activity_record)
-	return out
-
-
-func _preserve_non_protocol_activity_payload(out: Dictionary) -> void:
-	var existing_activity = out.get("activity", null)
-	if existing_activity == null or _is_protocol_activity_summary(existing_activity):
-		return
-	var existing_data = out.get("data", {})
-	if existing_data is Dictionary:
-		existing_data = (existing_data as Dictionary).duplicate(true)
-	elif out.has("data"):
-		existing_data = {"details": existing_data}
-	else:
-		existing_data = _extract_activity_extra_data(out)
-	(existing_data as Dictionary)["activity"] = existing_activity
-	out["data"] = existing_data
-
-
-func _extract_activity_extra_data(result: Dictionary) -> Dictionary:
-	var extra_data := {}
-	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true, "activity": true}
-	for key in result.keys():
-		if reserved.has(str(key)):
-			continue
-		extra_data[str(key)] = result[key]
-	return extra_data
-
-
-func _is_protocol_activity_summary(value) -> bool:
-	if not (value is Dictionary):
-		return false
-	return not str((value as Dictionary).get("call_id", "")).is_empty() and not str((value as Dictionary).get("state", "")).is_empty()
-
-
-func _load_script_resource(path: String, force_reload: bool) -> Resource:
-	var cache_mode = ResourceLoader.CACHE_MODE_REUSE
-	if force_reload:
-		cache_mode = ResourceLoader.CACHE_MODE_IGNORE_DEEP
-	return ResourceLoader.load(path, "", cache_mode)
+func _build_executor_runtime_context(category: String, entry: Dictionary, reason: String) -> Dictionary:
+	return _runtime_context_service.build_executor_runtime_context(
+		self,
+		_server_context,
+		_runtime_context_service.resolve_plugin_host(_server_context),
+		_tool_activity_registry,
+		category,
+		entry,
+		reason
+	)
 
 
 func _reload_script_dependency_chain(_script_resource: Script, _visited: Dictionary) -> void:
@@ -850,320 +324,155 @@ func _reload_script_dependency_chain(_script_resource: Script, _visited: Diction
 
 
 func _extract_tool_definitions(category: String, executor) -> Array:
-	var definitions: Array[Dictionary] = []
-	for tool_def in executor.get_tools():
-		if not (tool_def is Dictionary):
-			continue
-		definitions.append(tool_def.duplicate(true))
-	return definitions
+	return _runtime_manager.extract_tool_definitions(executor)
 
 
 func _record_load_error(category: String, path: String, message: String) -> void:
-	var error_info = {
-		"category": category,
-		"path": path,
-		"message": message
-	}
-	_load_errors.append(error_info)
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	runtime["last_error"] = error_info
-	_runtime_by_category[category] = runtime
-	_sync_load_error_incidents("record_load_error")
+	_state_store.record_load_error(category, path, message, _diagnostics_service)
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
-	var count = 0
-	for tool_def in _tool_definitions_by_category.get(category, []):
-		var full_name = "%s_%s" % [category, str(tool_def.get("name", ""))]
-		if is_tool_enabled(full_name):
-			count += 1
-	return count
+	return _enablement_service.count_enabled_tools_in_category(category, _tool_definitions_by_category)
 
 
 func _category_has_enabled_tools(category: String) -> bool:
-	return _count_enabled_tools_in_category(category) > 0
+	return _enablement_service.category_has_enabled_tools(category, _tool_definitions_by_category)
 
 
 func _unload_runtime(category: String, reason: String) -> void:
-	if not _runtime_by_category.has(category):
-		return
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var executor = runtime.get("instance", null)
-	_dispose_executor_instance(executor)
-	runtime["instance"] = null
-	runtime["state"] = "definitions_only"
-	runtime["last_unloaded_reason"] = reason
-	_runtime_by_category[category] = runtime
+	_runtime_state_service.unload_runtime(category, reason, _build_runtime_state_context())
 
 
 func _dispose_executor_instance(executor) -> void:
-	if executor == null:
-		return
-	if executor.has_method("dispose"):
-		executor.dispose()
-	if executor.has_method("shutdown"):
-		executor.shutdown()
-	if executor.has_method("clear"):
-		executor.clear()
-
-
-func _record_tool_call_metric(full_name: String, category: String, elapsed_ms: float) -> void:
-	var per_tool: Dictionary = _performance.get("tool_calls", {})
-	var metric: Dictionary = per_tool.get(full_name, {
-		"tool_name": full_name,
-		"category": category,
-		"count": 0,
-		"total_ms": 0.0,
-		"avg_ms": 0.0,
-		"last_ms": 0.0,
-		"last_called_at_unix": 0
-	})
-	metric["count"] = int(metric.get("count", 0)) + 1
-	metric["total_ms"] = float(metric.get("total_ms", 0.0)) + elapsed_ms
-	metric["last_ms"] = elapsed_ms
-	metric["last_called_at_unix"] = int(Time.get_unix_time_from_system())
-	metric["avg_ms"] = metric["total_ms"] / float(metric["count"])
-	per_tool[full_name] = metric
-	_performance["tool_calls"] = per_tool
-
-
-func _failure(error_type: String, category: String, tool_name: String, message: String, data: Dictionary = {}) -> Dictionary:
-	var failure_data = data.duplicate(true)
-	failure_data["error_type"] = error_type
-	failure_data["domain"] = category
-	if tool_name.is_empty():
-		failure_data["tool_name"] = category
-	else:
-		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
-	failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
-	return {
-		"success": false,
-		"error": message,
-		"data": failure_data
-	}
+	_runtime_manager.dispose_executor(executor)
 
 
 func _make_reload_status(action: String, reloaded_domains: Array = [], skipped_domains: Array = [], failed_domains: Array = [], elapsed_ms: float = 0.0) -> Dictionary:
-	return {
-		"action": action,
-		"reloaded_domains": reloaded_domains.duplicate(),
-		"skipped_domains": skipped_domains.duplicate(),
-		"failed_domains": failed_domains.duplicate(true),
-		"elapsed_ms": elapsed_ms,
-		"timestamp_unix": int(Time.get_unix_time_from_system()),
-		"performance": get_performance_summary()
-	}
+	return _status_service.make_reload_status(action, get_performance_summary(), reloaded_domains, skipped_domains, failed_domains, elapsed_ms)
 
 
 func _update_reload_status(status: Dictionary) -> Dictionary:
-	_reload_status = status.duplicate(true)
-	return _reload_status.duplicate(true)
+	return _diagnostics_service.update_reload_status(status)
 
 
 func _elapsed_ms(started_usec: int) -> float:
 	return float(Time.get_ticks_usec() - started_usec) / 1000.0
 
 
-func _sort_tool_metric(a: Dictionary, b: Dictionary) -> bool:
-	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
+func _build_catalog_projection_context() -> Dictionary:
+	return _context_service.build_loader_catalog_projection_context(self)
 
 
-func _sort_tool_usage_stats(a: Dictionary, b: Dictionary) -> bool:
-	var left_count = int(a.get("call_count", 0))
-	var right_count = int(b.get("call_count", 0))
-	if left_count != right_count:
-		return left_count > right_count
-
-	var left_time = int(a.get("last_called_at_unix", 0))
-	var right_time = int(b.get("last_called_at_unix", 0))
-	if left_time != right_time:
-		return left_time > right_time
-
-	return str(a.get("tool_name", "")) < str(b.get("tool_name", ""))
+func _build_execution_context() -> Dictionary:
+	return _execution_context_service.build_execution_context(
+		Callable(self, "_is_category_executable"),
+		Callable(self, "_get_tool_access_error"),
+		Callable(self, "_ensure_runtime_loaded")
+	)
 
 
-func _decorate_tool_definition(category: String, tool_def: Dictionary) -> Dictionary:
-	var decorated = tool_def.duplicate(true)
-	var entry: Dictionary = _entries_by_category.get(category, {})
-	var full_name = "%s_%s" % [category, str(tool_def.get("name", ""))]
-	decorated["category"] = category
-	decorated["full_name"] = full_name
-	decorated["enabled"] = is_tool_enabled(full_name)
-	decorated["load_state"] = _current_load_state(category)
-	decorated["source"] = str(decorated.get("source", str(entry.get("source", "builtin"))))
-	decorated["domain_script_path"] = str(entry.get("path", ""))
-	decorated["script_path"] = str(decorated.get("script_path", str(entry.get("path", ""))))
-	decorated["domain_key"] = str(entry.get("domain_key", "other"))
-	return decorated
+func _build_reload_context() -> Dictionary:
+	return _context_service.build_loader_reload_context(self)
 
 
-func _sync_user_tool_runtime_definitions(executor) -> void:
-	if executor == null or not executor.has_method("get_tools"):
-		return
-	var previous_defs = _tool_definitions_by_category.get("user", [])
-	var next_defs = _extract_tool_definitions("user", executor)
-	if JSON.stringify(previous_defs) == JSON.stringify(next_defs):
-		return
-	_tool_definitions_by_category["user"] = next_defs
-	_refresh_runtime_context()
+func _build_user_reload_context() -> Dictionary:
+	return _context_service.build_loader_user_reload_context(self)
 
 
-func _maybe_unload_idle_user_runtime(executor) -> void:
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var defs: Array = _tool_definitions_by_category.get("user", [])
-	if executor == null:
-		if defs.is_empty() and not runtime.is_empty():
-			_runtime_by_category.erase("user")
-			_tool_definitions_by_category.erase("user")
-			_refresh_runtime_context()
-		return
-	if not executor.has_method("should_unload_runtime"):
-		return
-	if not _as_bool(executor.should_unload_runtime()):
-		return
-	_runtime_by_category.erase("user")
-	_tool_definitions_by_category.erase("user")
-	_refresh_runtime_context()
+func _tick_loaded_runtimes_for_user_reload(runtime_by_category: Dictionary, definitions_by_category: Dictionary, delta: float) -> Dictionary:
+	return _tick_service.tick_loaded_runtimes(
+		runtime_by_category,
+		definitions_by_category,
+		delta,
+		Callable(self, "_extract_tool_definitions")
+	)
+
+
+func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
+	return _tick_service.tick_loaded_runtimes(
+		_runtime_by_category,
+		_tool_definitions_by_category,
+		delta,
+		Callable(self, "_extract_tool_definitions")
+	)
+
+
+func _build_runtime_state_context() -> Dictionary:
+	return _context_service.build_loader_runtime_state_context(self, _execution_context_service)
+
+
+func _build_lifecycle_context() -> Dictionary:
+	return _context_service.build_loader_lifecycle_context(self)
+
+
+func _set_force_reload_script_load(enabled: bool) -> void:
+	_state_store.set_force_reload_script_load(enabled)
+
+
+func _get_force_reload_script_load() -> bool:
+	return _state_store.get_force_reload_script_load()
+
+
+func _get_tool_load_error_count() -> int:
+	return _diagnostics_service.get_tool_load_error_count()
+
+
+func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
+	_lsp_diagnostics_service.release_loader()
+
+
+func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
+	_lsp_diagnostics_service.tick(delta)
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
-	if _as_bool(tool_def.get("compatibility_alias", false)):
-		return false
-	if _is_public_removed_tool_definition(tool_def):
-		return false
-	var category := str(tool_def.get("category", ""))
-	return _is_exposed_tool_category(category)
+	return _public_surface_policy.is_exposed_tool_definition(tool_def)
 
 
 func _is_public_removed_tool_definition(tool_def: Dictionary) -> bool:
-	var name := str(tool_def.get("name", ""))
-	var full_name := str(tool_def.get("full_name", name))
-	return PUBLIC_REMOVED_MCP_TOOLS.has(full_name) or PUBLIC_REMOVED_MCP_TOOLS.has(name)
+	return _public_surface_policy.is_public_removed_tool_definition(tool_def)
 
 
 func _is_callable_removed_public_tool(tool_name: String) -> bool:
-	if not PUBLIC_REMOVED_MCP_TOOLS.has(tool_name):
-		return false
-	for tool_def in get_tool_definitions():
-		if str(tool_def.get("name", "")) != tool_name:
-			continue
-		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
-			return false
-		return _as_bool(tool_def.get("enabled", true))
-	return false
+	return _public_surface_policy.is_callable_removed_public_tool(tool_name, get_tool_definitions(), Callable(self, "is_tool_enabled"))
 
 
 func _is_callable_compatibility_alias(tool_name: String) -> bool:
-	for tool_def in get_tool_definitions():
-		if str(tool_def.get("name", "")) != tool_name:
-			continue
-		if not _is_exposed_tool_category(str(tool_def.get("category", ""))):
-			return false
-		if not _as_bool(tool_def.get("enabled", true)):
-			return false
-		var replacement_tool := str(tool_def.get("compatibility_replacement", "")).strip_edges()
-		if not replacement_tool.is_empty() and not is_tool_enabled(replacement_tool):
-			return false
-		return _as_bool(tool_def.get("compatibility_alias", false))
-	return false
+	return _public_surface_policy.is_callable_compatibility_alias(tool_name, get_tool_definitions(), Callable(self, "is_tool_enabled"))
 
 
 func _is_exposed_tool_category(category: String) -> bool:
-	return category in MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
+	return _public_surface_policy.is_exposed_tool_category(category)
 
 
 func _get_tool_access_provider():
-	if _server_context == null:
-		return null
-	if _server_context.has_method("get_tool_access_provider"):
-		return _server_context.get_tool_access_provider()
-	if _server_context.has_method("get_parent"):
-		return _server_context.get_parent()
-	return null
+	return _access_service.get_tool_access_provider(_server_context)
 
 
 func _is_category_visible(category: String) -> bool:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("is_tool_category_visible"):
-		return _as_bool(provider.is_tool_category_visible(category))
-	return true
+	return _access_service.is_category_visible(category, _server_context)
 
 
 func _is_category_executable(category: String) -> bool:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("is_tool_category_executable"):
-		return _as_bool(provider.is_tool_category_executable(category))
-	return true
+	return _access_service.is_category_executable(category, _server_context)
 
 
 func _get_tool_access_error(category: String) -> String:
-	var provider = _get_tool_access_provider()
-	if provider != null and provider.has_method("get_tool_access_denied_message"):
-		return str(provider.get_tool_access_denied_message(category))
-	return "Tool category is disabled."
-
-
-func _as_bool(value) -> bool:
-	if value is bool:
-		return value
-	if value is int:
-		return value != 0
-	if value is float:
-		return !is_zero_approx(value)
-	if value is String:
-		var normalized = value.strip_edges().to_lower()
-		return normalized == "true" or normalized == "1" or normalized == "yes" or normalized == "on"
-	return value != null
-
-
-func _current_load_state(category: String) -> String:
-	var runtime: Dictionary = _runtime_by_category.get(category, {})
-	var defs = _tool_definitions_by_category.get(category, [])
-	if runtime.has("state"):
-		return str(runtime.get("state", "definitions_only"))
-	if defs.is_empty():
-		return "uninitialized"
-	return "definitions_only"
+	return _access_service.get_tool_access_error(category, _server_context)
 
 
 func _sync_load_error_incidents(phase: String) -> void:
-	for error_info in _load_errors:
-		if not (error_info is Dictionary):
-			continue
-		var info := error_info as Dictionary
-		PluginSelfDiagnosticStore.record_incident(
-			"error",
-			"tool_load_error",
-			"tool_domain_load_failed",
-			str(info.get("message", "Tool domain load failed")),
-			"tool_loader",
-			phase,
-			str(info.get("path", "")),
-			"",
-			"",
-			true,
-			"Inspect the tool domain script and the editor output for the failing category.",
-			{
-				"category": str(info.get("category", "")),
-				"source": str(info.get("source", "builtin"))
-			}
-		)
+	_diagnostics_service.sync_load_error_incidents(phase)
 
 
 func _record_reload_incident(category: String, message: String, phase: String) -> void:
-	PluginSelfDiagnosticStore.record_incident(
-		"error",
-		"reload_conflict",
-		"tool_reload_failed",
-		message,
-		"tool_loader",
-		phase,
+	_diagnostics_service.record_reload_incident(
+		category,
 		str(_entries_by_category.get(category, {}).get("path", "")),
-		"",
-		"",
-		true,
-		"Inspect the last reload status and the failing tool domain script.",
-		{
-			"category": category
-		}
+		message,
+		phase
 	)
+
+
+func _record_empty_visible_warning(message: String) -> void:
+	MCPDebugBuffer.record("warning", "tool_loader", message)

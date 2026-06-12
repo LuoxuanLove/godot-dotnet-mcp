@@ -66,6 +66,102 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (invalid_request_error is Dictionary) or int((invalid_request_error as Dictionary).get("code", 0)) != -32600:
 		return _failure("JSON-RPC request service did not reject a non-object request body.")
 
+	var wrong_jsonrpc: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "1.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {}
+	}))
+	var wrong_jsonrpc_error = wrong_jsonrpc.get("error", {})
+	if not (wrong_jsonrpc_error is Dictionary) or int((wrong_jsonrpc_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject non-2.0 envelopes with -32600.")
+	if int(wrong_jsonrpc.get("id", 0)) != 2:
+		return _failure("JSON-RPC request service should preserve valid ids on invalid envelope errors.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for invalid jsonrpc envelopes.")
+
+	var wrong_jsonrpc_invalid_id: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "1.0",
+		"id": {},
+		"method": [],
+		"params": {}
+	}))
+	var wrong_jsonrpc_invalid_id_error = wrong_jsonrpc_invalid_id.get("error", {})
+	if not (wrong_jsonrpc_invalid_id_error is Dictionary) or int((wrong_jsonrpc_invalid_id_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject combined invalid jsonrpc/id envelopes with -32600.")
+	if wrong_jsonrpc_invalid_id.get("id") != null:
+		return _failure("JSON-RPC request service should not echo invalid ids from combined malformed envelopes.")
+
+	var missing_method: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 3,
+		"params": {}
+	}))
+	var missing_method_error = missing_method.get("error", {})
+	if not (missing_method_error is Dictionary) or int((missing_method_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject missing method envelopes with -32600.")
+
+	var non_string_method: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 4,
+		"method": {},
+		"params": {}
+	}))
+	var non_string_method_error = non_string_method.get("error", {})
+	if not (non_string_method_error is Dictionary) or int((non_string_method_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject non-string method envelopes with -32600.")
+
+	var invalid_id: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": {},
+		"method": "tools/list",
+		"params": {}
+	}))
+	var invalid_id_error = invalid_id.get("error", {})
+	if not (invalid_id_error is Dictionary) or int((invalid_id_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject object ids with -32600.")
+	if invalid_id.get("id") != null:
+		return _failure("JSON-RPC request service should use id=null when the request id type is invalid.")
+
+	var invalid_notification_method: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": [],
+		"params": {}
+	}))
+	var invalid_notification_method_error = invalid_notification_method.get("error", {})
+	if not (invalid_notification_method_error is Dictionary) or int((invalid_notification_method_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should reject invalid no-id envelopes with -32600 and id=null.")
+	if invalid_notification_method.get("id") != null:
+		return _failure("JSON-RPC request service should use id=null for invalid no-id envelopes.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for invalid notification envelopes.")
+
+	var json_rpc_result_response: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 22,
+		"result": {"ack": true}
+	}))
+	if int(json_rpc_result_response.get("status", 0)) != 202 or not bool(json_rpc_result_response.get("_no_body", false)):
+		return _failure("JSON-RPC request service should accept response envelopes with 202 and no body.")
+	if callbacks.received.size() != 0:
+		return _failure("JSON-RPC request service should not emit request_received for response envelopes.")
+
+	var json_rpc_error_response: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 23,
+		"error": {"code": -32800, "message": "Cancelled"}
+	}))
+	if int(json_rpc_error_response.get("status", 0)) != 202 or not bool(json_rpc_error_response.get("_no_body", false)):
+		return _failure("JSON-RPC request service should accept error response envelopes with 202 and no body.")
+
+	var missing_id_response_like_body: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"result": {"ok": true}
+	}))
+	var missing_id_response_like_error = missing_id_response_like_body.get("error", {})
+	if not (missing_id_response_like_error is Dictionary) or int((missing_id_response_like_error as Dictionary).get("code", 0)) != -32600:
+		return _failure("JSON-RPC request service should not accept result envelopes without response ids.")
+
 	var invalid_params: Dictionary = await service.handle_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 8,

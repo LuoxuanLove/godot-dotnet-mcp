@@ -91,7 +91,7 @@ internal static class CsprojWriteTool
 
             if (!dryRun)
             {
-                File.WriteAllText(path, preview, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                WriteToolHelpers.WriteUtf8NoBom(path, preview);
             }
 
             return Task.FromResult(BridgeToolCallResponse.Success(result));

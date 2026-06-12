@@ -8,7 +8,8 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const DockPresenterScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd")
-const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
+const DockMcpCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_projection_service.gd")
 
 var _state
 var _localization
@@ -16,6 +17,7 @@ var _server_controller
 var _tool_catalog
 var _config_service
 var _dock_presenter = DockPresenterScript.new()
+var _mcp_catalog_projection_service = DockMcpCatalogProjectionServiceScript.new()
 var _user_tool_service
 var _client_install_detection_service
 var _user_tool_watch_service
@@ -40,6 +42,8 @@ func configure(
 ) -> void:
 	if _dock_presenter == null:
 		_dock_presenter = DockPresenterScript.new()
+	if _mcp_catalog_projection_service == null:
+		_mcp_catalog_projection_service = DockMcpCatalogProjectionServiceScript.new()
 	if localization == null and server_controller == null and tool_catalog == null and config_service == null and user_tool_service == null and client_install_detection_service == null and user_tool_watch_service == null:
 		if context_or_state == null:
 			dispose()
@@ -59,6 +63,7 @@ func configure(
 		_self_diagnostic_feature = _context_get(context_or_state, "self_diagnostic_feature")
 		var resolved_editor_scale = _context_get(context_or_state, "get_editor_scale", Callable())
 		_get_editor_scale = resolved_editor_scale if resolved_editor_scale is Callable else Callable()
+		_configure_mcp_catalog_projection_service()
 		return
 
 	_state = context_or_state
@@ -74,6 +79,7 @@ func configure(
 	_tool_access_feature = null
 	_self_diagnostic_feature = null
 	_get_editor_scale = get_editor_scale
+	_configure_mcp_catalog_projection_service()
 
 
 func _context_get(context, key: String, default_value = null):
@@ -90,12 +96,15 @@ func _context_get(context, key: String, default_value = null):
 func dispose() -> void:
 	if _dock_presenter != null and _dock_presenter.has_method("dispose"):
 		_dock_presenter.dispose()
+	if _mcp_catalog_projection_service != null and _mcp_catalog_projection_service.has_method("dispose"):
+		_mcp_catalog_projection_service.dispose()
 	_state = null
 	_localization = null
 	_server_controller = null
 	_tool_catalog = null
 	_config_service = null
 	_dock_presenter = null
+	_mcp_catalog_projection_service = null
 	_user_tool_service = null
 	_client_install_detection_service = null
 	_user_tool_watch_service = null
@@ -113,22 +122,17 @@ func build_model() -> Dictionary:
 	var settings = _get_settings()
 	var all_tools_by_category = _get_all_tools_by_category()
 	var tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
-	var domain_states = _server_controller.get_domain_states()
-	var tool_presentation = ToolPresentationService.build_tool_presentation(
-		_build_exposed_tool_definitions(tools_by_category),
-		tools_by_category,
-		domain_states,
-		settings.get("disabled_tools", []),
-		MCPToolManifest.TOOL_DOMAIN_DEFS
-	)
+	var catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
+	var tool_presentation = catalog_snapshot.get("presentation", {})
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var client_install_statuses := {}
 	var plugin_freshness := {}
 	var plugin_version := ""
+	var mcp_catalog_projection := _build_mcp_catalog_projection()
 
-	if int(_state.current_tab) == 2:
+	if int(_state.current_tab) == 4:
 		client_install_statuses = _get_client_install_statuses(settings)
-	if int(_state.current_tab) == 3:
+	if int(_state.current_tab) == 5:
 		plugin_freshness = _get_plugin_freshness_snapshot()
 		plugin_version = _read_plugin_version()
 
@@ -150,8 +154,13 @@ func build_model() -> Dictionary:
 		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": MCPToolManifest.TOOL_DOMAIN_DEFS,
+		"domain_defs": (catalog_snapshot.get("catalog_manifest", {}) as Dictionary).get("domain_defs", MCPToolManifest.TOOL_DOMAIN_DEFS),
 		"tool_presentation": tool_presentation,
+		"mcp_resources": mcp_catalog_projection.get("mcp_resources", []),
+		"mcp_resource_templates": mcp_catalog_projection.get("mcp_resource_templates", []),
+		"mcp_prompts": mcp_catalog_projection.get("mcp_prompts", []),
+		"mcp_catalog_counts": mcp_catalog_projection.get("mcp_catalog_counts", {}),
+		"mcp_catalog_preview": _get_state_value("mcp_catalog_preview", {}),
 		"client_install_statuses": client_install_statuses,
 		"plugin_freshness": plugin_freshness,
 		"plugin_version": plugin_version,
@@ -206,16 +215,103 @@ func build_model() -> Dictionary:
 
 func _build_exposed_tool_definitions(all_tools_by_category: Dictionary) -> Array[Dictionary]:
 	var exposed: Array[Dictionary] = []
-	for tool_def in all_tools_by_category.get("system", []):
-		if not (tool_def is Dictionary):
-			continue
-		var tool := (tool_def as Dictionary).duplicate(true)
-		if bool(tool.get("compatibility_alias", false)):
-			continue
-		tool["name"] = str(tool.get("full_name", "system_%s" % str(tool.get("name", ""))))
-		tool["category"] = "system"
-		exposed.append(tool)
+	for category_value in all_tools_by_category.keys():
+		var category := str(category_value)
+		for tool_def in all_tools_by_category.get(category, []):
+			if not (tool_def is Dictionary):
+				continue
+			var tool := (tool_def as Dictionary).duplicate(true)
+			if bool(tool.get("compatibility_alias", false)):
+				continue
+			tool["name"] = _get_exposed_tool_full_name(category, tool)
+			tool["category"] = category
+			exposed.append(tool)
 	return exposed
+
+
+func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dictionary) -> Dictionary:
+	var loader = _get_tool_loader()
+	if loader == null:
+		return {}
+	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
+		"all_tools_by_category": tools_by_category,
+		"exposed_tools": _build_exposed_tool_definitions(tools_by_category),
+		"disabled_tools": settings.get("disabled_tools", [])
+	})
+	if bool(snapshot.get("success", false)):
+		return snapshot
+	return {}
+
+
+func _build_mcp_catalog_projection() -> Dictionary:
+	if _mcp_catalog_projection_service == null:
+		return {}
+	return _mcp_catalog_projection_service.build_projection()
+
+
+func _configure_mcp_catalog_projection_service() -> void:
+	if _mcp_catalog_projection_service == null:
+		return
+	_mcp_catalog_projection_service.configure({
+		"get_tool_loader": Callable(self, "_get_tool_loader"),
+		"get_tool_loader_status": Callable(self, "_get_tool_loader_status_for_mcp_catalog"),
+		"get_tool_activity_registry": Callable(self, "_get_tool_activity_registry_for_mcp_catalog"),
+		"sanitize_for_json": Callable(self, "_sanitize_for_mcp_catalog")
+	})
+
+
+func _get_tool_loader():
+	if _server_controller != null and _server_controller.has_method("get_tool_loader"):
+		return _server_controller.get_tool_loader()
+	return _server_controller
+
+
+func _get_tool_loader_status_for_mcp_catalog() -> Dictionary:
+	if _server_controller != null and _server_controller.has_method("get_tool_loader_status"):
+		var status = _server_controller.get_tool_loader_status()
+		if status is Dictionary:
+			return (status as Dictionary).duplicate(true)
+	var loader = _get_tool_loader()
+	if loader != null and loader.has_method("get_tool_loader_status"):
+		var loader_status = loader.get_tool_loader_status()
+		if loader_status is Dictionary:
+			return (loader_status as Dictionary).duplicate(true)
+	return {}
+
+
+func _get_tool_activity_registry_for_mcp_catalog():
+	var loader = _get_tool_loader()
+	if loader != null and loader.has_method("get_tool_activity_registry"):
+		return loader.get_tool_activity_registry()
+	return null
+
+
+func _sanitize_for_mcp_catalog(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var result := {}
+			for key in value:
+				result[str(key)] = _sanitize_for_mcp_catalog(value[key])
+			return result
+		TYPE_ARRAY:
+			var result := []
+			for item in value:
+				result.append(_sanitize_for_mcp_catalog(item))
+			return result
+		TYPE_OBJECT:
+			return str(value)
+		_:
+			return value
+
+
+func _get_exposed_tool_full_name(category: String, tool: Dictionary) -> String:
+	var full_name := str(tool.get("full_name", ""))
+	if not full_name.is_empty():
+		return full_name
+	var name := str(tool.get("name", ""))
+	if name.begins_with("%s_" % category):
+		return name
+	return "%s_%s" % [category, name]
 
 
 func _get_settings() -> Dictionary:

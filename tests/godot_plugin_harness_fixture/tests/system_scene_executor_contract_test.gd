@@ -3,13 +3,13 @@ extends RefCounted
 # {"name": "system_scene_executor_contracts"}
 
 const SystemSceneExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_scene.gd")
-const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 const TEMP_ROOT := "res://tests_tmp/system_scene_executor_contracts"
 
 
 class FakeBridge extends RefCounted:
 	var calls: Array[Dictionary] = []
-	var atomic_bridge = AtomicBridgeScript.new()
+	var helpers = AtomicBridgeHelperServiceScript.new()
 	var existing_missing_uid_text := ""
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -42,19 +42,19 @@ class FakeBridge extends RefCounted:
 		return (data as Dictionary).duplicate(true) if data is Dictionary else {}
 
 	func parse_dependency_reference(raw_path: String, source_path: String = "") -> Dictionary:
-		return atomic_bridge.parse_dependency_reference(raw_path, source_path)
+		return helpers.parse_dependency_reference(raw_path, source_path)
 
 	func normalize_dependency_path(raw_path: String) -> String:
-		return atomic_bridge.normalize_dependency_path(raw_path)
+		return helpers.normalize_dependency_path(raw_path)
 
 	func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
-		return atomic_bridge.build_issue(severity, issue_type, message, extra)
+		return helpers.build_issue(severity, issue_type, message, extra)
 
 	func append_unique_issue(issues: Array, issue: Dictionary) -> void:
-		atomic_bridge.append_unique_issue(issues, issue)
+		helpers.append_unique_issue(issues, issue)
 
 	func has_severity(issues: Array, severity: String) -> bool:
-		return atomic_bridge.has_severity(issues, severity)
+		return helpers.has_severity(issues, severity)
 
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
@@ -126,36 +126,43 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("scene_tree set_transform should delegate to node_transform.")
 
 	var validate_result: Dictionary = executor.execute("scene_validate", {"scene": scene_path})
-	if not bool(validate_result.get("success", false)):
-		return _failure("scene_validate should succeed and report dependency reference issues.")
-	var validate_data: Dictionary = validate_result.get("data", {})
-	if int(validate_data.get("dependency_reference_issue_count", 0)) < 1:
-		return _failure("scene_validate should report UID/fallback dependency reference issues.")
-	var validate_issues: Array = validate_data.get("issues", [])
-	if not _has_issue_type(validate_issues, "missing_uid_and_path"):
-		return _failure("scene_validate should classify missing UID plus fallback path references.")
-	if _count_issue_type(validate_issues, "missing_uid_and_path") < 2:
-		return _failure("scene_validate should also classify known UID references when both resolved and fallback paths are missing.")
+	if bool(validate_result.get("success", true)):
+		return _failure("scene_validate legacy direct call should return removal guidance.")
+	if not _is_removed_scene_tool(validate_result, "system_scene_validate", "validate"):
+		return _failure("scene_validate removal guidance should point to system_scene_inspect(action=validate).")
+	var analyze_result: Dictionary = executor.execute("scene_analyze", {"scene": scene_path})
+	if bool(analyze_result.get("success", true)):
+		return _failure("scene_analyze legacy direct call should return removal guidance.")
+	if not _is_removed_scene_tool(analyze_result, "system_scene_analyze", "analyze"):
+		return _failure("scene_analyze removal guidance should point to system_scene_inspect(action=analyze).")
 
 	var inspect_validate_result: Dictionary = executor.execute("scene_inspect", {
 		"action": "validate",
 		"scene": scene_path
 	})
 	if not bool(inspect_validate_result.get("success", false)):
-		return _failure("scene_inspect validate should reuse scene_validate successfully.")
+		return _failure("scene_inspect validate should reuse scene validation successfully.")
+	var validate_data: Dictionary = inspect_validate_result.get("data", {})
+	if int(validate_data.get("dependency_reference_issue_count", 0)) < 1:
+		return _failure("scene_inspect validate should report UID/fallback dependency reference issues.")
+	var validate_issues: Array = validate_data.get("issues", [])
+	if not _has_issue_type(validate_issues, "missing_uid_and_path"):
+		return _failure("scene_inspect validate should classify missing UID plus fallback path references.")
+	if _count_issue_type(validate_issues, "missing_uid_and_path") < 2:
+		return _failure("scene_inspect validate should also classify known UID references when both resolved and fallback paths are missing.")
 	var inspect_validate_data: Dictionary = inspect_validate_result.get("data", {})
 	if int(inspect_validate_data.get("dependency_reference_issue_count", 0)) != int(validate_data.get("dependency_reference_issue_count", -1)):
-		return _failure("scene_inspect validate should preserve scene_validate payload fields.")
+		return _failure("scene_inspect validate should preserve validation payload fields.")
 
 	var inspect_analyze_result: Dictionary = executor.execute("scene_inspect", {
 		"action": "analyze",
 		"scene": scene_path
 	})
 	if not bool(inspect_analyze_result.get("success", false)):
-		return _failure("scene_inspect analyze should reuse scene_analyze successfully.")
+		return _failure("scene_inspect analyze should reuse scene analysis successfully.")
 	var inspect_analyze_data: Dictionary = inspect_analyze_result.get("data", {})
 	if not inspect_analyze_data.has("node_count") or not inspect_analyze_data.has("binding_count"):
-		return _failure("scene_inspect analyze should preserve scene_analyze payload fields.")
+		return _failure("scene_inspect analyze should preserve analysis payload fields.")
 
 	var inspect_full_result: Dictionary = executor.execute("scene_inspect", {
 		"action": "full",
@@ -202,6 +209,28 @@ func _has_tool(tool_defs: Array[Dictionary], name: String) -> bool:
 		if str(tool_def.get("name", "")) == name:
 			return true
 	return false
+
+
+func _is_removed_scene_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://scene/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_dict := replacement as Dictionary
+	var replacement_arguments = replacement_dict.get("arguments", {})
+	return str(replacement_dict.get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
 
 
 func _has_issue_type(issues: Array, issue_type: String) -> bool:

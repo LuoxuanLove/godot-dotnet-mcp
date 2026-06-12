@@ -391,6 +391,36 @@ function Test-IsAllowedInitialReleaseNoteTemplate {
     return $RelativePath -match 'v2\.0\.0\.md$'
 }
 
+function Test-ReleaseNoteFinishedWording {
+    param([string]$Content, [string]$RelativePath)
+    if ($RelativePath -notmatch 'v\d+\.\d+\.\d+\.md$') {
+        return
+    }
+
+    $patterns = @(
+        '(?i)final notes will be completed',
+        '(?i)final highlights will be written',
+        '(?i)compatibility and upgrade notes will be finalized',
+        '(?i)will be completed from the actual',
+        '最终发布说明会在发布前',
+        '最终亮点会.*定稿',
+        '兼容性与升级提示将在.*定稿',
+        '最終\s*release notes\s*は\s*release\s*前',
+        'final highlights\s*を実際の内容から仕上げます',
+        'compatibility and upgrade notes\s*は.*確定します',
+        '최종\s*release notes는\s*release 전에',
+        'final highlights를 실제 내용으로 마무리합니다',
+        'compatibility and upgrade notes는.*확정됩니다'
+    )
+
+    foreach ($pattern in $patterns) {
+        if ($Content -match $pattern) {
+            $errors.Add("Release note contains unfinished release wording: $RelativePath")
+            return
+        }
+    }
+}
+
 function Test-DocumentQuality {
     param([string]$Locale, [string]$RelativePath, [System.IO.FileInfo]$File)
     $content = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8
@@ -418,6 +448,7 @@ function Test-DocumentQuality {
     if ($RelativePath -in @("CHANGELOG.md", "变更日志.md", "変更履歴.md", "변경-로그.md")) {
         Test-ChangelogSectionOrder -Content $content -RelativePath $relative
     }
+    Test-ReleaseNoteFinishedWording -Content $naturalLanguageContent -RelativePath $relative
     foreach ($match in [regex]::Matches($naturalLanguageContent, '(?m)^#{1,6}\s+(.+)$')) {
         Test-LocalizedTextScript -Locale $Locale -Text $match.Groups[1].Value -Context $relative
     }

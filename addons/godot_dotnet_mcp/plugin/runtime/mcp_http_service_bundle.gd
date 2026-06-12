@@ -11,6 +11,7 @@ const MCPEditorLifecycleStateBuilderScript = preload("res://addons/godot_dotnet_
 const MCPEditorLifecycleResponseBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_lifecycle_response_builder.gd")
 const MCPHttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
 const MCPHttpRequestDecoderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_decoder.gd")
+const MCPHttpSseEventQueueScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_sse_event_queue.gd")
 const MCPJsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router.gd")
 const MCPJsonRpcMethodServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_service.gd")
 const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
@@ -34,6 +35,7 @@ var _editor_lifecycle_state_builder = null
 var _editor_lifecycle_response_builder = null
 var _http_request_router = null
 var _http_request_decoder = null
+var _http_sse_event_queue = null
 var _json_rpc_router = null
 var _json_rpc_method_service = null
 var _resources_service = null
@@ -108,6 +110,7 @@ func dispose() -> void:
 	_dispose_helper(_editor_lifecycle_response_builder)
 	_dispose_helper(_http_request_router)
 	_dispose_helper(_http_request_decoder)
+	_dispose_helper(_http_sse_event_queue)
 	_dispose_helper(_json_rpc_router)
 	_dispose_helper(_json_rpc_method_service)
 	_dispose_helper(_resources_service)
@@ -124,6 +127,7 @@ func dispose() -> void:
 	_editor_lifecycle_response_builder = null
 	_http_request_router = null
 	_http_request_decoder = null
+	_http_sse_event_queue = null
 	_json_rpc_router = null
 	_json_rpc_method_service = null
 	_resources_service = null
@@ -179,6 +183,7 @@ func _ensure_tool_activity_registry() -> void:
 func _ensure_http_request_router() -> void:
 	if _http_request_router == null:
 		_http_request_router = MCPHttpRequestRouterScript.new()
+	_ensure_http_sse_event_queue()
 	_ensure_json_rpc_request_service()
 	_ensure_tools_api_service()
 	_ensure_editor_lifecycle_endpoint()
@@ -188,7 +193,8 @@ func _ensure_http_request_router() -> void:
 			_json_rpc_request_service,
 			_http_response_service,
 			_tools_api_service,
-			_editor_lifecycle_endpoint
+			_editor_lifecycle_endpoint,
+			_http_sse_event_queue
 		)
 	)
 	if _server != null and _http_request_router.has_method("set_allowed_hosts"):
@@ -200,6 +206,11 @@ func _ensure_http_request_decoder() -> void:
 		_http_request_decoder = MCPHttpRequestDecoderScript.new()
 
 
+func _ensure_http_sse_event_queue() -> void:
+	if _http_sse_event_queue == null:
+		_http_sse_event_queue = MCPHttpSseEventQueueScript.new()
+
+
 func _ensure_http_transport_service() -> void:
 	if _http_transport_service == null:
 		_http_transport_service = MCPHttpTransportServiceScript.new()
@@ -207,6 +218,7 @@ func _ensure_http_transport_service() -> void:
 	_ensure_http_request_router()
 	_ensure_http_response_service()
 	_ensure_http_request_decoder()
+	_ensure_http_sse_event_queue()
 	_http_transport_service.configure(
 		_connection_state,
 		_http_request_decoder,
@@ -214,7 +226,8 @@ func _ensure_http_transport_service() -> void:
 			_server,
 			_tool_loader_supervisor,
 			_http_request_router,
-			_http_response_service
+			_http_response_service,
+			_http_sse_event_queue
 		)
 	)
 

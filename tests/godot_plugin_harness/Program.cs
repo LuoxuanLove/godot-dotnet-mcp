@@ -69,7 +69,7 @@ internal static class Program
 
         if (cleanAssetLibraryInstallBuild)
         {
-            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot);
+            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot, explicitGodotPath);
         }
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
@@ -100,6 +100,7 @@ internal static class Program
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            CopyContractCaseManifest(repoRoot, stageRoot);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
             if (editorProbeMode)
@@ -159,6 +160,7 @@ internal static class Program
             // so has_environment() correctly returns true throughout the test.
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_HOST"] = "10.0.0.8";
             process.StartInfo.Environment["GODOT_DOTNET_MCP_SERVER_PORT"] = "4100";
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_STDIO_FRAMING"] = "legacy_content_length";
             process.StartInfo.ArgumentList.Add("--headless");
             if (editorProbeMode)
             {
@@ -293,7 +295,7 @@ internal static class Program
         }
     }
 
-    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot)
+    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot, string? explicitGodotPath)
     {
         var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stageRoot);
@@ -305,6 +307,23 @@ internal static class Program
         {
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
+            var dirtyArchiveInputs = await GetDirtyAssetLibraryArchiveInputsAsync(repoRoot, processRegistry);
+            if (dirtyArchiveInputs.Length > 0)
+            {
+                preserveStageRoot = keepStageRoot;
+                var dirtySummary = new
+                {
+                    success = false,
+                    skipped = false,
+                    reason = "clean_asset_library_archive_inputs_dirty",
+                    stageRoot,
+                    stageKept = preserveStageRoot,
+                    dirtyArchiveInputs,
+                    phaseTimings,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(dirtySummary, new JsonSerializerOptions { WriteIndented = true }));
+                return 1;
+            }
             var archiveResult = await ExportAddonArchiveAsync(repoRoot, stageRoot, processRegistry);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
@@ -337,23 +356,71 @@ internal static class Program
             var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
             var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
             var exportedCompanionSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "companion"));
+            var rawSourceCopyRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
+            var rawSourceCopyDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var releaseDocsAdvertiseRawSourceCopy = ReleaseDocsAdvertiseRawSourceCopy(repoRoot);
+            var exportedRoslynRuntimeManifest = File.Exists(Path.Combine(
+                stageRoot,
+                "addons",
+                "godot_dotnet_mcp",
+                "plugin",
+                "runtime",
+                "roslyn_runtime",
+                "roslyn-runtime-manifest.json"));
+            var missingRoslynRuntimeManifestFiles = exportedRoslynRuntimeManifest
+                ? GetMissingRoslynRuntimeManifestFiles(stageRoot)
+                : [];
+            var exportedRoslynRuntimeExecutable = HasRoslynRuntimeExecutable(Path.Combine(
+                stageRoot,
+                "addons",
+                "godot_dotnet_mcp",
+                "plugin",
+                "runtime",
+                "roslyn_runtime"));
 
             var stageBuildStopwatch = Stopwatch.StartNew();
             var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
             stageBuildStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("build_stage_project", stageBuildStopwatch.ElapsedMilliseconds));
+            var runtimeProbeStopwatch = Stopwatch.StartNew();
+            var runtimeProbe = exportedRoslynRuntimeExecutable
+                ? await ProbeExportedRoslynRuntimeAsync(stageRoot, processRegistry)
+                : (Succeeded: false, ExitCode: -1, StdOut: string.Empty, StdErr: "Roslyn runtime executable missing.", TimedOut: false);
+            runtimeProbeStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("probe_exported_roslyn_runtime", runtimeProbeStopwatch.ElapsedMilliseconds));
+            var serviceProbeStopwatch = Stopwatch.StartNew();
+            var serviceProbe = !string.IsNullOrWhiteSpace(explicitGodotPath) && File.Exists(explicitGodotPath)
+                ? await RunGodotHarnessAsync(
+                    stageRoot,
+                    explicitGodotPath,
+                    "exported-roslyn-service-probe",
+                    ["plugin_roslyn_service_exported_runtime_contracts"],
+                    processRegistry)
+                : (Succeeded: false, ExitCode: -1, StdOut: string.Empty, StdErr: "Godot executable missing for exported PluginRoslynService probe.", TimedOut: false);
+            serviceProbeStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("probe_exported_plugin_roslyn_service", serviceProbeStopwatch.ElapsedMilliseconds));
 
             var succeeded = stageBuild.Succeeded
                 && !fixtureHasRoslynPackageReference
                 && !exportedRoslynRuntimeSources
                 && !exportedDotnetBridgeSources
-                && !exportedCompanionSources;
+                && !exportedCompanionSources
+                && !releaseDocsAdvertiseRawSourceCopy
+                && exportedRoslynRuntimeManifest
+                && missingRoslynRuntimeManifestFiles.Length == 0
+                && exportedRoslynRuntimeExecutable
+                && runtimeProbe.Succeeded
+                && serviceProbe.Succeeded;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
             {
                 success = succeeded,
                 skipped = false,
-                reason = succeeded ? string.Empty : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed"),
+                reason = succeeded
+                    ? string.Empty
+                    : (releaseDocsAdvertiseRawSourceCopy
+                        ? "clean_asset_library_raw_source_copy_documented"
+                        : (stageBuild.TimedOut ? "clean_asset_library_install_build_timeout" : "clean_asset_library_install_build_failed")),
                 exitCode = stageBuild.ExitCode,
                 exportedWithGitArchive = true,
                 stageRoot,
@@ -362,6 +429,22 @@ internal static class Program
                 exportedRoslynRuntimeSources,
                 exportedDotnetBridgeSources,
                 exportedCompanionSources,
+                rawSourceCopyRoslynRuntimeSources,
+                rawSourceCopyDotnetBridgeSources,
+                releaseDocsAdvertiseRawSourceCopy,
+                exportedRoslynRuntimeManifest,
+                missingRoslynRuntimeManifestFiles,
+                exportedRoslynRuntimeExecutable,
+                exportedRoslynRuntimeProbeSucceeded = runtimeProbe.Succeeded,
+                exportedRoslynRuntimeProbeExitCode = runtimeProbe.ExitCode,
+                exportedRoslynRuntimeProbeTimedOut = runtimeProbe.TimedOut,
+                exportedRoslynRuntimeProbeStdout = ToSerializedProcessOutput(runtimeProbe.StdOut),
+                exportedRoslynRuntimeProbeStderr = ToSerializedProcessOutput(runtimeProbe.StdErr),
+                exportedPluginRoslynServiceProbeSucceeded = serviceProbe.Succeeded,
+                exportedPluginRoslynServiceProbeExitCode = serviceProbe.ExitCode,
+                exportedPluginRoslynServiceProbeTimedOut = serviceProbe.TimedOut,
+                exportedPluginRoslynServiceProbeStdout = ToSerializedProcessOutput(serviceProbe.StdOut),
+                exportedPluginRoslynServiceProbeStderr = ToSerializedProcessOutput(serviceProbe.StdErr),
                 stdout = ToSerializedProcessOutput(stageBuild.StdOut),
                 stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                 phaseTimings,
@@ -381,6 +464,154 @@ internal static class Program
             catch
             {
             }
+        }
+    }
+
+    private static async Task<string[]> GetDirtyAssetLibraryArchiveInputsAsync(string repoRoot, HarnessProcessRegistry processRegistry)
+    {
+        var tracked = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-diff-asset-library-inputs",
+            ["diff", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        var staged = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-diff-cached-asset-library-inputs",
+            ["diff", "--cached", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        var untracked = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-untracked-asset-library-inputs",
+            ["ls-files", "--others", "--exclude-standard", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        return tracked
+            .Concat(staged)
+            .Concat(untracked)
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static async Task<string[]> RunGitLinesAsync(string repoRoot, HarnessProcessRegistry processRegistry, string registryLabel, string[] arguments)
+    {
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("git")
+                {
+                    WorkingDirectory = repoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            foreach (var argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.Start();
+            processRegistry.Register(process, registryLabel, "git", repoRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"{registryLabel} failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            return stdout
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            throw new TimeoutException($"{registryLabel} timed out.");
+        }
+        finally
+        {
+            processRegistry.Unregister(process);
+            process?.Dispose();
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGodotHarnessAsync(
+        string stageRoot,
+        string godotPath,
+        string registryLabel,
+        string[] selectedCases,
+        HarnessProcessRegistry processRegistry)
+    {
+        var appDataRoot = Path.Combine(stageRoot, ".appdata");
+        var localAppDataRoot = Path.Combine(stageRoot, ".localappdata");
+        Directory.CreateDirectory(appDataRoot);
+        Directory.CreateDirectory(localAppDataRoot);
+
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo(godotPath)
+                {
+                    WorkingDirectory = stageRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.Environment["APPDATA"] = appDataRoot;
+            process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
+            process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = "0";
+            process.StartInfo.Environment[SelectedCasesEnvVar] = string.Join(",", selectedCases);
+            process.StartInfo.ArgumentList.Add("--headless");
+            process.StartInfo.ArgumentList.Add("--path");
+            process.StartInfo.ArgumentList.Add(stageRoot);
+
+            process.Start();
+            processRegistry.Register(process, registryLabel, godotPath, stageRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            var suite = TryParseLastJsonLine(stdout);
+            var suiteSuccess = ExtractBooleanProperty(suite, "success") ?? false;
+            return (process.ExitCode == 0 && suiteSuccess, process.ExitCode, stdout, stderr, false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, stdout, stderr, true);
+        }
+        catch (Exception ex)
+        {
+            return (false, -1, string.Empty, ex.ToString(), false);
+        }
+        finally
+        {
+            process?.Dispose();
         }
     }
 
@@ -446,6 +677,39 @@ internal static class Program
                 await archiveStream.DisposeAsync();
             }
         }
+    }
+
+    private static bool ReleaseDocsAdvertiseRawSourceCopy(string repoRoot)
+    {
+        var releaseFacingDocs = new[]
+        {
+            Path.Combine(repoRoot, "README.md"),
+            Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "README.md"),
+            Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "README.zh-CN.md"),
+            Path.Combine(repoRoot, "docs", "en", "process", "release-runbook.md"),
+        };
+        var rawCopyPatterns = new[]
+        {
+            "copy source files directly",
+            "direct copy of the `addons/godot_dotnet_mcp/` source files",
+            "copy raw source",
+        };
+        foreach (var docPath in releaseFacingDocs)
+        {
+            if (!File.Exists(docPath))
+            {
+                continue;
+            }
+            var text = File.ReadAllText(docPath);
+            foreach (var pattern in rawCopyPatterns)
+            {
+                if (text.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static string[] ParseSelectedCases(string? rawCases)
@@ -534,6 +798,19 @@ internal static class Program
         {
             return null;
         }
+    }
+
+    private static bool? ExtractBooleanProperty(object? value, string propertyName)
+    {
+        if (value is JsonElement element
+            && element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(propertyName, out var property)
+            && (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False))
+        {
+            return property.GetBoolean();
+        }
+
+        return null;
     }
 
     private static async Task<string> TryReadOutputAsync(Task<string>? task)
@@ -680,6 +957,156 @@ internal static class Program
                 || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool HasRoslynRuntimeExecutable(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        return Directory.EnumerateFiles(directoryPath, "GodotDotnetMcp.PluginBridge.*", SearchOption.TopDirectoryOnly)
+            .Any(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string[] GetMissingRoslynRuntimeManifestFiles(string stageRoot)
+    {
+        var runtimeDirectory = Path.Combine(
+            stageRoot,
+            "addons",
+            "godot_dotnet_mcp",
+            "plugin",
+            "runtime",
+            "roslyn_runtime");
+        var manifestPath = Path.Combine(runtimeDirectory, "roslyn-runtime-manifest.json");
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if (!document.RootElement.TryGetProperty("files", out var filesElement) ||
+                filesElement.ValueKind != JsonValueKind.Array)
+            {
+                return ["roslyn-runtime-manifest.json:files"];
+            }
+
+            var missing = new List<string>();
+            foreach (var fileElement in filesElement.EnumerateArray())
+            {
+                if (fileElement.ValueKind != JsonValueKind.String)
+                {
+                    missing.Add("roslyn-runtime-manifest.json:non_string_file_entry");
+                    continue;
+                }
+
+                var fileName = fileElement.GetString();
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    missing.Add("roslyn-runtime-manifest.json:empty_file_entry");
+                    continue;
+                }
+
+                if (!File.Exists(Path.Combine(runtimeDirectory, fileName)))
+                {
+                    missing.Add(fileName);
+                }
+            }
+
+            return missing.ToArray();
+        }
+        catch (Exception ex)
+        {
+            return [$"roslyn-runtime-manifest.json:{ex.GetType().Name}"];
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> ProbeExportedRoslynRuntimeAsync(string stageRoot, HarnessProcessRegistry processRegistry)
+    {
+        var runtimeDll = Path.Combine(
+            stageRoot,
+            "addons",
+            "godot_dotnet_mcp",
+            "plugin",
+            "runtime",
+            "roslyn_runtime",
+            "GodotDotnetMcp.PluginBridge.dll");
+        if (!File.Exists(runtimeDll))
+        {
+            return (false, -1, string.Empty, "GodotDotnetMcp.PluginBridge.dll is missing from the exported runtime bundle.", false);
+        }
+
+        var probePath = Path.Combine(stageRoot, "RoslynRuntimeProbe.cs");
+        var requestPath = Path.Combine(stageRoot, "roslyn-runtime-probe-request.json");
+        await File.WriteAllTextAsync(probePath, "public partial class RoslynRuntimeProbe { [Export] public int Speed = 1; public void Run() { } }", Encoding.UTF8);
+        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new
+        {
+            path = "res://RoslynRuntimeProbe.cs",
+            action = "upsert_method",
+            type_name = "RoslynRuntimeProbe",
+            member_name = "AddedByRuntimeProbe",
+            return_type = "int",
+            parameters = Array.Empty<string>(),
+            body = "return 1;",
+        }), Encoding.UTF8);
+
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("dotnet")
+                {
+                    WorkingDirectory = stageRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_PROJECT_ROOT"] = stageRoot;
+            process.StartInfo.ArgumentList.Add(runtimeDll);
+            process.StartInfo.ArgumentList.Add("--call-json-file");
+            process.StartInfo.ArgumentList.Add("cs_plugin_patch");
+            process.StartInfo.ArgumentList.Add(requestPath);
+            process.Start();
+            processRegistry.Register(process, "roslyn-runtime-probe", "dotnet", stageRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (
+                process.ExitCode == 0
+                    && stdout.Contains("\"success\":true", StringComparison.Ordinal)
+                    && stdout.Contains("\"semanticRuntime\":\"Roslyn\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"action\":\"upsert_method\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"name\":\"Speed\"", StringComparison.Ordinal),
+                process.ExitCode,
+                stdout,
+                stderr,
+                false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, stdout, stderr, true);
+        }
+        catch (Exception ex)
+        {
+            return (false, -1, string.Empty, ex.ToString(), false);
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+
     private static void CopyDirectory(string sourceRoot, string destinationRoot)
     {
         Directory.CreateDirectory(destinationRoot);
@@ -697,6 +1124,19 @@ internal static class Program
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
             File.Copy(file, destinationPath, overwrite: true);
         }
+    }
+
+    private static void CopyContractCaseManifest(string repoRoot, string stageRoot)
+    {
+        var sourcePath = Path.Combine(repoRoot, "scripts", "contract_case_manifest.json");
+        if (!File.Exists(sourcePath))
+        {
+            return;
+        }
+
+        var destinationDirectory = Path.Combine(stageRoot, "scripts");
+        Directory.CreateDirectory(destinationDirectory);
+        File.Copy(sourcePath, Path.Combine(destinationDirectory, "contract_case_manifest.json"), overwrite: true);
     }
 
     private static void DisableProductionPluginForEditorProbe(string stageRoot)

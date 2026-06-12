@@ -3,11 +3,13 @@ extends VBoxContainer
 
 const SERVER_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/server_panel.tscn"
 const TOOLS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/tools_tab.tscn"
+const MCP_CATALOG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.tscn"
 const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.tscn"
 const SETTINGS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/settings_panel.tscn"
 const TAB_SCENE_SCRIPT_PATHS := {
 	SERVER_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/server_tab.gd",
 	TOOLS_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/tools_tab.gd",
+	MCP_CATALOG_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd",
 	CONFIG_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/config_tab.gd",
 	SETTINGS_TAB_SCENE_PATH: [
 		"res://addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd",
@@ -44,6 +46,7 @@ signal config_client_open_config_dir_requested(client_id: String)
 signal config_client_open_config_file_requested(client_id: String)
 signal config_write_requested(config_type: String, filepath: String, config: String, client_name: String)
 signal config_remove_requested(config_type: String, filepath: String, client_name: String)
+signal mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary)
 signal copy_requested(text: String, source: String)
 
 @onready var _status_indicator: ColorRect = %StatusIndicator
@@ -53,6 +56,8 @@ signal copy_requested(text: String, source: String)
 var _current_scale := -1.0
 var _server_tab: Control
 var _tools_tab: Control
+var _resources_tab: Control
+var _prompts_tab: Control
 var _config_tab: Control
 var _settings_tab: Control
 var _is_running := false
@@ -81,6 +86,15 @@ func _ready() -> void:
 		_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
 		_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
 		_tools_tab.tree_collapse_changed.connect(_on_tools_tab_tree_collapse_changed)
+
+	if _resources_tab and _resources_tab.has_signal("copy_requested"):
+		_resources_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
+	if _resources_tab and _resources_tab.has_signal("preview_requested"):
+		_resources_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
+	if _prompts_tab and _prompts_tab.has_signal("copy_requested"):
+		_prompts_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
+	if _prompts_tab and _prompts_tab.has_signal("preview_requested"):
+		_prompts_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
 
 	if _config_tab:
 		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
@@ -122,11 +136,13 @@ func apply_model(model: Dictionary) -> void:
 	_status_label.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
 	_refresh_theme_colors()
 
-	if _tab_container.get_tab_count() >= 4:
+	if _tab_container.get_tab_count() >= 6:
 		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
 		_tab_container.set_tab_title(1, localization.get_text("tab_tools"))
-		_tab_container.set_tab_title(2, localization.get_text("tab_config"))
-		_tab_container.set_tab_title(3, localization.get_text("tab_settings"))
+		_tab_container.set_tab_title(2, localization.get_text("tab_resources"))
+		_tab_container.set_tab_title(3, localization.get_text("tab_prompts"))
+		_tab_container.set_tab_title(4, localization.get_text("tab_config"))
+		_tab_container.set_tab_title(5, localization.get_text("tab_settings"))
 
 	var current_tab = int(model.get("current_tab", 0))
 	if current_tab >= 0 and current_tab < _tab_container.get_tab_count():
@@ -135,7 +151,7 @@ func apply_model(model: Dictionary) -> void:
 
 
 func _apply_all_tab_models(model: Dictionary) -> void:
-	for tab in [_server_tab, _tools_tab, _config_tab, _settings_tab]:
+	for tab in [_server_tab, _tools_tab, _resources_tab, _prompts_tab, _config_tab, _settings_tab]:
 		if tab and tab.has_method("apply_model"):
 			tab.apply_model(model)
 	_normalize_settings_update_buttons()
@@ -231,6 +247,12 @@ func _ensure_tabs() -> void:
 
 	_server_tab = _instantiate_tab(_load_packed_scene(SERVER_TAB_SCENE_PATH), "ServerTab")
 	_tools_tab = _instantiate_tab(_load_packed_scene(TOOLS_TAB_SCENE_PATH), "ToolsTab")
+	_resources_tab = _instantiate_tab(_load_packed_scene(MCP_CATALOG_TAB_SCENE_PATH), "ResourcesTab")
+	if _resources_tab != null and _resources_tab.has_method("set_catalog_mode"):
+		_resources_tab.set_catalog_mode("resources")
+	_prompts_tab = _instantiate_tab(_load_packed_scene(MCP_CATALOG_TAB_SCENE_PATH), "PromptsTab")
+	if _prompts_tab != null and _prompts_tab.has_method("set_catalog_mode"):
+		_prompts_tab.set_catalog_mode("prompts")
 	_config_tab = _instantiate_tab(_load_packed_scene(CONFIG_TAB_SCENE_PATH), "ConfigTab")
 	_settings_tab = _instantiate_tab(_load_packed_scene(SETTINGS_TAB_SCENE_PATH), "SettingsTab")
 
@@ -307,6 +329,14 @@ func _on_tools_tab_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 func _on_tools_tab_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
 	tree_collapse_changed.emit(kind, key, collapsed)
+
+
+func _on_mcp_catalog_tab_copy_requested(text: String, source: String) -> void:
+	copy_requested.emit(text, source)
+
+
+func _on_mcp_catalog_tab_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	mcp_catalog_preview_requested.emit(kind, id, arguments)
 
 
 func _on_config_tab_cli_scope_changed(scope: String) -> void:
@@ -435,6 +465,8 @@ func _load_packed_scene(path: String) -> PackedScene:
 
 
 func _reload_scene_script(scene_path: String) -> void:
+	if not Engine.is_editor_hint() or OS.has_feature("headless"):
+		return
 	var raw_script_paths = TAB_SCENE_SCRIPT_PATHS.get(scene_path, "")
 	var script_paths := _normalize_reload_script_paths(raw_script_paths)
 	if script_paths.is_empty():

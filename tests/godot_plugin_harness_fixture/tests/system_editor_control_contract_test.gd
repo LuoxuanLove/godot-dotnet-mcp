@@ -8,6 +8,10 @@ const SystemEditorImplScript = preload("res://addons/godot_dotnet_mcp/tools/syst
 class FakeBridge extends RefCounted:
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
 		match tool_name:
+			"debug_editor_log":
+				if str(args.get("action", "")) == "clear":
+					return success({"cleared": true})
+				return error("Unsupported debug_editor_log action")
 			"editor_status":
 				match str(args.get("action", "")):
 					"set_main_screen":
@@ -248,7 +252,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not editor_control_properties.has("index") or not editor_control_properties.has("id"):
 		return _failure("editor_control schema should expose index/id for PopupMenu item selection.")
 	var editor_control_actions: Array = editor_control_properties.get("action", {}).get("enum", [])
-	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "wait_for_ui", "list_tree_items", "select_tree_item", "get_popup", "capture_popup", "select_popup_menu_item", "hover_control", "leave_control", "set_value"]:
+	for expected_action in ["list_main_screens", "get_distraction_free", "set_distraction_free", "capture_editor", "clear_output", "wait_for_ui", "list_tree_items", "select_tree_item", "get_popup", "capture_popup", "select_popup_menu_item", "hover_control", "leave_control", "set_value"]:
 		if not editor_control_actions.has(expected_action):
 			return _failure("editor_control schema should expose %s." % expected_action)
 	if not editor_control_properties.has("value"):
@@ -303,6 +307,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control capture_editor should attach visible popup count.")
 	if str(capture_editor_result.get("data", {}).get("visible_popups", [{}])[0].get("node_path", "")) != "/root/Editor/SearchDialog":
 		return _failure("system editor_control capture_editor should attach visible popup metadata.")
+	var clear_output_result: Dictionary = impl.execute("editor_control", {"action": "clear_output"})
+	if not bool(clear_output_result.get("success", false)):
+		return _failure("system editor_control should delegate clear_output to the editor log atomic tool.")
+	if not bool(clear_output_result.get("data", {}).get("cleared", false)):
+		return _failure("system editor_control clear_output should preserve the cleared flag.")
 
 	var list_controls_result: Dictionary = impl.execute("editor_control", {
 		"action": "list_controls",
@@ -352,16 +361,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system editor_control should delegate semantic activate_ui.")
 	if str(activate_ui_semantic_result.get("data", {}).get("semantic_path", "")) != "MCPDock/config":
 		return _failure("system editor_control should preserve activate_ui semantic_path.")
+	var activate_resources_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/resources"
+	})
+	if not bool(activate_resources_result.get("success", false)):
+		return _failure("system editor_control should support semantic activation for the MCP Resources tab.")
+	if str(activate_resources_result.get("data", {}).get("semantic_path", "")) != "MCPDock/resources":
+		return _failure("system editor_control should preserve the MCP Resources semantic_path.")
+	var activate_prompts_result: Dictionary = impl.execute("editor_control", {
+		"action": "activate_ui",
+		"semantic_path": "MCPDock/prompts"
+	})
+	if not bool(activate_prompts_result.get("success", false)):
+		return _failure("system editor_control should support semantic activation for the MCP Prompts tab.")
+	if str(activate_prompts_result.get("data", {}).get("semantic_path", "")) != "MCPDock/prompts":
+		return _failure("system editor_control should preserve the MCP Prompts semantic_path.")
 
 	var activate_ui_tab_result: Dictionary = impl.execute("editor_control", {
 		"action": "activate_ui",
 		"target_path": "/root/Editor/MCP/TabContainer",
 		"tab_title": "ConfigTab",
-		"tab_index": 2
+		"tab_index": 4
 	})
 	if not bool(activate_ui_tab_result.get("success", false)):
 		return _failure("system editor_control should delegate TabContainer activate_ui.")
-	if int(activate_ui_tab_result.get("data", {}).get("tab_index", -1)) != 2:
+	if int(activate_ui_tab_result.get("data", {}).get("tab_index", -1)) != 4:
 		return _failure("system editor_control should preserve activate_ui tab_index.")
 
 	var activate_ui_bottom_result: Dictionary = impl.execute("editor_control", {

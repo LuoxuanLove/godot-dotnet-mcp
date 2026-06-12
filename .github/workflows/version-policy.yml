@@ -3,6 +3,7 @@ name: version-policy
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
   workflow_dispatch:
     inputs:
       pull_number:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   version-policy:
+    if: github.event_name != 'merge_group'
     runs-on: windows-2025
 
     steps:
@@ -48,7 +50,7 @@ jobs:
             $pr.baseRefName.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
             $pr.baseRefName.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
           ) {
-            $trustedPolicyRef = "release/v2.0.0-baseline"
+            $trustedPolicyRef = "v2.0"
           }
 
           "pull_number=$pullNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -64,20 +66,24 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Fetch pull request base
+      - name: Fetch pull request refs
         shell: pwsh
         env:
           BASE_BRANCH: ${{ steps.pr.outputs.base_branch }}
           PULL_NUMBER: ${{ steps.pr.outputs.pull_number }}
-        run: git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/base/$($env:PULL_NUMBER)"
-
-      - name: Fetch pull request head
-        shell: pwsh
-        env:
-          PULL_NUMBER: ${{ steps.pr.outputs.pull_number }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
-        run: git fetch --no-tags --depth=1 origin "+refs/pull/$env:PULL_NUMBER/head:refs/remotes/pull/$env:PULL_NUMBER/head"
+        run: |
+          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "v2.0", "release/v2.0.0-baseline")
+          $isV2StackBase = $env:BASE_BRANCH.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
+          if (($allowedBaseBranches -notcontains $env:BASE_BRANCH) -and -not $isV2StackBase) {
+            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, v2.0, or a v2 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
+          }
+
+          git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/policy-base/$($env:BASE_BRANCH)"
+          git fetch --no-tags --depth=1 origin "+refs/pull/$env:PULL_NUMBER/head:refs/remotes/pull/$env:PULL_NUMBER/head"
 
       - name: Validate public version metadata policy
         shell: pwsh
@@ -91,7 +97,7 @@ jobs:
           .\scripts\validate_pr_version_policy.ps1 `
             -BaseBranch $env:BASE_BRANCH `
             -HeadBranch $env:HEAD_BRANCH `
-            -BaseRef "refs/remotes/base/$env:PULL_NUMBER" `
+            -BaseRef "refs/remotes/policy-base/$env:BASE_BRANCH" `
             -HeadRef "refs/remotes/pull/$env:PULL_NUMBER/head" `
             -RepositoryOwner $env:REPOSITORY_OWNER `
             -HeadRepositoryOwner $env:HEAD_OWNER `

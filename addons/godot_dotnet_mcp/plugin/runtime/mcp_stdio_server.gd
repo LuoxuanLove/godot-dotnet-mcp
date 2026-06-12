@@ -3,19 +3,13 @@ extends Node
 class_name MCPStdioServer
 
 ## MCP Stdio Transport Server
-## Reads JSON-RPC 2.0 requests from stdin (Content-Length framed, same as LSP protocol)
+## Reads JSON-RPC 2.0 requests from stdin (newline-delimited by default)
 ## Writes responses to stdout
 ## Designed for Claude Desktop and headless Godot usage:
 ##   godot --headless --path /path/to/project --script res://addons/.../mcp_stdio_entry.gd
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
-const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
-const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
-const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
-const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
-const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
-const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const MCPStdioServiceBundleScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_bundle.gd")
 
 signal request_received(method: String, params: Dictionary)
 
@@ -24,26 +18,51 @@ var _buffer: PackedByteArray = PackedByteArray()
 var _tool_loader        # injected by server_runtime_controller, shared with HTTP server
 var _debug_mode: bool = false
 var _disabled_tools: Dictionary = {}
-var _resources_service = MCPResourcesServiceScript.new()
-var _prompts_service = MCPPromptsServiceScript.new()
-var _tool_activity_registry = MCPToolActivityRegistry.new()
+var _service_bundle = MCPStdioServiceBundleScript.new()
 var _processing_stdin := false
 var _transport_generation := 0
 var _last_written_response: Dictionary = {}
+var _last_written_frame := ""
+var _stdio_framing_mode := "newline"
+const STDIO_FRAMING_NEWLINE := "newline"
+const STDIO_FRAMING_LEGACY_CONTENT_LENGTH := "legacy_content_length"
 const STDIN_READ_SIZE := 1 # Read incrementally to preserve partial JSON-RPC frames.
 const MAX_STDIN_FRAMES_PER_TICK := 16
 const MAX_STDIN_BYTES_PER_TICK := 8192
+const MAX_STDIN_CONTENT_LENGTH := 1024 * 1024
+const MAX_STDIN_HEADER_BYTES := 64 * 1024
+const MAX_STDIN_PENDING_BYTES := MAX_STDIN_CONTENT_LENGTH + MAX_STDIN_HEADER_BYTES
 
 
 func _ready() -> void:
 	set_process(true)
 
 
+func _exit_tree() -> void:
+	dispose()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		dispose()
+
+
+func dispose() -> void:
+	if _service_bundle != null and _service_bundle.has_method("dispose"):
+		_service_bundle.dispose()
+	_service_bundle = null
+	_enabled = false
+	_buffer = PackedByteArray()
+	_tool_loader = null
+	_disabled_tools.clear()
+	_last_written_response = {}
+	_last_written_frame = ""
+
+
 func initialize(tool_loader, debug_mode: bool = false) -> void:
 	_tool_loader = tool_loader
 	_debug_mode = debug_mode
-	_configure_tool_activity_registry()
-	_configure_resources_prompts_services()
+	_configure_service_bundle()
 
 
 func start() -> void:
@@ -62,6 +81,15 @@ func stop() -> void:
 
 func is_running() -> bool:
 	return _enabled
+
+
+func set_framing_mode(mode: String) -> void:
+	if mode == STDIO_FRAMING_NEWLINE or mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		_stdio_framing_mode = mode
+
+
+func get_framing_mode() -> String:
+	return _stdio_framing_mode
 
 
 func set_disabled_tools(disabled: Array) -> void:
@@ -99,6 +127,12 @@ func _process(_delta: float) -> void:
 				read_any = true
 				bytes_read += chunk.size()
 				_buffer.append_array(chunk)
+				if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+					_reject_stdio_frame(
+						"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+						"stdio_pending_buffer_exceeded"
+					)
+					break
 			if not read_any:
 				break
 		_processing_stdin = false
@@ -108,8 +142,63 @@ func _process(_delta: float) -> void:
 
 
 func _try_parse_frame(generation: int) -> bool:
+	if _stdio_framing_mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		return await _try_parse_legacy_content_length_frame(generation)
+	return await _try_parse_newline_frame(generation)
+
+
+func _try_parse_newline_frame(generation: int) -> bool:
 	while true:
 		if not _enabled or generation != _transport_generation:
+			return false
+		if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+			_reject_stdio_frame(
+				"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+				"stdio_pending_buffer_exceeded"
+			)
+			return false
+		if _buffer.size() > 0 and _buffer.get_string_from_utf8().begins_with("Content-Length:"):
+			_reject_stdio_frame(
+				"Legacy Content-Length stdio framing requires explicit compatibility mode.",
+				"stdio_legacy_content_length_requires_compat"
+			)
+			return false
+		var newline_index := _find_byte(_buffer, 10)
+		if newline_index == -1:
+			if _buffer.size() > MAX_STDIN_CONTENT_LENGTH:
+				_reject_stdio_frame(
+					"Stdio newline-delimited frame exceeded maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH,
+					"stdio_line_too_large"
+				)
+			return false
+		var line_bytes: PackedByteArray = _buffer.slice(0, newline_index)
+		_buffer = _buffer.slice(newline_index + 1)
+		if line_bytes.size() > 0 and line_bytes[line_bytes.size() - 1] == 13:
+			line_bytes = line_bytes.slice(0, line_bytes.size() - 1)
+		if line_bytes.is_empty():
+			continue
+		if line_bytes.size() > MAX_STDIN_CONTENT_LENGTH:
+			_reject_stdio_frame(
+				"Stdio newline-delimited frame exceeded maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH,
+				"stdio_line_too_large"
+			)
+			return false
+		var body: String = line_bytes.get_string_from_utf8()
+		await _handle_request(body, generation)
+		return true
+
+	return false
+
+
+func _try_parse_legacy_content_length_frame(generation: int) -> bool:
+	while true:
+		if not _enabled or generation != _transport_generation:
+			return false
+		if _buffer.size() > MAX_STDIN_PENDING_BYTES:
+			_reject_stdio_frame(
+				"Stdio pending buffer exceeded maximum supported size of %d bytes." % MAX_STDIN_PENDING_BYTES,
+				"stdio_pending_buffer_exceeded"
+			)
 			return false
 		var buffer_text: String = _buffer.get_string_from_ascii()
 		var header_end: int = buffer_text.find("\r\n\r\n")
@@ -117,14 +206,14 @@ func _try_parse_frame(generation: int) -> bool:
 			return false
 		var header_bytes: PackedByteArray = _buffer.slice(0, header_end)
 		var header: String = header_bytes.get_string_from_ascii()
-		var content_length: int = -1
-		for line in header.split("\r\n"):
-			if line.to_lower().begins_with("content-length:"):
-				content_length = int(line.substr(15).strip_edges())
-		if content_length < 0:
-			# Malformed header — discard buffer up to next potential header
-			_buffer = PackedByteArray()
+		var content_length_result := _parse_stdio_content_length(header)
+		if not bool(content_length_result.get("success", false)):
+			_reject_stdio_frame(
+				str(content_length_result.get("error", "Invalid stdio Content-Length header.")),
+				str(content_length_result.get("type", "stdio_bad_content_length"))
+			)
 			return false
+		var content_length := int(content_length_result.get("content_length", 0))
 		var body_start: int = header_end + 4
 		# Byte-level check (UTF-8 multi-byte safe)
 		if _buffer.size() - body_start < content_length:
@@ -138,95 +227,64 @@ func _try_parse_frame(generation: int) -> bool:
 	return false
 
 
+func _find_byte(bytes: PackedByteArray, byte_value: int) -> int:
+	for index in range(bytes.size()):
+		if bytes[index] == byte_value:
+			return index
+	return -1
+
+
+func _parse_stdio_content_length(header: String) -> Dictionary:
+	var values: Array[String] = []
+	for line in header.split("\r\n"):
+		if line.to_lower().begins_with("content-length:"):
+			values.append(line.substr(15).strip_edges())
+	if values.is_empty():
+		return {"success": false, "type": "stdio_missing_content_length", "error": "Missing Content-Length header."}
+	if values.size() > 1:
+		return {"success": false, "type": "stdio_duplicate_content_length", "error": "Duplicate Content-Length headers are not supported."}
+	var text := values[0]
+	if not text.is_valid_int():
+		return {"success": false, "type": "stdio_bad_content_length", "error": "Content-Length must be a positive integer."}
+	var parsed := int(text)
+	if parsed <= 0:
+		return {"success": false, "type": "stdio_bad_content_length", "error": "Content-Length must be greater than zero."}
+	if parsed > MAX_STDIN_CONTENT_LENGTH:
+		return {
+			"success": false,
+			"type": "stdio_frame_too_large",
+			"error": "Content-Length exceeds maximum supported size of %d bytes." % MAX_STDIN_CONTENT_LENGTH
+		}
+	return {"success": true, "content_length": parsed}
+
+
+func _reject_stdio_frame(message: String, error_type: String = "stdio_bad_framing") -> void:
+	_buffer = PackedByteArray()
+	_log("Rejecting malformed stdio frame: %s (%s)" % [message, error_type], "warning")
+	_write_response(_create_json_rpc_error(-32700, "%s [%s]" % [message, error_type], null))
+
+
 func _handle_request(body: String, generation: int = -1) -> void:
+	var should_guard_generation := generation >= 0
 	if generation < 0:
 		generation = _transport_generation
-	_log("Parsing request (%d bytes)" % body.length(), "debug")
-	var json := JSON.new()
-	if json.parse(body) != OK:
-		_write_response(_create_json_rpc_error(-32700, "Parse error: %s" % json.get_error_message(), null))
+	_configure_service_bundle()
+	var result: Dictionary = await _service_bundle.handle_request_async(body)
+	if not bool(result.get("respond", false)):
+		_last_written_response = {}
+		_last_written_frame = ""
 		return
+	var response: Dictionary = result.get("response", {})
 
-	var request: Variant = json.get_data()
-	if not request is Dictionary:
-		_write_response(_create_json_rpc_error(-32600, "Invalid Request", null))
-		return
-
-	var request_dict: Dictionary = request
-	var method: String = str(request_dict.get("method", ""))
-	var params: Variant = request_dict.get("params", {})
-	var has_id: bool = request_dict.has("id")
-	var id: Variant = request_dict.get("id")
-	if not (params is Dictionary):
-		if not has_id:
-			return
-		_write_response(_create_json_rpc_error(-32602, "Invalid params: expected object", id))
-		return
-	var params_dict := params as Dictionary
-
-	_log("Method: %s" % method, "debug")
-	request_received.emit(method, params_dict)
-
-	# Notifications (no id) get no response
-	if not has_id:
-		return
-
-	var response: Dictionary
-	match method:
-		"initialize":
-			_ensure_resources_prompts_services()
-			response = _create_json_rpc_response({
-				"protocolVersion": MCPProtocolFacts.get_protocol_version(),
-				"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
-				"capabilities": _resources_service.build_server_capabilities(),
-				"serverInfo": MCPProtocolFacts.build_server_info()
-			}, id)
-		"initialized", "notifications/initialized":
-			response = _create_json_rpc_response({}, id)
-		"tools/list":
-			response = _handle_tools_list(id)
-		"tools/call":
-			response = await _handle_tools_call_async(params_dict, id)
-		"resources/list":
-			response = _handle_resources_list(params_dict, id)
-		"resources/templates/list":
-			response = _handle_resources_templates_list(params_dict, id)
-		"resources/read":
-			response = _handle_resources_read(params_dict, id)
-		"prompts/list":
-			response = _handle_prompts_list(params_dict, id)
-		"prompts/get":
-			response = _handle_prompts_get(params_dict, id)
-		"ping":
-			response = _create_json_rpc_response({}, id)
-		_:
-			response = _create_json_rpc_error(-32601, "Method not found: %s" % method, id)
-
-	if not _enabled or generation != _transport_generation:
+	if should_guard_generation and (not _enabled or generation != _transport_generation):
 		_log("Dropping stdio response after transport stop or restart", "debug")
 		return
 	_write_response(response)
 
 
 func _handle_tools_list(id) -> Dictionary:
-	if _tool_loader == null:
-		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var exposed_tools = _tool_loader.get_exposed_tool_definitions()
-	var all_tools_by_category := {}
-	if _tool_loader.has_method("get_all_tools_by_category"):
-		all_tools_by_category = _tool_loader.get_all_tools_by_category()
-	elif _tool_loader.has_method("get_tools_by_category"):
-		all_tools_by_category = _tool_loader.get_tools_by_category()
-	var domain_states := []
-	if _tool_loader.has_method("get_domain_states"):
-		domain_states = _tool_loader.get_domain_states()
-	var presentation = ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
-	return _create_json_rpc_response({
-		"tools": ToolPresentationService.build_mcp_tool_list(exposed_tools, presentation),
-		"presentationVersion": int(presentation.get("presentationVersion", 1)),
-		"toolTree": presentation.get("toolTree", []),
-		"toolGroups": presentation.get("toolGroups", [])
-	}, id)
+	_configure_service_bundle()
+	return _service_bundle.handle_tools_list(id)
 
 
 func _handle_tools_call(params, id) -> Dictionary:
@@ -234,193 +292,59 @@ func _handle_tools_call(params, id) -> Dictionary:
 
 
 func _handle_tools_call_async(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	var params_dict := params as Dictionary
-	if params_dict.has("arguments") and not (params_dict.get("arguments") is Dictionary):
-		return _create_tool_response({"success": false, "error": "Tool arguments must be an object"}, id)
-	if _tool_loader == null:
-		return _create_json_rpc_error(-32603, "Tool loader not initialized", id)
-	var tool_name := str(params_dict.get("name", ""))
-	var arguments = params_dict.get("arguments", {})
-	if not (arguments is Dictionary):
-		arguments = {}
-	else:
-		arguments = (arguments as Dictionary).duplicate(true)
-	if not (arguments as Dictionary).has("_mcp_context") and params_dict.get("_mcp_context", null) is Dictionary:
-		(arguments as Dictionary)["_mcp_context"] = (params_dict.get("_mcp_context", {}) as Dictionary).duplicate(true)
+	_configure_service_bundle()
+	return await _service_bundle.handle_tools_call_async(params, id)
 
-	if tool_name.is_empty():
-		return _create_tool_response({"success": false, "error": "Missing tool name"}, id)
+
+func _is_stdio_tool_disabled(tool_name: String) -> bool:
 	if _disabled_tools.has(tool_name):
-		return _create_tool_response({"success": false, "error": "Tool '%s' is disabled" % tool_name}, id)
-	if _tool_loader.has_method("is_tool_exposed") and not bool(_tool_loader.is_tool_exposed(tool_name)):
-		return _create_tool_response({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, id)
-
-	var resolved := _resolve_tool_call_name(tool_name)
-	if not bool(resolved.get("success", false)):
-		return _create_tool_response({"success": false, "error": "Invalid tool name: %s" % tool_name}, id)
-
-	var result: Dictionary = await _tool_loader.execute_tool_async(str(resolved["category"]), str(resolved["tool"]), arguments)
-	return _create_tool_response(result, id)
+		return true
+	return false
 
 
 func _handle_resources_list(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	_ensure_resources_prompts_services()
-	return _create_json_rpc_response(_resources_service.build_resources_list_result(params), id)
+	_configure_service_bundle()
+	return _service_bundle.handle_resources_list(params, id)
 
 
 func _handle_resources_templates_list(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	_ensure_resources_prompts_services()
-	return _create_json_rpc_response(_resources_service.build_resource_templates_list_result(params), id)
+	_configure_service_bundle()
+	return _service_bundle.handle_resources_templates_list(params, id)
 
 
 func _handle_resources_read(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	_ensure_resources_prompts_services()
-	var result: Dictionary = _resources_service.build_resources_read_result(params)
-	if not bool(result.get("success", true)):
-		return _create_json_rpc_error(-32602, str(result.get("error", "Resource not found")), id)
-	return _create_json_rpc_response(result, id)
+	_configure_service_bundle()
+	return _service_bundle.handle_resources_read(params, id)
 
 func _handle_prompts_list(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	_ensure_resources_prompts_services()
-	return _create_json_rpc_response(_prompts_service.build_prompts_list_result(params), id)
+	_configure_service_bundle()
+	return _service_bundle.handle_prompts_list(params, id)
 
 
 func _handle_prompts_get(params, id) -> Dictionary:
-	if not (params is Dictionary):
-		return _create_json_rpc_error(-32602, "Invalid params: expected object", id)
-	_ensure_resources_prompts_services()
-	var result: Dictionary = _prompts_service.build_prompts_get_result(params)
-	if not bool(result.get("success", true)):
-		return _create_json_rpc_error(-32602, str(result.get("error", "Prompt not found")), id)
-	return _create_json_rpc_response(result, id)
-
-
-func _configure_resources_prompts_services() -> void:
-	_configure_tool_activity_registry()
-	var resources_context = MCPResourcesServiceContextScript.new()
-	resources_context.get_tool_loader = func(): return _tool_loader
-	resources_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
-	resources_context.get_tool_activity_registry = Callable(self, "_get_stdio_tool_activity_registry")
-	resources_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
-	_resources_service.configure(resources_context)
-	var prompts_context = MCPPromptsServiceContextScript.new()
-	prompts_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
-	_prompts_service.configure(prompts_context)
-
-
-func _configure_tool_activity_registry() -> void:
-	if _tool_loader == null or not _tool_loader.has_method("set_tool_activity_registry"):
-		return
-	if _tool_loader.has_method("get_tool_activity_registry") and _tool_loader.get_tool_activity_registry() != null:
-		return
-	if _tool_loader.has_method("set_tool_activity_registry"):
-		_tool_loader.set_tool_activity_registry(_tool_activity_registry)
+	_configure_service_bundle()
+	return _service_bundle.handle_prompts_get(params, id)
 
 
 func _get_stdio_tool_activity_registry():
-	if _tool_loader != null and _tool_loader.has_method("get_tool_activity_registry"):
-		var registry = _tool_loader.get_tool_activity_registry()
-		if registry != null:
-			return registry
-	return _tool_activity_registry
+	_configure_service_bundle()
+	return _service_bundle.get_stdio_tool_activity_registry()
 
 
-func _ensure_resources_prompts_services() -> void:
-	if _resources_service == null:
-		_resources_service = MCPResourcesServiceScript.new()
-	if _prompts_service == null:
-		_prompts_service = MCPPromptsServiceScript.new()
-	_configure_resources_prompts_services()
+func _configure_service_bundle() -> void:
+	if _service_bundle == null:
+		_service_bundle = MCPStdioServiceBundleScript.new()
+	_service_bundle.configure(self)
 
 
 func _get_stdio_tool_loader_status() -> Dictionary:
-	if _tool_loader == null:
-		return {"initialized": false, "healthy": false, "status": "unavailable", "tool_count": 0, "exposed_tool_count": 0}
-	var tool_count := 0
-	if _tool_loader.has_method("get_tool_definitions"):
-		tool_count = _tool_loader.get_tool_definitions().size()
-	var exposed_tool_count := 0
-	if _tool_loader.has_method("get_exposed_tool_definitions"):
-		exposed_tool_count = _tool_loader.get_exposed_tool_definitions().size()
-	return {"initialized": true, "healthy": true, "status": "ready", "tool_count": tool_count, "exposed_tool_count": exposed_tool_count}
-
-
-func _resolve_tool_call_name(tool_name: String) -> Dictionary:
-	# Exact match via tool definitions
-	for tool_def in _tool_loader.get_tool_definitions():
-		if str(tool_def.get("name", "")) != tool_name:
-			continue
-		var cat := str(tool_def.get("category", ""))
-		if cat.is_empty():
-			break
-		var resolved := tool_name
-		if tool_name.begins_with("%s_" % cat):
-			resolved = tool_name.substr(cat.length() + 1)
-		return {"success": true, "category": cat, "tool": resolved}
-	# Fallback: longest matching prefix
-	var best_cat := ""
-	for state in _tool_loader.get_domain_states():
-		var cat := str(state.get("category", ""))
-		if not cat.is_empty() and tool_name.begins_with("%s_" % cat) and cat.length() > best_cat.length():
-			best_cat = cat
-	if not best_cat.is_empty():
-		return {"success": true, "category": best_cat, "tool": tool_name.substr(best_cat.length() + 1)}
-	# Last resort: split on first _
-	var parts := tool_name.split("_", true, 1)
-	if parts.size() < 2:
-		return {"success": false}
-	return {"success": true, "category": parts[0], "tool": parts[1]}
-
-
-func _create_tool_response(result: Dictionary, id) -> Dictionary:
-	var normalized := _normalize_tool_result(result)
-	var sanitized: Variant = _sanitize_for_json(normalized)
-	var result_text := JSON.stringify(sanitized)
-	var is_error := not bool(normalized.get("success", false))
-	return _create_json_rpc_response({
-		"content": [{"type": "text", "text": result_text}],
-		"structuredContent": sanitized,
-		"isError": is_error
-	}, id)
+	_configure_service_bundle()
+	return _service_bundle.get_stdio_tool_loader_status()
 
 
 func _normalize_tool_result(result) -> Dictionary:
-	if not (result is Dictionary):
-		return {"success": true, "data": result, "message": ""}
-	var normalized: Dictionary = result.duplicate(true)
-	normalized["success"] = bool(normalized.get("success", true))
-	var reserved := {"success": true, "data": true, "message": true, "error": true, "hints": true}
-	if MCPToolActivityRegistry.is_protocol_activity_summary(normalized.get("activity", null)):
-		reserved["activity"] = true
-	var extra := {}
-	for key in normalized.keys():
-		if not reserved.has(key):
-			extra[key] = normalized[key]
-	if normalized["success"]:
-		if not normalized.has("data"):
-			normalized["data"] = extra if not extra.is_empty() else null
-		if not normalized.has("message"):
-			normalized["message"] = ""
-		normalized.erase("error")
-	else:
-		if not normalized.has("error"):
-			normalized["error"] = str(normalized.get("message", "Tool execution failed"))
-		normalized.erase("message")
-		if not normalized.has("data") and not extra.is_empty():
-			normalized["data"] = extra
-	for key in extra.keys():
-		normalized.erase(key)
-	return normalized
+	_configure_service_bundle()
+	return _service_bundle.normalize_tool_result(result)
 
 
 func _create_json_rpc_response(result, id) -> Dictionary:
@@ -435,8 +359,11 @@ func _write_response(obj: Dictionary) -> void:
 	_last_written_response = obj.duplicate(true)
 	var body := JSON.stringify(_sanitize_for_json(obj))
 	var body_bytes := body.to_utf8_buffer()
-	# Content-Length frame; print() appends \n which is fine as inter-frame whitespace
-	print("Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body])
+	if _stdio_framing_mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
+		_last_written_frame = "Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body]
+	else:
+		_last_written_frame = body
+	print(_last_written_frame)
 
 
 func _sanitize_for_json(value):

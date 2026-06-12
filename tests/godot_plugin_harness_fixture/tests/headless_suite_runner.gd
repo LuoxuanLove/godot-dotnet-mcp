@@ -24,9 +24,12 @@ func _run_suite() -> void:
 	var discovered_selected_case_names := {}
 	for case_info in discovered_cases:
 		var case_name := str(case_info.get("name", ""))
+		var mode := str(case_info.get("mode", "headless"))
 		if only_case != "" and case_name != only_case:
 			continue
 		if only_case == "" and not selected_case_names.is_empty() and not selected_case_names.has(case_name):
+			continue
+		if only_case == "" and mode != "headless" and selected_case_names.is_empty():
 			continue
 		if not selected_case_names.is_empty():
 			discovered_selected_case_names[case_name] = true
@@ -39,7 +42,15 @@ func _run_suite() -> void:
 		var case_name := str(case_info.get("name", "unknown_case"))
 		var case_path := str(case_info.get("path", ""))
 		var mode := str(case_info.get("mode", "headless"))
-		var validation: Dictionary = HeadlessCaseSupport.validate_case(case_path)
+		var validation: Dictionary = {"status": "valid", "error": "", "warning": ""}
+		if mode != "headless" and only_case != case_name:
+			validation = {
+				"status": "editor_probe_required",
+				"error": "Selected harness case requires editor probe mode: %s" % mode,
+				"warning": ""
+			}
+		else:
+			validation = HeadlessCaseSupport.validate_case(case_path)
 		var item := {
 			"name": case_name,
 			"path": case_path,

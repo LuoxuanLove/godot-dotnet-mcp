@@ -17,7 +17,10 @@ var _editor_interface := FakeEditorInterface.new()
 
 func run_case(tree: SceneTree) -> Dictionary:
 	_coordinator = PluginReloadCoordinatorScript.new()
-	_coordinator.configure("godot_dotnet_mcp", _editor_interface, null)
+	_coordinator.configure("godot_dotnet_mcp", _editor_interface)
+	var source_guard_error := _assert_coordinator_is_lifecycle_only()
+	if not source_guard_error.is_empty():
+		return _failure(source_guard_error)
 	tree.root.add_child(_coordinator)
 	for _attempt in range(3):
 		await tree.process_frame
@@ -59,6 +62,24 @@ func cleanup_case(tree: SceneTree) -> void:
 	_coordinator = null
 	await tree.process_frame
 	await tree.process_frame
+
+
+func _assert_coordinator_is_lifecycle_only() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd"
+	if not FileAccess.file_exists(source_path):
+		return "PluginReloadCoordinator source should exist for lifecycle-only source guards."
+	var source := FileAccess.get_file_as_string(source_path)
+	for forbidden in [
+		"_server_controller",
+		"func request_reload(",
+		"func request_reload_by_script(",
+		"func request_reload_all(",
+		"reload_domain(",
+		"reload_all_domains()"
+	]:
+		if source.find(forbidden) != -1:
+			return "PluginReloadCoordinator should only coordinate plugin re-enable lifecycle, not runtime reload requests: %s" % forbidden
+	return ""
 
 
 func _failure(message: String) -> Dictionary:

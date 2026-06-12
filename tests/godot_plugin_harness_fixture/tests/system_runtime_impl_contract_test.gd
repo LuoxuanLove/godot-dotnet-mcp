@@ -133,6 +133,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected_name in ["runtime_control", "runtime_step"]:
 		if not tool_names.has(expected_name):
 			return _failure("runtime system impl is missing tool '%s'." % expected_name)
+	var runtime_step_schema := _find_tool_schema(tool_defs, "runtime_step")
+	if runtime_step_schema.is_empty():
+		return _failure("runtime_step schema should be available for contract inspection.")
+	var input_item_properties := _get_runtime_input_item_properties(runtime_step_schema)
+	if input_item_properties.is_empty():
+		return _failure("runtime_step schema should describe runtime input entries.")
+	var kind_enum = (input_item_properties.get("kind", {}) as Dictionary).get("enum", [])
+	if not (kind_enum is Array) or not (kind_enum as Array).has("mouse"):
+		return _failure("runtime_step schema should expose mouse input entries.")
+	var op_enum = (input_item_properties.get("op", {}) as Dictionary).get("enum", [])
+	if not (op_enum is Array) or not (op_enum as Array).has("click") or not (op_enum as Array).has("move"):
+		return _failure("runtime_step schema should expose mouse click and move operations.")
+	if not input_item_properties.has("x") or not input_item_properties.has("y") or not input_item_properties.has("position"):
+		return _failure("runtime_step schema should expose mouse coordinates.")
 
 	var status_result: Dictionary = await impl.execute_async("runtime_control", {"action": "status"})
 	if not bool(status_result.get("success", false)):
@@ -249,3 +263,28 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _find_tool_schema(tool_defs: Array[Dictionary], tool_name: String) -> Dictionary:
+	for tool_def in tool_defs:
+		if str(tool_def.get("name", "")) == tool_name:
+			var schema = tool_def.get("inputSchema", {})
+			if schema is Dictionary:
+				return schema
+	return {}
+
+
+func _get_runtime_input_item_properties(schema: Dictionary) -> Dictionary:
+	var properties = schema.get("properties", {})
+	if not (properties is Dictionary):
+		return {}
+	var inputs = (properties as Dictionary).get("inputs", {})
+	if not (inputs is Dictionary):
+		return {}
+	var items = (inputs as Dictionary).get("items", {})
+	if not (items is Dictionary):
+		return {}
+	var item_properties = (items as Dictionary).get("properties", {})
+	if item_properties is Dictionary:
+		return item_properties
+	return {}

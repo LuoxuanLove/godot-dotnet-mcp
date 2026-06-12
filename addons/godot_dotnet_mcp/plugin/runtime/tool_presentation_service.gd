@@ -3,9 +3,11 @@ extends RefCounted
 class_name ToolPresentationService
 
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolAnnotationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_annotation_service.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const PRESENTATION_VERSION := 1
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 
 
 static func build_tool_presentation(
@@ -13,8 +15,10 @@ static func build_tool_presentation(
 	all_tools_by_category: Dictionary,
 	domain_states: Array = [],
 	disabled_tools: Array = [],
-	domain_defs: Array = MCPToolManifest.TOOL_DOMAIN_DEFS
+	domain_defs: Array = []
 ) -> Dictionary:
+	if domain_defs.is_empty():
+		domain_defs = ToolCatalogManifest.get_domain_defs()
 	var tool_index := _build_tool_index(all_tools_by_category)
 	var exposed_lookup := _build_exposed_lookup(exposed_tools)
 	var disabled_lookup := _build_disabled_lookup(disabled_tools)
@@ -120,36 +124,94 @@ static func enrich_tools_for_presentation(tools: Array, presentation: Dictionary
 			tool["groupPath"] = metadata.get("groupPath", [])
 			tool["treeChildren"] = metadata.get("treeChildren", [])
 			tool["enabled"] = bool(metadata.get("enabled", tool.get("enabled", true)))
+		tool["inputSchema"] = build_tool_input_schema(tool)
+		tool["outputSchema"] = build_tool_output_schema(tool)
 		enriched.append(tool)
 	return enriched
 
 
-static func build_mcp_tool_list(tools: Array, presentation: Dictionary = {}) -> Array[Dictionary]:
-	var source_tools := tools
-	if not presentation.is_empty():
-		source_tools = enrich_tools_for_presentation(tools, presentation)
+static func build_mcp_tool_list(tools: Array, _presentation: Dictionary = {}) -> Array[Dictionary]:
 	var tools_list: Array[Dictionary] = []
-	for tool_def in source_tools:
+	for tool_def in tools:
 		if not (tool_def is Dictionary):
 			continue
 		var tool := tool_def as Dictionary
 		var item := {
 			"name": tool.get("name", ""),
 			"description": tool.get("description", ""),
-			"category": tool.get("category", ""),
-			"domainKey": tool.get("domain_key", tool.get("domainKey", "other")),
-			"loadState": tool.get("load_state", tool.get("loadState", "definitions_only")),
-			"source": tool.get("source", "builtin"),
-			"enabled": bool(tool.get("enabled", true)),
-			"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
-			"outputSchema": _get_tool_output_schema(tool)
+			"inputSchema": build_tool_input_schema(tool),
+			"outputSchema": build_tool_output_schema(tool),
+			"annotations": ToolAnnotationService.build_annotations(tool)
 		}
-		if tool.has("groupPath"):
-			item["groupPath"] = tool.get("groupPath", [])
-		if tool.has("treeChildren"):
-			item["treeChildren"] = tool.get("treeChildren", [])
 		tools_list.append(item)
 	return tools_list
+
+
+static func get_json_schema_dialect() -> String:
+	return JSON_SCHEMA_2020_12_URI
+
+
+static func get_atomic_child_specs(parent_full_name: String) -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(parent_full_name, []):
+		var atomic_full_name := ""
+		var actions: Array = []
+		if entry is Dictionary:
+			atomic_full_name = str((entry as Dictionary).get("tool", ""))
+			actions = (entry as Dictionary).get("actions", [])
+		else:
+			atomic_full_name = str(entry)
+		if atomic_full_name.is_empty():
+			continue
+		specs.append({
+			"tool": atomic_full_name,
+			"actions": _duplicate_array(actions)
+		})
+	return specs
+
+
+static func has_atomic_children(parent_full_name: String) -> bool:
+	return not get_atomic_child_specs(parent_full_name).is_empty()
+
+
+static func get_action_name_key(parent_full_name: String, action_name: String) -> String:
+	return SystemTreeCatalog.get_action_name_key(parent_full_name, action_name)
+
+
+static func get_generic_action_name_key(action_name: String) -> String:
+	return SystemTreeCatalog.get_generic_action_name_key(action_name)
+
+
+static func get_action_desc_key(parent_full_name: String, action_name: String) -> String:
+	return SystemTreeCatalog.get_action_desc_key(parent_full_name, action_name)
+
+
+static func get_generic_action_desc_key(action_name: String) -> String:
+	return SystemTreeCatalog.get_generic_action_desc_key(action_name)
+
+
+static func normalize_json_schema(schema, fallback: Dictionary = {}) -> Dictionary:
+	var schema_dict: Dictionary = {}
+	if schema is Dictionary:
+		schema_dict = (schema as Dictionary).duplicate(true)
+	elif not fallback.is_empty():
+		schema_dict = fallback.duplicate(true)
+	else:
+		schema_dict = {"type": "object", "properties": {}}
+	if not schema_dict.has("$schema"):
+		schema_dict["$schema"] = JSON_SCHEMA_2020_12_URI
+	return schema_dict
+
+
+static func build_tool_input_schema(tool: Dictionary) -> Dictionary:
+	return normalize_json_schema(tool.get("inputSchema", null), {"type": "object", "properties": {}})
+
+
+static func build_tool_output_schema(tool: Dictionary) -> Dictionary:
+	var explicit_schema = tool.get("outputSchema", tool.get("output_schema", null))
+	if explicit_schema is Dictionary:
+		return normalize_json_schema(explicit_schema)
+	return normalize_json_schema(_build_default_tool_output_schema())
 
 
 static func _build_category_tool_nodes(
@@ -196,6 +258,7 @@ static func _build_tool_node(
 	for child in children:
 		child_ids.append(str(child.get("id", "")))
 	var enabled := _is_tool_enabled(tool, full_name, disabled_lookup)
+	var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(tool, full_name))
 	var node := {
 		"kind": "tool",
 		"id": "tool:%s" % full_name,
@@ -214,8 +277,12 @@ static func _build_tool_node(
 		"script_path": str(tool.get("script_path", tool.get("scriptPath", ""))),
 		"domainScriptPath": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
 		"domain_script_path": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
-		"inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
-		"outputSchema": _get_tool_output_schema(tool),
+		"description": str(tool.get("description", "")),
+		"title": str(annotations.get("title", "")),
+		"icons": _duplicate_array(tool.get("icons", [])),
+		"annotations": annotations,
+		"inputSchema": build_tool_input_schema(tool),
+		"outputSchema": build_tool_output_schema(tool),
 		"groupPath": group_path,
 		"treeChildren": child_ids,
 		"children": children
@@ -262,6 +329,7 @@ static func _build_atomic_children(
 		for child in children:
 			child_ids.append(str(child.get("id", "")))
 		var enabled := _is_tool_enabled(atomic_tool, atomic_full_name, disabled_lookup)
+		var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(atomic_tool, atomic_full_name))
 		var node := {
 			"kind": "atomic",
 			"id": "atomic:%s" % atomic_full_name,
@@ -280,8 +348,12 @@ static func _build_atomic_children(
 			"script_path": str(atomic_tool.get("script_path", atomic_tool.get("scriptPath", ""))),
 			"domainScriptPath": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
 			"domain_script_path": str(atomic_tool.get("domain_script_path", atomic_tool.get("domainScriptPath", ""))),
-			"inputSchema": atomic_tool.get("inputSchema", {"type": "object", "properties": {}}),
-			"outputSchema": _get_tool_output_schema(atomic_tool),
+			"description": str(atomic_tool.get("description", "")),
+			"title": str(annotations.get("title", "")),
+			"icons": _duplicate_array(atomic_tool.get("icons", [])),
+			"annotations": annotations,
+			"inputSchema": build_tool_input_schema(atomic_tool),
+			"outputSchema": build_tool_output_schema(atomic_tool),
 			"groupPath": next_path,
 			"treeChildren": child_ids,
 			"children": children
@@ -318,6 +390,12 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"toolName": str(node.get("toolName", "")),
 		"fullName": str(node.get("fullName", "")),
 		"labelKey": str(node.get("labelKey", "")),
+		"description": str(node.get("description", "")),
+		"title": str(node.get("title", "")),
+		"icons": _duplicate_array(node.get("icons", [])),
+		"annotations": _duplicate_dictionary(node.get("annotations", {})),
+		"inputSchema": _duplicate_dictionary(node.get("inputSchema", {})),
+		"outputSchema": _duplicate_dictionary(node.get("outputSchema", {})),
 		"enabled": bool(node.get("enabled", true)),
 		"source": str(node.get("source", "")),
 		"loadState": str(node.get("loadState", "")),
@@ -330,11 +408,23 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 	}
 
 
-static func _get_tool_output_schema(tool: Dictionary) -> Dictionary:
-	var explicit_schema = tool.get("outputSchema", tool.get("output_schema", null))
-	if explicit_schema is Dictionary:
-		return (explicit_schema as Dictionary).duplicate(true)
-	return _build_default_tool_output_schema()
+static func _tool_with_full_name(tool: Dictionary, full_name: String) -> Dictionary:
+	var copy := tool.duplicate(true)
+	copy["name"] = full_name
+	copy["full_name"] = full_name
+	return copy
+
+
+static func _duplicate_dictionary(value) -> Dictionary:
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	return {}
+
+
+static func _duplicate_array(value) -> Array:
+	if value is Array:
+		return (value as Array).duplicate(true)
+	return []
 
 
 static func _build_default_tool_output_schema() -> Dictionary:

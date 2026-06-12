@@ -15,6 +15,7 @@ internal static class BridgeToolDispatcher
             "solution_analyze" => Task.FromResult(SolutionAnalyzeTool.Execute(arguments)),
             "csproj_write" => CsprojWriteTool.ExecuteAsync(arguments, cancellationToken),
             "cs_file_patch" => CsFilePatchTool.ExecuteAsync(arguments, cancellationToken),
+            "cs_plugin_patch" => CsPluginPatchTool.ExecuteAsync(arguments, cancellationToken),
             _ => Task.FromResult(BridgeToolCallResponse.Error($"Unknown tool: {toolName}", new { toolName })),
         };
     }

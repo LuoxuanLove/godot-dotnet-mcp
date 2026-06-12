@@ -122,7 +122,7 @@ The docs are part of the project and must stay in sync with the code.
 | `plugin_runtime_state_service.gd` | Load and save orchestration for runtime state, including default settings, custom-profile loading, and state normalization |
 | `tool_profile_catalog.gd` | Builtin profile source and profile storage directory |
 | `tool_catalog_service.gd` | Profile matching, counts, and category helpers |
-| `tool_catalog_search_service.gd` | Searchable tool catalog summaries for `system_tool_catalog` |
+| `tool_catalog_search_service.gd` | Internal searchable tool catalog summaries for catalog resources |
 | `user_tool_service.gd` | Facade for user-tool discovery and management, delegating to catalog and maintenance helpers |
 | `user_tool_catalog_service.gd` | User-tool directory scanning and compatibility reporting |
 | `user_tool_maintenance_service.gd` | User-tool scaffold, delete, restore, and audit operations |

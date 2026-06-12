@@ -39,7 +39,20 @@ func get_tools() -> Array[Dictionary]:
 				"type": "object",
 				"properties": {
 					"action": {"type": "string", "enum": ["step", "capture", "input"], "description": "Runtime automation action (default: step)"},
-					"inputs": {"type": "array", "items": {"type": "object"}, "description": "Optional runtime input entries"},
+					"inputs": {"type": "array", "items": {
+						"type": "object",
+						"properties": {
+							"kind": {"type": "string", "enum": ["action", "key", "mouse"], "description": "Input kind: InputMap action, keyboard key, or mouse event"},
+							"target": {"type": "string", "description": "Required action name or key name for action/key input; optional mouse button fallback such as left/right/middle"},
+							"button": {"type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button for kind=mouse press/release/click/tap/hold"},
+							"op": {"type": "string", "enum": ["press", "release", "tap", "hold", "click", "move"], "description": "Input operation. Mouse supports click and move; action/key support tap and hold."},
+							"duration_ms": {"type": "integer", "description": "Hold/click/tap duration in milliseconds"},
+							"x": {"type": "number", "description": "Mouse viewport x coordinate for kind=mouse"},
+							"y": {"type": "number", "description": "Mouse viewport y coordinate for kind=mouse"},
+							"position": {"type": "object", "description": "Mouse viewport position object with x/y fields"}
+						},
+						"required": ["kind", "op"]
+					}, "description": "Optional runtime input entries for action, key, or mouse automation"},
 					"wait_frames": {"type": "integer", "description": "Frames to wait before capture (default: 1)"},
 					"frame_count": {"type": "integer", "description": "Number of frames for action=capture (default: 1)"},
 					"interval_frames": {"type": "integer", "description": "Frames to wait between captures for action=capture (default: 1)"},

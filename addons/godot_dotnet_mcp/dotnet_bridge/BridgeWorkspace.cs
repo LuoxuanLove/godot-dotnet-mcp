@@ -20,6 +20,36 @@ internal static class WorkspacePathResolver
         return resolved;
     }
 
+    public static string ResolveProjectPath(string path)
+    {
+        return ResolvePath(path);
+    }
+
+    public static void ValidateWritableResolvedPath(string path)
+    {
+        var resolved = Path.GetFullPath(path);
+        if (!IsPathInsideProject(resolved))
+        {
+            throw ProjectPathException(path);
+        }
+
+        if (PathUsesReparsePointSegment(ProjectRoot, resolved))
+        {
+            throw ProjectPathException(path);
+        }
+
+        var parent = Path.GetDirectoryName(resolved);
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            throw new BridgeToolException($"Target directory does not exist: {path}");
+        }
+
+        if (PathUsesReparsePointSegment(ProjectRoot, parent))
+        {
+            throw ProjectPathException(path);
+        }
+    }
+
     public static string ResolveSolutionFile(string path)
     {
         var resolved = ResolvePath(path);

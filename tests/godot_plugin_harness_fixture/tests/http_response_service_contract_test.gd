@@ -209,6 +209,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Health response did not expose the unified protocol version.")
 	if str(health.get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
 		return _failure("Health response did not expose the unified tool schema version.")
+	var server_info := MCPProtocolFacts.build_server_info()
+	if str(server_info.get("description", "")).is_empty():
+		return _failure("Unified server info should expose an MCP 2025-11-25 implementation description.")
 	var freshness: Dictionary = health.get("freshness", {})
 	if str(freshness.get("status", "")) != "fresh" or bool(freshness.get("needs_lifecycle_reload", true)):
 		return _failure("Health response should expose plugin instance freshness.")
@@ -237,7 +240,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(active_maintenance.get("refetch_tools_required", false)) or int(active_maintenance.get("retry_after_ms", 0)) <= 0:
 		return _failure("Health maintenance window should tell clients to retry and refetch tools after reconnect.")
 
-	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST", "Content-Type, Accept")
+	var cors_response: Dictionary = service.build_cors_response("http://localhost:5173", "POST")
 	var cors_headers: Dictionary = cors_response.get("_headers", {})
 	if int(cors_response.get("_status_code", 0)) != 204 or not bool(cors_response.get("_no_body", false)):
 		return _failure("CORS response did not preserve preflight no-body semantics.")
@@ -247,6 +250,72 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("CORS response must not emit wildcard origins.")
 	if str(cors_headers.get("Vary", "")) != "Origin":
 		return _failure("CORS response did not include Vary: Origin.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("CORS response should allow the MCP-Protocol-Version header.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
+		return _failure("CORS response should allow the Mcp-Session-Id header.")
+	if str(cors_headers.get("Access-Control-Allow-Headers", "")).find("Last-Event-ID") == -1:
+		return _failure("CORS response should allow the Last-Event-ID resume cursor header.")
+
+	var raw_sse_text := _send_raw_response_over_loopback(service, {
+		"status": 406,
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_raw_body": "event: endpoint\ndata: {}\n\n",
+		"_headers": {
+			"Cache-Control": "no-cache"
+		}
+	})
+	if raw_sse_text.is_empty():
+		return _failure("HTTP response service should send raw SSE responses.")
+	if raw_sse_text.find("HTTP/1.1 406 Not Acceptable") == -1:
+		return _failure("HTTP response service should use the correct 406 status text.")
+	if raw_sse_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should preserve raw SSE content type.")
+	if raw_sse_text.find("Connection: keep-alive") == -1:
+		return _failure("HTTP response service should keep raw SSE HTTP connections alive.")
+	if raw_sse_text.find("event: endpoint\ndata: {}\n\n") == -1:
+		return _failure("HTTP response service should write raw SSE bodies without JSON encoding.")
+	var post_sse_text := _send_raw_response_over_loopback(service, {
+		"status": 200,
+		"_content_type": "text/event-stream; charset=utf-8",
+		"_raw_body": "id: post-1\nretry: 1000\nevent: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}\n\n",
+		"_headers": {
+			"MCP-Protocol-Version": MCPProtocolFacts.get_protocol_version(),
+			"Mcp-Session-Id": "post-sse-session"
+		}
+	})
+	if post_sse_text.find("HTTP/1.1 200 OK") == -1 or post_sse_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should send finite POST SSE responses as raw HTTP 200 event streams.")
+	if post_sse_text.find("Content-Length:") == -1:
+		return _failure("HTTP response service should keep Content-Length on finite raw POST SSE responses.")
+	if post_sse_text.find("Mcp-Session-Id: post-sse-session") == -1:
+		return _failure("HTTP response service should preserve MCP session headers on finite POST SSE responses.")
+	if post_sse_text.find("\"jsonrpc\":\"2.0\"") == -1 or post_sse_text.find("\"id\":7") == -1:
+		return _failure("HTTP response service should write finite POST SSE JSON-RPC response events without JSON encoding.")
+
+	var stream_text := _send_sse_stream_open_over_loopback(service, {
+		"_raw_body": "id: stream-1\nretry: 1000\nevent: message\ndata: {}\n\n",
+		"_headers": {
+			"MCP-Protocol-Version": MCPProtocolFacts.get_protocol_version(),
+			"Mcp-Session-Id": "contract-sse-session"
+		}
+	})
+	if stream_text.is_empty():
+		return _failure("HTTP response service should open long-lived SSE streams.")
+	if stream_text.find("HTTP/1.1 200 OK") == -1:
+		return _failure("HTTP response service should open SSE streams with HTTP 200.")
+	if stream_text.find("Content-Type: text/event-stream; charset=utf-8") == -1:
+		return _failure("HTTP response service should set SSE stream content type.")
+	if stream_text.find("Content-Length:") != -1:
+		return _failure("HTTP response service must not send Content-Length on long-lived SSE streams.")
+	if stream_text.find("Mcp-Session-Id: contract-sse-session") == -1:
+		return _failure("HTTP response service should preserve MCP session headers on SSE streams.")
+	if stream_text.find("id: stream-1") == -1:
+		return _failure("HTTP response service should send initial SSE stream events.")
+
+	var heartbeat_text := _send_sse_heartbeat_over_loopback(service)
+	if heartbeat_text.find(": godot-dotnet-mcp heartbeat\n\n") == -1:
+		return _failure("HTTP response service should write SSE heartbeat comments.")
 
 	var sanitized = service.sanitize_for_json({
 		"nan": NAN,
@@ -283,3 +352,120 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _send_raw_response_over_loopback(service, response_data: Dictionary) -> String:
+	var port := _pick_free_port(34150)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_http_response(accepted, response_data):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("\r\n\r\n") != -1 and text.find("event: endpoint") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _send_sse_stream_open_over_loopback(service, response_data: Dictionary) -> String:
+	var port := _pick_free_port(34180)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_sse_stream_open(accepted, response_data):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("\r\n\r\n") != -1 and text.find("id: stream-1") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _send_sse_heartbeat_over_loopback(service) -> String:
+	var port := _pick_free_port(34210)
+	if port <= 0:
+		return ""
+	var server := TCPServer.new()
+	if server.listen(port, "127.0.0.1") != OK:
+		return ""
+	var client := StreamPeerTCP.new()
+	client.connect_to_host("127.0.0.1", port)
+	var accepted: StreamPeerTCP = null
+	for _i in range(120):
+		if server.is_connection_available():
+			accepted = server.take_connection()
+			break
+		Engine.get_main_loop().process_frame
+	if accepted == null:
+		server.stop()
+		return ""
+	if not service.send_sse_heartbeat(accepted):
+		server.stop()
+		return ""
+	var text := ""
+	for _i in range(120):
+		client.poll()
+		var available := client.get_available_bytes()
+		if available > 0:
+			var packet := client.get_data(available)
+			if int(packet[0]) == OK:
+				text += (packet[1] as PackedByteArray).get_string_from_utf8()
+		if text.find("heartbeat") != -1:
+			break
+		Engine.get_main_loop().process_frame
+	server.stop()
+	return text
+
+
+func _pick_free_port(start_port: int) -> int:
+	for port in range(start_port, start_port + 20):
+		var probe := TCPServer.new()
+		if probe.listen(port, "127.0.0.1") == OK:
+			probe.stop()
+			return port
+	return -1
