@@ -6,6 +6,8 @@ $scriptRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
 $manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
 $roslynRuntimeGuardPath = Join-Path $scriptRoot "scripts\validate_roslyn_runtime_bundle.ps1"
+$releaseChangelogValidatorPath = Join-Path $scriptRoot "scripts\validate_release_changelog_section.ps1"
+$releaseChangelogTestPath = Join-Path $scriptRoot "scripts\test_release_changelog_section.ps1"
 
 function Write-Utf8NoBom {
     param(
@@ -40,6 +42,8 @@ function Write-GuardrailFixture {
     Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_refactor_guardrails.ps1")
     Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $RepositoryRoot "scripts\contract_case_manifest.json")
     Copy-Item -LiteralPath $roslynRuntimeGuardPath -Destination (Join-Path $RepositoryRoot "scripts\validate_roslyn_runtime_bundle.ps1")
+    Copy-Item -LiteralPath $releaseChangelogValidatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_release_changelog_section.ps1")
+    Copy-Item -LiteralPath $releaseChangelogTestPath -Destination (Join-Path $RepositoryRoot "scripts\test_release_changelog_section.ps1")
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
@@ -125,7 +129,7 @@ function Invoke-GuardrailScenario {
         $passed = $true
         $failureMessage = ""
         try {
-            $output = & (Join-Path $repo "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy -SkipBridgeSafeWrites 2>&1
+            $output = & (Join-Path $repo "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy -SkipBridgeSafeWrites -SkipReleaseChangelogPolicy 2>&1
             $output | Out-Host
         } catch {
             $passed = $false
