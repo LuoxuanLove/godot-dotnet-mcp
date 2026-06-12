@@ -16,6 +16,7 @@ const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dot
 const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
 const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
 const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
+const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -35,6 +36,7 @@ var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
 var _execution_service = ToolExecutionServiceScript.new()
 var _tick_service = ToolLoaderTickServiceScript.new()
 var _enablement_service = ToolLoaderEnablementServiceScript.new()
+var _reload_service = ToolLoaderReloadServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -297,116 +299,11 @@ func _refresh_runtime_context() -> void:
 
 
 func reload_domain(category: String) -> Dictionary:
-	MCPDebugBuffer.record("info", "tool_loader", "Reloading domain: %s" % category)
-	if category == "user":
-		_refresh_entries()
-
-	if not _entries_by_category.has(category):
-		if category == "user":
-			return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
-		MCPDebugBuffer.record("warning", "tool_loader", "Unknown domain: %s" % category)
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": "Unknown tool domain"
-		}]))
-
-	var entry: Dictionary = _entries_by_category.get(category, {})
-	if not (true if entry.get("hot_reloadable", true) else false):
-		return _update_reload_status(_make_reload_status("reload_domain", [], [category], []))
-
-	var old_runtime: Dictionary = _runtime_by_category.get(category, {}).duplicate(true)
-	var definitions_before = _tool_definitions_by_category.get(category, []).duplicate(true)
-	var reload_started = Time.get_ticks_usec()
-
-	var instantiate_result = _instantiate_executor(category, true, "reload")
-	if not instantiate_result.get("success", false):
-		var reload_err := str(instantiate_result.get("error", "Failed to reload tool domain"))
-		MCPDebugBuffer.record("error", "tool_loader",
-			"Domain %s reload failed: %s" % [category, reload_err])
-		_record_reload_incident(category, reload_err, "reload_domain")
-		if not old_runtime.is_empty():
-			_runtime_by_category[category] = old_runtime
-		if not definitions_before.is_empty():
-			_tool_definitions_by_category[category] = definitions_before
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": reload_err
-		}], _elapsed_ms(reload_started)))
-
-	var executor = instantiate_result.get("executor")
-	var version = int(old_runtime.get("version", 0)) + 1
-	var allow_empty_definitions = true if entry.get("allow_empty_definitions", false) else false
-	_runtime_by_category[category] = {
-		"instance": executor,
-		"state": "loaded",
-		"version": version,
-		"load_count": int(old_runtime.get("load_count", 0)) + 1,
-		"last_loaded_at_unix": int(Time.get_unix_time_from_system()),
-		"last_error": null
-	}
-	var definitions = _extract_tool_definitions(category, executor)
-	if definitions.is_empty():
-		if allow_empty_definitions:
-			_tool_definitions_by_category[category] = []
-			_sync_load_error_incidents("reload_domain")
-			_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
-			_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
-			MCPDebugBuffer.record("info", "tool_loader",
-				"Domain %s reloaded with no tool definitions (allowed) (%.0fms)" % [category, _elapsed_ms(reload_started)])
-			_refresh_runtime_context()
-			_reset_gdscript_lsp_diagnostics_service()
-			if not _category_has_enabled_tools(category):
-				_unload_runtime(category, "reload_completed_disabled")
-			return _update_reload_status(_make_reload_status("reload_domain", [category], [], [], _elapsed_ms(reload_started)))
-		_record_reload_incident(category, "Reloaded tool domain did not expose any tool definitions", "reload_domain")
-		if not old_runtime.is_empty():
-			_runtime_by_category[category] = old_runtime
-		if not definitions_before.is_empty():
-			_tool_definitions_by_category[category] = definitions_before
-		return _update_reload_status(_make_reload_status("reload_domain", [], [], [{
-			"domain": category,
-			"error": "Reloaded tool domain did not expose any tool definitions"
-		}], _elapsed_ms(reload_started)))
-
-	_tool_definitions_by_category[category] = definitions
-	_sync_load_error_incidents("reload_domain")
-	_performance["reload_total_ms"] = float(_performance.get("reload_total_ms", 0.0)) + _elapsed_ms(reload_started)
-	_performance["reload_count"] = int(_performance.get("reload_count", 0)) + 1
-
-	MCPDebugBuffer.record("info", "tool_loader",
-		"Domain %s reloaded: %d tools (%.0fms)" % [category, definitions.size(), _elapsed_ms(reload_started)])
-
-	_refresh_runtime_context()
-	_reset_gdscript_lsp_diagnostics_service()
-	if not _category_has_enabled_tools(category):
-		_unload_runtime(category, "reload_completed_disabled")
-
-	return _update_reload_status(_make_reload_status("reload_domain", [category], [], [], _elapsed_ms(reload_started)))
+	return _reload_service.reload_domain(category, _build_reload_context())
 
 
 func reload_all_domains() -> Dictionary:
-	var started_usec = Time.get_ticks_usec()
-	var disabled_tools = get_disabled_tools()
-	_refresh_entries()
-	_set_disabled_tools(disabled_tools)
-
-	var reloaded: Array = []
-	var skipped: Array = []
-	var failed: Array = []
-	for category in _ordered_categories:
-		var entry: Dictionary = _entries_by_category.get(category, {})
-		if not _as_bool(entry.get("hot_reloadable", true)):
-			skipped.append(category)
-			continue
-		var status = reload_domain(category)
-		reloaded.append_array(status.get("reloaded_domains", []))
-		skipped.append_array(status.get("skipped_domains", []))
-		failed.append_array(status.get("failed_domains", []))
-	_sync_load_error_incidents("reload_all_domains")
-	_refresh_runtime_context()
-	_reset_gdscript_lsp_diagnostics_service()
-
-	return _update_reload_status(_make_reload_status("reload_all_domains", reloaded, skipped, failed, _elapsed_ms(started_usec)))
+	return _reload_service.reload_all_domains(_build_reload_context())
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
@@ -671,6 +568,54 @@ func _build_execution_context() -> Dictionary:
 		"finish_tool_activity": Callable(self, "_finish_tool_activity"),
 		"failure": Callable(self, "_failure")
 	}
+
+
+func _build_reload_context() -> Dictionary:
+	return {
+		"ordered_categories": _ordered_categories,
+		"entries_by_category": _entries_by_category,
+		"runtime_by_category": _runtime_by_category,
+		"tool_definitions_by_category": _tool_definitions_by_category,
+		"performance": _performance,
+		"get_ordered_categories": Callable(self, "_get_ordered_categories_for_reload"),
+		"get_entries_by_category": Callable(self, "_get_entries_by_category_for_reload"),
+		"get_runtime_by_category": Callable(self, "_get_runtime_by_category_for_reload"),
+		"get_tool_definitions_by_category": Callable(self, "_get_tool_definitions_by_category_for_reload"),
+		"get_performance": Callable(self, "_get_performance_for_reload"),
+		"refresh_entries": Callable(self, "_refresh_entries"),
+		"instantiate_executor": Callable(self, "_instantiate_executor"),
+		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
+		"record_reload_incident": Callable(self, "_record_reload_incident"),
+		"sync_load_error_incidents": Callable(self, "_sync_load_error_incidents"),
+		"refresh_runtime_context": Callable(self, "_refresh_runtime_context"),
+		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),
+		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
+		"unload_runtime": Callable(self, "_unload_runtime"),
+		"make_reload_status": Callable(self, "_make_reload_status"),
+		"update_reload_status": Callable(self, "_update_reload_status"),
+		"get_disabled_tools": Callable(self, "get_disabled_tools"),
+		"set_disabled_tools": Callable(self, "_set_disabled_tools")
+	}
+
+
+func _get_ordered_categories_for_reload() -> Array:
+	return _ordered_categories
+
+
+func _get_entries_by_category_for_reload() -> Dictionary:
+	return _entries_by_category
+
+
+func _get_runtime_by_category_for_reload() -> Dictionary:
+	return _runtime_by_category
+
+
+func _get_tool_definitions_by_category_for_reload() -> Dictionary:
+	return _tool_definitions_by_category
+
+
+func _get_performance_for_reload() -> Dictionary:
+	return _performance
 
 
 func _apply_tick_result(tick_result: Dictionary) -> void:
