@@ -310,7 +310,7 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
 	var command_args: Array[String] = [runtime_dll]
 	command_args.append_array(args)
-	var exit_code := OS.execute("dotnet", command_args, output, true, false)
+	var exit_code := OS.execute("dotnet", PackedStringArray(command_args), output, true, false)
 	var stdout := ""
 	if not output.is_empty():
 		stdout = str(output[0]).strip_edges()
