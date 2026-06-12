@@ -46,6 +46,7 @@ func build_preview(kind: String, id: String, arguments: Dictionary = {}) -> Dict
 func _build_resource_preview(uri: String, arguments: Dictionary) -> Dictionary:
 	if _resources_service == null:
 		_resources_service = MCPResourcesServiceScript.new()
+	var metadata := _find_resource_metadata(uri)
 	var result: Dictionary = _resources_service.build_resources_read_result({"uri": uri})
 	if not bool(result.get("success", true)):
 		return _error_preview("resource", uri, str(result.get("error", "Resource preview failed.")), arguments)
@@ -59,10 +60,13 @@ func _build_resource_preview(uri: String, arguments: Dictionary) -> Dictionary:
 	return {
 		"kind": "resource",
 		"id": uri,
-		"title": uri,
+		"title": str(metadata.get("title", metadata.get("name", uri))),
+		"description": str(metadata.get("description", "")),
 		"success": true,
 		"text": text,
 		"mimeType": mime_type,
+		"icons": _duplicate_array(metadata.get("icons", [])),
+		"contents": contents.duplicate(true),
 		"arguments": arguments.duplicate(true)
 	}
 
@@ -70,6 +74,7 @@ func _build_resource_preview(uri: String, arguments: Dictionary) -> Dictionary:
 func _build_prompt_preview(name: String, arguments: Dictionary) -> Dictionary:
 	if _prompts_service == null:
 		_prompts_service = MCPPromptsServiceScript.new()
+	var metadata := _find_prompt_metadata(name)
 	var result: Dictionary = _prompts_service.build_prompts_get_result({
 		"name": name,
 		"arguments": _compact_arguments(arguments)
@@ -95,12 +100,42 @@ func _build_prompt_preview(name: String, arguments: Dictionary) -> Dictionary:
 	return {
 		"kind": "prompt",
 		"id": name,
-		"title": str(result.get("description", name)),
+		"title": str(metadata.get("title", result.get("description", name))),
+		"description": str(metadata.get("description", result.get("description", ""))),
 		"success": true,
 		"text": "\n\n".join(text_parts),
 		"messages": messages.duplicate(true),
+		"arguments_metadata": _duplicate_array(metadata.get("arguments", [])),
+		"icons": _duplicate_array(metadata.get("icons", [])),
 		"arguments": _compact_arguments(arguments)
 	}
+
+
+func _find_resource_metadata(uri: String) -> Dictionary:
+	var lists := [
+		_resources_service.build_resources_list_result().get("resources", []),
+		_resources_service.build_resource_templates_list_result().get("resourceTemplates", [])
+	]
+	for entries in lists:
+		if not (entries is Array):
+			continue
+		for entry in entries as Array:
+			if not (entry is Dictionary):
+				continue
+			var entry_dict := entry as Dictionary
+			if str(entry_dict.get("uri", entry_dict.get("uriTemplate", ""))) == uri:
+				return entry_dict.duplicate(true)
+	return {}
+
+
+func _find_prompt_metadata(name: String) -> Dictionary:
+	var entries = _prompts_service.build_prompts_list_result().get("prompts", [])
+	if not (entries is Array):
+		return {}
+	for entry in entries as Array:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return (entry as Dictionary).duplicate(true)
+	return {}
 
 
 func _compact_arguments(arguments: Dictionary) -> Dictionary:
@@ -120,6 +155,12 @@ func _compact_arguments(arguments: Dictionary) -> Dictionary:
 			continue
 		compacted[name] = raw_value
 	return compacted
+
+
+func _duplicate_array(values) -> Array:
+	if values is Array:
+		return (values as Array).duplicate(true)
+	return []
 
 
 func _error_preview(kind: String, id: String, error: String, arguments: Dictionary) -> Dictionary:

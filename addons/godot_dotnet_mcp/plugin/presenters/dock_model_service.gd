@@ -63,6 +63,7 @@ func configure(
 		_self_diagnostic_feature = _context_get(context_or_state, "self_diagnostic_feature")
 		var resolved_editor_scale = _context_get(context_or_state, "get_editor_scale", Callable())
 		_get_editor_scale = resolved_editor_scale if resolved_editor_scale is Callable else Callable()
+		_configure_mcp_catalog_projection_service()
 		return
 
 	_state = context_or_state
@@ -78,6 +79,7 @@ func configure(
 	_tool_access_feature = null
 	_self_diagnostic_feature = null
 	_get_editor_scale = get_editor_scale
+	_configure_mcp_catalog_projection_service()
 
 
 func _context_get(context, key: String, default_value = null):
@@ -247,10 +249,59 @@ func _build_mcp_catalog_projection() -> Dictionary:
 	return _mcp_catalog_projection_service.build_projection()
 
 
+func _configure_mcp_catalog_projection_service() -> void:
+	if _mcp_catalog_projection_service == null:
+		return
+	_mcp_catalog_projection_service.configure({
+		"get_tool_loader": Callable(self, "_get_tool_loader"),
+		"get_tool_loader_status": Callable(self, "_get_tool_loader_status_for_mcp_catalog"),
+		"get_tool_activity_registry": Callable(self, "_get_tool_activity_registry_for_mcp_catalog"),
+		"sanitize_for_json": Callable(self, "_sanitize_for_mcp_catalog")
+	})
+
+
 func _get_tool_loader():
 	if _server_controller != null and _server_controller.has_method("get_tool_loader"):
 		return _server_controller.get_tool_loader()
 	return _server_controller
+
+
+func _get_tool_loader_status_for_mcp_catalog() -> Dictionary:
+	if _server_controller != null and _server_controller.has_method("get_tool_loader_status"):
+		var status = _server_controller.get_tool_loader_status()
+		if status is Dictionary:
+			return (status as Dictionary).duplicate(true)
+	var loader = _get_tool_loader()
+	if loader != null and loader.has_method("get_tool_loader_status"):
+		var loader_status = loader.get_tool_loader_status()
+		if loader_status is Dictionary:
+			return (loader_status as Dictionary).duplicate(true)
+	return {}
+
+
+func _get_tool_activity_registry_for_mcp_catalog():
+	var loader = _get_tool_loader()
+	if loader != null and loader.has_method("get_tool_activity_registry"):
+		return loader.get_tool_activity_registry()
+	return null
+
+
+func _sanitize_for_mcp_catalog(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var result := {}
+			for key in value:
+				result[str(key)] = _sanitize_for_mcp_catalog(value[key])
+			return result
+		TYPE_ARRAY:
+			var result := []
+			for item in value:
+				result.append(_sanitize_for_mcp_catalog(item))
+			return result
+		TYPE_OBJECT:
+			return str(value)
+		_:
+			return value
 
 
 func _get_exposed_tool_full_name(category: String, tool: Dictionary) -> String:

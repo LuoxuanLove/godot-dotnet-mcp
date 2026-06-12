@@ -46,6 +46,7 @@ const REQUIRED_CASES := {
 	"http_transport_service_contracts": {"axis": "streamable_http", "layer": "transport", "domain": "http"},
 	"stdio_tool_error_parity_contracts": {"axis": "stdio", "layer": "transport", "domain": "stdio"},
 	"dock_model_service_contracts": {"axis": "ui_metadata", "layer": "dock", "domain": "model", "conformance": "optional"},
+	"dock_mcp_catalog_projection_service_contracts": {"axis": "ui_metadata", "layer": "dock", "domain": "resources_prompts", "conformance": "optional"},
 	"dock_mcp_catalog_preview_service_contracts": {"axis": "ui_metadata", "layer": "dock", "domain": "resources_prompts", "conformance": "optional"},
 	"mcp_catalog_tab_rendering_contracts": {"axis": "ui_metadata", "layer": "dock", "domain": "resources_prompts", "conformance": "optional"},
 	"tools_tab_rendering_contracts": {"axis": "ui_metadata", "layer": "dock", "domain": "tools", "conformance": "optional"}

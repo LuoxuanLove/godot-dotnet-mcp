@@ -90,6 +90,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should render MCP resource template icons from protocol metadata.")
 	if _find_protocol_icon(prompts_tab, "prompt", "godot.project_orientation") == null:
 		return _failure("Prompts tab should render MCP prompt icons from protocol metadata.")
+	var invalid_icon := _find_protocol_icon(resources_tab, "resource", "godot-dotnet-mcp://state/editor")
+	if invalid_icon == null or not (invalid_icon is Label):
+		return _failure("Resources tab should render invalid protocol icons as bounded fallback labels.")
+	if (invalid_icon as Control).custom_minimum_size.x > 24.0:
+		return _failure("Protocol icon fallback should keep a bounded width in compact Dock layouts.")
 	if _find_label_containing(resources_tab, "application/json") == null:
 		return _failure("Resources tab should display resource mime type metadata.")
 	if _find_label_containing(prompts_tab, "goal, include_scene") == null:
@@ -140,6 +145,27 @@ func run_case(tree: SceneTree) -> Dictionary:
 	copy_preview_button.emit_signal("pressed")
 	if recorder.copied_text != "Use resources/list before editing.":
 		return _failure("Copy Preview should emit generated prompt text.")
+	var resource_preview_model := _build_model()
+	resource_preview_model["mcp_catalog_preview"] = {
+		"kind": "resource",
+		"id": "godot-dotnet-mcp://guides/index",
+		"title": "Guide Index",
+		"description": "Canonical guide catalog.",
+		"success": true,
+		"text": "{\"guides\":[]}",
+		"mimeType": "application/json"
+	}
+	resources_tab.apply_model(resource_preview_model)
+	await tree.process_frame
+	var resource_preview_text := _find_label_containing(resources_tab, "{\"guides\":[]}")
+	if resource_preview_text == null:
+		return _failure("Resource preview results should render resources/read text.")
+	copy_preview_button = _find_entry_card(resources_tab, "resource", "godot-dotnet-mcp://guides/index").find_child("CopyPreviewButton", true, false) as Button
+	if copy_preview_button == null:
+		return _failure("Rendered resource previews should expose a copy preview button.")
+	copy_preview_button.emit_signal("pressed")
+	if recorder.copied_text != "{\"guides\":[]}" or not recorder.copied_source.contains("Guide Index"):
+		return _failure("Resource Copy Preview should emit resource text and the resource title.")
 	goal_input = _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("ArgumentInput_goal", true, false) as LineEdit
 	goal_input.text = "map the runtime"
 	goal_input.emit_signal("text_changed", "map the runtime")
@@ -190,7 +216,7 @@ func _build_model() -> Dictionary:
 			"description": "Current editor state.",
 			"mimeType": "application/json",
 			"resource_kind": "state",
-			"icons": [_icon_metadata("state")]
+			"icons": [{"src": "data:text/plain;base64,%s" % Marshalls.raw_to_base64("not svg".to_utf8_buffer()), "mimeType": "text/plain", "sizes": ["any"]}]
 		}],
 		"mcp_resource_templates": [{
 			"uri": "godot-dotnet-mcp://scene/{path}",
