@@ -60,13 +60,17 @@ internal static class CsFileReadTool
     {
         try
         {
-            var path = WorkspacePathResolver.ResolveExistingPath(BridgeArgumentReader.GetRequiredString(arguments, "path"));
+            var rawPath = BridgeArgumentReader.GetRequiredString(arguments, "path");
+            var hasSourceText = BridgeArgumentReader.TryGetString(arguments, "sourceText", out var sourceText);
+            var path = hasSourceText
+                ? WorkspacePathResolver.ResolveProjectPath(rawPath)
+                : WorkspacePathResolver.ResolveExistingPath(rawPath);
             if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             {
                 throw new BridgeToolException("cs_file_read requires a .cs path.");
             }
 
-            var result = BridgeArgumentReader.TryGetString(arguments, "sourceText", out var sourceText)
+            var result = hasSourceText
                 ? CSharpFileReader.ReadSource(path, sourceText ?? string.Empty)
                 : CSharpFileReader.Read(path);
             return BridgeToolCallResponse.Success(result);
