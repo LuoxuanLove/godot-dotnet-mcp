@@ -147,6 +147,7 @@ Target version: 1.4.0.
 - Enforced removal guards for the deleted filesystem root monolith, `filesystem_file` loader definition, direct filesystem-domain execution, and stale localization inventory keys.
 - Added debug executor source guards so the canonical debug implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
 - Added editor executor source guards so the canonical editor implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
+- Added an aggregate root tool monolith closure guard that allows only `base_tools.gd` plus the intentional debug/editor compatibility wrappers at the tools root.
 - Added `ToolCatalogManifest` as the single static catalog fact source for built-in tool entries, domain metadata, public category exposure, and removed public tool guards while keeping the existing registry and manifest adapters.
 - Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
 - Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
