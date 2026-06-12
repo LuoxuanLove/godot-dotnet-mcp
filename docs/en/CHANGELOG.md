@@ -87,6 +87,7 @@ Target version: 1.4.0.
 - Centralized `MCPToolLoader` loader-specific context wiring inside the loader context service, removed unused reload state forwarding methods, and added source guards that keep context routing and AtomicBridge helper behavior from flowing back into facade classes.
 - Moved stdio tool-router, resource, and prompt service context wiring into a dedicated stdio service context builder so the stdio transport stays focused on framing and request handling.
 - Moved plugin entrypoint lifecycle wiring into a dedicated plugin lifecycle service so `plugin.gd` delegates enter, exit, disable, and process orchestration through one service boundary.
+- Moved plugin config, reload scheduling, and user-tool watch wiring into a dedicated plugin config/reload wiring service so `plugin.gd` no longer owns those service construction details.
 - Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
 - Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
 
