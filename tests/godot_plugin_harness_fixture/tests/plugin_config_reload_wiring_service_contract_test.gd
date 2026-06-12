@@ -250,6 +250,9 @@ func _assert_plugin_entrypoint_uses_config_reload_wiring_service() -> String:
 		"ConfigTabActionServiceScript = preload",
 		"UserToolWatchServiceScript = preload",
 		"PluginReloadCoordinator.new()",
+		"coordinator.request_reload(",
+		"coordinator.request_reload_by_script(",
+		"coordinator.request_reload_all(",
 		"ConfigTabActionServiceScript.new()",
 		"UserToolWatchServiceScript.new()"
 	]:
