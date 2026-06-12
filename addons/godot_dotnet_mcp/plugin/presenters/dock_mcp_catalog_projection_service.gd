@@ -85,7 +85,12 @@ func _project_prompts(entries) -> Array[Dictionary]:
 
 
 func _resource_kind_for_entry(entry: Dictionary, is_template: bool) -> String:
-	var protocol_kind := str(entry.get("resourceKind", entry.get("resource_kind", ""))).strip_edges()
+	var meta = entry.get("_meta", {})
+	var protocol_kind := ""
+	if meta is Dictionary:
+		protocol_kind = str((meta as Dictionary).get("resourceKind", "")).strip_edges()
+	if protocol_kind.is_empty():
+		protocol_kind = str(entry.get("resource_kind", "")).strip_edges()
 	if not protocol_kind.is_empty():
 		return protocol_kind
 	if is_template:
@@ -94,7 +99,12 @@ func _resource_kind_for_entry(entry: Dictionary, is_template: bool) -> String:
 
 
 func _prompt_kind_for_entry(entry: Dictionary) -> String:
-	var protocol_kind := str(entry.get("promptKind", entry.get("prompt_kind", ""))).strip_edges()
+	var meta = entry.get("_meta", {})
+	var protocol_kind := ""
+	if meta is Dictionary:
+		protocol_kind = str((meta as Dictionary).get("promptKind", "")).strip_edges()
+	if protocol_kind.is_empty():
+		protocol_kind = str(entry.get("prompt_kind", "")).strip_edges()
 	return protocol_kind if not protocol_kind.is_empty() else "prompt"
 
 

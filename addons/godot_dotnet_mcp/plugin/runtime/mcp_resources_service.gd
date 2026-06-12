@@ -736,7 +736,11 @@ func _with_catalog_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 	metadata["icons"] = [_icon_metadata(icon_name)]
 	var kind := _resource_kind_for_entry(metadata)
 	if not kind.is_empty():
-		metadata["resourceKind"] = kind
+		var meta := metadata.get("_meta", {})
+		if not (meta is Dictionary):
+			meta = {}
+		(meta as Dictionary)["resourceKind"] = kind
+		metadata["_meta"] = meta
 	return metadata
 
 

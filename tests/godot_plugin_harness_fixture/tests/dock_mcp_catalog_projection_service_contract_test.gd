@@ -120,6 +120,8 @@ func _projection_source_still_uses_substring_classifiers() -> bool:
 		return true
 	var source := script.get_as_text()
 	var forbidden := [
+		"entry.get(\"resourceKind\"",
+		"entry.get(\"promptKind\"",
 		"begins_with(\"godot-dotnet-mcp://",
 		".find(\"debug\")",
 		".find(\"runtime\")",

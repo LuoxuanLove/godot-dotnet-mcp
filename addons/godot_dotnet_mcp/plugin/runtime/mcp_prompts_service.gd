@@ -323,7 +323,11 @@ func _text(key: String, fallback: String) -> String:
 func _with_prompt_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 	var metadata := entry.duplicate(true)
 	metadata["icons"] = [_icon_metadata(icon_name)]
-	metadata["promptKind"] = _prompt_kind_for_name(str(metadata.get("name", "")))
+	var meta := metadata.get("_meta", {})
+	if not (meta is Dictionary):
+		meta = {}
+	(meta as Dictionary)["promptKind"] = _prompt_kind_for_name(str(metadata.get("name", "")))
+	metadata["_meta"] = meta
 	return metadata
 
 
