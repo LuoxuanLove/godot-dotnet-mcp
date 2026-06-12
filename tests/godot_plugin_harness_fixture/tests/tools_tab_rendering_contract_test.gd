@@ -5,6 +5,7 @@ extends RefCounted
 const ToolsTabScene = preload("res://addons/godot_dotnet_mcp/ui/tools_tab.tscn")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const TEST_ICON_SRC := "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjNGFhM2ZmIi8+PC9zdmc+"
 
 var _instance: VBoxContainer = null
 
@@ -267,6 +268,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab output-schema metadata should resolve shared presentation outputSchema.")
 	if (copied_output_properties as Dictionary).has("raw_output_only") or str((copied_output_schema_json as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
 		return _failure("Tools tab output-schema metadata should not use poisoned raw schemas.")
+	if dap_tool.get_icon(0) == null:
+		return _failure("Tools tab should render protocol icons from shared presentation metadata on tool rows.")
+	var dap_icon_metadata = dap_tool.get_metadata(0)
+	if not (dap_icon_metadata is Dictionary) or str((dap_icon_metadata as Dictionary).get("mcp_icon_src", "")) != TEST_ICON_SRC:
+		return _failure("Tools tab should preserve rendered protocol icon source metadata for tool row affordances.")
 	_instance.call("_show_tree_context_menu", dap_tool, expected_context_position)
 	var schema_popup := _find_context_popup(_instance)
 	if schema_popup == null:
@@ -298,6 +304,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var atomic_dap_tool = _find_child_by_metadata(dap_tool, "atomic", "dap_debugger")
 	if atomic_dap_tool == null:
 		return _failure("Tools tab should render the DAP atomic tool under the high-level DAP debugger entry.")
+	if atomic_dap_tool.get_icon(0) == null:
+		return _failure("Tools tab should render protocol icons from shared presentation metadata on atomic rows.")
 	var atomic_dap_configuration_done_action = _find_child_by_metadata(atomic_dap_tool, "action", "dap_debugger.configuration_done")
 	if atomic_dap_configuration_done_action == null or atomic_dap_configuration_done_action.get_text(0) != "配置完成":
 		return _failure("Tools tab should localize DAP atomic action children.")
@@ -458,6 +466,7 @@ func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Ar
 			}
 		}
 	if full_name == "system_dap_debugger" or full_name == "dap_debugger":
+		tool_def["icons"] = [{"src": TEST_ICON_SRC, "mimeType": "image/svg+xml"}]
 		tool_def["inputSchema"] = {
 			"type": "object",
 			"properties": {

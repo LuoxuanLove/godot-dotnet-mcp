@@ -83,6 +83,7 @@ var _selected_tool_name := ""
 var _selection_sync_queued := false
 var _last_tree_signature := ""
 var _last_preview_key := ""
+var _icon_texture_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -327,6 +328,7 @@ func _configure_info_row(item: TreeItem, text: String, metadata: Dictionary, col
 	item.set_text(TREE_TEXT_COLUMN, text)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
 	item.set_metadata(TREE_TEXT_COLUMN, metadata)
+	_apply_protocol_icon(item, metadata)
 	item.set_custom_color(TREE_TEXT_COLUMN, _get_muted_text_color())
 	item.collapsed = collapsed
 
@@ -355,8 +357,54 @@ func _configure_item_text(item: TreeItem, text: String, metadata: Dictionary, to
 	item.set_text(TREE_TEXT_COLUMN, text)
 	item.set_selectable(TREE_TEXT_COLUMN, true)
 	item.set_metadata(TREE_TEXT_COLUMN, metadata)
+	_apply_protocol_icon(item, metadata)
 	if not tooltip.is_empty():
 		item.set_tooltip_text(TREE_TEXT_COLUMN, tooltip)
+
+
+func _apply_protocol_icon(item: TreeItem, metadata: Dictionary) -> void:
+	var icon_src := _metadata_icon_src(metadata)
+	if icon_src.is_empty():
+		return
+	var texture := _texture_from_icon_src(icon_src)
+	if texture == null:
+		return
+	item.set_icon(TREE_TEXT_COLUMN, texture)
+	item.set_icon_max_width(TREE_TEXT_COLUMN, int(round(18.0 * _scale())))
+	metadata["mcp_icon_src"] = icon_src
+	item.set_metadata(TREE_TEXT_COLUMN, metadata)
+
+
+func _metadata_icon_src(metadata: Dictionary) -> String:
+	var icons = metadata.get("icons", [])
+	if not (icons is Array):
+		return ""
+	for raw_icon in icons as Array:
+		if not (raw_icon is Dictionary):
+			continue
+		var src := str((raw_icon as Dictionary).get("src", "")).strip_edges()
+		if not src.is_empty():
+			return src
+	return ""
+
+
+func _texture_from_icon_src(src: String) -> Texture2D:
+	if _icon_texture_cache.has(src):
+		return _icon_texture_cache.get(src)
+	var texture: Texture2D = null
+	var svg_prefix := "data:image/svg+xml;base64,"
+	if src.begins_with(svg_prefix):
+		var bytes := Marshalls.base64_to_raw(src.substr(svg_prefix.length()))
+		if not bytes.is_empty():
+			var image := Image.new()
+			if image.load_svg_from_buffer(bytes) == OK:
+				texture = ImageTexture.create_from_image(image)
+	_icon_texture_cache[src] = texture
+	return texture
+
+
+func _scale() -> float:
+	return _current_scale if _current_scale > 0.0 else 1.0
 
 
 func _create_domain_item(root: TreeItem, model: Dictionary, domain_key: String, label_key: String, categories: Array) -> void:
