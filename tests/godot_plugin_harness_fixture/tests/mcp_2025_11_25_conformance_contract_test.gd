@@ -4,10 +4,30 @@ extends RefCounted
 
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const HttpRequestRouterContractScript = preload("res://tests/http_request_router_contract_test.gd")
+const HttpTransportServiceContractScript = preload("res://tests/http_transport_service_contract_test.gd")
 
 const CASE_NAME := "mcp_2025_11_25_conformance_contracts"
 const MANIFEST_PATH := "res://scripts/contract_case_manifest.json"
 const PROTOCOL_VERSION := "2025-11-25"
+
+const REQUIRED_STREAMABLE_HTTP_SEMANTICS := {
+	"http_request_router_contracts": [
+		"post_accept_negotiation",
+		"get_sse_negotiation",
+		"protocol_version_headers",
+		"sse_resume_metadata",
+		"finite_post_sse",
+		"session_termination"
+	],
+	"http_transport_service_contracts": [
+		"long_lived_get_sse",
+		"sse_heartbeat",
+		"queued_event_delivery",
+		"session_delete_disconnect",
+		"bounded_cursor_replay"
+	]
+}
 
 const REQUIRED_CASES := {
 	"mcp_2025_11_25_conformance_contracts": {"axis": "aggregate_gate", "layer": "protocol", "domain": "conformance"},
@@ -40,7 +60,7 @@ const REQUIRED_AXES := [
 ]
 
 
-func run_case(_tree: SceneTree) -> Dictionary:
+func run_case(tree: SceneTree) -> Dictionary:
 	var facts_check := _assert_protocol_facts()
 	if not bool(facts_check.get("success", false)):
 		return facts_check
@@ -61,6 +81,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var coverage_check := _assert_manifest_coverage(manifest)
 	if not bool(coverage_check.get("success", false)):
 		return coverage_check
+
+	var transport_gate_check := await _assert_streamable_http_contract_semantics(tree)
+	if not bool(transport_gate_check.get("success", false)):
+		return transport_gate_check
 
 	return {
 		"name": CASE_NAME,
@@ -163,6 +187,35 @@ func _assert_required_entry(case_name: String, entry: Dictionary, expected: Dict
 		return _failure("Required conformance case %s should remain in layer=%s." % [case_name, expected.get("layer", "")])
 	if str(entry.get("domain", "")) != str(expected.get("domain", "")):
 		return _failure("Required conformance case %s should remain in domain=%s." % [case_name, expected.get("domain", "")])
+	return _success()
+
+
+func _assert_streamable_http_contract_semantics(tree: SceneTree) -> Dictionary:
+	var router_contract = HttpRequestRouterContractScript.new()
+	var router_result: Dictionary = await router_contract.run_case(tree)
+	var router_check := _assert_streamable_http_semantics_result("http_request_router_contracts", router_result)
+	if not bool(router_check.get("success", false)):
+		return router_check
+
+	var transport_contract = HttpTransportServiceContractScript.new()
+	var transport_result: Dictionary = await transport_contract.run_case(tree)
+	var transport_check := _assert_streamable_http_semantics_result("http_transport_service_contracts", transport_result)
+	if not bool(transport_check.get("success", false)):
+		return transport_check
+
+	return _success()
+
+
+func _assert_streamable_http_semantics_result(case_name: String, result: Dictionary) -> Dictionary:
+	if not bool(result.get("success", false)):
+		return _failure("Streamable HTTP conformance gate dependency failed: %s: %s" % [case_name, result.get("error", "")])
+	var details: Dictionary = result.get("details", {})
+	var semantics: Dictionary = details.get("streamable_http_semantics", {})
+	if semantics.is_empty():
+		return _failure("Streamable HTTP conformance dependency %s should report structured semantic coverage." % case_name)
+	for semantic_name in REQUIRED_STREAMABLE_HTTP_SEMANTICS.get(case_name, []):
+		if not bool(semantics.get(semantic_name, false)):
+			return _failure("Streamable HTTP conformance dependency %s should prove semantic guard: %s" % [case_name, semantic_name])
 	return _success()
 
 

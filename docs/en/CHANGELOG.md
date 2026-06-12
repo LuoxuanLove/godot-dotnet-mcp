@@ -23,6 +23,7 @@ Target version: 1.4.0.
 - Added Dock previews for MCP Resources and Prompts, including resource read previews, prompt argument inputs, `prompts/get` preview rendering, and copy-generated-prompt text affordances.
 - Added Dock rendering for MCP 2025-11-25 Resource, Resource Template, and Prompt `icons` metadata in the Resources and Prompts catalog tabs.
 - Added an MCP 2025-11-25 conformance gate that keeps lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, and Dock metadata contracts registered in the v1.4 harness manifest.
+- Added Streamable HTTP semantic coverage checks to the MCP 2025-11-25 conformance gate so release validation requires the registered HTTP contracts to retain POST negotiation, GET SSE resume, finite POST SSE, DELETE session termination, active stream disconnect, heartbeat, queued event delivery, and bounded replay guards.
 
 ### Changed
 

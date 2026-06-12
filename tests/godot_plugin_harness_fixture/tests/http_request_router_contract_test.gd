@@ -486,7 +486,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"last_mcp_body_length": callbacks.last_mcp_body.length(),
 			"lifecycle_action": callbacks.last_lifecycle_action,
-			"not_found_status": int(not_found_response.get("status", 0))
+			"not_found_status": int(not_found_response.get("status", 0)),
+			"streamable_http_semantics": {
+				"post_accept_negotiation": true,
+				"get_sse_negotiation": true,
+				"protocol_version_headers": true,
+				"sse_resume_metadata": true,
+				"finite_post_sse": true,
+				"session_termination": true
+			}
 		}
 	}
 

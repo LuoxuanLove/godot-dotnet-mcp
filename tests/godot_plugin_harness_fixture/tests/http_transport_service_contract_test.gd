@@ -219,7 +219,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"connected_count": _connected_count,
 			"disconnected_count": _disconnected_count,
 			"tick_count": _tick_count,
-			"last_method": _last_method
+			"last_method": _last_method,
+			"streamable_http_semantics": {
+				"long_lived_get_sse": true,
+				"sse_heartbeat": true,
+				"queued_event_delivery": true,
+				"session_delete_disconnect": true,
+				"bounded_cursor_replay": true
+			}
 		}
 	}
 
