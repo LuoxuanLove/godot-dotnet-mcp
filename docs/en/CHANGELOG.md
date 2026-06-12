@@ -29,6 +29,7 @@ Target version: 1.4.0.
 
 - Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
 - Split `MCPToolLoader` lifecycle orchestration into a dedicated lifecycle service covering initialization, shutdown, disabled-tool changes, and frame maintenance while preserving the public loader facade.
+- Routed shared system implementation helpers through a dedicated helper service so data extraction, file collection, issue, and dependency helpers no longer require production impls to call the AtomicBridge compatibility facade.
 - Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
 - Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
 - Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.

@@ -12,6 +12,7 @@ const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/m
 const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
 
 var bridge
+var bridge_helpers
 var _runtime_context: Dictionary = {}
 
 const _EXPORT_PRESETS_PATH := "res://export_presets.cfg"
@@ -47,6 +48,10 @@ const HANDLED_TOOLS := [
 
 func configure_runtime(context: Dictionary) -> void:
 	_runtime_context = context.duplicate()
+
+
+func configure_bridge_helpers(helpers) -> void:
+	bridge_helpers = helpers
 
 
 func handles(tool_name: String) -> bool:
@@ -267,6 +272,12 @@ func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
 
 # --- private helpers ---
 
+func _helpers():
+	if bridge_helpers != null:
+		return bridge_helpers
+	return bridge
+
+
 
 func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
 	var target_path := str(args.get("path", "")).strip_edges()
@@ -321,7 +332,7 @@ func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
 				error_count += 1
 			elif str(issue.get("severity", "")) == "warning":
 				warning_count += 1
-			bridge.append_unique_issue(issues, issue)
+			_helpers().append_unique_issue(issues, issue)
 
 	var risk_level := "clean"
 	if error_count > 0:
@@ -359,7 +370,7 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 	var csharp_resource_script_count := 0
 	var read_text := FileAccess.get_file_as_string(path)
 	if read_text.is_empty() and FileAccess.get_open_error() != OK:
-		var read_issue: Dictionary = bridge.build_issue("error", "resource_reference_read_failed", "Failed to read resource text: %s" % path, {"file": path})
+		var read_issue: Dictionary = _helpers().build_issue("error", "resource_reference_read_failed", "Failed to read resource text: %s" % path, {"file": path})
 		return {"file": path, "issue_count": 1, "issues": [read_issue], "ext_resource_count": 0, "csharp_resource_script_count": 0}
 
 	var header := _extract_resource_header(read_text)
@@ -375,7 +386,7 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 			var ref_data := _parse_ext_resource_line(path, line, line_no)
 			var ref_issues := _build_ext_resource_issues(path, ref_data, include_warnings)
 			for ref_issue in ref_issues:
-				bridge.append_unique_issue(issues, ref_issue)
+				_helpers().append_unique_issue(issues, ref_issue)
 			var resource_id := str(ref_data.get("id", ""))
 			if not resource_id.is_empty():
 				ext_resources_by_id[resource_id] = ref_data
@@ -393,13 +404,13 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 	if path.ends_with(".tres"):
 		for resource_id in used_script_ids.keys():
 			if not ext_resources_by_id.has(resource_id):
-				var unresolved_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
-				bridge.append_unique_issue(issues, unresolved_issue)
+				var unresolved_issue: Dictionary = _helpers().build_issue("error", "resource_script_ext_resource_missing", "Resource script ExtResource id is used but not declared: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "build_status": "dotnet_build_may_pass"})
+				_helpers().append_unique_issue(issues, unresolved_issue)
 				continue
 			if not script_resources.has(resource_id):
 				var non_script_ref: Dictionary = ext_resources_by_id[resource_id]
-				var non_script_issue: Dictionary = bridge.build_issue("error", "resource_script_ext_resource_not_script", "Resource script ExtResource id does not declare a Script resource: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "declared_type": str(non_script_ref.get("type", "")), "build_status": "dotnet_build_may_pass"})
-				bridge.append_unique_issue(issues, non_script_issue)
+				var non_script_issue: Dictionary = _helpers().build_issue("error", "resource_script_ext_resource_not_script", "Resource script ExtResource id does not declare a Script resource: %s" % resource_id, {"file": path, "line": int(used_script_ids[resource_id]), "id": str(resource_id), "declared_type": str(non_script_ref.get("type", "")), "build_status": "dotnet_build_may_pass"})
+				_helpers().append_unique_issue(issues, non_script_issue)
 				continue
 			var script_ref: Dictionary = script_resources[resource_id]
 			var script_path := str(script_ref.get("normalized_path", ""))
@@ -407,16 +418,17 @@ func _audit_resource_reference_file(path: String, include_warnings: bool) -> Dic
 				csharp_resource_script_count += 1
 				var script_issues := _audit_csharp_resource_script_reference(path, int(used_script_ids[resource_id]), script_ref, header, include_warnings)
 				for script_issue in script_issues:
-					bridge.append_unique_issue(issues, script_issue)
+					_helpers().append_unique_issue(issues, script_issue)
 
 	var dep_result: Dictionary = bridge.call_atomic("resource_query", {"action": "get_dependencies", "path": path})
-	var dep_data: Dictionary = bridge.extract_data(dep_result)
+	var dep_data: Dictionary = _helpers().extract_data(dep_result)
+	var helpers = _helpers()
 	for raw_dep in dep_data.get("dependencies", []):
-		var dep_ref: Dictionary = bridge.parse_dependency_reference(str(raw_dep), path) if bridge.has_method("parse_dependency_reference") else {"risk": "none"}
+		var dep_ref: Dictionary = helpers.parse_dependency_reference(str(raw_dep), path) if helpers.has_method("parse_dependency_reference") else {"risk": "none"}
 		var risk := str(dep_ref.get("risk", "none"))
 		if risk == "error" or (include_warnings and risk == "warning"):
 			var dep_issue := _build_dependency_issue(path, dep_ref, 0, "resource_loader_dependencies")
-			bridge.append_unique_issue(issues, dep_issue)
+			_helpers().append_unique_issue(issues, dep_issue)
 
 	return {
 		"file": path,
@@ -435,7 +447,8 @@ func _parse_ext_resource_line(source_path: String, line: String, line_no: int) -
 	var raw_ref := declared_path
 	if not uid_text.is_empty():
 		raw_ref = "%s::%s::%s" % [uid_text, resource_type, declared_path]
-	var parsed: Dictionary = bridge.parse_dependency_reference(raw_ref, source_path) if bridge.has_method("parse_dependency_reference") else {"normalized_path": declared_path, "risk": "none"}
+	var helpers = _helpers()
+	var parsed: Dictionary = helpers.parse_dependency_reference(raw_ref, source_path) if helpers.has_method("parse_dependency_reference") else {"normalized_path": declared_path, "risk": "none"}
 	parsed["file"] = source_path
 	parsed["line"] = line_no
 	parsed["type"] = resource_type
@@ -470,7 +483,7 @@ func _build_dependency_issue(file_path: String, dep_ref: Dictionary, line_no: in
 			message = "Neither UID nor fallback path can be resolved: %s -> %s." % [uid_text, declared_path]
 		"missing_path":
 			message = "Referenced path does not exist: %s." % declared_path
-	return bridge.build_issue(severity, consistency, message, {
+	return _helpers().build_issue(severity, consistency, message, {
 		"file": file_path,
 		"line": line_no,
 		"source": source,
@@ -490,26 +503,26 @@ func _audit_csharp_resource_script_reference(file_path: String, line_no: int, sc
 	if script_path.is_empty():
 		script_path = declared_path
 	if script_path.is_empty() or not FileAccess.file_exists(script_path):
-		issues.append(bridge.build_issue("error", "missing_resource_script_path", "C# Resource script path is missing: %s" % declared_path, {"file": file_path, "line": line_no, "script": declared_path, "id": str(script_ref.get("id", "")), "build_status": "dotnet_build_may_pass", "hint": "Fix the .tres script ExtResource path or re-save the resource after moving the script."}))
+		issues.append(_helpers().build_issue("error", "missing_resource_script_path", "C# Resource script path is missing: %s" % declared_path, {"file": file_path, "line": line_no, "script": declared_path, "id": str(script_ref.get("id", "")), "build_status": "dotnet_build_may_pass", "hint": "Fix the .tres script ExtResource path or re-save the resource after moving the script."}))
 		return issues
 
-	var inspect_data: Dictionary = bridge.extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
+	var inspect_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_inspect", {"path": script_path}))
 	var header_script_class := str(header.get("script_class", ""))
 	var file_class_name := script_path.get_file().get_basename()
 	var resolved_type := _resolve_csharp_resource_type(inspect_data, header_script_class, file_class_name)
 	var script_class_name := str(resolved_type.get("class_name", ""))
 	var base_type := str(resolved_type.get("base_type", ""))
 	if script_class_name.is_empty():
-		issues.append(bridge.build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "script_file_exists": true, "roslyn_class_found": false, "build_status": "dotnet_build_may_pass"}))
+		issues.append(_helpers().build_issue("error", "resource_script_class_unresolved", "C# Resource script could not be resolved to a class: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "script_file_exists": true, "roslyn_class_found": false, "build_status": "dotnet_build_may_pass"}))
 		return issues
 	if not header_script_class.is_empty() and header_script_class != script_class_name:
-		issues.append(bridge.build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "build_status": "dotnet_build_may_pass"}))
+		issues.append(_helpers().build_issue("error", "resource_script_class_name_mismatch", "Resource script_class %s does not match C# class %s." % [header_script_class, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "script_class": header_script_class, "class_name": script_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "build_status": "dotnet_build_may_pass"}))
 	if include_warnings and file_class_name != script_class_name:
-		issues.append(bridge.build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
+		issues.append(_helpers().build_issue("warning", "global_class_file_name_mismatch", "C# GlobalClass file name should match class name: %s vs %s." % [file_class_name, script_class_name], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "file_class_name": file_class_name, "resolution_source": str(resolved_type.get("resolution_source", "")), "hint": "Godot C# global classes require a case-sensitive file name and class name match."}))
 	if include_warnings and not _is_resource_base_type(base_type):
-		issues.append(bridge.build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "resolution_source": str(resolved_type.get("resolution_source", "")), "roslyn_class_found": bool(resolved_type.get("roslyn_class_found", false)), "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
+		issues.append(_helpers().build_issue("warning", "resource_script_base_type_unconfirmed", "C# script referenced by a .tres resource does not directly inherit Godot.Resource: %s : %s." % [script_class_name, base_type], {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "base_type": base_type, "resolution_source": str(resolved_type.get("resolution_source", "")), "roslyn_class_found": bool(resolved_type.get("roslyn_class_found", false)), "hint": "Verify the script is a Resource-derived [GlobalClass]; dotnet build can pass even when .tres resource loading is inconsistent."}))
 	if include_warnings and not _csharp_script_has_global_class_attribute(script_path):
-		issues.append(bridge.build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "global_class_attribute_found": false, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
+		issues.append(_helpers().build_issue("warning", "resource_script_missing_global_class_attribute", "C# Resource script referenced by .tres does not declare [GlobalClass]: %s" % script_path, {"file": file_path, "line": line_no, "script": script_path, "class_name": script_class_name, "global_class_attribute_found": false, "hint": "Add [GlobalClass] when the resource should be registered as an editor-visible custom Resource."}))
 	return issues
 
 
@@ -620,21 +633,23 @@ func _csharp_script_has_global_class_attribute(script_path: String) -> bool:
 
 func _collect_project_files(pattern: String) -> Array[String]:
 	var collected: Array[String] = []
-	for raw_path in bridge.collect_files(pattern):
+	for raw_path in _helpers().collect_files(pattern):
 		collected.append(str(raw_path))
 	collected.sort()
 	return collected
 
 
 func _collect_project_file_count(pattern: String) -> int:
-	if bridge != null and bridge.has_method("collect_file_count"):
-		return int(bridge.collect_file_count(pattern))
+	var helpers = _helpers()
+	if helpers != null and helpers.has_method("collect_file_count"):
+		return int(helpers.collect_file_count(pattern))
 	return _collect_project_files(pattern).size()
 
 
 func _collect_project_file_counts(patterns: Array) -> Dictionary:
-	if bridge != null and bridge.has_method("collect_file_counts"):
-		var counts = bridge.collect_file_counts(patterns)
+	var helpers = _helpers()
+	if helpers != null and helpers.has_method("collect_file_counts"):
+		var counts = helpers.collect_file_counts(patterns)
 		if counts is Dictionary and not (counts as Dictionary).is_empty():
 			return (counts as Dictionary).duplicate(true)
 	var fallback_counts := {}
@@ -926,12 +941,12 @@ func _execute_userdata_maintenance(args: Dictionary) -> Dictionary:
 			return bridge.error("Unknown userdata_maintenance action: %s" % action)
 
 func _get_runtime_summary() -> Dictionary:
-	return bridge.extract_data(bridge.call_atomic("debug_runtime_bridge", {"action": "get_summary"}))
+	return _helpers().extract_data(bridge.call_atomic("debug_runtime_bridge", {"action": "get_summary"}))
 
 
 func _safe_extract_data(result: Dictionary) -> Dictionary:
 	if result is Dictionary and bool(result.get("success", false)):
-		return bridge.extract_data(result)
+		return _helpers().extract_data(result)
 	return {}
 
 
@@ -1187,11 +1202,11 @@ func _build_project_state_summary(_args: Dictionary = {}) -> Dictionary:
 		if result is Dictionary and not bool(result.get("success", false)):
 			failed_result = result
 			break
-	var dotnet_data: Dictionary = bridge.extract_data(dotnet_result)
-	var runtime_summary: Dictionary = bridge.extract_data(runtime_summary_result)
-	var scene_snapshot: Dictionary = bridge.extract_data(scene_snapshot_result)
-	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
-	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var dotnet_data: Dictionary = _helpers().extract_data(dotnet_result)
+	var runtime_summary: Dictionary = _helpers().extract_data(runtime_summary_result)
+	var scene_snapshot: Dictionary = _helpers().extract_data(scene_snapshot_result)
+	var dotnet_build_data: Dictionary = _helpers().extract_data(dotnet_build_result)
+	var project_info: Dictionary = _helpers().extract_data(project_info_result)
 	var runtime_control_status := _build_runtime_control_state_section()
 	var runtime_capabilities := _build_runtime_capabilities(project_info, dotnet_build_data, runtime_summary, runtime_control_status)
 	var state_data := {
@@ -1217,7 +1232,7 @@ func _build_project_state_summary(_args: Dictionary = {}) -> Dictionary:
 
 
 func _get_runtime_errors(limit: int) -> Array:
-	return bridge.extract_array(bridge.call_atomic("debug_runtime_bridge", {
+	return _helpers().extract_array(bridge.call_atomic("debug_runtime_bridge", {
 		"action": "get_errors_context", "limit": limit
 	}), "errors")
 
@@ -1229,7 +1244,7 @@ func _get_runtime_warnings(limit: int) -> Array:
 		"tail": limit,
 		"limit": max(limit * 4, 20)
 	})
-	var events: Array = bridge.extract_array(result, "events")
+	var events: Array = _helpers().extract_array(result, "events")
 	var warnings: Array = []
 	for event in events:
 		if not (event is Dictionary):
@@ -1384,7 +1399,7 @@ func _execute_project_state(args: Dictionary) -> Dictionary:
 	var full_result := _execute_project_state_full(args, collect_file_paths)
 	if not bool(full_result.get("success", false)):
 		return full_result
-	var full_data: Dictionary = bridge.extract_data(full_result)
+	var full_data: Dictionary = _helpers().extract_data(full_result)
 	if not selected_sections.is_empty():
 		return bridge.success(_build_project_state_sections_payload(full_data, selected_sections))
 	if bool(args.get("summary", false)):
@@ -1402,9 +1417,9 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 	var error_limit: int = max(int(args.get("error_limit", 10)), 0)
 	var include_runtime_health := bool(args.get("include_runtime_health", false))
 	MCPDebugBuffer.record("debug", "system", "project_state: collecting stats (error_limit=%d)" % error_limit)
-	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
+	var project_info: Dictionary = _helpers().extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
 	var dotnet_result: Dictionary = bridge.call_atomic("project_dotnet", {})
-	var dotnet_data: Dictionary = bridge.extract_data(dotnet_result)
+	var dotnet_data: Dictionary = _helpers().extract_data(dotnet_result)
 	var runtime_summary := _get_runtime_summary()
 	var recent_errors := _get_runtime_errors(error_limit)
 	var recent_warnings := _get_runtime_warnings(min(error_limit, 10))
@@ -1443,11 +1458,11 @@ func _execute_project_state_full(args: Dictionary, collect_file_paths: bool = tr
 	var compile_error_count := 0
 	var dotnet_errors_data: Dictionary = {}
 	if bool(dotnet_result.get("success", false)):
-		dotnet_errors_data = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
+		dotnet_errors_data = _helpers().extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(dotnet_errors_data.get("error_count", 0))
 
 	var current_scene := ""
-	var scene_snapshot: Dictionary = bridge.extract_data(bridge.call_atomic("debug_runtime_bridge", {"action": "get_scene_snapshot"}))
+	var scene_snapshot: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_runtime_bridge", {"action": "get_scene_snapshot"}))
 	if not scene_snapshot.is_empty():
 		current_scene = str(scene_snapshot.get("current_scene", scene_snapshot.get("scene", "")))
 
@@ -2028,13 +2043,13 @@ func _fetch_runtime_log_events(log_tail: int) -> Array:
 	var result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_recent", "limit": log_tail})
 	if not bool(result.get("success", false)):
 		result = bridge.call_atomic("debug_runtime_bridge", {"action": "get_recent_filtered", "limit": log_tail, "tail": log_tail})
-	return bridge.extract_array(result, "events")
+	return _helpers().extract_array(result, "events")
 
 
 func _fetch_runtime_log_events_after(after_event_id: int, log_tail: int) -> Array:
 	var result: Dictionary = bridge.call_atomic("debug_runtime_bridge", {"action": "get_since_event_id", "after_event_id": after_event_id, "limit": log_tail})
 	if bool(result.get("success", false)):
-		return bridge.extract_array(result, "events")
+		return _helpers().extract_array(result, "events")
 	return _filter_new_runtime_events(_fetch_runtime_log_events(log_tail), {"max_event_id": after_event_id})
 
 
@@ -2118,9 +2133,9 @@ func _project_lifecycle_foreground_options_requested(args: Dictionary) -> bool:
 
 func _build_project_lifecycle_foreground_required_context(custom_scene: String, args: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
-	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var project_info: Dictionary = _helpers().extract_data(project_info_result)
 	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
-	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var dotnet_build_data: Dictionary = _helpers().extract_data(dotnet_build_result)
 	var runtime_summary := _get_runtime_summary()
 	var runtime_control_status := _build_runtime_control_state_section()
 	return {
@@ -2146,9 +2161,9 @@ func _build_project_lifecycle_foreground_required_context(custom_scene: String, 
 
 func _build_project_lifecycle_failure_context(custom_scene: String, run_result: Dictionary) -> Dictionary:
 	var project_info_result: Dictionary = bridge.call_atomic("project_info", {"action": "get_info"})
-	var project_info: Dictionary = bridge.extract_data(project_info_result)
+	var project_info: Dictionary = _helpers().extract_data(project_info_result)
 	var dotnet_build_result: Dictionary = bridge.call_atomic("debug_dotnet", {"action": "build"})
-	var dotnet_build_data: Dictionary = bridge.extract_data(dotnet_build_result)
+	var dotnet_build_data: Dictionary = _helpers().extract_data(dotnet_build_result)
 	var runtime_summary := _get_runtime_summary()
 	var runtime_control_status := _build_runtime_control_state_section()
 	var main_scene := str(project_info.get("main_scene", ""))
@@ -2229,10 +2244,10 @@ func _build_project_lifecycle_cli_fallback(editor_context: Dictionary, requested
 
 
 func _build_project_lifecycle_success_capabilities(custom_scene: String) -> Dictionary:
-	var project_info: Dictionary = bridge.extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
+	var project_info: Dictionary = _helpers().extract_data(bridge.call_atomic("project_info", {"action": "get_info"}))
 	if not custom_scene.is_empty():
 		project_info["main_scene"] = custom_scene
-	var dotnet_build_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
+	var dotnet_build_data: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 	return _build_runtime_capabilities(project_info, dotnet_build_data, _get_runtime_summary(), _build_runtime_control_state_section())
 
 
@@ -2253,7 +2268,7 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	var include_gd_errors := bool(args.get("include_gd_errors", false))
 	var tail: int = max(int(args.get("tail", 20)), 1)
 
-	var runtime_errors_raw: Array = bridge.extract_array(
+	var runtime_errors_raw: Array = _helpers().extract_array(
 		bridge.call_atomic("debug_runtime_bridge", {"action": "get_errors_context", "limit": tail}),
 		"errors"
 	)
@@ -2274,7 +2289,7 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	var compile_errors: Array = []
 	var compile_error_count := 0
 	if include_compile_errors:
-		var dotnet_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
+		var dotnet_data: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_dotnet", {"action": "build"}))
 		compile_error_count = int(dotnet_data.get("error_count", 0))
 		for raw in dotnet_data.get("errors", []):
 			if not (raw is Dictionary):
@@ -2290,9 +2305,9 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 
 	var performance: Dictionary = {}
 	if include_performance:
-		var fps_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_performance", {"action": "get_fps"}))
-		var mem_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_performance", {"action": "get_memory"}))
-		var render_data: Dictionary = bridge.extract_data(bridge.call_atomic("debug_performance", {"action": "get_render_info"}))
+		var fps_data: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_performance", {"action": "get_fps"}))
+		var mem_data: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_performance", {"action": "get_memory"}))
+		var render_data: Dictionary = _helpers().extract_data(bridge.call_atomic("debug_performance", {"action": "get_render_info"}))
 		performance = {"fps": fps_data, "memory": mem_data, "render": render_data}
 
 	var gd_errors: Array = []
@@ -2300,7 +2315,7 @@ func _execute_runtime_diagnose(args: Dictionary) -> Dictionary:
 	if include_gd_errors:
 		var el_result: Dictionary = bridge.call_atomic("debug_editor_log", {"action": "get_errors", "limit": 50})
 		if bool(el_result.get("success", false)):
-			var el_data: Dictionary = bridge.extract_data(el_result)
+			var el_data: Dictionary = _helpers().extract_data(el_result)
 			gd_error_count = int(el_data.get("error_count", 0))
 			for raw in el_data.get("errors", []):
 				if raw is Dictionary:
