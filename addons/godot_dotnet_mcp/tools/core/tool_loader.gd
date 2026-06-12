@@ -290,7 +290,7 @@ func _refresh_runtime_context() -> void:
 	var context: Dictionary = _runtime_context_service.build_runtime_context(
 		self,
 		_server_context,
-		_get_plugin_host(),
+		_runtime_context_service.resolve_plugin_host(_server_context),
 		_tool_activity_registry
 	)
 	_runtime_context_service.configure_loaded_runtimes(_runtime_by_category, context)
@@ -546,20 +546,12 @@ func _build_executor_runtime_context(category: String, entry: Dictionary, reason
 	return _runtime_context_service.build_executor_runtime_context(
 		self,
 		_server_context,
-		_get_plugin_host(),
+		_runtime_context_service.resolve_plugin_host(_server_context),
 		_tool_activity_registry,
 		category,
 		entry,
 		reason
 	)
-
-
-func _get_plugin_host():
-	if _server_context != null and is_instance_valid(_server_context) and _server_context.has_method("get_parent"):
-		var plugin = _server_context.get_parent()
-		if plugin != null and is_instance_valid(plugin):
-			return plugin
-	return null
 
 
 func _finalize_tool_execution(category: String, tool_name: String, args: Dictionary, started_usec: int, result) -> Dictionary:
