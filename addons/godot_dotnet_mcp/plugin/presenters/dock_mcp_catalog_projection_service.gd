@@ -57,7 +57,7 @@ func _project_resources(entries, is_template: bool) -> Array[Dictionary]:
 			"description": str(source.get("description", "")),
 			"mimeType": str(source.get("mimeType", "")),
 			"icons": _duplicate_array(source.get("icons", [])),
-			"resource_kind": _resource_kind_for_uri(uri, is_template),
+			"resource_kind": _resource_kind_for_entry(source, is_template),
 			"is_template": is_template
 		}
 		projected.append(projected_entry)
@@ -79,41 +79,33 @@ func _project_prompts(entries) -> Array[Dictionary]:
 			"description": str(source.get("description", "")),
 			"arguments": _duplicate_array(source.get("arguments", [])),
 			"icons": _duplicate_array(source.get("icons", [])),
-			"prompt_kind": _prompt_kind_for_name(name)
+			"prompt_kind": _prompt_kind_for_entry(source)
 		})
 	return projected
 
 
-func _resource_kind_for_uri(uri: String, is_template: bool) -> String:
+func _resource_kind_for_entry(entry: Dictionary, is_template: bool) -> String:
+	var meta = entry.get("_meta", {})
+	var protocol_kind := ""
+	if meta is Dictionary:
+		protocol_kind = str((meta as Dictionary).get("resourceKind", "")).strip_edges()
+	if protocol_kind.is_empty():
+		protocol_kind = str(entry.get("resource_kind", "")).strip_edges()
+	if not protocol_kind.is_empty():
+		return protocol_kind
 	if is_template:
 		return "template"
-	if uri.begins_with("godot-dotnet-mcp://guides/"):
-		return "guide"
-	if uri.begins_with("godot-dotnet-mcp://state/") or uri == "godot-dotnet-mcp://project/info":
-		return "state"
-	if uri.begins_with("godot-dotnet-mcp://activity/"):
-		return "activity"
-	if uri.begins_with("godot-dotnet-mcp://tools/catalog") or uri == "godot-dotnet-mcp://tools/catalog":
-		return "catalog"
-	if uri.begins_with("godot-dotnet-mcp://logs/"):
-		return "log"
-	if uri.begins_with("godot-dotnet-mcp://diagnostics/"):
-		return "diagnostic"
 	return "resource"
 
 
-func _prompt_kind_for_name(name: String) -> String:
-	if name.find("debug") != -1:
-		return "debug"
-	if name.find("runtime") != -1:
-		return "runtime"
-	if name.find("ui") != -1:
-		return "editor_ui"
-	if name.find("authoring") != -1:
-		return "authoring"
-	if name.find("reference") != -1:
-		return "integrity"
-	return "orientation"
+func _prompt_kind_for_entry(entry: Dictionary) -> String:
+	var meta = entry.get("_meta", {})
+	var protocol_kind := ""
+	if meta is Dictionary:
+		protocol_kind = str((meta as Dictionary).get("promptKind", "")).strip_edges()
+	if protocol_kind.is_empty():
+		protocol_kind = str(entry.get("prompt_kind", "")).strip_edges()
+	return protocol_kind if not protocol_kind.is_empty() else "prompt"
 
 
 func _duplicate_array(values) -> Array:

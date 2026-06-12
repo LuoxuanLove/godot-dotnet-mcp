@@ -6,9 +6,9 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="docs/zh-CN/说明.md">简体中文</a> | <a href="docs/ja/はじめに.md">日本語</a> | <a href="docs/ko/소개.md">한국어</a></p>
 
-| Home | Tools | Config |
-|---|---|---|
-| ![Home dashboard](asset_library/home-en.png) | ![Tool browser](asset_library/tools-en.png) | ![Client configuration](asset_library/config-en.png) |
+| Home | Tools | Resources | Prompts | Config | Settings |
+|---|---|---|---|---|---|
+| ![Home dashboard](asset_library/home-en.png) | ![Tool browser](asset_library/tools-en.png) | MCP resource catalog | MCP workflow prompts | ![Client configuration](asset_library/config-en.png) | Plugin settings |
 
 # Godot .NET MCP
 

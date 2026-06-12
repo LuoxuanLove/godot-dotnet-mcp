@@ -5,9 +5,9 @@
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-22c55e?style=flat-square&amp;labelColor=24292f"></p>
 
 
-| Home | Tools | Config |
-|---|---|---|
-| ![Home dashboard](../../asset_library/home-en.png) | ![Tools browser](../../asset_library/tools-en.png) | ![Client config](../../asset_library/config-en.png) |
+| Home | Tools | Resources | Prompts | Config | Settings |
+|---|---|---|---|---|---|
+| ![Home dashboard](../../asset_library/home-en.png) | ![Tools browser](../../asset_library/tools-en.png) | MCP resource catalog | MCP workflow prompts | ![Client config](../../asset_library/config-en.png) | Plugin settings |
 
 # Godot .NET MCP
 

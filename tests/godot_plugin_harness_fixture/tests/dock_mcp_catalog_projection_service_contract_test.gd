@@ -52,7 +52,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var guide := _find_resource(resources, "godot-dotnet-mcp://guides/index")
 	if guide.is_empty() or str(guide.get("resource_kind", "")) != "guide":
-		return _failure("Projection should classify canonical guide resources.")
+		return _failure("Projection should classify canonical guide resources from protocol metadata.")
 	if str(guide.get("title", "")).is_empty() or str(guide.get("description", "")).is_empty() or str(guide.get("mimeType", "")) != "application/json":
 		return _failure("Projection should preserve resource title, description, and MIME metadata.")
 	if (guide.get("icons", []) as Array).is_empty():
@@ -79,7 +79,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Projection should preserve prompt icons and argument metadata.")
 	var debug_prompt := _find_prompt(prompts, "godot.debug_triage")
 	if debug_prompt.is_empty() or str(debug_prompt.get("prompt_kind", "")) != "debug":
-		return _failure("Projection should classify debug workflow prompts.")
+		return _failure("Projection should classify debug workflow prompts from protocol metadata.")
+	if _projection_source_still_uses_substring_classifiers():
+		return _failure("Dock MCP catalog projection should consume protocol kind metadata instead of rebuilding private URI/name substring classifiers.")
 
 	return {
 		"name": "dock_mcp_catalog_projection_service_contracts",
@@ -108,6 +110,27 @@ func _has_argument(entries, name: String) -> bool:
 		return false
 	for entry in entries as Array:
 		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return true
+	return false
+
+
+func _projection_source_still_uses_substring_classifiers() -> bool:
+	var script := FileAccess.open("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_projection_service.gd", FileAccess.READ)
+	if script == null:
+		return true
+	var source := script.get_as_text()
+	var forbidden := [
+		"entry.get(\"resourceKind\"",
+		"entry.get(\"promptKind\"",
+		"begins_with(\"godot-dotnet-mcp://",
+		".find(\"debug\")",
+		".find(\"runtime\")",
+		".find(\"ui\")",
+		".find(\"authoring\")",
+		".find(\"reference\")"
+	]
+	for pattern in forbidden:
+		if source.find(pattern) != -1:
 			return true
 	return false
 

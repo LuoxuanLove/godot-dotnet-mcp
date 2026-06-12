@@ -142,6 +142,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for resource in resources as Array:
 		if not _has_display_metadata(resource):
 			return _failure("resources/list should expose 2025-11-25 title/icons metadata for every resource.")
+		if not _has_meta_kind(resource, "resourceKind"):
+			return _failure("resources/list should keep Dock resource classification in _meta.resourceKind.")
+		if (resource as Dictionary).has("resourceKind"):
+			return _failure("resources/list should not expose Dock resource classification as a top-level protocol field.")
 	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
 	if str(project_info_metadata.get("name", "")) != "项目信息":
 		return _failure("resources/list should localize resource metadata through the active locale.")
@@ -163,6 +167,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for template in templates as Array:
 		if not _has_display_metadata(template):
 			return _failure("resources/templates/list should expose 2025-11-25 title/icons metadata for every template.")
+		if not _has_meta_kind(template, "resourceKind"):
+			return _failure("resources/templates/list should keep Dock template classification in _meta.resourceKind.")
+		if (template as Dictionary).has("resourceKind"):
+			return _failure("resources/templates/list should not expose Dock template classification as a top-level protocol field.")
 	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
 	if str(scene_template_metadata.get("name", "")) != "场景文本":
 		return _failure("resources/templates/list should localize template names through the active locale.")
@@ -415,6 +423,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("prompts/list should expose 2025-11-25 icons metadata for prompt: %s" % expected_prompt)
 		if not _prompt_arguments_are_documented(prompt_metadata):
 			return _failure("prompts/list should document argument descriptions for prompt: %s" % expected_prompt)
+		if not _has_meta_kind(prompt_metadata, "promptKind"):
+			return _failure("prompts/list should keep Dock prompt classification in _meta.promptKind.")
+		if prompt_metadata.has("promptKind"):
+			return _failure("prompts/list should not expose Dock prompt classification as a top-level protocol field.")
 	var orientation_metadata := _find_prompt(prompts, PROJECT_ORIENTATION_PROMPT)
 	if str(orientation_metadata.get("title", "")) != "项目定位工作流":
 		return _failure("prompts/list should localize prompt titles through the active locale.")
@@ -844,6 +856,13 @@ func _has_display_metadata(entry) -> bool:
 	if str(metadata.get("title", "")).is_empty():
 		return false
 	return _has_icon_metadata(metadata)
+
+
+func _has_meta_kind(entry, key: String) -> bool:
+	if not (entry is Dictionary):
+		return false
+	var meta = (entry as Dictionary).get("_meta", {})
+	return meta is Dictionary and not str((meta as Dictionary).get(key, "")).strip_edges().is_empty()
 
 
 func _has_icon_metadata(entry: Dictionary) -> bool:

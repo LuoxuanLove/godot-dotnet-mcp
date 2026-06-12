@@ -734,6 +734,13 @@ func _with_catalog_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 	if not name.is_empty():
 		metadata["title"] = name
 	metadata["icons"] = [_icon_metadata(icon_name)]
+	var kind := _resource_kind_for_entry(metadata)
+	if not kind.is_empty():
+		var meta := metadata.get("_meta", {})
+		if not (meta is Dictionary):
+			meta = {}
+		(meta as Dictionary)["resourceKind"] = kind
+		metadata["_meta"] = meta
 	return metadata
 
 
@@ -782,6 +789,27 @@ func _resource_icon_for_uri(uri: String) -> String:
 			return "boxes"
 		_:
 			return "file"
+
+
+func _resource_kind_for_entry(entry: Dictionary) -> String:
+	if entry.has("uriTemplate"):
+		return "template"
+	var uri := str(entry.get("uri", ""))
+	match uri:
+		GUIDES_INDEX_URI, GUIDES_CAPABILITIES_URI, GUIDES_UI_AUTOMATION_URI:
+			return "guide"
+		STATE_PROJECT_SUMMARY_URI, STATE_EDITOR_URI, PROJECT_INFO_URI:
+			return "state"
+		EDITOR_LOG_OUTPUT_URI, EDITOR_LOG_ERRORS_URI:
+			return "log"
+		ACTIVITY_STATUS_URI, ACTIVITY_RECENT_URI:
+			return "activity"
+		TOOLS_CATALOG_EXPOSED_URI, TOOLS_CATALOG_VISIBLE_URI, TOOL_CATALOG_URI:
+			return "catalog"
+		DIAGNOSTICS_SUMMARY_URI:
+			return "diagnostic"
+		_:
+			return "resource"
 
 
 func _resource_template_icon_for_uri(uri_template: String) -> String:
