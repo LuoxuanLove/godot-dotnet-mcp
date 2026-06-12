@@ -465,6 +465,8 @@ func _load_packed_scene(path: String) -> PackedScene:
 
 
 func _reload_scene_script(scene_path: String) -> void:
+	if not Engine.is_editor_hint() or OS.has_feature("headless"):
+		return
 	var raw_script_paths = TAB_SCENE_SCRIPT_PATHS.get(scene_path, "")
 	var script_paths := _normalize_reload_script_paths(raw_script_paths)
 	if script_paths.is_empty():

@@ -181,6 +181,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var user_category = _find_child_by_metadata(user_domain, "category", "user")
 	if system_category == null or plugin_runtime_category == null or user_category == null:
 		return _failure("Tools tab should render presentation category nodes.")
+	var initial_top_level_domain_count := root.get_child_count()
+	var initial_system_tool_count := system_category.get_child_count()
+	var initial_user_tool_count := user_category.get_child_count()
 
 	var editor_state_tool = _find_child_by_metadata(system_category, "tool", "system_editor_state")
 	var system_tool = _find_child_by_metadata(system_category, "tool", "system_project_state")
@@ -367,9 +370,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():
 		return _failure(catalog_error)
-	var initial_top_level_domain_count := root.get_child_count()
-	var initial_system_tool_count := system_category.get_child_count()
-	var initial_user_tool_count := user_category.get_child_count()
 	var refreshed_model := base_model.duplicate(true)
 	refreshed_model["localization"] = RefreshLocalization.new()
 	refreshed_model["current_language"] = "zh_CN"
