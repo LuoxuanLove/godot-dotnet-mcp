@@ -92,31 +92,7 @@ func call_atomic_async(full_name: String, args: Dictionary = {}) -> Dictionary:
 
 
 func _build_atomic_runtime_context(category: String, _runtime_context_source: Dictionary) -> Dictionary:
-	var context := _runtime_context.duplicate()
-	context["category"] = category
-	var plugin = _resolve_plugin_host(context)
-	if plugin != null:
-		context["plugin_host"] = plugin
-		if not context.has("editor_interface") and plugin.has_method("get_editor_interface"):
-			context["editor_interface"] = plugin.get_editor_interface()
-	return context
-
-
-func _resolve_plugin_host(context: Dictionary):
-	var plugin = context.get("plugin_host", null)
-	if plugin != null and is_instance_valid(plugin):
-		return plugin
-	var getter = context.get("get_plugin_host", Callable())
-	if getter is Callable and getter.is_valid():
-		plugin = getter.call()
-		if plugin != null and is_instance_valid(plugin):
-			return plugin
-	var server = context.get("server", null)
-	if server != null and is_instance_valid(server) and server.has_method("get_parent"):
-		plugin = server.get_parent()
-		if plugin != null and is_instance_valid(plugin):
-			return plugin
-	return null
+	return _context_resolver.build_atomic_runtime_context(category, _runtime_context)
 
 
 func extract_data(result: Dictionary) -> Dictionary:
