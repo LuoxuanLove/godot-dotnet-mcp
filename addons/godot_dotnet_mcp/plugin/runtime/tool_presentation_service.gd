@@ -151,6 +151,45 @@ static func get_json_schema_dialect() -> String:
 	return JSON_SCHEMA_2020_12_URI
 
 
+static func get_atomic_child_specs(parent_full_name: String) -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	for entry in SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.get(parent_full_name, []):
+		var atomic_full_name := ""
+		var actions: Array = []
+		if entry is Dictionary:
+			atomic_full_name = str((entry as Dictionary).get("tool", ""))
+			actions = (entry as Dictionary).get("actions", [])
+		else:
+			atomic_full_name = str(entry)
+		if atomic_full_name.is_empty():
+			continue
+		specs.append({
+			"tool": atomic_full_name,
+			"actions": _duplicate_array(actions)
+		})
+	return specs
+
+
+static func has_atomic_children(parent_full_name: String) -> bool:
+	return not get_atomic_child_specs(parent_full_name).is_empty()
+
+
+static func get_action_name_key(parent_full_name: String, action_name: String) -> String:
+	return SystemTreeCatalog.get_action_name_key(parent_full_name, action_name)
+
+
+static func get_generic_action_name_key(action_name: String) -> String:
+	return SystemTreeCatalog.get_generic_action_name_key(action_name)
+
+
+static func get_action_desc_key(parent_full_name: String, action_name: String) -> String:
+	return SystemTreeCatalog.get_action_desc_key(parent_full_name, action_name)
+
+
+static func get_generic_action_desc_key(action_name: String) -> String:
+	return SystemTreeCatalog.get_generic_action_desc_key(action_name)
+
+
 static func normalize_json_schema(schema, fallback: Dictionary = {}) -> Dictionary:
 	var schema_dict: Dictionary = {}
 	if schema is Dictionary:

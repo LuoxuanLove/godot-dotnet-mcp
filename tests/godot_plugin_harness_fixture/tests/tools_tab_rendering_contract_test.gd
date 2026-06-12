@@ -36,6 +36,7 @@ class FakeLocalization extends RefCounted:
 		"tool_action_clear_output_name": "清空输出",
 		"tool_action_status_name": "读取状态",
 		"tool_action_capture_name": "截图",
+		"tool_action_capture_popup_name": "截图弹窗",
 		"tool_action_ensure_layout_name": "确保目录结构",
 		"tool_action_list_capture_cache_name": "列出截图缓存",
 		"tool_action_cleanup_capture_cache_name": "清理截图缓存",
@@ -96,6 +97,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance = ToolsTabScene.instantiate() as VBoxContainer
 	if _instance == null:
 		return _failure("Tools tab rendering test could not instantiate the tools tab scene.")
+	var ui_source_guard := _assert_tools_tab_uses_presentation_service_for_catalog_fallbacks()
+	if not ui_source_guard.is_empty():
+		return _failure(ui_source_guard)
 	tree.root.add_child(_instance)
 	await tree.process_frame
 
@@ -365,6 +369,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var expected_legacy_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 1
 	if tool_count_label.text != "已启用 %d/%d" % [expected_legacy_tool_count, expected_legacy_tool_count]:
 		return _failure("Tools tab should preserve the legacy header count when the presentation tree is unavailable.")
+	var legacy_error: String = await _assert_legacy_fallback_catalog_rendering(tool_tree, preview_text, search_edit)
+	if not legacy_error.is_empty():
+		return _failure(legacy_error)
 
 	return {
 		"name": "tools_tab_rendering_contracts",
@@ -625,6 +632,53 @@ func _assert_system_catalog_rendered(system_category: TreeItem) -> String:
 			for action in actions:
 				if _find_child_by_metadata(atomic_item, "action", "%s.%s" % [atomic_full_name, action]) == null:
 					return "Tools tab should render atomic action %s.%s under %s" % [atomic_full_name, action, system_full_name]
+	return ""
+
+
+func _assert_tools_tab_uses_presentation_service_for_catalog_fallbacks() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/ui/tools_tab.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Tools tab source should exist for catalog fallback guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	if source.find("SystemTreeCatalog") != -1:
+		return "Tools tab should not depend directly on SystemTreeCatalog; route catalog fallback facts through ToolPresentationService."
+	if source.find("ToolPresentationService.get_atomic_child_specs") == -1:
+		return "Tools tab legacy fallback rendering should consume atomic child specs from ToolPresentationService."
+	if source.find("ToolPresentationService.get_action_name_key") == -1 or source.find("ToolPresentationService.get_action_desc_key") == -1:
+		return "Tools tab legacy action localization should consume action key helpers from ToolPresentationService."
+	return ""
+
+
+func _assert_legacy_fallback_catalog_rendering(tool_tree: Tree, preview_text: TextEdit, search_edit: LineEdit) -> String:
+	var root := tool_tree.get_root()
+	var system_root := _find_child_by_metadata(root, "root", "system")
+	if system_root == null:
+		return "Tools tab legacy fallback should render the system root."
+	var editor_control_tool := _find_child_by_metadata(system_root, "tool", "system_editor_control")
+	if editor_control_tool == null:
+		return "Tools tab legacy fallback should render system_editor_control."
+	var popup_atomic := _find_child_by_metadata(editor_control_tool, "atomic", "editor_popup")
+	if popup_atomic == null:
+		return "Tools tab legacy fallback should render editor_popup atomic children via ToolPresentationService."
+	var popup_capture_action := _find_child_by_metadata(popup_atomic, "action", "editor_popup.capture_popup")
+	if popup_capture_action == null:
+		return "Tools tab legacy fallback should render catalog-edge atomic actions via ToolPresentationService."
+	_instance.call("_apply_selection_metadata", editor_control_tool.get_metadata(0))
+	await _instance.get_tree().process_frame
+	if not preview_text.text.contains("截图"):
+		return "Tools tab legacy preview should include catalog-edge atomic action labels."
+	search_edit.text = "截图"
+	_instance.call("_on_search_text_changed", search_edit.text)
+	await _instance.get_tree().process_frame
+	root = tool_tree.get_root()
+	system_root = _find_child_by_metadata(root, "root", "system")
+	editor_control_tool = _find_child_by_metadata(system_root, "tool", "system_editor_control") if system_root != null else null
+	popup_atomic = _find_child_by_metadata(editor_control_tool, "atomic", "editor_popup") if editor_control_tool != null else null
+	if popup_atomic == null or _find_child_by_metadata(popup_atomic, "action", "editor_popup.capture_popup") == null:
+		return "Tools tab legacy search should match catalog-edge atomic action labels after service indirection."
+	search_edit.text = ""
+	_instance.call("_on_search_text_changed", "")
+	await _instance.get_tree().process_frame
 	return ""
 
 
