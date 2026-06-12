@@ -87,6 +87,20 @@ try {
         $errors.Add("Roslyn runtime bundle must not contain source/build input file: $($sourceFile.FullName)")
     }
 
+    $allowedBundleFiles = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::Ordinal)
+    [void]$allowedBundleFiles.Add("roslyn-runtime-manifest.json")
+    [void]$allowedBundleFiles.Add(".gitkeep")
+    foreach ($fileName in $files) {
+        [void]$allowedBundleFiles.Add($fileName)
+    }
+
+    $extraBundleFiles = @(Get-ChildItem -LiteralPath $runtimeDirectory -File -ErrorAction SilentlyContinue | Where-Object {
+        -not $allowedBundleFiles.Contains($_.Name)
+    })
+    foreach ($extraFile in $extraBundleFiles) {
+        $errors.Add("Roslyn runtime bundle contains file not listed in manifest: $($extraFile.Name)")
+    }
+
     if ($errors.Count -gt 0) {
         throw ($errors -join [Environment]::NewLine)
     }

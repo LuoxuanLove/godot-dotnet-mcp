@@ -471,12 +471,18 @@ internal static class Program
             processRegistry,
             "git-diff-asset-library-inputs",
             ["diff", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        var staged = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-diff-cached-asset-library-inputs",
+            ["diff", "--cached", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
         var untracked = await RunGitLinesAsync(
             repoRoot,
             processRegistry,
             "git-untracked-asset-library-inputs",
             ["ls-files", "--others", "--exclude-standard", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
         return tracked
+            .Concat(staged)
             .Concat(untracked)
             .Where(static line => !string.IsNullOrWhiteSpace(line))
             .Distinct(StringComparer.Ordinal)
