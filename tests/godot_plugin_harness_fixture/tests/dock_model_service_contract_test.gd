@@ -78,6 +78,12 @@ class FakeServer extends Node:
 	func get_tool_loader():
 		return self
 
+	func get_tool_loader_status() -> Dictionary:
+		return {"state": "ready", "loaded_tools": 6}
+
+	func get_tool_activity_registry():
+		return FakeActivityRegistry.new()
+
 	func get_exposed_tool_definitions() -> Array:
 		return [{
 			"name": "system_project_state",
@@ -168,6 +174,14 @@ class FakeLocalization extends RefCounted:
 
 	func get_text(_key: String) -> String:
 		return ""
+
+
+class FakeActivityRegistry extends RefCounted:
+	func get_status() -> Dictionary:
+		return {"running": false, "recent_count": 2}
+
+	func get_recent(_limit: int = 20) -> Dictionary:
+		return {"recent": [{"id": "call-1", "tool": "system_project_state"}], "recent_count": 1}
 
 
 class FakeToolCatalog extends RefCounted:

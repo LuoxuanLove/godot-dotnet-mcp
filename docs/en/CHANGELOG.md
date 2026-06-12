@@ -69,6 +69,7 @@ Target version: 1.4.0.
 - Changed the Tools tab preview, search, tooltip, and schema-copy paths to consume shared presentation metadata before falling back to raw tool definitions.
 - Changed the Tools tab preview and context menu to expose shared presentation output schemas alongside input schemas, keeping Dock schema inspection aligned with MCP 2025-11-25 metadata.
 - Changed the Tools tab legacy fallback paths to consume atomic child specs and action localization keys through the shared tool presentation service instead of depending directly on the system tree catalog.
+- Hardened the Dock Resources/Prompts catalog projection and preview path so it consumes configured runtime context, preserves preview metadata, and keeps invalid protocol icons bounded in the UI.
 - Moved the debug domain implementation behind `tools/debug/executor.gd` while keeping `debug_tools.gd` as a thin compatibility wrapper for existing script references.
 - Moved the editor domain implementation behind `tools/editor/executor.gd` while keeping `editor_tools.gd` as a thin compatibility wrapper for existing script references.
 - Moved `MCPToolLoader` frame tick, user-tool definition refresh, and idle user-runtime unload decisions into a dedicated loader tick service.
