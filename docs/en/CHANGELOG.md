@@ -80,6 +80,7 @@ Target version: 1.4.0.
 - Centralized `MCPToolLoader` mutable registry/runtime/definition/performance state and context projection in a loader state store, keeping the public loader as service orchestration rather than the state owner.
 - Moved `MCPToolLoader` tool access provider resolution, category visibility, execution gating, denied-message handling, and loose boolean coercion into a dedicated loader access service.
 - Moved `MCPToolLoader` GDScript LSP diagnostics adapter lifecycle into a dedicated loader diagnostics service while preserving lazy service creation, reset, tick, dispose, and debug snapshot behavior.
+- Moved `MCPToolLoader` execution context callbacks, agent-context sanitization, activity forwarding, finalization forwarding, and shared failure-envelope construction into a dedicated loader execution-context service.
 - Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
 - Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
 

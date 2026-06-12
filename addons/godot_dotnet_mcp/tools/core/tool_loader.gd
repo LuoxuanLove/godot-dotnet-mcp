@@ -22,6 +22,7 @@ const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/
 const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
 const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
 const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
+const ToolLoaderExecutionContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_execution_context_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -47,6 +48,7 @@ var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
 var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
 var _access_service = ToolLoaderAccessServiceScript.new()
 var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
+var _execution_context_service = ToolLoaderExecutionContextServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 
@@ -55,6 +57,7 @@ func _init() -> void:
 	_bind_state_refs()
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	_lsp_diagnostics_service.configure(self)
+	_execution_context_service.configure(_execution_observer)
 
 
 func _bind_state_refs() -> void:
@@ -299,26 +302,6 @@ func _build_executor_runtime_context(category: String, entry: Dictionary, reason
 	)
 
 
-func _finalize_tool_execution(category: String, tool_name: String, args: Dictionary, started_usec: int, result) -> Dictionary:
-	return _execution_observer.finalize_tool_execution(category, tool_name, args, started_usec, result)
-
-
-func _extract_agent_context(args: Dictionary) -> Dictionary:
-	var context := {}
-	if args.get("_mcp_context", null) is Dictionary:
-		context = (args.get("_mcp_context", {}) as Dictionary).duplicate(true)
-	args.erase("_mcp_context")
-	return context
-
-
-func _begin_tool_activity(category: String, tool_name: String, args: Dictionary, agent_context: Dictionary) -> Dictionary:
-	return _execution_observer.begin_tool_activity(category, tool_name, args, agent_context)
-
-
-func _finish_tool_activity(result: Dictionary, activity_record: Dictionary) -> Dictionary:
-	return _execution_observer.finish_tool_activity(result, activity_record)
-
-
 func _reload_script_dependency_chain(_script_resource: Script, _visited: Dictionary) -> void:
 	pass
 
@@ -352,22 +335,6 @@ func _dispose_executor_instance(executor) -> void:
 	_runtime_manager.dispose_executor(executor)
 
 
-func _failure(error_type: String, category: String, tool_name: String, message: String, data: Dictionary = {}) -> Dictionary:
-	var failure_data = data.duplicate(true)
-	failure_data["error_type"] = error_type
-	failure_data["domain"] = category
-	if tool_name.is_empty():
-		failure_data["tool_name"] = category
-	else:
-		failure_data["tool_name"] = "%s_%s" % [category, tool_name]
-	failure_data["timestamp_unix"] = int(Time.get_unix_time_from_system())
-	return {
-		"success": false,
-		"error": message,
-		"data": failure_data
-	}
-
-
 func _make_reload_status(action: String, reloaded_domains: Array = [], skipped_domains: Array = [], failed_domains: Array = [], elapsed_ms: float = 0.0) -> Dictionary:
 	return _status_service.make_reload_status(action, get_performance_summary(), reloaded_domains, skipped_domains, failed_domains, elapsed_ms)
 
@@ -391,16 +358,11 @@ func _build_catalog_projection_context() -> Dictionary:
 
 
 func _build_execution_context() -> Dictionary:
-	return {
-		"extract_agent_context": Callable(self, "_extract_agent_context"),
-		"is_category_executable": Callable(self, "_is_category_executable"),
-		"get_tool_access_error": Callable(self, "_get_tool_access_error"),
-		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
-		"begin_tool_activity": Callable(self, "_begin_tool_activity"),
-		"finalize_tool_execution": Callable(self, "_finalize_tool_execution"),
-		"finish_tool_activity": Callable(self, "_finish_tool_activity"),
-		"failure": Callable(self, "_failure")
-	}
+	return _execution_context_service.build_execution_context(
+		Callable(self, "_is_category_executable"),
+		Callable(self, "_get_tool_access_error"),
+		Callable(self, "_ensure_runtime_loaded")
+	)
 
 
 func _build_reload_context() -> Dictionary:
@@ -455,7 +417,7 @@ func _build_runtime_state_context() -> Dictionary:
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
 		"record_load_error": Callable(self, "_record_load_error"),
 		"dispose_executor": Callable(self, "_dispose_executor_instance"),
-		"failure": Callable(self, "_failure")
+		"failure": Callable(_execution_context_service, "failure")
 	})
 
 
