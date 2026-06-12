@@ -24,6 +24,7 @@ const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/too
 const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
 const ToolLoaderExecutionContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_execution_context_service.gd")
 const ToolLoaderContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_context_service.gd")
+const ToolLoaderQueryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_query_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -51,6 +52,7 @@ var _access_service = ToolLoaderAccessServiceScript.new()
 var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
 var _execution_context_service = ToolLoaderExecutionContextServiceScript.new()
 var _context_service = ToolLoaderContextServiceScript.new()
+var _query_service = ToolLoaderQueryServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 
@@ -111,11 +113,7 @@ func set_disabled_tools(disabled_tools: Array) -> void:
 
 
 func get_tools_by_category() -> Dictionary:
-	var visible := _build_tools_by_category_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible tools by category resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_tools_by_category_internal(true)
 
 
 func get_all_tools_by_category() -> Dictionary:
@@ -123,15 +121,17 @@ func get_all_tools_by_category() -> Dictionary:
 
 
 func _build_tools_by_category_internal(visible_only: bool) -> Dictionary:
-	return _catalog_projection_service.build_tools_by_category(_build_catalog_projection_context(), visible_only)
+	return _query_service.build_tools_by_category(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_tool_definitions() -> Array[Dictionary]:
-	var visible := _build_tool_definitions_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible tool definitions resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_tool_definitions_internal(true)
 
 
 func get_all_tool_definitions() -> Array[Dictionary]:
@@ -139,18 +139,17 @@ func get_all_tool_definitions() -> Array[Dictionary]:
 
 
 func get_exposed_tool_definitions() -> Array[Dictionary]:
-	return _catalog_projection_service.build_exposed_tool_definitions(_build_catalog_projection_context(), get_tool_definitions())
+	return _query_service.build_exposed_tool_definitions(_catalog_projection_service, _build_catalog_projection_context(), get_tool_definitions())
 
 
 func is_tool_exposed(tool_name: String) -> bool:
-	if _is_callable_removed_public_tool(tool_name):
-		return true
-	for tool_def in get_exposed_tool_definitions():
-		if str(tool_def.get("name", "")) == tool_name:
-			return true
-	if _is_callable_removed_public_tool(tool_name):
-		return true
-	return _is_callable_compatibility_alias(tool_name)
+	return _query_service.is_tool_exposed(
+		tool_name,
+		get_exposed_tool_definitions(),
+		_public_surface_policy,
+		get_tool_definitions(),
+		Callable(self, "is_tool_enabled")
+	)
 
 
 func is_public_removed_tool(tool_name: String) -> bool:
@@ -162,7 +161,13 @@ func build_removed_public_tool_result(tool_name: String, arguments: Dictionary =
 
 
 func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
-	return _catalog_projection_service.build_tool_definitions(_build_catalog_projection_context(), visible_only)
+	return _query_service.build_tool_definitions(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
@@ -170,11 +175,7 @@ func get_tool_load_errors() -> Array[Dictionary]:
 
 
 func get_domain_states() -> Array[Dictionary]:
-	var visible := _build_domain_states_internal(true)
-	if visible.is_empty() and not _entries_by_category.is_empty():
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"Visible domain states resolved to empty; returning fail-closed visible set")
-	return visible
+	return _build_domain_states_internal(true)
 
 
 func get_all_domain_states() -> Array[Dictionary]:
@@ -182,7 +183,13 @@ func get_all_domain_states() -> Array[Dictionary]:
 
 
 func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
-	return _catalog_projection_service.build_domain_states(_build_catalog_projection_context(), visible_only)
+	return _query_service.build_domain_states(
+		_catalog_projection_service,
+		_build_catalog_projection_context(),
+		visible_only,
+		_entries_by_category,
+		Callable(self, "_record_empty_visible_warning")
+	)
 
 
 func get_reload_status() -> Dictionary:
@@ -190,11 +197,13 @@ func get_reload_status() -> Dictionary:
 
 
 func get_tool_loader_status() -> Dictionary:
-	var tool_count := get_tool_definitions().size()
-	var exposed_tool_count := get_exposed_tool_definitions().size()
-	var category_count := _ordered_categories.size()
-	var tool_load_error_count := _diagnostics_service.get_tool_load_error_count()
-	return _status_service.build_tool_loader_status(tool_count, exposed_tool_count, category_count, tool_load_error_count)
+	return _query_service.build_tool_loader_status(
+		_status_service,
+		get_tool_definitions(),
+		get_exposed_tool_definitions(),
+		_ordered_categories,
+		_diagnostics_service.get_tool_load_error_count()
+	)
 
 
 func get_performance_summary() -> Dictionary:
@@ -463,3 +472,7 @@ func _record_reload_incident(category: String, message: String, phase: String) -
 		message,
 		phase
 	)
+
+
+func _record_empty_visible_warning(message: String) -> void:
+	MCPDebugBuffer.record("warning", "tool_loader", message)
