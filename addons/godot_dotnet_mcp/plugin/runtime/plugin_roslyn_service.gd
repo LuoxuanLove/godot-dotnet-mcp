@@ -60,18 +60,18 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 		return _owner._execute_runtime_capabilities()
 
 	func parse_file(script_path: String, source_text: String = "") -> Dictionary:
-		var request := {
+		var request: Dictionary = {
 			"path": script_path
 		}
 		if not source_text.is_empty():
 			request["sourceText"] = source_text
-		var response := _owner._execute_runtime_tool("cs_file_read", request)
+		var response: Dictionary = _owner._execute_runtime_tool("cs_file_read", request)
 		return _owner._convert_bridge_read_response(response, script_path)
 
 	func patch_file(script_path: String, request: Dictionary) -> Dictionary:
-		var bridge_request := request.duplicate(true)
+		var bridge_request: Dictionary = request.duplicate(true)
 		bridge_request["path"] = script_path
-		var response := _owner._execute_runtime_tool("cs_file_patch", bridge_request)
+		var response: Dictionary = _owner._execute_runtime_tool("cs_file_patch", bridge_request)
 		return _owner._convert_bridge_patch_response(response, script_path)
 
 
