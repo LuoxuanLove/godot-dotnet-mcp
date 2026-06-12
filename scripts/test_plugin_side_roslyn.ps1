@@ -649,7 +649,8 @@ try {
 
     Assert-DiscoveredCasesAreManifested -Discovered $discoveredManifestEntries -ManifestCaseNames $ManifestCaseNames -LegacyAllowlist $LegacyUnmanifestedContractCases
 
-    foreach ($caseName in $RequiredCases) {
+    $requiredDiscoverableCases = @($RequiredCases | Where-Object { $EditorProbeCases -notcontains $_ })
+    foreach ($caseName in $requiredDiscoverableCases) {
         if ($discoveredCases -notcontains $caseName) {
             throw "Required harness case was not discovered: $caseName"
         }
