@@ -15,6 +15,7 @@ const SERVER_SCRIPT_PATH = "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_htt
 var _plugin: EditorPlugin
 var _server: Node
 var _stdio_server: Node
+var _active_transport_mode := ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE
 var _lsp_snapshot_service := ServerRuntimeLspDiagnosticsSnapshotService.new()
 var _node_lifecycle := ServerRuntimeNodeLifecycleService.new()
 var _settings_projection := ServerRuntimeSettingsProjectionService.new()
@@ -44,6 +45,7 @@ func detach() -> void:
 	_node_lifecycle.dispose_stdio_server_node(_stdio_server)
 	_stdio_server = null
 	_plugin = null
+	_active_transport_mode = ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE
 	_finish_operation(operation, true, "server_runtime_controller", "detach")
 
 
@@ -52,6 +54,7 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation_id := str(operation.get("operation_id", ""))
 	var phase_started = PluginSelfDiagnosticStore.begin_phase()
 	var runtime_settings := _settings_projection.project(settings)
+	_active_transport_mode = str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
 	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
 	return _reinitialize_runtime_settings(runtime_settings, reason, true, operation)
 
@@ -61,10 +64,19 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 	var operation_id := str(operation.get("operation_id", ""))
 	var phase_started = PluginSelfDiagnosticStore.begin_phase()
 	var runtime_settings := _settings_projection.project(settings)
+	var transport_mode := str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
+	_active_transport_mode = transport_mode
 	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
 	if not _reinitialize_runtime_settings(runtime_settings, reason, false, operation):
 		_finish_operation(operation, false, "server_runtime_controller", reason)
 		return false
+	if transport_mode == "stdio":
+		phase_started = PluginSelfDiagnosticStore.begin_phase()
+		_stdio_server = _node_lifecycle.ensure_stdio_server_node(_plugin, _stdio_server, _server, runtime_settings, operation_id)
+		var stdio_started := is_stdio_running()
+		PluginSelfDiagnosticStore.record_operation_phase(operation_id, "stdio_server.ensure", phase_started, {"transport_mode": transport_mode, "started": stdio_started})
+		_finish_operation(operation, stdio_started, "server_runtime_controller", reason)
+		return stdio_started
 	if _has_server_method("start"):
 		phase_started = PluginSelfDiagnosticStore.begin_phase()
 		var started = _server.start(operation_id)
@@ -84,8 +96,7 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 				"Inspect the server listen error and port configuration.",
 				{"port": int(runtime_settings.get("port", ServerRuntimeSettingsProjectionService.DEFAULT_PORT))}
 			)
-		var transport_mode := str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
-		if transport_mode in ["stdio", "both"]:
+		if transport_mode == "both":
 			phase_started = PluginSelfDiagnosticStore.begin_phase()
 			_stdio_server = _node_lifecycle.ensure_stdio_server_node(_plugin, _stdio_server, _server, runtime_settings, operation_id)
 			PluginSelfDiagnosticStore.record_operation_phase(operation_id, "stdio_server.ensure", phase_started, {"transport_mode": transport_mode})
@@ -186,6 +197,10 @@ func is_stdio_running() -> bool:
 
 
 func is_running() -> bool:
+	if _active_transport_mode == "stdio":
+		return is_stdio_running()
+	if _active_transport_mode == "both":
+		return (_has_server_method("is_running") and _server.is_running()) or is_stdio_running()
 	return _has_server_method("is_running") and _server.is_running()
 
 

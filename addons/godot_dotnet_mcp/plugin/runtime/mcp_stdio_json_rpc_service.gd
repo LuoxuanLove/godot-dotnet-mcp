@@ -42,6 +42,9 @@ func handle_request_async(body: String) -> Dictionary:
 		return _response(_create_json_rpc_error(-32600, "Invalid Request", null))
 
 	var request_dict: Dictionary = request
+	if _is_json_rpc_response_envelope(request_dict):
+		_log_message("Ignoring JSON-RPC response envelope on stdio input.", "debug")
+		return _no_response()
 	var envelope_validation := MCPJsonRpcEnvelopeValidator.validate_request_envelope(request_dict)
 	var has_id: bool = bool(envelope_validation.get("has_id", false))
 	var id: Variant = envelope_validation.get("id")
@@ -177,6 +180,10 @@ func _create_json_rpc_response(result, id) -> Dictionary:
 
 func _create_json_rpc_error(code: int, message: String, id) -> Dictionary:
 	return {"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": id}
+
+
+func _is_json_rpc_response_envelope(message: Dictionary) -> bool:
+	return str(message.get("jsonrpc", "")) == "2.0" and message.has("id") and (message.has("result") or message.has("error")) and not message.has("method")
 
 
 func _log_message(message: String, level: String = "debug") -> void:

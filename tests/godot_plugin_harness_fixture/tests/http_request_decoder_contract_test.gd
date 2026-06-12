@@ -66,6 +66,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var oversized_check := _assert_bad_content_length(oversized_length, "oversized")
 	if not bool(oversized_check.get("success", false)):
 		return oversized_check
+	var duplicate_length := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}")
+	var duplicate_check := _assert_framing_error(duplicate_length, "duplicate_content_length", "duplicate Content-Length")
+	if not bool(duplicate_check.get("success", false)):
+		return duplicate_check
+	var conflicting_framing := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: 2\r\nTransfer-Encoding: chunked\r\n\r\n{}")
+	var conflicting_check := _assert_framing_error(conflicting_framing, "conflicting_framing_headers", "conflicting Content-Length and Transfer-Encoding")
+	if not bool(conflicting_check.get("success", false)):
+		return conflicting_check
 
 	var chunked_request := (
 		"POST /mcp HTTP/1.1\r\n"
@@ -82,6 +90,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Chunked request body was not decoded correctly.")
 	if str(decoded_chunked.get("remaining_data", "")) != "NEXT":
 		return _failure("Chunked request should preserve trailing bytes.")
+	var invalid_chunk_size := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nz\r\nhello\r\n0\r\n\r\n")
+	var invalid_chunk_check := _assert_framing_error(invalid_chunk_size, "bad_chunk_size", "invalid chunk size")
+	if not bool(invalid_chunk_check.get("success", false)):
+		return invalid_chunk_check
+	var invalid_chunk_terminator := decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloXX0\r\n\r\n")
+	var invalid_chunk_terminator_check := _assert_framing_error(invalid_chunk_terminator, "bad_chunk_terminator", "invalid chunk terminator")
+	if not bool(invalid_chunk_terminator_check.get("success", false)):
+		return invalid_chunk_terminator_check
 
 	var invalid_headers: Dictionary = decoder.decode_pending_request("\r\n\r\norphan-body")
 	if not bool(invalid_headers.get("ready", false)):
@@ -110,6 +126,16 @@ func _assert_bad_content_length(decoded: Dictionary, label: String) -> Dictionar
 		return _failure("Invalid %s Content-Length should report bad_content_length." % label)
 	if not str(decoded.get("message", "")).contains("Content-Length"):
 		return _failure("Invalid %s Content-Length should describe the rejected header." % label)
+	return {"success": true, "error": ""}
+
+
+func _assert_framing_error(decoded: Dictionary, expected_error: String, label: String) -> Dictionary:
+	if not bool(decoded.get("ready", false)):
+		return _failure("Invalid %s should produce a ready framing error." % label)
+	if not bool(decoded.get("framing_error", false)):
+		return _failure("Invalid %s should be marked as a framing error." % label)
+	if str(decoded.get("error", "")) != expected_error:
+		return _failure("Invalid %s should report %s. actual=%s" % [label, expected_error, str(decoded.get("error", ""))])
 	return {"success": true, "error": ""}
 
 

@@ -63,6 +63,8 @@ func set_allowed_hosts(value) -> void:
 
 func route_request_async(method: String, path: String, request_body: String, headers: Dictionary = {}) -> Dictionary:
 	var normalized_headers := _normalize_headers(headers)
+	if method == "POST" and path == "/mcp":
+		normalized_headers["_request_body"] = request_body
 	if not _is_host_allowed(str(normalized_headers.get("host", ""))):
 		return _forbidden("HTTP Host is not allowed")
 
@@ -202,6 +204,9 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 	var session_guard := _validate_mcp_session_id_header(headers)
 	if not session_guard.is_empty():
 		return session_guard
+	var active_session_guard := _validate_mcp_existing_session(headers)
+	if not active_session_guard.is_empty():
+		return active_session_guard
 
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_mcp_response(accept_header):
@@ -213,6 +218,8 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
 	var supported_version := MCPProtocolFacts.get_protocol_version()
+	if requested_version.is_empty() and _is_initialize_request_body(str(headers.get("_request_body", ""))):
+		return {}
 	if requested_version.is_empty():
 		return {
 			"error": "Missing MCP protocol version",
@@ -235,6 +242,9 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 	var session_guard := _validate_mcp_session_id_header(headers)
 	if not session_guard.is_empty():
 		return session_guard
+	var active_session_guard := _validate_mcp_existing_session(headers)
+	if not active_session_guard.is_empty():
+		return active_session_guard
 
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_sse_response(accept_header):
@@ -319,6 +329,19 @@ func _validate_mcp_session_active(headers: Dictionary) -> Dictionary:
 	return {}
 
 
+func _validate_mcp_existing_session(headers: Dictionary) -> Dictionary:
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if requested_session.is_empty():
+		return {}
+	if not _has_mcp_session(requested_session) or _is_mcp_session_terminated(requested_session):
+		return {
+			"error": "MCP session not found",
+			"status": 404,
+			"details": "The MCP session is unknown or expired."
+		}
+	return {}
+
+
 func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
@@ -384,23 +407,15 @@ func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
 func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictionary:
 	var resume_status := _sse_resume_status(session_id, last_event_id)
 	return _append_sse_event(session_id, {
-		"jsonrpc": "2.0",
-		"method": "notifications/message",
-		"params": {
-			"level": "info",
-			"logger": "godot-dotnet-mcp.transport",
-			"data": {
-				"transport": "streamable_http",
-				"mode": "sse_stream",
-				"resume_from_event_id": last_event_id,
-				"resume_cursor_found": bool(resume_status.get("found", false)),
-				"resume_status": str(resume_status.get("status", "matched" if bool(resume_status.get("found", false)) else "unknown_session")),
-				"replay_event_count": int(resume_status.get("event_count_after_cursor", 0)),
-				"resume_start_index": int(resume_status.get("start_index", 0)),
-				"resume_base_index": int(resume_status.get("base_index", 0)),
-				"resume_next_index": int(resume_status.get("next_index", 0))
-			}
-		}
+		"transport": "streamable_http",
+		"mode": "sse_stream",
+		"resume_from_event_id": last_event_id,
+		"resume_cursor_found": bool(resume_status.get("found", false)),
+		"resume_status": str(resume_status.get("status", "matched" if bool(resume_status.get("found", false)) else "unknown_session")),
+		"replay_event_count": int(resume_status.get("event_count_after_cursor", 0)),
+		"resume_start_index": int(resume_status.get("start_index", 0)),
+		"resume_base_index": int(resume_status.get("base_index", 0)),
+		"resume_next_index": int(resume_status.get("next_index", 0))
 	}, "streamable-http-get")
 
 
@@ -444,6 +459,8 @@ func _remember_mcp_session(session_id: String) -> void:
 func _should_remember_mcp_session(response: Dictionary) -> bool:
 	if response.has("_terminate_mcp_session_id"):
 		return false
+	if bool(response.get("_no_body", false)) and not response.has("_mcp_session_id"):
+		return false
 	var status_code := int(response.get("status", response.get("_status_code", 200)))
 	return status_code < 400
 
@@ -475,9 +492,9 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	if enriched.has("_headers") and enriched["_headers"] is Dictionary:
 		response_headers = (enriched["_headers"] as Dictionary).duplicate(true)
 	response_headers["MCP-Protocol-Version"] = MCPProtocolFacts.get_protocol_version()
-	var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
-	response_headers["Mcp-Session-Id"] = resolved_session_id
 	if _should_remember_mcp_session(enriched):
+		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
+		response_headers["Mcp-Session-Id"] = resolved_session_id
 		_remember_mcp_session(resolved_session_id)
 	enriched["_headers"] = response_headers
 	return enriched
@@ -519,6 +536,16 @@ func _generate_mcp_session_id() -> String:
 		str(get_instance_id()),
 		str(randi())
 	]
+
+
+func _is_initialize_request_body(body: String) -> bool:
+	var json := JSON.new()
+	if json.parse(body) != OK:
+		return false
+	var data: Variant = json.get_data()
+	if not (data is Dictionary):
+		return false
+	return str((data as Dictionary).get("method", "")) == "initialize"
 
 
 func _accepts_json_response(accept_header: String) -> bool:
