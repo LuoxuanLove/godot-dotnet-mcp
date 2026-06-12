@@ -6,6 +6,7 @@
   "distribution": "isolated-runtime-bundle",
   "source_surface": "excluded",
   "mode": "syntax",
+  "semantic_runtime": "Roslyn",
   "entrypoints": {
     "capabilities": "--capabilities",
     "call": "--call <tool_name> <json_arguments>",
@@ -16,8 +17,6 @@
     "GodotDotnetMcp.PluginBridge.deps.json",
     "GodotDotnetMcp.PluginBridge.runtimeconfig.json",
     "Microsoft.CodeAnalysis.dll",
-    "Microsoft.CodeAnalysis.CSharp.dll",
-    "System.Collections.Immutable.dll",
-    "System.Reflection.Metadata.dll"
+    "Microsoft.CodeAnalysis.CSharp.dll"
   ]
 }
