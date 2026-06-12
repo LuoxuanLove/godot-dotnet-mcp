@@ -13,6 +13,7 @@ const ToolLoaderDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mc
 const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
 const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
 const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
+const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -30,6 +31,7 @@ var _diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
 var _entry_service = ToolRegistryEntryServiceScript.new()
 var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
 var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
+var _execution_service = ToolExecutionServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -220,65 +222,11 @@ func get_tool_usage_stats() -> Array[Dictionary]:
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
-	var execution_args := args.duplicate(true)
-	var agent_context := _extract_agent_context(execution_args)
-	if not _is_category_executable(category):
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
-			"%s_%s" % [category, tool_name])
-		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
-
-	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
-		"%s_%s" % [category, tool_name])
-
-	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
-	if not runtime_result.get("success", false):
-		return runtime_result
-
-	var runtime: Dictionary = runtime_result.get("runtime", {})
-	var executor = runtime.get("instance")
-	if executor == null:
-		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
-
-	var started_usec = Time.get_ticks_usec()
-	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
-	var result = executor.execute(tool_name, execution_args)
-	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
-	return _finish_tool_activity(result, activity_record)
+	return _execution_service.execute_tool(category, tool_name, args, _build_execution_context())
 
 
 func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
-	var execution_args := args.duplicate(true)
-	var agent_context := _extract_agent_context(execution_args)
-	if not _is_category_executable(category):
-		MCPDebugBuffer.record("warning", "tool_loader",
-			"%s_%s denied: %s" % [category, tool_name, _get_tool_access_error(category)],
-			"%s_%s" % [category, tool_name])
-		return _failure("tool_access_denied", category, tool_name, _get_tool_access_error(category))
-
-	MCPDebugBuffer.record("debug", "tool_loader",
-		"Calling %s_%s (action: %s)" % [category, tool_name, str(execution_args.get("action", ""))],
-		"%s_%s" % [category, tool_name])
-
-	var runtime_result = _ensure_runtime_loaded(category, "tool_call")
-	if not runtime_result.get("success", false):
-		return runtime_result
-
-	var runtime: Dictionary = runtime_result.get("runtime", {})
-	var executor = runtime.get("instance")
-	if executor == null:
-		return _failure("tool_runtime_missing", category, tool_name, "Tool runtime is unavailable")
-
-	var started_usec = Time.get_ticks_usec()
-	var activity_record := _begin_tool_activity(category, tool_name, execution_args, agent_context)
-	var result
-	if executor.has_method("execute_async"):
-		result = await executor.execute_async(tool_name, execution_args)
-	else:
-		result = executor.execute(tool_name, execution_args)
-	result = _finalize_tool_execution(category, tool_name, execution_args, started_usec, result)
-	return _finish_tool_activity(result, activity_record)
+	return await _execution_service.execute_tool_async(category, tool_name, args, _build_execution_context())
 
 
 func tick(delta: float) -> void:
@@ -718,6 +666,19 @@ func _build_catalog_projection_context() -> Dictionary:
 		"is_tool_enabled": Callable(self, "is_tool_enabled"),
 		"is_exposed_tool_definition": Callable(self, "_is_exposed_tool_definition"),
 		"is_public_removed_tool_definition": Callable(self, "_is_public_removed_tool_definition")
+	}
+
+
+func _build_execution_context() -> Dictionary:
+	return {
+		"extract_agent_context": Callable(self, "_extract_agent_context"),
+		"is_category_executable": Callable(self, "_is_category_executable"),
+		"get_tool_access_error": Callable(self, "_get_tool_access_error"),
+		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
+		"begin_tool_activity": Callable(self, "_begin_tool_activity"),
+		"finalize_tool_execution": Callable(self, "_finalize_tool_execution"),
+		"finish_tool_activity": Callable(self, "_finish_tool_activity"),
+		"failure": Callable(self, "_failure")
 	}
 
 

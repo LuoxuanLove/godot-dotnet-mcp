@@ -36,6 +36,7 @@
   {"name":"shader_tool_executor_contracts","layer":"tool","domain":"shader","behavior":"removal_guard","mcp_version":"legacy","conformance":"compat","speed":"headless","isolation":"stage_root","v1_4_disposition":"keep"},
   {"name":"tool_loader_contracts","layer":"tooling","domain":"loader","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
   {"name":"tool_public_surface_policy_contracts","layer":"tooling","domain":"loader","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
+  {"name":"tool_execution_service_contracts","layer":"tooling","domain":"loader","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
   {"name":"tool_execution_observer_contracts","layer":"tooling","domain":"loader","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},
   {"name":"tool_runtime_manager_contracts","layer":"tooling","domain":"loader","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"stage_root","v1_4_disposition":"rewrite"},
   {"name":"tool_loader_status_service_contracts","layer":"tooling","domain":"loader","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v1_4_disposition":"rewrite"},

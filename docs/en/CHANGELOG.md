@@ -112,6 +112,7 @@ Target version: 1.4.0.
 - Split registry entry indexing, duplicate-category detection, and loader entry ordering into a dedicated service while keeping runtime cache cleanup in `MCPToolLoader`.
 - Split tool-loader runtime context construction and loaded-runtime reconfiguration into a dedicated service while keeping executor lifecycle ownership in `MCPToolLoader`.
 - Split tool-loader catalog, flat definition, exposed-definition, and domain-state projections into a dedicated service while keeping lazy definition loading owned by `MCPToolLoader`.
+- Split tool-loader execution orchestration into a dedicated service so `MCPToolLoader` no longer owns duplicated sync/async access checks, runtime lookup, activity tracking, and finalization flow.
 - Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
 - Extended protocol facts parity coverage to include the server description used by initialize metadata.
 - Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
