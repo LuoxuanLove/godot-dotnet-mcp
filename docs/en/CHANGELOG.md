@@ -39,6 +39,7 @@ Target version: 1.4.0.
 - Changed MCP tool input/output schemas emitted by `tools/list`, catalog resources, and schema-inclusive catalog search to declare the JSON Schema 2020-12 dialect.
 - Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
 - Changed the Tools tab tree to render MCP protocol `icons` metadata from the shared tool presentation snapshot on tool and atomic rows.
+- Changed the Tools tab action rows and action previews to consume label and description keys from shared presentation metadata before falling back to legacy action-key derivation.
 - Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
 - Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
 - Changed the default MCP protocol facts to `2025-11-25` and added `serverInfo.description` metadata to initialize responses.

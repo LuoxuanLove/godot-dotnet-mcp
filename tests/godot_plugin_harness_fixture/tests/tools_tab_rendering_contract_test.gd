@@ -20,6 +20,7 @@ class FakeLocalization extends RefCounted:
 		"tool_preview_tool_id": "工具 ID",
 		"tool_preview_category": "分类",
 		"tool_preview_description": "描述",
+		"tool_action": "工具动作",
 		"tools_partial_suffix": "(partial)",
 		"cat_system": "System",
 		"cat_runtime": "运行时",
@@ -46,6 +47,8 @@ class FakeLocalization extends RefCounted:
 		"tool_action_launch_name": "启动",
 		"tool_action_attach_name": "附加",
 		"tool_action_configuration_done_name": "配置完成",
+		"tool_action_custom_node_label": "节点自带动作名",
+		"tool_action_custom_node_desc": "节点自带动作描述。",
 		"tool_action_disconnect_name": "断开连接",
 		"tool_action_terminate_name": "终止",
 		"tool_action_threads_name": "读取线程",
@@ -98,6 +101,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var tools_by_category := _build_tools_by_category()
 	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
+	_override_presentation_action_metadata(presentation, "system_dap_debugger.configuration_done", "tool_action_custom_node_label", "tool_action_custom_node_desc")
 	_poison_raw_tool_definitions_after_presentation(tools_by_category)
 	var base_model := {
 		"localization": FakeLocalization.new(),
@@ -241,8 +245,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if settings_popup_capture_action == null:
 		return _failure("Tools tab should expose editor_popup.capture_popup under system_settings_dialog for surface evidence workflows.")
 	var dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
-	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "配置完成":
-		return _failure("Tools tab should localize DAP debugger action children instead of humanizing snake_case action names.")
+	if dap_configuration_done_action == null or dap_configuration_done_action.get_text(0) != "节点自带动作名":
+		return _failure("Tools tab should render action names from shared presentation node metadata instead of deriving action keys in the UI.")
 	_instance.call("_apply_selection_metadata", dap_tool.get_metadata(0))
 	await tree.process_frame
 	if not preview_text.text.contains("adapter_args | object | 发送给调试适配器的启动或附加参数。"):
@@ -325,6 +329,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should localize DAP atomic action parameter descriptions in the selected action preview.")
 	if preview_text.text.contains("Launch/attach arguments sent to the adapter"):
 		return _failure("Tools tab should not leak raw English DAP atomic action schema parameter descriptions in localized previews.")
+	dap_configuration_done_action = _find_child_by_metadata(dap_tool, "action", "system_dap_debugger.configuration_done")
+	if dap_configuration_done_action == null:
+		return _failure("Tools tab should keep the DAP debugger action row available after search rebuilds.")
+	_instance.call("_apply_selection_metadata", dap_configuration_done_action.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("工具动作: 节点自带动作名") or not preview_text.text.contains("节点自带动作描述。"):
+		return _failure("Tools tab action preview should consume label and description keys from shared presentation node metadata.")
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():
 		return _failure(catalog_error)
@@ -443,6 +454,27 @@ func _poison_raw_tool_definitions_after_presentation(tools_by_category: Dictiona
 				"raw_output_only": {"type": "string", "description": "RAW SHOULD NOT APPEAR"}
 			}
 		}
+
+
+func _override_presentation_action_metadata(presentation: Dictionary, action_key: String, label_key: String, description_key: String) -> void:
+	var nodes = presentation.get("toolTree", [])
+	if nodes is Array:
+		_override_presentation_action_metadata_recursive(nodes as Array, action_key, label_key, description_key)
+
+
+func _override_presentation_action_metadata_recursive(nodes: Array, action_key: String, label_key: String, description_key: String) -> bool:
+	for raw_node in nodes:
+		if not (raw_node is Dictionary):
+			continue
+		var node := raw_node as Dictionary
+		if str(node.get("kind", "")) == "action" and str(node.get("key", "")) == action_key:
+			node["labelKey"] = label_key
+			node["descriptionKey"] = description_key
+			return true
+		var children = node.get("children", [])
+		if children is Array and _override_presentation_action_metadata_recursive(children as Array, action_key, label_key, description_key):
+			return true
+	return false
 
 
 func _add_tool_def(tools_by_category: Dictionary, full_name: String, actions: Array = []) -> void:
