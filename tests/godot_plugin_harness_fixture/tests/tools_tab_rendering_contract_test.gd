@@ -18,7 +18,10 @@ class FakeLocalization extends RefCounted:
 		"tool_preview_empty": "Nothing selected",
 		"tool_preview_tool": "工具",
 		"tool_preview_tool_id": "工具 ID",
+		"tool_preview_domain": "Domain",
 		"tool_preview_category": "分类",
+		"tool_preview_category_count": "%d categories",
+		"tool_preview_tool_count": "%d tools",
 		"tool_preview_description": "描述",
 		"tool_action": "工具动作",
 		"tools_partial_suffix": "(partial)",
@@ -288,6 +291,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var shared_metadata_after_poison: Dictionary = _instance.call("_get_tool_metadata", "system_dap_debugger", dap_tool.get_metadata(0))
 	if JSON.stringify(shared_metadata_after_poison).contains("RAW SHOULD NOT APPEAR"):
 		return _failure("Tools tab metadata lookup should ignore poisoned raw tool definitions when shared presentation metadata exists.")
+	root = tool_tree.get_root()
+	core_domain = _find_child_by_metadata(root, "domain", "core")
+	system_category = _find_child_by_metadata(core_domain, "category", "system")
+	if core_domain == null or system_category == null:
+		return _failure("Tools tab should keep current presentation domain/category nodes before preview poisoning assertions.")
+	_instance.call("_apply_selection_metadata", {"kind": "domain", "key": "core"})
+	await tree.process_frame
+	if preview_text.text.contains("RAW SHOULD NOT APPEAR") or not preview_text.text.contains("System"):
+		return _failure("Tools tab domain preview should use presentation category children instead of poisoned raw category facts.")
+	_instance.call("_apply_selection_metadata", {"kind": "category", "key": "system", "category": "system"})
+	await tree.process_frame
+	if preview_text.text.contains("RAW SHOULD NOT APPEAR") or preview_text.text.contains("raw_only_param") or not preview_text.text.contains("DAP 调试器"):
+		return _failure("Tools tab category preview should list tools from shared presentation metadata instead of poisoned raw tool definitions.")
 	if dap_tool.get_icon(0) == null:
 		return _failure("Tools tab should render protocol icons from shared presentation metadata on tool rows.")
 	var dap_icon_metadata = dap_tool.get_metadata(0)
