@@ -233,15 +233,34 @@ func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
 		return _failure("Stdio context builder should produce prompt service status callables.")
 	var stdio_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
 	for forbidden in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"ToolPresentationService",
 		"MCPResourcesServiceContextScript",
 		"MCPPromptsServiceContextScript",
 		"MCPToolRpcRouterContextScript",
+		"func _create_tool_response",
+		"func _resolve_tool_call_name",
+		"_resources_service",
+		"_prompts_service",
+		"_tool_rpc_router",
+		"_context_builder",
 		".new()\n\tresources_context",
 		".new()\n\tprompts_context",
 		".new()\n\trouter_context"
 	]:
 		if stdio_source.find(forbidden) != -1:
 			return _failure("mcp_stdio_server.gd should delegate context construction to MCPStdioServiceContextBuilder, but still contains '%s'." % forbidden)
+	for required_server in [
+		"MCPStdioServiceBundleScript",
+		"_service_bundle.handle_request_async(",
+		"_service_bundle.handle_tools_call_async(",
+		"_service_bundle.handle_resources_read(",
+		"_service_bundle.handle_prompts_get("
+	]:
+		if stdio_source.find(required_server) == -1:
+			return _failure("mcp_stdio_server.gd should delegate stdio service handling to MCPStdioServiceBundle: missing '%s'." % required_server)
 	var builder_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
 	for required in [
 		"MCPResourcesServiceContextScript",
@@ -253,6 +272,28 @@ func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
 	]:
 		if builder_source.find(required) == -1:
 			return _failure("MCPStdioServiceContextBuilder should own stdio context construction: missing '%s'." % required)
+	var bundle_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_bundle.gd")
+	for required_bundle in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"MCPStdioJsonRpcServiceScript",
+		"func handle_request_async",
+		"func handle_tools_call_async",
+		"func get_stdio_tool_loader_status"
+	]:
+		if bundle_source.find(required_bundle) == -1:
+			return _failure("MCPStdioServiceBundle should own stdio service assembly: missing '%s'." % required_bundle)
+	var json_rpc_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_json_rpc_service.gd")
+	for required_json_rpc in [
+		"func handle_request_async",
+		"func handle_tools_list",
+		"func handle_tools_call_async",
+		"func handle_resources_read",
+		"func handle_prompts_get"
+	]:
+		if json_rpc_source.find(required_json_rpc) == -1:
+			return _failure("MCPStdioJsonRpcService should own stdio JSON-RPC method dispatch: missing '%s'." % required_json_rpc)
 	return {"success": true, "error": ""}
 
 

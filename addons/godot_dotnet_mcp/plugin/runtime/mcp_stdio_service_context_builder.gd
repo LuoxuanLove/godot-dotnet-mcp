@@ -13,8 +13,8 @@ const MCPToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plu
 func build_tool_rpc_router_context(server, tool_activity_registry = null):
 	var context = MCPToolRpcRouterContextScript.new()
 	context.get_tool_loader = func(): return server.get("_tool_loader")
-	context.is_tool_enabled = Callable(server, "_is_tool_enabled")
-	context.is_tool_exposed = Callable(server, "_is_tool_exposed")
+	context.is_tool_enabled = Callable(server._service_bundle, "is_tool_enabled")
+	context.is_tool_exposed = Callable(server._service_bundle, "is_tool_exposed")
 	context.log = Callable(server, "_log")
 	context.sanitize_for_json = Callable(server, "_sanitize_for_json")
 	context.tool_activity_registry = tool_activity_registry
@@ -24,13 +24,13 @@ func build_tool_rpc_router_context(server, tool_activity_registry = null):
 func build_resources_service_context(server):
 	var context = MCPResourcesServiceContextScript.new()
 	context.get_tool_loader = func(): return server.get("_tool_loader")
-	context.get_tool_loader_status = Callable(server, "_get_stdio_tool_loader_status")
-	context.get_tool_activity_registry = Callable(server, "_get_stdio_tool_activity_registry")
+	context.get_tool_loader_status = Callable(server._service_bundle, "get_stdio_tool_loader_status")
+	context.get_tool_activity_registry = Callable(server._service_bundle, "get_stdio_tool_activity_registry")
 	context.sanitize_for_json = Callable(server, "_sanitize_for_json")
 	return context
 
 
 func build_prompts_service_context(server):
 	var context = MCPPromptsServiceContextScript.new()
-	context.get_tool_loader_status = Callable(server, "_get_stdio_tool_loader_status")
+	context.get_tool_loader_status = Callable(server._service_bundle, "get_stdio_tool_loader_status")
 	return context
