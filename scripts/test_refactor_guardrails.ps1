@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
 $manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
+$roslynRuntimeGuardPath = Join-Path $scriptRoot "scripts\validate_roslyn_runtime_bundle.ps1"
 
 function Write-Utf8NoBom {
     param(
@@ -34,9 +35,11 @@ function Write-GuardrailFixture {
 
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "scripts") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot ".github\workflows") -Force | Out-Null
 
     Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_refactor_guardrails.ps1")
     Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $RepositoryRoot "scripts\contract_case_manifest.json")
+    Copy-Item -LiteralPath $roslynRuntimeGuardPath -Destination (Join-Path $RepositoryRoot "scripts\validate_roslyn_runtime_bundle.ps1")
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
@@ -83,8 +86,24 @@ MCP 2025-06-18 is the default target baseline.
 
     Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
     Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot ".github\workflows\pr-policy.yml") -Text @'
+name: pr-policy
+on:
+  pull_request:
+  merge_group:
+jobs:
+  pr-standards:
+    steps:
+      - run: python scripts/test_validate_pr_policy.py
+'@
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot ".github\workflows\version-policy.yml") -Text @'
+name: version-policy
+on:
+  pull_request_target:
+  merge_group:
+'@
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json docs/en/process/v1.4.0-protocol-refactor-plan.md docs/en/process/v1.4.0-refactor-progress-tracker.md | Out-Null
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml docs/en/process/v1.4.0-protocol-refactor-plan.md docs/en/process/v1.4.0-refactor-progress-tracker.md | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 
@@ -106,7 +125,7 @@ function Invoke-GuardrailScenario {
         $passed = $true
         $failureMessage = ""
         try {
-            $output = & (Join-Path $repo "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy 2>&1
+            $output = & (Join-Path $repo "scripts\validate_refactor_guardrails.ps1") -SkipVersionPolicy -SkipBridgeSafeWrites 2>&1
             $output | Out-Host
         } catch {
             $passed = $false
@@ -140,7 +159,7 @@ $cleanAddonReadme = @"
 
 ## Installation
 
-Use Godot Asset Library installation or direct source-copy installation.
+Use Godot Asset Library installation or prepared installable addon contents.
 "@
 
 Invoke-GuardrailScenario -Name "release-facing README install paths" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $true

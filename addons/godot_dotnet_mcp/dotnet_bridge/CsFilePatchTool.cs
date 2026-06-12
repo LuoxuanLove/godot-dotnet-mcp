@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace GodotDotnetMcp.DotnetBridge;
@@ -45,7 +44,7 @@ internal static class CsFilePatchTool
 
             if (!dryRun)
             {
-                File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                WriteToolHelpers.WriteUtf8NoBom(path, text);
             }
 
             return Task.FromResult(BridgeToolCallResponse.Success(result));

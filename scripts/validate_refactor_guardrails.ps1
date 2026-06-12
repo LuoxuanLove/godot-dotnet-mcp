@@ -1,5 +1,6 @@
 ﻿param(
-    [switch]$SkipVersionPolicy
+    [switch]$SkipVersionPolicy,
+    [switch]$SkipBridgeSafeWrites
 )
 
 $ErrorActionPreference = "Stop"
@@ -236,7 +237,7 @@ foreach ($relativeReadmePath in $releaseFacingReadmes) {
     $readmeText = Get-Content -LiteralPath $absoluteReadmePath -Encoding UTF8 -Raw
     foreach ($entry in $bannedReadmeInstallPatterns) {
         if ($readmeText -match $entry.Pattern) {
-            $errors.Add("Release-facing README must only document Asset Library or direct source-copy installs; found $($entry.Description) in ${relativeReadmePath}.")
+            $errors.Add("Release-facing README must only document Asset Library or prepared installable addon contents; found $($entry.Description) in ${relativeReadmePath}.")
         }
     }
 }
@@ -353,3 +354,12 @@ if ($errors.Count -gt 0) {
 }
 
 Write-Host "Refactor guardrails validated successfully."
+
+if ($SkipBridgeSafeWrites) {
+    Write-Host "Dotnet bridge safe-write regression tests skipped: caller opted out."
+} else {
+    & "$PSScriptRoot\test_dotnet_bridge_safe_writes.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dotnet bridge safe-write regression tests failed with exit code $LASTEXITCODE."
+    }
+}
