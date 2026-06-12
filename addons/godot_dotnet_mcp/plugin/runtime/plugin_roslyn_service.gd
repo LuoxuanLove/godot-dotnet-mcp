@@ -215,6 +215,11 @@ func _ensure_facade() -> void:
 
 
 func _instantiate_facade():
+	if not FileAccess.file_exists(FACADE_SCRIPT_PATH):
+		var missing_source_process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is not present in this installation")
+		if missing_source_process_facade != null:
+			return missing_source_process_facade
+		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 	var script = ResourceLoader.load(FACADE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	if script == null or not (script is Script):
 		var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source could not be loaded from res://")

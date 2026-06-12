@@ -356,6 +356,14 @@ function Assert-CleanAssetLibraryInstallBuild {
     if (-not [bool]$HarnessJson.exportedRoslynRuntimeProbeSucceeded) {
         throw "Clean Asset Library install build could not execute the isolated Roslyn runtime probe."
     }
+
+    if (-not ($HarnessJson.PSObject.Properties.Name -contains "exportedPluginRoslynServiceProbeSucceeded")) {
+        throw "Clean Asset Library install build did not report required property: exportedPluginRoslynServiceProbeSucceeded"
+    }
+
+    if (-not [bool]$HarnessJson.exportedPluginRoslynServiceProbeSucceeded) {
+        throw "Clean Asset Library install build could not execute PluginRoslynService through the exported isolated runtime process."
+    }
 }
 
 function Write-HarnessTimingSummary {
@@ -624,6 +632,13 @@ $HarnessSucceeded = $false
 try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
         Invoke-DotnetBuildWithDiagnostics -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
+    }))
+
+    $TimingRecords.Add((Invoke-CommandOrThrow -Description "Validate isolated Roslyn runtime bundle" -Command {
+        & .\scripts\validate_roslyn_runtime_bundle.ps1 -Configuration Release
+        if ($LASTEXITCODE -ne 0) {
+            throw "Validate isolated Roslyn runtime bundle failed with exit code $LASTEXITCODE."
+        }
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build harness runner" -Command {

@@ -69,7 +69,7 @@ internal static class Program
 
         if (cleanAssetLibraryInstallBuild)
         {
-            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot);
+            return await RunCleanAssetLibraryInstallBuildAsync(repoRoot, keepStageRoot, explicitGodotPath);
         }
 
         if (string.IsNullOrWhiteSpace(explicitGodotPath) || !File.Exists(explicitGodotPath))
@@ -295,7 +295,7 @@ internal static class Program
         }
     }
 
-    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot)
+    private static async Task<int> RunCleanAssetLibraryInstallBuildAsync(string repoRoot, bool keepStageRoot, string? explicitGodotPath)
     {
         var stageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stageRoot);
@@ -307,6 +307,23 @@ internal static class Program
         {
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
+            var dirtyArchiveInputs = await GetDirtyAssetLibraryArchiveInputsAsync(repoRoot, processRegistry);
+            if (dirtyArchiveInputs.Length > 0)
+            {
+                preserveStageRoot = keepStageRoot;
+                var dirtySummary = new
+                {
+                    success = false,
+                    skipped = false,
+                    reason = "clean_asset_library_archive_inputs_dirty",
+                    stageRoot,
+                    stageKept = preserveStageRoot,
+                    dirtyArchiveInputs,
+                    phaseTimings,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(dirtySummary, new JsonSerializerOptions { WriteIndented = true }));
+                return 1;
+            }
             var archiveResult = await ExportAddonArchiveAsync(repoRoot, stageRoot, processRegistry);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
@@ -370,6 +387,17 @@ internal static class Program
                 : (Succeeded: false, ExitCode: -1, StdOut: string.Empty, StdErr: "Roslyn runtime executable missing.", TimedOut: false);
             runtimeProbeStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("probe_exported_roslyn_runtime", runtimeProbeStopwatch.ElapsedMilliseconds));
+            var serviceProbeStopwatch = Stopwatch.StartNew();
+            var serviceProbe = !string.IsNullOrWhiteSpace(explicitGodotPath) && File.Exists(explicitGodotPath)
+                ? await RunGodotHarnessAsync(
+                    stageRoot,
+                    explicitGodotPath,
+                    "exported-roslyn-service-probe",
+                    ["plugin_roslyn_service_exported_runtime_contracts"],
+                    processRegistry)
+                : (Succeeded: false, ExitCode: -1, StdOut: string.Empty, StdErr: "Godot executable missing for exported PluginRoslynService probe.", TimedOut: false);
+            serviceProbeStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("probe_exported_plugin_roslyn_service", serviceProbeStopwatch.ElapsedMilliseconds));
 
             var succeeded = stageBuild.Succeeded
                 && !fixtureHasRoslynPackageReference
@@ -379,7 +407,8 @@ internal static class Program
                 && exportedRoslynRuntimeManifest
                 && missingRoslynRuntimeManifestFiles.Length == 0
                 && exportedRoslynRuntimeExecutable
-                && runtimeProbe.Succeeded;
+                && runtimeProbe.Succeeded
+                && serviceProbe.Succeeded;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
             {
@@ -408,6 +437,11 @@ internal static class Program
                 exportedRoslynRuntimeProbeTimedOut = runtimeProbe.TimedOut,
                 exportedRoslynRuntimeProbeStdout = ToSerializedProcessOutput(runtimeProbe.StdOut),
                 exportedRoslynRuntimeProbeStderr = ToSerializedProcessOutput(runtimeProbe.StdErr),
+                exportedPluginRoslynServiceProbeSucceeded = serviceProbe.Succeeded,
+                exportedPluginRoslynServiceProbeExitCode = serviceProbe.ExitCode,
+                exportedPluginRoslynServiceProbeTimedOut = serviceProbe.TimedOut,
+                exportedPluginRoslynServiceProbeStdout = ToSerializedProcessOutput(serviceProbe.StdOut),
+                exportedPluginRoslynServiceProbeStderr = ToSerializedProcessOutput(serviceProbe.StdErr),
                 stdout = ToSerializedProcessOutput(stageBuild.StdOut),
                 stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                 phaseTimings,
@@ -427,6 +461,154 @@ internal static class Program
             catch
             {
             }
+        }
+    }
+
+    private static async Task<string[]> GetDirtyAssetLibraryArchiveInputsAsync(string repoRoot, HarnessProcessRegistry processRegistry)
+    {
+        var tracked = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-diff-asset-library-inputs",
+            ["diff", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        var staged = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-diff-cached-asset-library-inputs",
+            ["diff", "--cached", "--name-only", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        var untracked = await RunGitLinesAsync(
+            repoRoot,
+            processRegistry,
+            "git-untracked-asset-library-inputs",
+            ["ls-files", "--others", "--exclude-standard", "--", "addons/godot_dotnet_mcp", ".gitattributes"]);
+        return tracked
+            .Concat(staged)
+            .Concat(untracked)
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static async Task<string[]> RunGitLinesAsync(string repoRoot, HarnessProcessRegistry processRegistry, string registryLabel, string[] arguments)
+    {
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("git")
+                {
+                    WorkingDirectory = repoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            foreach (var argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.Start();
+            processRegistry.Register(process, registryLabel, "git", repoRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"{registryLabel} failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            return stdout
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            throw new TimeoutException($"{registryLabel} timed out.");
+        }
+        finally
+        {
+            processRegistry.Unregister(process);
+            process?.Dispose();
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGodotHarnessAsync(
+        string stageRoot,
+        string godotPath,
+        string registryLabel,
+        string[] selectedCases,
+        HarnessProcessRegistry processRegistry)
+    {
+        var appDataRoot = Path.Combine(stageRoot, ".appdata");
+        var localAppDataRoot = Path.Combine(stageRoot, ".localappdata");
+        Directory.CreateDirectory(appDataRoot);
+        Directory.CreateDirectory(localAppDataRoot);
+
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo(godotPath)
+                {
+                    WorkingDirectory = stageRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.Environment["APPDATA"] = appDataRoot;
+            process.StartInfo.Environment["LOCALAPPDATA"] = localAppDataRoot;
+            process.StartInfo.Environment["GODOT_PLUGIN_HARNESS_LIST_CASES"] = "0";
+            process.StartInfo.Environment[SelectedCasesEnvVar] = string.Join(",", selectedCases);
+            process.StartInfo.ArgumentList.Add("--headless");
+            process.StartInfo.ArgumentList.Add("--path");
+            process.StartInfo.ArgumentList.Add(stageRoot);
+
+            process.Start();
+            processRegistry.Register(process, registryLabel, godotPath, stageRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            var suite = TryParseLastJsonLine(stdout);
+            var suiteSuccess = ExtractBooleanProperty(suite, "success") ?? false;
+            return (process.ExitCode == 0 && suiteSuccess, process.ExitCode, stdout, stderr, false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, stdout, stderr, true);
+        }
+        catch (Exception ex)
+        {
+            return (false, -1, string.Empty, ex.ToString(), false);
+        }
+        finally
+        {
+            process?.Dispose();
         }
     }
 
@@ -613,6 +795,19 @@ internal static class Program
         {
             return null;
         }
+    }
+
+    private static bool? ExtractBooleanProperty(object? value, string propertyName)
+    {
+        if (value is JsonElement element
+            && element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(propertyName, out var property)
+            && (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False))
+        {
+            return property.GetBoolean();
+        }
+
+        return null;
     }
 
     private static async Task<string> TryReadOutputAsync(Task<string>? task)

@@ -14,6 +14,7 @@
   },
   "files": [
     "GodotDotnetMcp.PluginBridge.dll",
+    "GodotDotnetMcp.PluginBridge.exe",
     "GodotDotnetMcp.PluginBridge.deps.json",
     "GodotDotnetMcp.PluginBridge.runtimeconfig.json",
     "Microsoft.CodeAnalysis.dll",
