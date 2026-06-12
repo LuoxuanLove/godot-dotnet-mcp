@@ -1646,28 +1646,21 @@ func _find_domain_definition(domain_key: String) -> Dictionary:
 	return {}
 
 
-func _find_tool_definition(category: String, tool_name: String) -> Dictionary:
-	for tool_def in _current_model.get("tools_by_category", {}).get(category, []):
-		if bool(tool_def.get("compatibility_alias", false)):
-			continue
-		if str(tool_def.get("name", "")) == tool_name:
-			return (tool_def as Dictionary).duplicate(true)
-	return {}
-
-
 func _get_tool_metadata(full_name: String, fallback: Dictionary = {}) -> Dictionary:
 	var presentation = _current_model.get("tool_presentation", {})
 	var metadata_by_name = (presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}
 	var metadata: Dictionary = {}
+	var has_shared_metadata := false
 	if metadata_by_name is Dictionary and (metadata_by_name as Dictionary).has(full_name):
 		var shared_metadata = (metadata_by_name as Dictionary).get(full_name, {})
 		if shared_metadata is Dictionary:
 			metadata = (shared_metadata as Dictionary).duplicate(true)
+			has_shared_metadata = true
 	if metadata.is_empty() and not fallback.is_empty():
 		metadata = fallback.duplicate(true)
-	if metadata.is_empty():
+	if metadata.is_empty() and not _has_presentation_tree(_current_model):
 		metadata = _get_tool_def_by_full_name(_current_model, full_name)
-	else:
+	elif not has_shared_metadata:
 		_merge_missing_tool_runtime_fields(metadata, _get_tool_def_by_full_name(_current_model, full_name))
 	if not metadata.has("fullName"):
 		metadata["fullName"] = full_name
@@ -1727,6 +1720,8 @@ func _build_atomic_tool_preview_lines(system_full_name: String, depth: int = 0, 
 	var presentation_lines := _build_presentation_atomic_tool_preview_lines(system_full_name, depth, visited)
 	if not presentation_lines.is_empty():
 		return presentation_lines
+	if _has_presentation_tree(_current_model):
+		return lines
 	for entry in ToolPresentationService.get_atomic_child_specs(system_full_name):
 		var atomic_full_name := str(entry.get("tool", ""))
 		var actions: Array = entry.get("actions", [])
@@ -1938,6 +1933,10 @@ func _build_tree_signature(model: Dictionary) -> String:
 		JSON.stringify(model.get("tool_load_errors", [])),
 		JSON.stringify(model.get("toolTree", []))
 	]
+	if _has_presentation_tree(model):
+		var presentation = model.get("tool_presentation", {})
+		parts.append(JSON.stringify((presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}))
+		return "\n".join(parts)
 	var categories: Array = tools_by_category.keys()
 	categories.sort()
 	for category in categories:

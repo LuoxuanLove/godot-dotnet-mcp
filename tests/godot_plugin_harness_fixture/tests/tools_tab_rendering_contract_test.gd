@@ -97,7 +97,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance = ToolsTabScene.instantiate() as VBoxContainer
 	if _instance == null:
 		return _failure("Tools tab rendering test could not instantiate the tools tab scene.")
-	var ui_source_guard := _assert_tools_tab_uses_presentation_service_for_catalog_fallbacks()
+	var ui_source_guard := _assert_tools_tab_prefers_shared_presentation_metadata()
 	if not ui_source_guard.is_empty():
 		return _failure(ui_source_guard)
 	tree.root.add_child(_instance)
@@ -280,6 +280,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab output-schema metadata should resolve shared presentation outputSchema.")
 	if (copied_output_properties as Dictionary).has("raw_output_only") or str((copied_output_schema_json as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
 		return _failure("Tools tab output-schema metadata should not use poisoned raw schemas.")
+	var signature_before_poison_update: String = _instance.call("_build_tree_signature", base_model)
+	_poison_all_raw_tool_definitions(tools_by_category)
+	var signature_after_poison_update: String = _instance.call("_build_tree_signature", base_model)
+	if signature_before_poison_update != signature_after_poison_update:
+		return _failure("Tools tab refresh signature should ignore raw tool definition changes when shared presentation metadata exists.")
+	var shared_metadata_after_poison: Dictionary = _instance.call("_get_tool_metadata", "system_dap_debugger", dap_tool.get_metadata(0))
+	if JSON.stringify(shared_metadata_after_poison).contains("RAW SHOULD NOT APPEAR"):
+		return _failure("Tools tab metadata lookup should ignore poisoned raw tool definitions when shared presentation metadata exists.")
 	if dap_tool.get_icon(0) == null:
 		return _failure("Tools tab should render protocol icons from shared presentation metadata on tool rows.")
 	var dap_icon_metadata = dap_tool.get_metadata(0)
@@ -463,6 +471,21 @@ func _poison_raw_tool_definitions_after_presentation(tools_by_category: Dictiona
 		}
 
 
+func _poison_all_raw_tool_definitions(tools_by_category: Dictionary) -> void:
+	for category in tools_by_category.keys():
+		var entries = tools_by_category.get(category, [])
+		if not (entries is Array):
+			continue
+		for raw_tool in entries:
+			if not (raw_tool is Dictionary):
+				continue
+			var tool_def := raw_tool as Dictionary
+			tool_def["description"] = "RAW SHOULD NOT APPEAR"
+			tool_def["source"] = "RAW SHOULD NOT APPEAR"
+			tool_def["script_path"] = "RAW SHOULD NOT APPEAR"
+			tool_def["load_state"] = "RAW SHOULD NOT APPEAR"
+
+
 func _override_presentation_action_metadata(presentation: Dictionary, action_key: String, label_key: String, description_key: String) -> void:
 	var nodes = presentation.get("toolTree", [])
 	if nodes is Array:
@@ -635,10 +658,10 @@ func _assert_system_catalog_rendered(system_category: TreeItem) -> String:
 	return ""
 
 
-func _assert_tools_tab_uses_presentation_service_for_catalog_fallbacks() -> String:
+func _assert_tools_tab_prefers_shared_presentation_metadata() -> String:
 	var source_path := "res://addons/godot_dotnet_mcp/ui/tools_tab.gd"
 	if not FileAccess.file_exists(source_path):
-		return "Tools tab source should exist for catalog fallback guard."
+		return "Tools tab source should exist for presentation metadata guard."
 	var source := FileAccess.get_file_as_string(source_path)
 	if source.find("SystemTreeCatalog") != -1:
 		return "Tools tab should not depend directly on SystemTreeCatalog; route catalog fallback facts through ToolPresentationService."
@@ -646,6 +669,10 @@ func _assert_tools_tab_uses_presentation_service_for_catalog_fallbacks() -> Stri
 		return "Tools tab legacy fallback rendering should consume atomic child specs from ToolPresentationService."
 	if source.find("ToolPresentationService.get_action_name_key") == -1 or source.find("ToolPresentationService.get_action_desc_key") == -1:
 		return "Tools tab legacy action localization should consume action key helpers from ToolPresentationService."
+	if source.find("if _has_presentation_tree(_current_model):\n\t\treturn lines") == -1:
+		return "Tools tab atomic preview should not fall back to raw atomic specs when shared presentation metadata exists."
+	if source.find("if _has_presentation_tree(model):") == -1:
+		return "Tools tab tree signature should use a presentation-only branch when shared presentation metadata exists."
 	return ""
 
 
