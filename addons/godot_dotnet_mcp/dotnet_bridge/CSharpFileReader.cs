@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using System.Text.Json.Serialization;
 
 namespace GodotDotnetMcp.DotnetBridge;
 
@@ -13,102 +13,93 @@ internal sealed record CSharpMethodSummary(
     int Column,
     string? ContainingType);
 
+internal sealed record CSharpExportSummary(
+    string Name,
+    [property: JsonPropertyName("member_type")] string MemberType,
+    [property: JsonPropertyName("type_name")] string TypeName);
+
+internal sealed record CSharpParseErrorSummary(string Severity, string Code, string Message, int Line, int Column);
+
 internal sealed record CSharpFileReadModel(
     string Path,
     string? Namespace,
     IReadOnlyList<string> Usings,
     IReadOnlyList<CSharpTypeSummary> Types,
-    IReadOnlyList<CSharpMethodSummary> Methods);
+    IReadOnlyList<CSharpMethodSummary> Methods,
+    IReadOnlyList<CSharpExportSummary> Exports,
+    IReadOnlyList<CSharpParseErrorSummary> ParseErrors,
+    string SemanticRuntime);
 
 internal static class CSharpFileReader
 {
-    private static readonly Regex NamespaceRegex = new(@"^\s*namespace\s+(?<name>[A-Za-z_][\w\.]*)\s*(?:;|\{)?\s*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex UsingRegex = new(@"^\s*using\s+(?:(?<static>static)\s+)?(?:(?<alias>[A-Za-z_]\w*)\s*=\s*)?(?<name>[A-Za-z_][\w\.]*(?:<[^>]+>)?)(?:\s*;\s*)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex TypeRegex = new(@"^\s*(?:(?<mods>(?:public|private|protected|internal|static|abstract|sealed|partial|readonly|unsafe|new)\s+)+)?(?<kind>class|struct|interface|enum|record(?:\s+(?:class|struct))?)\s+(?<name>[A-Za-z_]\w*(?:<[^>{]+>)?)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex MethodRegex = new(@"^\s*(?:(?<mods>(?:public|private|protected|internal|static|virtual|override|abstract|async|sealed|partial|extern|new|unsafe|readonly)\s+)+)?(?<returnType>[A-Za-z_][\w<>\[\]\.,\?\s]*?)\s+(?<name>[A-Za-z_]\w*)\s*(?:<(?<generic>[^>]+)>)?\s*\((?<parameters>[^\)]*)\)\s*(?:\{|=>|where\b|;)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     public static CSharpFileReadModel Read(string path)
     {
-        var lines = File.ReadAllLines(path);
-        string? namespaceName = null;
-        var usings = new List<string>();
-        var types = new List<CSharpTypeSummary>();
-        var methods = new List<CSharpMethodSummary>();
-        string? currentType = null;
+        return ReadSource(path, File.ReadAllText(path));
+    }
 
-        for (var index = 0; index < lines.Length; index++)
-        {
-            var line = lines[index];
-            var trimmed = line.Trim();
-
-            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("//", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var namespaceMatch = NamespaceRegex.Match(trimmed);
-            if (namespaceMatch.Success)
-            {
-                namespaceName = namespaceMatch.Groups["name"].Value;
-                continue;
-            }
-
-            var usingMatch = UsingRegex.Match(trimmed);
-            if (usingMatch.Success)
-            {
-                usings.Add(trimmed);
-                continue;
-            }
-
-            var typeMatch = TypeRegex.Match(trimmed);
-            if (typeMatch.Success)
-            {
-                var modifiers = ParseModifiers(typeMatch.Groups["mods"].Value);
-                var kind = NormalizeTypeKind(typeMatch.Groups["kind"].Value);
-                var name = typeMatch.Groups["name"].Value;
-                currentType = name;
-                types.Add(new CSharpTypeSummary(kind, name, modifiers, index + 1, line.IndexOf(name, StringComparison.Ordinal) + 1));
-                continue;
-            }
-
-            var methodMatch = MethodRegex.Match(trimmed);
-            if (methodMatch.Success)
-            {
-                var modifiers = ParseModifiers(methodMatch.Groups["mods"].Value);
-                var methodName = methodMatch.Groups["name"].Value;
-                var returnType = methodMatch.Groups["returnType"].Value.Trim();
-                var parameters = methodMatch.Groups["parameters"].Value.Trim();
-                methods.Add(new CSharpMethodSummary(
-                    Name: methodName,
-                    ReturnType: returnType,
-                    Parameters: parameters,
-                    Modifiers: modifiers,
-                    Line: index + 1,
-                    Column: line.IndexOf(methodName, StringComparison.Ordinal) + 1,
-                    ContainingType: currentType));
-            }
-        }
+    public static CSharpFileReadModel ReadSource(string path, string sourceText)
+    {
+        var readModel = GodotDotnetMcp.PluginRuntime.Roslyn.PluginRoslynSyntaxCore.Read(path, sourceText);
+        var types = readModel.Types
+            .Select(type => new CSharpTypeSummary(type.Kind, type.Name, type.Modifiers, type.Line, type.Column))
+            .ToArray();
+        var methods = readModel.Methods
+            .Select(method => new CSharpMethodSummary(
+                method.Name,
+                method.ReturnType,
+                string.Join(", ", method.Parameters),
+                method.Modifiers,
+                method.Line,
+                method.Column,
+                method.ContainingType))
+            .ToArray();
+        var exports = readModel.Root.DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.FieldDeclarationSyntax>()
+            .Where(field => HasExportAttribute(field.AttributeLists))
+            .SelectMany(field => field.Declaration.Variables.Select(variable => new CSharpExportSummary(
+                variable.Identifier.Text,
+                "field",
+                field.Declaration.Type.ToString())))
+            .Concat(readModel.Root.DescendantNodes()
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax>()
+                .Where(property => HasExportAttribute(property.AttributeLists))
+                .Select(property => new CSharpExportSummary(
+                    property.Identifier.Text,
+                    "property",
+                    property.Type.ToString())))
+            .ToArray();
+        var parseErrors = readModel.ParseErrors
+            .Select(error => new CSharpParseErrorSummary(error.Severity, error.Code, error.Message, error.Line, error.Column))
+            .ToArray();
 
         return new CSharpFileReadModel(
             Path: Path.GetFullPath(path),
-            Namespace: namespaceName,
-            Usings: usings,
+            Namespace: string.IsNullOrWhiteSpace(readModel.Namespace) ? null : readModel.Namespace,
+            Usings: readModel.Usings,
             Types: types,
-            Methods: methods);
+            Methods: methods,
+            Exports: exports,
+            ParseErrors: parseErrors,
+            SemanticRuntime: "Roslyn");
     }
 
-    private static IReadOnlyList<string> ParseModifiers(string rawModifiers)
+    private static bool HasExportAttribute(Microsoft.CodeAnalysis.SyntaxList<Microsoft.CodeAnalysis.CSharp.Syntax.AttributeListSyntax> attributeLists)
     {
-        if (string.IsNullOrWhiteSpace(rawModifiers))
+        foreach (var attributeList in attributeLists)
         {
-            return Array.Empty<string>();
+            foreach (var attribute in attributeList.Attributes)
+            {
+                var name = attribute.Name.ToString();
+                if (name == "Export" ||
+                    name == "ExportAttribute" ||
+                    name.EndsWith(".Export", StringComparison.Ordinal) ||
+                    name.EndsWith(".ExportAttribute", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
         }
 
-        return rawModifiers.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    }
-
-    private static string NormalizeTypeKind(string kind)
-    {
-        return kind.Replace("record ", "record", StringComparison.Ordinal).Trim();
+        return false;
     }
 }

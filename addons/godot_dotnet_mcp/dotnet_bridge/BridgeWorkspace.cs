@@ -20,6 +20,11 @@ internal static class WorkspacePathResolver
         return resolved;
     }
 
+    public static string ResolveProjectPath(string path)
+    {
+        return ResolvePath(path);
+    }
+
     public static string ResolveSolutionFile(string path)
     {
         var resolved = ResolvePath(path);

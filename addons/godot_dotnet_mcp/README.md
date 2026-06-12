@@ -70,7 +70,7 @@ Then:
 
 ### Option 2: Copy source files directly
 
-Place the plugin in your Godot project:
+Place the installable plugin directory in your Godot project. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle without exposing plugin C# sources to your project build:
 
 ```text
 addons/godot_dotnet_mcp

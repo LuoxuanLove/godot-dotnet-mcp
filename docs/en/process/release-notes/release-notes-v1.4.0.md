@@ -18,6 +18,8 @@ Editor Output reads now follow the same resource-first model: clients can read `
 
 Release-facing claims stay tied to plugin-owned checks: localized documentation validation, manifest-backed public-tool guardrails, headless MCP contracts, and clean install verification. This keeps the release notes focused on behavior users can reproduce from the plugin repository itself.
 
+The v1.4 install surface also treats C# semantic support as a first-class plugin capability. Asset Library and direct source-copy installs must keep the isolated Roslyn runtime bundle in `plugin/runtime/roslyn_runtime/`, while plugin Roslyn and bridge C# source trees stay out of the host project compile surface.
+
 ### ✅ Compatibility and Upgrade Notes
 
 This version line updates plugin metadata to v1.4.0 and continues to target Godot 4.6+ .NET projects. Clients should prefer the new resource and prompt entry points for passive context and planning, while legacy discovery calls provide migration guidance instead of remaining first-class public tools.

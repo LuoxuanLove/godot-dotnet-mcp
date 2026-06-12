@@ -338,16 +338,44 @@ internal static class Program
                 "Microsoft.CodeAnalysis.CSharp");
             var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
             var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var exportedRoslynRuntimeManifest = File.Exists(Path.Combine(
+                stageRoot,
+                "addons",
+                "godot_dotnet_mcp",
+                "plugin",
+                "runtime",
+                "roslyn_runtime",
+                "roslyn-runtime-manifest.json"));
+            var missingRoslynRuntimeManifestFiles = exportedRoslynRuntimeManifest
+                ? GetMissingRoslynRuntimeManifestFiles(stageRoot)
+                : [];
+            var exportedRoslynRuntimeExecutable = HasRoslynRuntimeExecutable(Path.Combine(
+                stageRoot,
+                "addons",
+                "godot_dotnet_mcp",
+                "plugin",
+                "runtime",
+                "roslyn_runtime"));
 
             var stageBuildStopwatch = Stopwatch.StartNew();
             var stageBuild = await BuildStageRootProject(stageRoot, processRegistry);
             stageBuildStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("build_stage_project", stageBuildStopwatch.ElapsedMilliseconds));
+            var runtimeProbeStopwatch = Stopwatch.StartNew();
+            var runtimeProbe = exportedRoslynRuntimeExecutable
+                ? await ProbeExportedRoslynRuntimeAsync(stageRoot, processRegistry)
+                : (Succeeded: false, ExitCode: -1, StdOut: string.Empty, StdErr: "Roslyn runtime executable missing.", TimedOut: false);
+            runtimeProbeStopwatch.Stop();
+            phaseTimings.Add(new PhaseTiming("probe_exported_roslyn_runtime", runtimeProbeStopwatch.ElapsedMilliseconds));
 
             var succeeded = stageBuild.Succeeded
                 && !fixtureHasRoslynPackageReference
                 && !exportedRoslynRuntimeSources
-                && !exportedDotnetBridgeSources;
+                && !exportedDotnetBridgeSources
+                && exportedRoslynRuntimeManifest
+                && missingRoslynRuntimeManifestFiles.Length == 0
+                && exportedRoslynRuntimeExecutable
+                && runtimeProbe.Succeeded;
             preserveStageRoot = keepStageRoot && !succeeded;
             var summary = new
             {
@@ -361,6 +389,14 @@ internal static class Program
                 fixtureHasRoslynPackageReference,
                 exportedRoslynRuntimeSources,
                 exportedDotnetBridgeSources,
+                exportedRoslynRuntimeManifest,
+                missingRoslynRuntimeManifestFiles,
+                exportedRoslynRuntimeExecutable,
+                exportedRoslynRuntimeProbeSucceeded = runtimeProbe.Succeeded,
+                exportedRoslynRuntimeProbeExitCode = runtimeProbe.ExitCode,
+                exportedRoslynRuntimeProbeTimedOut = runtimeProbe.TimedOut,
+                exportedRoslynRuntimeProbeStdout = ToSerializedProcessOutput(runtimeProbe.StdOut),
+                exportedRoslynRuntimeProbeStderr = ToSerializedProcessOutput(runtimeProbe.StdErr),
                 stdout = ToSerializedProcessOutput(stageBuild.StdOut),
                 stderr = ToSerializedProcessOutput(stageBuild.StdErr),
                 phaseTimings,
@@ -677,6 +713,156 @@ internal static class Program
         return Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
             .Any(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRoslynRuntimeExecutable(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        return Directory.EnumerateFiles(directoryPath, "GodotDotnetMcp.PluginBridge.*", SearchOption.TopDirectoryOnly)
+            .Any(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string[] GetMissingRoslynRuntimeManifestFiles(string stageRoot)
+    {
+        var runtimeDirectory = Path.Combine(
+            stageRoot,
+            "addons",
+            "godot_dotnet_mcp",
+            "plugin",
+            "runtime",
+            "roslyn_runtime");
+        var manifestPath = Path.Combine(runtimeDirectory, "roslyn-runtime-manifest.json");
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if (!document.RootElement.TryGetProperty("files", out var filesElement) ||
+                filesElement.ValueKind != JsonValueKind.Array)
+            {
+                return ["roslyn-runtime-manifest.json:files"];
+            }
+
+            var missing = new List<string>();
+            foreach (var fileElement in filesElement.EnumerateArray())
+            {
+                if (fileElement.ValueKind != JsonValueKind.String)
+                {
+                    missing.Add("roslyn-runtime-manifest.json:non_string_file_entry");
+                    continue;
+                }
+
+                var fileName = fileElement.GetString();
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    missing.Add("roslyn-runtime-manifest.json:empty_file_entry");
+                    continue;
+                }
+
+                if (!File.Exists(Path.Combine(runtimeDirectory, fileName)))
+                {
+                    missing.Add(fileName);
+                }
+            }
+
+            return missing.ToArray();
+        }
+        catch (Exception ex)
+        {
+            return [$"roslyn-runtime-manifest.json:{ex.GetType().Name}"];
+        }
+    }
+
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> ProbeExportedRoslynRuntimeAsync(string stageRoot, HarnessProcessRegistry processRegistry)
+    {
+        var runtimeDll = Path.Combine(
+            stageRoot,
+            "addons",
+            "godot_dotnet_mcp",
+            "plugin",
+            "runtime",
+            "roslyn_runtime",
+            "GodotDotnetMcp.PluginBridge.dll");
+        if (!File.Exists(runtimeDll))
+        {
+            return (false, -1, string.Empty, "GodotDotnetMcp.PluginBridge.dll is missing from the exported runtime bundle.", false);
+        }
+
+        var probePath = Path.Combine(stageRoot, "RoslynRuntimeProbe.cs");
+        var requestPath = Path.Combine(stageRoot, "roslyn-runtime-probe-request.json");
+        await File.WriteAllTextAsync(probePath, "public partial class RoslynRuntimeProbe { [Export] public int Speed = 1; public void Run() { } }", Encoding.UTF8);
+        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new
+        {
+            path = "res://RoslynRuntimeProbe.cs",
+            action = "upsert_method",
+            type_name = "RoslynRuntimeProbe",
+            member_name = "AddedByRuntimeProbe",
+            return_type = "int",
+            parameters = Array.Empty<string>(),
+            body = "return 1;",
+        }), Encoding.UTF8);
+
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
+        try
+        {
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo("dotnet")
+                {
+                    WorkingDirectory = stageRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.StartInfo.Environment["GODOT_DOTNET_MCP_PROJECT_ROOT"] = stageRoot;
+            process.StartInfo.ArgumentList.Add(runtimeDll);
+            process.StartInfo.ArgumentList.Add("--call-json-file");
+            process.StartInfo.ArgumentList.Add("cs_plugin_patch");
+            process.StartInfo.ArgumentList.Add(requestPath);
+            process.Start();
+            processRegistry.Register(process, "roslyn-runtime-probe", "dotnet", stageRoot, process.StartInfo.ArgumentList);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(HarnessTimeoutMs);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (
+                process.ExitCode == 0
+                    && stdout.Contains("\"success\":true", StringComparison.Ordinal)
+                    && stdout.Contains("\"semanticRuntime\":\"Roslyn\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"action\":\"upsert_method\"", StringComparison.Ordinal)
+                    && stdout.Contains("\"name\":\"Speed\"", StringComparison.Ordinal),
+                process.ExitCode,
+                stdout,
+                stderr,
+                false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            var stdout = await TryReadOutputAsync(stdoutTask);
+            var stderr = await TryReadOutputAsync(stderrTask);
+            processRegistry.Unregister(process);
+            return (false, -1, stdout, stderr, true);
+        }
+        catch (Exception ex)
+        {
+            return (false, -1, string.Empty, ex.ToString(), false);
+        }
+        finally
+        {
+            process?.Dispose();
+        }
     }
 
     private static void CopyDirectory(string sourceRoot, string destinationRoot)
