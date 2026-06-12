@@ -12,12 +12,31 @@ class FakeExecutor:
 		configured_contexts.append(context.duplicate(true))
 
 
+class FakeServer:
+	extends RefCounted
+
+	var plugin_host = null
+
+	func _init(parent_plugin) -> void:
+		plugin_host = parent_plugin
+
+	func get_parent():
+		return plugin_host
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = RuntimeContextServiceScript.new()
 	var loader = RefCounted.new()
 	var server = RefCounted.new()
 	var plugin_host = RefCounted.new()
 	var activity_registry = RefCounted.new()
+
+	if service.resolve_plugin_host(FakeServer.new(plugin_host)) != plugin_host:
+		return _failure("Runtime context service should resolve plugin hosts from server parents.")
+	if service.resolve_plugin_host(RefCounted.new()) != null:
+		return _failure("Runtime context service should ignore server contexts without get_parent.")
+	if service.resolve_plugin_host(FakeServer.new(null)) != null:
+		return _failure("Runtime context service should ignore null plugin hosts.")
 
 	var base_context: Dictionary = service.build_runtime_context(loader, server, plugin_host, activity_registry)
 	if base_context.get("tool_loader", null) != loader:

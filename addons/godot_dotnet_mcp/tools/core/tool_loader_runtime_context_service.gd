@@ -1,6 +1,14 @@
 extends RefCounted
 
 
+func resolve_plugin_host(server_context):
+	if server_context != null and is_instance_valid(server_context) and server_context.has_method("get_parent"):
+		var plugin = server_context.get_parent()
+		if plugin != null and is_instance_valid(plugin):
+			return plugin
+	return null
+
+
 func build_runtime_context(tool_loader, server_context, plugin_host, tool_activity_registry) -> Dictionary:
 	return {
 		"tool_loader": tool_loader,
