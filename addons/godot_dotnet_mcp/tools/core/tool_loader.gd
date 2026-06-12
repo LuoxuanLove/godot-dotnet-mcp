@@ -23,6 +23,7 @@ const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/
 const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
 const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
 const ToolLoaderExecutionContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_execution_context_service.gd")
+const ToolLoaderContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_context_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -49,6 +50,7 @@ var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
 var _access_service = ToolLoaderAccessServiceScript.new()
 var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
 var _execution_context_service = ToolLoaderExecutionContextServiceScript.new()
+var _context_service = ToolLoaderContextServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 
@@ -58,6 +60,7 @@ func _init() -> void:
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	_lsp_diagnostics_service.configure(self)
 	_execution_context_service.configure(_execution_observer)
+	_context_service.configure(_state_store)
 
 
 func _bind_state_refs() -> void:
@@ -348,7 +351,7 @@ func _elapsed_ms(started_usec: int) -> float:
 
 
 func _build_catalog_projection_context() -> Dictionary:
-	return _state_store.build_catalog_projection_context({
+	return _context_service.build_catalog_projection_context({
 		"ensure_tool_definitions": Callable(self, "_ensure_tool_definitions"),
 		"is_category_visible": Callable(self, "_is_category_visible"),
 		"is_tool_enabled": Callable(self, "is_tool_enabled"),
@@ -366,7 +369,7 @@ func _build_execution_context() -> Dictionary:
 
 
 func _build_reload_context() -> Dictionary:
-	return _state_store.build_reload_context({
+	return _context_service.build_reload_context({
 		"refresh_entries": Callable(self, "_refresh_entries"),
 		"instantiate_executor": Callable(self, "_instantiate_executor"),
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
@@ -384,7 +387,7 @@ func _build_reload_context() -> Dictionary:
 
 
 func _build_user_reload_context() -> Dictionary:
-	return _state_store.build_reload_context({
+	return _context_service.build_user_reload_context({
 		"category_has_enabled_tools": Callable(self, "_category_has_enabled_tools"),
 		"ensure_runtime_loaded": Callable(self, "_ensure_runtime_loaded"),
 		"tick_loaded_runtimes": Callable(self, "_tick_loaded_runtimes_for_user_reload"),
@@ -412,7 +415,7 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 
 
 func _build_runtime_state_context() -> Dictionary:
-	return _state_store.build_runtime_state_context({
+	return _context_service.build_runtime_state_context({
 		"instantiate_executor": Callable(self, "_instantiate_executor"),
 		"extract_tool_definitions": Callable(self, "_extract_tool_definitions"),
 		"record_load_error": Callable(self, "_record_load_error"),
@@ -422,7 +425,7 @@ func _build_runtime_state_context() -> Dictionary:
 
 
 func _build_lifecycle_context() -> Dictionary:
-	return _state_store.build_lifecycle_context({
+	return _context_service.build_lifecycle_context({
 		"reset_state": Callable(self, "_reset_state"),
 		"set_disabled_tools": Callable(self, "_set_disabled_tools"),
 		"reset_gdscript_lsp_diagnostics_service": Callable(self, "_reset_gdscript_lsp_diagnostics_service"),

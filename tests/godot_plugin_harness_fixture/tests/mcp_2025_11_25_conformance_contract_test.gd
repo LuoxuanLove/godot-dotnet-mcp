@@ -39,6 +39,7 @@ const REQUIRED_CASES := {
 	"tool_presentation_service_contracts": {"axis": "schema_metadata", "layer": "tooling", "domain": "catalog"},
 	"tool_execution_service_contracts": {"axis": "service_convergence", "layer": "tooling", "domain": "loader"},
 	"tool_loader_execution_context_service_contracts": {"axis": "service_convergence", "layer": "tooling", "domain": "loader"},
+	"tool_loader_context_service_contracts": {"axis": "service_convergence", "layer": "tooling", "domain": "loader"},
 	"http_request_router_contracts": {"axis": "streamable_http", "layer": "transport", "domain": "http"},
 	"http_response_service_contracts": {"axis": "streamable_http", "layer": "transport", "domain": "http"},
 	"http_transport_service_contracts": {"axis": "streamable_http", "layer": "transport", "domain": "http"},
