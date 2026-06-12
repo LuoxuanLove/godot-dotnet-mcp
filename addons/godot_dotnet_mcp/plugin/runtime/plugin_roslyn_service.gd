@@ -2,6 +2,7 @@
 extends Node
 
 const FACADE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/PluginRoslynRuntimeFacade.cs"
+const RUNTIME_MANIFEST_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json"
 const LOAD_MODE_RUNTIME := "runtime_csharp"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
@@ -190,7 +191,7 @@ func _instantiate_facade():
 	var script = ResourceLoader.load(FACADE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	if script == null or not (script is Script):
 		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source could not be loaded from res://"
+		_load_error = _build_runtime_unavailable_message("PluginRoslynRuntimeFacade runtime source could not be loaded from res://")
 		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 	var script_resource := script as Script
 	if script_resource.can_instantiate():
@@ -207,11 +208,22 @@ func _instantiate_facade():
 			return class_instance
 	if not script_resource.can_instantiate():
 		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment"
+		_load_error = _build_runtime_unavailable_message("PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment")
 		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 	_load_mode = LOAD_MODE_PLACEHOLDER
-	_load_error = "PluginRoslynRuntimeFacade runtime source is present but could not be instantiated"
+	_load_error = _build_runtime_unavailable_message("PluginRoslynRuntimeFacade runtime source is present but could not be instantiated")
 	return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
+
+
+func _build_runtime_unavailable_message(reason: String) -> String:
+	var manifest_state := "missing"
+	if FileAccess.file_exists(RUNTIME_MANIFEST_PATH):
+		manifest_state = "present"
+	return "%s. C# semantic support requires the isolated Roslyn runtime bundle at %s (manifest %s)." % [
+		reason,
+		RUNTIME_MANIFEST_PATH,
+		manifest_state
+	]
 
 
 func _normalize_capabilities_result(result) -> Dictionary:
@@ -448,6 +460,8 @@ func _base_metadata(degraded: bool) -> Dictionary:
 		"mode": "syntax",
 		"transport": "in_process",
 		"entrypoint": "plugin_internal_facade",
+		"runtime_manifest_path": RUNTIME_MANIFEST_PATH,
+		"runtime_manifest_present": FileAccess.file_exists(RUNTIME_MANIFEST_PATH),
 		"load_mode": _load_mode,
 		"load_error": _load_error,
 		"degraded": degraded,

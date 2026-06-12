@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -13,6 +13,8 @@
     <InformationalVersion>1.4.0</InformationalVersion>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

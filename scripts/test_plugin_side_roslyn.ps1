@@ -332,6 +332,30 @@ function Assert-CleanAssetLibraryInstallBuild {
             throw "Clean Asset Library install build reported $propertyName=true."
         }
     }
+
+    if (-not ($HarnessJson.PSObject.Properties.Name -contains "exportedRoslynRuntimeManifest")) {
+        throw "Clean Asset Library install build did not report required property: exportedRoslynRuntimeManifest"
+    }
+
+    if (-not [bool]$HarnessJson.exportedRoslynRuntimeManifest) {
+        throw "Clean Asset Library install build did not include the isolated Roslyn runtime manifest."
+    }
+
+    if (-not ($HarnessJson.PSObject.Properties.Name -contains "exportedRoslynRuntimeExecutable")) {
+        throw "Clean Asset Library install build did not report required property: exportedRoslynRuntimeExecutable"
+    }
+
+    if (-not [bool]$HarnessJson.exportedRoslynRuntimeExecutable) {
+        throw "Clean Asset Library install build did not include the isolated Roslyn runtime executable."
+    }
+
+    if (-not ($HarnessJson.PSObject.Properties.Name -contains "exportedRoslynRuntimeProbeSucceeded")) {
+        throw "Clean Asset Library install build did not report required property: exportedRoslynRuntimeProbeSucceeded"
+    }
+
+    if (-not [bool]$HarnessJson.exportedRoslynRuntimeProbeSucceeded) {
+        throw "Clean Asset Library install build could not execute the isolated Roslyn runtime probe."
+    }
 }
 
 function Write-HarnessTimingSummary {

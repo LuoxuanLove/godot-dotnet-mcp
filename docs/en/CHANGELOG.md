@@ -10,6 +10,7 @@ Target version: 1.4.0.
 
 ### Added
 
+- Guarded the v1.4 install contract for C# semantic tooling so clean Asset Library installs must include the isolated Roslyn runtime manifest while still excluding plugin Roslyn and bridge C# source files from host project builds.
 - Runtime automation `runtime_step(action=input)` now supports mouse move and click events with viewport coordinates, and its tool schema advertises mouse input fields for MCP clients.
 - Initialized the v1.4.0 protocol refactor version line and release-note source template.
 - Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
