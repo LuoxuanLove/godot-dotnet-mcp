@@ -84,6 +84,7 @@ Target version: 1.4.0.
 - Moved `MCPToolLoader` execution context callbacks, agent-context sanitization, activity forwarding, finalization forwarding, and shared failure-envelope construction into a dedicated loader execution-context service.
 - Moved `MCPToolLoader` catalog, reload, user-reload, runtime-state, and lifecycle context dictionary assembly into a dedicated loader context service.
 - Centralized `MCPToolLoader` loader-specific context wiring inside the loader context service, removed unused reload state forwarding methods, and added source guards that keep context routing and AtomicBridge helper behavior from flowing back into facade classes.
+- Moved stdio tool-router, resource, and prompt service context wiring into a dedicated stdio service context builder so the stdio transport stays focused on framing and request handling.
 - Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
 - Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
 

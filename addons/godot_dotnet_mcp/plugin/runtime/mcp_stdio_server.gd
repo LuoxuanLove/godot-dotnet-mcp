@@ -12,12 +12,10 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
-const MCPResourcesServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service_context.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
-const MCPPromptsServiceContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service_context.gd")
 const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
-const MCPToolRpcRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd")
+const MCPStdioServiceContextBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 signal request_received(method: String, params: Dictionary)
@@ -31,6 +29,7 @@ var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
 var _tool_rpc_router = MCPToolRpcRouterScript.new()
 var _tool_activity_registry = MCPToolActivityRegistry.new()
+var _context_builder = MCPStdioServiceContextBuilderScript.new()
 var _processing_stdin := false
 var _transport_generation := 0
 var _last_written_response: Dictionary = {}
@@ -416,26 +415,12 @@ func _handle_prompts_get(params, id) -> Dictionary:
 
 func _configure_resources_prompts_services() -> void:
 	_configure_tool_activity_registry()
-	var resources_context = MCPResourcesServiceContextScript.new()
-	resources_context.get_tool_loader = func(): return _tool_loader
-	resources_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
-	resources_context.get_tool_activity_registry = Callable(self, "_get_stdio_tool_activity_registry")
-	resources_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
-	_resources_service.configure(resources_context)
-	var prompts_context = MCPPromptsServiceContextScript.new()
-	prompts_context.get_tool_loader_status = Callable(self, "_get_stdio_tool_loader_status")
-	_prompts_service.configure(prompts_context)
+	_resources_service.configure(_context_builder.build_resources_service_context(self))
+	_prompts_service.configure(_context_builder.build_prompts_service_context(self))
 
 
 func _configure_tool_rpc_router() -> void:
-	var router_context = MCPToolRpcRouterContextScript.new()
-	router_context.get_tool_loader = func(): return _tool_loader
-	router_context.is_tool_enabled = Callable(self, "_is_tool_enabled")
-	router_context.is_tool_exposed = Callable(self, "_is_tool_exposed")
-	router_context.log = Callable(self, "_log")
-	router_context.sanitize_for_json = Callable(self, "_sanitize_for_json")
-	router_context.tool_activity_registry = _get_stdio_tool_activity_registry()
-	_tool_rpc_router.configure(router_context)
+	_tool_rpc_router.configure(_context_builder.build_tool_rpc_router_context(self, _get_stdio_tool_activity_registry()))
 
 
 func _configure_tool_activity_registry() -> void:
