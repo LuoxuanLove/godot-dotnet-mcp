@@ -15,6 +15,7 @@ const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet
 const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
 const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
 const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
+const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -22,7 +23,6 @@ var _entries_by_category: Dictionary = {}
 var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
-var _disabled_tools: Dictionary = {}
 var _tool_lsp_diagnostics_adapter = null
 var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
 var _execution_observer = ToolExecutionObserverScript.new()
@@ -34,6 +34,7 @@ var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
 var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
 var _execution_service = ToolExecutionServiceScript.new()
 var _tick_service = ToolLoaderTickServiceScript.new()
+var _enablement_service = ToolLoaderEnablementServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -446,11 +447,11 @@ func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
 
 
 func get_disabled_tools() -> Array:
-	return _disabled_tools.keys()
+	return _enablement_service.get_disabled_tools()
 
 
 func is_tool_enabled(tool_name: String) -> bool:
-	return not _disabled_tools.has(tool_name)
+	return _enablement_service.is_tool_enabled(tool_name)
 
 
 func _reset_state() -> void:
@@ -479,9 +480,7 @@ func _refresh_entries() -> void:
 
 
 func _set_disabled_tools(disabled_tools: Array) -> void:
-	_disabled_tools.clear()
-	for tool_name in disabled_tools:
-		_disabled_tools[str(tool_name)] = true
+	_enablement_service.configure_disabled_tools(disabled_tools)
 
 
 func _ensure_tool_definitions(category: String) -> Array:
@@ -604,16 +603,11 @@ func _record_load_error(category: String, path: String, message: String) -> void
 
 
 func _count_enabled_tools_in_category(category: String) -> int:
-	var count = 0
-	for tool_def in _tool_definitions_by_category.get(category, []):
-		var full_name = "%s_%s" % [category, str(tool_def.get("name", ""))]
-		if is_tool_enabled(full_name):
-			count += 1
-	return count
+	return _enablement_service.count_enabled_tools_in_category(category, _tool_definitions_by_category)
 
 
 func _category_has_enabled_tools(category: String) -> bool:
-	return _count_enabled_tools_in_category(category) > 0
+	return _enablement_service.category_has_enabled_tools(category, _tool_definitions_by_category)
 
 
 func _unload_runtime(category: String, reason: String) -> void:
