@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using GodotDotnetMcp.PluginRuntime.Roslyn;
 using RuntimeBridgeException = GodotDotnetMcp.PluginRuntime.Roslyn.BridgeToolException;
@@ -59,7 +58,7 @@ internal static class CsPluginPatchTool
                 _ => throw new BridgeToolException($"Unsupported Roslyn patch action: {action}"),
             };
 
-            File.WriteAllText(path, updatedText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            WriteToolHelpers.WriteUtf8NoBom(path, updatedText);
             var updatedReadModel = CSharpFileReader.ReadSource(path, updatedText);
             var result = new PluginPatchResult(
                 Path: Path.GetFullPath(path),
