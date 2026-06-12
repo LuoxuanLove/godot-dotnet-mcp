@@ -3,13 +3,13 @@ extends RefCounted
 # {"name": "system_scene_executor_contracts"}
 
 const SystemSceneExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_scene.gd")
-const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
+const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
 const TEMP_ROOT := "res://tests_tmp/system_scene_executor_contracts"
 
 
 class FakeBridge extends RefCounted:
 	var calls: Array[Dictionary] = []
-	var atomic_bridge = AtomicBridgeScript.new()
+	var helpers = AtomicBridgeExecutionServiceScript.new()
 	var existing_missing_uid_text := ""
 
 	func call_atomic(tool_name: String, args: Dictionary) -> Dictionary:
@@ -42,19 +42,19 @@ class FakeBridge extends RefCounted:
 		return (data as Dictionary).duplicate(true) if data is Dictionary else {}
 
 	func parse_dependency_reference(raw_path: String, source_path: String = "") -> Dictionary:
-		return atomic_bridge.parse_dependency_reference(raw_path, source_path)
+		return helpers.parse_dependency_reference(raw_path, source_path)
 
 	func normalize_dependency_path(raw_path: String) -> String:
-		return atomic_bridge.normalize_dependency_path(raw_path)
+		return helpers.normalize_dependency_path(raw_path)
 
 	func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
-		return atomic_bridge.build_issue(severity, issue_type, message, extra)
+		return helpers.build_issue(severity, issue_type, message, extra)
 
 	func append_unique_issue(issues: Array, issue: Dictionary) -> void:
-		atomic_bridge.append_unique_issue(issues, issue)
+		helpers.append_unique_issue(issues, issue)
 
 	func has_severity(issues: Array, severity: String) -> bool:
-		return atomic_bridge.has_severity(issues, severity)
+		return helpers.has_severity(issues, severity)
 
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}

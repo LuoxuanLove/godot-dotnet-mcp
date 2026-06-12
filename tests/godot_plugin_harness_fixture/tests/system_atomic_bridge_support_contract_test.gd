@@ -2,7 +2,6 @@ extends RefCounted
 
 # {"name": "system_atomic_bridge_support_contracts"}
 
-const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
 const AtomicBridgeSupportScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_support.gd")
 
 const SOURCE_PATH := "res://tests_tmp/system_atomic_bridge_support_contracts/scenes/Main.tscn"
@@ -10,7 +9,6 @@ const SOURCE_PATH := "res://tests_tmp/system_atomic_bridge_support_contracts/sce
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var support = AtomicBridgeSupportScript.new()
-	var bridge = AtomicBridgeScript.new()
 
 	if not support.is_protected_path("res://addons/godot_dotnet_mcp/plugin/plugin.gd"):
 		return _failure("AtomicBridgeSupport should protect plugin implementation paths.")
@@ -52,37 +50,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var raw_reference := "uid://missing_bridge_contract::Script::../Missing.cs"
 	var support_reference: Dictionary = support.parse_dependency_reference(raw_reference, SOURCE_PATH)
-	var bridge_reference: Dictionary = bridge.parse_dependency_reference(raw_reference, SOURCE_PATH)
 	if not bool(support_reference.get("has_uid_path_pair", false)):
 		return _failure("AtomicBridgeSupport should preserve UID/path pair detection.")
 	if support_reference.get("declared_path", "") != "res://tests_tmp/system_atomic_bridge_support_contracts/Missing.cs":
 		return _failure("AtomicBridgeSupport should normalize declared fallback dependency paths.")
 	if support_reference.get("risk", "") != "error" or support_reference.get("consistency", "") != "missing_uid_and_path":
 		return _failure("AtomicBridgeSupport should report missing UID/path dependency references as errors.")
-	if not _dicts_equal(support_reference, bridge_reference):
-		return _failure("AtomicBridge facade should delegate dependency parsing without changing the result.")
-
-	if bridge.is_protected_path("res://addons/godot_dotnet_mcp/plugin/plugin.gd") != support.is_protected_path("res://addons/godot_dotnet_mcp/plugin/plugin.gd"):
-		return _failure("AtomicBridge facade should delegate protected path checks to support service.")
-	if bridge._is_write_action({"action": "save"}) != support.is_write_action({"action": "save"}):
-		return _failure("AtomicBridge facade should delegate write action checks to support service.")
-	if bridge._is_write_atomic_action("script_edit_cs", {}) != support.is_write_atomic_action("script_edit_cs", {}):
-		return _failure("AtomicBridge facade should delegate inferred write action checks to support service.")
-	if bridge._find_path_in_args(path_args) != support.find_path_in_args(path_args):
-		return _failure("AtomicBridge facade should delegate path lookup to support service.")
 
 	return {"name": "system_atomic_bridge_support_contracts", "success": true, "error": ""}
-
-
-func _dicts_equal(left: Dictionary, right: Dictionary) -> bool:
-	if left.keys().size() != right.keys().size():
-		return false
-	for key in left.keys():
-		if not right.has(key):
-			return false
-		if left.get(key) != right.get(key):
-			return false
-	return true
 
 
 func _failure(message: String) -> Dictionary:
