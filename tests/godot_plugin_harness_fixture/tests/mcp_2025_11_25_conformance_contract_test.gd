@@ -4,65 +4,29 @@ extends RefCounted
 
 const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const HttpRequestRouterContractScript = preload("res://tests/http_request_router_contract_test.gd")
+const HttpTransportServiceContractScript = preload("res://tests/http_transport_service_contract_test.gd")
 
 const CASE_NAME := "mcp_2025_11_25_conformance_contracts"
 const MANIFEST_PATH := "res://scripts/contract_case_manifest.json"
 const PROTOCOL_VERSION := "2025-11-25"
-const HTTP_REQUEST_ROUTER_CONTRACT_PATH := "res://tests/http_request_router_contract_test.gd"
-const HTTP_TRANSPORT_SERVICE_CONTRACT_PATH := "res://tests/http_transport_service_contract_test.gd"
 
-const REQUIRED_STREAMABLE_HTTP_GUARDS := {
-	HTTP_REQUEST_ROUTER_CONTRACT_PATH: {
-		"POST Accept negotiation": [
-			"require explicit Streamable HTTP Accept headers for POST /mcp",
-			"application/json, text/event-stream"
-		],
-		"GET SSE negotiation": [
-			"reject GET /mcp requests that cannot accept SSE responses",
-			"text/event-stream;q=0"
-		],
-		"protocol version headers": [
-			"require MCP-Protocol-Version on GET /mcp",
-			"Missing MCP protocol version"
-		],
-		"SSE resume metadata": [
-			"resume_status",
-			"Last-Event-ID",
-			"replay_event_count"
-		],
-		"finite POST SSE": [
-			"POST SSE responses as finite raw HTTP responses",
-			"not replay finite POST SSE responses through unrelated GET SSE probes"
-		],
-		"session termination": [
-			"DELETE /mcp session termination",
-			"MCP session not found",
-			"_terminate_mcp_session_id"
-		]
-	},
-	HTTP_TRANSPORT_SERVICE_CONTRACT_PATH: {
-		"long-lived GET SSE": [
-			"_run_sse_stream_lifecycle_contract",
-			"SSE lifecycle transport should open exactly one long-lived SSE stream"
-		],
-		"SSE heartbeat": [
-			"heartbeat",
-			"_write_sse_heartbeat"
-		],
-		"queued event delivery": [
-			"_write_sse_events",
-			"SSE lifecycle transport should drain queued server-to-client events for open streams"
-		],
-		"session delete disconnect": [
-			"_run_sse_session_delete_contract",
-			"should remove active SSE sessions for the terminated MCP session"
-		],
-		"bounded cursor replay": [
-			"_run_sse_event_queue_bounded_cursor_contract",
-			"stale_cursor",
-			"unknown_session"
-		]
-	}
+const REQUIRED_STREAMABLE_HTTP_SEMANTICS := {
+	"http_request_router_contracts": [
+		"post_accept_negotiation",
+		"get_sse_negotiation",
+		"protocol_version_headers",
+		"sse_resume_metadata",
+		"finite_post_sse",
+		"session_termination"
+	],
+	"http_transport_service_contracts": [
+		"long_lived_get_sse",
+		"sse_heartbeat",
+		"queued_event_delivery",
+		"session_delete_disconnect",
+		"bounded_cursor_replay"
+	]
 }
 
 const REQUIRED_CASES := {
@@ -96,7 +60,7 @@ const REQUIRED_AXES := [
 ]
 
 
-func run_case(_tree: SceneTree) -> Dictionary:
+func run_case(tree: SceneTree) -> Dictionary:
 	var facts_check := _assert_protocol_facts()
 	if not bool(facts_check.get("success", false)):
 		return facts_check
@@ -118,7 +82,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(coverage_check.get("success", false)):
 		return coverage_check
 
-	var transport_gate_check := _assert_streamable_http_guard_coverage()
+	var transport_gate_check := await _assert_streamable_http_contract_semantics(tree)
 	if not bool(transport_gate_check.get("success", false)):
 		return transport_gate_check
 
@@ -226,19 +190,32 @@ func _assert_required_entry(case_name: String, entry: Dictionary, expected: Dict
 	return _success()
 
 
-func _assert_streamable_http_guard_coverage() -> Dictionary:
-	for path in REQUIRED_STREAMABLE_HTTP_GUARDS.keys():
-		if not FileAccess.file_exists(path):
-			return _failure("Streamable HTTP conformance gate should be able to inspect guard source: %s" % path)
-		var source_text := FileAccess.get_file_as_string(path)
-		if source_text.strip_edges().is_empty():
-			return _failure("Streamable HTTP conformance guard source should not be empty: %s" % path)
-		var guard_groups: Dictionary = REQUIRED_STREAMABLE_HTTP_GUARDS[path]
-		for guard_name in guard_groups.keys():
-			var required_tokens: Array = guard_groups[guard_name]
-			for token in required_tokens:
-				if source_text.find(str(token)) == -1:
-					return _failure("Streamable HTTP conformance guard '%s' in %s should retain token: %s" % [guard_name, path, token])
+func _assert_streamable_http_contract_semantics(tree: SceneTree) -> Dictionary:
+	var router_contract = HttpRequestRouterContractScript.new()
+	var router_result: Dictionary = await router_contract.run_case(tree)
+	var router_check := _assert_streamable_http_semantics_result("http_request_router_contracts", router_result)
+	if not bool(router_check.get("success", false)):
+		return router_check
+
+	var transport_contract = HttpTransportServiceContractScript.new()
+	var transport_result: Dictionary = await transport_contract.run_case(tree)
+	var transport_check := _assert_streamable_http_semantics_result("http_transport_service_contracts", transport_result)
+	if not bool(transport_check.get("success", false)):
+		return transport_check
+
+	return _success()
+
+
+func _assert_streamable_http_semantics_result(case_name: String, result: Dictionary) -> Dictionary:
+	if not bool(result.get("success", false)):
+		return _failure("Streamable HTTP conformance gate dependency failed: %s: %s" % [case_name, result.get("error", "")])
+	var details: Dictionary = result.get("details", {})
+	var semantics: Dictionary = details.get("streamable_http_semantics", {})
+	if semantics.is_empty():
+		return _failure("Streamable HTTP conformance dependency %s should report structured semantic coverage." % case_name)
+	for semantic_name in REQUIRED_STREAMABLE_HTTP_SEMANTICS.get(case_name, []):
+		if not bool(semantics.get(semantic_name, false)):
+			return _failure("Streamable HTTP conformance dependency %s should prove semantic guard: %s" % [case_name, semantic_name])
 	return _success()
 
 
