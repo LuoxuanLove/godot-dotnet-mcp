@@ -84,7 +84,57 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if parsed.get("risk", "") != "error":
 		return _failure("SystemImplHelperService should preserve dependency reference risk.")
 
+	var source_guard := _verify_production_impl_helper_guard()
+	if not bool(source_guard.get("success", false)):
+		return source_guard
+
 	return {"name": "system_impl_helper_service_contracts", "success": true, "error": ""}
+
+
+func _verify_production_impl_helper_guard() -> Dictionary:
+	var system_dir := "res://addons/godot_dotnet_mcp/tools/system"
+	for path in _collect_impl_sources(system_dir):
+		var source := FileAccess.get_file_as_string(path)
+		if source.is_empty():
+			return _failure("System impl source should be readable for helper guard: %s" % path)
+		for forbidden in [
+			"bridge.extract_data",
+			"bridge.extract_array",
+			"bridge.collect_files",
+			"bridge.collect_file_count",
+			"bridge.collect_file_counts",
+			"bridge.build_issue",
+			"bridge.append_unique_issue",
+			"bridge.has_severity",
+			"bridge.normalize_dependency_path",
+			"bridge.normalize_resource_path",
+			"bridge.parse_dependency_reference",
+			"bridge.resource_path_exists"
+		]:
+			if source.find(forbidden) != -1:
+				return _failure("System impls should use SystemImplHelperService for helper behavior, not AtomicBridge facade: %s in %s" % [forbidden, path])
+	return {"success": true}
+
+
+func _collect_impl_sources(root: String) -> Array[String]:
+	var result: Array[String] = []
+	var dir := DirAccess.open(root)
+	if dir == null:
+		return result
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry == "." or entry == "..":
+			entry = dir.get_next()
+			continue
+		var path := "%s/%s" % [root, entry]
+		if dir.current_is_dir():
+			result.append_array(_collect_impl_sources(path))
+		elif entry.begins_with("impl_") and entry.ends_with(".gd"):
+			result.append(path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	return result
 
 
 func _failure(message: String) -> Dictionary:
