@@ -14,6 +14,7 @@ const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/to
 const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
 const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
 const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
+const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
 
 var _registry := MCPToolRegistry.new()
 var _server_context: Object
@@ -32,6 +33,7 @@ var _entry_service = ToolRegistryEntryServiceScript.new()
 var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
 var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
 var _execution_service = ToolExecutionServiceScript.new()
+var _tick_service = ToolLoaderTickServiceScript.new()
 var _force_reload_script_load := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {
@@ -230,14 +232,13 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 
 
 func tick(delta: float) -> void:
-	for category in _runtime_by_category.keys():
-		var runtime: Dictionary = _runtime_by_category.get(category, {})
-		var executor = runtime.get("instance", null)
-		if executor != null and executor.has_method("tick"):
-			executor.tick(delta)
-		if category == "user":
-			_sync_user_tool_runtime_definitions(executor)
-			_maybe_unload_idle_user_runtime(executor)
+	var tick_result: Dictionary = _tick_service.tick_loaded_runtimes(
+		_runtime_by_category,
+		_tool_definitions_by_category,
+		delta,
+		Callable(self, "_extract_tool_definitions")
+	)
+	_apply_tick_result(tick_result)
 	var diagnostics_adapter = _ensure_lsp_diagnostics_adapter()
 	if diagnostics_adapter != null and diagnostics_adapter.has_method("tick"):
 		diagnostics_adapter.tick(delta)
@@ -420,10 +421,14 @@ func request_reload_by_script(script_path: String, reason: String = "manual") ->
 	if executor == null or not executor.has_method("request_reload_by_script"):
 		return {"success": false, "error": "User runtime is unavailable"}
 	executor.request_reload_by_script(normalized_path, reason)
-	if executor.has_method("tick"):
-		executor.tick(0.0)
-	_sync_user_tool_runtime_definitions(executor)
-	_refresh_runtime_context()
+	_apply_tick_result(_tick_service.tick_loaded_runtimes(
+		{"user": runtime},
+		_tool_definitions_by_category,
+		0.0,
+		Callable(self, "_extract_tool_definitions")
+	))
+	if _runtime_by_category.has("user"):
+		_refresh_runtime_context()
 	return {
 		"success": true,
 		"script_path": normalized_path,
@@ -682,33 +687,17 @@ func _build_execution_context() -> Dictionary:
 	}
 
 
-func _sync_user_tool_runtime_definitions(executor) -> void:
-	if executor == null or not executor.has_method("get_tools"):
-		return
-	var previous_defs = _tool_definitions_by_category.get("user", [])
-	var next_defs = _extract_tool_definitions("user", executor)
-	if JSON.stringify(previous_defs) == JSON.stringify(next_defs):
-		return
-	_tool_definitions_by_category["user"] = next_defs
-	_refresh_runtime_context()
-
-
-func _maybe_unload_idle_user_runtime(executor) -> void:
-	var runtime: Dictionary = _runtime_by_category.get("user", {})
-	var defs: Array = _tool_definitions_by_category.get("user", [])
-	if executor == null:
-		if defs.is_empty() and not runtime.is_empty():
-			_runtime_by_category.erase("user")
-			_tool_definitions_by_category.erase("user")
-			_refresh_runtime_context()
-		return
-	if not executor.has_method("should_unload_runtime"):
-		return
-	if not _as_bool(executor.should_unload_runtime()):
-		return
-	_runtime_by_category.erase("user")
-	_tool_definitions_by_category.erase("user")
-	_refresh_runtime_context()
+func _apply_tick_result(tick_result: Dictionary) -> void:
+	var refresh_context := false
+	if bool(tick_result.get("user_definitions_changed", false)):
+		_tool_definitions_by_category["user"] = (tick_result.get("user_definitions", []) as Array).duplicate(true)
+		refresh_context = true
+	if bool(tick_result.get("user_should_unload", false)) and _runtime_by_category.has("user"):
+		_runtime_by_category.erase("user")
+		_tool_definitions_by_category.erase("user")
+		refresh_context = true
+	if refresh_context:
+		_refresh_runtime_context()
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:
