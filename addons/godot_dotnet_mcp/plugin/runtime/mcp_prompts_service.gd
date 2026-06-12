@@ -323,6 +323,7 @@ func _text(key: String, fallback: String) -> String:
 func _with_prompt_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 	var metadata := entry.duplicate(true)
 	metadata["icons"] = [_icon_metadata(icon_name)]
+	metadata["promptKind"] = _prompt_kind_for_name(str(metadata.get("name", "")))
 	return metadata
 
 
@@ -355,6 +356,24 @@ func _prompt_icon_for_name(prompt_name: String) -> String:
 			return "panel-top"
 		_:
 			return "message-square-text"
+
+
+func _prompt_kind_for_name(prompt_name: String) -> String:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return "orientation"
+		CONTENT_AUTHORING_PROMPT:
+			return "authoring"
+		DEBUG_TRIAGE_PROMPT:
+			return "debug"
+		REFERENCE_INTEGRITY_PROMPT:
+			return "integrity"
+		RUNTIME_VALIDATION_PROMPT:
+			return "runtime"
+		EDITOR_UI_CONTROL_PROMPT:
+			return "editor_ui"
+		_:
+			return "prompt"
 
 
 func _prompt_response(description: String, text: String) -> Dictionary:

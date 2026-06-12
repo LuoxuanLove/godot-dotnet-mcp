@@ -35,6 +35,10 @@ var _catalog_mode := "resources"
 var _argument_values: Dictionary = {}
 var _icon_texture_cache: Dictionary = {}
 
+const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
+const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
+const MAX_PROTOCOL_ICON_DECODED_BYTES := 4096
+
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
@@ -226,17 +230,24 @@ func _entry_icon_tooltip(entry: Dictionary, entry_kind: String) -> String:
 
 
 func _texture_from_icon_src(src: String) -> Texture2D:
+	if src.length() > MAX_PROTOCOL_ICON_SRC_LENGTH:
+		return null
 	if _icon_texture_cache.has(src):
 		return _icon_texture_cache.get(src)
 	var texture: Texture2D = null
 	var svg_prefix := "data:image/svg+xml;base64,"
 	if src.begins_with(svg_prefix):
-		var bytes := Marshalls.base64_to_raw(src.substr(svg_prefix.length()))
-		if not bytes.is_empty():
-			var image := Image.new()
-			if image.load_svg_from_buffer(bytes) == OK:
-				texture = ImageTexture.create_from_image(image)
-	_icon_texture_cache[src] = texture
+		var encoded := src.substr(svg_prefix.length())
+		if encoded.length() <= MAX_PROTOCOL_ICON_BASE64_LENGTH:
+			var bytes := Marshalls.base64_to_raw(encoded)
+			if not bytes.is_empty() and bytes.size() <= MAX_PROTOCOL_ICON_DECODED_BYTES:
+				var svg_text := bytes.get_string_from_utf8().strip_edges()
+				if svg_text.begins_with("<svg"):
+					var image := Image.new()
+					if image.load_svg_from_buffer(bytes) == OK:
+						texture = ImageTexture.create_from_image(image)
+	if texture != null:
+		_icon_texture_cache[src] = texture
 	return texture
 
 

@@ -70,9 +70,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	prompts_tab.apply_model(model)
 	await tree.process_frame
 
-	if _label_text(resources_tab, "HeaderCounts") != "Resources: 2 | Templates: 1":
+	if _label_text(resources_tab, "HeaderCounts") != "Resources: 3 | Templates: 1":
 		return _failure("Resources tab should render resource/template counts from the Dock protocol model.")
-	if _label_text(prompts_tab, "HeaderCounts") != "Prompts: 2":
+	if _label_text(prompts_tab, "HeaderCounts") != "Prompts: 3":
 		return _failure("Prompts tab should render prompt counts from the Dock protocol model.")
 	if not resources_tab.find_child("ResourcesCard", true, false).visible or not resources_tab.find_child("TemplatesCard", true, false).visible or resources_tab.find_child("PromptsCard", true, false).visible:
 		return _failure("Resources tab should show Resources and Resource Templates while hiding Prompts.")
@@ -95,6 +95,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should render invalid protocol icons as bounded fallback labels.")
 	if (invalid_icon as Control).custom_minimum_size.x > 24.0:
 		return _failure("Protocol icon fallback should keep a bounded width in compact Dock layouts.")
+	var oversized_icon := _find_protocol_icon(resources_tab, "resource", "godot-dotnet-mcp://diagnostics/summary")
+	if oversized_icon == null or not (oversized_icon is Label):
+		return _failure("Resources tab should reject oversized protocol icon metadata before SVG loading.")
+	var non_svg_icon := _find_protocol_icon(prompts_tab, "prompt", "godot.content_authoring")
+	if non_svg_icon == null or not (non_svg_icon is Label):
+		return _failure("Prompts tab should reject decoded non-SVG protocol icon metadata before SVG loading.")
 	if _find_label_containing(resources_tab, "application/json") == null:
 		return _failure("Resources tab should display resource mime type metadata.")
 	if _find_label_containing(prompts_tab, "goal, include_scene") == null:
@@ -217,6 +223,13 @@ func _build_model() -> Dictionary:
 			"mimeType": "application/json",
 			"resource_kind": "state",
 			"icons": [{"src": "data:text/plain;base64,%s" % Marshalls.raw_to_base64("not svg".to_utf8_buffer()), "mimeType": "text/plain", "sizes": ["any"]}]
+		}, {
+			"uri": "godot-dotnet-mcp://diagnostics/summary",
+			"title": "Diagnostics Summary",
+			"description": "Plugin diagnostics.",
+			"mimeType": "application/json",
+			"resource_kind": "diagnostic",
+			"icons": [{"src": _oversized_icon_src(), "mimeType": "image/svg+xml", "sizes": ["any"]}]
 		}],
 		"mcp_resource_templates": [{
 			"uri": "godot-dotnet-mcp://scene/{path}",
@@ -236,6 +249,13 @@ func _build_model() -> Dictionary:
 			"arguments": [{"name": "goal"}, {"name": "include_scene"}],
 			"icons": [_icon_metadata("orientation")]
 		}, {
+			"name": "godot.content_authoring",
+			"title": "Content Authoring",
+			"description": "Author content.",
+			"prompt_kind": "authoring",
+			"arguments": [{"name": "goal"}],
+			"icons": [{"src": _non_svg_data_icon_src(), "mimeType": "image/svg+xml", "sizes": ["any"]}]
+		}, {
 			"name": "godot.runtime_validation",
 			"title": "Runtime Validation",
 			"description": "Validate runtime behavior.",
@@ -244,9 +264,9 @@ func _build_model() -> Dictionary:
 			"icons": [_icon_metadata("runtime")]
 		}],
 		"mcp_catalog_counts": {
-			"resources": 2,
+			"resources": 3,
 			"resource_templates": 1,
-			"prompts": 2
+			"prompts": 3
 		}
 	}
 
@@ -258,6 +278,16 @@ func _icon_metadata(name: String) -> Dictionary:
 		"mimeType": "image/svg+xml",
 		"sizes": ["any"]
 	}
+
+
+func _oversized_icon_src() -> String:
+	var repeated := "<rect x=\"1\" y=\"1\" width=\"14\" height=\"14\" fill=\"currentColor\"/>".repeat(260)
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\">%s</svg>" % repeated
+	return "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64(svg.to_utf8_buffer())
+
+
+func _non_svg_data_icon_src() -> String:
+	return "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64("not svg".to_utf8_buffer())
 
 
 func _label_text(root: Node, name: String) -> String:
