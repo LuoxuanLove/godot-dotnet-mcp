@@ -7,6 +7,15 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+function Quote-ProcessArgument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
+
 $projectPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj"
 $bridgeExe = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\bin\$Configuration\net8.0\GodotDotnetMcp.PluginBridge.exe"
 
@@ -64,6 +73,7 @@ try {
     }
 
     $timeoutProject = Join-Path $tempRoot "TimeoutProbe.csproj"
+    $timeoutStartedMarker = Join-Path $tempRoot "timeout-started.txt"
     $timeoutMarker = Join-Path $tempRoot "timeout-marker.txt"
     $timeoutArgs = @{
         path = $timeoutProject
@@ -73,11 +83,12 @@ try {
     } | ConvertTo-Json -Compress
     $timeoutRequestPath = Join-Path $tempRoot "timeout-request.json"
     [System.IO.File]::WriteAllText($timeoutRequestPath, $timeoutArgs, [System.Text.UTF8Encoding]::new($false))
+    $escapedStartedMarker = [System.Security.SecurityElement]::Escape($timeoutStartedMarker)
     $escapedMarker = [System.Security.SecurityElement]::Escape($timeoutMarker)
     $preBuildCommand = if ($IsWindows -or $env:OS -eq "Windows_NT") {
-        "powershell -NoProfile -ExecutionPolicy Bypass -Command `"Start-Sleep -Seconds 8; Set-Content -LiteralPath '$escapedMarker' -Value leaked -Encoding UTF8`""
+        "powershell -NoProfile -ExecutionPolicy Bypass -Command `"Set-Content -LiteralPath '$escapedStartedMarker' -Value started -Encoding UTF8; Start-Sleep -Seconds 8; Set-Content -LiteralPath '$escapedMarker' -Value leaked -Encoding UTF8`""
     } else {
-        "sh -c 'sleep 8; printf leaked > &quot;$escapedMarker&quot;'"
+        "sh -c 'printf started > &quot;$escapedStartedMarker&quot;; sleep 8; printf leaked > &quot;$escapedMarker&quot;'"
     }
     [System.IO.File]::WriteAllText($timeoutProject, @"
 <Project Sdk="Microsoft.NET.Sdk">
@@ -94,11 +105,39 @@ try {
         throw "Timeout probe project restore failed with exit code $LASTEXITCODE."
     }
 
-    $timeoutOutput = & $bridgeExe --timeout-ms 500 --call-json-file dotnet_build $timeoutRequestPath
-    if ($LASTEXITCODE -ne 124) {
-        throw "DotnetBridge dotnet_build timeout should return exit code 124. Exit code: $LASTEXITCODE Output: $timeoutOutput"
+    $timeoutResponsePath = Join-Path $tempRoot "timeout-response.json"
+    $timeoutStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $timeoutStartInfo.FileName = $bridgeExe
+    $timeoutStartInfo.Arguments = "--timeout-ms 5000 --response-json-file $(Quote-ProcessArgument $timeoutResponsePath) --call-json-file dotnet_build $(Quote-ProcessArgument $timeoutRequestPath)"
+    $timeoutStartInfo.UseShellExecute = $false
+    $timeoutStartInfo.CreateNoWindow = $true
+    $timeoutProcess = [System.Diagnostics.Process]::Start($timeoutStartInfo)
+
+    $startedDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    while (-not (Test-Path -LiteralPath $timeoutStartedMarker) -and -not $timeoutProcess.HasExited -and [DateTime]::UtcNow -lt $startedDeadline) {
+        Start-Sleep -Milliseconds 100
     }
-    $timeoutJson = $timeoutOutput | ConvertFrom-Json
+    if (-not (Test-Path -LiteralPath $timeoutStartedMarker)) {
+        if (-not $timeoutProcess.HasExited) {
+            $timeoutProcess.Kill()
+            $timeoutProcess.WaitForExit()
+        }
+        throw "DotnetBridge dotnet_build timeout regression must prove the PreBuildEvent child process started before timeout."
+    }
+
+    if (-not $timeoutProcess.WaitForExit(10000)) {
+        $timeoutProcess.Kill()
+        $timeoutProcess.WaitForExit()
+        throw "DotnetBridge dotnet_build timeout process did not exit after the timeout window."
+    }
+    if ($timeoutProcess.ExitCode -ne 124) {
+        $timeoutOutput = if (Test-Path -LiteralPath $timeoutResponsePath) { Get-Content -LiteralPath $timeoutResponsePath -Raw -Encoding UTF8 } else { "" }
+        throw "DotnetBridge dotnet_build timeout should return exit code 124. Exit code: $($timeoutProcess.ExitCode) Output: $timeoutOutput"
+    }
+    if (-not (Test-Path -LiteralPath $timeoutResponsePath)) {
+        throw "DotnetBridge dotnet_build timeout should write a response file."
+    }
+    $timeoutJson = Get-Content -LiteralPath $timeoutResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ([string]$timeoutJson.structuredContent.error -ne "runtime_timeout") {
         throw "DotnetBridge dotnet_build timeout should report structuredContent.error=runtime_timeout."
     }
