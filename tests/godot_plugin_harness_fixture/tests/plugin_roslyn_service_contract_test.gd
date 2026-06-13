@@ -1,6 +1,7 @@
 extends RefCounted
 
 const PluginRoslynServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd")
+const SERVICE_SOURCE_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd"
 
 var _temp_paths: Array[String] = []
 var _service: Node = null
@@ -55,6 +56,10 @@ class FakeRoslynFacade extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var runtime_guard := _assert_isolated_runtime_process_has_timeout_guards()
+	if not bool(runtime_guard.get("success", false)):
+		return runtime_guard
+
 	_service = PluginRoslynServiceScript.new()
 	_fake = FakeRoslynFacade.new()
 	_service.set_facade_for_testing(_fake)
@@ -165,6 +170,37 @@ func _write_text(path: String, content: String) -> void:
 		return
 	file.store_string(content)
 	file.close()
+
+
+func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
+	var service_source := _read_text(SERVICE_SOURCE_PATH)
+	if service_source.is_empty():
+		return _failure("PluginRoslynService source should be readable for timeout guard checks.")
+	for required_text in [
+		"RUNTIME_PROCESS_TIMEOUT_MS",
+		"OS.create_process",
+		"OS.kill(pid)",
+		"--timeout-ms",
+		"--response-json-file",
+		"roslyn_runtime_timeout"
+	]:
+		if service_source.find(required_text) == -1:
+			return _failure("PluginRoslynService isolated process guard is missing '%s'." % required_text)
+	if service_source.find("OS.execute(\"dotnet\"") != -1:
+		return _failure("PluginRoslynService must not use blocking OS.execute for isolated Roslyn runtime calls.")
+
+	return {"success": true}
+
+
+func _read_text(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var text := file.get_as_text()
+	file.close()
+	return text
 
 
 func _failure(message: String) -> Dictionary:

@@ -9,6 +9,8 @@ const LOAD_MODE_RUNTIME_PROCESS := "isolated_runtime_process"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
+const RUNTIME_PROCESS_TIMEOUT_MS := 15000
+const RUNTIME_PROCESS_POLL_DELAY_USEC := 10000
 
 const ERROR_TYPE_INVALID_ARGUMENT := "invalid_argument"
 const ERROR_TYPE_SOURCE_UNAVAILABLE := "source_unavailable"
@@ -311,14 +313,43 @@ func _execute_runtime_tool(tool_name: String, request: Dictionary) -> Dictionary
 
 
 func _execute_runtime_process(args: Array[String]) -> Dictionary:
-	var output: Array = []
 	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
+	var response_path := _make_runtime_response_path()
 	var command_args: Array[String] = [runtime_dll]
+	command_args.append_array(["--timeout-ms", str(RUNTIME_PROCESS_TIMEOUT_MS), "--response-json-file", ProjectSettings.globalize_path(response_path)])
 	command_args.append_array(args)
-	var exit_code := OS.execute("dotnet", PackedStringArray(command_args), output, true, false)
+	var pid := OS.create_process("dotnet", PackedStringArray(command_args), false)
+	if pid <= 0:
+		_remove_file_if_exists(response_path)
+		return {
+			"success": false,
+			"error": "Failed to start isolated Roslyn runtime process.",
+			"exit_code": -1,
+			"stdout": "",
+			"error_code": "roslyn_runtime_process_start_failed"
+		}
+	var started := Time.get_ticks_msec()
+	while OS.is_process_running(pid):
+		if Time.get_ticks_msec() - started > RUNTIME_PROCESS_TIMEOUT_MS:
+			OS.kill(pid)
+			_remove_file_if_exists(response_path)
+			return {
+				"success": false,
+				"error": "Isolated Roslyn runtime timed out after %d ms." % RUNTIME_PROCESS_TIMEOUT_MS,
+				"exit_code": -1,
+				"stdout": "",
+				"error_code": "roslyn_runtime_timeout",
+				"timeout_ms": RUNTIME_PROCESS_TIMEOUT_MS
+			}
+		OS.delay_usec(RUNTIME_PROCESS_POLL_DELAY_USEC)
+	var exit_code := OS.get_process_exit_code(pid)
 	var stdout := ""
-	if not output.is_empty():
-		stdout = str(output[0]).strip_edges()
+	if FileAccess.file_exists(response_path):
+		var response_file := FileAccess.open(response_path, FileAccess.READ)
+		if response_file != null:
+			stdout = response_file.get_as_text().strip_edges()
+			response_file.close()
+		_remove_file_if_exists(response_path)
 	if exit_code != 0:
 		return {
 			"success": false,
@@ -349,6 +380,18 @@ func _make_runtime_request_path(tool_name: String) -> String:
 		Time.get_ticks_msec(),
 		randi()
 	]
+
+
+func _make_runtime_response_path() -> String:
+	return "user://godot_dotnet_mcp_roslyn_response_%d_%d.json" % [
+		Time.get_ticks_msec(),
+		randi()
+	]
+
+
+func _remove_file_if_exists(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _convert_bridge_read_response(response: Dictionary, script_path: String) -> Dictionary:
