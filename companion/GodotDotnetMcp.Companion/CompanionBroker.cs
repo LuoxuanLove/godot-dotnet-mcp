@@ -130,6 +130,34 @@ public sealed class CompanionBroker
         return _projects.GetOrAdd(project.ProjectId, project);
     }
 
+    public bool RemoveProject(string projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            throw new ArgumentException("project_id is required.", nameof(projectId));
+        }
+
+        lock (_sessionLock)
+        {
+            if (!_projects.TryRemove(projectId, out _))
+            {
+                return false;
+            }
+
+            var nowUtc = _clock();
+            foreach (var (sessionId, session) in _sessions)
+            {
+                if (string.Equals(session.Identity.ProjectId, projectId, StringComparison.Ordinal))
+                {
+                    session.Revoke(nowUtc);
+                    _sessions.TryRemove(sessionId, out _);
+                }
+            }
+
+            return true;
+        }
+    }
+
     public ProjectSession StartSession(string projectId)
     {
         if (string.IsNullOrWhiteSpace(projectId))
@@ -137,14 +165,14 @@ public sealed class CompanionBroker
             throw new ArgumentException("project_id is required.", nameof(projectId));
         }
 
-        if (!_projects.TryGetValue(projectId, out var project))
-        {
-            throw new KeyNotFoundException($"Unknown project_id: {projectId}");
-        }
-
         lock (_sessionLock)
         {
             RemoveInactiveSessions();
+            if (!_projects.TryGetValue(projectId, out var project))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {projectId}");
+            }
+
             var nowUtc = _clock();
             var activeSessionCount = 0;
             var activeProjectSessionCount = 0;
