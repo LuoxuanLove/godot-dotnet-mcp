@@ -55,6 +55,49 @@ public sealed class CompanionBroker
 
     public IReadOnlyCollection<ProjectDescriptor> Projects => _projects.Values.ToArray();
 
+    public IReadOnlyCollection<BrokerProjectSummary> ListProjects()
+    {
+        var nowUtc = _clock();
+        var activeSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var staticHeadlessSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var editorLiveSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var session in _sessions.Values)
+        {
+            if (!session.TryGetActiveIdentity(nowUtc, out var identity))
+            {
+                continue;
+            }
+
+            Increment(activeSessionCounts, identity.ProjectId);
+            if (identity.Mode is CompanionMode.EditorLive)
+            {
+                Increment(editorLiveSessionCounts, identity.ProjectId);
+            }
+            else
+            {
+                Increment(staticHeadlessSessionCounts, identity.ProjectId);
+            }
+        }
+
+        return _projects.Values
+            .OrderBy(project => project.ProjectId, StringComparer.Ordinal)
+            .Select(project =>
+            {
+                activeSessionCounts.TryGetValue(project.ProjectId, out var activeSessionCount);
+                staticHeadlessSessionCounts.TryGetValue(project.ProjectId, out var staticHeadlessSessionCount);
+                editorLiveSessionCounts.TryGetValue(project.ProjectId, out var editorLiveSessionCount);
+                return new BrokerProjectSummary(
+                    project.ProjectId,
+                    project.ProjectRoot,
+                    project.ProjectFilePath,
+                    ProjectFileScoped: project.ProjectFilePath is not null,
+                    activeSessionCount,
+                    staticHeadlessSessionCount,
+                    editorLiveSessionCount);
+            })
+            .ToArray();
+    }
+
     public IReadOnlyCollection<ProjectSessionIdentity> Sessions
     {
         get
@@ -263,6 +306,12 @@ public sealed class CompanionBroker
         }
     }
 
+    private static void Increment(Dictionary<string, int> counts, string projectId)
+    {
+        counts.TryGetValue(projectId, out var currentCount);
+        counts[projectId] = currentCount + 1;
+    }
+
     public void RequireCapability(ToolRequestScope scope, CompanionCapability capability)
     {
         var session = ResolveSession(scope);
@@ -272,6 +321,15 @@ public sealed class CompanionBroker
         }
     }
 }
+
+public sealed record BrokerProjectSummary(
+    string ProjectId,
+    string ProjectRoot,
+    string? ProjectFilePath,
+    bool ProjectFileScoped,
+    int ActiveSessionCount,
+    int StaticHeadlessSessionCount,
+    int EditorLiveSessionCount);
 
 public sealed record ToolRequestScope(string ProjectId, string SessionId);
 
