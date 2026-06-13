@@ -28,6 +28,7 @@ jobs:
           EVENT_PULL_NUMBER: ${{ github.event.pull_request.number }}
           INPUT_PULL_NUMBER: ${{ github.event.inputs.pull_number }}
           REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -41,6 +42,9 @@ jobs:
 
           $pr = gh pr view $pullNumber --repo $env:REPOSITORY --json baseRefName,headRefName,headRepositoryOwner | ConvertFrom-Json
           $trustedPolicyRef = $pr.baseRefName
+          if ($pr.baseRefName -eq "dev" -and $pr.headRefName -eq "refactor/v2.0.0" -and $pr.headRepositoryOwner.login -eq $env:REPOSITORY_OWNER) {
+            $trustedPolicyRef = "refactor/v2.0.0"
+          }
           if (
             ($pr.baseRefName -eq "v2.0" -and $pr.headRefName -eq "release/v2.0.0-baseline") -or
             $pr.baseRefName -eq "release/v2.0.0-baseline" -or
@@ -72,12 +76,12 @@ jobs:
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
         run: |
-          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "v2.0", "release/v2.0.0-baseline")
+          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0", "v2.0", "release/v2.0.0-baseline")
           $isV2StackBase = $env:BASE_BRANCH.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
             $env:BASE_BRANCH.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
             $env:BASE_BRANCH.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
           if (($allowedBaseBranches -notcontains $env:BASE_BRANCH) -and -not $isV2StackBase) {
-            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, v2.0, or a v2 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
+            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, refactor/v2.0.0, v2.0, or a v2 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
           }
 
           git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/policy-base/$($env:BASE_BRANCH)"
