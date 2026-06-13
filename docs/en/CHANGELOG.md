@@ -10,169 +10,47 @@ Target version: 1.4.0.
 
 ### Added
 
-- Guarded the v1.4 install contract for C# semantic tooling so clean Asset Library installs must include the isolated Roslyn runtime manifest while still excluding plugin Roslyn and bridge C# source files from host project builds.
-- Runtime automation `runtime_step(action=input)` now supports mouse move and click events with viewport coordinates, and its tool schema advertises mouse input fields for MCP clients.
-- Initialized the v1.4.0 protocol refactor version line and release-note source template.
-- Added explicit self-plugin target metadata to `system_plugin_reload(action="full_reload_plugin")` and the maintenance reload path so clients can distinguish MCP plugin reloads from other plugin operations.
-- Added `outputSchema` metadata to MCP `tools/list` entries and tool presentation nodes so clients can inspect normalized tool result envelopes separately from input schemas.
-- Added MCP tool annotations to `tools/list` entries so clients can distinguish read-only inspection tools from state-changing workflows.
-- Added governance diagnostics to `system_tool_catalog` search summaries, including available filter values, filter warnings, and suggested next queries when domain or category filters are unavailable or too narrow.
+- Added an isolated Roslyn runtime bundle so Asset Library and prepared addon installs keep C# semantic read/patch workflows without compiling plugin Roslyn or bridge source files inside the host project.
+- Added MCP 2025-11-25 Resources, Resource Templates, Prompts, and Tools metadata, including titles, icons, annotations, input schemas, output schemas, and JSON Schema 2020-12 declarations.
+- Added Dock Resources and Prompts tabs with protocol catalog counts, ID copy actions, resource previews, prompt argument inputs, generated prompt previews, and bounded icon rendering.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
-- Added MCP 2025-11-25 display metadata to Resources, Resource Templates, and built-in Prompts so clients can render titles and icons from protocol lists.
-- Added Dock model projections for MCP Resources, Resource Templates, and Prompts so the editor UI can consume resource-first and prompt-first metadata without polluting `tools/list`.
-- Added Dock Resources and Prompts tabs that render MCP protocol catalog metadata, entry counts, kind/MIME/argument summaries, and copy-ID affordances from the shared catalog projection.
-- Added Dock previews for MCP Resources and Prompts, including resource read previews, prompt argument inputs, `prompts/get` preview rendering, and copy-generated-prompt text affordances.
-- Added Dock rendering for MCP 2025-11-25 Resource, Resource Template, and Prompt `icons` metadata in the Resources and Prompts catalog tabs.
-- Added an MCP 2025-11-25 conformance gate that keeps lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, and Dock metadata contracts registered in the v1.4 harness manifest.
-- Added Streamable HTTP semantic coverage checks to the MCP 2025-11-25 conformance gate so release validation requires the registered HTTP contracts to retain POST negotiation, GET SSE resume, finite POST SSE, DELETE session termination, active stream disconnect, heartbeat, queued event delivery, and bounded replay guards.
+- Added mouse move and click support to `runtime_step(action=input)` with viewport coordinate fields in the tool schema.
+- Added structured User-tool recovery diagnostics with diagnostic codes, recommended actions, and follow-up tool hints.
 
 ### Changed
 
-- Bumped plugin metadata, protocol facts, .NET bridge metadata, plugin-update contract expectations, localized changelogs, and release-note sources to `1.4.0`.
-- Split `MCPToolLoader` read-side projections, exposure checks, empty-visible diagnostics, and status snapshots into a dedicated query service while preserving the public loader facade.
-- Split `MCPToolLoader` lifecycle orchestration into a dedicated lifecycle service covering initialization, shutdown, disabled-tool changes, and frame maintenance while preserving the public loader facade.
-- Split plugin lifecycle context wiring into a dedicated context service so `plugin.gd` delegates lifecycle callback-map assembly instead of rebuilding it in the entrypoint.
-- Split plugin runtime reload requests into a dedicated request service so `PluginReloadCoordinator` only coordinates plugin re-enable lifecycle work.
-- Split stdio JSON-RPC method dispatch and service assembly into dedicated stdio services so the transport server stays focused on framing and response writes.
-- Routed Tools tab domain and category previews through shared presentation metadata so preview counts and tool lists no longer fall back to raw catalog definitions when a presentation snapshot is available.
-- Routed shared system implementation helpers through a dedicated helper service so data extraction, file collection, issue, and dependency helpers no longer require production impls to call the AtomicBridge compatibility facade or execution service.
-- Slimmed the AtomicBridge facade to execution, context, success, and error operations by removing helper-method forwarding; helper coverage now lives on the support, atomic helper, and system implementation helper services.
-- Tightened built-in Prompt Guide argument handling so `prompts/get` rejects unknown argument names and reports the allowed argument list for the requested prompt.
-- Removed `system_help` from the public tool list and changed legacy calls to return replacement resource and prompt guidance.
-- Updated project-orientation prompt guidance to start from MCP resources and prompts instead of `system_help`.
-- Removed `system_tool_activity` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to activity resources.
-- Removed `system_scene_validate` and `system_scene_analyze` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_scene_inspect(action=validate|analyze)`.
-- Removed `system_tool_catalog` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to canonical catalog resources.
-- Removed `system_plugin_reload` and `system_plugin_update` from the public MCP tool surface; legacy calls now return `removed_public_tool` guidance pointing clients to `system_plugin_maintenance`.
-- Changed MCP `tools/list` to return only the flat callable tool list; tree/group presentation metadata now stays in catalog resources, while flat tool-entry presentation metadata remains in `/api/tools`.
-- Changed MCP tool input/output schemas emitted by `tools/list`, catalog resources, and schema-inclusive catalog search to declare the JSON Schema 2020-12 dialect.
-- Removed `system_editor_log` from the public MCP tool surface; legacy reads now point to editor log resources, while clearing Output uses `system_editor_control(action=clear_output)`.
-- Changed the Tools tab tree to render MCP protocol `icons` metadata from the shared tool presentation snapshot on tool and atomic rows.
-- Changed the Tools tab action rows and action previews to consume label and description keys from shared presentation metadata before falling back to legacy action-key derivation.
-- Removed the legacy internal `resource_manage` compatibility alias; use `resource_query`, `resource_create`, and `resource_file_ops` instead.
-- Removed the legacy internal `debug_log` compatibility alias; use `debug_log_write` and `debug_log_buffer` instead.
-- Changed the default MCP protocol facts to `2025-11-25` and added `serverInfo.description` metadata to initialize responses.
-- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4.0 line.
-- Stopped advertising unsupported resource subscription capability metadata in MCP `initialize` responses.
-- Removed the first split-domain root monolith batch for audio, animation, signal, TileMap, and UI tools so the split executors are the only stable domain entries.
-- Removed the filesystem root monolith and its legacy `filesystem_file` compatibility alias so `filesystem/file_read`, `filesystem/file_write`, and `filesystem/file_manage` are the only file entries.
-- Changed stdio transport to use newline-delimited JSON-RPC by default for MCP 2025-11-25, with legacy `Content-Length` framing available only through explicit compatibility mode.
-- Changed the default MCP protocol baseline to `2025-11-25`, added `serverInfo.description`, and tightened `/mcp` Streamable HTTP headers for protocol-version, session-id, and JSON `Accept` negotiation.
-- Added a minimal `GET /mcp` Streamable HTTP SSE probe surface that requires `Accept: text/event-stream`, validates protocol-version headers, returns session/protocol response headers, and emits a small JSON-RPC notification event without using legacy endpoint discovery.
-- Added SSE cursor metadata to the `GET /mcp` probe, including event ids, retry hints, `Last-Event-ID` CORS allowance, and a resume cursor echo for Streamable HTTP clients.
-- Added bounded per-session SSE event replay for `GET /mcp` so Streamable HTTP clients can resume from a matching `Last-Event-ID` cursor and receive stored events after that cursor.
-- Added long-lived SSE stream lifecycle support for `GET /mcp`, including Content-Length-free stream opening, heartbeat comments, active `transport_mode=sse` diagnostics, and disconnected stream session history.
-- Added queued server-to-client event delivery for long-lived `GET /mcp` SSE streams so Streamable HTTP clients receive new JSON-RPC notifications without reopening the connection.
-- Added explicit Streamable HTTP SSE resume status metadata so clients can distinguish matched, stale, unknown-session, unknown-cursor, and empty `Last-Event-ID` cursors with retained-window indexes.
-- Added finite Streamable HTTP POST SSE responses for JSON-RPC requests that explicitly prefer `text/event-stream`, while keeping JSON-preferred POSTs on the existing JSON response path and preventing POST response events from replaying through unrelated GET SSE probes.
-- Added `DELETE /mcp` Streamable HTTP session termination so clients can explicitly close MCP sessions, clear resumable SSE history, and disconnect matching active SSE streams.
-- Hardened Streamable HTTP session handling so invalid multi-line `Mcp-Session-Id` headers are rejected before they can be echoed in response headers.
-- Moved group, geometry, material, lighting, navigation, particle, physics, and shader implementations into their split executors and removed their legacy root monolith files and UIDs.
-- Moved the node, project, resource, and scene domain implementations into their split executors and removed the legacy root monolith files and UIDs.
-- Changed catalog snapshots, catalog resources, `/api/tools`, and tool presentation metadata to reuse `ToolCatalogManifest` for domain, public category, and removed public tool facts.
-- Changed the Dock Tools model to build presentation metadata through `ToolCatalogSnapshotService`, keeping visible tool trees aligned with shared catalog snapshot filtering and metadata.
-- Changed tool presentation metadata so Dock/Tools consumers receive protocol-aligned descriptions, titles, icons, annotations, input schemas, and output schemas from the shared catalog snapshot instead of reconstructing those facts locally.
-- Changed the Tools tab preview, search, tooltip, and schema-copy paths to consume shared presentation metadata before falling back to raw tool definitions.
-- Changed the Tools tab preview and context menu to expose shared presentation output schemas alongside input schemas, keeping Dock schema inspection aligned with MCP 2025-11-25 metadata.
-- Changed the Tools tab legacy fallback paths to consume atomic child specs and action localization keys through the shared tool presentation service instead of depending directly on the system tree catalog.
-- Changed Tools tab metadata lookup, atomic previews, and refresh signatures to ignore raw `tools_by_category` fallback data whenever shared presentation metadata is available.
-- Hardened the Dock Resources/Prompts catalog projection and preview path so it consumes configured runtime context, preserves preview metadata, and keeps invalid protocol icons bounded in the UI.
-- Moved the debug domain implementation behind `tools/debug/executor.gd` while keeping `debug_tools.gd` as a thin compatibility wrapper for existing script references.
-- Moved the editor domain implementation behind `tools/editor/executor.gd` while keeping `editor_tools.gd` as a thin compatibility wrapper for existing script references.
-- Moved `MCPToolLoader` frame tick, user-tool definition refresh, and idle user-runtime unload decisions into a dedicated loader tick service.
-- Moved `MCPToolLoader` disabled-tool normalization and enabled-tool counting into a dedicated loader enablement service.
-- Moved `MCPToolLoader` plugin-host resolution into the loader runtime-context service.
-- Moved `MCPToolLoader` tool-definition loading, runtime load state, and runtime unload transitions into a dedicated loader runtime-state service.
-- Moved `MCPToolLoader` domain reload orchestration into a dedicated loader reload service while preserving reload status, rollback, disabled-tool restoration, and runtime-context refresh behavior.
-- Moved `MCPToolLoader` user-tool script reload requests and runtime snapshots into a dedicated loader user reload service.
-- Centralized `MCPToolLoader` mutable registry/runtime/definition/performance state and context projection in a loader state store, keeping the public loader as service orchestration rather than the state owner.
-- Moved `MCPToolLoader` tool access provider resolution, category visibility, execution gating, denied-message handling, and loose boolean coercion into a dedicated loader access service.
-- Moved `MCPToolLoader` GDScript LSP diagnostics adapter lifecycle into a dedicated loader diagnostics service while preserving lazy service creation, reset, tick, dispose, and debug snapshot behavior.
-- Moved `MCPToolLoader` execution context callbacks, agent-context sanitization, activity forwarding, finalization forwarding, and shared failure-envelope construction into a dedicated loader execution-context service.
-- Moved `MCPToolLoader` catalog, reload, user-reload, runtime-state, and lifecycle context dictionary assembly into a dedicated loader context service.
-- Centralized `MCPToolLoader` loader-specific context wiring inside the loader context service, removed unused reload state forwarding methods, and added source guards that keep context routing and AtomicBridge helper behavior from flowing back into facade classes.
-- Moved stdio tool-router, resource, and prompt service context wiring into a dedicated stdio service context builder so the stdio transport stays focused on framing and request handling.
-- Moved plugin entrypoint lifecycle wiring into a dedicated plugin lifecycle service so `plugin.gd` delegates enter, exit, disable, and process orchestration through one service boundary.
-- Moved plugin config, reload scheduling, and user-tool watch wiring into a dedicated plugin config/reload wiring service so `plugin.gd` no longer owns those service construction details.
-- Moved AtomicBridge tool-loader and GDScript LSP diagnostics resolution into a dedicated context resolver while keeping the compatibility facade API stable.
-- Moved AtomicBridge runtime context and plugin-host resolution into the context resolver so the compatibility facade keeps shrinking without changing executor behavior.
+- Changed the default MCP protocol baseline to `2025-11-25`, including initialize metadata, tool-name validation, schema dialect policy, and explicit optional-capability boundaries.
+- Changed the default stdio transport to newline-delimited JSON-RPC, with legacy `Content-Length` framing retained only as an explicit compatibility mode.
+- Changed the default HTTP endpoint at `127.0.0.1:3000/mcp` toward MCP Streamable HTTP semantics, including protocol/session headers, JSON and SSE `Accept` negotiation, Origin/CORS checks, GET SSE streams, resumable event history, finite POST SSE responses, heartbeat events, queued server-to-client delivery, and `DELETE /mcp` session termination.
+- Changed public discovery to be resource-first and prompt-first: passive help, activity, catalog, editor-log, plugin maintenance, and scene validation discovery now use Resources, Prompts, or canonical action tools instead of legacy public discovery tools.
+- Changed `tools/list` to return a flat callable tool list with schema, annotation, and output metadata while tree/group presentation data moves to catalog resources and shared Dock presentation snapshots.
+- Changed catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, and Tools tab preview/search/schema-copy paths to use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path.
+- Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
+- Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
+- Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
+- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4 line.
 
 ### Fixed
 
-- Fixed the default tool profile so registered split visual authoring categories for materials, shaders, lighting, particles, TileMaps, and geometry are visible without switching to the full profile.
-- Fixed stdio `tools/call` disabled-tool checks to use the shared loader enabled state before exposure checks, matching HTTP transport error semantics.
-- Fixed `prompts/get` argument validation so non-string prompt arguments and invalid `include_runtime` true/false strings are rejected instead of being coerced.
-- Fixed the visible tool catalog resource so it includes the promised raw `domain_states` slice alongside tree and group presentation metadata.
-- Fixed text resource templates and prompt path validation so binary `.scn` and `.res` files are rejected instead of being read as text.
-- Fixed HTTP and stdio transport framing so malformed, negative, or oversized `Content-Length` frames are rejected deterministically instead of being parsed ambiguously or left to accumulate.
-- Fixed JSON-RPC envelope validation so HTTP and stdio reject malformed `jsonrpc`, `method`, and `id` fields before routing or emitting request activity.
-- Fixed Streamable HTTP POST handling so JSON-RPC response envelopes are accepted with `202 Accepted` and no response body instead of being rejected as invalid requests.
-- Fixed the Dock Tools presentation so visible non-system tool families are not dropped from the tree.
-- Tightened `/mcp` HTTP request negotiation so unsupported `Accept` values and mismatched `MCP-Protocol-Version` headers are rejected before JSON-RPC dispatch.
-- Tightened `/mcp` Streamable HTTP negotiation so missing POST `Content-Type: application/json` and missing POST/GET `MCP-Protocol-Version` headers are rejected, with HTTP audit summaries retaining MCP session/version headers.
-- Fixed raw HTTP response writing so SSE bodies can be sent without JSON encoding and 406 responses use `Not Acceptable` status text.
-- Fixed client-config preflight checks so writing `godot-mcp` requires confirmation before replacing a non-local or non-object existing server entry.
-- Fixed localized `system_project_state` descriptions so they document `summary=true` compact reads and `sections=[...]` selective reads.
-- Fixed the Traditional Chinese project-orientation prompt body so it no longer shows corrupted question-mark text.
-- Fixed lazy project-index consumers so symbol search and scene dependency graph responses report `index_state` and refresh stale indexes when project file lists change.
+- Hardened HTTP and stdio JSON-RPC envelope handling, malformed framing, duplicate/conflicting HTTP body headers, response-envelope handling, disabled-tool parity, and session validation so transport errors are deterministic across supported MCP transports.
+- Fixed Prompt and Resource validation so unknown or incorrectly typed prompt arguments are rejected with allowed-argument metadata and binary `.scn` / `.res` files are not read as text resources.
+- Fixed Dock catalog rendering so visible tool families are retained and invalid Resource/Prompt icons are bounded before SVG loading.
+- Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
+- Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
+- Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
 
 ### Documentation
 
-- Refreshed the v1.4.0 refactor progress tracker so completed MCP 2025-11-25 baseline, public-tool cleanup, Streamable HTTP release contracts, and UI metadata work are no longer tracked as open blockers.
-- Removed external project validation narrative from release-facing README, localized entry pages, and v1.4.0 release notes so documentation claims stay focused on plugin-owned capabilities and reproducible checks.
-- Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
-- Clarified `system_help` protocol guidance so clients can choose MCP Resources for passive context, Prompts for workflow planning, and Tools for actions or computed workflow results.
-- Added a [v1.4.0 refactor progress tracker](process/v1.4.0-refactor-progress-tracker.md) that records completed guardrails, remaining cleanup axes, and the next PR queue.
-- Updated the v1.4.0 protocol refactor plan to target MCP 2025-11-25 conformance, including Streamable HTTP on `127.0.0.1:3000/mcp`, newline-delimited stdio, 2020-12 schema metadata, tool-name guards, optional capability boundaries, and Dock/Tools UI metadata adaptation.
-- Added localization inventory coverage for schema keywords that must remain visible in translated tool descriptions.
-- Added localization parity coverage for repeated question-mark corruption markers in translated strings.
+- Updated the v1.4 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
+- Updated release-facing README and localized entry pages so installation and migration guidance stays focused on plugin-owned install surfaces, Resources, Prompts, Tools, and reproducible validation.
+- Added draft v1.4 release-note sources and localized navigation for the protocol refactor line.
+- Clarified legacy `system_help` guidance so clients start from MCP Resources for passive context, Prompts for planning, and Tools for actions or computed workflow results.
 
 ### Internal
 
-- Added manifest-backed public tool surface guardrails so the loader and contracts keep only high-level MCP categories publicly exposed.
-- Moved AtomicBridge executor path metadata into a dedicated manifest and made the runtime own default executor catalog configuration.
-- Aligned the tool manifest domain map with the registry's `core`, `visual`, `gameplay`, `interface`, `plugin`, and `user` domains, with parity coverage for every registered built-in category.
-- Split AtomicBridge call dispatch, write-guard orchestration, atomic name parsing, and write-success invalidation into a dedicated dispatch service.
-- Split AtomicBridge write-policy, path-reference, and issue helpers into a dedicated support service while keeping the bridge facade API stable.
-- Split AtomicBridge executor loading, caching, runtime context wiring, and sync/async dispatch into a dedicated runtime service while keeping the bridge facade API stable.
-- Moved AtomicBridge support/runtime/dispatch composition into a dedicated execution service so `atomic_bridge.gd` remains a thinner compatibility facade.
-- Split AtomicBridge data extraction, file-collection, issue, and dependency helpers into a dedicated helper service while keeping filesystem enumeration semantics stable.
-- Split public tool exposure and removed-tool replacement guidance into a dedicated loader policy service so `MCPToolLoader` no longer owns public surface compatibility rules directly.
-- Split tool execution observation, activity wrapping, and per-tool call metrics into a dedicated loader observer service while preserving loader execution APIs.
-- Split executor instantiation, runtime context wiring, tool-definition extraction, and executor disposal into a dedicated runtime manager while keeping loader state and reload APIs stable.
-- Split tool loader health, performance, and reload status snapshots into a dedicated status service while keeping existing loader status APIs stable.
-- Split loader load/reload diagnostic incident handling into a dedicated diagnostics service while keeping loader error/status APIs stable.
-- Split registry entry indexing, duplicate-category detection, and loader entry ordering into a dedicated service while keeping runtime cache cleanup in `MCPToolLoader`.
-- Split tool-loader runtime context construction and loaded-runtime reconfiguration into a dedicated service while keeping executor lifecycle ownership in `MCPToolLoader`.
-- Split tool-loader catalog, flat definition, exposed-definition, and domain-state projections into a dedicated service while keeping lazy definition loading owned by `MCPToolLoader`.
-- Split tool-loader execution orchestration into a dedicated service so `MCPToolLoader` no longer owns duplicated sync/async access checks, runtime lookup, activity tracking, and finalization flow.
-- Added version-policy coverage for protocol facts JSON/fallback parity and synchronized fallback error code defaults with the canonical facts file.
-- Extended protocol facts parity coverage to include the server description used by initialize metadata.
-- Added recovery guidance fields to User-tool runtime diagnostics so load failures include diagnostic codes, recommended actions, and follow-up tool hints, with the relevant User-tool and runtime-diagnostics contracts now required by the plugin harness.
-- Added docs i18n validation coverage for changelog section ordering across localized changelogs.
-- Added removal guard coverage so tool lists, catalog resources, search results, Tools page rendering, and localization inventory cannot re-expose `system_tool_activity` or the removed scene validation aliases.
-- Added removal guard coverage so `system_tool_catalog` stays absent from tools/list, tool-tree metadata, catalog resources, catalog search, and localization inventory while preserving explicit legacy-call guidance.
-- Added removal guard coverage so `system_editor_log` stays absent from tools/list, tool-tree metadata, catalog resources, prompt guidance, and localization inventory while preserving legacy-call migration guidance.
-- Added removal guard coverage so `resource_manage` cannot reappear in loader definitions, direct resource-domain execution, or localization inventory while the split resource tools stay available.
-- Added removal guard coverage so `debug_log` cannot reappear in loader definitions, direct debug-domain execution, JSON-RPC routing, or localization inventory while the split debug tools stay available.
-- Enforced absence guards for the removed audio, animation, signal, TileMap, and UI root monolith files now that their split executors own the domain implementations.
-- Enforced removal guards for the deleted filesystem root monolith, `filesystem_file` loader definition, direct filesystem-domain execution, and stale localization inventory keys.
-- Added debug executor source guards so the canonical debug implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
-- Added editor executor source guards so the canonical editor implementation no longer depends on the legacy root entry while compatibility preloads continue to work.
-- Added an aggregate root tool monolith closure guard that allows only `base_tools.gd` plus the intentional debug/editor compatibility wrappers at the tools root.
-- Added `ToolCatalogManifest` as the single static catalog fact source for built-in tool entries, domain metadata, public category exposure, and removed public tool guards while keeping the existing registry and manifest adapters.
-- Added a read-only tool catalog snapshot service and contract coverage so catalog search can reuse one filtered loader snapshot without changing its response shape.
-- Tightened catalog snapshot coverage so manifest-domain states aggregate category loader states, and catalog search preserves output schemas when schema details are requested.
-- Added real-loader catalog snapshot coverage so snapshot and search contracts now exercise `MCPToolLoader` registry initialization, disabled tools, hidden categories, domain-state aggregation, and loader-decorated metadata.
-- Added MCP 2025-11-25 tool-name guard coverage so manifest-owned removed public tool names, registry categories, loader-exposed tools, and final `tools/list` entries stay within the 1-128 character ASCII letter, digit, `_`, `-`, and `.` naming profile.
-- Added a plugin harness manifest guard so newly discovered runnable contract cases fail validation when they are missing from `scripts/contract_case_manifest.json` or the fixed legacy allowlist.
-- Added MCP 2025-11-25 manifest taxonomy so each required harness case declares its protocol version and conformance role before it can enter the v1.4 verification gate.
-- Moved HTTP request decoder and transport contracts into the required harness manifest so malformed framing guards run in the standard plugin verification path.
-- Updated PR policy and version-policy CI to validate v1.4 refactor integration pull requests against their actual base branch ref while keeping release version metadata changes limited to release branches targeting `dev`.
-- Added release-note finished-wording guardrails across docs validation, release-note rendering, draft generation, and release publish preflight.
-- Added refactor guardrail coverage so the v1.4 protocol plan and progress tracker keep the same MCP 2025-11-25 target facts.
-- Added initialize capability guard coverage so optional MCP 2025-11-25 Sampling, Elicitation, and Tasks capabilities cannot be advertised before implementation.
-- Added refactor guardrail coverage so release-facing README files cannot reintroduce zip, `release_dist`, local-release, or release-package installation paths.
+- Added aggregate v1.4 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
+- Added release-policy, PR-policy, and merge-queue validation coverage for v1.4 branch integration, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
+- Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
 
 ## [1.3.0] - 2026-06-08
 
