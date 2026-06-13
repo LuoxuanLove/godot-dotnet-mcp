@@ -746,6 +746,16 @@ func _apply_responsive_layout() -> void:
 	_margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
 	_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
 	_content.add_theme_constant_override("separation", int(round((10.0 if narrow else 12.0) * scale)))
+	_view_mode_row.add_theme_constant_override("separation", int(round((4.0 if narrow else 6.0) * scale)))
+	_configure_view_mode_button(_catalog_view_button, VIEW_CATALOG, 76.0 if narrow else 96.0, scale)
+	_configure_view_mode_button(_diagnostics_view_button, VIEW_DIAGNOSTICS, 86.0 if narrow else 104.0, scale)
+
+
+func _configure_view_mode_button(button: Button, view: String, min_width: float, scale: float) -> void:
+	if button == null:
+		return
+	button.custom_minimum_size.x = min_width * scale
+	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 
 func _apply_visual_style(scale: float) -> void:
@@ -762,8 +772,11 @@ func _apply_visual_style(scale: float) -> void:
 	for title in [_header_title, _resources_title, _templates_title, _prompts_title]:
 		title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 		title.remove_theme_font_size_override("font_size")
+		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_header_description.add_theme_color_override("font_color", _get_description_text_color())
 	_header_counts.add_theme_color_override("font_color", _get_meta_text_color())
+	_header_description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_header_counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	end_bulk_theme_override()
 
 

@@ -103,6 +103,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("MCP catalog tabs should expose Catalog and Diagnostics view buttons.")
 	if not catalog_button.button_pressed or diagnostics_button.button_pressed:
 		return _failure("MCP catalog tabs should default to the Catalog view.")
+	resources_tab.size = Vector2(320, 640)
+	resources_tab.call("_apply_responsive_layout")
+	await tree.process_frame
+	if catalog_button.custom_minimum_size.x <= 0.0 or diagnostics_button.custom_minimum_size.x <= 0.0:
+		return _failure("MCP catalog view buttons should keep stable minimum widths in narrow Dock layouts.")
+	if catalog_button.tooltip_text.is_empty() or diagnostics_button.tooltip_text.is_empty():
+		return _failure("MCP catalog view buttons should expose tooltips for clipped narrow labels.")
 	if _find_entry_card(resources_tab, "resource", "godot-dotnet-mcp://guides/index") == null:
 		return _failure("Resources tab should render canonical guide resources by URI.")
 	if _find_entry_card(resources_tab, "template", "godot-dotnet-mcp://scene/{path}") == null:
