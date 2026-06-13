@@ -227,6 +227,28 @@ public sealed class ProjectSession
         }
     }
 
+    internal void DowngradeToStaticHeadless(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            if (!IsActiveLocked(nowUtc))
+            {
+                return;
+            }
+
+            if (_identity.Mode is CompanionMode.StaticHeadless)
+            {
+                return;
+            }
+
+            _identity = _identity with
+            {
+                Mode = CompanionMode.StaticHeadless,
+                EditorSessionId = null,
+            };
+        }
+    }
+
     internal void EnsureActive(DateTimeOffset nowUtc)
     {
         lock (_stateLock)

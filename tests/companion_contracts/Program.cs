@@ -421,9 +421,62 @@ static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
     AssertEqual("editor_session_1", session.Identity.EditorSessionId);
     broker.RequireCapability(scope, CompanionCapability.EditorScreenshot);
 
+    broker.UpdateEditorBridgeStatus(EditorBridgeStatus.Disabled(project.ProjectId));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+    AssertThrows<InvalidOperationException>(() =>
+        broker.RequireCapability(scope, CompanionCapability.EditorScreenshot));
+
+    broker.UpdateEditorBridgeStatus(onlineStatus);
+    broker.UpgradeSessionToEditorLive(scope);
+    AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_2",
+        "1.4.0",
+        true));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+
     AssertThrows<InvalidOperationException>(() =>
         broker.UpgradeSessionToEditorLive(new ToolRequestScope(otherProject.ProjectId, otherSession.Identity.SessionId)));
     AssertEqual(CompanionMode.StaticHeadless, otherSession.Identity.Mode);
+
+    for (var i = 0; i < 100; i++)
+    {
+        var raceBroker = new CompanionBroker();
+        var raceProject = raceBroker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+        var raceSession = raceBroker.StartSession(raceProject.ProjectId);
+        var raceScope = new ToolRequestScope(raceProject.ProjectId, raceSession.Identity.SessionId);
+        var raceOnlineStatus = new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            raceProject.ProjectId,
+            "race_editor_session",
+            "2.0.0",
+            true);
+        raceBroker.UpdateEditorBridgeStatus(raceOnlineStatus);
+
+        var upgradeTask = Task.Run(() =>
+        {
+            try
+            {
+                raceBroker.UpgradeSessionToEditorLive(raceScope);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var offlineTask = Task.Run(() => raceBroker.UpdateEditorBridgeStatus(EditorBridgeStatus.Disabled(raceProject.ProjectId)));
+
+        Task.WaitAll(upgradeTask, offlineTask);
+        var latestStatus = raceBroker.GetEditorBridgeStatus(raceProject.ProjectId);
+        AssertEqual(EditorBridgeState.Disabled, latestStatus.State);
+        AssertEqual(CompanionMode.StaticHeadless, raceSession.Identity.Mode);
+        AssertEqual<string?>(null, raceSession.Identity.EditorSessionId);
+        AssertThrows<InvalidOperationException>(() =>
+            raceBroker.RequireCapability(raceScope, CompanionCapability.EditorScreenshot));
+    }
 }
 
 static void BrokerRemovesProjectsAndRevokesTheirSessions()
