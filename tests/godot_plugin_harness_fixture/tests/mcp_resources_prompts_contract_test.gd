@@ -144,8 +144,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("resources/list should expose 2025-11-25 title/icons metadata for every resource.")
 		if not _has_meta_kind(resource, "resourceKind"):
 			return _failure("resources/list should keep Dock resource classification in _meta.resourceKind.")
+		if not _has_meta_kind(resource, "resourceGroup"):
+			return _failure("resources/list should keep Dock resource grouping in _meta.resourceGroup.")
 		if (resource as Dictionary).has("resourceKind"):
 			return _failure("resources/list should not expose Dock resource classification as a top-level protocol field.")
+		if (resource as Dictionary).has("resourceGroup"):
+			return _failure("resources/list should not expose Dock resource grouping as a top-level protocol field.")
 	var project_info_metadata := _find_resource(resources, PROJECT_INFO_URI)
 	if str(project_info_metadata.get("name", "")) != "项目信息":
 		return _failure("resources/list should localize resource metadata through the active locale.")
@@ -169,8 +173,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("resources/templates/list should expose 2025-11-25 title/icons metadata for every template.")
 		if not _has_meta_kind(template, "resourceKind"):
 			return _failure("resources/templates/list should keep Dock template classification in _meta.resourceKind.")
+		if not _has_meta_kind(template, "resourceGroup"):
+			return _failure("resources/templates/list should keep Dock template grouping in _meta.resourceGroup.")
 		if (template as Dictionary).has("resourceKind"):
 			return _failure("resources/templates/list should not expose Dock template classification as a top-level protocol field.")
+		if (template as Dictionary).has("resourceGroup"):
+			return _failure("resources/templates/list should not expose Dock template grouping as a top-level protocol field.")
 	var scene_template_metadata := _find_template(templates, "godot-dotnet-mcp://scene/{path}")
 	if str(scene_template_metadata.get("name", "")) != "场景文本":
 		return _failure("resources/templates/list should localize template names through the active locale.")

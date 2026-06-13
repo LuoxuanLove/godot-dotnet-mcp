@@ -6,9 +6,13 @@ extends RefCounted
 
 const MCPResourcesServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
 const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_prompts_service.gd")
+const ResourceTreePresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/resource_tree_presentation_service.gd")
+const PromptTreePresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/prompt_tree_presentation_service.gd")
 
 var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
+var _resource_tree_presentation_service = ResourceTreePresentationServiceScript.new()
+var _prompt_tree_presentation_service = PromptTreePresentationServiceScript.new()
 
 
 func configure(context = null) -> void:
@@ -22,16 +26,22 @@ func configure(context = null) -> void:
 func dispose() -> void:
 	_resources_service.dispose()
 	_prompts_service.dispose()
+	_resource_tree_presentation_service = ResourceTreePresentationServiceScript.new()
+	_prompt_tree_presentation_service = PromptTreePresentationServiceScript.new()
 
 
 func build_projection() -> Dictionary:
 	var resources := _project_resources(_resources_service.build_resources_list_result().get("resources", []), false)
 	var resource_templates := _project_resources(_resources_service.build_resource_templates_list_result().get("resourceTemplates", []), true)
 	var prompts := _project_prompts(_prompts_service.build_prompts_list_result().get("prompts", []))
+	var resource_presentation := _resource_tree_presentation_service.build_resource_catalog_tree(resources, resource_templates)
+	var prompt_presentation := _prompt_tree_presentation_service.build_prompt_catalog_tree(prompts)
 	return {
 		"mcp_resources": resources,
 		"mcp_resource_templates": resource_templates,
 		"mcp_prompts": prompts,
+		"mcp_resource_presentation": resource_presentation,
+		"mcp_prompt_presentation": prompt_presentation,
 		"mcp_catalog_counts": {
 			"resources": resources.size(),
 			"resource_templates": resource_templates.size(),
@@ -58,6 +68,7 @@ func _project_resources(entries, is_template: bool) -> Array[Dictionary]:
 			"mimeType": str(source.get("mimeType", "")),
 			"icons": _duplicate_array(source.get("icons", [])),
 			"resource_kind": _resource_kind_for_entry(source, is_template),
+			"resource_group": _resource_group_for_entry(source, is_template),
 			"is_template": is_template
 		}
 		projected.append(projected_entry)
@@ -96,6 +107,18 @@ func _resource_kind_for_entry(entry: Dictionary, is_template: bool) -> String:
 	if is_template:
 		return "template"
 	return "resource"
+
+
+func _resource_group_for_entry(entry: Dictionary, is_template: bool) -> String:
+	var meta = entry.get("_meta", {})
+	var protocol_group := ""
+	if meta is Dictionary:
+		protocol_group = str((meta as Dictionary).get("resourceGroup", "")).strip_edges()
+	if not protocol_group.is_empty():
+		return protocol_group
+	if is_template:
+		return "resource_templates"
+	return ""
 
 
 func _prompt_kind_for_entry(entry: Dictionary) -> String:

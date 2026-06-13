@@ -746,6 +746,7 @@ func _with_catalog_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
 		if not (meta is Dictionary):
 			meta = {}
 		(meta as Dictionary)["resourceKind"] = kind
+		(meta as Dictionary)["resourceGroup"] = _resource_group_for_entry(metadata, kind)
 		metadata["_meta"] = meta
 	return metadata
 
@@ -816,6 +817,37 @@ func _resource_kind_for_entry(entry: Dictionary) -> String:
 			return "diagnostic"
 		_:
 			return "resource"
+
+
+func _resource_group_for_entry(entry: Dictionary, resource_kind: String) -> String:
+	if entry.has("uriTemplate"):
+		return "resource_templates"
+	var uri := str(entry.get("uri", ""))
+	match uri:
+		GUIDES_INDEX_URI, GUIDES_CAPABILITIES_URI, GUIDES_UI_AUTOMATION_URI:
+			return "guides"
+		STATE_PROJECT_SUMMARY_URI, PROJECT_INFO_URI:
+			return "project_state"
+		STATE_EDITOR_URI:
+			return "editor_state"
+		EDITOR_LOG_OUTPUT_URI, EDITOR_LOG_ERRORS_URI, ACTIVITY_STATUS_URI, ACTIVITY_RECENT_URI:
+			return "activity_logs"
+		TOOLS_CATALOG_EXPOSED_URI, TOOLS_CATALOG_VISIBLE_URI, TOOL_CATALOG_URI:
+			return "tool_catalog"
+		DIAGNOSTICS_SUMMARY_URI:
+			return "advanced_resources"
+		_:
+			match resource_kind:
+				"guide":
+					return "guides"
+				"activity", "log":
+					return "activity_logs"
+				"catalog":
+					return "tool_catalog"
+				"template":
+					return "resource_templates"
+				_:
+					return "advanced_resources"
 
 
 func _resource_template_icon_for_uri(uri_template: String) -> String:

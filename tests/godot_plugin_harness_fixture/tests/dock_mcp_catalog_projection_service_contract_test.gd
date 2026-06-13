@@ -44,11 +44,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var resources: Array = projection.get("mcp_resources", [])
 	var templates: Array = projection.get("mcp_resource_templates", [])
 	var prompts: Array = projection.get("mcp_prompts", [])
+	var resource_presentation: Dictionary = projection.get("mcp_resource_presentation", {})
+	var prompt_presentation: Dictionary = projection.get("mcp_prompt_presentation", {})
 	var counts: Dictionary = projection.get("mcp_catalog_counts", {})
 	if resources.is_empty() or templates.is_empty() or prompts.is_empty():
 		return _failure("Projection should expose resources, resource templates, and prompts for Dock tabs.")
 	if int(counts.get("resources", -1)) != resources.size() or int(counts.get("resource_templates", -1)) != templates.size() or int(counts.get("prompts", -1)) != prompts.size():
 		return _failure("Projection counts should match the projected lists.")
+	if resource_presentation.is_empty() or prompt_presentation.is_empty():
+		return _failure("Projection should expose explicit resource and prompt presentation trees for Dock tabs.")
 
 	var guide := _find_resource(resources, "godot-dotnet-mcp://guides/index")
 	if guide.is_empty() or str(guide.get("resource_kind", "")) != "guide":
@@ -64,6 +68,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var activity := _find_resource(resources, "godot-dotnet-mcp://activity/status")
 	if activity.is_empty() or str(activity.get("resource_kind", "")) != "activity":
 		return _failure("Projection should classify activity resources.")
+	var editor_state := _find_resource(resources, "godot-dotnet-mcp://state/editor")
+	if editor_state.is_empty() or str(editor_state.get("resource_group", "")) != "editor_state":
+		return _failure("Projection should preserve protocol resourceGroup metadata for editor state resources.")
 	var template := _find_resource(templates, "godot-dotnet-mcp://scene/{path}")
 	if template.is_empty() or str(template.get("resource_kind", "")) != "template" or not bool(template.get("is_template", false)):
 		return _failure("Projection should classify resource templates and preserve template flags.")
@@ -80,6 +87,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var debug_prompt := _find_prompt(prompts, "godot.debug_triage")
 	if debug_prompt.is_empty() or str(debug_prompt.get("prompt_kind", "")) != "debug":
 		return _failure("Projection should classify debug workflow prompts from protocol metadata.")
+	if not _presentation_has_group_entry(resource_presentation.get("resourceTree", []), "guides", "resource_entry", "godot-dotnet-mcp://guides/index"):
+		return _failure("Resource presentation should place guide resources under the Guides group.")
+	if not _presentation_has_group_entry(resource_presentation.get("resourceTree", []), "resource_templates", "resource_template", "godot-dotnet-mcp://scene/{path}"):
+		return _failure("Resource presentation should place templates under the Resource Templates group.")
+	if not _presentation_has_group_entry(resource_presentation.get("resourceTree", []), "activity_logs", "resource_entry", "godot-dotnet-mcp://activity/status"):
+		return _failure("Resource presentation should group activity and log resources from metadata kinds.")
+	if not _presentation_has_group_entry(resource_presentation.get("resourceTree", []), "editor_state", "resource_entry", "godot-dotnet-mcp://state/editor"):
+		return _failure("Resource presentation should place editor state resources under the Editor State metadata group.")
+	if not _presentation_has_group_entry(prompt_presentation.get("promptTree", []), "project_understanding", "prompt_entry", "godot.project_orientation"):
+		return _failure("Prompt presentation should place orientation prompts under Project Understanding.")
+	if not _presentation_has_group_entry(prompt_presentation.get("promptTree", []), "runtime_validation", "prompt_entry", "godot.debug_triage"):
+		return _failure("Prompt presentation should place debug prompts under Runtime Validation.")
+	var prompt_node := _find_presentation_entry(prompt_presentation.get("promptTree", []), "godot.project_orientation")
+	if prompt_node.is_empty() or not _presentation_node_has_child_kind(prompt_node, "prompt_argument"):
+		return _failure("Prompt presentation should model arguments as prompt_argument children.")
 	if _projection_source_still_uses_substring_classifiers():
 		return _failure("Dock MCP catalog projection should consume protocol kind metadata instead of rebuilding private URI/name substring classifiers.")
 
@@ -110,6 +132,45 @@ func _has_argument(entries, name: String) -> bool:
 		return false
 	for entry in entries as Array:
 		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return true
+	return false
+
+
+func _presentation_has_group_entry(groups, group_id: String, node_kind: String, entry_id: String) -> bool:
+	var entry := _find_presentation_entry_in_group(groups, group_id, entry_id)
+	return not entry.is_empty() and str(entry.get("kind", "")) == node_kind
+
+
+func _find_presentation_entry(groups, entry_id: String) -> Dictionary:
+	if not (groups is Array):
+		return {}
+	for raw_group in groups as Array:
+		if not (raw_group is Dictionary):
+			continue
+		for raw_child in (raw_group as Dictionary).get("children", []):
+			if raw_child is Dictionary and str((raw_child as Dictionary).get("id", "")) == entry_id:
+				return raw_child as Dictionary
+	return {}
+
+
+func _find_presentation_entry_in_group(groups, group_id: String, entry_id: String) -> Dictionary:
+	if not (groups is Array):
+		return {}
+	for raw_group in groups as Array:
+		if not (raw_group is Dictionary):
+			continue
+		var group := raw_group as Dictionary
+		if str(group.get("id", "")) != group_id:
+			continue
+		for raw_child in group.get("children", []):
+			if raw_child is Dictionary and str((raw_child as Dictionary).get("id", "")) == entry_id:
+				return raw_child as Dictionary
+	return {}
+
+
+func _presentation_node_has_child_kind(node: Dictionary, child_kind: String) -> bool:
+	for raw_child in node.get("children", []):
+		if raw_child is Dictionary and str((raw_child as Dictionary).get("kind", "")) == child_kind:
 			return true
 	return false
 
