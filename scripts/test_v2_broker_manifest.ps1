@@ -154,6 +154,22 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "broker_reports_structured_scope_validation" {
+        $path = Join-Path $tempRoot "structured-scope-validation.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_scope.reports_structured_validation = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_scope_validation_reason_codes_are_complete" {
+        $path = Join-Path $tempRoot "structured-scope-reasons.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_scope.validation_reason_codes = @("accepted", "missing_project_id")
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "session_lifecycle_requires_positive_lease" {
         $path = Join-Path $tempRoot "session-lease.json"
         $manifest = Copy-Manifest -Path $path

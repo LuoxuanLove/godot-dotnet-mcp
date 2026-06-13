@@ -30,7 +30,18 @@
   "session_scope": {
     "requires_project_id": true,
     "requires_session_id": true,
-    "rejects_cross_project_session": true
+    "rejects_cross_project_session": true,
+    "reports_structured_validation": true,
+    "validation_reason_codes": [
+      "accepted",
+      "missing_project_id",
+      "missing_session_id",
+      "unknown_session_id",
+      "project_session_mismatch",
+      "expired_session",
+      "inactive_session",
+      "capability_unavailable"
+    ]
   },
   "session_lifecycle": {
     "default_lease_minutes": 30,
