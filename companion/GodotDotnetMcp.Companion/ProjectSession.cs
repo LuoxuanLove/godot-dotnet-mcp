@@ -55,16 +55,25 @@ public sealed record ProjectDescriptor
     private static string BuildProjectId(string projectRoot, string? projectFilePath)
     {
         var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
-        var normalizedProjectFile = string.IsNullOrWhiteSpace(projectFilePath)
-            ? string.Empty
-            : Path.GetRelativePath(normalized, Path.GetFullPath(projectFilePath));
+        var comparisonRoot = normalized;
         if (OperatingSystem.IsWindows())
         {
-            normalized = normalized.ToUpperInvariant();
-            normalizedProjectFile = normalizedProjectFile.ToUpperInvariant();
+            comparisonRoot = comparisonRoot.ToUpperInvariant();
         }
 
-        var hashInput = normalized + "\n" + normalizedProjectFile.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var hashInput = comparisonRoot;
+        if (!string.IsNullOrWhiteSpace(projectFilePath))
+        {
+            var normalizedProjectFile = Path.GetRelativePath(normalized, Path.GetFullPath(projectFilePath))
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+            if (OperatingSystem.IsWindows())
+            {
+                normalizedProjectFile = normalizedProjectFile.ToUpperInvariant();
+            }
+
+            hashInput += "\n" + normalizedProjectFile;
+        }
+
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(hashInput));
         return "project_" + Convert.ToHexString(hash[..8]).ToLowerInvariant();
     }

@@ -32,7 +32,7 @@ public sealed class ProjectInventoryAnalyzer
             ? new ResourceReferenceGraphAnalyzer().Analyze(normalizedRoot)
             : EmptyResourceGraph();
 
-        var descriptor = TryCreateDescriptor(normalizedRoot, isGodotProject, csprojFiles.FirstOrDefault());
+        var descriptor = TryCreateDescriptor(normalizedRoot, isGodotProject);
         var capabilities = BuildCapabilities(isGodotProject, dotnetWorkspace);
 
         return new ProjectInventory(
@@ -53,14 +53,14 @@ public sealed class ProjectInventoryAnalyzer
         return new ResourceReferenceGraph([], [], [], [], []);
     }
 
-    private static ProjectDescriptor? TryCreateDescriptor(string projectRoot, bool isGodotProject, string? firstProjectFile)
+    private static ProjectDescriptor? TryCreateDescriptor(string projectRoot, bool isGodotProject)
     {
         if (!isGodotProject)
         {
             return null;
         }
 
-        return ProjectDescriptor.FromRoot(projectRoot, firstProjectFile);
+        return ProjectDescriptor.FromRoot(projectRoot);
     }
 
     private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, DotnetWorkspaceGraph dotnetWorkspace)

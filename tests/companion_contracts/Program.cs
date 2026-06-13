@@ -90,6 +90,7 @@ static void ProjectDescriptorDisambiguatesSameRootProjectFiles()
     var gameDescriptor = ProjectDescriptor.FromRoot(root, gameProject);
     var toolsDescriptor = ProjectDescriptor.FromRoot(root, toolsProject);
 
+    AssertEqual(rootDescriptor.ProjectId, ProjectDescriptor.FromRoot(root).ProjectId);
     AssertNotEqual(rootDescriptor.ProjectId, gameDescriptor.ProjectId);
     AssertNotEqual(gameDescriptor.ProjectId, toolsDescriptor.ProjectId);
     AssertNotEqual(rootDescriptor.ProjectId, toolsDescriptor.ProjectId);

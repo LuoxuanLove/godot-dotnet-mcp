@@ -54,6 +54,7 @@ static void ReportsStaticInventoryForGodotDotnetProject()
 
     AssertTrue(inventory.IsGodotProject);
     AssertTrue(inventory.ProjectId?.StartsWith("project_", StringComparison.Ordinal) == true);
+    AssertEqual(ProjectDescriptor.FromRoot(root).ProjectId, inventory.ProjectId);
     AssertEqual(CompanionMode.StaticHeadless, inventory.Mode);
     AssertTrue(inventory.HasPluginDirectory);
     AssertEqual(1, inventory.CSharpProjectFiles.Count);
