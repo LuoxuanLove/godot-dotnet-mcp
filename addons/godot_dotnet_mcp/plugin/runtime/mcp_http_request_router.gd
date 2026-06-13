@@ -242,9 +242,6 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 	var session_guard := _validate_mcp_session_id_header(headers)
 	if not session_guard.is_empty():
 		return session_guard
-	var active_session_guard := _validate_mcp_existing_session(headers)
-	if not active_session_guard.is_empty():
-		return active_session_guard
 
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_sse_response(accept_header):
@@ -270,6 +267,16 @@ func _validate_mcp_sse_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
+
+	if str(headers.get("mcp-session-id", "")).strip_edges().is_empty():
+		return {
+			"error": "Missing MCP session id",
+			"status": 400,
+			"details": "GET /mcp requires an initialized Mcp-Session-Id."
+		}
+	var active_session_guard := _validate_mcp_existing_session(headers)
+	if not active_session_guard.is_empty():
+		return active_session_guard
 
 	return {}
 

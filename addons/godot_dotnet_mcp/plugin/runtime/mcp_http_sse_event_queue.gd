@@ -136,7 +136,7 @@ func resume_status(session_id: String, last_event_id: String) -> Dictionary:
 			"base_index": current_base,
 			"next_index": current_end
 		}
-	var has_session := _event_logs.has(normalized_session)
+	var has_session := _issued_sessions.has(normalized_session) or _event_logs.has(normalized_session)
 	var log := _log_for_session(normalized_session)
 	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	var end_index := base_index + log.size()
