@@ -1,4 +1,4 @@
-name: version-policy
+﻿name: version-policy
 
 on:
   pull_request_target:
@@ -30,6 +30,7 @@ jobs:
           EVENT_PULL_NUMBER: ${{ github.event.pull_request.number }}
           INPUT_PULL_NUMBER: ${{ github.event.inputs.pull_number }}
           REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -43,7 +44,7 @@ jobs:
 
           $pr = gh pr view $pullNumber --repo $env:REPOSITORY --json baseRefName,headRefName,headRepositoryOwner | ConvertFrom-Json
           $trustedPolicyRef = $pr.baseRefName
-          if ($pr.baseRefName -eq "dev" -and $pr.headRefName -eq "refactor/v2.0.0" -and $pr.headRepositoryOwner.login -eq $env:GITHUB_REPOSITORY_OWNER) {
+          if ($pr.baseRefName -eq "dev" -and $pr.headRefName -eq "refactor/v2.0.0" -and $pr.headRepositoryOwner.login -eq $env:REPOSITORY_OWNER) {
             $trustedPolicyRef = "refactor/v2.0.0"
           }
           if (

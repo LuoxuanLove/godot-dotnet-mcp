@@ -309,39 +309,39 @@ if ($changes.Count -eq 0) {
 }
 
 if ($BaseBranch -eq "refactor/v1.4.0" -and $HeadBranch -eq "refactor/v2.0.0") {
-	if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
-		throw "v2.0 refactor migration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
-	}
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v2.0 refactor migration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
 
-	Write-Host "Version policy validated: v2.0 refactor migration branch changes public version metadata:"
-	foreach ($change in $changes) {
-		Write-Host "- $change"
-	}
-	exit 0
+    Write-Host "Version policy validated: v2.0 refactor migration branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
+    exit 0
 }
 
 if ($BaseBranch -eq "refactor/v2.0.0" -and $HeadBranch -eq "chore/v2.0-version-baseline") {
-	if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
-		throw "v2.0 refactor baseline version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
-	}
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v2.0 refactor baseline version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
 
     Write-Host "Version policy validated: v2.0 refactor baseline branch changes public version metadata:"
     foreach ($change in $changes) {
         Write-Host "- $change"
-	}
-	exit 0
+    }
+    exit 0
 }
 
 if ($BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v2.0.0") {
-	if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
-		throw "v2.0 refactor integration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
-	}
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v2.0 refactor integration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
 
-	Write-Host "Version policy validated: v2.0 refactor integration branch changes public version metadata:"
-	foreach ($change in $changes) {
-		Write-Host "- $change"
-	}
-	exit 0
+    Write-Host "Version policy validated: v2.0 refactor integration branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
+    exit 0
 }
 
 if ($HeadBranch -like "release/*") {
