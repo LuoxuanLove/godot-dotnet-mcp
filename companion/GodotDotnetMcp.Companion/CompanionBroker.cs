@@ -8,6 +8,9 @@ public sealed class CompanionBroker
     public const int DefaultMaxActiveSessions = 256;
     public const int DefaultMaxActiveSessionsPerProject = 32;
 
+    private static readonly IReadOnlyCollection<CompanionCapability> EmptyCapabilities =
+        Array.AsReadOnly(Array.Empty<CompanionCapability>());
+
     private readonly ConcurrentDictionary<string, ProjectDescriptor> _projects = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProjectSession> _sessions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, EditorBridgeStatus> _editorBridgeStatuses = new(StringComparer.Ordinal);
@@ -292,9 +295,12 @@ public sealed class CompanionBroker
 
     public bool StopSession(ToolRequestScope scope)
     {
-        var session = ResolveSession(scope, renewLease: false);
-        session.Revoke(_clock());
-        return _sessions.TryRemove(scope.SessionId, out _);
+        lock (_sessionLock)
+        {
+            var session = ResolveSession(scope, renewLease: false);
+            session.Revoke(_clock());
+            return _sessions.TryRemove(scope.SessionId, out _);
+        }
     }
 
     public ProjectSession RenewSession(ToolRequestScope scope)
@@ -332,6 +338,23 @@ public sealed class CompanionBroker
         }
     }
 
+    public ToolAvailability EvaluateToolAvailability(
+        ToolRequestScope scope,
+        string toolName,
+        CompanionCapability? requiredCapability = null)
+    {
+        if (string.IsNullOrWhiteSpace(toolName))
+        {
+            throw new ArgumentException("Tool name is required.", nameof(toolName));
+        }
+
+        lock (_sessionLock)
+        {
+            var nowUtc = _clock();
+            return CreateToolAvailability(scope, toolName.Trim(), nowUtc, requiredCapability);
+        }
+    }
+
     public ProjectSession ResolveSession(ToolRequestScope scope)
     {
         return ResolveSession(scope, renewLease: true);
@@ -339,6 +362,17 @@ public sealed class CompanionBroker
 
     public ToolScopeValidationResult ValidateToolScope(
         ToolRequestScope scope,
+        CompanionCapability? requiredCapability = null)
+    {
+        lock (_sessionLock)
+        {
+            return ValidateToolScope(scope, _clock(), requiredCapability);
+        }
+    }
+
+    private ToolScopeValidationResult ValidateToolScope(
+        ToolRequestScope scope,
+        DateTimeOffset nowUtc,
         CompanionCapability? requiredCapability = null)
     {
         if (string.IsNullOrWhiteSpace(scope.ProjectId))
@@ -370,7 +404,6 @@ public sealed class CompanionBroker
                 session.Identity);
         }
 
-        var nowUtc = _clock();
         if (session.IsExpired(nowUtc))
         {
             return ToolScopeValidationResult.CreateRejected(
@@ -396,6 +429,64 @@ public sealed class CompanionBroker
         }
 
         return ToolScopeValidationResult.CreateAccepted(session.Identity);
+    }
+
+    private ToolAvailability CreateToolAvailability(
+        ToolRequestScope scope,
+        string toolName,
+        DateTimeOffset nowUtc,
+        CompanionCapability? requiredCapability)
+    {
+        var validation = ValidateToolScope(scope, nowUtc, requiredCapability);
+        if (validation.Session is null || validation.Reason is ToolScopeValidationReason.ProjectSessionMismatch)
+        {
+            return new ToolAvailability(
+                toolName,
+                validation.Accepted,
+                validation.Reason,
+                validation.Message,
+                requiredCapability,
+                null,
+                EmptyCapabilities);
+        }
+
+        var capabilities = TryCreateScopedCapabilities(scope, nowUtc, validation.Session.SessionId);
+        return new ToolAvailability(
+            toolName,
+            validation.Accepted,
+            validation.Reason,
+            validation.Message,
+            requiredCapability,
+            validation.Session,
+            capabilities);
+    }
+
+    private IReadOnlyCollection<CompanionCapability> TryCreateScopedCapabilities(
+        ToolRequestScope scope,
+        DateTimeOffset nowUtc,
+        string validatedSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(scope.ProjectId) || string.IsNullOrWhiteSpace(scope.SessionId))
+        {
+            return EmptyCapabilities;
+        }
+
+        if (!_sessions.TryGetValue(scope.SessionId, out var session))
+        {
+            return EmptyCapabilities;
+        }
+
+        if (!string.Equals(session.Identity.SessionId, validatedSessionId, StringComparison.Ordinal))
+        {
+            return EmptyCapabilities;
+        }
+
+        if (!string.Equals(session.Identity.ProjectId, scope.ProjectId, StringComparison.Ordinal))
+        {
+            return EmptyCapabilities;
+        }
+
+        return session.CreateCapabilitySnapshot(nowUtc).Capabilities;
     }
 
     private ProjectSession ResolveSession(ToolRequestScope scope, bool renewLease)
@@ -528,6 +619,15 @@ public sealed record BrokerProjectSummary(
 
 public sealed record SessionCapabilitySnapshot(
     ProjectSessionIdentity Session,
+    IReadOnlyCollection<CompanionCapability> Capabilities);
+
+public sealed record ToolAvailability(
+    string ToolName,
+    bool Available,
+    ToolScopeValidationReason Reason,
+    string Message,
+    CompanionCapability? RequiredCapability,
+    ProjectSessionIdentity? Session,
     IReadOnlyCollection<CompanionCapability> Capabilities);
 
 public sealed record BrokerLifecycleOptions(
