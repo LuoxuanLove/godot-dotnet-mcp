@@ -109,7 +109,7 @@ function Test-IsV2StackBaseBranch {
 function Test-IsAllowedBaseBranch {
     param([string]$Branch)
 
-    return $Branch -in @("dev", "refactor/v1.4.0", "v2.0") -or (Test-IsV2StackBaseBranch -Branch $Branch)
+    return $Branch -in @("dev", "refactor/v1.4.0", "refactor/v2.0.0", "v2.0") -or (Test-IsV2StackBaseBranch -Branch $Branch)
 }
 
 function Get-VersionValue {
@@ -138,7 +138,7 @@ if ([string]::IsNullOrWhiteSpace($BaseBranch)) {
 }
 
 if (-not (Test-IsAllowedBaseBranch -Branch $BaseBranch)) {
-    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, v2.0, or a v2 stacked base branch. Actual base branch: $BaseBranch"
+    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, refactor/v2.0.0, v2.0, or a v2 stacked base branch. Actual base branch: $BaseBranch"
 }
 
 if ([string]::IsNullOrWhiteSpace($HeadBranch)) {
@@ -175,6 +175,18 @@ foreach ($field in $versionFields) {
 
 if ($changes.Count -eq 0) {
     Write-Host "Version policy validated: public version metadata remains unchanged."
+    exit 0
+}
+
+if ($BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v2.0.0") {
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v2.0 refactor integration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
+
+    Write-Host "Version policy validated: v2.0 refactor integration branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
     exit 0
 }
 
