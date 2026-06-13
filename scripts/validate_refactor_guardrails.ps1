@@ -244,7 +244,7 @@ foreach ($relativeReadmePath in $releaseFacingReadmes) {
 }
 
 $workflowGuardSpecs = @(
-    @{ Path = ".github/workflows/pr-policy.yml"; Required = @("merge_group:", "python scripts/test_validate_pr_policy.py") },
+    @{ Path = ".github/workflows/pr-policy.yml"; Required = @("merge_group:", "python scripts/test_validate_pr_policy.py", "release/v2.0.0-baseline", "feature/v2-*", "docs/v2-*", "ci/v2-*") },
     @{ Path = ".github/workflows/version-policy.yml"; Required = @("merge_group:") },
     @{ Path = ".github/workflows/publish-plugin.yml"; Required = @("Require release tag ref", 'RELEASE_REF: ${{ github.ref }}', 'StartsWith("refs/tags/")') }
 )

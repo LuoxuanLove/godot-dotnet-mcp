@@ -4,10 +4,14 @@ $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $PSScriptRoot
 $validatorPath = Join-Path $scriptRoot "scripts\validate_refactor_guardrails.ps1"
+$versionPolicyValidatorPath = Join-Path $scriptRoot "scripts\validate_pr_version_policy.ps1"
 $manifestPath = Join-Path $scriptRoot "scripts\contract_case_manifest.json"
 $roslynRuntimeGuardPath = Join-Path $scriptRoot "scripts\validate_roslyn_runtime_bundle.ps1"
 $releaseChangelogValidatorPath = Join-Path $scriptRoot "scripts\validate_release_changelog_section.ps1"
 $releaseChangelogTestPath = Join-Path $scriptRoot "scripts\test_release_changelog_section.ps1"
+$roslynRuntimeServicePath = Join-Path $scriptRoot "addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd"
+$dotnetBridgeProgramPath = Join-Path $scriptRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs"
+$dotnetBridgeRuntimeCliTestPath = Join-Path $scriptRoot "scripts\test_dotnet_bridge_runtime_cli.ps1"
 
 function Write-Utf8NoBom {
     param(
@@ -36,14 +40,20 @@ function Write-GuardrailFixture {
     git -C $RepositoryRoot config user.name "Fixture" | Out-Null
 
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\plugin\runtime") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\dotnet_bridge") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "scripts") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot ".github\workflows") -Force | Out-Null
 
     Copy-Item -LiteralPath $validatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_refactor_guardrails.ps1")
+    Copy-Item -LiteralPath $versionPolicyValidatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_pr_version_policy.ps1")
     Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $RepositoryRoot "scripts\contract_case_manifest.json")
     Copy-Item -LiteralPath $roslynRuntimeGuardPath -Destination (Join-Path $RepositoryRoot "scripts\validate_roslyn_runtime_bundle.ps1")
     Copy-Item -LiteralPath $releaseChangelogValidatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_release_changelog_section.ps1")
     Copy-Item -LiteralPath $releaseChangelogTestPath -Destination (Join-Path $RepositoryRoot "scripts\test_release_changelog_section.ps1")
+    Copy-Item -LiteralPath $roslynRuntimeServicePath -Destination (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd")
+    Copy-Item -LiteralPath $dotnetBridgeProgramPath -Destination (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs")
+    Copy-Item -LiteralPath $dotnetBridgeRuntimeCliTestPath -Destination (Join-Path $RepositoryRoot "scripts\test_dotnet_bridge_runtime_cli.ps1")
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
@@ -96,6 +106,13 @@ on:
   pull_request:
   merge_group:
 jobs:
+  pr-target-dev:
+    steps:
+      - run: |
+          case "$base_ref" in
+            dev|refactor/v1.4.0|refactor/v2.0.0|v2.0|release/v2.0.0-baseline|feature/v2-*|docs/v2-*|ci/v2-*)
+              ;;
+          esac
   pr-standards:
     steps:
       - run: python scripts/test_validate_pr_policy.py
@@ -106,8 +123,29 @@ on:
   pull_request_target:
   merge_group:
 '@
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot ".github\workflows\publish-plugin.yml") -Text @'
+name: publish-plugin
+on:
+  workflow_dispatch:
+jobs:
+  publish-plugin:
+    steps:
+      - name: Require release tag ref
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          if (-not $env:RELEASE_REF.StartsWith("refs/tags/")) {
+            throw "publish-plugin validates release tags only"
+          }
+      - name: Run release preflight
+        run: echo ok
+      - name: Render release notes
+        run: echo ok
+      - name: Upload release notes
+        run: echo ok
+'@
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml docs/en/process/v2.0.0-protocol-refactor-plan.md docs/en/process/v2.0.0-refactor-progress-tracker.md | Out-Null
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd addons/godot_dotnet_mcp/dotnet_bridge/Program.cs scripts/validate_refactor_guardrails.ps1 scripts/validate_pr_version_policy.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 scripts/test_dotnet_bridge_runtime_cli.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml .github/workflows/publish-plugin.yml docs/en/process/v2.0.0-protocol-refactor-plan.md docs/en/process/v2.0.0-refactor-progress-tracker.md | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 
@@ -155,7 +193,7 @@ $cleanRootReadme = @"
 
 ## Installation
 
-Install from the Godot Asset Library or copy `addons/godot_dotnet_mcp` directly into a Godot project.
+Install from the Godot Asset Library or prepared installable addon contents.
 "@
 
 $cleanAddonReadme = @"
