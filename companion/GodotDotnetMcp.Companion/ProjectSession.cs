@@ -342,9 +342,15 @@ public sealed class ProjectSession
 
     public EditorLiveUpgradeEligibility EvaluateEditorLiveUpgrade(EditorBridgeStatus bridgeStatus)
     {
+        return EvaluateEditorLiveUpgrade(bridgeStatus, _clock());
+    }
+
+    internal EditorLiveUpgradeEligibility EvaluateEditorLiveUpgrade(
+        EditorBridgeStatus bridgeStatus,
+        DateTimeOffset nowUtc)
+    {
         lock (_stateLock)
         {
-            var nowUtc = _clock();
             if (_identity.Revoked)
             {
                 return CreateEditorLiveUpgradeEligibility(

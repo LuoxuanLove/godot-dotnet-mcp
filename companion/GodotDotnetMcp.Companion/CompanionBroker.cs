@@ -338,6 +338,94 @@ public sealed class CompanionBroker
         }
     }
 
+    public SessionHealthSnapshot EvaluateSessionHealth(ToolRequestScope scope)
+    {
+        lock (_sessionLock)
+        {
+            var nowUtc = _clock();
+            if (string.IsNullOrWhiteSpace(scope.ProjectId))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.MissingProjectId,
+                    "Session health requests must include project_id.",
+                    null,
+                    null);
+            }
+
+            if (string.IsNullOrWhiteSpace(scope.SessionId))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.MissingSessionId,
+                    "Session health requests must include session_id.",
+                    null,
+                    null);
+            }
+
+            if (!_projects.ContainsKey(scope.ProjectId))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.UnknownProjectId,
+                    $"Unknown project_id: {scope.ProjectId}",
+                    null,
+                    null);
+            }
+
+            var bridgeStatus = GetKnownProjectBridgeStatus(scope.ProjectId);
+            if (!_sessions.TryGetValue(scope.SessionId, out var session))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.UnknownSessionId,
+                    $"Unknown session_id: {scope.SessionId}",
+                    null,
+                    bridgeStatus);
+            }
+
+            if (!string.Equals(session.Identity.ProjectId, scope.ProjectId, StringComparison.Ordinal))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.ProjectSessionMismatch,
+                    "Tool call project_id does not match the resolved session.",
+                    null,
+                    bridgeStatus);
+            }
+
+            if (session.IsExpired(nowUtc))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.ExpiredSession,
+                    "Project session lease has expired.",
+                    session.Identity,
+                    bridgeStatus,
+                    session.EvaluateEditorLiveUpgrade(bridgeStatus, nowUtc));
+            }
+
+            if (!session.IsActive(nowUtc))
+            {
+                return SessionHealthSnapshot.CreateRejected(
+                    SessionHealthState.InactiveSession,
+                    "Project session is not active.",
+                    session.Identity,
+                    bridgeStatus,
+                    session.EvaluateEditorLiveUpgrade(bridgeStatus, nowUtc));
+            }
+
+            var capabilities = session.CreateCapabilitySnapshot(nowUtc).Capabilities;
+            var state = session.Identity.Mode is CompanionMode.EditorLive
+                ? SessionHealthState.EditorLive
+                : SessionHealthState.StaticHeadless;
+            return new SessionHealthSnapshot(
+                Available: true,
+                State: state,
+                Message: state is SessionHealthState.EditorLive
+                    ? "Project session is active in editor-live mode."
+                    : "Project session is active in static/headless mode.",
+                Session: session.Identity,
+                BridgeStatus: bridgeStatus,
+                EditorLiveUpgrade: session.EvaluateEditorLiveUpgrade(bridgeStatus, nowUtc),
+                Capabilities: capabilities);
+        }
+    }
+
     public ToolAvailability EvaluateToolAvailability(
         ToolRequestScope scope,
         string toolName,
@@ -592,6 +680,13 @@ public sealed class CompanionBroker
         }
     }
 
+    private EditorBridgeStatus GetKnownProjectBridgeStatus(string projectId)
+    {
+        return _editorBridgeStatuses.TryGetValue(projectId, out var status)
+            ? status
+            : EditorBridgeStatus.Disabled(projectId);
+    }
+
     private static bool CanProvideEditorLive(EditorBridgeStatus bridgeStatus)
     {
         return bridgeStatus.ProvidesLiveEditorState &&
@@ -620,6 +715,54 @@ public sealed record BrokerProjectSummary(
 public sealed record SessionCapabilitySnapshot(
     ProjectSessionIdentity Session,
     IReadOnlyCollection<CompanionCapability> Capabilities);
+
+public enum SessionHealthState
+{
+    StaticHeadless,
+    EditorLive,
+    MissingProjectId,
+    MissingSessionId,
+    UnknownProjectId,
+    UnknownSessionId,
+    ProjectSessionMismatch,
+    ExpiredSession,
+    InactiveSession,
+}
+
+public sealed record SessionHealthSnapshot(
+    bool Available,
+    SessionHealthState State,
+    string Message,
+    ProjectSessionIdentity? Session,
+    EditorBridgeStatus? BridgeStatus,
+    EditorLiveUpgradeEligibility? EditorLiveUpgrade,
+    IReadOnlyCollection<CompanionCapability> Capabilities)
+{
+    private static readonly IReadOnlyCollection<CompanionCapability> EmptyCapabilities =
+        Array.AsReadOnly(Array.Empty<CompanionCapability>());
+
+    public static SessionHealthSnapshot CreateRejected(
+        SessionHealthState state,
+        string message,
+        ProjectSessionIdentity? session,
+        EditorBridgeStatus? bridgeStatus,
+        EditorLiveUpgradeEligibility? editorLiveUpgrade = null)
+    {
+        if (state is SessionHealthState.StaticHeadless or SessionHealthState.EditorLive)
+        {
+            throw new ArgumentException("Active session health snapshots must be created directly.", nameof(state));
+        }
+
+        return new SessionHealthSnapshot(
+            Available: false,
+            state,
+            message,
+            session,
+            bridgeStatus,
+            editorLiveUpgrade,
+            EmptyCapabilities);
+    }
+}
 
 public sealed record ToolAvailability(
     string ToolName,
