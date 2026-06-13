@@ -32,7 +32,9 @@
     "http_loopback": {
       "enabled_by_default": false,
       "host": "127.0.0.1",
-      "requires_explicit_port": true
+      "requires_explicit_port": true,
+      "port_min": 1,
+      "port_max": 65535
     }
   },
   "session_scope": {

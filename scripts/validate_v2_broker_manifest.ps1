@@ -111,6 +111,11 @@ if ((Require-String -Object $httpLoopback -Name "host" -Context "transport.http_
     throw "HTTP loopback transport must be loopback-only."
 }
 Assert-Bool -Actual (Require-Bool -Object $httpLoopback -Name "requires_explicit_port" -Context "transport.http_loopback") -Expected $true -Message "HTTP loopback transport must require an explicit port."
+$httpPortMin = Require-PositiveInteger -Object $httpLoopback -Name "port_min" -Context "transport.http_loopback"
+$httpPortMax = Require-PositiveInteger -Object $httpLoopback -Name "port_max" -Context "transport.http_loopback"
+if ($httpPortMin -ne 1 -or $httpPortMax -ne 65535) {
+    throw "HTTP loopback transport port range must be 1 through 65535."
+}
 
 $scope = $manifest.session_scope
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "requires_project_id" -Context "session_scope") -Expected $true -Message "Broker session tools must require project_id."
