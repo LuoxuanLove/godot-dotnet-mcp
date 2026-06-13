@@ -245,7 +245,8 @@ foreach ($relativeReadmePath in $releaseFacingReadmes) {
 
 $workflowGuardSpecs = @(
     @{ Path = ".github/workflows/pr-policy.yml"; Required = @("merge_group:", "python scripts/test_validate_pr_policy.py") },
-    @{ Path = ".github/workflows/version-policy.yml"; Required = @("merge_group:") }
+    @{ Path = ".github/workflows/version-policy.yml"; Required = @("merge_group:") },
+    @{ Path = ".github/workflows/publish-plugin.yml"; Required = @("Require release tag ref", 'RELEASE_REF: ${{ github.ref }}', 'StartsWith("refs/tags/")') }
 )
 foreach ($spec in $workflowGuardSpecs) {
     $workflowPath = Join-Path $repoRoot $spec.Path
@@ -421,6 +422,12 @@ if ($SkipReleaseChangelogPolicy) {
     & "$PSScriptRoot\test_release_changelog_section.ps1"
     if ($LASTEXITCODE -ne 0) {
         throw "Release changelog section policy tests failed with exit code $LASTEXITCODE."
+    }
+    $global:LASTEXITCODE = 0
+
+    & "$PSScriptRoot\test_publish_plugin_workflow_policy.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Publish-plugin workflow policy tests failed with exit code $LASTEXITCODE."
     }
     $global:LASTEXITCODE = 0
 }

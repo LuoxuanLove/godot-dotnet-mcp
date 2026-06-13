@@ -23,8 +23,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Require release tag ref
+        shell: pwsh
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:RELEASE_REF.StartsWith("refs/tags/")) {
+            throw "publish-plugin validates release tags only. Run it from a v* tag ref, or use publish-release dry_run=true from dev for release readiness."
+          }
+
       - name: Run release preflight
-        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           TAG_NAME: ${{ github.ref_name }}
@@ -115,7 +124,6 @@ jobs:
 
       - name: Render release notes
         id: release_notes
-        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           TAG_NAME: ${{ github.ref_name }}
@@ -147,7 +155,6 @@ jobs:
           "prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload release notes
-        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: release-notes
