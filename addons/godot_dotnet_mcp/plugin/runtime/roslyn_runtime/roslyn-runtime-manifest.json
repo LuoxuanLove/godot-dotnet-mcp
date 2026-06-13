@@ -10,7 +10,9 @@
   "entrypoints": {
     "capabilities": "--capabilities",
     "call": "--call <tool_name> <json_arguments>",
-    "call_json_file": "--call-json-file <tool_name> <json_file>"
+    "call_json_file": "--call-json-file <tool_name> <json_file>",
+    "timeout": "--timeout-ms <milliseconds>",
+    "response_file": "--response-json-file <json_file>"
   },
   "files": [
     "GodotDotnetMcp.PluginBridge.dll",

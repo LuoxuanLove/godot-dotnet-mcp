@@ -21,6 +21,10 @@ internal static class DotnetBuildTool
         {
             return BridgeToolCallResponse.Error(ex.Message, new { error = ex.Message });
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return BridgeToolCallResponse.Error($"dotnet_build failed: {ex.Message}", new { error = ex.Message, exception = ex.GetType().Name });
