@@ -14,6 +14,7 @@ var tests = new (string Name, Action Run)[]
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
+    ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
     ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
@@ -256,6 +257,47 @@ static void BrokerListsRegisteredProjectsWithoutRenewingSessions()
     secondSummary = broker.ListProjects().Single(project => project.ProjectId == secondProject.ProjectId);
     AssertEqual(0, firstSummary.ActiveSessionCount);
     AssertEqual(0, secondSummary.ActiveSessionCount);
+}
+
+static void BrokerListsProjectSessionsWithoutCrossingProjectBoundaries()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(firstProject.ProjectId);
+    var otherSession = broker.StartSession(secondProject.ProjectId);
+    var firstExpiry = firstSession.Identity.ExpiresAtUtc;
+
+    AssertThrows<ArgumentException>(() => broker.ListProjectSessions(string.Empty));
+    AssertThrows<KeyNotFoundException>(() => broker.ListProjectSessions("project_missing"));
+
+    now = now.AddSeconds(5);
+    var firstProjectSessions = broker.ListProjectSessions(firstProject.ProjectId).ToArray();
+
+    AssertEqual(2, firstProjectSessions.Length);
+    AssertTrue(firstProjectSessions.All(session => session.ProjectId == firstProject.ProjectId));
+    AssertTrue(firstProjectSessions.Any(session => session.SessionId == firstSession.Identity.SessionId));
+    AssertTrue(firstProjectSessions.Any(session => session.SessionId == secondSession.Identity.SessionId));
+    AssertFalse(firstProjectSessions.Any(session => session.SessionId == otherSession.Identity.SessionId));
+    AssertEqual(firstExpiry, firstSession.Identity.ExpiresAtUtc);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), firstSession.Identity.LastUsedAtUtc);
+
+    var secondProjectSessions = broker.ListProjectSessions(secondProject.ProjectId).ToArray();
+    AssertEqual(1, secondProjectSessions.Length);
+    AssertEqual(otherSession.Identity.SessionId, secondProjectSessions[0].SessionId);
+
+    now = now.AddSeconds(6);
+    AssertEqual(0, broker.ListProjectSessions(firstProject.ProjectId).Count);
+    AssertEqual(0, broker.ListProjectSessions(secondProject.ProjectId).Count);
+
+    var removableProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var removableSession = broker.StartSession(removableProject.ProjectId);
+    AssertEqual(1, broker.ListProjectSessions(removableProject.ProjectId).Count);
+    AssertTrue(broker.RemoveProject(removableProject.ProjectId));
+    AssertTrue(removableSession.Identity.Revoked);
+    AssertThrows<KeyNotFoundException>(() => broker.ListProjectSessions(removableProject.ProjectId));
 }
 
 static void BrokerRemovesProjectsAndRevokesTheirSessions()

@@ -117,6 +117,39 @@ public sealed class CompanionBroker
         }
     }
 
+    public IReadOnlyCollection<ProjectSessionIdentity> ListProjectSessions(string projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            throw new ArgumentException("project_id is required.", nameof(projectId));
+        }
+
+        if (!_projects.ContainsKey(projectId))
+        {
+            throw new KeyNotFoundException($"Unknown project_id: {projectId}");
+        }
+
+        RemoveInactiveSessions();
+        var nowUtc = _clock();
+        var identities = new List<ProjectSessionIdentity>();
+        foreach (var session in _sessions.Values)
+        {
+            if (!session.TryGetActiveIdentity(nowUtc, out var identity))
+            {
+                continue;
+            }
+
+            if (string.Equals(identity.ProjectId, projectId, StringComparison.Ordinal))
+            {
+                identities.Add(identity);
+            }
+        }
+
+        return identities
+            .OrderBy(identity => identity.SessionId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public ProjectDescriptor RegisterProject(ProjectDescriptor project)
     {
         ArgumentNullException.ThrowIfNull(project);
