@@ -148,6 +148,11 @@ public sealed class ProjectSession
         return Capabilities.Contains(capability);
     }
 
+    internal bool HasCapability(CompanionCapability capability, DateTimeOffset nowUtc)
+    {
+        return GetCapabilities(nowUtc).Contains(capability);
+    }
+
     public bool IsExpired(DateTimeOffset nowUtc)
     {
         lock (_stateLock)

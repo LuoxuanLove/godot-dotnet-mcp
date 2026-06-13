@@ -202,7 +202,7 @@ public sealed class CompanionBroker
                 session.Identity);
         }
 
-        if (requiredCapability is not null && !session.HasCapability(requiredCapability.Value))
+        if (requiredCapability is not null && !session.HasCapability(requiredCapability.Value, nowUtc))
         {
             return ToolScopeValidationResult.CreateRejected(
                 ToolScopeValidationReason.CapabilityUnavailable,

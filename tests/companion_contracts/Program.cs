@@ -13,6 +13,7 @@ var tests = new (string Name, Action Run)[]
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
     ("tool_scope_validation_does_not_renew_session_leases", ToolScopeValidationDoesNotRenewSessionLeases),
+    ("tool_scope_validation_uses_one_clock_snapshot", ToolScopeValidationUsesOneClockSnapshot),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
     ("stops_and_rejects_revoked_sessions", StopsAndRejectsRevokedSessions),
     ("expires_and_rejects_stale_sessions", ExpiresAndRejectsStaleSessions),
@@ -222,6 +223,29 @@ static void ToolScopeValidationDoesNotRenewSessionLeases()
     AssertTrue(result.Accepted);
     AssertEqual(firstExpiry, session.Identity.ExpiresAtUtc);
     AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), session.Identity.LastUsedAtUtc);
+}
+
+static void ToolScopeValidationUsesOneClockSnapshot()
+{
+    var reads = -1;
+    var clockReads = new[]
+    {
+        DateTimeOffset.Parse("2026-06-09T00:00:00Z"),
+        DateTimeOffset.Parse("2026-06-09T00:00:09.999Z"),
+        DateTimeOffset.Parse("2026-06-09T00:00:10.001Z"),
+    };
+    var broker = new CompanionBroker(
+        TimeSpan.FromSeconds(10),
+        () => clockReads[Math.Min(++reads, clockReads.Length - 1)]);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+
+    var result = broker.ValidateToolScope(
+        new ToolRequestScope(project.ProjectId, session.Identity.SessionId),
+        CompanionCapability.StaticProjectAnalysis);
+
+    AssertTrue(result.Accepted);
+    AssertEqual(ToolScopeValidationReason.Accepted, result.Reason);
 }
 
 static void CrossProjectSessionReuseIsRejected()
