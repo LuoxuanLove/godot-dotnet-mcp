@@ -19,6 +19,7 @@ Target version: 2.0.0.
 - Added a Companion static/headless project inventory analyzer that reports Godot project status, discovered `.csproj` files, plugin directory presence, and editor-live unavailability reasons without starting Godot.
 - Added an unevaluated static .NET workspace graph that reports SDK, target frameworks, package references, project references, compile includes/removes, and Godot SDK/package hints without restoring or building projects.
 - Added a static resource reference graph for text `.tscn` and `.tres` files, covering external resources, sub-resources, `uid://` markers, `res://` usages, missing references, and unsupported binary `.res` files without opening the editor.
+- Added a v2 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, listening ports, or unscoped tool calls.
 
 ### Fixed
 

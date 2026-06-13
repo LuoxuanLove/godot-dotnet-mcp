@@ -36,6 +36,7 @@ $publishRelease = Read-Workflow ".github/workflows/publish-release.yml"
 $dotnetBuild = Read-Workflow ".github/workflows/dotnet-build.yml"
 $v2Bridge = Read-Workflow ".github/workflows/v2-bridge-contract.yml"
 $v2Broker = Read-Workflow ".github/workflows/v2-broker-manifest.yml"
+$v2Capabilities = Read-Workflow ".github/workflows/v2-capability-manifest.yml"
 
 $companionChecks = @(
     "companion\GodotDotnetMcp.Companion\GodotDotnetMcp.Companion.csproj",
@@ -59,7 +60,9 @@ $v2PolicyChecks = @(
     ".\scripts\validate_v2_bridge_contract.ps1",
     ".\scripts\test_v2_bridge_contract.ps1",
     ".\scripts\validate_v2_broker_manifest.ps1",
-    ".\scripts\test_v2_broker_manifest.ps1"
+    ".\scripts\test_v2_broker_manifest.ps1",
+    ".\scripts\validate_v2_capability_manifest.ps1",
+    ".\scripts\test_v2_capability_manifest.ps1"
 )
 
 foreach ($check in $v2PolicyChecks) {
@@ -71,7 +74,9 @@ foreach ($field in @(
     "v2_bridge_contract_checked",
     "v2_bridge_contract_tests_checked",
     "v2_broker_manifest_checked",
-    "v2_broker_manifest_tests_checked"
+    "v2_broker_manifest_tests_checked",
+    "v2_capability_manifest_checked",
+    "v2_capability_manifest_tests_checked"
 )) {
     Assert-Contains "publish-release dry-run validation" $publishRelease "`$record.$field -eq `$true"
     Assert-Contains "publish-release dry-run record" $publishRelease "$field = `$true"
@@ -80,7 +85,8 @@ foreach ($field in @(
 foreach ($workflow in @(
     @{ Name = "dotnet-build"; Content = $dotnetBuild },
     @{ Name = "v2-bridge-contract"; Content = $v2Bridge },
-    @{ Name = "v2-broker-manifest"; Content = $v2Broker }
+    @{ Name = "v2-broker-manifest"; Content = $v2Broker },
+    @{ Name = "v2-capability-manifest"; Content = $v2Capabilities }
 )) {
     Assert-Contains $workflow.Name $workflow.Content "release/v2.0.0-baseline"
 }

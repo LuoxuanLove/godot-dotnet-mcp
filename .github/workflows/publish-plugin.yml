@@ -125,6 +125,14 @@ jobs:
         shell: pwsh
         run: .\scripts\test_v2_broker_manifest.ps1
 
+      - name: Validate v2 capability manifest
+        shell: pwsh
+        run: .\scripts\validate_v2_capability_manifest.ps1
+
+      - name: Run v2 capability manifest tests
+        shell: pwsh
+        run: .\scripts\test_v2_capability_manifest.ps1
+
       - name: Setup Godot 4.6
         shell: pwsh
         run: |
