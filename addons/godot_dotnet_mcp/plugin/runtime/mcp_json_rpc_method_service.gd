@@ -49,6 +49,9 @@ func handle_tools_list(_params: Dictionary, id) -> Dictionary:
 func handle_tools_call_async(params: Dictionary, id) -> Dictionary:
 	if _tool_rpc_router == null:
 		return _build_error(-32603, "tools/call handler is unavailable", id)
+	var validation_error := _validate_tools_call_params(params)
+	if not validation_error.is_empty():
+		return _build_error(-32602, validation_error, id)
 	return _build_response(await _tool_rpc_router.build_tool_call_result_async(params), id)
 
 
@@ -96,6 +99,17 @@ func _build_capabilities() -> Dictionary:
 		"resources": {"listChanged": false},
 		"prompts": {"listChanged": false}
 	}
+
+
+func _validate_tools_call_params(params: Dictionary) -> String:
+	if not params.has("name"):
+		return "Invalid params: tools/call requires a non-empty string name"
+	var tool_name = params.get("name")
+	if not (tool_name is String) or str(tool_name).strip_edges().is_empty():
+		return "Invalid params: tools/call requires a non-empty string name"
+	if params.has("arguments") and not (params.get("arguments") is Dictionary):
+		return "Invalid params: tools/call arguments must be an object"
+	return ""
 
 func handle_notification(method: String, _params: Dictionary) -> void:
 	match method:

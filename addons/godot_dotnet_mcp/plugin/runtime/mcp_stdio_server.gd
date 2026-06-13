@@ -23,6 +23,7 @@ var _processing_stdin := false
 var _transport_generation := 0
 var _last_written_response: Dictionary = {}
 var _last_written_frame := ""
+var _suppress_stdout_writes_for_testing := false
 var _stdio_framing_mode := "newline"
 const STDIO_FRAMING_NEWLINE := "newline"
 const STDIO_FRAMING_LEGACY_CONTENT_LENGTH := "legacy_content_length"
@@ -81,6 +82,10 @@ func stop() -> void:
 
 func is_running() -> bool:
 	return _enabled
+
+
+func set_stdout_writes_suppressed_for_testing(enabled: bool) -> void:
+	_suppress_stdout_writes_for_testing = enabled
 
 
 func set_framing_mode(mode: String) -> void:
@@ -362,8 +367,9 @@ func _write_response(obj: Dictionary) -> void:
 	if _stdio_framing_mode == STDIO_FRAMING_LEGACY_CONTENT_LENGTH:
 		_last_written_frame = "Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body]
 	else:
-		_last_written_frame = body
-	print(_last_written_frame)
+		_last_written_frame = body + "\n"
+	if not _suppress_stdout_writes_for_testing:
+		printraw(_last_written_frame)
 
 
 func _sanitize_for_json(value):

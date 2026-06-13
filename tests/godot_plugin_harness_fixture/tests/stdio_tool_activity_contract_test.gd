@@ -72,6 +72,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var loader = FakeToolLoader.new()
 	var stdio_server = StdioServerScript.new()
 	stdio_server.initialize(loader, false)
+	stdio_server.call("set_stdout_writes_suppressed_for_testing", true)
 
 	var response: Dictionary = await stdio_server.call("_handle_tools_call", {
 		"name": "system_project_state",
@@ -182,12 +183,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	stdio_server.stop()
 	if not (invalid_arguments_request_response is Dictionary):
 		return _failure("Stdio full request path should record non-object tool arguments response.")
-	var invalid_arguments_request_result = (invalid_arguments_request_response as Dictionary).get("result", {})
-	if not (invalid_arguments_request_result is Dictionary):
-		return _failure("Stdio full request path should return a tool result for non-object tool arguments.")
-	var invalid_arguments_request_structured = (invalid_arguments_request_result as Dictionary).get("structuredContent", {})
-	if not (invalid_arguments_request_structured is Dictionary) or bool((invalid_arguments_request_structured as Dictionary).get("success", true)):
-		return _failure("Stdio full request path should expose failing structuredContent for non-object tool arguments.")
+	var invalid_arguments_request_error = (invalid_arguments_request_response as Dictionary).get("error", {})
+	if not (invalid_arguments_request_error is Dictionary):
+		return _failure("Stdio full request path should return JSON-RPC invalid params for non-object tool arguments.")
+	if int((invalid_arguments_request_error as Dictionary).get("code", 0)) != -32602:
+		return _failure("Stdio full request path should classify non-object tool arguments as -32602 Invalid params.")
 
 	var plain_activity_result: Dictionary = stdio_server.call("_normalize_tool_result", {
 		"success": true,
