@@ -262,6 +262,23 @@ foreach ($spec in $workflowGuardSpecs) {
     }
 }
 
+$versionPolicyPath = Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1"
+if (Test-Path -LiteralPath $versionPolicyPath) {
+    $versionPolicyText = Get-Content -LiteralPath $versionPolicyPath -Raw -Encoding UTF8
+    foreach ($requiredText in @(
+        '$BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v1.4.0"',
+        "v1.4 refactor integration version changes must come from the base repository",
+        "Version policy validated: v1.4 refactor integration branch changes public version metadata"
+    )) {
+        if (-not $versionPolicyText.Contains($requiredText)) {
+            $errors.Add("Version policy must preserve the trusted refactor/v1.4.0 -> dev integration exception: missing '$requiredText'.")
+        }
+    }
+}
+else {
+    $errors.Add("Version policy script is missing: scripts\validate_pr_version_policy.ps1")
+}
+
 $roslynRuntimeBundleScript = Join-Path $repoRoot "scripts\validate_roslyn_runtime_bundle.ps1"
 if (-not (Test-Path -LiteralPath $roslynRuntimeBundleScript)) {
     $errors.Add("Roslyn runtime release guard script is missing: scripts\validate_roslyn_runtime_bundle.ps1")
