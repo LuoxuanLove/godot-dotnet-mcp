@@ -179,6 +179,8 @@ jobs:
                 $record.v2_bridge_contract_tests_checked -eq $true -and
                 $record.v2_broker_manifest_checked -eq $true -and
                 $record.v2_broker_manifest_tests_checked -eq $true -and
+                $record.v2_capability_manifest_checked -eq $true -and
+                $record.v2_capability_manifest_tests_checked -eq $true -and
                 $record.harness_checked -eq $true -and
                 $record.release_notes_rendered -eq $true -and
                 $recordAge.TotalHours -le 24
@@ -260,6 +262,16 @@ jobs:
         shell: pwsh
         run: .\scripts\test_v2_broker_manifest.ps1
 
+      - name: Validate v2 capability manifest
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: .\scripts\validate_v2_capability_manifest.ps1
+
+      - name: Run v2 capability manifest tests
+        if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
+        shell: pwsh
+        run: .\scripts\test_v2_capability_manifest.ps1
+
       - name: Setup Godot 4.6
         if: ${{ steps.reuse_dry_run.outputs.skip_repeated_tests != 'true' }}
         shell: pwsh
@@ -337,6 +349,8 @@ jobs:
             v2_bridge_contract_tests_checked = $true
             v2_broker_manifest_checked = $true
             v2_broker_manifest_tests_checked = $true
+            v2_capability_manifest_checked = $true
+            v2_capability_manifest_tests_checked = $true
             harness_checked = $true
             release_notes_rendered = $true
           } | ConvertTo-Json | Set-Content -LiteralPath ".release-dry-run-cache\publish-release.json" -Encoding UTF8
