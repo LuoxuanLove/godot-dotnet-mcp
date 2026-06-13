@@ -469,6 +469,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": resource_path})
 	if not bool(reference_audit.get("success", false)):
 		return _failure("resource_reference_audit should run on a .tres fixture.")
+	var unsafe_reference_audit: Dictionary = executor.execute("resource_reference_audit", {"path": "user://outside.tres"})
+	if bool(unsafe_reference_audit.get("success", false)):
+		return _failure("resource_reference_audit should reject explicit paths outside res://.")
 	var reference_data: Dictionary = reference_audit.get("data", {})
 	if int(reference_data.get("issue_count", 0)) < 1:
 		return _failure("resource_reference_audit should report UID/path or C# Resource script issues.")
@@ -743,6 +746,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_files_write: Dictionary = executor.execute("project_files", {"action": "write_file", "path": "res://notes.txt", "content": "ok"})
 	if not bool(project_files_write.get("success", false)):
 		return _failure("project_files write_file should delegate to the filesystem write atomic tool.")
+	var project_files_binary_write: Dictionary = executor.execute("project_files", {"action": "write_file", "path": "res://unsafe_texture.png", "content": "not a png"})
+	if bool(project_files_binary_write.get("success", false)):
+		return _failure("project_files write_file should reject binary/image text writes.")
+	if str(project_files_binary_write.get("data", {}).get("error_code", project_files_binary_write.get("error_code", ""))) != "project_text_file_required":
+		return _failure("project_files binary write rejection should preserve project_text_file_required.")
 	var project_files_select: Dictionary = executor.execute("project_files", {"action": "select_file", "path": "res://Player.gd"})
 	if not bool(project_files_select.get("success", false)):
 		return _failure("project_files select_file should delegate to the editor filesystem atomic tool.")

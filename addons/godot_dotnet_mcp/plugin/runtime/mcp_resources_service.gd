@@ -4,6 +4,7 @@ class_name MCPResourcesService
 
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPPathArgumentNormalizerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_path_argument_normalizer.gd")
+const MCPFileUtilsScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
 const MCPDebugBufferScript = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
@@ -49,6 +50,7 @@ var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
 var _get_tool_activity_registry := Callable()
 var _sanitize_for_json := Callable()
+var _path_utils = MCPFileUtilsScript.new()
 
 
 func configure(context = null) -> void:
@@ -495,6 +497,10 @@ func _read_template_resource(uri: String) -> Dictionary:
 	if not bool(res_path_result.get("success", false)):
 		return {"success": false, "error": str(res_path_result.get("error", "Invalid resource path"))}
 	var res_path := str(res_path_result.get("path", ""))
+	var path_guard: Dictionary = _path_utils.validate_text_file_path(res_path, false, "resource template")
+	if not bool(path_guard.get("success", false)):
+		return {"success": false, "error": str(path_guard.get("error", "Invalid resource path"))}
+	res_path = str(path_guard.get("path", res_path))
 	if not FileAccess.file_exists(res_path):
 		return {"success": false, "error": "Resource file not found: %s" % res_path}
 	var file := FileAccess.open(res_path, FileAccess.READ)
