@@ -72,7 +72,7 @@ Target version: 2.0.0.
 - Added `system_plugin_maintenance`, the canonical high-level plugin maintenance entry for status, reload, update-status, update-reference refresh, update-source selection, and update-start workflows.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
-- Added canonical v2.0 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
+- Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 - Added `structuredContent` to every `tools/call` result while preserving the text JSON content for existing clients.
 
@@ -96,15 +96,15 @@ Target version: 2.0.0.
 
 ### Documentation
 
-- Added a localized v2.0.0 protocol refactor plan and linked it from the four localized roadmaps.
+- Added a localized v1.4.0 protocol refactor plan and linked it from the four localized roadmaps.
 - Refreshed README Highlights to align the top-level feature story with the v1.2.0 and v1.3.0 release lines, grouping overlapping entries into consistent editor-native service, semantic automation, evidence, diagnostics, runtime, workflow discovery, and User-tool extension themes.
 - Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
 - Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
 
 ### Internal
 
-- Added documentation localization validation coverage for the localized v2.0.0 protocol plan page.
-- Added a v2.0.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
+- Added documentation localization validation coverage for the localized v1.4.0 protocol plan page.
+- Added a v1.4.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
