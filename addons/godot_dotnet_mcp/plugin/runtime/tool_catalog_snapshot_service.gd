@@ -3,6 +3,7 @@ extends RefCounted
 class_name ToolCatalogSnapshotService
 
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolTreePresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_tree_presentation_service.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 
@@ -34,6 +35,10 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 		disabled_source if disabled_source is Array else [],
 		catalog_manifest.get("domain_defs", [])
 	)
+	var disabled_tools: Array = disabled_source if disabled_source is Array else []
+	var agent_tool_presentation := ToolTreePresentationServiceScript.build_agent_tool_tree(exposed_tools, disabled_tools)
+	var internal_executor_presentation := ToolTreePresentationServiceScript.build_internal_executor_tree(all_tools_by_category, exposed_tools, category_states, catalog_manifest)
+	var tool_diagnostics_presentation := ToolTreePresentationServiceScript.build_diagnostics_tree(exposed_tools, all_tools_by_category, _get_loader_status(loader))
 
 	return {
 		"success": true,
@@ -44,6 +49,9 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 		"category_states": category_states,
 		"domain_states": domain_states,
 		"presentation": presentation.duplicate(true),
+		"agent_tool_presentation": agent_tool_presentation.duplicate(true),
+		"internal_executor_presentation": internal_executor_presentation.duplicate(true),
+		"tool_diagnostics_presentation": tool_diagnostics_presentation.duplicate(true),
 		"tool_loader_status": _get_loader_status(loader)
 	}
 
