@@ -16,6 +16,7 @@ Target version: 1.4.0.
 ### Internal
 
 - Updated PR policy and version-policy CI to validate pull requests targeting the v1.4 refactor integration branch while keeping release version metadata changes limited to release branches targeting `dev`.
+- Updated version-policy CI so v2.0 predevelopment pull requests can validate against trusted v2 policy scripts while release version metadata remains limited to release branches targeting `dev` or `v2.0`.
 
 ## [1.3.0] - 2026-06-08
 
