@@ -22,6 +22,8 @@ var tests = new (string Name, Action Run)[]
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
+    ("broker_evaluates_tool_availability_without_renewing_sessions", BrokerEvaluatesToolAvailabilityWithoutRenewingSessions),
+    ("broker_manifest_declares_tool_availability_preflight", BrokerManifestDeclaresToolAvailabilityPreflight),
     ("reports_session_capabilities_without_renewing_leases", ReportsSessionCapabilitiesWithoutRenewingLeases),
     ("tool_scope_validation_does_not_renew_session_leases", ToolScopeValidationDoesNotRenewSessionLeases),
     ("tool_scope_validation_uses_one_clock_snapshot", ToolScopeValidationUsesOneClockSnapshot),
@@ -33,6 +35,7 @@ var tests = new (string Name, Action Run)[]
     ("renews_session_leases_on_valid_use", RenewsSessionLeasesOnValidUse),
     ("keeps_revoked_sessions_terminal_under_concurrency", RevokedSessionsStayTerminalUnderConcurrency),
     ("keeps_session_snapshots_active_under_concurrency", SessionSnapshotsStayActiveUnderConcurrency),
+    ("keeps_tool_availability_snapshots_consistent_under_stop_concurrency", ToolAvailabilitySnapshotsStayConsistentUnderStopConcurrency),
     ("evaluates_editor_live_upgrade_without_changing_session_state", EditorLiveUpgradeEligibilityDoesNotMutateSession),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
     ("requires_bridge_live_state_support_for_editor_live_upgrade", BridgeLiveStateSupportIsRequired),
@@ -662,6 +665,95 @@ static void ReportsMachineReadableToolScopeValidation()
     AssertEqual(session.Identity.SessionId, expired.Session?.SessionId);
 }
 
+static void BrokerEvaluatesToolAvailabilityWithoutRenewingSessions()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+    var initialIdentity = session.Identity;
+
+    AssertThrows<ArgumentException>(() =>
+        broker.EvaluateToolAvailability(scope, " ", CompanionCapability.StaticProjectAnalysis));
+
+    var staticTool = broker.EvaluateToolAvailability(
+        scope,
+        "  static.resource_graph  ",
+        CompanionCapability.ResourceGraphAnalysis);
+    AssertTrue(staticTool.Available);
+    AssertEqual("static.resource_graph", staticTool.ToolName);
+    AssertEqual(ToolScopeValidationReason.Accepted, staticTool.Reason);
+    AssertEqual(CompanionCapability.ResourceGraphAnalysis, staticTool.RequiredCapability);
+    AssertEqual(session.Identity.SessionId, staticTool.Session?.SessionId);
+    AssertTrue(staticTool.Capabilities.Contains(CompanionCapability.StaticProjectAnalysis));
+    AssertTrue(staticTool.Capabilities.Contains(CompanionCapability.ResourceGraphAnalysis));
+    AssertFalse(staticTool.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+
+    var liveToolBeforeUpgrade = broker.EvaluateToolAvailability(
+        scope,
+        "editor.capture",
+        CompanionCapability.EditorScreenshot);
+    AssertFalse(liveToolBeforeUpgrade.Available);
+    AssertEqual(ToolScopeValidationReason.CapabilityUnavailable, liveToolBeforeUpgrade.Reason);
+    AssertEqual(session.Identity.SessionId, liveToolBeforeUpgrade.Session?.SessionId);
+    AssertFalse(liveToolBeforeUpgrade.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+
+    var crossProject = broker.EvaluateToolAvailability(
+        new ToolRequestScope(otherProject.ProjectId, session.Identity.SessionId),
+        "static.resource_graph",
+        CompanionCapability.ResourceGraphAnalysis);
+    AssertFalse(crossProject.Available);
+    AssertEqual(ToolScopeValidationReason.ProjectSessionMismatch, crossProject.Reason);
+    AssertEqual<ProjectSessionIdentity?>(null, crossProject.Session);
+    AssertEqual(0, crossProject.Capabilities.Count);
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+    broker.UpgradeSessionToEditorLive(scope);
+    var liveTool = broker.EvaluateToolAvailability(
+        scope,
+        "editor.capture",
+        CompanionCapability.EditorScreenshot);
+    AssertTrue(liveTool.Available);
+    AssertEqual(CompanionMode.EditorLive, liveTool.Session?.Mode);
+    AssertTrue(liveTool.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+
+    now = now.AddSeconds(11);
+    var expiredTool = broker.EvaluateToolAvailability(
+        scope,
+        "editor.capture",
+        CompanionCapability.EditorScreenshot);
+    AssertFalse(expiredTool.Available);
+    AssertEqual(ToolScopeValidationReason.ExpiredSession, expiredTool.Reason);
+    AssertEqual(session.Identity.SessionId, expiredTool.Session?.SessionId);
+    AssertEqual(0, expiredTool.Capabilities.Count);
+}
+
+static void BrokerManifestDeclaresToolAvailabilityPreflight()
+{
+    var manifestPath = FindRepositoryFile(Path.Combine("companion", "contracts", "v2-broker-manifest.json"));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var toolAvailability = manifest.RootElement.GetProperty("tool_availability");
+
+    AssertTrue(toolAvailability.GetProperty("preflight_supported").GetBoolean());
+    AssertFalse(toolAvailability.GetProperty("preflight_renews_sessions").GetBoolean());
+    AssertTrue(toolAvailability.GetProperty("requires_project_id").GetBoolean());
+    AssertTrue(toolAvailability.GetProperty("requires_session_id").GetBoolean());
+    AssertTrue(toolAvailability.GetProperty("reports_required_capability").GetBoolean());
+    AssertTrue(toolAvailability.GetProperty("reports_current_capabilities").GetBoolean());
+    AssertTrue(toolAvailability.GetProperty("rejects_cross_project_session").GetBoolean());
+}
+
 static void ReportsSessionCapabilitiesWithoutRenewingLeases()
 {
     var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
@@ -974,6 +1066,58 @@ static void SessionSnapshotsStayActiveUnderConcurrency()
         {
             AssertFalse(identity.Revoked);
             AssertTrue(identity.ExpiresAtUtc > DateTimeOffset.UtcNow);
+        }
+
+        AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
+    }
+}
+
+static void ToolAvailabilitySnapshotsStayConsistentUnderStopConcurrency()
+{
+    for (var i = 0; i < 100; i++)
+    {
+        var broker = new CompanionBroker();
+        var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+        var session = broker.StartSession(project.ProjectId);
+        var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+        var stopTask = Task.Run(() =>
+        {
+            try
+            {
+                broker.StopSession(scope);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var availabilityTask = Task.Run(() =>
+        {
+            try
+            {
+                return broker.EvaluateToolAvailability(
+                    scope,
+                    "static.resource_graph",
+                    CompanionCapability.ResourceGraphAnalysis);
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        });
+
+        Task.WaitAll(stopTask, availabilityTask);
+        var availability = availabilityTask.Result;
+        if (availability is not null && availability.Available)
+        {
+            AssertEqual(session.Identity.SessionId, availability.Session?.SessionId);
+            AssertTrue(availability.Capabilities.Contains(CompanionCapability.ResourceGraphAnalysis));
         }
 
         AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
