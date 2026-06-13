@@ -8,6 +8,7 @@ public sealed record ProjectInventory(
     bool IsGodotProject,
     string ProjectFilePath,
     IReadOnlyList<string> CSharpProjectFiles,
+    IReadOnlyList<CSharpProjectScope> CSharpProjectScopes,
     DotnetWorkspaceGraph DotnetWorkspace,
     ResourceReferenceGraph ResourceReferences,
     bool HasPluginDirectory,
@@ -32,3 +33,7 @@ public sealed record ProjectCapabilityStatus(
     CompanionMode Mode,
     bool Available,
     string Reason);
+
+public sealed record CSharpProjectScope(
+    string ProjectFilePath,
+    string ProjectId);
