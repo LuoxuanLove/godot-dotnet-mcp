@@ -49,7 +49,7 @@ Target version: 1.4.0.
 ### Internal
 
 - Added aggregate v1.4 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
-- Added release-policy, PR-policy, and merge-queue validation coverage for v1.4 branch integration, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
+- Added release-policy, PR-policy, and merge-queue validation coverage for v1.4 branch integration, trusted `refactor/v1.4.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
 
