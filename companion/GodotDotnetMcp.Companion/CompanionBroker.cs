@@ -293,6 +293,14 @@ public sealed class CompanionBroker
         return ResolveSession(scope);
     }
 
+    public ProjectSession UpgradeSessionToEditorLive(ToolRequestScope scope)
+    {
+        var session = ResolveSession(scope);
+        var bridgeStatus = GetEditorBridgeStatus(scope.ProjectId);
+        session.UpgradeToEditorLive(bridgeStatus);
+        return session;
+    }
+
     public ProjectSession ResolveSession(ToolRequestScope scope)
     {
         return ResolveSession(scope, renewLease: true);

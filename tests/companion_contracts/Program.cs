@@ -16,6 +16,7 @@ var tests = new (string Name, Action Run)[]
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
     ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
     ("broker_tracks_editor_bridge_status_without_upgrading_sessions", BrokerTracksEditorBridgeStatusWithoutUpgradingSessions),
+    ("broker_upgrades_sessions_to_editor_live_from_stored_bridge_status", BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus),
     ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
@@ -386,6 +387,43 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
         AssertEqual(EditorBridgeState.Disabled, statusAfterReRegister.State);
         AssertEqual<string?>(null, statusAfterReRegister.EditorSessionId);
     }
+}
+
+static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
+{
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var otherSession = broker.StartSession(otherProject.ProjectId);
+    var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+
+    AssertThrows<InvalidOperationException>(() => broker.UpgradeSessionToEditorLive(scope));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+
+    var onlineStatus = new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true);
+    broker.UpdateEditorBridgeStatus(onlineStatus);
+
+    AssertThrows<InvalidOperationException>(() =>
+        broker.UpgradeSessionToEditorLive(new ToolRequestScope(otherProject.ProjectId, session.Identity.SessionId)));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual(CompanionMode.StaticHeadless, otherSession.Identity.Mode);
+
+    var upgradedSession = broker.UpgradeSessionToEditorLive(scope);
+    AssertEqual(session.Identity.SessionId, upgradedSession.Identity.SessionId);
+    AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
+    AssertEqual("editor_session_1", session.Identity.EditorSessionId);
+    broker.RequireCapability(scope, CompanionCapability.EditorScreenshot);
+
+    AssertThrows<InvalidOperationException>(() =>
+        broker.UpgradeSessionToEditorLive(new ToolRequestScope(otherProject.ProjectId, otherSession.Identity.SessionId)));
+    AssertEqual(CompanionMode.StaticHeadless, otherSession.Identity.Mode);
 }
 
 static void BrokerRemovesProjectsAndRevokesTheirSessions()
