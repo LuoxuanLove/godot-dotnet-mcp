@@ -10,6 +10,7 @@ public sealed class CompanionBroker
 
     private readonly ConcurrentDictionary<string, ProjectDescriptor> _projects = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProjectSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, EditorBridgeStatus> _editorBridgeStatuses = new(StringComparer.Ordinal);
     private readonly object _sessionLock = new();
     private readonly Func<DateTimeOffset> _clock;
     private readonly TimeSpan _sessionLeaseDuration;
@@ -150,6 +151,46 @@ public sealed class CompanionBroker
             .ToArray();
     }
 
+    public EditorBridgeStatus GetEditorBridgeStatus(string projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            throw new ArgumentException("project_id is required.", nameof(projectId));
+        }
+
+        lock (_sessionLock)
+        {
+            if (!_projects.ContainsKey(projectId))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {projectId}");
+            }
+
+            return _editorBridgeStatuses.TryGetValue(projectId, out var status)
+                ? status
+                : EditorBridgeStatus.Disabled(projectId);
+        }
+    }
+
+    public EditorBridgeStatus UpdateEditorBridgeStatus(EditorBridgeStatus bridgeStatus)
+    {
+        ArgumentNullException.ThrowIfNull(bridgeStatus);
+        if (string.IsNullOrWhiteSpace(bridgeStatus.ProjectId))
+        {
+            throw new ArgumentException("Editor bridge status must include project_id.", nameof(bridgeStatus));
+        }
+
+        lock (_sessionLock)
+        {
+            if (!_projects.ContainsKey(bridgeStatus.ProjectId))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {bridgeStatus.ProjectId}");
+            }
+
+            _editorBridgeStatuses[bridgeStatus.ProjectId] = bridgeStatus;
+            return bridgeStatus;
+        }
+    }
+
     public ProjectDescriptor RegisterProject(ProjectDescriptor project)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -177,6 +218,7 @@ public sealed class CompanionBroker
                 return false;
             }
 
+            _editorBridgeStatuses.TryRemove(projectId, out _);
             var nowUtc = _clock();
             foreach (var (sessionId, session) in _sessions)
             {

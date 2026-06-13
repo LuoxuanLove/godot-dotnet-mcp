@@ -15,6 +15,7 @@ var tests = new (string Name, Action Run)[]
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
     ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
+    ("broker_tracks_editor_bridge_status_without_upgrading_sessions", BrokerTracksEditorBridgeStatusWithoutUpgradingSessions),
     ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
@@ -298,6 +299,93 @@ static void BrokerListsProjectSessionsWithoutCrossingProjectBoundaries()
     AssertTrue(broker.RemoveProject(removableProject.ProjectId));
     AssertTrue(removableSession.Identity.Revoked);
     AssertThrows<KeyNotFoundException>(() => broker.ListProjectSessions(removableProject.ProjectId));
+}
+
+static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
+{
+    var broker = new CompanionBroker();
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+
+    AssertThrows<ArgumentException>(() => broker.GetEditorBridgeStatus(string.Empty));
+    AssertThrows<KeyNotFoundException>(() => broker.GetEditorBridgeStatus("project_missing"));
+    AssertThrows<ArgumentException>(() =>
+        broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            string.Empty,
+            "editor_session_1",
+            "2.0.0",
+            true)));
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            "project_missing",
+            "editor_session_1",
+            "2.0.0",
+            true)));
+
+    var defaultStatus = broker.GetEditorBridgeStatus(project.ProjectId);
+    AssertEqual(EditorBridgeState.Disabled, defaultStatus.State);
+    AssertEqual(project.ProjectId, defaultStatus.ProjectId);
+    AssertFalse(defaultStatus.ProvidesLiveEditorState);
+
+    var onlineStatus = new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true);
+    var updatedStatus = broker.UpdateEditorBridgeStatus(onlineStatus);
+    AssertEqual(onlineStatus, updatedStatus);
+    AssertEqual(onlineStatus, broker.GetEditorBridgeStatus(project.ProjectId));
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+    AssertFalse(session.HasCapability(CompanionCapability.EditorScreenshot));
+
+    var eligibility = session.EvaluateEditorLiveUpgrade(broker.GetEditorBridgeStatus(project.ProjectId));
+    AssertTrue(eligibility.Eligible);
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+
+    session.UpgradeToEditorLive(broker.GetEditorBridgeStatus(project.ProjectId));
+    AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
+    AssertEqual("editor_session_1", session.Identity.EditorSessionId);
+
+    AssertEqual(EditorBridgeState.Disabled, broker.GetEditorBridgeStatus(otherProject.ProjectId).State);
+    AssertTrue(broker.RemoveProject(project.ProjectId));
+    AssertThrows<KeyNotFoundException>(() => broker.GetEditorBridgeStatus(project.ProjectId));
+
+    for (var i = 0; i < 100; i++)
+    {
+        var raceBroker = new CompanionBroker();
+        var raceRoot = CreateTempProjectRoot();
+        var raceProject = raceBroker.RegisterProject(ProjectDescriptor.FromRoot(raceRoot));
+        var staleStatus = new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            raceProject.ProjectId,
+            "stale_editor_session",
+            "2.0.0",
+            true);
+
+        var removeTask = Task.Run(() => raceBroker.RemoveProject(raceProject.ProjectId));
+        var updateTask = Task.Run(() =>
+        {
+            try
+            {
+                raceBroker.UpdateEditorBridgeStatus(staleStatus);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+        });
+
+        Task.WaitAll(removeTask, updateTask);
+        AssertTrue(removeTask.Result);
+        var registeredAgain = raceBroker.RegisterProject(ProjectDescriptor.FromRoot(raceRoot));
+        var statusAfterReRegister = raceBroker.GetEditorBridgeStatus(registeredAgain.ProjectId);
+        AssertEqual(EditorBridgeState.Disabled, statusAfterReRegister.State);
+        AssertEqual<string?>(null, statusAfterReRegister.EditorSessionId);
+    }
 }
 
 static void BrokerRemovesProjectsAndRevokesTheirSessions()
