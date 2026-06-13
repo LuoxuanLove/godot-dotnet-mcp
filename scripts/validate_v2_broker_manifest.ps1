@@ -157,6 +157,16 @@ foreach ($reasonCode in $actualReasonCodes) {
     }
 }
 
+$sessionHealth = $manifest.session_health
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "snapshot_supported" -Context "session_health") -Expected $true -Message "Broker session health snapshots must be supported."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "snapshot_renews_sessions" -Context "session_health") -Expected $false -Message "Broker session health snapshots must not renew session leases."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "requires_project_id" -Context "session_health") -Expected $true -Message "Broker session health snapshots must require project_id."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "requires_session_id" -Context "session_health") -Expected $true -Message "Broker session health snapshots must require session_id."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "reports_bridge_status" -Context "session_health") -Expected $true -Message "Broker session health snapshots must report bridge status."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "reports_editor_live_upgrade_eligibility" -Context "session_health") -Expected $true -Message "Broker session health snapshots must report editor-live upgrade eligibility."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "reports_current_capabilities" -Context "session_health") -Expected $true -Message "Broker session health snapshots must report current capabilities."
+Assert-Bool -Actual (Require-Bool -Object $sessionHealth -Name "rejects_cross_project_session" -Context "session_health") -Expected $true -Message "Broker session health snapshots must reject cross-project session reuse."
+
 $sessionLifecycle = $manifest.session_lifecycle
 $defaultLeaseMinutes = Require-PositiveInteger -Object $sessionLifecycle -Name "default_lease_minutes" -Context "session_lifecycle"
 $maxActiveSessions = Require-PositiveInteger -Object $sessionLifecycle -Name "max_active_sessions" -Context "session_lifecycle"
