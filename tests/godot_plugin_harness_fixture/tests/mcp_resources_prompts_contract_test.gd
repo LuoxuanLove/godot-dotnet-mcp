@@ -649,17 +649,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int((invalid_stdio_tool_params.get("error", {}) as Dictionary).get("code", 0)) != -32602:
 		return _failure("stdio tools/call should reject non-object params with -32602.")
 	var invalid_stdio_tool_arguments: Dictionary = await stdio_server._handle_tools_call_async({"name": "system_help", "arguments": []}, 21)
-	var invalid_stdio_tool_arguments_result = invalid_stdio_tool_arguments.get("result", {})
-	if not (invalid_stdio_tool_arguments_result is Dictionary) or not bool((invalid_stdio_tool_arguments_result as Dictionary).get("isError", false)):
-		return _failure("stdio tools/call should return isError=true for non-object arguments.")
-	var invalid_stdio_tool_arguments_structured = (invalid_stdio_tool_arguments_result as Dictionary).get("structuredContent", {})
-	if not (invalid_stdio_tool_arguments_structured is Dictionary) or bool((invalid_stdio_tool_arguments_structured as Dictionary).get("success", true)):
-		return _failure("stdio tools/call non-object arguments should expose failing structuredContent.")
-	var invalid_stdio_tool_arguments_content = (invalid_stdio_tool_arguments_result as Dictionary).get("content", [])
-	if not (invalid_stdio_tool_arguments_content is Array) or (invalid_stdio_tool_arguments_content as Array).is_empty():
-		return _failure("stdio tools/call non-object arguments should include text content.")
-	if str(((invalid_stdio_tool_arguments_content as Array)[0] as Dictionary).get("text", "")).find("Tool arguments must be an object") == -1:
-		return _failure("stdio tools/call non-object arguments should preserve the validation message.")
+	var invalid_stdio_tool_arguments_error: Dictionary = invalid_stdio_tool_arguments.get("error", {})
+	if int(invalid_stdio_tool_arguments_error.get("code", 0)) != -32602:
+		return _failure("stdio tools/call should reject non-object arguments with -32602.")
+	if str(invalid_stdio_tool_arguments_error.get("message", "")).find("arguments must be an object") == -1:
+		return _failure("stdio tools/call non-object arguments should describe the invalid request shape.")
 	stdio_server.free()
 	_restore_language()
 

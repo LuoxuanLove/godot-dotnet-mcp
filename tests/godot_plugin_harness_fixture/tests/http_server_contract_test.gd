@@ -148,25 +148,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"method": "tools/call",
 		"params": {}
 	}))
-	var rpc_missing_tool_result = rpc_missing_tool.get("result", {})
-	if not (rpc_missing_tool_result is Dictionary):
-		return _failure("JSON-RPC tools/call did not return a result object for invalid input.")
-	if not bool((rpc_missing_tool_result as Dictionary).get("isError", false)):
-		return _failure("JSON-RPC tools/call should return isError=true when the tool name is missing.")
-	var rpc_missing_tool_structured = (rpc_missing_tool_result as Dictionary).get("structuredContent", {})
-	if not (rpc_missing_tool_structured is Dictionary) or bool((rpc_missing_tool_structured as Dictionary).get("success", true)):
-		return _failure("JSON-RPC tools/call missing-name response should expose failing structuredContent.")
-	var rpc_content = (rpc_missing_tool_result as Dictionary).get("content", [])
-	if not (rpc_content is Array) or (rpc_content as Array).is_empty():
-		return _failure("JSON-RPC tools/call error result did not include text content.")
-	var rpc_error_text := str(((rpc_content as Array)[0] as Dictionary).get("text", ""))
-	if rpc_error_text.find("Missing tool name") == -1:
-		return _failure("JSON-RPC tools/call missing-name response did not preserve the router error text.")
-	var rpc_missing_tool_payload = JSON.parse_string(rpc_error_text)
-	if not (rpc_missing_tool_payload is Dictionary):
-		return _failure("JSON-RPC tools/call missing-name text content should remain parseable JSON.")
-	if str((rpc_missing_tool_structured as Dictionary).get("error", "")) != str((rpc_missing_tool_payload as Dictionary).get("error", "")):
-		return _failure("JSON-RPC tools/call missing-name structuredContent should match the compatibility text JSON error.")
+	var rpc_missing_tool_error: Dictionary = rpc_missing_tool.get("error", {})
+	if int(rpc_missing_tool_error.get("code", 0)) != -32602:
+		return _failure("JSON-RPC tools/call should reject missing tool names with -32602.")
+	if str(rpc_missing_tool_error.get("message", "")).find("requires a non-empty string name") == -1:
+		return _failure("JSON-RPC tools/call missing-name response should describe the invalid request shape.")
 
 	var rpc_invalid_params: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
@@ -205,18 +191,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"arguments": []
 		}
 	}))
-	var rpc_invalid_arguments_result = rpc_invalid_arguments.get("result", {})
-	if not (rpc_invalid_arguments_result is Dictionary) or not bool((rpc_invalid_arguments_result as Dictionary).get("isError", false)):
-		return _failure("JSON-RPC tools/call should return isError=true for non-object arguments.")
-	var rpc_invalid_arguments_structured = (rpc_invalid_arguments_result as Dictionary).get("structuredContent", {})
-	if not (rpc_invalid_arguments_structured is Dictionary) or bool((rpc_invalid_arguments_structured as Dictionary).get("success", true)):
-		return _failure("JSON-RPC tools/call non-object arguments should expose failing structuredContent.")
-	var rpc_invalid_arguments_content = (rpc_invalid_arguments_result as Dictionary).get("content", [])
-	if not (rpc_invalid_arguments_content is Array) or (rpc_invalid_arguments_content as Array).is_empty():
-		return _failure("JSON-RPC tools/call non-object arguments should include text content.")
-	var rpc_invalid_arguments_text := str(((rpc_invalid_arguments_content as Array)[0] as Dictionary).get("text", ""))
-	if rpc_invalid_arguments_text.find("Tool arguments must be an object") == -1:
-		return _failure("JSON-RPC tools/call non-object arguments should preserve the router error text.")
+	var rpc_invalid_arguments_error: Dictionary = rpc_invalid_arguments.get("error", {})
+	if int(rpc_invalid_arguments_error.get("code", 0)) != -32602:
+		return _failure("JSON-RPC tools/call should reject non-object arguments with -32602.")
+	if str(rpc_invalid_arguments_error.get("message", "")).find("arguments must be an object") == -1:
+		return _failure("JSON-RPC tools/call non-object arguments should describe the invalid request shape.")
 
 	var rpc_removed_resource_manage: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
