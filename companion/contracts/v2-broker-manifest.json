@@ -63,6 +63,16 @@
     "reports_current_capabilities": true,
     "rejects_cross_project_session": true
   },
+  "session_health": {
+    "snapshot_supported": true,
+    "snapshot_renews_sessions": false,
+    "requires_project_id": true,
+    "requires_session_id": true,
+    "reports_bridge_status": true,
+    "reports_editor_live_upgrade_eligibility": true,
+    "reports_current_capabilities": true,
+    "rejects_cross_project_session": true
+  },
   "session_lifecycle": {
     "default_lease_minutes": 30,
     "max_active_sessions": 256,

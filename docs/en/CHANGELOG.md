@@ -28,6 +28,7 @@ Target version: 2.0.0.
 - Added a Broker-owned editor-live upgrade preflight contract so clients can read stored bridge blockers without mutating sessions or renewing leases.
 - Added a Broker session capability snapshot contract so clients can inspect scoped static/headless or editor-live capabilities without renewing session leases.
 - Added a Broker tool availability preflight contract so clients can inspect required capabilities and blockers before invoking scoped tools.
+- Added a Broker session health snapshot contract so clients can read scoped static/headless or editor-live state, bridge status, editor-live upgrade eligibility, and current capabilities without renewing session leases.
 
 ### Fixed
 

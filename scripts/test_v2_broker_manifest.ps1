@@ -258,6 +258,70 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "session_health_snapshot_must_be_supported" {
+        $path = Join-Path $tempRoot "session-health-supported.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.snapshot_supported = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_snapshot_does_not_renew_sessions" {
+        $path = Join-Path $tempRoot "session-health-renew.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.snapshot_renews_sessions = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_requires_project_scope" {
+        $path = Join-Path $tempRoot "session-health-project-scope.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.requires_project_id = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_requires_session_scope" {
+        $path = Join-Path $tempRoot "session-health-session-scope.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.requires_session_id = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_reports_bridge_status" {
+        $path = Join-Path $tempRoot "session-health-bridge-status.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.reports_bridge_status = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_reports_editor_live_upgrade_eligibility" {
+        $path = Join-Path $tempRoot "session-health-editor-live-upgrade.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.reports_editor_live_upgrade_eligibility = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_reports_current_capabilities" {
+        $path = Join-Path $tempRoot "session-health-current-capabilities.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.reports_current_capabilities = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "session_health_rejects_cross_project_session" {
+        $path = Join-Path $tempRoot "session-health-cross-project.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.session_health.rejects_cross_project_session = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "session_lifecycle_requires_positive_lease" {
         $path = Join-Path $tempRoot "session-lease.json"
         $manifest = Copy-Manifest -Path $path
