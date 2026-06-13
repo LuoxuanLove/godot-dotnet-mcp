@@ -9,6 +9,7 @@ var tests = new (string Name, Action Run)[]
     ("disambiguates_same_root_csproj_scopes", ProjectDescriptorDisambiguatesSameRootProjectFiles),
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
+    ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
     ("stops_and_rejects_revoked_sessions", StopsAndRejectsRevokedSessions),
@@ -121,6 +122,26 @@ static void BrokerRegistersProjectsThroughDescriptorFactory()
 
     AssertEqual(project.ProjectId, session.Identity.ProjectId);
     AssertEqual(Path.GetFullPath(root), project.ProjectRoot);
+}
+
+static void SessionIdentityPreservesExplicitProjectFileScope()
+{
+    var root = CreateTempProjectRoot();
+    var projectFile = Path.Combine(root, "Game.csproj");
+    File.WriteAllText(projectFile, "<Project />");
+    var broker = new CompanionBroker();
+
+    var rootProject = broker.RegisterProject(root);
+    var rootSession = broker.StartSession(rootProject.ProjectId);
+
+    AssertEqual<string?>(null, rootSession.Identity.ProjectFilePath);
+
+    var scopedProject = broker.RegisterProject(root, projectFile);
+    var scopedSession = broker.StartSession(scopedProject.ProjectId);
+
+    AssertEqual(Path.GetFullPath(projectFile), scopedProject.ProjectFilePath);
+    AssertEqual(scopedProject.ProjectFilePath, scopedSession.Identity.ProjectFilePath);
+    AssertEqual(scopedProject.ProjectId, scopedSession.Identity.ProjectId);
 }
 
 static void ToolCallsRequireProjectAndSessionScope()
