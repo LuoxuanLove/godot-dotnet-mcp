@@ -293,6 +293,51 @@ if (Test-Path -LiteralPath $roslynHarnessScript) {
     }
 }
 
+$roslynRuntimeServicePath = Join-Path $repoRoot "addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd"
+if (Test-Path -LiteralPath $roslynRuntimeServicePath) {
+    $roslynRuntimeServiceText = Get-Content -LiteralPath $roslynRuntimeServicePath -Raw -Encoding UTF8
+    foreach ($requiredText in @("RUNTIME_PROCESS_TIMEOUT_MS", "OS.create_process", "OS.kill(pid)", "--timeout-ms", "--response-json-file", "roslyn_runtime_timeout")) {
+        if (-not $roslynRuntimeServiceText.Contains($requiredText)) {
+            $errors.Add("PluginRoslynService isolated runtime process guard must contain '$requiredText'.")
+        }
+    }
+    if ($roslynRuntimeServiceText.Contains('OS.execute("dotnet"')) {
+        $errors.Add("PluginRoslynService must not use blocking OS.execute for isolated Roslyn runtime calls.")
+    }
+}
+else {
+    $errors.Add("PluginRoslynService runtime file is missing: addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd")
+}
+
+$dotnetBridgeProgramPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs"
+if (Test-Path -LiteralPath $dotnetBridgeProgramPath) {
+    $dotnetBridgeProgramText = Get-Content -LiteralPath $dotnetBridgeProgramPath -Raw -Encoding UTF8
+    foreach ($requiredText in @("--timeout-ms", "--response-json-file", "FindResponseJsonFile", "CancellationTokenSource", "OperationCanceledException", "runtime_timeout")) {
+        if (-not $dotnetBridgeProgramText.Contains($requiredText)) {
+            $errors.Add("DotnetBridge runtime process guard must contain '$requiredText'.")
+        }
+    }
+    if ($dotnetBridgeProgramText.Contains("CancellationToken.None")) {
+        $errors.Add("DotnetBridge must not dispatch runtime tools with CancellationToken.None.")
+    }
+}
+else {
+    $errors.Add("DotnetBridge Program.cs is missing: addons\godot_dotnet_mcp\dotnet_bridge\Program.cs")
+}
+
+$dotnetBridgeRuntimeCliTestPath = Join-Path $repoRoot "scripts\test_dotnet_bridge_runtime_cli.ps1"
+if (Test-Path -LiteralPath $dotnetBridgeRuntimeCliTestPath) {
+    $dotnetBridgeRuntimeCliTestText = Get-Content -LiteralPath $dotnetBridgeRuntimeCliTestPath -Raw -Encoding UTF8
+    foreach ($requiredText in @("--response-json-file", "--timeout-ms not-a-number", "--call-json-file cs_file_read")) {
+        if (-not $dotnetBridgeRuntimeCliTestText.Contains($requiredText)) {
+            $errors.Add("Dotnet bridge runtime CLI regression tests must contain '$requiredText'.")
+        }
+    }
+}
+else {
+    $errors.Add("Dotnet bridge runtime CLI regression test is missing: scripts\test_dotnet_bridge_runtime_cli.ps1")
+}
+
 $distRoot = Join-Path $repoRoot "dist"
 $expectedDirs = @(
     (Join-Path $distRoot "godot-dotnet-mcp-plugin")
@@ -371,6 +416,11 @@ if ($SkipBridgeSafeWrites) {
     & "$PSScriptRoot\test_dotnet_bridge_safe_writes.ps1"
     if ($LASTEXITCODE -ne 0) {
         throw "Dotnet bridge safe-write regression tests failed with exit code $LASTEXITCODE."
+    }
+
+    & "$PSScriptRoot\test_dotnet_bridge_runtime_cli.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dotnet bridge runtime CLI regression tests failed with exit code $LASTEXITCODE."
     }
 }
 
