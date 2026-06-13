@@ -29,6 +29,7 @@ Target version: 2.0.0.
 - Added a Broker session capability snapshot contract so clients can inspect scoped static/headless or editor-live capabilities without renewing session leases.
 - Added a Broker tool availability preflight contract so clients can inspect required capabilities and blockers before invoking scoped tools.
 - Added a Broker session health snapshot contract so clients can read scoped static/headless or editor-live state, bridge status, editor-live upgrade eligibility, and current capabilities without renewing session leases.
+- Added a Broker status snapshot contract so clients can inspect registered project counts, active session mode counts, bridge status counts, and project summaries without scanning the filesystem, launching Godot, or renewing session leases.
 
 ### Fixed
 

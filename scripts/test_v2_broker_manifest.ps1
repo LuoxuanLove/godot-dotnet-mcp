@@ -170,6 +170,70 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "broker_status_snapshot_must_be_supported" {
+        $path = Join-Path $tempRoot "broker-status-supported.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.snapshot_supported = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_snapshot_does_not_renew_sessions" {
+        $path = Join-Path $tempRoot "broker-status-renew.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.snapshot_renews_sessions = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_snapshot_does_not_scan_filesystem" {
+        $path = Join-Path $tempRoot "broker-status-scan.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.snapshot_scans_filesystem = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_snapshot_does_not_launch_godot" {
+        $path = Join-Path $tempRoot "broker-status-launch.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.snapshot_launches_godot_editor = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_reports_registered_project_count" {
+        $path = Join-Path $tempRoot "broker-status-project-count.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.reports_registered_project_count = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_reports_session_mode_counts" {
+        $path = Join-Path $tempRoot "broker-status-session-counts.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.reports_session_mode_counts = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_reports_bridge_status_counts" {
+        $path = Join-Path $tempRoot "broker-status-bridge-counts.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.reports_bridge_status_counts = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_status_reports_project_summaries" {
+        $path = Join-Path $tempRoot "broker-status-project-summaries.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_status.reports_project_summaries = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "http_loopback_cannot_be_default" {
         $path = Join-Path $tempRoot "http-default.json"
         $manifest = Copy-Manifest -Path $path
