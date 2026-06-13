@@ -239,9 +239,9 @@ if ([string]::IsNullOrWhiteSpace($BaseBranch)) {
     throw "Version policy validation requires a base branch. Set GITHUB_BASE_REF or pass -BaseBranch."
 }
 
-$allowedBaseBranches = @("dev", "refactor/v1.4.0")
+$allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0")
 if ($allowedBaseBranches -notcontains $BaseBranch) {
-    throw "Version policy validation expects pull requests to target dev or refactor/v1.4.0. Actual base branch: $BaseBranch"
+    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, or refactor/v2.0.0. Actual base branch: $BaseBranch"
 }
 
 if ([string]::IsNullOrWhiteSpace($HeadBranch)) {
