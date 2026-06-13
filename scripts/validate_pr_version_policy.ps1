@@ -178,6 +178,18 @@ if ($changes.Count -eq 0) {
     exit 0
 }
 
+if ($BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v1.4.0") {
+    if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
+        throw "v1.4 refactor integration version changes must come from the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
+    }
+
+    Write-Host "Version policy validated: v1.4 refactor integration branch changes public version metadata:"
+    foreach ($change in $changes) {
+        Write-Host "- $change"
+    }
+    exit 0
+}
+
 if ($HeadBranch -like "release/*") {
     if ($BaseBranch -notin @("dev", "v2.0")) {
         throw "Release version changes must target dev or v2.0. Actual base branch: $BaseBranch"
