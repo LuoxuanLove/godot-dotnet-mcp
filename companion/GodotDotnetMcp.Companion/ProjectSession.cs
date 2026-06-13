@@ -47,20 +47,25 @@ public sealed record ProjectDescriptor
         }
 
         return new ProjectDescriptor(
-            projectId: BuildProjectId(normalizedRoot),
+            projectId: BuildProjectId(normalizedRoot, normalizedProjectFile),
             projectRoot: normalizedRoot,
             projectFilePath: normalizedProjectFile);
     }
 
-    private static string BuildProjectId(string projectRoot)
+    private static string BuildProjectId(string projectRoot, string? projectFilePath)
     {
         var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
+        var normalizedProjectFile = string.IsNullOrWhiteSpace(projectFilePath)
+            ? string.Empty
+            : Path.GetRelativePath(normalized, Path.GetFullPath(projectFilePath));
         if (OperatingSystem.IsWindows())
         {
             normalized = normalized.ToUpperInvariant();
+            normalizedProjectFile = normalizedProjectFile.ToUpperInvariant();
         }
 
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        var hashInput = normalized + "\n" + normalizedProjectFile.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(hashInput));
         return "project_" + Convert.ToHexString(hash[..8]).ToLowerInvariant();
     }
 
