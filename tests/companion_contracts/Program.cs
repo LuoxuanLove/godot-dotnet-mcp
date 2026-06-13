@@ -14,6 +14,7 @@ var tests = new (string Name, Action Run)[]
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
+    ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
@@ -254,6 +255,37 @@ static void BrokerListsRegisteredProjectsWithoutRenewingSessions()
     secondSummary = broker.ListProjects().Single(project => project.ProjectId == secondProject.ProjectId);
     AssertEqual(0, firstSummary.ActiveSessionCount);
     AssertEqual(0, secondSummary.ActiveSessionCount);
+}
+
+static void BrokerRemovesProjectsAndRevokesTheirSessions()
+{
+    var broker = new CompanionBroker();
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(secondProject.ProjectId);
+
+    AssertThrows<ArgumentException>(() => broker.RemoveProject(string.Empty));
+    AssertFalse(broker.RemoveProject("project_missing"));
+
+    AssertTrue(broker.RemoveProject(firstProject.ProjectId));
+
+    AssertFalse(broker.Projects.Any(project => project.ProjectId == firstProject.ProjectId));
+    AssertFalse(broker.ListProjects().Any(project => project.ProjectId == firstProject.ProjectId));
+    AssertTrue(firstSession.Identity.Revoked);
+    AssertFalse(firstSession.HasCapability(CompanionCapability.StaticProjectAnalysis));
+    AssertFalse(broker.Sessions.Any(session => session.SessionId == firstSession.Identity.SessionId));
+    AssertThrows<KeyNotFoundException>(() => broker.StartSession(firstProject.ProjectId));
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.ResolveSession(new ToolRequestScope(firstProject.ProjectId, firstSession.Identity.SessionId)));
+
+    AssertTrue(broker.Projects.Any(project => project.ProjectId == secondProject.ProjectId));
+    AssertFalse(secondSession.Identity.Revoked);
+    AssertTrue(broker.Sessions.Any(session => session.SessionId == secondSession.Identity.SessionId));
+    var secondResolved = broker.ResolveSession(new ToolRequestScope(secondProject.ProjectId, secondSession.Identity.SessionId));
+    AssertEqual(secondSession.Identity.SessionId, secondResolved.Identity.SessionId);
+
+    AssertFalse(broker.RemoveProject(firstProject.ProjectId));
 }
 
 static void SessionIdentityPreservesExplicitProjectFileScope()
