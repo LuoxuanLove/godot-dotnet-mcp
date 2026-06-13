@@ -21,13 +21,6 @@ jobs:
     runs-on: windows-2025
 
     steps:
-      - name: Checkout trusted policy scripts
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 1
-          persist-credentials: false
-
       - name: Resolve pull request refs
         id: pr
         shell: pwsh
@@ -49,10 +42,32 @@ jobs:
           }
 
           $pr = gh pr view $pullNumber --repo $env:REPOSITORY --json baseRefName,headRefName,headRepositoryOwner | ConvertFrom-Json
+          $trustedPolicyRef = $pr.baseRefName
+          if ($pr.baseRefName -eq "dev" -and $pr.headRefName -eq "refactor/v2.0.0" -and $pr.headRepositoryOwner.login -eq $env:GITHUB_REPOSITORY_OWNER) {
+            $trustedPolicyRef = "refactor/v2.0.0"
+          }
+          if (
+            ($pr.baseRefName -eq "v2.0" -and $pr.headRefName -eq "release/v2.0.0-baseline") -or
+            $pr.baseRefName -eq "release/v2.0.0-baseline" -or
+            $pr.baseRefName.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
+            $pr.baseRefName.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
+            $pr.baseRefName.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
+          ) {
+            $trustedPolicyRef = "v2.0"
+          }
+
           "pull_number=$pullNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "base_branch=$($pr.baseRefName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "head_branch=$($pr.headRefName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "head_owner=$($pr.headRepositoryOwner.login)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "trusted_policy_ref=$trustedPolicyRef" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Checkout trusted policy scripts
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.pr.outputs.trusted_policy_ref }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Fetch pull request refs
         shell: pwsh
@@ -62,9 +77,12 @@ jobs:
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
         run: |
-          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0")
-          if ($allowedBaseBranches -notcontains $env:BASE_BRANCH) {
-            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, or refactor/v2.0.0. Actual base branch: $($env:BASE_BRANCH)"
+          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0", "v2.0", "release/v2.0.0-baseline")
+          $isV2StackBase = $env:BASE_BRANCH.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
+          if (($allowedBaseBranches -notcontains $env:BASE_BRANCH) -and -not $isV2StackBase) {
+            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, refactor/v2.0.0, v2.0, or a v2 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
           }
 
           git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/policy-base/$($env:BASE_BRANCH)"

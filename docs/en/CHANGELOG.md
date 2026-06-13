@@ -52,6 +52,8 @@ Target version: 2.0.0.
 - Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
+- Updated PR policy and version-policy CI to validate pull requests targeting the v1.4 refactor integration branch while keeping release version metadata changes limited to release branches targeting `dev`.
+- Updated version-policy CI so v2.0 predevelopment pull requests can validate against trusted v2 policy scripts while release version metadata remains limited to release branches targeting `dev` or `v2.0`.
 
 ## [1.3.0] - 2026-06-08
 

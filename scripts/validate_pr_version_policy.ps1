@@ -214,6 +214,32 @@ function Read-VersionContent {
     return Invoke-Git -Arguments @("show", "${Ref}:$Path")
 }
 
+function Test-IsV2StackBaseBranch {
+    param([string]$Branch)
+
+    if ([string]::IsNullOrWhiteSpace($Branch)) {
+        return $false
+    }
+
+    if ($Branch -eq "release/v2.0.0-baseline") {
+        return $true
+    }
+
+    foreach ($prefix in @("feature/v2-", "docs/v2-", "ci/v2-")) {
+        if ($Branch.StartsWith($prefix, [System.StringComparison]::Ordinal)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-IsAllowedBaseBranch {
+    param([string]$Branch)
+
+    return $Branch -in @("dev", "refactor/v1.4.0", "refactor/v2.0.0", "v2.0") -or (Test-IsV2StackBaseBranch -Branch $Branch)
+}
+
 function Get-VersionValue {
     param(
         [string]$Content,
@@ -239,9 +265,8 @@ if ([string]::IsNullOrWhiteSpace($BaseBranch)) {
     throw "Version policy validation requires a base branch. Set GITHUB_BASE_REF or pass -BaseBranch."
 }
 
-$allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0")
-if ($allowedBaseBranches -notcontains $BaseBranch) {
-    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, or refactor/v2.0.0. Actual base branch: $BaseBranch"
+if (-not (Test-IsAllowedBaseBranch -Branch $BaseBranch)) {
+    throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, refactor/v2.0.0, v2.0, or a v2 stacked base branch. Actual base branch: $BaseBranch"
 }
 
 if ([string]::IsNullOrWhiteSpace($HeadBranch)) {
@@ -320,9 +345,9 @@ if ($BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v2.0.0") {
 }
 
 if ($HeadBranch -like "release/*") {
-	if ($BaseBranch -ne "dev") {
-		throw "Release version changes must target dev. Actual base branch: $BaseBranch"
-	}
+    if ($BaseBranch -notin @("dev", "v2.0")) {
+        throw "Release version changes must target dev or v2.0. Actual base branch: $BaseBranch"
+    }
 
     if ($RequireTrustedReleaseBranch -and ([string]::IsNullOrWhiteSpace($RepositoryOwner) -or [string]::IsNullOrWhiteSpace($HeadRepositoryOwner) -or $RepositoryOwner -ne $HeadRepositoryOwner)) {
         throw "Release version changes must come from a release/* branch in the base repository. Head owner: $HeadRepositoryOwner; repository owner: $RepositoryOwner."
@@ -338,4 +363,4 @@ if ($HeadBranch -like "release/*") {
 foreach ($change in $changes) {
     Write-Error "Non-release branch '$HeadBranch' changes public version metadata: $change"
 }
-throw "Move final plugin version changes to a release/* branch targeting dev."
+throw "Move final plugin version changes to a release/* branch targeting dev or v2.0."
