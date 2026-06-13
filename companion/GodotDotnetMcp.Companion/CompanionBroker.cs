@@ -90,6 +90,65 @@ public sealed class CompanionBroker
         }
     }
 
+    public BrokerProjectHealthSnapshot GetProjectHealth(string projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            throw new ArgumentException("project_id is required.", nameof(projectId));
+        }
+
+        lock (_sessionLock)
+        {
+            if (!_projects.TryGetValue(projectId, out var project))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {projectId}");
+            }
+
+            var nowUtc = _clock();
+            var activeSessionCount = 0;
+            var staticHeadlessSessionCount = 0;
+            var editorLiveSessionCount = 0;
+            foreach (var session in _sessions.Values)
+            {
+                if (!session.TryGetActiveIdentity(nowUtc, out var identity))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(identity.ProjectId, project.ProjectId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                activeSessionCount++;
+                if (identity.Mode is CompanionMode.EditorLive)
+                {
+                    editorLiveSessionCount++;
+                }
+                else
+                {
+                    staticHeadlessSessionCount++;
+                }
+            }
+
+            var hasStoredBridgeStatus = _editorBridgeStatuses.TryGetValue(projectId, out var bridgeStatus);
+            bridgeStatus ??= EditorBridgeStatus.Disabled(projectId);
+
+            return new BrokerProjectHealthSnapshot(
+                CapturedAtUtc: nowUtc,
+                ProjectId: project.ProjectId,
+                ProjectRoot: project.ProjectRoot,
+                ProjectFilePath: project.ProjectFilePath,
+                ProjectFileScoped: project.ProjectFilePath is not null,
+                ActiveSessionCount: activeSessionCount,
+                StaticHeadlessSessionCount: staticHeadlessSessionCount,
+                EditorLiveSessionCount: editorLiveSessionCount,
+                StoredBridgeStatus: hasStoredBridgeStatus,
+                BridgeStatus: bridgeStatus,
+                EditorLiveUpgradeAvailable: CanProvideEditorLive(bridgeStatus));
+        }
+    }
+
     private IReadOnlyCollection<BrokerProjectSummary> CreateProjectSummaries(DateTimeOffset nowUtc)
     {
         var activeSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -781,6 +840,19 @@ public sealed record BrokerStatusSnapshot(
     int LiveCapableBridgeStatusCount,
     int DisabledBridgeStatusCount,
     IReadOnlyCollection<BrokerProjectSummary> Projects);
+
+public sealed record BrokerProjectHealthSnapshot(
+    DateTimeOffset CapturedAtUtc,
+    string ProjectId,
+    string ProjectRoot,
+    string? ProjectFilePath,
+    bool ProjectFileScoped,
+    int ActiveSessionCount,
+    int StaticHeadlessSessionCount,
+    int EditorLiveSessionCount,
+    bool StoredBridgeStatus,
+    EditorBridgeStatus BridgeStatus,
+    bool EditorLiveUpgradeAvailable);
 
 public sealed record BrokerShutdownSnapshot(
     DateTimeOffset CapturedAtUtc,

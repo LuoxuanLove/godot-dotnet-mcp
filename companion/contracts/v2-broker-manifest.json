@@ -34,6 +34,17 @@
     "reports_bridge_status_counts": true,
     "reports_project_summaries": true
   },
+  "project_health": {
+    "snapshot_supported": true,
+    "requires_project_id": true,
+    "snapshot_renews_sessions": false,
+    "snapshot_scans_filesystem": false,
+    "snapshot_launches_godot_editor": false,
+    "reports_project_file_scope": true,
+    "reports_session_mode_counts": true,
+    "reports_bridge_status": true,
+    "reports_editor_live_upgrade_eligibility": true
+  },
   "broker_shutdown": {
     "explicit_shutdown_supported": true,
     "shutdown_revokes_sessions": true,
