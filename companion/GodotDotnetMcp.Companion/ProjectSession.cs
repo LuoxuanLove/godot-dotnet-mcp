@@ -249,6 +249,42 @@ public sealed class ProjectSession
         }
     }
 
+    internal void RefreshEditorSession(EditorBridgeStatus bridgeStatus, DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            if (!IsActiveLocked(nowUtc))
+            {
+                return;
+            }
+
+            if (_identity.Mode is not CompanionMode.EditorLive)
+            {
+                return;
+            }
+
+            if (!string.Equals(_identity.ProjectId, bridgeStatus.ProjectId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (!bridgeStatus.ProvidesLiveEditorState)
+            {
+                _identity = _identity with
+                {
+                    Mode = CompanionMode.StaticHeadless,
+                    EditorSessionId = null,
+                };
+                return;
+            }
+
+            _identity = _identity with
+            {
+                EditorSessionId = bridgeStatus.EditorSessionId,
+            };
+        }
+    }
+
     internal void EnsureActive(DateTimeOffset nowUtc)
     {
         lock (_stateLock)

@@ -434,6 +434,16 @@ static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_2",
+        "2.0.0",
+        true));
+    AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
+    AssertEqual("editor_session_2", session.Identity.EditorSessionId);
+    broker.RequireCapability(scope, CompanionCapability.EditorScreenshot);
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_2",
         "1.4.0",
         true));
     AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);

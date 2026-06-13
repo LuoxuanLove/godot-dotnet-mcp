@@ -191,6 +191,10 @@ public sealed class CompanionBroker
             {
                 DowngradeProjectSessionsToStaticHeadless(bridgeStatus.ProjectId, _clock());
             }
+            else
+            {
+                RefreshProjectEditorSessions(bridgeStatus, _clock());
+            }
 
             return bridgeStatus;
         }
@@ -438,6 +442,17 @@ public sealed class CompanionBroker
             if (string.Equals(session.Identity.ProjectId, projectId, StringComparison.Ordinal))
             {
                 session.DowngradeToStaticHeadless(nowUtc);
+            }
+        }
+    }
+
+    private void RefreshProjectEditorSessions(EditorBridgeStatus bridgeStatus, DateTimeOffset nowUtc)
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (string.Equals(session.Identity.ProjectId, bridgeStatus.ProjectId, StringComparison.Ordinal))
+            {
+                session.RefreshEditorSession(bridgeStatus, nowUtc);
             }
         }
     }
