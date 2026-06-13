@@ -23,6 +23,7 @@ $docMap = @(
     @{ Id = "interface-tools"; Paths = @{ en = "interface/tools-page.md"; "zh-CN" = "界面/工具页实现.md"; ja = "インターフェース/ツールページ実装.md"; ko = "인터페이스/도구-페이지-구현.md" } },
     @{ Id = "process-agent-bot"; Paths = @{ en = "process/agent-and-bot-workflow.md"; "zh-CN" = "流程/智能体与机器人流程.md"; ja = "プロセス/エージェントとボットの流れ.md"; ko = "프로세스/에이전트와-봇-흐름.md" } },
     @{ Id = "process-v2.0.0-protocol-plan"; Paths = @{ en = "process/v2.0.0-protocol-refactor-plan.md"; "zh-CN" = "流程/v2.0.0-协议重构计划.md"; ja = "プロセス/v2.0.0-プロトコルリファクタ計画.md"; ko = "프로세스/v2.0.0-프로토콜-리팩터-계획.md" } },
+    @{ Id = "process-v2.0.0-ui-information-design-plan"; Paths = @{ en = "process/v2.0.0-ui-information-design-plan.md"; "zh-CN" = "流程/v2.0.0-UI信息设计计划.md"; ja = "プロセス/v2.0.0-UI情報設計計画.md"; ko = "프로세스/v2.0.0-UI-정보-설계-계획.md" } },
     @{ Id = "process-v2.0.0-progress-tracker"; Paths = @{ en = "process/v2.0.0-refactor-progress-tracker.md"; "zh-CN" = "流程/v2.0.0-重构进度跟踪.md"; ja = "プロセス/v2.0.0-リファクタ進捗トラッカー.md"; ko = "프로세스/v2.0.0-리팩터-진행-추적.md" } },
     @{ Id = "process-release-runbook"; Paths = @{ en = "process/release-runbook.md"; "zh-CN" = "流程/发布运行手册.md"; ja = "プロセス/リリース運用手順.md"; ko = "프로세스/릴리스-운영-절차.md" } },
     @{ Id = "process-release-notes-v1.2.0"; Paths = @{ en = "process/release-notes/release-notes-v1.2.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md" } },
