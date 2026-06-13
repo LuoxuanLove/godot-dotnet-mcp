@@ -62,9 +62,9 @@ jobs:
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
         run: |
-          $allowedBaseBranches = @("dev", "refactor/v1.4.0")
+          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "refactor/v2.0.0")
           if ($allowedBaseBranches -notcontains $env:BASE_BRANCH) {
-            throw "Version policy validation expects pull requests to target dev or refactor/v1.4.0. Actual base branch: $($env:BASE_BRANCH)"
+            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, or refactor/v2.0.0. Actual base branch: $($env:BASE_BRANCH)"
           }
 
           git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/policy-base/$($env:BASE_BRANCH)"
