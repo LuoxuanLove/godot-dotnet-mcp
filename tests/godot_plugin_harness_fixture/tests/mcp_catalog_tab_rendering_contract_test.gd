@@ -22,6 +22,10 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_copy_id": "Copy ID",
 		"mcp_catalog_kind": "Kind",
 		"mcp_catalog_mime_type": "MIME",
+		"mcp_catalog_source": "Source",
+		"mcp_catalog_visibility": "Visibility",
+		"mcp_catalog_callability": "Callability",
+		"mcp_catalog_group": "Group",
 		"mcp_catalog_arguments": "Arguments",
 		"mcp_catalog_preview": "Preview",
 		"mcp_catalog_preview_title": "Preview",
@@ -30,6 +34,8 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_copy_preview": "Copy Preview",
 		"mcp_catalog_argument_placeholder": "Enter argument value",
 		"mcp_catalog_template_preview_unavailable": "Provide a concrete resource URI from this template before reading it.",
+		"mcp_catalog_view_catalog": "Catalog",
+		"mcp_catalog_view_diagnostics": "Diagnostics",
 		"mcp_resource_group_guides": "Guides",
 		"mcp_resource_group_project_state": "Project State",
 		"mcp_resource_group_editor_state": "Editor State",
@@ -91,6 +97,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should show Resources and Resource Templates while hiding Prompts.")
 	if prompts_tab.find_child("ResourcesCard", true, false).visible or prompts_tab.find_child("TemplatesCard", true, false).visible or not prompts_tab.find_child("PromptsCard", true, false).visible:
 		return _failure("Prompts tab should show Prompts while hiding resource sections.")
+	var catalog_button := resources_tab.find_child("CatalogViewButton", true, false) as Button
+	var diagnostics_button := resources_tab.find_child("DiagnosticsViewButton", true, false) as Button
+	if catalog_button == null or diagnostics_button == null:
+		return _failure("MCP catalog tabs should expose Catalog and Diagnostics view buttons.")
+	if not catalog_button.button_pressed or diagnostics_button.button_pressed:
+		return _failure("MCP catalog tabs should default to the Catalog view.")
 	if _find_entry_card(resources_tab, "resource", "godot-dotnet-mcp://guides/index") == null:
 		return _failure("Resources tab should render canonical guide resources by URI.")
 	if _find_entry_card(resources_tab, "template", "godot-dotnet-mcp://scene/{path}") == null:
@@ -130,6 +142,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should display resource mime type metadata.")
 	if _find_label_containing(prompts_tab, "goal, include_scene") == null:
 		return _failure("Prompts tab should display prompt argument metadata.")
+	diagnostics_button.emit_signal("pressed")
+	await tree.process_frame
+	if catalog_button.button_pressed or not diagnostics_button.button_pressed:
+		return _failure("MCP catalog view buttons should stay mutually exclusive after switching to Diagnostics.")
+	if _find_label_containing(resources_tab, "Source: resources/list") == null or _find_label_containing(resources_tab, "Visibility: public") == null:
+		return _failure("Resources Diagnostics view should expose source and visibility metadata from presentation nodes.")
+	if _find_label_containing(resources_tab, "Group: editor_state") == null:
+		return _failure("Resources Diagnostics view should expose resource group metadata.")
+	catalog_button.emit_signal("pressed")
+	await tree.process_frame
+	var prompt_catalog_button := prompts_tab.find_child("CatalogViewButton", true, false) as Button
+	var prompt_diagnostics_button := prompts_tab.find_child("DiagnosticsViewButton", true, false) as Button
+	if prompt_catalog_button == null or prompt_diagnostics_button == null:
+		return _failure("Prompts tab should expose Catalog and Diagnostics view buttons.")
+	prompt_diagnostics_button.emit_signal("pressed")
+	await tree.process_frame
+	if _find_label_containing(prompts_tab, "Source: prompts/list") == null or _find_label_containing(prompts_tab, "Arguments: 2") == null:
+		return _failure("Prompts Diagnostics view should expose prompt source and argument count metadata.")
+	prompt_catalog_button.emit_signal("pressed")
+	await tree.process_frame
 	var copy_button := _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("CopyIdButton", true, false) as Button
 	if copy_button == null:
 		return _failure("MCP catalog entries should expose copy buttons for protocol identifiers.")
@@ -381,6 +413,10 @@ func _resource_node(entry: Dictionary, kind: String) -> Dictionary:
 		"kind": kind,
 		"resource_uri": id,
 		"resource_kind": str(entry.get("resource_kind", "")),
+		"resource_group": str(entry.get("resource_group", "")),
+		"visibility": "public",
+		"callability": "not_callable",
+		"source": "resources/templates/list" if kind == "resource_template" else "resources/list",
 		"entry": entry.duplicate(true),
 		"children": []
 	}
@@ -398,6 +434,9 @@ func _prompt_node(entry: Dictionary) -> Dictionary:
 		"kind": "prompt_entry",
 		"prompt_name": name,
 		"prompt_kind": str(entry.get("prompt_kind", "")),
+		"visibility": "public",
+		"callability": "not_callable",
+		"source": "prompts/list",
 		"entry": entry.duplicate(true),
 		"children": children
 	}

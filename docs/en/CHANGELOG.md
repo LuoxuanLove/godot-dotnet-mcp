@@ -28,6 +28,7 @@ Target version: 2.0.0.
 - Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
 - Changed the Dock Tools tab to default to the Agent Tools call surface, with separate Internal and Diagnostics views for executor layout and legacy/public-tool diagnostics.
 - Changed Dock Resources and Prompts tabs to consume explicit presentation trees, grouping resource URIs, resource templates, workflow prompts, and prompt arguments by shared protocol metadata instead of Dock-side URI or name guesses.
+- Changed Dock Resources and Prompts tabs to expose separate Catalog and Diagnostics views so users can switch between readable protocol entries and source/visibility/callability/group metadata.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
