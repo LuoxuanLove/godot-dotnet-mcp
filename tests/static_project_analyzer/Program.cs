@@ -63,6 +63,7 @@ static void ReportsStaticInventoryForGodotDotnetProject()
     AssertEqual(1, inventory.CSharpProjectScopes.Count);
     AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectScopes[0].ProjectFilePath);
     AssertEqual(ProjectDescriptor.FromRoot(root, csprojPath).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
+    AssertEqual(inventory.CSharpProjectScopes[0], inventory.DefaultCSharpProjectScope);
     AssertTrue(inventory.DotnetWorkspace.HasProjects);
     AssertFalse(inventory.DotnetWorkspace.HasDiagnostics);
     AssertFalse(inventory.ResourceReferences.HasResources);
@@ -89,6 +90,7 @@ static void ReportsStaticProjectScopesForEachCSharpProject()
     AssertEqual(Path.GetFullPath(toolsProject), inventory.CSharpProjectScopes[1].ProjectFilePath);
     AssertEqual(ProjectDescriptor.FromRoot(root, gameProject).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertEqual(ProjectDescriptor.FromRoot(root, toolsProject).ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
+    AssertEqual<CSharpProjectScope?>(null, inventory.DefaultCSharpProjectScope);
     AssertNotEqual(inventory.ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertNotEqual(inventory.CSharpProjectScopes[0].ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
 }
@@ -597,6 +599,8 @@ static void DoesNotRegisterNonGodotDirectoriesAsProjects()
 
     AssertFalse(inventory.IsGodotProject);
     AssertEqual<string?>(null, inventory.ProjectId);
+    AssertEqual(0, inventory.CSharpProjectScopes.Count);
+    AssertEqual<CSharpProjectScope?>(null, inventory.DefaultCSharpProjectScope);
     AssertFalse(inventory.ResourceReferences.HasResources);
     AssertFalse(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertFalse(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));

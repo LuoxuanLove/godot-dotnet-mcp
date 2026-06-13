@@ -45,6 +45,7 @@ public sealed class ProjectInventoryAnalyzer
             ProjectFilePath: projectFilePath,
             CSharpProjectFiles: csprojFiles,
             CSharpProjectScopes: projectScopes,
+            DefaultCSharpProjectScope: SelectDefaultProjectScope(projectScopes),
             DotnetWorkspace: dotnetWorkspace,
             ResourceReferences: resourceReferences,
             HasPluginDirectory: hasPluginDirectory,
@@ -76,6 +77,11 @@ public sealed class ProjectInventoryAnalyzer
                 return new CSharpProjectScope(projectFile, descriptor.ProjectId);
             })
             .ToArray();
+    }
+
+    private static CSharpProjectScope? SelectDefaultProjectScope(IReadOnlyList<CSharpProjectScope> projectScopes)
+    {
+        return projectScopes.Count == 1 ? projectScopes[0] : null;
     }
 
     private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, DotnetWorkspaceGraph dotnetWorkspace)

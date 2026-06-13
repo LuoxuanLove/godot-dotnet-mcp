@@ -9,6 +9,7 @@ public sealed record ProjectInventory(
     string ProjectFilePath,
     IReadOnlyList<string> CSharpProjectFiles,
     IReadOnlyList<CSharpProjectScope> CSharpProjectScopes,
+    CSharpProjectScope? DefaultCSharpProjectScope,
     DotnetWorkspaceGraph DotnetWorkspace,
     ResourceReferenceGraph ResourceReferences,
     bool HasPluginDirectory,
