@@ -331,6 +331,50 @@ public sealed record BrokerProjectSummary(
     int StaticHeadlessSessionCount,
     int EditorLiveSessionCount);
 
+public sealed record BrokerLifecycleOptions(
+    bool EnabledByDefault = false,
+    bool StartsBackgroundProcess = false,
+    bool OpensListeningPort = false,
+    bool LaunchesGodotEditor = false,
+    bool RequiresExplicitStart = true,
+    bool RequiresExplicitEditorLaunch = true)
+{
+    public static BrokerLifecycleOptions Default { get; } = new();
+
+    public void Validate()
+    {
+        if (EnabledByDefault)
+        {
+            throw new InvalidOperationException("Broker lifecycle must be disabled by default.");
+        }
+
+        if (StartsBackgroundProcess)
+        {
+            throw new InvalidOperationException("Broker lifecycle must not start a background process by default.");
+        }
+
+        if (OpensListeningPort)
+        {
+            throw new InvalidOperationException("Broker lifecycle must not open a listening port by default.");
+        }
+
+        if (LaunchesGodotEditor)
+        {
+            throw new InvalidOperationException("Broker lifecycle must not launch Godot by default.");
+        }
+
+        if (!RequiresExplicitStart)
+        {
+            throw new InvalidOperationException("Broker lifecycle must require explicit start.");
+        }
+
+        if (!RequiresExplicitEditorLaunch)
+        {
+            throw new InvalidOperationException("Broker lifecycle must require explicit editor launch.");
+        }
+    }
+}
+
 public enum BrokerTransportMode
 {
     Stdio,

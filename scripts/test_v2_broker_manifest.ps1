@@ -74,6 +74,30 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "broker_requires_explicit_start" {
+        $path = Join-Path $tempRoot "implicit-start.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.default_lifecycle.requires_explicit_start = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_requires_explicit_editor_launch" {
+        $path = Join-Path $tempRoot "implicit-editor-launch.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.default_lifecycle.requires_explicit_editor_launch = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_lifecycle_requires_runtime_contract" {
+        $path = Join-Path $tempRoot "lifecycle-runtime-contract.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.default_lifecycle.validated_by_runtime_contract = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "broker_discovery_must_scan_known_projects_only" {
         $path = Join-Path $tempRoot "known-projects-only.json"
         $manifest = Copy-Manifest -Path $path
