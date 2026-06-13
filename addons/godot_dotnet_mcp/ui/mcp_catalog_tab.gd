@@ -12,6 +12,9 @@ signal preview_requested(kind: String, id: String, arguments: Dictionary)
 @onready var _header_title: Label = %HeaderTitle
 @onready var _header_description: Label = %HeaderDescription
 @onready var _header_counts: Label = %HeaderCounts
+@onready var _view_mode_row: HBoxContainer = %ViewModeRow
+@onready var _catalog_view_button: Button = %CatalogViewButton
+@onready var _diagnostics_view_button: Button = %DiagnosticsViewButton
 @onready var _resources_card: PanelContainer = %ResourcesCard
 @onready var _resources_margin: MarginContainer = %ResourcesMargin
 @onready var _resources_body: VBoxContainer = %ResourcesBody
@@ -30,18 +33,29 @@ signal preview_requested(kind: String, id: String, arguments: Dictionary)
 
 var _current_scale := -1.0
 var _current_signature := ""
+var _current_model: Dictionary = {}
 var _localization = null
 var _catalog_mode := "resources"
+var _active_view := "catalog"
 var _argument_values: Dictionary = {}
 var _icon_texture_cache: Dictionary = {}
+var _view_buttons: Dictionary = {}
 
 const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_PROTOCOL_ICON_DECODED_BYTES := 4096
+const VIEW_CATALOG := "catalog"
+const VIEW_DIAGNOSTICS := "diagnostics"
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	_view_buttons = {
+		VIEW_CATALOG: _catalog_view_button,
+		VIEW_DIAGNOSTICS: _diagnostics_view_button
+	}
+	_catalog_view_button.pressed.connect(_on_view_button_pressed.bind(VIEW_CATALOG))
+	_diagnostics_view_button.pressed.connect(_on_view_button_pressed.bind(VIEW_DIAGNOSTICS))
 	resized.connect(_on_resized)
 
 
@@ -50,8 +64,15 @@ func set_catalog_mode(mode: String) -> void:
 	_current_signature = ""
 
 
+func set_catalog_view(view: String) -> void:
+	_active_view = view if view in [VIEW_CATALOG, VIEW_DIAGNOSTICS] else VIEW_CATALOG
+	_sync_view_buttons()
+	_current_signature = ""
+
+
 func apply_model(model: Dictionary) -> void:
 	_localization = model.get("localization")
+	_current_model = model
 	var editor_scale := float(model.get("editor_scale", 1.0))
 	if not is_equal_approx(_current_scale, editor_scale):
 		_apply_editor_scale(editor_scale)
@@ -84,9 +105,29 @@ func _apply_localized_copy(model: Dictionary) -> void:
 	_resources_title.text = _localization.get_text("mcp_catalog_resources")
 	_templates_title.text = _localization.get_text("mcp_catalog_resource_templates")
 	_prompts_title.text = _localization.get_text("mcp_catalog_prompts")
+	_catalog_view_button.text = _localization.get_text("mcp_catalog_view_catalog")
+	_diagnostics_view_button.text = _localization.get_text("mcp_catalog_view_diagnostics")
+	_sync_view_buttons()
 	_resources_card.visible = _catalog_mode == "resources"
 	_templates_card.visible = _catalog_mode == "resources"
 	_prompts_card.visible = _catalog_mode == "prompts"
+
+
+func _sync_view_buttons() -> void:
+	for view in _view_buttons.keys():
+		var button := _view_buttons.get(view) as Button
+		if button != null:
+			button.button_pressed = str(view) == _active_view
+
+
+func _on_view_button_pressed(view: String) -> void:
+	if _active_view == view:
+		_sync_view_buttons()
+		return
+	set_catalog_view(view)
+	if not _current_model.is_empty():
+		_rebuild_resource_catalog(_current_model)
+		_rebuild_prompt_catalog(_current_model)
 
 
 func _rebuild_entries(container: VBoxContainer, entries, entry_kind: String) -> void:
@@ -201,7 +242,15 @@ func _group_label(group: Dictionary) -> String:
 func _entry_from_presentation_node(node: Dictionary) -> Dictionary:
 	var entry = node.get("entry", {})
 	if entry is Dictionary:
-		return (entry as Dictionary).duplicate(true)
+		var result := (entry as Dictionary).duplicate(true)
+		result["_presentation_kind"] = str(node.get("kind", ""))
+		result["_presentation_visibility"] = str(node.get("visibility", ""))
+		result["_presentation_callability"] = str(node.get("callability", ""))
+		result["_presentation_source"] = str(node.get("source", ""))
+		result["_presentation_group"] = str(node.get("resource_group", node.get("prompt_kind", "")))
+		result["_presentation_child_count"] = (node.get("children", []) as Array).size()
+		result["_presentation_metadata"] = node.get("metadata", {})
+		return result
 	return {}
 
 
@@ -607,6 +656,8 @@ func _entry_title(entry: Dictionary, entry_kind: String) -> String:
 
 
 func _entry_meta(entry: Dictionary, entry_kind: String) -> String:
+	if _active_view == VIEW_DIAGNOSTICS:
+		return _entry_diagnostics_meta(entry, entry_kind)
 	if entry_kind == "prompt":
 		var args: Array[String] = []
 		for arg in entry.get("arguments", []):
@@ -628,11 +679,47 @@ func _entry_meta(entry: Dictionary, entry_kind: String) -> String:
 	]
 
 
+func _entry_diagnostics_meta(entry: Dictionary, entry_kind: String) -> String:
+	var parts: Array[String] = []
+	parts.append("%s: %s" % [_text("mcp_catalog_kind"), _diagnostic_kind(entry, entry_kind)])
+	var source := str(entry.get("_presentation_source", "")).strip_edges()
+	if not source.is_empty():
+		parts.append("%s: %s" % [_text("mcp_catalog_source"), source])
+	var visibility := str(entry.get("_presentation_visibility", "")).strip_edges()
+	if not visibility.is_empty():
+		parts.append("%s: %s" % [_text("mcp_catalog_visibility"), visibility])
+	var callability := str(entry.get("_presentation_callability", "")).strip_edges()
+	if not callability.is_empty():
+		parts.append("%s: %s" % [_text("mcp_catalog_callability"), callability])
+	var group := str(entry.get("resource_group", entry.get("_presentation_group", ""))).strip_edges()
+	if entry_kind == "prompt":
+		group = str(entry.get("prompt_kind", entry.get("_presentation_group", ""))).strip_edges()
+	if not group.is_empty():
+		parts.append("%s: %s" % [_text("mcp_catalog_group"), group])
+	if entry_kind == "prompt":
+		parts.append("%s: %d" % [_text("mcp_catalog_arguments"), _safe_array(entry.get("arguments", [])).size()])
+	else:
+		var mime := str(entry.get("mimeType", "")).strip_edges()
+		if not mime.is_empty():
+			parts.append("%s: %s" % [_text("mcp_catalog_mime_type"), mime])
+	return " | ".join(parts)
+
+
+func _diagnostic_kind(entry: Dictionary, entry_kind: String) -> String:
+	var presentation_kind := str(entry.get("_presentation_kind", "")).strip_edges()
+	if not presentation_kind.is_empty():
+		return presentation_kind
+	if entry_kind == "prompt":
+		return str(entry.get("prompt_kind", "prompt"))
+	return str(entry.get("resource_kind", entry_kind))
+
+
 func _build_signature(model: Dictionary) -> String:
 	set_meta("_mcp_catalog_preview", model.get("mcp_catalog_preview", {}))
 	return JSON.stringify({
 		"language": str(model.get("current_language", "")),
 		"mode": _catalog_mode,
+		"view": _active_view,
 		"resources": model.get("mcp_resources", []),
 		"templates": model.get("mcp_resource_templates", []),
 		"prompts": model.get("mcp_prompts", []),
@@ -698,6 +785,12 @@ func _text(key: String) -> String:
 	if _localization != null:
 		return _localization.get_text(key)
 	return key
+
+
+func _safe_array(value) -> Array:
+	if value is Array:
+		return value as Array
+	return []
 
 
 func _get_description_text_color() -> Color:

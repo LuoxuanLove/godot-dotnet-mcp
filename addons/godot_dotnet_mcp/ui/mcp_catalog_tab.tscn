@@ -52,6 +52,21 @@ autowrap_mode = 3
 [node name="HeaderCounts" type="Label" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody"]
 unique_name_in_owner = true
 
+[node name="ViewModeRow" type="HBoxContainer" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CatalogViewButton" type="Button" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody/ViewModeRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+
+[node name="DiagnosticsViewButton" type="Button" parent="Scroll/Margin/Content/HeaderCard/HeaderMargin/HeaderBody/ViewModeRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+
 [node name="ResourcesCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
