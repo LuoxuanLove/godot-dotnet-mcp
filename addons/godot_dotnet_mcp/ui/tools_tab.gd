@@ -169,13 +169,19 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 	var display_name := _get_presentation_node_display_name(filtered_node)
 	var metadata := _build_presentation_node_metadata(filtered_node, display_name)
 	match kind:
-		"domain", "category":
+		"domain", "category", "executor_domain", "executor_category":
 			_configure_item_toggle(item, _is_presentation_group_enabled(filtered_node))
 			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", 0)), int(filtered_node.get("totalCount", 0))]
 			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(filtered_node.get("labelKey", ""))))
-		"tool":
+		"tool_group", "diagnostic_node":
+			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", filtered_node.get("toolCount", 0))), int(filtered_node.get("totalCount", filtered_node.get("toolCount", 0)))]
+			_configure_info_row(item, text, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key))
+		"tool", "public_tool", "executor_tool":
 			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
 			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _get_tool_metadata(key)))
+			if str(filtered_node.get("callability", "")) == "not_callable":
+				item.set_editable(TREE_CHECK_COLUMN, false)
+				item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 		"atomic":
 			_configure_info_row(item, display_name, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), TreeCollapseState.KIND_ATOMIC, key))
 		"action":
@@ -213,7 +219,7 @@ func _presentation_node_matches_search(model: Dictionary, node: Dictionary, quer
 	if display_name.contains(query) or str(node.get("key", "")).to_lower().contains(query):
 		return true
 	var kind := str(node.get("kind", ""))
-	if kind == "tool" or kind == "atomic":
+	if _is_tool_like_presentation_kind(kind) or kind == "atomic":
 		var full_name := str(node.get("fullName", node.get("key", "")))
 		var metadata := _get_tool_metadata(full_name, node)
 		if _get_tool_description(model.get("localization"), full_name, metadata).to_lower().contains(query):
@@ -233,7 +239,9 @@ func _get_presentation_node_display_name(node: Dictionary) -> String:
 			return _localization.get_text(str(node.get("labelKey", "domain_other")))
 		"category":
 			return _get_category_label(_localization, str(node.get("category", node.get("key", ""))))
-		"tool", "atomic":
+		"tool_group", "executor_domain", "executor_category", "diagnostic_node":
+			return _get_labeled_presentation_name(node)
+		"tool", "public_tool", "executor_tool", "legacy_tool", "atomic":
 			var full_name := str(node.get("fullName", node.get("key", "")))
 			return _get_tool_display_name(_localization, full_name, str(node.get("toolName", node.get("tool_name", ""))))
 		"action":
@@ -244,7 +252,9 @@ func _get_presentation_node_display_name(node: Dictionary) -> String:
 func _build_presentation_node_metadata(node: Dictionary, display_name: String) -> Dictionary:
 	var kind := str(node.get("kind", ""))
 	var key := str(node.get("key", node.get("id", "")))
+	var normalized_kind := _normalize_presentation_kind(kind)
 	var extra := {
+		"presentation_kind": kind,
 		"label_key": str(node.get("labelKey", "")),
 		"category": str(node.get("category", "")),
 		"tool_name": str(node.get("toolName", node.get("tool_name", ""))),
@@ -268,7 +278,7 @@ func _build_presentation_node_metadata(node: Dictionary, display_name: String) -
 		extra["tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
 		extra["parent_tool"] = str(node.get("parentTool", node.get("parent_tool", "")))
 		extra["description_key"] = str(node.get("descriptionKey", ""))
-	return _build_tree_node_metadata(kind, key, display_name, key, extra)
+	return _build_tree_node_metadata(normalized_kind, key, display_name, key, extra)
 
 
 func _is_presentation_group_enabled(node: Dictionary) -> bool:
@@ -282,10 +292,16 @@ func _presentation_collapse_kind(kind: String) -> String:
 			return TreeCollapseState.KIND_DOMAIN
 		"category":
 			return TreeCollapseState.KIND_CATEGORY
-		"tool":
+		"tool", "public_tool", "executor_tool":
 			return TreeCollapseState.KIND_TOOL
 		"atomic":
 			return TreeCollapseState.KIND_ATOMIC
+		"tool_group":
+			return TreeCollapseState.KIND_CATEGORY
+		"executor_domain":
+			return TreeCollapseState.KIND_DOMAIN
+		"executor_category", "diagnostic_node":
+			return TreeCollapseState.KIND_CATEGORY
 	return kind
 
 
@@ -576,7 +592,7 @@ func _count_presentation_nodes(nodes: Array) -> Dictionary:
 		if not (entry is Dictionary):
 			continue
 		var node := entry as Dictionary
-		if str(node.get("kind", "")) == "tool":
+		if _is_tool_like_presentation_kind(str(node.get("kind", ""))):
 			total += 1
 			if bool(node.get("enabled", false)):
 				enabled += 1
@@ -647,6 +663,48 @@ func _get_group_tooltip(localization, label_key: String) -> String:
 	var desc_key = "%s_desc" % label_key
 	var translated = localization.get_text(desc_key)
 	return translated if translated != desc_key else ""
+
+
+func _get_labeled_presentation_name(node: Dictionary) -> String:
+	var label_key := str(node.get("labelKey", ""))
+	if _localization != null and not label_key.is_empty():
+		var translated = _localization.get_text(label_key)
+		if translated != label_key:
+			return translated
+	var label := str(node.get("label", ""))
+	if not label.is_empty():
+		return _humanize_identifier(label)
+	return _humanize_identifier(str(node.get("key", node.get("id", ""))))
+
+
+func _normalize_presentation_kind(kind: String) -> String:
+	match kind:
+		"public_tool", "executor_tool", "legacy_tool":
+			return "tool"
+		"tool_group", "diagnostic_node":
+			return "category"
+		"executor_domain":
+			return "domain"
+		"executor_category":
+			return "category"
+	return kind
+
+
+func _is_tool_like_presentation_kind(kind: String) -> bool:
+	return ["tool", "public_tool", "executor_tool"].has(kind)
+
+
+func _active_tool_presentation() -> Dictionary:
+	var active = _current_model.get("active_tool_presentation", {})
+	if active is Dictionary and not (active as Dictionary).is_empty():
+		return (active as Dictionary)
+	var agent = _current_model.get("agent_tool_presentation", {})
+	if agent is Dictionary and not (agent as Dictionary).is_empty():
+		return (agent as Dictionary)
+	var presentation = _current_model.get("tool_presentation", {})
+	if presentation is Dictionary:
+		return (presentation as Dictionary)
+	return {}
 
 
 func _get_tool_display_name(localization, full_name: String, tool_name: String) -> String:
@@ -1407,7 +1465,7 @@ func _get_presentation_category_tool_metadata(category: String) -> Array:
 
 
 func _find_presentation_node(kind: String, key: String) -> Dictionary:
-	for node in _current_model.get("toolTree", []):
+	for node in _active_tool_presentation().get("toolTree", []):
 		if not (node is Dictionary):
 			continue
 		var found := _find_presentation_node_recursive(node as Dictionary, kind, key)
@@ -1417,7 +1475,8 @@ func _find_presentation_node(kind: String, key: String) -> Dictionary:
 
 
 func _find_presentation_node_recursive(node: Dictionary, kind: String, key: String) -> Dictionary:
-	if str(node.get("kind", "")) == kind:
+	var node_kind := str(node.get("kind", ""))
+	if node_kind == kind or _normalize_presentation_kind(node_kind) == kind:
 		var node_key := str(node.get("key", node.get("id", "")))
 		var category_key := str(node.get("category", ""))
 		if node_key == key or category_key == key:
@@ -1715,7 +1774,7 @@ func _find_domain_definition(domain_key: String) -> Dictionary:
 
 
 func _get_tool_metadata(full_name: String, fallback: Dictionary = {}) -> Dictionary:
-	var presentation = _current_model.get("tool_presentation", {})
+	var presentation = _active_tool_presentation()
 	var metadata_by_name = (presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}
 	var metadata: Dictionary = {}
 	var has_shared_metadata := false
@@ -2002,7 +2061,11 @@ func _build_tree_signature(model: Dictionary) -> String:
 		JSON.stringify(model.get("toolTree", []))
 	]
 	if _has_presentation_tree(model):
-		var presentation = model.get("tool_presentation", {})
+		var presentation = model.get("active_tool_presentation", {})
+		if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
+			presentation = model.get("agent_tool_presentation", {})
+		if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
+			presentation = model.get("tool_presentation", {})
 		parts.append(JSON.stringify((presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}))
 		return "\n".join(parts)
 	var categories: Array = tools_by_category.keys()
