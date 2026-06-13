@@ -236,7 +236,7 @@ static void BrokerListsRegisteredProjectsWithoutRenewingSessions()
         EditorBridgeState.Online,
         secondProject.ProjectId,
         "editor_session_1",
-        "v2.0.0",
+        "v3.0.0",
         SupportsLiveEditorState: true));
     var firstExpiry = firstSession.Identity.ExpiresAtUtc;
     var secondExpiry = secondSession.Identity.ExpiresAtUtc;
@@ -291,7 +291,7 @@ static void BrokerReportsStatusWithoutSideEffects()
         EditorBridgeState.Online,
         secondProject.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     broker.UpgradeSessionToEditorLive(new ToolRequestScope(secondProject.ProjectId, secondSession.Identity.SessionId));
     broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
@@ -375,7 +375,7 @@ static void BrokerReportsProjectHealthWithoutSideEffects()
         EditorBridgeState.Online,
         firstProject.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     broker.UpgradeSessionToEditorLive(new ToolRequestScope(firstProject.ProjectId, secondSession.Identity.SessionId));
     now = now.AddSeconds(5);
@@ -411,7 +411,7 @@ static void BrokerReportsProjectHealthWithoutSideEffects()
         EditorBridgeState.Online,
         firstProject.ProjectId,
         "editor_session_2",
-        "2.0.0",
+        "3.0.0",
         false));
     var unsupportedLiveState = broker.GetProjectHealth(firstProject.ProjectId);
     AssertTrue(unsupportedLiveState.StoredBridgeStatus);
@@ -497,14 +497,14 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
             EditorBridgeState.Online,
             string.Empty,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             true)));
     AssertThrows<KeyNotFoundException>(() =>
         broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
             EditorBridgeState.Online,
             "project_missing",
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             true)));
 
     var defaultStatus = broker.GetEditorBridgeStatus(project.ProjectId);
@@ -516,7 +516,7 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true);
     var updatedStatus = broker.UpdateEditorBridgeStatus(onlineStatus);
     AssertEqual(onlineStatus, updatedStatus);
@@ -546,7 +546,7 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
             EditorBridgeState.Online,
             raceProject.ProjectId,
             "stale_editor_session",
-            "2.0.0",
+            "3.0.0",
             true);
 
         var removeTask = Task.Run(() => raceBroker.RemoveProject(raceProject.ProjectId));
@@ -599,7 +599,7 @@ static void BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
 
     now = now.AddSeconds(1);
@@ -647,7 +647,7 @@ static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true);
     broker.UpdateEditorBridgeStatus(onlineStatus);
 
@@ -675,7 +675,7 @@ static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_2",
-        "2.0.0",
+        "3.0.0",
         true));
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
     AssertEqual("editor_session_2", session.Identity.EditorSessionId);
@@ -704,7 +704,7 @@ static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
             EditorBridgeState.Online,
             raceProject.ProjectId,
             "race_editor_session",
-            "2.0.0",
+            "3.0.0",
             true);
         raceBroker.UpdateEditorBridgeStatus(raceOnlineStatus);
 
@@ -773,13 +773,13 @@ static void BrokerShutdownRevokesSessionsAndClearsBridgeState()
         EditorBridgeState.Online,
         firstProject.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
         EditorBridgeState.Online,
         secondProject.ProjectId,
         "editor_session_2",
-        "2.0.0",
+        "3.0.0",
         true));
     now = now.AddSeconds(5);
 
@@ -953,7 +953,7 @@ static void BrokerEvaluatesToolAvailabilityWithoutRenewingSessions()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     broker.UpgradeSessionToEditorLive(scope);
     var liveTool = broker.EvaluateToolAvailability(
@@ -1022,7 +1022,7 @@ static void ReportsSessionCapabilitiesWithoutRenewingLeases()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     broker.UpgradeSessionToEditorLive(scope);
     var liveSnapshot = broker.GetSessionCapabilities(scope);
@@ -1105,7 +1105,7 @@ static void BrokerReportsSessionHealthWithoutRenewingLeases()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     var eligibleHealth = broker.EvaluateSessionHealth(scope);
     AssertTrue(eligibleHealth.Available);
@@ -1188,7 +1188,7 @@ static void SessionHealthUsesOneClockSnapshot()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
     AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:10Z"), session.Identity.ExpiresAtUtc);
 
@@ -1252,7 +1252,7 @@ static void StopsAndRejectsRevokedSessions()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             true)));
     AssertThrows<KeyNotFoundException>(() => broker.ResolveSession(scope));
     AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
@@ -1273,7 +1273,7 @@ static void ExpiresAndRejectsStaleSessions()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             true)));
     AssertThrows<InvalidOperationException>(() =>
         broker.ResolveSession(new ToolRequestScope(project.ProjectId, session.Identity.SessionId)));
@@ -1352,7 +1352,7 @@ static void RevokedSessionsStayTerminalUnderConcurrency()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             true);
 
         var stopTask = Task.Run(() =>
@@ -1505,7 +1505,7 @@ static void EditorLiveUpgradeEligibilityDoesNotMutateSession()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true);
     var eligible = session.EvaluateEditorLiveUpgrade(eligibleBridge);
 
@@ -1531,7 +1531,7 @@ static void EditorLiveUpgradeEligibilityDoesNotMutateSession()
         EditorBridgeState.Online,
         otherProject.ProjectId,
         "editor_session_2",
-        "2.0.0",
+        "3.0.0",
         true));
     AssertFalse(mismatch.Eligible);
     AssertEqual(EditorLiveUpgradeEligibilityReason.ProjectMismatch, mismatch.Reason);
@@ -1540,7 +1540,7 @@ static void EditorLiveUpgradeEligibilityDoesNotMutateSession()
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_3",
-        "2.0.0",
+        "3.0.0",
         false));
     AssertFalse(missingLiveState.Eligible);
     AssertEqual(EditorLiveUpgradeEligibilityReason.LiveEditorStateUnavailable, missingLiveState.Reason);
@@ -1566,7 +1566,7 @@ static void EditorLiveUpgradeEligibilityDoesNotMutateSession()
         EditorBridgeState.Online,
         revokedProject.ProjectId,
         "editor_session_5",
-        "2.0.0",
+        "3.0.0",
         true));
     AssertFalse(stopped.Eligible);
     AssertEqual(EditorLiveUpgradeEligibilityReason.SessionStopped, stopped.Reason);
@@ -1593,14 +1593,14 @@ static void ExplicitBridgeUpgradeEnablesLiveCapabilities()
             EditorBridgeState.Online,
             project.ProjectId,
             null,
-            "2.0.0",
+            "3.0.0",
             true)));
 
     session.UpgradeToEditorLive(new EditorBridgeStatus(
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "2.0.0",
+        "3.0.0",
         true));
 
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
@@ -1628,7 +1628,7 @@ static void BridgeLiveStateSupportIsRequired()
             EditorBridgeState.Online,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             false)));
     AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
 }
@@ -1644,16 +1644,17 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
         null,
         "",
         "1.4.0",
-        "3.0.0",
+        "2.0.0",
+        "4.0.0",
         "not-a-version",
-        " 2.0.0",
-        "2.0.0 ",
-        "02.0.0",
-        "2.0.0-",
-        "2.0.0+",
-        "2.0.0-%%%",
-        "2.0.0+bad space",
-        "2.0.0-preview..1",
+        " 3.0.0",
+        "3.0.0 ",
+        "03.0.0",
+        "3.0.0-",
+        "3.0.0+",
+        "3.0.0-%%%",
+        "3.0.0+bad space",
+        "3.0.0-preview..1",
     })
     {
         AssertThrows<InvalidOperationException>(() =>
@@ -1671,14 +1672,14 @@ static void IncompatibleEditorBridgeVersionsAreRejected()
             EditorBridgeState.VersionMismatch,
             project.ProjectId,
             "editor_session_1",
-            "2.0.0",
+            "3.0.0",
             false)));
 
     session.UpgradeToEditorLive(new EditorBridgeStatus(
         EditorBridgeState.Online,
         project.ProjectId,
         "editor_session_1",
-        "v2.0.0-preview.1+build.5",
+        "v3.0.0-preview.1+build.5",
         true));
     AssertEqual(CompanionMode.EditorLive, session.Identity.Mode);
 }

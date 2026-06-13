@@ -136,7 +136,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"current_language": "en",
 		"log_levels": ["debug", "info"],
 		"update_refs_branches": ["dev", "feature/dock"],
-		"update_refs_releases": ["v1.0.0", "v2.0.0"],
+		"update_refs_releases": ["v1.0.0", "v3.0.0"],
 		"update_refs_state": "success",
 		"update_refs_commits": {"dev": "1234567890abcdef"},
 		"update_refs_versions": {"dev": "1.4.0"},
@@ -210,7 +210,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"current_language": "en",
 		"log_levels": ["debug", "info"],
 		"update_refs_branches": ["dev", "feature/dock"],
-		"update_refs_releases": ["v1.0.0", "v2.0.0"],
+		"update_refs_releases": ["v1.0.0", "v3.0.0"],
 		"plugin_version": "1.0.1",
 		"plugin_freshness": {}
 	})

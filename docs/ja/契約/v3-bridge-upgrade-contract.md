@@ -1,6 +1,6 @@
-# v2 Bridge Upgrade Contract
+# v3 Bridge Upgrade Contract
 
-v2 Companion bridge contract では、editor-live state の authority を Godot editor plugin に保ちます。Project session は editor が開いていない時も static/headless analysis を提供できますが、matching editor bridge が online state を報告するまでは selected nodes、Inspector state、Dock state、screenshots、runtime validation を公開できません。
+v3 Companion bridge contract では、editor-live state の authority を Godot editor plugin に保ちます。Project session は editor が開いていない時も static/headless analysis を提供できますが、matching editor bridge が online state を報告するまでは selected nodes、Inspector state、Dock state、screenshots、runtime validation を公開できません。
 
 ## Bridge States
 

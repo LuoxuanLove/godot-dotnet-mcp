@@ -90,13 +90,13 @@ These examples should emphasize repeatability and evidence, not marketing breadt
 - Keep Asset Library installation verification aligned with the exported plugin contents
 - Make sure release notes and the changelog describe user-visible capabilities and important internal verification changes, not implementation logs
 
-## v2.0 Direction
+## v3.0 Direction
 
-v2.0 is the right stage to explore structural extensions beyond the 1.x editor-native plugin boundary. The main area to explore is an optional external or headless companion mode.
+v3.0 is the right stage to explore structural extensions beyond the 1.x editor-native plugin boundary. The main area to explore is an optional external or headless companion mode.
 
 ### Optional External or Headless Companion
 
-Only consider a v2.0 companion if it solves real workflows that the editor-native plugin cannot cover well. Possible goals include:
+Only consider a v3.0 companion if it solves real workflows that the editor-native plugin cannot cover well. Possible goals include:
 
 - checking `.tscn`, `.tres`, `.csproj`, solution files, and C# source without opening the editor UI
 - running builds, restores, static audits, resource-reference checks, and binding checks in local automation or CI-style environments
@@ -106,7 +106,7 @@ Only consider a v2.0 companion if it solves real workflows that the editor-nativ
 
 This companion must not weaken the core plugin experience. The editor plugin should remain the authoritative source for live editor state, selected nodes, Dock state, editor screenshots, editor logs, and editor UI control.
 
-### v2.0 Structure Principles
+### v3.0 Structure Principles
 
 - Keep the 1.x editor-native plugin as the stable mode, not as a soon-to-be-removed transition path
 - Any companion must be optional, explicit, and capability-gated. It must not become a hidden required background process
@@ -116,7 +116,7 @@ This companion must not weaken the core plugin experience. The editor plugin sho
 
 ### Deeper .NET Runtime and Debugging Story
 
-If the Godot and .NET debugging boundaries allow it, v2.0 can also explore a deeper .NET workflow:
+If the Godot and .NET debugging boundaries allow it, v3.0 can also explore a deeper .NET workflow:
 
 - stronger mapping from managed exceptions to C# source, scenes, and resources
 - richer MSBuild and SDK compatibility diagnostics

@@ -1,6 +1,6 @@
-# v2 Bridge 升级契约
+# v3 Bridge 升级契约
 
-v2 Companion bridge 契约要求 editor-live 状态始终以 Godot 编辑器插件为权威来源。Project session 可以在未打开编辑器时继续提供 static/headless analysis，但在匹配的 editor bridge 报告 online 状态前，不得暴露选中节点、Inspector 状态、Dock 状态、截图或运行时验证。
+v3 Companion bridge 契约要求 editor-live 状态始终以 Godot 编辑器插件为权威来源。Project session 可以在未打开编辑器时继续提供 static/headless analysis，但在匹配的 editor bridge 报告 online 状态前，不得暴露选中节点、Inspector 状态、Dock 状态、截图或运行时验证。
 
 ## Bridge 状态
 

@@ -43,14 +43,17 @@ jobs:
 
           $pr = gh pr view $pullNumber --repo $env:REPOSITORY --json baseRefName,headRefName,headRepositoryOwner | ConvertFrom-Json
           $trustedPolicyRef = $pr.baseRefName
-          if (
-            ($pr.baseRefName -eq "v2.0" -and $pr.headRefName -eq "release/v2.0.0-baseline") -or
-            $pr.baseRefName -eq "release/v2.0.0-baseline" -or
-            $pr.baseRefName.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
-            $pr.baseRefName.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
-            $pr.baseRefName.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
-          ) {
+          if ($pr.baseRefName -eq "v2.0" -and $pr.headRefName -eq "release/v3.0.0-baseline") {
             $trustedPolicyRef = "v2.0"
+          }
+          elseif (
+            ($pr.baseRefName -eq "v3.0" -and $pr.headRefName -eq "release/v3.0.0-baseline") -or
+            $pr.baseRefName -eq "release/v3.0.0-baseline" -or
+            $pr.baseRefName.StartsWith("feature/v3-", [System.StringComparison]::Ordinal) -or
+            $pr.baseRefName.StartsWith("docs/v3-", [System.StringComparison]::Ordinal) -or
+            $pr.baseRefName.StartsWith("ci/v3-", [System.StringComparison]::Ordinal)
+          ) {
+            $trustedPolicyRef = "v3.0"
           }
 
           "pull_number=$pullNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -74,12 +77,12 @@ jobs:
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           HEAD_OWNER: ${{ steps.pr.outputs.head_owner }}
         run: |
-          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "v2.0", "release/v2.0.0-baseline")
-          $isV2StackBase = $env:BASE_BRANCH.StartsWith("feature/v2-", [System.StringComparison]::Ordinal) -or
-            $env:BASE_BRANCH.StartsWith("docs/v2-", [System.StringComparison]::Ordinal) -or
-            $env:BASE_BRANCH.StartsWith("ci/v2-", [System.StringComparison]::Ordinal)
-          if (($allowedBaseBranches -notcontains $env:BASE_BRANCH) -and -not $isV2StackBase) {
-            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, v2.0, or a v2 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
+          $allowedBaseBranches = @("dev", "refactor/v1.4.0", "v2.0", "v3.0", "release/v3.0.0-baseline")
+          $isVNextStackBase = $env:BASE_BRANCH.StartsWith("feature/v3-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("docs/v3-", [System.StringComparison]::Ordinal) -or
+            $env:BASE_BRANCH.StartsWith("ci/v3-", [System.StringComparison]::Ordinal)
+          if (($allowedBaseBranches -notcontains $env:BASE_BRANCH) -and -not $isVNextStackBase) {
+            throw "Version policy validation expects pull requests to target dev, refactor/v1.4.0, v2.0, v3.0, or an explicit v3 stacked base branch. Actual base branch: $($env:BASE_BRANCH)"
           }
 
           git fetch --no-tags --depth=1 origin "+refs/heads/$($env:BASE_BRANCH):refs/remotes/policy-base/$($env:BASE_BRANCH)"

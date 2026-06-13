@@ -87,11 +87,11 @@ try {
     Assert-Passes "plugin_version_policy_samples" {
         $schema = Get-Content -LiteralPath $schemaPath -Encoding UTF8 -Raw | ConvertFrom-Json
         $pattern = $schema.properties.plugin_version.pattern
-        foreach ($value in @("2.0.0", "v2.0.0", "2.0.0-preview.1", "2.0.0+build.5", "v2.0.0-preview.1+build.5")) {
+        foreach ($value in @("3.0.0", "v3.0.0", "3.0.0-preview.1", "3.0.0+build.5", "v3.0.0-preview.1+build.5")) {
             Assert-PatternAccepts -Pattern $pattern -Value $value
         }
 
-        foreach ($value in @("", " 2.0.0", "2.0.0 ", "1.4.0", "3.0.0", "02.0.0", "2.0.0-", "2.0.0+", "2.0.0-preview..1", "2.0.0+bad space")) {
+        foreach ($value in @("", " 3.0.0", "3.0.0 ", "1.4.0", "2.0.0", "4.0.0", "03.0.0", "3.0.0-", "3.0.0+", "3.0.0-preview..1", "3.0.0+bad space")) {
             Assert-PatternRejects -Pattern $pattern -Value $value
         }
     }

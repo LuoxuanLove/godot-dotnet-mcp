@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version_line": "2.0.0",
+  "version_line": "3.0.0",
   "contract": "godot-dotnet-mcp.v2.broker",
   "default_lifecycle": {
     "enabled_by_default": false,

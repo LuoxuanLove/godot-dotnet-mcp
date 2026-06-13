@@ -10,7 +10,8 @@ on:
     branches:
       - dev
       - v2.0
-      - release/v2.0.0-baseline
+      - v3.0
+      - release/v3.0.0-baseline
 
 permissions:
   contents: read

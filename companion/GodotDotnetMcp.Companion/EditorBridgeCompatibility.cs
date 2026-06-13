@@ -4,7 +4,7 @@ namespace GodotDotnetMcp.Companion;
 
 public static class EditorBridgeCompatibility
 {
-    public const int CompatibleMajorVersion = 2;
+    public const int CompatibleMajorVersion = 3;
     private static readonly Regex SemanticVersionPattern = new(
         """
         ^v?(?<core>(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))(?:-(?<pre>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$

@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "GodotDotnetMcp.PluginBridge/2.0.0": {
+      "GodotDotnetMcp.PluginBridge/3.0.0": {
         "dependencies": {
           "Microsoft.CodeAnalysis.CSharp": "4.13.0"
         },
@@ -51,7 +51,7 @@
     }
   },
   "libraries": {
-    "GodotDotnetMcp.PluginBridge/2.0.0": {
+    "GodotDotnetMcp.PluginBridge/3.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

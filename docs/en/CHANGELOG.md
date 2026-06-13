@@ -8,18 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes yet.
 
-## [2.0.0]
+## [3.0.0]
 
-Target version: 2.0.0.
+Target version: 3.0.0.
 
 ### Added
 
-- Added the first .NET Companion contract library and pure contract runner for v2.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
+- Added the first .NET Companion contract library and pure contract runner for v3.0 project sessions, capability-gated static/headless mode, explicit editor-live upgrades, and project/session-scoped tool calls.
 - Added explicit project session lifecycle controls with issued/last-used/expiry metadata, lease renewal, stop/revoke behavior, and stale-session rejection.
 - Added a Companion static/headless project inventory analyzer that reports Godot project status, discovered `.csproj` files, plugin directory presence, and editor-live unavailability reasons without starting Godot.
 - Added an unevaluated static .NET workspace graph that reports SDK, target frameworks, package references, project references, compile includes/removes, and Godot SDK/package hints without restoring or building projects.
 - Added a static resource reference graph for text `.tscn` and `.tres` files, covering external resources, sub-resources, `uid://` markers, `res://` usages, missing references, and unsupported binary `.res` files without opening the editor.
-- Added a v2 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, listening ports, or unscoped tool calls.
+- Added a v3 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, listening ports, or unscoped tool calls.
 - Added an explicit Broker project removal contract that drops registered projects and revokes their active project sessions without affecting other projects.
 - Added a non-mutating editor-live upgrade eligibility contract so clients can report upgrade blockers before explicitly switching a project session to editor-live mode.
 - Added a project-scoped Broker session listing contract so clients can inspect active sessions for one `project_id` without crossing project boundaries or renewing leases.
@@ -36,40 +36,40 @@ Target version: 2.0.0.
 ### Fixed
 
 - Fixed the static resource graph so `preload()` usages are not also recorded as `load()` usages, damaged external-resource fallback paths are diagnosed, and `res://` references crossing reparse points are not resolved as ordinary in-project files.
-- Rejected editor-live upgrades from bridge statuses that omit `supports_live_editor_state`, lack a compatible v2 plugin version, or report missing, malformed, older-major, newer-major, or explicit version-mismatch plugin versions.
+- Rejected editor-live upgrades from bridge statuses that omit `supports_live_editor_state`, lack a compatible v3 plugin version, or report missing, malformed, older-major, newer-major, or explicit version-mismatch plugin versions.
 - Aligned the bridge status `plugin_version` schema with the runtime compatibility parser for optional `v` prefixes, prerelease/build metadata, and whitespace rejection.
 - Bounded active project sessions globally and per project, and pruned expired sessions before accepting new sessions so stale entries cannot accumulate indefinitely.
 
 ### Documentation
 
 - Clarified source-copy installation guidance so users copy only the installable addon directory and do not install repository-level Companion, test, or script development directories into Godot projects.
-- Updated the four localized overview release-prep links so the v2.0.0 baseline points to the v2.0.0 release-note sources instead of the v1.4.0 notes.
-- Added the v2 editor bridge upgrade contract across localized docs, covering bridge states, explicit editor-live upgrade requirements, and project/session-scoped bridge use.
-- Initialized the v2.0.0 release-note sources across the four localized documentation trees so the version line has durable release narrative files before feature work begins.
+- Updated the four localized overview release-prep links so the v3.0.0 baseline points to the v3.0.0 release-note sources instead of the v1.4.0 notes.
+- Added the v3 editor bridge upgrade contract across localized docs, covering bridge states, explicit editor-live upgrade requirements, and project/session-scoped bridge use.
+- Initialized the v3.0.0 release-note sources across the four localized documentation trees so the version line has durable release narrative files before feature work begins.
 
 ### Internal
 
-- Scoped v2 Companion project identifiers by both Godot project root and explicit `.csproj` path so Broker registration can keep multiple C# projects under one Godot root isolated.
-- Added static/headless inventory project scopes that expose each discovered `.csproj` with its scoped v2 `project_id` while keeping the inventory root `project_id` stable.
+- Scoped v3 Companion project identifiers by both Godot project root and explicit `.csproj` path so Broker registration can keep multiple C# projects under one Godot root isolated.
+- Added static/headless inventory project scopes that expose each discovered `.csproj` with its scoped v3 `project_id` while keeping the inventory root `project_id` stable.
 - Added a static/headless default project-scope marker that is populated only for single-`.csproj` Godot roots so multi-project roots must be selected explicitly.
 - Added static/headless project-scope selection status so multi-`.csproj` roots report when clients must select an explicit scoped `project_id`.
-- Added explicit `.csproj` scope metadata to v2 project session identities so Broker clients can audit which C# project a scoped session is bound to.
-- Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
+- Added explicit `.csproj` scope metadata to v3 project session identities so Broker clients can audit which C# project a scoped session is bound to.
+- Moved the v3 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
-- Added a v2 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
-- Added machine-readable v2 Broker tool-scope validation results and manifest coverage for missing project/session IDs, unknown sessions, cross-project reuse, expired sessions, inactive sessions, and unavailable capabilities.
-- Added a v2 Broker registered-project snapshot that reports explicit project file scope plus active static/headless and editor-live session counts without scanning or renewing sessions.
-- Added a v2 Broker lifecycle-options contract that keeps the companion disabled by default and requires explicit broker start and editor launch.
-- Added a v2 Broker transport-options contract that keeps stdio as the default and requires explicit loopback-only HTTP enablement with a valid port.
-- Added v2 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
-- Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
+- Added a v3 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
+- Added machine-readable v3 Broker tool-scope validation results and manifest coverage for missing project/session IDs, unknown sessions, cross-project reuse, expired sessions, inactive sessions, and unavailable capabilities.
+- Added a v3 Broker registered-project snapshot that reports explicit project file scope plus active static/headless and editor-live session counts without scanning or renewing sessions.
+- Added a v3 Broker lifecycle-options contract that keeps the companion disabled by default and requires explicit broker start and editor launch.
+- Added a v3 Broker transport-options contract that keeps stdio as the default and requires explicit loopback-only HTTP enablement with a valid port.
+- Added v3 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
+- Added the v3 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.
 - Added regression coverage for static resource graph fallback diagnostics, preload/load classification, reparse-point references, bridge version policy samples, and project session limits.
 - Added Companion static analyzer build and contract-runner coverage to the .NET CI workflow.
-- Mirrored the Companion contract and static analyzer build/test gates into release workflows, added dry-run cache markers for those checks, and guarded active v2 baseline push filters for v2 contract workflows.
-- Added v2 bridge contract and broker manifest validators to release workflow gates, including dry-run cache markers for those policy checks.
-- Added `v2.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v2.0 release-baseline metadata changes and non-release version guardrails.
-- Allowed explicit v2 stacked pull request base branches in the branch-policy and version-policy validators so each v2 Companion feature can be reviewed independently without weakening non-v2 target protections.
+- Mirrored the Companion contract and static analyzer build/test gates into release workflows, added dry-run cache markers for those checks, and guarded active v3 baseline push filters for companion contract workflows.
+- Added v3 bridge contract and broker manifest validators to release workflow gates, including dry-run cache markers for those policy checks.
+- Added `v3.0` as an allowed pull request target for the branch policy and version-policy validators, with coverage for v3.0 release-baseline metadata changes and non-release version guardrails.
+- Allowed explicit v3 stacked pull request base branches in the branch-policy and version-policy validators so each v3 Companion feature can be reviewed independently without weakening non-v3 target protections.
 
 ## [Unreleased] ([1.4.0])
 

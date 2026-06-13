@@ -99,7 +99,7 @@ static func _default_facts() -> Dictionary:
 		"tool_schema_version": "2026-06-08.33",
 		"server_name": "godot-dotnet-mcp",
 		"server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation.",
-		"server_version": "2.0.0",
+		"server_version": "3.0.0",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch",
 			"runtime_not_running": "runtime_not_running",

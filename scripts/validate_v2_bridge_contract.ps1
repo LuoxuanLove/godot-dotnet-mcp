@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($SchemaPath)) {
 
 $schema = Get-Content -LiteralPath (Resolve-Path -LiteralPath $SchemaPath) -Encoding UTF8 -Raw | ConvertFrom-Json
 
-if ($schema.title -ne "Godot .NET MCP v2 Editor Bridge Status") {
+if ($schema.title -ne "Godot .NET MCP v3 Editor Bridge Status") {
     throw "Unexpected bridge status schema title."
 }
 
@@ -48,9 +48,9 @@ if ($onlineRule.then.properties.plugin_version.type -ne "string") {
     throw "Online bridge status must require a string plugin_version."
 }
 
-$expectedPluginVersionPattern = "^v?2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+$expectedPluginVersionPattern = "^v?3\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 if ($schema.properties.plugin_version.pattern -ne $expectedPluginVersionPattern) {
-    throw "Bridge status schema plugin_version pattern must match the v2 compatibility policy."
+    throw "Bridge status schema plugin_version pattern must match the v3 compatibility policy."
 }
 
 if ($onlineRule.then.properties.supports_live_editor_state.const -ne $true) {
