@@ -278,6 +278,9 @@ func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
 		"MCPPromptsServiceScript",
 		"MCPToolRpcRouterScript",
 		"MCPStdioJsonRpcServiceScript",
+		"MCPJsonRpcRequestServiceScript",
+		"MCPJsonRpcRouterScript",
+		"MCPJsonRpcMethodServiceScript",
 		"func handle_request_async",
 		"func handle_tools_call_async",
 		"func get_stdio_tool_loader_status"
@@ -287,13 +290,30 @@ func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
 	var json_rpc_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_json_rpc_service.gd")
 	for required_json_rpc in [
 		"func handle_request_async",
+		"_json_rpc_request_service.handle_request_async",
+		"_json_rpc_router.route_request_async",
+		"_json_rpc_method_service.handle_tools_list",
+		"_json_rpc_method_service.handle_resources_read",
+		"_json_rpc_method_service.handle_prompts_get"
+	]:
+		if json_rpc_source.find(required_json_rpc) == -1:
+			return _failure("MCPStdioJsonRpcService should delegate stdio JSON-RPC semantics to the shared request/router/method stack: missing '%s'." % required_json_rpc)
+	for forbidden_json_rpc in [
+		"match method",
+		"\"initialize\":",
+		"\"resources/read\":",
+		"\"prompts/get\":"
+	]:
+		if json_rpc_source.find(forbidden_json_rpc) != -1:
+			return _failure("MCPStdioJsonRpcService should not own stdio JSON-RPC method dispatch anymore: found '%s'." % forbidden_json_rpc)
+	for retained_helper in [
 		"func handle_tools_list",
 		"func handle_tools_call_async",
 		"func handle_resources_read",
 		"func handle_prompts_get"
 	]:
-		if json_rpc_source.find(required_json_rpc) == -1:
-			return _failure("MCPStdioJsonRpcService should own stdio JSON-RPC method dispatch: missing '%s'." % required_json_rpc)
+		if json_rpc_source.find(retained_helper) == -1:
+			return _failure("MCPStdioJsonRpcService should retain compatibility helper '%s' for focused stdio harness probes." % retained_helper)
 	return {"success": true, "error": ""}
 
 

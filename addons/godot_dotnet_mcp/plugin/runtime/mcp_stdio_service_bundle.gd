@@ -7,6 +7,10 @@ const MCPPromptsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const MCPToolRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd")
 const MCPStdioJsonRpcServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_json_rpc_service.gd")
+const MCPJsonRpcRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd")
+const MCPJsonRpcRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_router.gd")
+const MCPJsonRpcMethodServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_service.gd")
+const MCPHttpResponseServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd")
 const MCPStdioServiceContextBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
 
 var _server = null
@@ -16,6 +20,10 @@ var _prompts_service = null
 var _tool_rpc_router = null
 var _tool_activity_registry = MCPToolActivityRegistry.new()
 var _json_rpc_service = null
+var _json_rpc_request_service = null
+var _json_rpc_router = null
+var _json_rpc_method_service = null
+var _json_rpc_response_service = null
 
 
 func configure(server) -> void:
@@ -36,10 +44,18 @@ func dispose() -> void:
 	_dispose_helper(_prompts_service)
 	_dispose_helper(_tool_rpc_router)
 	_dispose_helper(_json_rpc_service)
+	_dispose_helper(_json_rpc_request_service)
+	_dispose_helper(_json_rpc_router)
+	_dispose_helper(_json_rpc_method_service)
+	_dispose_helper(_json_rpc_response_service)
 	_resources_service = null
 	_prompts_service = null
 	_tool_rpc_router = null
 	_json_rpc_service = null
+	_json_rpc_request_service = null
+	_json_rpc_router = null
+	_json_rpc_method_service = null
+	_json_rpc_response_service = null
 	_tool_activity_registry = null
 	_context_builder = null
 	_server = null
@@ -172,24 +188,49 @@ func _ensure_prompts_service() -> void:
 func _ensure_json_rpc_service() -> void:
 	if _json_rpc_service == null:
 		_json_rpc_service = MCPStdioJsonRpcServiceScript.new()
-	_ensure_tool_rpc_router()
-	_ensure_resources_service()
-	_ensure_prompts_service()
-	var get_tool_loader_callback := func(): return _get_tool_loader()
-	var emit_request_received_callback := func(method: String, params: Dictionary) -> void:
-		if _server != null:
-			_server.call_deferred("emit_signal", "request_received", method, params)
+	_ensure_json_rpc_request_service()
+	_ensure_json_rpc_router()
 	var log_callback := func(message: String, level: String = "debug") -> void:
 		if _server != null:
 			_server.call("_log", message, level)
 	_json_rpc_service.configure({
-		"tool_rpc_router": _tool_rpc_router,
-		"resources_service": _resources_service,
-		"prompts_service": _prompts_service,
-		"get_tool_loader": get_tool_loader_callback,
-		"emit_request_received": emit_request_received_callback,
+		"json_rpc_request_service": _json_rpc_request_service,
+		"json_rpc_router": _json_rpc_router,
+		"json_rpc_method_service": _json_rpc_method_service,
+		"json_rpc_response_service": _json_rpc_response_service,
 		"log": log_callback
 	})
+
+
+func _ensure_json_rpc_request_service() -> void:
+	if _json_rpc_request_service == null:
+		_json_rpc_request_service = MCPJsonRpcRequestServiceScript.new()
+	_ensure_json_rpc_router()
+	_ensure_json_rpc_response_service()
+	_json_rpc_request_service.configure(_context_builder.build_json_rpc_request_context(_server, _json_rpc_router, _json_rpc_response_service))
+
+
+func _ensure_json_rpc_router() -> void:
+	if _json_rpc_router == null:
+		_json_rpc_router = MCPJsonRpcRouterScript.new()
+	_ensure_json_rpc_method_service()
+	_ensure_json_rpc_response_service()
+	_json_rpc_router.configure(_context_builder.build_json_rpc_router_context(_server, _json_rpc_method_service, _json_rpc_response_service))
+
+
+func _ensure_json_rpc_method_service() -> void:
+	if _json_rpc_method_service == null:
+		_json_rpc_method_service = MCPJsonRpcMethodServiceScript.new()
+	_ensure_tool_rpc_router()
+	_ensure_resources_service()
+	_ensure_prompts_service()
+	_ensure_json_rpc_response_service()
+	_json_rpc_method_service.configure(_context_builder.build_json_rpc_method_context(_server, _tool_rpc_router, _resources_service, _prompts_service, _json_rpc_response_service))
+
+
+func _ensure_json_rpc_response_service() -> void:
+	if _json_rpc_response_service == null:
+		_json_rpc_response_service = MCPHttpResponseServiceScript.new()
 
 
 func _get_tool_loader():
