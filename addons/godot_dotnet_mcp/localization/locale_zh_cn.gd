@@ -90,6 +90,9 @@ const TRANSLATIONS: Dictionary = {
 	# Tools tab
 	"tools_enabled": "工具：%d/%d 已启用",
 	"external_tools_enabled": "对外工具：%d/%d",
+	"tools_view_agent_tools": "Agent 工具",
+	"tools_view_internal_executors": "内部执行器",
+	"tools_view_diagnostics": "诊断",
 	"tool_profile": "预设：",
 	"tool_profile_system": "系统",
 	"tool_profile_task": "任务",
