@@ -98,6 +98,54 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "project_registry_lists_registered_projects" {
+        $path = Join-Path $tempRoot "project-registry-list.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.lists_registered_projects = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_registry_reports_active_session_counts" {
+        $path = Join-Path $tempRoot "project-registry-session-counts.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.reports_active_session_counts = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_registry_reports_session_mode_counts" {
+        $path = Join-Path $tempRoot "project-registry-mode-counts.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.reports_session_mode_counts = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_registry_reports_project_file_scope" {
+        $path = Join-Path $tempRoot "project-registry-file-scope.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.reports_project_file_scope = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_registry_listing_does_not_renew_sessions" {
+        $path = Join-Path $tempRoot "project-registry-renew.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.list_projects_renews_sessions = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_registry_listing_does_not_scan_filesystem" {
+        $path = Join-Path $tempRoot "project-registry-scan.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_registry.list_projects_scans_filesystem = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "http_loopback_cannot_be_default" {
         $path = Join-Path $tempRoot "http-default.json"
         $manifest = Copy-Manifest -Path $path

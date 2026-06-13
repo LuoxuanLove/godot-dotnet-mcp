@@ -9,6 +9,7 @@ var tests = new (string Name, Action Run)[]
     ("disambiguates_same_root_csproj_scopes", ProjectDescriptorDisambiguatesSameRootProjectFiles),
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
+    ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
@@ -125,6 +126,60 @@ static void BrokerRegistersProjectsThroughDescriptorFactory()
 
     AssertEqual(project.ProjectId, session.Identity.ProjectId);
     AssertEqual(Path.GetFullPath(root), project.ProjectRoot);
+}
+
+static void BrokerListsRegisteredProjectsWithoutRenewingSessions()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondRoot = CreateTempProjectRoot();
+    var secondProjectFile = Path.Combine(secondRoot, "Game.csproj");
+    File.WriteAllText(secondProjectFile, "<Project />");
+    var secondProject = broker.RegisterProject(secondRoot, secondProjectFile);
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(secondProject.ProjectId);
+    secondSession.UpgradeToEditorLive(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        secondProject.ProjectId,
+        "editor_session_1",
+        "v2.0.0",
+        SupportsLiveEditorState: true));
+    var firstExpiry = firstSession.Identity.ExpiresAtUtc;
+    var secondExpiry = secondSession.Identity.ExpiresAtUtc;
+    now = now.AddSeconds(5);
+
+    var projects = broker.ListProjects().ToArray();
+
+    AssertEqual(2, projects.Length);
+    var sortedProjectIds = projects.Select(project => project.ProjectId)
+        .OrderBy(projectId => projectId, StringComparer.Ordinal)
+        .ToArray();
+    AssertEqual(sortedProjectIds[0], projects[0].ProjectId);
+    AssertEqual(sortedProjectIds[1], projects[1].ProjectId);
+    var firstSummary = projects.Single(project => project.ProjectId == firstProject.ProjectId);
+    var secondSummary = projects.Single(project => project.ProjectId == secondProject.ProjectId);
+    AssertEqual(firstProject.ProjectRoot, firstSummary.ProjectRoot);
+    AssertEqual<string?>(null, firstSummary.ProjectFilePath);
+    AssertFalse(firstSummary.ProjectFileScoped);
+    AssertEqual(1, firstSummary.ActiveSessionCount);
+    AssertEqual(1, firstSummary.StaticHeadlessSessionCount);
+    AssertEqual(0, firstSummary.EditorLiveSessionCount);
+    AssertEqual(secondProject.ProjectRoot, secondSummary.ProjectRoot);
+    AssertEqual(secondProject.ProjectFilePath, secondSummary.ProjectFilePath);
+    AssertTrue(secondSummary.ProjectFileScoped);
+    AssertEqual(1, secondSummary.ActiveSessionCount);
+    AssertEqual(0, secondSummary.StaticHeadlessSessionCount);
+    AssertEqual(1, secondSummary.EditorLiveSessionCount);
+    AssertEqual(firstExpiry, firstSession.Identity.ExpiresAtUtc);
+    AssertEqual(secondExpiry, secondSession.Identity.ExpiresAtUtc);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), firstSession.Identity.LastUsedAtUtc);
+
+    now = now.AddSeconds(6);
+    firstSummary = broker.ListProjects().Single(project => project.ProjectId == firstProject.ProjectId);
+    secondSummary = broker.ListProjects().Single(project => project.ProjectId == secondProject.ProjectId);
+    AssertEqual(0, firstSummary.ActiveSessionCount);
+    AssertEqual(0, secondSummary.ActiveSessionCount);
 }
 
 static void SessionIdentityPreservesExplicitProjectFileScope()

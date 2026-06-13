@@ -45,6 +45,7 @@ Target version: 2.0.0.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added a v2 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
 - Added machine-readable v2 Broker tool-scope validation results and manifest coverage for missing project/session IDs, unknown sessions, cross-project reuse, expired sessions, inactive sessions, and unavailable capabilities.
+- Added a v2 Broker registered-project snapshot that reports explicit project file scope plus active static/headless and editor-live session counts without scanning or renewing sessions.
 - Added v2 broker manifest session-lifecycle contract checks for leases, renew/stop behavior, expired-session handling, and active-session limits.
 - Added the v2 bridge status schema, validator, negative policy tests, and CI coverage so online bridge status requires a non-empty editor session identity.
 - Added Companion contract coverage that prevents static/headless sessions from claiming editor-live capabilities until a matching online editor bridge is present.

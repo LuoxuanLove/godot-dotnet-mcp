@@ -87,6 +87,14 @@ Assert-Bool -Actual (Require-Bool -Object $discovery -Name "scans_known_projects
 Assert-Bool -Actual (Require-Bool -Object $discovery -Name "allows_recursive_home_scan" -Context "project_discovery") -Expected $false -Message "Broker discovery must not allow recursive home scans."
 Assert-Bool -Actual (Require-Bool -Object $discovery -Name "requires_explicit_project_registration" -Context "project_discovery") -Expected $true -Message "Broker discovery must require explicit project registration."
 
+$projectRegistry = $manifest.project_registry
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "lists_registered_projects" -Context "project_registry") -Expected $true -Message "Broker project registry must list explicitly registered projects."
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "reports_active_session_counts" -Context "project_registry") -Expected $true -Message "Broker project registry must report active session counts."
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "reports_session_mode_counts" -Context "project_registry") -Expected $true -Message "Broker project registry must report session mode counts."
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "reports_project_file_scope" -Context "project_registry") -Expected $true -Message "Broker project registry must report explicit project file scope."
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "list_projects_renews_sessions" -Context "project_registry") -Expected $false -Message "Broker project listing must not renew session leases."
+Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "list_projects_scans_filesystem" -Context "project_registry") -Expected $false -Message "Broker project listing must not scan the filesystem."
+
 $transport = $manifest.transport
 $allowedModes = @($transport.allowed_modes)
 if ($allowedModes.Count -ne 2 -or $allowedModes -notcontains "stdio" -or $allowedModes -notcontains "http_loopback") {

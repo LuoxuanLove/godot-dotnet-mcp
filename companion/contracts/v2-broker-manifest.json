@@ -15,6 +15,14 @@
     "allows_recursive_home_scan": false,
     "requires_explicit_project_registration": true
   },
+  "project_registry": {
+    "lists_registered_projects": true,
+    "reports_active_session_counts": true,
+    "reports_session_mode_counts": true,
+    "reports_project_file_scope": true,
+    "list_projects_renews_sessions": false,
+    "list_projects_scans_filesystem": false
+  },
   "transport": {
     "allowed_modes": [
       "stdio",
