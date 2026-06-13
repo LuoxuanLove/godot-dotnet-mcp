@@ -22,6 +22,7 @@ Target version: 2.0.0.
 - Added a v2 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, listening ports, or unscoped tool calls.
 - Added an explicit Broker project removal contract that drops registered projects and revokes their active project sessions without affecting other projects.
 - Added a non-mutating editor-live upgrade eligibility contract so clients can report upgrade blockers before explicitly switching a project session to editor-live mode.
+- Added a project-scoped Broker session listing contract so clients can inspect active sessions for one `project_id` without crossing project boundaries or renewing leases.
 
 ### Fixed
 
