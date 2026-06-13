@@ -402,7 +402,15 @@ internal static class DotnetCliRunner
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            KillProcessTree(process);
+            throw;
+        }
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
         stopwatch.Stop();
@@ -420,6 +428,33 @@ internal static class DotnetCliRunner
             StdErr: stderr,
             Diagnostics: diagnostics,
             Summary: DiagnosticSummaryExtensions.BuildSummary(diagnostics));
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+        }
+        finally
+        {
+            try
+            {
+                process.WaitForExit();
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
     }
 
     private static IReadOnlyList<DiagnosticSummary> ParseDiagnostics(string text)
