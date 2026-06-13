@@ -171,6 +171,20 @@ public sealed class ProjectSession
         return GetCapabilities(nowUtc).Contains(capability);
     }
 
+    internal SessionCapabilitySnapshot CreateCapabilitySnapshot(DateTimeOffset nowUtc)
+    {
+        lock (_stateLock)
+        {
+            var capabilities = IsActiveLocked(nowUtc)
+                ? new System.Collections.ObjectModel.ReadOnlyCollection<CompanionCapability>(
+                    CompanionCapabilityCatalog.ForMode(_identity.Mode)
+                        .OrderBy(capability => capability)
+                        .ToArray())
+                : Array.AsReadOnly(Array.Empty<CompanionCapability>());
+            return new SessionCapabilitySnapshot(_identity, capabilities);
+        }
+    }
+
     public bool IsExpired(DateTimeOffset nowUtc)
     {
         lock (_stateLock)
