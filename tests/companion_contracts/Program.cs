@@ -11,6 +11,8 @@ var tests = new (string Name, Action Run)[]
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
+    ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
+    ("tool_scope_validation_does_not_renew_session_leases", ToolScopeValidationDoesNotRenewSessionLeases),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
     ("stops_and_rejects_revoked_sessions", StopsAndRejectsRevokedSessions),
     ("expires_and_rejects_stale_sessions", ExpiresAndRejectsStaleSessions),
@@ -158,6 +160,68 @@ static void ToolCallsRequireProjectAndSessionScope()
         broker.ResolveSession(new ToolRequestScope(string.Empty, session.Identity.SessionId)));
     AssertThrows<ArgumentException>(() =>
         broker.ResolveSession(new ToolRequestScope(project.ProjectId, string.Empty)));
+}
+
+static void ReportsMachineReadableToolScopeValidation()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var validScope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+
+    var accepted = broker.ValidateToolScope(validScope, CompanionCapability.StaticProjectAnalysis);
+    AssertTrue(accepted.Accepted);
+    AssertEqual(ToolScopeValidationReason.Accepted, accepted.Reason);
+    AssertEqual(session.Identity.SessionId, accepted.Session?.SessionId);
+
+    var missingProject = broker.ValidateToolScope(new ToolRequestScope(string.Empty, session.Identity.SessionId));
+    AssertFalse(missingProject.Accepted);
+    AssertEqual(ToolScopeValidationReason.MissingProjectId, missingProject.Reason);
+    AssertEqual<ProjectSessionIdentity?>(null, missingProject.Session);
+
+    var missingSession = broker.ValidateToolScope(new ToolRequestScope(project.ProjectId, string.Empty));
+    AssertFalse(missingSession.Accepted);
+    AssertEqual(ToolScopeValidationReason.MissingSessionId, missingSession.Reason);
+
+    var unknownSession = broker.ValidateToolScope(new ToolRequestScope(project.ProjectId, "session_missing"));
+    AssertFalse(unknownSession.Accepted);
+    AssertEqual(ToolScopeValidationReason.UnknownSessionId, unknownSession.Reason);
+
+    var crossProject = broker.ValidateToolScope(new ToolRequestScope(otherProject.ProjectId, session.Identity.SessionId));
+    AssertFalse(crossProject.Accepted);
+    AssertEqual(ToolScopeValidationReason.ProjectSessionMismatch, crossProject.Reason);
+    AssertEqual(session.Identity.SessionId, crossProject.Session?.SessionId);
+
+    var missingCapability = broker.ValidateToolScope(validScope, CompanionCapability.EditorScreenshot);
+    AssertFalse(missingCapability.Accepted);
+    AssertEqual(ToolScopeValidationReason.CapabilityUnavailable, missingCapability.Reason);
+    AssertEqual(session.Identity.SessionId, missingCapability.Session?.SessionId);
+
+    now = now.AddSeconds(11);
+    var expired = broker.ValidateToolScope(validScope);
+    AssertFalse(expired.Accepted);
+    AssertEqual(ToolScopeValidationReason.ExpiredSession, expired.Reason);
+    AssertEqual(session.Identity.SessionId, expired.Session?.SessionId);
+}
+
+static void ToolScopeValidationDoesNotRenewSessionLeases()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var firstExpiry = session.Identity.ExpiresAtUtc;
+    now = now.AddSeconds(5);
+
+    var result = broker.ValidateToolScope(
+        new ToolRequestScope(project.ProjectId, session.Identity.SessionId),
+        CompanionCapability.StaticProjectAnalysis);
+
+    AssertTrue(result.Accepted);
+    AssertEqual(firstExpiry, session.Identity.ExpiresAtUtc);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), session.Identity.LastUsedAtUtc);
 }
 
 static void CrossProjectSessionReuseIsRejected()

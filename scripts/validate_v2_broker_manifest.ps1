@@ -108,6 +108,31 @@ $scope = $manifest.session_scope
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "requires_project_id" -Context "session_scope") -Expected $true -Message "Broker session tools must require project_id."
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "requires_session_id" -Context "session_scope") -Expected $true -Message "Broker session tools must require session_id."
 Assert-Bool -Actual (Require-Bool -Object $scope -Name "rejects_cross_project_session" -Context "session_scope") -Expected $true -Message "Broker must reject cross-project session reuse."
+Assert-Bool -Actual (Require-Bool -Object $scope -Name "reports_structured_validation" -Context "session_scope") -Expected $true -Message "Broker must expose structured session-scope validation."
+$expectedReasonCodes = @(
+    "accepted",
+    "missing_project_id",
+    "missing_session_id",
+    "unknown_session_id",
+    "project_session_mismatch",
+    "expired_session",
+    "inactive_session",
+    "capability_unavailable"
+)
+$actualReasonCodes = @($scope.validation_reason_codes | ForEach-Object { [string]$_ })
+if ($actualReasonCodes.Count -ne $expectedReasonCodes.Count) {
+    throw "Broker session_scope validation_reason_codes must list the exact structured validation reasons."
+}
+foreach ($reasonCode in $expectedReasonCodes) {
+    if ($actualReasonCodes -notcontains $reasonCode) {
+        throw "Broker session_scope validation_reason_codes is missing '$reasonCode'."
+    }
+}
+foreach ($reasonCode in $actualReasonCodes) {
+    if ($expectedReasonCodes -notcontains $reasonCode) {
+        throw "Broker session_scope validation_reason_codes contains unexpected '$reasonCode'."
+    }
+}
 
 $sessionLifecycle = $manifest.session_lifecycle
 $defaultLeaseMinutes = Require-PositiveInteger -Object $sessionLifecycle -Name "default_lease_minutes" -Context "session_lifecycle"

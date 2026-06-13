@@ -152,6 +152,67 @@ public sealed class CompanionBroker
         return ResolveSession(scope, renewLease: true);
     }
 
+    public ToolScopeValidationResult ValidateToolScope(
+        ToolRequestScope scope,
+        CompanionCapability? requiredCapability = null)
+    {
+        if (string.IsNullOrWhiteSpace(scope.ProjectId))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.MissingProjectId,
+                "Tool calls must include project_id.");
+        }
+
+        if (string.IsNullOrWhiteSpace(scope.SessionId))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.MissingSessionId,
+                "Tool calls must include session_id.");
+        }
+
+        if (!_sessions.TryGetValue(scope.SessionId, out var session))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.UnknownSessionId,
+                $"Unknown session_id: {scope.SessionId}");
+        }
+
+        if (!string.Equals(session.Identity.ProjectId, scope.ProjectId, StringComparison.Ordinal))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.ProjectSessionMismatch,
+                "Tool call project_id does not match the resolved session.",
+                session.Identity);
+        }
+
+        var nowUtc = _clock();
+        if (session.IsExpired(nowUtc))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.ExpiredSession,
+                "Project session lease has expired.",
+                session.Identity);
+        }
+
+        if (!session.IsActive(nowUtc))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.InactiveSession,
+                "Project session is not active.",
+                session.Identity);
+        }
+
+        if (requiredCapability is not null && !session.HasCapability(requiredCapability.Value))
+        {
+            return ToolScopeValidationResult.CreateRejected(
+                ToolScopeValidationReason.CapabilityUnavailable,
+                $"Capability '{requiredCapability}' is unavailable in {session.Identity.Mode} mode.",
+                session.Identity);
+        }
+
+        return ToolScopeValidationResult.CreateAccepted(session.Identity);
+    }
+
     private ProjectSession ResolveSession(ToolRequestScope scope, bool renewLease)
     {
         if (string.IsNullOrWhiteSpace(scope.ProjectId))
@@ -213,3 +274,40 @@ public sealed class CompanionBroker
 }
 
 public sealed record ToolRequestScope(string ProjectId, string SessionId);
+
+public enum ToolScopeValidationReason
+{
+    Accepted,
+    MissingProjectId,
+    MissingSessionId,
+    UnknownSessionId,
+    ProjectSessionMismatch,
+    ExpiredSession,
+    InactiveSession,
+    CapabilityUnavailable,
+}
+
+public sealed record ToolScopeValidationResult(
+    bool Accepted,
+    ToolScopeValidationReason Reason,
+    string Message,
+    ProjectSessionIdentity? Session)
+{
+    public static ToolScopeValidationResult CreateAccepted(ProjectSessionIdentity session)
+    {
+        return new ToolScopeValidationResult(true, ToolScopeValidationReason.Accepted, "Tool scope is valid.", session);
+    }
+
+    public static ToolScopeValidationResult CreateRejected(
+        ToolScopeValidationReason reason,
+        string message,
+        ProjectSessionIdentity? session = null)
+    {
+        if (reason is ToolScopeValidationReason.Accepted)
+        {
+            throw new ArgumentException("Accepted validation results must use the CreateAccepted factory.", nameof(reason));
+        }
+
+        return new ToolScopeValidationResult(false, reason, message, session);
+    }
+}
