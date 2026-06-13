@@ -4,6 +4,7 @@ var tests = new (string Name, Action Run)[]
 {
     ("starts_static_headless_without_live_editor_capabilities", StaticSessionDoesNotExposeLiveCapabilities),
     ("keeps_capability_sets_immutable", CapabilityCatalogSetsCannotBeMutated),
+    ("validates_explicit_broker_lifecycle_options", ValidatesExplicitBrokerLifecycleOptions),
     ("validates_explicit_broker_transport_options", ValidatesExplicitBrokerTransportOptions),
     ("binds_only_godot_project_roots", ProjectDescriptorRequiresGodotProjectRoot),
     ("keeps_explicit_csproj_inside_project_root", ProjectDescriptorKeepsProjectFileInsideRoot),
@@ -58,6 +59,31 @@ static void CapabilityCatalogSetsCannotBeMutated()
     AssertThrows<NotSupportedException>(() =>
         ((ISet<CompanionCapability>)staticCapabilities).Add(CompanionCapability.EditorScreenshot));
     AssertFalse(staticCapabilities.Contains(CompanionCapability.EditorScreenshot));
+}
+
+static void ValidatesExplicitBrokerLifecycleOptions()
+{
+    BrokerLifecycleOptions.Default.Validate();
+
+    AssertFalse(BrokerLifecycleOptions.Default.EnabledByDefault);
+    AssertFalse(BrokerLifecycleOptions.Default.StartsBackgroundProcess);
+    AssertFalse(BrokerLifecycleOptions.Default.OpensListeningPort);
+    AssertFalse(BrokerLifecycleOptions.Default.LaunchesGodotEditor);
+    AssertTrue(BrokerLifecycleOptions.Default.RequiresExplicitStart);
+    AssertTrue(BrokerLifecycleOptions.Default.RequiresExplicitEditorLaunch);
+
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(EnabledByDefault: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(StartsBackgroundProcess: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(OpensListeningPort: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(LaunchesGodotEditor: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(RequiresExplicitStart: false).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerLifecycleOptions(RequiresExplicitEditorLaunch: false).Validate());
 }
 
 static void ValidatesExplicitBrokerTransportOptions()

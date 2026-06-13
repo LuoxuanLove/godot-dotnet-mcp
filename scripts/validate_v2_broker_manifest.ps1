@@ -81,6 +81,7 @@ Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "opens_listening_port
 Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "launches_godot_editor" -Context "default_lifecycle") -Expected $false -Message "Broker must not launch Godot by default."
 Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_start" -Context "default_lifecycle") -Expected $true -Message "Broker must require explicit start."
 Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_editor_launch" -Context "default_lifecycle") -Expected $true -Message "Broker must require explicit editor launch."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "validated_by_runtime_contract" -Context "default_lifecycle") -Expected $true -Message "Broker default lifecycle must be backed by a runtime contract."
 
 $discovery = $manifest.project_discovery
 Assert-Bool -Actual (Require-Bool -Object $discovery -Name "scans_known_projects_only" -Context "project_discovery") -Expected $true -Message "Broker discovery must stay limited to known projects."

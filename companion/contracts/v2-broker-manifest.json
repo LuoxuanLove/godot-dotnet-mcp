@@ -8,7 +8,8 @@
     "opens_listening_port": false,
     "launches_godot_editor": false,
     "requires_explicit_start": true,
-    "requires_explicit_editor_launch": true
+    "requires_explicit_editor_launch": true,
+    "validated_by_runtime_contract": true
   },
   "project_discovery": {
     "scans_known_projects_only": true,
