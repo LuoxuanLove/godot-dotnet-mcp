@@ -99,6 +99,24 @@ public sealed record ProjectSessionIdentity(
     DateTimeOffset ExpiresAtUtc,
     bool Revoked);
 
+public enum EditorLiveUpgradeEligibilityReason
+{
+    Eligible,
+    SessionStopped,
+    SessionExpired,
+    BridgeNotOnline,
+    ProjectMismatch,
+    LiveEditorStateUnavailable,
+    IncompatiblePluginVersion,
+}
+
+public sealed record EditorLiveUpgradeEligibility(
+    bool Eligible,
+    EditorLiveUpgradeEligibilityReason Reason,
+    ProjectSessionIdentity Session,
+    EditorBridgeStatus BridgeStatus,
+    string Message);
+
 public sealed class ProjectSession
 {
     private readonly object _stateLock = new();
@@ -250,6 +268,73 @@ public sealed class ProjectSession
         }
     }
 
+    public EditorLiveUpgradeEligibility EvaluateEditorLiveUpgrade(EditorBridgeStatus bridgeStatus)
+    {
+        lock (_stateLock)
+        {
+            var nowUtc = _clock();
+            if (_identity.Revoked)
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.SessionStopped,
+                    bridgeStatus,
+                    "Project session has been stopped.");
+            }
+
+            if (IsExpiredLocked(nowUtc))
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.SessionExpired,
+                    bridgeStatus,
+                    "Project session lease has expired.");
+            }
+
+            if (bridgeStatus.State is not EditorBridgeState.Online)
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.BridgeNotOnline,
+                    bridgeStatus,
+                    "Project sessions can upgrade to editor-live mode only when the editor bridge is online.");
+            }
+
+            if (!string.Equals(Project.ProjectId, bridgeStatus.ProjectId, StringComparison.Ordinal))
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.ProjectMismatch,
+                    bridgeStatus,
+                    "Editor bridge project_id must match the project session before live capabilities are available.");
+            }
+
+            if (!bridgeStatus.ProvidesLiveEditorState)
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.LiveEditorStateUnavailable,
+                    bridgeStatus,
+                    "Editor bridge must provide an editor_session_id and supports_live_editor_state before live capabilities are available.");
+            }
+
+            if (!EditorBridgeCompatibility.IsPluginVersionCompatible(bridgeStatus.PluginVersion))
+            {
+                return CreateEditorLiveUpgradeEligibility(
+                    false,
+                    EditorLiveUpgradeEligibilityReason.IncompatiblePluginVersion,
+                    bridgeStatus,
+                    $"Editor bridge plugin_version is not compatible. {EditorBridgeCompatibility.CompatibilityRequirement}");
+            }
+
+            return CreateEditorLiveUpgradeEligibility(
+                true,
+                EditorLiveUpgradeEligibilityReason.Eligible,
+                bridgeStatus,
+                "Editor bridge can be explicitly upgraded to editor-live mode.");
+        }
+    }
+
     private IReadOnlySet<CompanionCapability> GetCapabilities(DateTimeOffset nowUtc)
     {
         lock (_stateLock)
@@ -281,5 +366,19 @@ public sealed class ProjectSession
     private bool IsExpiredLocked(DateTimeOffset nowUtc)
     {
         return nowUtc >= _identity.ExpiresAtUtc;
+    }
+
+    private EditorLiveUpgradeEligibility CreateEditorLiveUpgradeEligibility(
+        bool eligible,
+        EditorLiveUpgradeEligibilityReason reason,
+        EditorBridgeStatus bridgeStatus,
+        string message)
+    {
+        return new EditorLiveUpgradeEligibility(
+            eligible,
+            reason,
+            _identity,
+            bridgeStatus,
+            message);
     }
 }
