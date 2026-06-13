@@ -16,6 +16,8 @@ var tests = new (string Name, Action Run)[]
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
     ("broker_reports_status_without_side_effects", BrokerReportsStatusWithoutSideEffects),
     ("broker_manifest_declares_status_snapshot", BrokerManifestDeclaresStatusSnapshot),
+    ("broker_reports_project_health_without_side_effects", BrokerReportsProjectHealthWithoutSideEffects),
+    ("broker_manifest_declares_project_health_snapshot", BrokerManifestDeclaresProjectHealthSnapshot),
     ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
     ("broker_tracks_editor_bridge_status_without_upgrading_sessions", BrokerTracksEditorBridgeStatusWithoutUpgradingSessions),
     ("broker_evaluates_stored_editor_live_upgrade_without_mutating_sessions", BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions),
@@ -348,6 +350,96 @@ static void BrokerManifestDeclaresStatusSnapshot()
     AssertTrue(status.GetProperty("reports_session_mode_counts").GetBoolean());
     AssertTrue(status.GetProperty("reports_bridge_status_counts").GetBoolean());
     AssertTrue(status.GetProperty("reports_project_summaries").GetBoolean());
+}
+
+static void BrokerReportsProjectHealthWithoutSideEffects()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var firstRoot = CreateTempProjectRoot();
+    var firstProjectFile = Path.Combine(firstRoot, "Game.csproj");
+    File.WriteAllText(firstProjectFile, "<Project />");
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(firstRoot, firstProjectFile));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(firstProject.ProjectId);
+    var otherSession = broker.StartSession(secondProject.ProjectId);
+    var firstExpiry = firstSession.Identity.ExpiresAtUtc;
+    var secondExpiry = secondSession.Identity.ExpiresAtUtc;
+    var otherExpiry = otherSession.Identity.ExpiresAtUtc;
+
+    AssertThrows<ArgumentException>(() => broker.GetProjectHealth(string.Empty));
+    AssertThrows<KeyNotFoundException>(() => broker.GetProjectHealth("project_missing"));
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        firstProject.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+    broker.UpgradeSessionToEditorLive(new ToolRequestScope(firstProject.ProjectId, secondSession.Identity.SessionId));
+    now = now.AddSeconds(5);
+
+    var firstHealth = broker.GetProjectHealth(firstProject.ProjectId);
+    var secondHealth = broker.GetProjectHealth(secondProject.ProjectId);
+
+    AssertEqual(now, firstHealth.CapturedAtUtc);
+    AssertEqual(firstProject.ProjectId, firstHealth.ProjectId);
+    AssertEqual(firstProject.ProjectRoot, firstHealth.ProjectRoot);
+    AssertEqual(firstProject.ProjectFilePath, firstHealth.ProjectFilePath);
+    AssertTrue(firstHealth.ProjectFileScoped);
+    AssertEqual(2, firstHealth.ActiveSessionCount);
+    AssertEqual(1, firstHealth.StaticHeadlessSessionCount);
+    AssertEqual(1, firstHealth.EditorLiveSessionCount);
+    AssertTrue(firstHealth.StoredBridgeStatus);
+    AssertEqual(EditorBridgeState.Online, firstHealth.BridgeStatus.State);
+    AssertEqual(firstProject.ProjectId, firstHealth.BridgeStatus.ProjectId);
+    AssertTrue(firstHealth.EditorLiveUpgradeAvailable);
+    AssertEqual(1, secondHealth.ActiveSessionCount);
+    AssertEqual(1, secondHealth.StaticHeadlessSessionCount);
+    AssertEqual(0, secondHealth.EditorLiveSessionCount);
+    AssertFalse(secondHealth.StoredBridgeStatus);
+    AssertEqual(EditorBridgeState.Disabled, secondHealth.BridgeStatus.State);
+    AssertEqual(secondProject.ProjectId, secondHealth.BridgeStatus.ProjectId);
+    AssertFalse(secondHealth.EditorLiveUpgradeAvailable);
+    AssertEqual(firstExpiry, firstSession.Identity.ExpiresAtUtc);
+    AssertEqual(secondExpiry, secondSession.Identity.ExpiresAtUtc);
+    AssertEqual(otherExpiry, otherSession.Identity.ExpiresAtUtc);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), firstSession.Identity.LastUsedAtUtc);
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        firstProject.ProjectId,
+        "editor_session_2",
+        "2.0.0",
+        false));
+    var unsupportedLiveState = broker.GetProjectHealth(firstProject.ProjectId);
+    AssertTrue(unsupportedLiveState.StoredBridgeStatus);
+    AssertEqual(EditorBridgeState.Online, unsupportedLiveState.BridgeStatus.State);
+    AssertFalse(unsupportedLiveState.EditorLiveUpgradeAvailable);
+
+    now = now.AddSeconds(6);
+    var expiredHealth = broker.GetProjectHealth(firstProject.ProjectId);
+    AssertEqual(0, expiredHealth.ActiveSessionCount);
+    AssertEqual(0, expiredHealth.StaticHeadlessSessionCount);
+    AssertEqual(0, expiredHealth.EditorLiveSessionCount);
+}
+
+static void BrokerManifestDeclaresProjectHealthSnapshot()
+{
+    var manifestPath = FindRepositoryFile(Path.Combine("companion", "contracts", "v2-broker-manifest.json"));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var projectHealth = manifest.RootElement.GetProperty("project_health");
+
+    AssertTrue(projectHealth.GetProperty("snapshot_supported").GetBoolean());
+    AssertTrue(projectHealth.GetProperty("requires_project_id").GetBoolean());
+    AssertFalse(projectHealth.GetProperty("snapshot_renews_sessions").GetBoolean());
+    AssertFalse(projectHealth.GetProperty("snapshot_scans_filesystem").GetBoolean());
+    AssertFalse(projectHealth.GetProperty("snapshot_launches_godot_editor").GetBoolean());
+    AssertTrue(projectHealth.GetProperty("reports_project_file_scope").GetBoolean());
+    AssertTrue(projectHealth.GetProperty("reports_session_mode_counts").GetBoolean());
+    AssertTrue(projectHealth.GetProperty("reports_bridge_status").GetBoolean());
+    AssertTrue(projectHealth.GetProperty("reports_editor_live_upgrade_eligibility").GetBoolean());
 }
 
 static void BrokerListsProjectSessionsWithoutCrossingProjectBoundaries()

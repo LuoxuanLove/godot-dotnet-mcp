@@ -115,6 +115,17 @@ Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_session_m
 Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_bridge_status_counts" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report bridge status counts."
 Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_project_summaries" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report project summaries."
 
+$projectHealth = $manifest.project_health
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "snapshot_supported" -Context "project_health") -Expected $true -Message "Broker project health snapshots must be supported."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "requires_project_id" -Context "project_health") -Expected $true -Message "Broker project health snapshots must require project_id."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "snapshot_renews_sessions" -Context "project_health") -Expected $false -Message "Broker project health snapshots must not renew session leases."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "snapshot_scans_filesystem" -Context "project_health") -Expected $false -Message "Broker project health snapshots must not scan the filesystem."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "snapshot_launches_godot_editor" -Context "project_health") -Expected $false -Message "Broker project health snapshots must not launch Godot."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "reports_project_file_scope" -Context "project_health") -Expected $true -Message "Broker project health snapshots must report project file scope."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "reports_session_mode_counts" -Context "project_health") -Expected $true -Message "Broker project health snapshots must report session mode counts."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "reports_bridge_status" -Context "project_health") -Expected $true -Message "Broker project health snapshots must report bridge status."
+Assert-Bool -Actual (Require-Bool -Object $projectHealth -Name "reports_editor_live_upgrade_eligibility" -Context "project_health") -Expected $true -Message "Broker project health snapshots must report editor-live upgrade eligibility."
+
 $brokerShutdown = $manifest.broker_shutdown
 Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "explicit_shutdown_supported" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must be explicitly supported."
 Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_revokes_sessions" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must revoke project sessions."

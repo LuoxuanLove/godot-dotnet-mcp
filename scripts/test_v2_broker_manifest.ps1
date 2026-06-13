@@ -234,6 +234,78 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "project_health_snapshot_must_be_supported" {
+        $path = Join-Path $tempRoot "project-health-supported.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.snapshot_supported = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_requires_project_scope" {
+        $path = Join-Path $tempRoot "project-health-project-scope.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.requires_project_id = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_snapshot_does_not_renew_sessions" {
+        $path = Join-Path $tempRoot "project-health-renew.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.snapshot_renews_sessions = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_snapshot_does_not_scan_filesystem" {
+        $path = Join-Path $tempRoot "project-health-scan.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.snapshot_scans_filesystem = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_snapshot_does_not_launch_godot" {
+        $path = Join-Path $tempRoot "project-health-launch.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.snapshot_launches_godot_editor = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_reports_project_file_scope" {
+        $path = Join-Path $tempRoot "project-health-file-scope.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.reports_project_file_scope = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_reports_session_mode_counts" {
+        $path = Join-Path $tempRoot "project-health-session-counts.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.reports_session_mode_counts = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_reports_bridge_status" {
+        $path = Join-Path $tempRoot "project-health-bridge-status.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.reports_bridge_status = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "project_health_reports_editor_live_upgrade_eligibility" {
+        $path = Join-Path $tempRoot "project-health-editor-live-upgrade.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.project_health.reports_editor_live_upgrade_eligibility = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "broker_shutdown_must_be_explicitly_supported" {
         $path = Join-Path $tempRoot "broker-shutdown-supported.json"
         $manifest = Copy-Manifest -Path $path
