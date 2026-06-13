@@ -105,6 +105,16 @@ Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "reports_projec
 Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "list_projects_renews_sessions" -Context "project_registry") -Expected $false -Message "Broker project listing must not renew session leases."
 Assert-Bool -Actual (Require-Bool -Object $projectRegistry -Name "list_projects_scans_filesystem" -Context "project_registry") -Expected $false -Message "Broker project listing must not scan the filesystem."
 
+$brokerStatus = $manifest.broker_status
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "snapshot_supported" -Context "broker_status") -Expected $true -Message "Broker status snapshots must be supported."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "snapshot_renews_sessions" -Context "broker_status") -Expected $false -Message "Broker status snapshots must not renew session leases."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "snapshot_scans_filesystem" -Context "broker_status") -Expected $false -Message "Broker status snapshots must not scan the filesystem."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "snapshot_launches_godot_editor" -Context "broker_status") -Expected $false -Message "Broker status snapshots must not launch Godot."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_registered_project_count" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report registered project counts."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_session_mode_counts" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report session mode counts."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_bridge_status_counts" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report bridge status counts."
+Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_project_summaries" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report project summaries."
+
 $transport = $manifest.transport
 $allowedModes = @($transport.allowed_modes)
 if ($allowedModes.Count -ne 2 -or $allowedModes -notcontains "stdio" -or $allowedModes -notcontains "http_loopback") {

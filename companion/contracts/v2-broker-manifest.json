@@ -24,6 +24,16 @@
     "list_projects_renews_sessions": false,
     "list_projects_scans_filesystem": false
   },
+  "broker_status": {
+    "snapshot_supported": true,
+    "snapshot_renews_sessions": false,
+    "snapshot_scans_filesystem": false,
+    "snapshot_launches_godot_editor": false,
+    "reports_registered_project_count": true,
+    "reports_session_mode_counts": true,
+    "reports_bridge_status_counts": true,
+    "reports_project_summaries": true
+  },
   "transport": {
     "allowed_modes": [
       "stdio",

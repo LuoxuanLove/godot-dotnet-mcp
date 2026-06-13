@@ -14,6 +14,8 @@ var tests = new (string Name, Action Run)[]
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
+    ("broker_reports_status_without_side_effects", BrokerReportsStatusWithoutSideEffects),
+    ("broker_manifest_declares_status_snapshot", BrokerManifestDeclaresStatusSnapshot),
     ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
     ("broker_tracks_editor_bridge_status_without_upgrading_sessions", BrokerTracksEditorBridgeStatusWithoutUpgradingSessions),
     ("broker_evaluates_stored_editor_live_upgrade_without_mutating_sessions", BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions),
@@ -267,6 +269,83 @@ static void BrokerListsRegisteredProjectsWithoutRenewingSessions()
     secondSummary = broker.ListProjects().Single(project => project.ProjectId == secondProject.ProjectId);
     AssertEqual(0, firstSummary.ActiveSessionCount);
     AssertEqual(0, secondSummary.ActiveSessionCount);
+}
+
+static void BrokerReportsStatusWithoutSideEffects()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var thirdProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(secondProject.ProjectId);
+    var thirdSession = broker.StartSession(thirdProject.ProjectId);
+    var firstExpiry = firstSession.Identity.ExpiresAtUtc;
+    var secondExpiry = secondSession.Identity.ExpiresAtUtc;
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        secondProject.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+    broker.UpgradeSessionToEditorLive(new ToolRequestScope(secondProject.ProjectId, secondSession.Identity.SessionId));
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        thirdProject.ProjectId,
+        "editor_session_2",
+        "1.9.0",
+        true));
+    now = now.AddSeconds(5);
+
+    var status = broker.GetBrokerStatus();
+
+    AssertEqual(now, status.CapturedAtUtc);
+    AssertEqual(3, status.RegisteredProjectCount);
+    AssertEqual(3, status.ActiveSessionCount);
+    AssertEqual(2, status.StaticHeadlessSessionCount);
+    AssertEqual(1, status.EditorLiveSessionCount);
+    AssertEqual(2, status.StoredBridgeStatusCount);
+    AssertEqual(2, status.OnlineBridgeStatusCount);
+    AssertEqual(1, status.LiveCapableBridgeStatusCount);
+    AssertEqual(1, status.DisabledBridgeStatusCount);
+    AssertEqual(3, status.Projects.Count);
+    AssertEqual(firstExpiry, firstSession.Identity.ExpiresAtUtc);
+    AssertEqual(secondExpiry, secondSession.Identity.ExpiresAtUtc);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:00Z"), firstSession.Identity.LastUsedAtUtc);
+    var projectIds = status.Projects.Select(project => project.ProjectId).ToArray();
+    var sortedProjectIds = projectIds.OrderBy(projectId => projectId, StringComparer.Ordinal).ToArray();
+    AssertEqual(string.Join("|", sortedProjectIds), string.Join("|", projectIds));
+
+    var stoppedScope = new ToolRequestScope(thirdProject.ProjectId, thirdSession.Identity.SessionId);
+    AssertTrue(broker.StopSession(stoppedScope));
+    var afterStop = broker.GetBrokerStatus();
+    AssertEqual(2, afterStop.ActiveSessionCount);
+    AssertEqual(1, afterStop.StaticHeadlessSessionCount);
+    AssertEqual(1, afterStop.EditorLiveSessionCount);
+
+    now = now.AddSeconds(6);
+    var expired = broker.GetBrokerStatus();
+    AssertEqual(0, expired.ActiveSessionCount);
+    AssertEqual(0, expired.StaticHeadlessSessionCount);
+    AssertEqual(0, expired.EditorLiveSessionCount);
+    AssertEqual(3, expired.RegisteredProjectCount);
+}
+
+static void BrokerManifestDeclaresStatusSnapshot()
+{
+    var manifestPath = FindRepositoryFile(Path.Combine("companion", "contracts", "v2-broker-manifest.json"));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var status = manifest.RootElement.GetProperty("broker_status");
+
+    AssertTrue(status.GetProperty("snapshot_supported").GetBoolean());
+    AssertFalse(status.GetProperty("snapshot_renews_sessions").GetBoolean());
+    AssertFalse(status.GetProperty("snapshot_scans_filesystem").GetBoolean());
+    AssertFalse(status.GetProperty("snapshot_launches_godot_editor").GetBoolean());
+    AssertTrue(status.GetProperty("reports_registered_project_count").GetBoolean());
+    AssertTrue(status.GetProperty("reports_session_mode_counts").GetBoolean());
+    AssertTrue(status.GetProperty("reports_bridge_status_counts").GetBoolean());
+    AssertTrue(status.GetProperty("reports_project_summaries").GetBoolean());
 }
 
 static void BrokerListsProjectSessionsWithoutCrossingProjectBoundaries()

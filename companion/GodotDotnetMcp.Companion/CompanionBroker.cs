@@ -62,6 +62,36 @@ public sealed class CompanionBroker
     public IReadOnlyCollection<BrokerProjectSummary> ListProjects()
     {
         var nowUtc = _clock();
+        return CreateProjectSummaries(nowUtc);
+    }
+
+    public BrokerStatusSnapshot GetBrokerStatus()
+    {
+        lock (_sessionLock)
+        {
+            var nowUtc = _clock();
+            var projects = CreateProjectSummaries(nowUtc);
+            var bridgeStatuses = _projects.Values
+                .OrderBy(project => project.ProjectId, StringComparer.Ordinal)
+                .Select(project => GetKnownProjectBridgeStatus(project.ProjectId))
+                .ToArray();
+
+            return new BrokerStatusSnapshot(
+                CapturedAtUtc: nowUtc,
+                RegisteredProjectCount: projects.Count,
+                ActiveSessionCount: projects.Sum(project => project.ActiveSessionCount),
+                StaticHeadlessSessionCount: projects.Sum(project => project.StaticHeadlessSessionCount),
+                EditorLiveSessionCount: projects.Sum(project => project.EditorLiveSessionCount),
+                StoredBridgeStatusCount: bridgeStatuses.Count(status => _editorBridgeStatuses.ContainsKey(status.ProjectId)),
+                OnlineBridgeStatusCount: bridgeStatuses.Count(status => status.State is EditorBridgeState.Online),
+                LiveCapableBridgeStatusCount: bridgeStatuses.Count(CanProvideEditorLive),
+                DisabledBridgeStatusCount: bridgeStatuses.Count(status => status.State is EditorBridgeState.Disabled),
+                Projects: projects);
+        }
+    }
+
+    private IReadOnlyCollection<BrokerProjectSummary> CreateProjectSummaries(DateTimeOffset nowUtc)
+    {
         var activeSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         var staticHeadlessSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         var editorLiveSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -711,6 +741,18 @@ public sealed record BrokerProjectSummary(
     int ActiveSessionCount,
     int StaticHeadlessSessionCount,
     int EditorLiveSessionCount);
+
+public sealed record BrokerStatusSnapshot(
+    DateTimeOffset CapturedAtUtc,
+    int RegisteredProjectCount,
+    int ActiveSessionCount,
+    int StaticHeadlessSessionCount,
+    int EditorLiveSessionCount,
+    int StoredBridgeStatusCount,
+    int OnlineBridgeStatusCount,
+    int LiveCapableBridgeStatusCount,
+    int DisabledBridgeStatusCount,
+    IReadOnlyCollection<BrokerProjectSummary> Projects);
 
 public sealed record SessionCapabilitySnapshot(
     ProjectSessionIdentity Session,
