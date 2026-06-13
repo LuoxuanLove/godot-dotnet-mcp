@@ -53,9 +53,16 @@ const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_PROTOCOL_ICON_DECODED_BYTES := 4096
+const VIEW_AGENT_TOOLS := "agent_tools"
+const VIEW_INTERNAL_EXECUTORS := "internal_executors"
+const VIEW_DIAGNOSTICS := "tool_diagnostics"
 
 @onready var _header_card: PanelContainer = %HeaderCard
 @onready var _tool_count_label: Label = %ToolCountLabel
+@onready var _view_mode_row: HBoxContainer = %ViewModeRow
+@onready var _agent_tools_button: Button = %AgentToolsButton
+@onready var _internal_executors_button: Button = %InternalExecutorsButton
+@onready var _diagnostics_button: Button = %DiagnosticsButton
 @onready var _search_edit: LineEdit = %ToolSearchEdit
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
@@ -88,11 +95,21 @@ var _selection_sync_queued := false
 var _last_tree_signature := ""
 var _last_preview_key := ""
 var _icon_texture_cache: Dictionary = {}
+var _active_tools_view := VIEW_AGENT_TOOLS
+var _view_buttons: Dictionary = {}
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_search_edit.text_changed.connect(_on_search_text_changed)
+	_view_buttons = {
+		VIEW_AGENT_TOOLS: _agent_tools_button,
+		VIEW_INTERNAL_EXECUTORS: _internal_executors_button,
+		VIEW_DIAGNOSTICS: _diagnostics_button
+	}
+	_agent_tools_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_AGENT_TOOLS))
+	_internal_executors_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_INTERNAL_EXECUTORS))
+	_diagnostics_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_DIAGNOSTICS))
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.gui_input.connect(_on_tree_gui_input)
 	_tool_tree.theme_type_variation = "TreeSecondary"
@@ -141,9 +158,12 @@ func _render_tool_tree(model: Dictionary) -> void:
 		_tree_syncing = false
 		return
 	if _has_presentation_tree(model):
-		for node in model.get("toolTree", []):
+		for node in _active_tool_presentation().get("toolTree", []):
 			if node is Dictionary:
 				_create_presentation_node(root, model, node as Dictionary)
+		_tree_syncing = false
+		return
+	if not _is_agent_tools_view():
 		_tree_syncing = false
 		return
 
@@ -154,6 +174,12 @@ func _render_tool_tree(model: Dictionary) -> void:
 
 
 func _has_presentation_tree(model: Dictionary) -> bool:
+	var presentation := _active_tool_presentation()
+	var tree = presentation.get("toolTree", [])
+	if tree is Array and not (tree as Array).is_empty():
+		return true
+	if not _is_agent_tools_view():
+		return false
 	return model.get("toolTree", []) is Array and not (model.get("toolTree", []) as Array).is_empty()
 
 
@@ -332,6 +358,10 @@ func _apply_localized_copy(localization, model: Dictionary) -> void:
 	var counts = _count_visible_tools(model)
 	_tool_count_label.text = localization.get_text("tools_enabled") % [counts["enabled"], counts["total"]]
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
+	_agent_tools_button.text = localization.get_text("tools_view_agent_tools")
+	_internal_executors_button.text = localization.get_text("tools_view_internal_executors")
+	_diagnostics_button.text = localization.get_text("tools_view_diagnostics")
+	_update_tool_view_buttons()
 
 
 func _refresh_tree_state(model: Dictionary, tree_signature: String) -> void:
@@ -370,7 +400,7 @@ func _configure_action_item(item: TreeItem, action_name: String, parent_tool: St
 
 func _configure_item_toggle(item: TreeItem, checked: bool) -> void:
 	item.set_cell_mode(TREE_CHECK_COLUMN, TreeItem.CELL_MODE_CHECK)
-	item.set_editable(TREE_CHECK_COLUMN, true)
+	item.set_editable(TREE_CHECK_COLUMN, _is_agent_tools_view())
 	item.set_selectable(TREE_CHECK_COLUMN, false)
 	item.set_checked(TREE_CHECK_COLUMN, checked)
 
@@ -575,14 +605,16 @@ func _create_action_children(parent: TreeItem, parent_full_name: String, tool_de
 
 
 func _count_visible_tools(model: Dictionary) -> Dictionary:
-	var tool_tree: Array = model.get("toolTree", [])
+	var tool_tree: Array = _active_tool_presentation().get("toolTree", [])
 	if not tool_tree.is_empty():
 		return _count_presentation_nodes(tool_tree)
+	if not _is_agent_tools_view():
+		return {"total": 0, "enabled": 0}
 	return _count_legacy_visible_tools(model)
 
 
 func _count_presentation_tools(model: Dictionary) -> Dictionary:
-	return _count_presentation_nodes(model.get("toolTree", []))
+	return _count_presentation_nodes(_active_tool_presentation().get("toolTree", []))
 
 
 func _count_presentation_nodes(nodes: Array) -> Dictionary:
@@ -594,7 +626,7 @@ func _count_presentation_nodes(nodes: Array) -> Dictionary:
 		var node := entry as Dictionary
 		if _is_tool_like_presentation_kind(str(node.get("kind", ""))):
 			total += 1
-			if bool(node.get("enabled", false)):
+			if bool(node.get("enabled", true)):
 				enabled += 1
 		var child_counts = _count_presentation_nodes(node.get("children", []))
 		total += int(child_counts["total"])
@@ -694,7 +726,60 @@ func _is_tool_like_presentation_kind(kind: String) -> bool:
 	return ["tool", "public_tool", "executor_tool"].has(kind)
 
 
+func _is_agent_tools_view() -> bool:
+	return _active_tools_view == VIEW_AGENT_TOOLS
+
+
+func _on_tool_view_button_pressed(view_id: String) -> void:
+	var resolved_view := _resolve_tool_view_id(view_id)
+	if resolved_view == _active_tools_view:
+		_update_tool_view_buttons()
+		return
+	_active_tools_view = resolved_view
+	_clear_selection_metadata()
+	_last_tree_signature = ""
+	_update_tool_view_buttons()
+	if not _current_model.is_empty():
+		_apply_localized_copy(_localization, _current_model)
+		_refresh_tree_state(_current_model, _build_tree_signature(_current_model))
+
+
+func _resolve_tool_view_id(view_id: String) -> String:
+	match view_id:
+		VIEW_AGENT_TOOLS, VIEW_INTERNAL_EXECUTORS, VIEW_DIAGNOSTICS:
+			return view_id
+	return VIEW_AGENT_TOOLS
+
+
+func _update_tool_view_buttons() -> void:
+	for view_id in _view_buttons.keys():
+		var button := _view_buttons.get(view_id) as Button
+		if button == null:
+			continue
+		button.set_pressed_no_signal(str(view_id) == _active_tools_view)
+
+
+func _presentation_for_view(view_id: String) -> Dictionary:
+	var key := ""
+	match _resolve_tool_view_id(view_id):
+		VIEW_AGENT_TOOLS:
+			key = "agent_tool_presentation"
+		VIEW_INTERNAL_EXECUTORS:
+			key = "internal_executor_presentation"
+		VIEW_DIAGNOSTICS:
+			key = "tool_diagnostics_presentation"
+	var presentation = _current_model.get(key, {})
+	if presentation is Dictionary and not (presentation as Dictionary).is_empty():
+		return presentation as Dictionary
+	return {}
+
+
 func _active_tool_presentation() -> Dictionary:
+	var selected_presentation := _presentation_for_view(_active_tools_view)
+	if not selected_presentation.is_empty():
+		return selected_presentation
+	if not _is_agent_tools_view():
+		return {}
 	var active = _current_model.get("active_tool_presentation", {})
 	if active is Dictionary and not (active as Dictionary).is_empty():
 		return (active as Dictionary)
@@ -1297,6 +1382,8 @@ func _handle_tree_click_deferred(mouse_position: Vector2) -> void:
 
 
 func _emit_toggle_for_item(item: TreeItem) -> void:
+	if not _is_agent_tools_view():
+		return
 	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
 	if not (metadata is Dictionary):
 		return
@@ -1337,7 +1424,7 @@ func _refresh_preview() -> void:
 		return
 	_tool_preview_title.text = _localization.get_text("tool_preview_title")
 	# Build a key representing the current selection to detect changes
-	var current_preview_key := "%s|%s|%s" % [_selected_tree_kind, _selected_tree_key, _selected_tool_name]
+	var current_preview_key := "%s|%s|%s|%s" % [_active_tools_view, _selected_tree_kind, _selected_tree_key, _selected_tool_name]
 	var selection_changed := current_preview_key != _last_preview_key
 	_last_preview_key = current_preview_key
 	# Preserve scroll position when re-rendering without a selection change
@@ -2053,19 +2140,16 @@ func _filter_empty_preview_lines(lines: Array[String]) -> Array[String]:
 func _build_tree_signature(model: Dictionary) -> String:
 	var tools_by_category = model.get("tools_by_category", {})
 	var parts: Array[String] = [
+		_active_tools_view,
 		_get_tree_language_signature(model),
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
 		JSON.stringify(model.get("tool_load_errors", [])),
-		JSON.stringify(model.get("toolTree", []))
+		JSON.stringify(_active_tool_presentation().get("toolTree", []))
 	]
 	if _has_presentation_tree(model):
-		var presentation = model.get("active_tool_presentation", {})
-		if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
-			presentation = model.get("agent_tool_presentation", {})
-		if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
-			presentation = model.get("tool_presentation", {})
+		var presentation = _active_tool_presentation()
 		parts.append(JSON.stringify((presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}))
 		return "\n".join(parts)
 	var categories: Array = tools_by_category.keys()

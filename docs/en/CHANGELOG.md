@@ -26,6 +26,7 @@ Target version: 2.0.0.
 - Changed `tools/list` to return a flat callable tool list with schema, annotation, and output metadata while tree/group presentation data moves to catalog resources and shared Dock presentation snapshots.
 - Changed catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, and Tools tab preview/search/schema-copy paths to use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path.
 - Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
+- Changed the Dock Tools tab to default to the Agent Tools call surface, with separate Internal and Diagnostics views for executor layout and legacy/public-tool diagnostics.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.

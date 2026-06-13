@@ -29,6 +29,30 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="ViewModeRow" type="HBoxContainer" parent="HeaderCard/HeaderMargin/HeaderContent" unique_id=112018083]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="AgentToolsButton" type="Button" parent="HeaderCard/HeaderMargin/HeaderContent/ViewModeRow" unique_id=1708687712]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+
+[node name="InternalExecutorsButton" type="Button" parent="HeaderCard/HeaderMargin/HeaderContent/ViewModeRow" unique_id=1900921166]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+
+[node name="DiagnosticsButton" type="Button" parent="HeaderCard/HeaderMargin/HeaderContent/ViewModeRow" unique_id=1934776404]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+
 [node name="ContentSplit" type="VSplitContainer" parent="." unique_id=1069031372]
 unique_name_in_owner = true
 layout_mode = 2
