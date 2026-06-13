@@ -67,6 +67,15 @@ function Assert-Bool {
     }
 }
 
+$brokerLifecycleContract = [ordered]@{
+    enabled_by_default = $false
+    starts_background_process = $false
+    opens_listening_port = $false
+    launches_godot_editor = $false
+    requires_explicit_start = $true
+    requires_explicit_editor_launch = $true
+}
+
 $resolvedManifestPath = Resolve-Path -LiteralPath $ManifestPath
 $manifest = Get-Content -LiteralPath $resolvedManifestPath -Encoding UTF8 -Raw | ConvertFrom-Json
 
@@ -75,12 +84,12 @@ if ((Require-String -Object $manifest -Name "contract" -Context "manifest") -ne 
 }
 
 $lifecycle = $manifest.default_lifecycle
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "enabled_by_default" -Context "default_lifecycle") -Expected $false -Message "Broker must be disabled by default."
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "starts_background_process" -Context "default_lifecycle") -Expected $false -Message "Broker must not start a background process by default."
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "opens_listening_port" -Context "default_lifecycle") -Expected $false -Message "Broker must not open a listening port by default."
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "launches_godot_editor" -Context "default_lifecycle") -Expected $false -Message "Broker must not launch Godot by default."
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_start" -Context "default_lifecycle") -Expected $true -Message "Broker must require explicit start."
-Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_editor_launch" -Context "default_lifecycle") -Expected $true -Message "Broker must require explicit editor launch."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "enabled_by_default" -Context "default_lifecycle") -Expected $brokerLifecycleContract.enabled_by_default -Message "Broker must be disabled by default."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "starts_background_process" -Context "default_lifecycle") -Expected $brokerLifecycleContract.starts_background_process -Message "Broker must not start a background process by default."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "opens_listening_port" -Context "default_lifecycle") -Expected $brokerLifecycleContract.opens_listening_port -Message "Broker must not open a listening port by default."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "launches_godot_editor" -Context "default_lifecycle") -Expected $brokerLifecycleContract.launches_godot_editor -Message "Broker must not launch Godot by default."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_start" -Context "default_lifecycle") -Expected $brokerLifecycleContract.requires_explicit_start -Message "Broker must require explicit start."
+Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "requires_explicit_editor_launch" -Context "default_lifecycle") -Expected $brokerLifecycleContract.requires_explicit_editor_launch -Message "Broker must require explicit editor launch."
 Assert-Bool -Actual (Require-Bool -Object $lifecycle -Name "validated_by_runtime_contract" -Context "default_lifecycle") -Expected $true -Message "Broker default lifecycle must be backed by a runtime contract."
 
 $discovery = $manifest.project_discovery

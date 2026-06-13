@@ -1,10 +1,12 @@
 using GodotDotnetMcp.Companion;
+using System.Text.Json;
 
 var tests = new (string Name, Action Run)[]
 {
     ("starts_static_headless_without_live_editor_capabilities", StaticSessionDoesNotExposeLiveCapabilities),
     ("keeps_capability_sets_immutable", CapabilityCatalogSetsCannotBeMutated),
     ("validates_explicit_broker_lifecycle_options", ValidatesExplicitBrokerLifecycleOptions),
+    ("matches_broker_lifecycle_manifest_to_runtime_contract", BrokerLifecycleManifestMatchesRuntimeContract),
     ("validates_explicit_broker_transport_options", ValidatesExplicitBrokerTransportOptions),
     ("binds_only_godot_project_roots", ProjectDescriptorRequiresGodotProjectRoot),
     ("keeps_explicit_csproj_inside_project_root", ProjectDescriptorKeepsProjectFileInsideRoot),
@@ -84,6 +86,22 @@ static void ValidatesExplicitBrokerLifecycleOptions()
         new BrokerLifecycleOptions(RequiresExplicitStart: false).Validate());
     AssertThrows<InvalidOperationException>(() =>
         new BrokerLifecycleOptions(RequiresExplicitEditorLaunch: false).Validate());
+}
+
+static void BrokerLifecycleManifestMatchesRuntimeContract()
+{
+    var manifestPath = FindRepositoryFile(Path.Combine("companion", "contracts", "v2-broker-manifest.json"));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var lifecycle = manifest.RootElement.GetProperty("default_lifecycle");
+    var runtimeOptions = BrokerLifecycleOptions.Default;
+
+    AssertEqual(runtimeOptions.EnabledByDefault, lifecycle.GetProperty("enabled_by_default").GetBoolean());
+    AssertEqual(runtimeOptions.StartsBackgroundProcess, lifecycle.GetProperty("starts_background_process").GetBoolean());
+    AssertEqual(runtimeOptions.OpensListeningPort, lifecycle.GetProperty("opens_listening_port").GetBoolean());
+    AssertEqual(runtimeOptions.LaunchesGodotEditor, lifecycle.GetProperty("launches_godot_editor").GetBoolean());
+    AssertEqual(runtimeOptions.RequiresExplicitStart, lifecycle.GetProperty("requires_explicit_start").GetBoolean());
+    AssertEqual(runtimeOptions.RequiresExplicitEditorLaunch, lifecycle.GetProperty("requires_explicit_editor_launch").GetBoolean());
+    AssertTrue(lifecycle.GetProperty("validated_by_runtime_contract").GetBoolean());
 }
 
 static void ValidatesExplicitBrokerTransportOptions()
@@ -692,6 +710,23 @@ static string CreateTempProjectRoot()
     Directory.CreateDirectory(root);
     File.WriteAllText(Path.Combine(root, "project.godot"), string.Empty);
     return root;
+}
+
+static string FindRepositoryFile(string relativePath)
+{
+    var current = new DirectoryInfo(AppContext.BaseDirectory);
+    while (current is not null)
+    {
+        var candidate = Path.Combine(current.FullName, relativePath);
+        if (File.Exists(candidate))
+        {
+            return candidate;
+        }
+
+        current = current.Parent;
+    }
+
+    throw new FileNotFoundException($"Could not find repository file '{relativePath}'.");
 }
 
 static void AssertTrue(bool condition)
