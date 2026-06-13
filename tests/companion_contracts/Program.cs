@@ -354,6 +354,38 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
     AssertEqual(EditorBridgeState.Disabled, broker.GetEditorBridgeStatus(otherProject.ProjectId).State);
     AssertTrue(broker.RemoveProject(project.ProjectId));
     AssertThrows<KeyNotFoundException>(() => broker.GetEditorBridgeStatus(project.ProjectId));
+
+    for (var i = 0; i < 100; i++)
+    {
+        var raceBroker = new CompanionBroker();
+        var raceRoot = CreateTempProjectRoot();
+        var raceProject = raceBroker.RegisterProject(ProjectDescriptor.FromRoot(raceRoot));
+        var staleStatus = new EditorBridgeStatus(
+            EditorBridgeState.Online,
+            raceProject.ProjectId,
+            "stale_editor_session",
+            "2.0.0",
+            true);
+
+        var removeTask = Task.Run(() => raceBroker.RemoveProject(raceProject.ProjectId));
+        var updateTask = Task.Run(() =>
+        {
+            try
+            {
+                raceBroker.UpdateEditorBridgeStatus(staleStatus);
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+        });
+
+        Task.WaitAll(removeTask, updateTask);
+        AssertTrue(removeTask.Result);
+        var registeredAgain = raceBroker.RegisterProject(ProjectDescriptor.FromRoot(raceRoot));
+        var statusAfterReRegister = raceBroker.GetEditorBridgeStatus(registeredAgain.ProjectId);
+        AssertEqual(EditorBridgeState.Disabled, statusAfterReRegister.State);
+        AssertEqual<string?>(null, statusAfterReRegister.EditorSessionId);
+    }
 }
 
 static void BrokerRemovesProjectsAndRevokesTheirSessions()

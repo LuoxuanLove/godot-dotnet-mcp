@@ -158,14 +158,17 @@ public sealed class CompanionBroker
             throw new ArgumentException("project_id is required.", nameof(projectId));
         }
 
-        if (!_projects.ContainsKey(projectId))
+        lock (_sessionLock)
         {
-            throw new KeyNotFoundException($"Unknown project_id: {projectId}");
-        }
+            if (!_projects.ContainsKey(projectId))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {projectId}");
+            }
 
-        return _editorBridgeStatuses.TryGetValue(projectId, out var status)
-            ? status
-            : EditorBridgeStatus.Disabled(projectId);
+            return _editorBridgeStatuses.TryGetValue(projectId, out var status)
+                ? status
+                : EditorBridgeStatus.Disabled(projectId);
+        }
     }
 
     public EditorBridgeStatus UpdateEditorBridgeStatus(EditorBridgeStatus bridgeStatus)
@@ -176,13 +179,16 @@ public sealed class CompanionBroker
             throw new ArgumentException("Editor bridge status must include project_id.", nameof(bridgeStatus));
         }
 
-        if (!_projects.ContainsKey(bridgeStatus.ProjectId))
+        lock (_sessionLock)
         {
-            throw new KeyNotFoundException($"Unknown project_id: {bridgeStatus.ProjectId}");
-        }
+            if (!_projects.ContainsKey(bridgeStatus.ProjectId))
+            {
+                throw new KeyNotFoundException($"Unknown project_id: {bridgeStatus.ProjectId}");
+            }
 
-        _editorBridgeStatuses[bridgeStatus.ProjectId] = bridgeStatus;
-        return bridgeStatus;
+            _editorBridgeStatuses[bridgeStatus.ProjectId] = bridgeStatus;
+            return bridgeStatus;
+        }
     }
 
     public ProjectDescriptor RegisterProject(ProjectDescriptor project)
