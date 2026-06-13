@@ -121,13 +121,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for malformed_name in [1, null]:
 		var malformed_params := {"name": malformed_name, "arguments": {}}
 		var malformed_response: Dictionary = await stdio_server.call("_handle_tools_call", malformed_params, 13)
-		var malformed_check := _assert_stable_stdio_tool_error(
-			malformed_response.get("result", {}),
-			"Tool name must be a string",
-			"malformed name"
-		)
-		if not bool(malformed_check.get("success", false)):
-			return malformed_check
+		var malformed_error: Dictionary = malformed_response.get("error", {})
+		if int(malformed_error.get("code", 0)) != -32602:
+			return _failure("Stdio malformed-name tools/call should return -32602.")
+		if str(malformed_error.get("message", "")).find("requires a non-empty string name") == -1:
+			return _failure("Stdio malformed-name tools/call should describe the invalid request shape.")
 	if loader.executed_count != 0:
 		return _failure("Malformed-name stdio cases should not execute the loader.")
 

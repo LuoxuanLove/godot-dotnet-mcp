@@ -363,7 +363,10 @@ func _write_response(obj: Dictionary) -> void:
 		_last_written_frame = "Content-Length: %d\r\n\r\n%s" % [body_bytes.size(), body]
 	else:
 		_last_written_frame = body
-	print(_last_written_frame)
+	if OS.has_method("write_string_to_stdout"):
+		OS.call("write_string_to_stdout", _last_written_frame)
+	else:
+		print(_last_written_frame)
 
 
 func _sanitize_for_json(value):

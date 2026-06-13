@@ -366,26 +366,26 @@ func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 
 
 func _build_mcp_post_sse_response(headers: Dictionary, json_rpc_response: Dictionary) -> Dictionary:
-	var session_id := _resolve_mcp_session_id(headers)
-	var event_id := "streamable-http-post-%s-%s" % [
-		_sanitize_sse_token(session_id),
-		str(Time.get_ticks_usec())
-	]
-	return {
+	var establish_session := _is_successful_initialize_response(json_rpc_response)
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	var has_existing_session := not requested_session.is_empty() and _has_mcp_session(requested_session) and not _is_mcp_session_terminated(requested_session)
+	var should_queue_event := establish_session or has_existing_session
+	var session_id := _resolve_mcp_session_id(headers) if should_queue_event else ""
+	var event := _append_sse_event(session_id, json_rpc_response.duplicate(true), "streamable-http-post") if should_queue_event else _build_one_shot_sse_event(json_rpc_response)
+	var response := {
 		"status": 200,
-		"_raw_body": _format_sse_events([{
-			"id": event_id,
-			"event": "message",
-			"retry": MCPHttpSseEventQueueScript.SSE_RETRY_MS,
-			"data": json_rpc_response.duplicate(true)
-		}]),
+		"_raw_body": _format_sse_events([event]),
 		"_content_type": "text/event-stream; charset=utf-8",
-		"_mcp_session_id": session_id,
 		"_headers": {
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no"
 		}
 	}
+	if should_queue_event:
+		response["_mcp_session_id"] = session_id
+	if establish_session:
+		response["_establish_mcp_session"] = true
+	return response
 
 
 func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
@@ -425,6 +425,15 @@ func _append_sse_event(session_id: String, payload: Dictionary, id_prefix: Strin
 	return {}
 
 
+func _build_one_shot_sse_event(json_rpc_response: Dictionary) -> Dictionary:
+	return {
+		"id": "streamable-http-one-shot-%s" % str(Time.get_ticks_usec()),
+		"event": "message",
+		"retry": MCPHttpSseEventQueueScript.SSE_RETRY_MS,
+		"data": json_rpc_response.duplicate(true)
+	}
+
+
 func _sse_events_after_cursor(session_id: String, last_event_id: String) -> Array:
 	if _sse_event_queue != null and _sse_event_queue.has_method("events_after_cursor"):
 		return _sse_event_queue.events_after_cursor(session_id, last_event_id)
@@ -457,12 +466,11 @@ func _remember_mcp_session(session_id: String) -> void:
 
 
 func _should_remember_mcp_session(response: Dictionary) -> bool:
+	if bool(response.get("_establish_mcp_session", false)):
+		return true
 	if response.has("_terminate_mcp_session_id"):
 		return false
-	if bool(response.get("_no_body", false)) and not response.has("_mcp_session_id"):
-		return false
-	var status_code := int(response.get("status", response.get("_status_code", 200)))
-	return status_code < 400
+	return false
 
 
 func _is_mcp_session_terminated(session_id: String) -> bool:
@@ -488,14 +496,27 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	var response_session_id := str(enriched.get("_mcp_session_id", "")).strip_edges()
 	if enriched.has("_mcp_session_id"):
 		enriched.erase("_mcp_session_id")
+	var establish_session := bool(enriched.get("_establish_mcp_session", false)) or _is_successful_initialize_response(enriched)
+	if enriched.has("_establish_mcp_session"):
+		enriched.erase("_establish_mcp_session")
 	var response_headers := {}
 	if enriched.has("_headers") and enriched["_headers"] is Dictionary:
 		response_headers = (enriched["_headers"] as Dictionary).duplicate(true)
 	response_headers["MCP-Protocol-Version"] = MCPProtocolFacts.get_protocol_version()
+	if establish_session:
+		enriched["_establish_mcp_session"] = true
 	if _should_remember_mcp_session(enriched):
 		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
 		response_headers["Mcp-Session-Id"] = resolved_session_id
 		_remember_mcp_session(resolved_session_id)
+	elif not response_session_id.is_empty() and _has_mcp_session(response_session_id) and not _is_mcp_session_terminated(response_session_id):
+		response_headers["Mcp-Session-Id"] = response_session_id
+	else:
+		var request_session_id := str(request_headers.get("mcp-session-id", "")).strip_edges()
+		if not request_session_id.is_empty() and _has_mcp_session(request_session_id) and not _is_mcp_session_terminated(request_session_id):
+			response_headers["Mcp-Session-Id"] = request_session_id
+	if enriched.has("_establish_mcp_session"):
+		enriched.erase("_establish_mcp_session")
 	enriched["_headers"] = response_headers
 	return enriched
 
@@ -546,6 +567,17 @@ func _is_initialize_request_body(body: String) -> bool:
 	if not (data is Dictionary):
 		return false
 	return str((data as Dictionary).get("method", "")) == "initialize"
+
+
+func _is_successful_initialize_response(response: Dictionary) -> bool:
+	if str(response.get("jsonrpc", "")) != "2.0":
+		return false
+	if response.has("error"):
+		return false
+	if not (response.get("result") is Dictionary):
+		return false
+	var result: Dictionary = response.get("result", {})
+	return result.has("protocolVersion") and result.has("serverInfo")
 
 
 func _accepts_json_response(accept_header: String) -> bool:
