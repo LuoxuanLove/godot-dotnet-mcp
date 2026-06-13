@@ -32,9 +32,7 @@ Target version: 1.4.0.
 
 ### Fixed
 
-- Fixed HTTP and stdio JSON-RPC envelope handling, malformed framing, duplicate/conflicting HTTP body headers, response-envelope handling, disabled-tool parity, and session validation so transport errors are deterministic across supported MCP transports.
-- Fixed `/mcp` negotiation so `initialize` can negotiate from the JSON-RPC body, later requests enforce protocol/session headers, unsupported `Accept` values are rejected, and guard responses do not create sessions.
-- Fixed Streamable HTTP SSE output so transport open/heartbeat events do not require undeclared logging capabilities and SSE bodies are written without JSON response encoding.
+- Hardened HTTP and stdio JSON-RPC envelope handling, malformed framing, duplicate/conflicting HTTP body headers, response-envelope handling, disabled-tool parity, and session validation so transport errors are deterministic across supported MCP transports.
 - Fixed Prompt and Resource validation so unknown or incorrectly typed prompt arguments are rejected with allowed-argument metadata and binary `.scn` / `.res` files are not read as text resources.
 - Fixed Dock catalog rendering so visible tool families are retained and invalid Resource/Prompt icons are bounded before SVG loading.
 - Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
