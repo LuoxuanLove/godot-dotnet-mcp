@@ -231,6 +231,7 @@ static void ToolScopeValidationUsesOneClockSnapshot()
     var clockReads = new[]
     {
         DateTimeOffset.Parse("2026-06-09T00:00:00Z"),
+        DateTimeOffset.Parse("2026-06-09T00:00:00Z"),
         DateTimeOffset.Parse("2026-06-09T00:00:09.999Z"),
         DateTimeOffset.Parse("2026-06-09T00:00:10.001Z"),
     };
@@ -239,6 +240,7 @@ static void ToolScopeValidationUsesOneClockSnapshot()
         () => clockReads[Math.Min(++reads, clockReads.Length - 1)]);
     var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
     var session = broker.StartSession(project.ProjectId);
+    AssertEqual(DateTimeOffset.Parse("2026-06-09T00:00:10Z"), session.Identity.ExpiresAtUtc);
 
     var result = broker.ValidateToolScope(
         new ToolRequestScope(project.ProjectId, session.Identity.SessionId),
