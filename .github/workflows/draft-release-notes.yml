@@ -67,6 +67,8 @@ jobs:
             }
           }
 
+          .\scripts\validate_docs_i18n.ps1
+
           .\scripts\render_release_notes.ps1 `
             -Version $version `
             -OutputPath $notesFile `

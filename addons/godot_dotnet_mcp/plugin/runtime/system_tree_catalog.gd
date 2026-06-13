@@ -2,7 +2,6 @@
 extends RefCounted
 
 const SYSTEM_TOOL_ATOMIC_CHILDREN := {
-	"system_help": [],
 	"system_project_state": [
 		{"tool": "project_info",         "actions": ["get_info"]},
 		{"tool": "project_dotnet",       "actions": []},
@@ -17,15 +16,11 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "debug_runtime_bridge", "actions": ["get_summary", "get_scene_snapshot", "get_errors_context", "get_recent_filtered"]},
 		{"tool": "debug_dotnet",         "actions": ["build"]}
 	],
-	"system_plugin_reload": [],
-	"system_plugin_update": [],
-	"system_plugin_maintenance": [
-		{"tool": "system_plugin_reload", "actions": ["get_freshness", "full_reload_plugin"]},
-		{"tool": "system_plugin_update", "actions": ["get_current", "get_status", "set_source", "start_sync"]}
-	],
+	"system_plugin_maintenance": [],
 	"system_editor_control": [
 		{"tool": "editor_status",      "actions": ["list_main_screens", "set_main_screen", "get_distraction_free", "set_distraction_free"]},
 		{"tool": "editor_screenshot",  "actions": ["capture"]},
+		{"tool": "debug_editor_log",   "actions": ["clear"]},
 		{"tool": "editor_ui_control",  "actions": ["list_visible", "wait_for_ui", "list_dock_tabs", "activate_dock_tab", "activate_ui", "list_tree_items", "select_tree_item", "list_menus", "open_menu", "select_menu_item", "get_control", "capture_control", "focus_control", "activate_control", "click_control", "right_click_control", "hover_control", "leave_control", "set_text", "set_value"]},
 		{"tool": "editor_popup",       "actions": ["list_visible", "get_popup", "capture_popup", "press_button", "select_item", "set_text", "close_popup"]}
 	],
@@ -46,9 +41,6 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 	],
 	"system_editor_plugin_control": [
 		{"tool": "editor_plugin",      "actions": ["list", "inspect", "is_enabled", "enable", "disable"]}
-	],
-	"system_editor_log": [
-		{"tool": "debug_editor_log", "actions": ["get_output", "get_errors", "clear"]}
 	],
 	"system_runtime_diagnose": [
 		{"tool": "debug_runtime_bridge", "actions": ["get_errors_context"]},
@@ -88,15 +80,6 @@ const SYSTEM_TOOL_ATOMIC_CHILDREN := {
 		{"tool": "scene_bindings",       "actions": ["from_path"]},
 		{"tool": "scene_audit",          "actions": ["from_path"]},
 		{"tool": "filesystem_directory", "actions": ["get_files"]}
-	],
-	"system_scene_validate": [
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "resource_query", "actions": ["get_dependencies", "get_info"]}
-	],
-	"system_scene_analyze": [
-		{"tool": "scene_bindings", "actions": ["from_path"]},
-		{"tool": "scene_audit",    "actions": ["from_path"]},
-		{"tool": "script_inspect", "actions": ["path"]}
 	],
 	"system_scene_inspect": [
 		{"tool": "scene_audit",    "actions": ["from_path"]},

@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "stdio_tool_activity_contracts"}
 
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const StdioContextBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
 
@@ -37,6 +38,9 @@ class FakeToolLoader:
 
 	func get_domain_states() -> Array:
 		return [{"category": "system", "status": "ready"}]
+
+	func is_tool_enabled(tool_name: String) -> bool:
+		return not disabled_tools.has(tool_name)
 
 	func is_tool_exposed(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
@@ -159,6 +163,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_lifecycle_structured = (disabled_lifecycle_result as Dictionary).get("structuredContent", {})
 	if not (disabled_lifecycle_structured is Dictionary) or bool((disabled_lifecycle_structured as Dictionary).get("success", true)):
 		return _failure("Stdio disabled tool errors should expose failing structuredContent.")
+	if str((disabled_lifecycle_structured as Dictionary).get("error", "")).find("disabled") == -1:
+		return _failure("Stdio disabled tool errors should use loader enabled-state semantics before exposure checks.")
 	loader.disabled_tools.clear()
 
 	stdio_server.start()
@@ -190,12 +196,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		},
 		"plain": "value"
 	})
-	stdio_server.free()
 	if plain_activity_result.has("activity"):
 		return _failure("Stdio normalizer should reserve top-level activity only for protocol activity summaries.")
 	var plain_activity_data = plain_activity_result.get("data", {})
 	if not (plain_activity_data is Dictionary) or not (((plain_activity_data as Dictionary).get("activity", {}) as Dictionary).get("user_supplied", false)):
 		return _failure("Stdio normalizer should move non-protocol tool activity fields into data.")
+
+	var context_guard := _verify_stdio_context_builder_guard(stdio_server)
+	stdio_server.free()
+	if not bool(context_guard.get("success", false)):
+		return context_guard
 
 	return {
 		"name": "stdio_tool_activity_contracts",
@@ -206,6 +216,85 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"recent_count": int(status.get("recent_count", 0))
 		}
 	}
+
+
+func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
+	var builder = StdioContextBuilderScript.new()
+	var router_context = builder.build_tool_rpc_router_context(stdio_server, stdio_server.call("_get_stdio_tool_activity_registry"))
+	if router_context == null or not router_context.get_tool_loader.is_valid():
+		return _failure("Stdio context builder should produce a tool router context with a loader callable.")
+	if router_context.tool_activity_registry == null:
+		return _failure("Stdio context builder should preserve the shared tool activity registry.")
+	var resources_context = builder.build_resources_service_context(stdio_server)
+	if resources_context == null or not resources_context.get_tool_loader_status.is_valid() or not resources_context.sanitize_for_json.is_valid():
+		return _failure("Stdio context builder should produce resource service status and sanitization callables.")
+	var prompts_context = builder.build_prompts_service_context(stdio_server)
+	if prompts_context == null or not prompts_context.get_tool_loader_status.is_valid():
+		return _failure("Stdio context builder should produce prompt service status callables.")
+	var stdio_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+	for forbidden in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"ToolPresentationService",
+		"MCPResourcesServiceContextScript",
+		"MCPPromptsServiceContextScript",
+		"MCPToolRpcRouterContextScript",
+		"func _create_tool_response",
+		"func _resolve_tool_call_name",
+		"_resources_service",
+		"_prompts_service",
+		"_tool_rpc_router",
+		"_context_builder",
+		".new()\n\tresources_context",
+		".new()\n\tprompts_context",
+		".new()\n\trouter_context"
+	]:
+		if stdio_source.find(forbidden) != -1:
+			return _failure("mcp_stdio_server.gd should delegate context construction to MCPStdioServiceContextBuilder, but still contains '%s'." % forbidden)
+	for required_server in [
+		"MCPStdioServiceBundleScript",
+		"_service_bundle.handle_request_async(",
+		"_service_bundle.handle_tools_call_async(",
+		"_service_bundle.handle_resources_read(",
+		"_service_bundle.handle_prompts_get("
+	]:
+		if stdio_source.find(required_server) == -1:
+			return _failure("mcp_stdio_server.gd should delegate stdio service handling to MCPStdioServiceBundle: missing '%s'." % required_server)
+	var builder_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
+	for required in [
+		"MCPResourcesServiceContextScript",
+		"MCPPromptsServiceContextScript",
+		"MCPToolRpcRouterContextScript",
+		"func build_tool_rpc_router_context",
+		"func build_resources_service_context",
+		"func build_prompts_service_context"
+	]:
+		if builder_source.find(required) == -1:
+			return _failure("MCPStdioServiceContextBuilder should own stdio context construction: missing '%s'." % required)
+	var bundle_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_bundle.gd")
+	for required_bundle in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"MCPStdioJsonRpcServiceScript",
+		"func handle_request_async",
+		"func handle_tools_call_async",
+		"func get_stdio_tool_loader_status"
+	]:
+		if bundle_source.find(required_bundle) == -1:
+			return _failure("MCPStdioServiceBundle should own stdio service assembly: missing '%s'." % required_bundle)
+	var json_rpc_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_json_rpc_service.gd")
+	for required_json_rpc in [
+		"func handle_request_async",
+		"func handle_tools_list",
+		"func handle_tools_call_async",
+		"func handle_resources_read",
+		"func handle_prompts_get"
+	]:
+		if json_rpc_source.find(required_json_rpc) == -1:
+			return _failure("MCPStdioJsonRpcService should own stdio JSON-RPC method dispatch: missing '%s'." % required_json_rpc)
+	return {"success": true, "error": ""}
 
 
 func _failure(message: String) -> Dictionary:

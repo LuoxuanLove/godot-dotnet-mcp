@@ -1,17 +1,25 @@
-## 🧭 Godot .NET MCP v1.4.0: Real Project Validation
+## 🧩 Godot .NET MCP v1.4.0: Protocol Refactor Line Initialized
 
-Godot .NET MCP v1.4.0 starts by making the plugin's real-project validation easier to inspect: readers can jump from the README and localized entry pages to a public Godot .NET project that records substantial development work and shows the plugin being used in a larger editor workflow.
+Godot .NET MCP v1.4.0 opens the protocol-refactor line with a stricter plugin-first release surface, resource-first context entry points, and stronger contract gates for public MCP behavior.
 
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/en/process/release-notes/release-notes-v1.4.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/zh-CN/流程/发布说明/发布说明-v1.4.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/ja/プロセス/リリースノート/リリースノート-v1.4.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v1.4.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.4.0.md">한국어</a></p>
 
-### 🖼️ Real Project Example
+### ✨ Release Highlights
 
-The README now includes a dedicated Real Project Validation section with a screenshot beside the project note. The linked CoGDSex repository is presented as a living Godot .NET game project that records real development work rather than as a synthetic demo.
+The v1.4.0 line establishes the protocol-refactor baseline: passive context moves toward MCP Resources, workflow orientation stays in Prompts, public Tools narrow toward action and computed workflow entries, and legacy discovery calls return explicit replacement guidance.
 
-### 🌐 Localized Entry Points
+### 📚 Resource-First Protocol Surface
 
-The same validation note appears in the Simplified Chinese, Japanese, and Korean entry pages, so readers using any supported documentation language can reach the same project example and understand why it matters to plugin stability.
+The v1.4.0 line moves passive context, status, and catalog discovery toward MCP Resources, keeps workflow planning in Prompts, and narrows public Tools to actions or computed workflow results. Legacy discovery calls now provide explicit replacement guidance instead of remaining first-class public tools.
+
+Editor Output reads now follow the same resource-first model: clients can read `godot-dotnet-mcp://logs/editor/output` or `godot-dotnet-mcp://logs/editor/errors`, while Output clearing remains an explicit editor-control action instead of a passive Resource.
+
+### 🧪 Reproducible Plugin Gates
+
+Release-facing claims stay tied to plugin-owned checks: localized documentation validation, manifest-backed public-tool guardrails, headless MCP contracts, and clean install verification. This keeps the release notes focused on behavior users can reproduce from the plugin repository itself.
+
+The v1.4 install surface also treats C# semantic support as a first-class plugin capability. Asset Library and direct source-copy installs must keep the isolated Roslyn runtime bundle in `plugin/runtime/roslyn_runtime/`, while plugin Roslyn and bridge C# source trees stay out of the host project compile surface.
 
 ### ✅ Compatibility and Upgrade Notes
 
-This documentation update does not change the Godot or .NET compatibility expectations. Godot .NET MCP continues to target Godot 4.6+ .NET projects, and the release-note source now tracks the v1.4.0 version line after the v1.3.0 release.
+This version line updates plugin metadata to v1.4.0 and continues to target Godot 4.6+ .NET projects. Clients should prefer the new resource and prompt entry points for passive context and planning, while legacy discovery calls provide migration guidance instead of remaining first-class public tools.

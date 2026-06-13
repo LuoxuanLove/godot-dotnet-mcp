@@ -4,13 +4,19 @@ class_name ServerRuntimeSettingsProjectionService
 
 const ENV_RUNTIME_SERVER_HOST := "GODOT_DOTNET_MCP_SERVER_HOST"
 const ENV_RUNTIME_SERVER_PORT := "GODOT_DOTNET_MCP_SERVER_PORT"
+const ENV_RUNTIME_STDIO_FRAMING := "GODOT_DOTNET_MCP_STDIO_FRAMING"
 const DEFAULT_HOST := "127.0.0.1"
 const DEFAULT_PORT := 3000
 const DEFAULT_TRANSPORT_MODE := "http"
+const DEFAULT_STDIO_FRAMING_MODE := "newline"
 const SUPPORTED_TRANSPORT_MODES := {
 	"http": true,
 	"stdio": true,
 	"both": true
+}
+const SUPPORTED_STDIO_FRAMING_MODES := {
+	"newline": true,
+	"legacy_content_length": true
 }
 
 
@@ -18,16 +24,18 @@ func project(settings: Dictionary) -> Dictionary:
 	var runtime_settings := settings.duplicate(true)
 	var has_explicit_host := _has_explicit_host(runtime_settings.get("host", DEFAULT_HOST))
 	var has_explicit_port := _has_explicit_port(runtime_settings.get("port", DEFAULT_PORT))
-	_apply_environment_overrides(runtime_settings, has_explicit_host, has_explicit_port)
+	var has_explicit_stdio_framing := _has_explicit_stdio_framing(runtime_settings.get("stdio_framing_mode", DEFAULT_STDIO_FRAMING_MODE))
+	_apply_environment_overrides(runtime_settings, has_explicit_host, has_explicit_port, has_explicit_stdio_framing)
 	runtime_settings["host"] = _resolve_host(runtime_settings.get("host", DEFAULT_HOST))
 	runtime_settings["port"] = _resolve_port(runtime_settings.get("port", DEFAULT_PORT))
 	runtime_settings["debug_mode"] = _coerce_bool(runtime_settings.get("debug_mode", true))
 	runtime_settings["disabled_tools"] = _normalize_disabled_tools(runtime_settings.get("disabled_tools", []))
 	runtime_settings["transport_mode"] = _resolve_transport_mode(runtime_settings.get("transport_mode", DEFAULT_TRANSPORT_MODE))
+	runtime_settings["stdio_framing_mode"] = _resolve_stdio_framing_mode(runtime_settings.get("stdio_framing_mode", DEFAULT_STDIO_FRAMING_MODE))
 	return runtime_settings
 
 
-func _apply_environment_overrides(runtime_settings: Dictionary, has_explicit_host: bool, has_explicit_port: bool) -> void:
+func _apply_environment_overrides(runtime_settings: Dictionary, has_explicit_host: bool, has_explicit_port: bool, has_explicit_stdio_framing: bool) -> void:
 	if not has_explicit_host and OS.has_environment(ENV_RUNTIME_SERVER_HOST):
 		var env_host := OS.get_environment(ENV_RUNTIME_SERVER_HOST).strip_edges()
 		if not env_host.is_empty():
@@ -36,6 +44,10 @@ func _apply_environment_overrides(runtime_settings: Dictionary, has_explicit_hos
 		var env_port_text := OS.get_environment(ENV_RUNTIME_SERVER_PORT).strip_edges()
 		if env_port_text.is_valid_int() and int(env_port_text) > 0:
 			runtime_settings["port"] = int(env_port_text)
+	if not has_explicit_stdio_framing and OS.has_environment(ENV_RUNTIME_STDIO_FRAMING):
+		var env_stdio_framing := _resolve_stdio_framing_mode(OS.get_environment(ENV_RUNTIME_STDIO_FRAMING))
+		if env_stdio_framing != DEFAULT_STDIO_FRAMING_MODE:
+			runtime_settings["stdio_framing_mode"] = env_stdio_framing
 
 
 func _has_explicit_host(value) -> bool:
@@ -44,6 +56,10 @@ func _has_explicit_host(value) -> bool:
 
 func _has_explicit_port(value) -> bool:
 	return _resolve_port(value) != DEFAULT_PORT
+
+
+func _has_explicit_stdio_framing(value) -> bool:
+	return _resolve_stdio_framing_mode(value) != DEFAULT_STDIO_FRAMING_MODE
 
 
 func _resolve_host(value) -> String:
@@ -70,6 +86,13 @@ func _resolve_transport_mode(value) -> String:
 	if SUPPORTED_TRANSPORT_MODES.has(normalized):
 		return normalized
 	return DEFAULT_TRANSPORT_MODE
+
+
+func _resolve_stdio_framing_mode(value) -> String:
+	var normalized := str(value).strip_edges().to_lower()
+	if SUPPORTED_STDIO_FRAMING_MODES.has(normalized):
+		return normalized
+	return DEFAULT_STDIO_FRAMING_MODE
 
 
 func _normalize_disabled_tools(value) -> Array[String]:

@@ -27,7 +27,7 @@ func dispose() -> void:
 
 
 func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
-	return {
+	var result := {
 		"prompts": [{
 			"name": PROJECT_ORIENTATION_PROMPT,
 			"title": _text("prompt_project_orientation_title", "Project orientation workflow"),
@@ -51,7 +51,7 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			"description": _text("prompt_debug_triage_desc", "Triage Godot editor, build, runtime, or DAP failures with an evidence-first order that separates logs, project state, runtime diagnostics, and debugger data."),
 			"arguments": [
 				{"name": "error_summary", "description": _text("prompt_arg_error_summary_desc", "Optional observed error text or symptom that should be preserved in the triage plan."), "required": false},
-				{"name": "include_runtime", "description": _text("prompt_arg_include_runtime_desc", "Optional boolean indicating whether runtime diagnostics and capability checks are needed."), "required": false}
+				{"name": "include_runtime", "description": _text("prompt_arg_include_runtime_desc", "Optional true/false string indicating whether runtime diagnostics and capability checks are needed."), "required": false}
 			]
 		}, {
 			"name": REFERENCE_INTEGRITY_PROMPT,
@@ -82,6 +82,10 @@ func build_prompts_list_result(_params: Dictionary = {}) -> Dictionary:
 			]
 		}]
 	}
+	for index in range((result.get("prompts", []) as Array).size()):
+		var prompt := (result["prompts"] as Array)[index] as Dictionary
+		(result["prompts"] as Array)[index] = _with_prompt_metadata(prompt, _prompt_icon_for_name(str(prompt.get("name", ""))))
+	return result
 
 
 func build_prompts_get_result(params: Dictionary) -> Dictionary:
@@ -122,7 +126,30 @@ func _validate_prompt_arguments(prompt_name: String, arguments: Dictionary) -> D
 		if not allowed_lookup.has(name):
 			unknown_args.append(name)
 	if unknown_args.is_empty():
-		return {"success": true}
+		return _validate_prompt_argument_types(prompt_name, arguments)
+	return _unknown_prompt_argument_error(prompt_name, unknown_args, allowed_args)
+
+
+func _validate_prompt_argument_types(prompt_name: String, arguments: Dictionary) -> Dictionary:
+	var expected_types := _prompt_argument_types(prompt_name)
+	for key in arguments.keys():
+		var name := str(key)
+		if not expected_types.has(name):
+			continue
+		var expected_type := str(expected_types.get(name, ""))
+		var value = arguments.get(key)
+		if not (value is String):
+			return _prompt_argument_type_error(prompt_name, name, "a string")
+		match expected_type:
+			"boolean_string":
+				if not _is_prompt_boolean_string(str(value)):
+					return _prompt_argument_type_error(prompt_name, name, "the string 'true' or 'false'")
+			"string":
+				pass
+	return {"success": true}
+
+
+func _unknown_prompt_argument_error(prompt_name: String, unknown_args: Array[String], allowed_args: Array[String]) -> Dictionary:
 	unknown_args.sort()
 	return {
 		"success": false,
@@ -131,6 +158,13 @@ func _validate_prompt_arguments(prompt_name: String, arguments: Dictionary) -> D
 			", ".join(unknown_args),
 			", ".join(allowed_args)
 		]
+	}
+
+
+func _prompt_argument_type_error(prompt_name: String, argument_name: String, expected_type: String) -> Dictionary:
+	return {
+		"success": false,
+		"error": "Prompt argument '%s' for %s must be %s." % [argument_name, prompt_name, expected_type]
 	}
 
 
@@ -152,10 +186,28 @@ func _prompt_argument_names(prompt_name: String) -> Array[String]:
 			return []
 
 
+func _prompt_argument_types(prompt_name: String) -> Dictionary:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return {"goal": "string", "symbol": "string"}
+		CONTENT_AUTHORING_PROMPT:
+			return {"scene_path": "string", "script_path": "string", "goal": "string"}
+		DEBUG_TRIAGE_PROMPT:
+			return {"error_summary": "string", "include_runtime": "boolean_string"}
+		REFERENCE_INTEGRITY_PROMPT:
+			return {"script_path": "string", "scene_path": "string", "resource_path": "string", "binding_name": "string"}
+		RUNTIME_VALIDATION_PROMPT:
+			return {"scene_path": "string", "goal": "string", "success_marker": "string"}
+		EDITOR_UI_CONTROL_PROMPT:
+			return {"ui_goal": "string", "target_path": "string"}
+		_:
+			return {}
+
+
 func _build_project_orientation_prompt(arguments: Dictionary) -> Dictionary:
 	var goal := str(arguments.get("goal", "")).strip_edges()
 	var symbol := str(arguments.get("symbol", "")).strip_edges()
-	var text := _text("prompt_project_orientation_body", "Use when: Start here when connecting to an unfamiliar Godot project or when a task needs project-level context before choosing an edit, debug, or validation path. Recommended workflow: 1. Call system_help to confirm current MCP capabilities and the available six Prompt Guides. 2. Call system_project_state with summary=true or sections=[summary,project,runtime,capabilities] for a lightweight health snapshot before requesting full file arrays. 3. Call system_editor_state when the current editor selection, inspector, or UI state may affect the task. 4. When names or relationships matter, call system_project_index_build, then system_project_symbol_search or system_scene_dependency_graph. 5. Use system_project_files only for targeted file-tree reads, selections, scans, or reimports after the orientation evidence narrows the scope. Validation: cite the project path, current errors or blockers, relevant symbols or dependency edges, and the next Prompt Guide or tool family chosen from the evidence. Avoid: do not modify files, launch the project, or perform broad recursive reads during orientation.")
+	var text := _text("prompt_project_orientation_body", "Use when: Start here when connecting to an unfamiliar Godot project or when a task needs project-level context before choosing an edit, debug, or validation path. Recommended workflow: 1. Read resources/list, then godot-dotnet-mcp://guides/index and godot-dotnet-mcp://guides/capabilities for the current resource-first discovery map, and use prompts/list or prompts/get when workflow planning is needed. 2. Call system_project_state with summary=true or sections=[summary,project,runtime,capabilities] for a lightweight health snapshot before requesting full file arrays. 3. Call system_editor_state when the current editor selection, inspector, or UI state may affect the task. 4. When names or relationships matter, call system_project_index_build, then system_project_symbol_search or system_scene_dependency_graph. 5. Use system_project_files only for targeted file-tree reads, selections, scans, or reimports after the orientation evidence narrows the scope. Validation: cite the project path, current errors or blockers, relevant symbols or dependency edges, and the next Prompt Guide or tool family chosen from the evidence. Avoid: do not modify files, launch the project, or perform broad recursive reads during orientation.")
 	if not goal.is_empty():
 		text += " Goal: %s." % goal
 	if not symbol.is_empty():
@@ -164,7 +216,7 @@ func _build_project_orientation_prompt(arguments: Dictionary) -> Dictionary:
 
 
 func _build_content_authoring_prompt(arguments: Dictionary) -> Dictionary:
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var script_path_result := _optional_res_path(arguments, "script_path", [".cs", ".gd"])
@@ -173,7 +225,7 @@ func _build_content_authoring_prompt(arguments: Dictionary) -> Dictionary:
 	var scene_path := str(scene_path_result.get("path", ""))
 	var script_path := str(script_path_result.get("path", ""))
 	var goal := str(arguments.get("goal", "")).strip_edges()
-	var text := _text("prompt_content_authoring_body", "Use when: Start here before creating or modifying Godot content such as scenes, nodes, scripts, resources, visual settings, or small project configuration that directly supports the current content change. Recommended workflow: 1. Call system_project_state to confirm errors and capability blockers, and use godot.project_orientation first if the target is not known. 2. For scene-backed work, call system_scene_validate, then system_scene_analyze before changing nodes, properties, scripts, or resources. 3. For script-backed work, call system_script_analyze before using system_script_patch; prefer dry_run=true previews before applying member-level changes. 4. Choose system_scene_patch for file-safe scene edits, system_scene_tree for the live edited scene, system_project_configure for narrow settings/autoload/input changes, and project or visual tools only after the target is grounded. 5. Keep edits minimal and scoped to the user goal. Validation: re-read the changed scene or script with system_scene_validate, system_scene_analyze, or system_script_analyze, then hand off to godot.runtime_validation when behavior must be proven in a running project. Avoid: do not diagnose unrelated failures here, do not repair reference graphs without godot.reference_integrity, and do not use OS mouse automation for editor UI tasks.")
+	var text := _text("prompt_content_authoring_body", "Use when: Start here before creating or modifying Godot content such as scenes, nodes, scripts, resources, visual settings, or small project configuration that directly supports the current content change. Recommended workflow: 1. Call system_project_state to confirm errors and capability blockers, and use godot.project_orientation first if the target is not known. 2. For scene-backed work, call system_scene_inspect(action=validate), then system_scene_inspect(action=analyze) before changing nodes, properties, scripts, or resources. 3. For script-backed work, call system_script_analyze before using system_script_patch; prefer dry_run=true previews before applying member-level changes. 4. Choose system_scene_patch for file-safe scene edits, system_scene_tree for the live edited scene, system_project_configure for narrow settings/autoload/input changes, and project or visual tools only after the target is grounded. 5. Keep edits minimal and scoped to the user goal. Validation: re-read the changed scene or script with system_scene_inspect(action=validate), system_scene_inspect(action=analyze), or system_script_analyze, then hand off to godot.runtime_validation when behavior must be proven in a running project. Avoid: do not diagnose unrelated failures here, do not repair reference graphs without godot.reference_integrity, and do not use OS mouse automation for editor UI tasks.")
 	if not scene_path.is_empty():
 		text += " Target scene: %s." % scene_path
 	if not script_path.is_empty():
@@ -185,8 +237,8 @@ func _build_content_authoring_prompt(arguments: Dictionary) -> Dictionary:
 
 func _build_debug_triage_prompt(arguments: Dictionary) -> Dictionary:
 	var error_summary := str(arguments.get("error_summary", "")).strip_edges()
-	var include_runtime := bool(arguments.get("include_runtime", false))
-	var text := _text("prompt_debug_triage_body", "Use when: Start here when a Godot editor warning, build failure, runtime exception, DAP symptom, or unclear failure needs diagnosis before choosing a fix. Recommended workflow: 1. Call system_project_state to separate compile errors, runtime state, file enumeration, capability blockers, and project health. 2. Call system_editor_log for current Output warnings and errors before changing code. 3. If runtime evidence is relevant, call system_runtime_diagnose and include runtime capability state before proposing a fix. 4. If normal logs are insufficient or a debugger session is required, use system_dap_debugger(status), then initialize or attach, configure breakpoints, continue or step, inspect threads, stack_trace, and output, and terminate or disconnect cleanly. 5. Fix the root cause with the smallest relevant content, reference, or configuration workflow, then re-run the same diagnostic surface. Validation: cite the failing evidence, the changed evidence after the fix, any DAP session facts used, and any remaining unrelated warnings. Avoid: do not create a separate DAP-only workflow, do not hide symptoms with broad guards, and do not skip compile or runtime evidence.")
+	var include_runtime := _parse_prompt_boolean_string(arguments, "include_runtime", false)
+	var text := _text("prompt_debug_triage_body", "Use when: Start here when a Godot editor warning, build failure, runtime exception, DAP symptom, or unclear failure needs diagnosis before choosing a fix. Recommended workflow: 1. Call system_project_state to separate compile errors, runtime state, file enumeration, capability blockers, and project health. 2. Read godot-dotnet-mcp://logs/editor/errors with resources/read for current Output warnings and errors before changing code. 3. If runtime evidence is relevant, call system_runtime_diagnose and include runtime capability state before proposing a fix. 4. If normal logs are insufficient or a debugger session is required, use system_dap_debugger(status), then initialize or attach, configure breakpoints, continue or step, inspect threads, stack_trace, and output, and terminate or disconnect cleanly. 5. Fix the root cause with the smallest relevant content, reference, or configuration workflow, then re-run the same diagnostic surface. Validation: cite the failing evidence, the changed evidence after the fix, any DAP session facts used, and any remaining unrelated warnings. Avoid: do not create a separate DAP-only workflow, do not hide symptoms with broad guards, and do not skip compile or runtime evidence.")
 	if include_runtime:
 		text += " Include runtime_diagnose output and runtime capability state before proposing fixes."
 	if not error_summary.is_empty():
@@ -194,11 +246,23 @@ func _build_debug_triage_prompt(arguments: Dictionary) -> Dictionary:
 	return _prompt_response(_text("prompt_debug_triage_title", "Debug triage workflow"), text)
 
 
+func _is_prompt_boolean_string(value: String) -> bool:
+	var normalized := value.strip_edges().to_lower()
+	return normalized == "true" or normalized == "false"
+
+
+func _parse_prompt_boolean_string(arguments: Dictionary, argument_name: String, default_value: bool) -> bool:
+	if not arguments.has(argument_name):
+		return default_value
+	var normalized := str(arguments.get(argument_name, "")).strip_edges().to_lower()
+	return normalized == "true"
+
+
 func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 	var script_path_result := _optional_res_path(arguments, "script_path", [".cs", ".gd"])
 	if not bool(script_path_result.get("success", false)):
 		return script_path_result
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var resource_path_result := _optional_res_path(arguments, "resource_path", [".tscn", ".tres"])
@@ -208,7 +272,7 @@ func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 	var scene_path := str(scene_path_result.get("path", ""))
 	var resource_path := str(resource_path_result.get("path", ""))
 	var binding_name := str(arguments.get("binding_name", "")).strip_edges()
-	var text := _text("prompt_reference_integrity_body", "Use when: Start here when C#, GDScript, export, signal, NodePath, scene dependency, resource UID, fallback path, or C# Resource script references disagree with saved scenes and resources. Recommended workflow: 1. Call system_bindings_audit with the script or scene path when member declarations may disagree with scene references. 2. Call system_resource_reference_audit for project-wide or focused .tscn/.tres UID, fallback path, and Resource script consistency checks. 3. Call system_scene_validate to confirm the scene reference graph is loadable and system_script_analyze to ground exported members, signals, variables, and methods in saved source. 4. Compare the audited reference with the declaration or resource path, then apply the smallest matching rename, property, signal, UID/path, or script reference fix. 5. Re-run the same audit tools and validation on the same targets. Validation: the audited issue should disappear, the scene or resource should still validate, and no unrelated scene, resource, or binding reference should change. Avoid: do not add duplicate fallback bindings, do not rewrite unrelated node paths, and do not treat a passing .NET build as proof that resource references are valid.")
+	var text := _text("prompt_reference_integrity_body", "Use when: Start here when C#, GDScript, export, signal, NodePath, scene dependency, resource UID, fallback path, or C# Resource script references disagree with saved scenes and resources. Recommended workflow: 1. Call system_bindings_audit with the script or scene path when member declarations may disagree with scene references. 2. Call system_resource_reference_audit for project-wide or focused .tscn/.tres UID, fallback path, and Resource script consistency checks. 3. Call system_scene_inspect(action=validate) to confirm the scene reference graph is loadable and system_script_analyze to ground exported members, signals, variables, and methods in saved source. 4. Compare the audited reference with the declaration or resource path, then apply the smallest matching rename, property, signal, UID/path, or script reference fix. 5. Re-run the same audit tools and validation on the same targets. Validation: the audited issue should disappear, the scene or resource should still validate, and no unrelated scene, resource, or binding reference should change. Avoid: do not add duplicate fallback bindings, do not rewrite unrelated node paths, and do not treat a passing .NET build as proof that resource references are valid.")
 	if not script_path.is_empty():
 		text += " Inspect script: %s." % script_path
 	if not scene_path.is_empty():
@@ -221,7 +285,7 @@ func _build_reference_integrity_prompt(arguments: Dictionary) -> Dictionary:
 
 
 func _build_runtime_validation_prompt(arguments: Dictionary) -> Dictionary:
-	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn", ".scn"])
+	var scene_path_result := _optional_res_path(arguments, "scene_path", [".tscn"])
 	if not bool(scene_path_result.get("success", false)):
 		return scene_path_result
 	var scene_path := str(scene_path_result.get("path", ""))
@@ -254,6 +318,66 @@ func _text(key: String, fallback: String) -> String:
 	if text == key or text.is_empty():
 		return fallback
 	return text
+
+
+func _with_prompt_metadata(entry: Dictionary, icon_name: String) -> Dictionary:
+	var metadata := entry.duplicate(true)
+	metadata["icons"] = [_icon_metadata(icon_name)]
+	var meta := metadata.get("_meta", {})
+	if not (meta is Dictionary):
+		meta = {}
+	(meta as Dictionary)["promptKind"] = _prompt_kind_for_name(str(metadata.get("name", "")))
+	metadata["_meta"] = meta
+	return metadata
+
+
+func _icon_metadata(name: String) -> Dictionary:
+	return {
+		"src": _icon_data_uri(name),
+		"mimeType": "image/svg+xml",
+		"sizes": ["any"]
+	}
+
+
+func _icon_data_uri(name: String) -> String:
+	var svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><title>%s</title><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\"/></svg>" % name.xml_escape()
+	return "data:image/svg+xml;base64,%s" % Marshalls.raw_to_base64(svg.to_utf8_buffer())
+
+
+func _prompt_icon_for_name(prompt_name: String) -> String:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return "compass"
+		CONTENT_AUTHORING_PROMPT:
+			return "pen-tool"
+		DEBUG_TRIAGE_PROMPT:
+			return "bug"
+		REFERENCE_INTEGRITY_PROMPT:
+			return "link"
+		RUNTIME_VALIDATION_PROMPT:
+			return "play-circle"
+		EDITOR_UI_CONTROL_PROMPT:
+			return "panel-top"
+		_:
+			return "message-square-text"
+
+
+func _prompt_kind_for_name(prompt_name: String) -> String:
+	match prompt_name:
+		PROJECT_ORIENTATION_PROMPT:
+			return "orientation"
+		CONTENT_AUTHORING_PROMPT:
+			return "authoring"
+		DEBUG_TRIAGE_PROMPT:
+			return "debug"
+		REFERENCE_INTEGRITY_PROMPT:
+			return "integrity"
+		RUNTIME_VALIDATION_PROMPT:
+			return "runtime"
+		EDITOR_UI_CONTROL_PROMPT:
+			return "editor_ui"
+		_:
+			return "prompt"
 
 
 func _prompt_response(description: String, text: String) -> Dictionary:

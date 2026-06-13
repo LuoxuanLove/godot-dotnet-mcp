@@ -20,7 +20,7 @@ The 1.x line should keep improving the editor-native plugin structure while turn
 
 ### v1.4.0 Protocol Refactor
 
-v1.4.0 follows the [protocol refactor plan](process/v1.4.0-protocol-refactor-plan.md): context, state, and catalogs move to Resources; workflow guidance stays in Prompts; and Tools narrow to action and computational workflow entries. The work is intentionally split into PR-sized refactor axes with removal guards and migration contracts.
+v1.4.0 follows the [protocol refactor plan](process/v1.4.0-protocol-refactor-plan.md): context, state, and catalogs move to Resources; workflow guidance stays in Prompts; and Tools narrow to action and computational workflow entries. The target baseline is MCP 2025-11-25, with `127.0.0.1:3000/mcp` as the default Streamable HTTP endpoint, newline-delimited stdio as the default stdio mode, and schema/metadata/UI catalog adaptation handled as explicit gates. The work is intentionally split into PR-sized refactor axes with removal guards and migration contracts.
 
 The current execution checklist is tracked in the [v1.4.0 refactor progress tracker](process/v1.4.0-refactor-progress-tracker.md).
 

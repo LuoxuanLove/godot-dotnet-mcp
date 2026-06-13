@@ -28,7 +28,7 @@ const BUILTIN_TOOL_PROFILES: Array[Dictionary] = [
 		"id": "default",
 		"name_key": "tool_profile_default",
 		"desc_key": "tool_profile_default_desc",
-		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "runtime", "group", "signal", "animation", "physics", "navigation", "audio", "ui", "system"]
+		"enabled_categories": ["scene", "node", "script", "resource", "filesystem", "project", "editor", "plugin_runtime", "plugin_evolution", "plugin_developer", "debug", "runtime", "group", "signal", "animation", "material", "shader", "lighting", "particle", "tilemap", "geometry", "physics", "navigation", "audio", "ui", "system"]
 	},
 	{
 		"id": "full",

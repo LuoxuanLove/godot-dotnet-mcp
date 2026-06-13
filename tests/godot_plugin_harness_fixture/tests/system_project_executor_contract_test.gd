@@ -4,7 +4,8 @@ extends RefCounted
 
 const SystemProjectExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_project.gd")
 const DebugToolsScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
-const AtomicBridgeScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge.gd")
+const AtomicBridgeExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_execution_service.gd")
+const AtomicBridgeHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/atomic_bridge_helper_service.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPRuntimeDebugStoreShared = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
@@ -19,7 +20,7 @@ class FakeBridge extends RefCounted:
 	var collect_files_calls := 0
 	var collect_file_count_calls := 0
 	var collect_file_counts_calls := 0
-	var atomic_bridge = AtomicBridgeScript.new()
+	var helpers = AtomicBridgeHelperServiceScript.new()
 
 	func _init(tool_loader = null) -> void:
 		_tool_loader = tool_loader
@@ -223,13 +224,13 @@ class FakeBridge extends RefCounted:
 		return []
 
 	func parse_dependency_reference(raw_path: String, source_path: String = "") -> Dictionary:
-		return atomic_bridge.parse_dependency_reference(raw_path, source_path)
+		return helpers.parse_dependency_reference(raw_path, source_path)
 
 	func build_issue(severity: String, issue_type: String, message: String, extra: Dictionary = {}) -> Dictionary:
-		return atomic_bridge.build_issue(severity, issue_type, message, extra)
+		return helpers.build_issue(severity, issue_type, message, extra)
 
 	func append_unique_issue(issues: Array, issue: Dictionary) -> void:
-		atomic_bridge.append_unique_issue(issues, issue)
+		helpers.append_unique_issue(issues, issue)
 
 	func success(data = {}, message: String = "") -> Dictionary:
 		return {"success": true, "data": data, "message": message}
@@ -300,21 +301,56 @@ class FakeDisposableExecutor extends RefCounted:
 		shutdown_called = true
 
 
-class FakeFilesystemAtomicBridge extends AtomicBridgeScript:
-	var last_args: Dictionary = {}
+class FakeFilesystemRuntime:
+	extends RefCounted
 
-	func call_atomic(tool_name: String, args: Dictionary = {}) -> Dictionary:
-		if tool_name != "filesystem_directory":
-			return error("Unexpected atomic tool: %s" % tool_name)
+	var last_args: Dictionary = {}
+	var cached := {}
+
+	func has_category(category: String) -> bool:
+		return category == "filesystem"
+
+	func dispatch(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+		if category != "filesystem" or tool_name != "directory":
+			return {"success": false, "error": "Unexpected atomic tool: %s_%s" % [category, tool_name]}
 		last_args = args.duplicate(true)
+		if args.has("filters"):
+			return {"success": true, "data": {"counts_by_filter": {"*.gd": 1, "*.cs": 0}}}
 		if bool(args.get("count_only", false)):
-			return success({"count": 1, "count_only": true})
-		return success({"files": ["res://Player.gd"], "count": 1})
+			return {"success": true, "data": {"count": 1, "count_only": true}}
+		return {"success": true, "data": {"files": ["res://Player.gd"], "count": 1}}
+
+	func call_atomic_for_helper(full_name: String, args: Dictionary) -> Dictionary:
+		var parts := full_name.split("_", true, 1)
+		if parts.size() != 2:
+			return {"success": false, "error": "Invalid atomic tool name: %s" % full_name}
+		return dispatch(str(parts[0]), str(parts[1]), args)
+
+	func dispose_executor(executor) -> void:
+		if executor == null:
+			return
+		if executor.has_method("dispose"):
+			executor.dispose()
+		if executor.has_method("shutdown"):
+			executor.shutdown()
+
+	func invalidate() -> void:
+		for executor in cached.values():
+			dispose_executor(executor)
+		cached.clear()
+
+	func cache_executor_for_test(category: String, executor) -> void:
+		cached[category] = executor
+
+	func get_cached_executor_count_for_test() -> int:
+		return cached.size()
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	_prepare_temp_root()
-	var atomic_bridge = AtomicBridgeScript.new()
+	var execution_service = AtomicBridgeExecutionServiceScript.new()
+	var filesystem_runtime = FakeFilesystemRuntime.new()
+	execution_service._runtime = filesystem_runtime
 	var read_actions := [
 		{"tool": "project_info", "args": {"action": "get_settings"}},
 		{"tool": "scene_hierarchy", "args": {"action": "select"}},
@@ -325,8 +361,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"tool": "debug_runtime_bridge", "args": {"action": "get_recent"}}
 	]
 	for item in read_actions:
-		if atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
-			return _failure("AtomicBridge should not classify read action as write: %s" % JSON.stringify(item))
+		if execution_service.is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridgeExecutionService should not classify read action as write: %s" % JSON.stringify(item))
 	var write_actions := [
 		{"tool": "project_settings", "args": {"action": "set_setting"}},
 		{"tool": "filesystem_directory", "args": {"action": "create"}},
@@ -340,28 +376,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"tool": "script_edit_cs", "args": {"action": "replace_method_body"}}
 	]
 	for item in write_actions:
-		if not atomic_bridge._is_write_action(item.get("args", {}) as Dictionary):
-			return _failure("AtomicBridge should classify mutating action as write: %s" % JSON.stringify(item))
-	if not atomic_bridge._is_write_atomic_action("script_edit_gd", {}):
-		return _failure("AtomicBridge should infer script_edit_* atomic calls without an action as writes.")
+		if not execution_service.is_write_action(item.get("args", {}) as Dictionary):
+			return _failure("AtomicBridgeExecutionService should classify mutating action as write: %s" % JSON.stringify(item))
+	if not execution_service.is_write_atomic_action("script_edit_gd", {}):
+		return _failure("AtomicBridgeExecutionService should infer script_edit_* atomic calls without an action as writes.")
 	var disposable_executor := FakeDisposableExecutor.new()
-	atomic_bridge._atomic_executors["script"] = disposable_executor
-	atomic_bridge._invalidate_atomic_executors()
+	execution_service.cache_executor_for_test("script", disposable_executor)
+	execution_service.invalidate()
 	if not disposable_executor.disposed or not disposable_executor.shutdown_called:
-		return _failure("AtomicBridge write invalidation should dispose and shutdown cached executors.")
-	if not atomic_bridge._atomic_executors.is_empty():
-		return _failure("AtomicBridge write invalidation should clear all cached executors.")
-	var atomic_collect_bridge = FakeFilesystemAtomicBridge.new()
-	var atomic_files: Array = atomic_collect_bridge.collect_files("*.gd")
+		return _failure("AtomicBridgeExecutionService invalidation should dispose and shutdown cached executors.")
+	if execution_service.get_cached_executor_count_for_test() != 0:
+		return _failure("AtomicBridgeExecutionService invalidation should clear all cached executors.")
+	var helper_service = AtomicBridgeHelperServiceScript.new()
+	var atomic_caller := Callable(filesystem_runtime, "call_atomic_for_helper")
+	var atomic_files: Array = helper_service.collect_files("*.gd", atomic_caller)
 	if atomic_files.size() != 1:
-		return _failure("AtomicBridge.collect_files should return files from filesystem_directory.")
-	if str(atomic_collect_bridge.last_args.get("path", "")) != "res://":
-		return _failure("AtomicBridge.collect_files should pass res:// as the filesystem_directory root path.")
-	var atomic_file_count: int = atomic_collect_bridge.collect_file_count("*.gd")
+		return _failure("AtomicBridgeHelperService.collect_files should return files from filesystem_directory.")
+	if str(filesystem_runtime.last_args.get("path", "")) != "res://":
+		return _failure("AtomicBridgeHelperService.collect_files should pass res:// as the filesystem_directory root path.")
+	var atomic_file_count: int = helper_service.collect_file_count("*.gd", atomic_caller)
 	if atomic_file_count != 1:
-		return _failure("AtomicBridge.collect_file_count should return count from filesystem_directory.")
-	if not bool(atomic_collect_bridge.last_args.get("count_only", false)):
-		return _failure("AtomicBridge.collect_file_count should request count_only filesystem enumeration.")
+		return _failure("AtomicBridgeHelperService.collect_file_count should return count from filesystem_directory.")
+	if not bool(filesystem_runtime.last_args.get("count_only", false)):
+		return _failure("AtomicBridgeHelperService.collect_file_count should request count_only filesystem enumeration.")
+	var atomic_file_counts: Dictionary = helper_service.collect_file_counts(["*.gd", "*.cs"], atomic_caller)
+	if int(atomic_file_counts.get("*.gd", 0)) != 1:
+		return _failure("AtomicBridgeHelperService.collect_file_counts should return counts from filesystem_directory.")
+	if not bool(filesystem_runtime.last_args.get("count_only", false)) or not (filesystem_runtime.last_args.get("filters", []) is Array):
+		return _failure("AtomicBridgeHelperService.collect_file_counts should request filters with count_only filesystem enumeration.")
 	var resource_path := TEMP_ROOT.path_join("GlobalGameConfig.tres")
 	var valid_resource_path := TEMP_ROOT.path_join("ValidNoteData.tres")
 	var quoted_id_path_resource_path := TEMP_ROOT.path_join("QuotedPathIdNoteData.tres")
@@ -399,13 +441,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 11:
-		return _failure("System project implementation should expose 11 tool definitions including plugin_reload, plugin_update, plugin_maintenance, project_files, resource_reference_audit, userdata_maintenance and project_lifecycle.")
+		return _failure("System project implementation should expose 11 tool definitions including plugin removal guards, plugin_maintenance, project_files, resource_reference_audit, userdata_maintenance and project_lifecycle.")
 	if not _has_tool(tool_defs, "plugin_reload"):
-		return _failure("System project implementation should expose plugin_reload for stable plugin lifecycle reloads.")
+		return _failure("System project implementation should keep plugin_reload as a direct-call removal guard.")
 	if not _has_tool(tool_defs, "plugin_update"):
-		return _failure("System project implementation should expose plugin_update for high-level plugin update flows.")
+		return _failure("System project implementation should keep plugin_update as a direct-call removal guard.")
 	if not _has_tool(tool_defs, "plugin_maintenance"):
-		return _failure("System project implementation should expose plugin_maintenance as the grouped plugin maintenance entry.")
+		return _failure("System project implementation should expose plugin_maintenance as the canonical plugin maintenance entry.")
 	if not _has_tool(tool_defs, "userdata_maintenance"):
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 	if not _has_tool(tool_defs, "project_files"):

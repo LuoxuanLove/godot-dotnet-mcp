@@ -22,4 +22,5 @@ internal sealed record CsFilePatchResult(
     string Preview,
     string ContentHash,
     int OriginalLength,
-    int NewLength);
+    int NewLength,
+    string SemanticRuntime);

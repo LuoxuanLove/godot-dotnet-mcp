@@ -2,7 +2,10 @@
 extends Node
 
 const FACADE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/PluginRoslynRuntimeFacade.cs"
+const RUNTIME_MANIFEST_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json"
+const RUNTIME_BRIDGE_DLL_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/GodotDotnetMcp.PluginBridge.dll"
 const LOAD_MODE_RUNTIME := "runtime_csharp"
+const LOAD_MODE_RUNTIME_PROCESS := "isolated_runtime_process"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
@@ -45,6 +48,31 @@ class PlaceholderRoslynFacade extends RefCounted:
 			"error": _reason,
 			"data": data
 		}
+
+
+class RuntimeProcessRoslynFacade extends RefCounted:
+	var _owner = null
+
+	func _init(owner) -> void:
+		_owner = owner
+
+	func get_capabilities() -> Dictionary:
+		return _owner._execute_runtime_capabilities()
+
+	func parse_file(script_path: String, source_text: String = "") -> Dictionary:
+		var request: Dictionary = {
+			"path": script_path
+		}
+		if not source_text.is_empty():
+			request["sourceText"] = source_text
+		var response: Dictionary = _owner._execute_runtime_tool("cs_file_read", request)
+		return _owner._convert_bridge_read_response(response, script_path)
+
+	func patch_file(script_path: String, request: Dictionary) -> Dictionary:
+		var bridge_request: Dictionary = request.duplicate(true)
+		bridge_request["path"] = script_path
+		var response: Dictionary = _owner._execute_runtime_tool("cs_plugin_patch", bridge_request)
+		return _owner._convert_bridge_patch_response(response, script_path)
 
 
 func _init() -> void:
@@ -187,10 +215,16 @@ func _ensure_facade() -> void:
 
 
 func _instantiate_facade():
+	if not FileAccess.file_exists(FACADE_SCRIPT_PATH):
+		var missing_source_process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is not present in this installation")
+		if missing_source_process_facade != null:
+			return missing_source_process_facade
+		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 	var script = ResourceLoader.load(FACADE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	if script == null or not (script is Script):
-		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source could not be loaded from res://"
+		var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source could not be loaded from res://")
+		if process_facade != null:
+			return process_facade
 		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 	var script_resource := script as Script
 	if script_resource.can_instantiate():
@@ -206,12 +240,195 @@ func _instantiate_facade():
 			_load_error = ""
 			return class_instance
 	if not script_resource.can_instantiate():
-		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment"
+		var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment")
+		if process_facade != null:
+			return process_facade
 		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	_load_mode = LOAD_MODE_PLACEHOLDER
-	_load_error = "PluginRoslynRuntimeFacade runtime source is present but could not be instantiated"
+	var fallback_process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is present but could not be instantiated")
+	if fallback_process_facade != null:
+		return fallback_process_facade
 	return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
+
+
+func _instantiate_runtime_process_facade(reason: String):
+	if not FileAccess.file_exists(RUNTIME_BRIDGE_DLL_PATH):
+		_load_mode = LOAD_MODE_PLACEHOLDER
+		_load_error = _build_runtime_unavailable_message("%s; isolated runtime bridge is missing at %s" % [reason, RUNTIME_BRIDGE_DLL_PATH])
+		return null
+	var capabilities := _execute_runtime_capabilities()
+	if not bool(capabilities.get("success", false)):
+		_load_mode = LOAD_MODE_PLACEHOLDER
+		_load_error = str(capabilities.get("error", _build_runtime_unavailable_message(reason)))
+		return null
+	_load_mode = LOAD_MODE_RUNTIME_PROCESS
+	_load_error = ""
+	return RuntimeProcessRoslynFacade.new(self)
+
+
+func _build_runtime_unavailable_message(reason: String) -> String:
+	var manifest_state := "missing"
+	if FileAccess.file_exists(RUNTIME_MANIFEST_PATH):
+		manifest_state = "present"
+	return "%s. C# semantic support requires the isolated Roslyn runtime bundle at %s (manifest %s)." % [
+		reason,
+		RUNTIME_MANIFEST_PATH,
+		manifest_state
+	]
+
+
+func _execute_runtime_capabilities() -> Dictionary:
+	var result := _execute_runtime_process(["--capabilities"])
+	if not bool(result.get("success", false)):
+		return result
+	var payload := _coerce_dictionary(result.get("payload", {}))
+	var data := _base_metadata(false)
+	data["component"] = str(payload.get("component", "godot-dotnet-mcp-roslyn-runtime"))
+	data["version"] = str(payload.get("version", ""))
+	data["mode"] = str(payload.get("mode", "syntax"))
+	data["semantic_runtime"] = "Roslyn"
+	data["tools"] = _coerce_array(payload.get("tools", []))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Isolated Roslyn runtime bundle is ready."
+	}
+
+
+func _execute_runtime_tool(tool_name: String, request: Dictionary) -> Dictionary:
+	var request_path := _make_runtime_request_path(tool_name)
+	var file := FileAccess.open(request_path, FileAccess.WRITE)
+	if file == null:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+		}
+	file.store_string(JSON.stringify(request))
+	file.close()
+	var result := _execute_runtime_process(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
+	if FileAccess.file_exists(request_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))
+	return result
+
+
+func _execute_runtime_process(args: Array[String]) -> Dictionary:
+	var output: Array = []
+	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
+	var command_args: Array[String] = [runtime_dll]
+	command_args.append_array(args)
+	var exit_code := OS.execute("dotnet", PackedStringArray(command_args), output, true, false)
+	var stdout := ""
+	if not output.is_empty():
+		stdout = str(output[0]).strip_edges()
+	if exit_code != 0:
+		return {
+			"success": false,
+			"error": "Isolated Roslyn runtime exited with code %d: %s" % [exit_code, stdout],
+			"exit_code": exit_code,
+			"stdout": stdout
+		}
+	var parsed = JSON.parse_string(stdout)
+	if not (parsed is Dictionary):
+		return {
+			"success": false,
+			"error": "Isolated Roslyn runtime returned invalid JSON.",
+			"exit_code": exit_code,
+			"stdout": stdout
+		}
+	return {
+		"success": true,
+		"payload": parsed,
+		"exit_code": exit_code,
+		"stdout": stdout
+	}
+
+
+func _make_runtime_request_path(tool_name: String) -> String:
+	var safe_tool_name := tool_name.replace("/", "_").replace("\\", "_").replace(":", "_")
+	return "user://godot_dotnet_mcp_roslyn_%s_%d_%d.json" % [
+		safe_tool_name,
+		Time.get_ticks_msec(),
+		randi()
+	]
+
+
+func _convert_bridge_read_response(response: Dictionary, script_path: String) -> Dictionary:
+	if not bool(response.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_failed",
+			str(response.get("error", "Isolated Roslyn runtime failed"))
+		)
+	var payload := _coerce_dictionary(response.get("payload", {}))
+	if not bool(payload.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_ROSLYN_FAILURE,
+			"roslyn_parse_failed",
+			str(payload.get("error", "Isolated Roslyn runtime parse failed"))
+		)
+	var structured := _coerce_dictionary(payload.get("structuredContent", {}))
+	var data := _base_metadata(false)
+	data["path"] = str(structured.get("path", script_path))
+	data["namespace"] = str(structured.get("namespace", ""))
+	data["usings"] = _coerce_array(structured.get("usings", []))
+	data["types"] = _coerce_array(structured.get("types", []))
+	data["methods"] = _coerce_array(structured.get("methods", []))
+	data["exports"] = _coerce_array(structured.get("exports", []))
+	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
+	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Syntax parsed successfully."
+	}
+
+
+func _convert_bridge_patch_response(response: Dictionary, script_path: String) -> Dictionary:
+	if not bool(response.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_failed",
+			str(response.get("error", "Isolated Roslyn runtime failed"))
+		)
+	var payload := _coerce_dictionary(response.get("payload", {}))
+	if not bool(payload.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_ROSLYN_FAILURE,
+			"roslyn_patch_failed",
+			str(payload.get("error", "Isolated Roslyn runtime patch failed"))
+		)
+	var structured := _coerce_dictionary(payload.get("structuredContent", {}))
+	var data := _base_metadata(false)
+	data["path"] = str(structured.get("path", script_path))
+	data["source_hash"] = str(structured.get("sourceHash", structured.get("contentHash", "")))
+	var operations := _coerce_array(structured.get("operations", []))
+	if operations.is_empty() and structured.has("operation"):
+		operations = [_coerce_dictionary(structured.get("operation", {}))]
+	data["operation"] = _first_operation(operations)
+	data["operations"] = operations
+	data["preview"] = str(structured.get("preview", ""))
+	data["written"] = bool(structured.get("written", true))
+	data["dry_run"] = bool(structured.get("dryRun", false))
+	data["action"] = str(structured.get("action", ""))
+	data["type_name"] = str(structured.get("typeName", structured.get("type_name", "")))
+	data["member_name"] = str(structured.get("memberName", structured.get("member_name", "")))
+	data["types"] = _coerce_array(structured.get("types", []))
+	data["methods"] = _coerce_array(structured.get("methods", []))
+	data["exports"] = _coerce_array(structured.get("exports", []))
+	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
+	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Syntax patch applied successfully."
+	}
 
 
 func _normalize_capabilities_result(result) -> Dictionary:
@@ -442,12 +659,29 @@ func _coerce_array(value) -> Array:
 	return []
 
 
+func _first_operation(operations: Array) -> Dictionary:
+	if operations.is_empty():
+		return {}
+	var first = operations[0]
+	if first is Dictionary:
+		return (first as Dictionary).duplicate(true)
+	return {}
+
+
 func _base_metadata(degraded: bool) -> Dictionary:
+	var transport := "in_process"
+	var entrypoint := "plugin_internal_facade"
+	if _load_mode == LOAD_MODE_RUNTIME_PROCESS:
+		transport = "process_json"
+		entrypoint = RUNTIME_BRIDGE_DLL_PATH
 	return {
 		"engine": "roslyn",
 		"mode": "syntax",
-		"transport": "in_process",
-		"entrypoint": "plugin_internal_facade",
+		"semantic_runtime": "Roslyn",
+		"transport": transport,
+		"entrypoint": entrypoint,
+		"runtime_manifest_path": RUNTIME_MANIFEST_PATH,
+		"runtime_manifest_present": FileAccess.file_exists(RUNTIME_MANIFEST_PATH),
 		"load_mode": _load_mode,
 		"load_error": _load_error,
 		"degraded": degraded,

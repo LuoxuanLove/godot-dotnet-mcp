@@ -64,13 +64,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if locale.has("advanced_settings"):
 			return _failure("Localization dictionaries should not keep the removed Advanced Settings label.")
 	for key in [
-		"tool_system_help_name",
-		"tool_system_help_desc",
 		"tool_system_editor_state_name",
 		"tool_system_project_files_name",
 		"tool_system_scene_tree_name",
 		"tool_system_userdata_maintenance_name",
-		"tool_system_editor_log_name",
 		"cat_dap",
 		"tool_system_dap_debugger_name",
 		"tool_dap_debugger_name",
@@ -123,6 +120,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		for locale_code in supported_locale_codes:
 			if localization.get_text_for(locale_code, key) == key:
 				return _failure("All supported locales should resolve visible Tools-page key: %s" % key)
+	for key in [
+		"tab_resources",
+		"tab_prompts",
+		"mcp_resources_title",
+		"mcp_resources_description",
+		"mcp_resources_counts",
+		"mcp_prompts_title",
+		"mcp_prompts_description",
+		"mcp_prompts_counts",
+		"mcp_catalog_resources",
+		"mcp_catalog_resource_templates",
+		"mcp_catalog_prompts",
+		"mcp_catalog_empty",
+		"mcp_catalog_copy_id",
+		"mcp_catalog_kind",
+		"mcp_catalog_mime_type",
+		"mcp_catalog_arguments",
+		"mcp_catalog_preview",
+		"mcp_catalog_preview_title",
+		"mcp_catalog_preview_empty",
+		"mcp_catalog_preview_error",
+		"mcp_catalog_copy_preview",
+		"mcp_catalog_argument_placeholder",
+		"mcp_catalog_template_preview_unavailable",
+	]:
+		for locale_code in supported_locale_codes:
+			if localization.get_text_for(locale_code, key) == key:
+				return _failure("All supported locales should resolve visible MCP catalog key: %s" % key)
 	for key in [
 		"tab_settings",
 		"settings_general_title",

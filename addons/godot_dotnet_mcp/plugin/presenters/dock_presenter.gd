@@ -38,7 +38,7 @@ func build_model(context: Dictionary) -> Dictionary:
 	if current_tab == 1 and user_tool_service != null:
 		user_tools = user_tool_service.list_user_tools()
 
-	if current_tab == 2:
+	if current_tab == 4:
 		var client_install_statuses: Dictionary = context.get("client_install_statuses", {})
 		var runtime_process: Dictionary = {}
 		desktop_clients = _client_config_presenter.build_desktop_client_models(
@@ -84,6 +84,11 @@ func build_model(context: Dictionary) -> Dictionary:
 		"languages": localization.get_available_languages(),
 		"tools_by_category": tools_by_category,
 		"tool_presentation": context.get("tool_presentation", {}),
+		"mcp_resources": context.get("mcp_resources", []),
+		"mcp_resource_templates": context.get("mcp_resource_templates", []),
+		"mcp_prompts": context.get("mcp_prompts", []),
+		"mcp_catalog_counts": context.get("mcp_catalog_counts", {}),
+		"mcp_catalog_preview": context.get("mcp_catalog_preview", {}),
 		"presentationVersion": int(context.get("tool_presentation", {}).get("presentationVersion", 1)) if context.get("tool_presentation", {}) is Dictionary else 1,
 		"toolTree": context.get("tool_presentation", {}).get("toolTree", []) if context.get("tool_presentation", {}) is Dictionary else [],
 		"toolGroups": context.get("tool_presentation", {}).get("toolGroups", []) if context.get("tool_presentation", {}) is Dictionary else [],

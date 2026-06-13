@@ -12,8 +12,24 @@ class FakeLocalization extends RefCounted:
 		"status_stopped": "Stopped",
 		"tab_server": "Home",
 		"tab_tools": "Tools",
+		"tab_resources": "Resources",
+		"tab_prompts": "Prompts",
 		"tab_config": "Config",
 		"tab_settings": "Settings",
+		"mcp_resources_title": "Resources",
+		"mcp_resources_description": "Browse context resources.",
+		"mcp_resources_counts": "Resources: %d | Templates: %d",
+		"mcp_prompts_title": "Prompts",
+		"mcp_prompts_description": "Browse workflows.",
+		"mcp_prompts_counts": "Prompts: %d",
+		"mcp_catalog_resources": "Resources",
+		"mcp_catalog_resource_templates": "Resource Templates",
+		"mcp_catalog_prompts": "Prompts",
+		"mcp_catalog_empty": "No entries",
+		"mcp_catalog_copy_id": "Copy ID",
+		"mcp_catalog_kind": "Kind",
+		"mcp_catalog_mime_type": "MIME",
+		"mcp_catalog_arguments": "Arguments",
 		"tools_enabled": "Tools: %d/%d enabled",
 		"settings_general_title": "General",
 		"settings_updates_title": "Updates",
@@ -96,10 +112,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 
 	var tab_container := _instance.get_node("TabContainer") as TabContainer
-	if tab_container == null or tab_container.get_tab_count() != 4:
-		return _failure("MCP Dock should create exactly four tabs.")
-	if tab_container.get_tab_control(2).name != "ConfigTab" or tab_container.get_tab_control(3).name != "SettingsTab":
-		return _failure("MCP Dock should preserve Config at index 2 and Settings at index 3 before localization applies.")
+	if tab_container == null or tab_container.get_tab_count() != 6:
+		return _failure("MCP Dock should create Home, Tools, Resources, Prompts, Config, and Settings tabs.")
+	if tab_container.get_tab_control(2).name != "ResourcesTab" or tab_container.get_tab_control(3).name != "PromptsTab" or tab_container.get_tab_control(4).name != "ConfigTab" or tab_container.get_tab_control(5).name != "SettingsTab":
+		return _failure("MCP Dock should preserve Resources/Prompts before Config and Settings before localization applies.")
 	var server_tab := tab_container.get_tab_control(0)
 	if server_tab == null or server_tab.find_child("SettingsCard", true, false) != null:
 		return _failure("Home tab should not keep persistent SettingsCard controls.")
@@ -113,7 +129,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
-		"current_tab": 3,
+		"current_tab": 5,
 		"is_running": false,
 		"settings": {"port": 3100, "update_source": "custom_branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
 		"current_log_level": "info",
@@ -123,7 +139,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_refs_releases": ["v1.0.0", "v2.0.0"],
 		"update_refs_state": "success",
 		"update_refs_commits": {"dev": "1234567890abcdef"},
-		"update_refs_versions": {"dev": "1.3.0"},
+		"update_refs_versions": {"dev": "1.4.0"},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 1,
 		"update_compare_behind_by": 0,
@@ -133,23 +149,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {"sync": {"source_git_commit": "abcdef123456"}}
 	})
 	await tree.process_frame
-	if tab_container.get_tab_title(0) != "Home" or tab_container.get_tab_title(2) != "Config" or tab_container.get_tab_title(3) != "Settings":
-		return _failure("MCP Dock should localize all four tab titles, including Settings.")
-	if tab_container.current_tab != 3:
-		return _failure("MCP Dock should apply Settings tab model at tab index 3.")
+	if tab_container.get_tab_title(0) != "Home" or tab_container.get_tab_title(2) != "Resources" or tab_container.get_tab_title(3) != "Prompts" or tab_container.get_tab_title(4) != "Config" or tab_container.get_tab_title(5) != "Settings":
+		return _failure("MCP Dock should localize all six tab titles, including Resources and Prompts.")
+	if tab_container.current_tab != 5:
+		return _failure("MCP Dock should apply Settings tab model at tab index 5.")
 
-	var port_spin := tab_container.get_tab_control(3).find_child("PortSpin", true, false) as SpinBox
+	var port_spin := tab_container.get_tab_control(5).find_child("PortSpin", true, false) as SpinBox
 	if port_spin == null or int(port_spin.value) != 3100:
-		return _failure("Settings tab should receive the Dock model at index 3.")
+		return _failure("Settings tab should receive the Dock model at index 5.")
 	port_spin.value = 3200
 	if recorder.port != 3200:
 		return _failure("Settings tab port changes should route through the existing Dock port_changed signal.")
-	var source_option := tab_container.get_tab_control(3).find_child("SourceOption", true, false) as OptionButton
-	var custom_branch_row := tab_container.get_tab_control(3).find_child("CustomBranchRow", true, false) as HBoxContainer
-	var custom_branch_value := tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) as OptionButton
-	var check_button := tab_container.get_tab_control(3).find_child("CheckButton", true, false) as Button
-	var prepare_button := tab_container.get_tab_control(3).find_child("PrepareButton", true, false) as Button
-	var apply_button := tab_container.get_tab_control(3).find_child("ApplyButton", true, false) as Button
+	var source_option := tab_container.get_tab_control(5).find_child("SourceOption", true, false) as OptionButton
+	var custom_branch_row := tab_container.get_tab_control(5).find_child("CustomBranchRow", true, false) as HBoxContainer
+	var custom_branch_value := tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) as OptionButton
+	var check_button := tab_container.get_tab_control(5).find_child("CheckButton", true, false) as Button
+	var prepare_button := tab_container.get_tab_control(5).find_child("PrepareButton", true, false) as Button
+	var apply_button := tab_container.get_tab_control(5).find_child("ApplyButton", true, false) as Button
 	if source_option == null or custom_branch_value == null or check_button == null or prepare_button == null or apply_button == null:
 		return _failure("Settings tab update source controls should exist in the Settings tab.")
 	if source_option.get_item_count() != 3 or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
@@ -158,9 +174,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should not expose selectable release/tag or latest dev sources.")
 	if custom_branch_value.get_item_count() < 2 or str(custom_branch_value.get_item_metadata(0)) != "dev" or str(custom_branch_value.get_item_metadata(custom_branch_value.selected)) != "dev":
 		return _failure("Settings tab should keep dev first in the custom branch selector after Dock projection.")
-	if custom_branch_row == null or not custom_branch_row.visible or tab_container.get_tab_control(3).find_child("ReleaseTagRow", true, false) != null:
+	if custom_branch_row == null or not custom_branch_row.visible or tab_container.get_tab_control(5).find_child("ReleaseTagRow", true, false) != null:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
-	if tab_container.get_tab_control(3).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(3).find_child("CustomBranchValue", true, false) is LineEdit:
+	if tab_container.get_tab_control(5).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
 	if check_button.visible or not check_button.disabled or not check_button.text.is_empty():
 		return _failure("Settings tab Check should remain hidden, disabled, and label-free because refs are discovered from source selection.")
@@ -170,12 +186,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab Sync should preserve non-stale non-Chinese labels after Dock projection.")
 	if apply_button.disabled:
 		return _failure("Settings tab Sync should be enabled for selected branch targets.")
-	var labels := tab_container.get_tab_control(3).find_children("*", "Label", true, false)
+	var labels := tab_container.get_tab_control(5).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Click Check") != null:
 		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
 	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
-	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.3.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
+	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
@@ -187,7 +203,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
-		"current_tab": 3,
+		"current_tab": 5,
 		"is_running": false,
 		"settings": {"port": 3100, "update_source": "custom_branch", "update_custom_branch": "dev", "update_release_tag": "v1.0.0"},
 		"current_log_level": "info",

@@ -3,6 +3,7 @@ name: pr-policy
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
   workflow_dispatch:
     inputs:
       pull_number:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   pr-target-dev:
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +47,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
       - name: Validate objective PR fields
+        if: github.event_name != 'merge_group'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pull_number }}
@@ -60,64 +64,7 @@ jobs:
           pr_fields_file="$RUNNER_TEMP/pr-policy-fields.json"
           gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title,body > "$pr_fields_file"
 
-          PR_FIELDS_PATH="$pr_fields_file" python - <<'PY'
-          import json
-          import os
-          import re
-          import sys
+          python scripts/validate_pr_policy.py --fields-json "$pr_fields_file"
 
-          with open(os.environ["PR_FIELDS_PATH"], "r", encoding="utf-8") as fields_file:
-              pull_request = json.load(fields_file)
-
-          title = (pull_request.get("title") or "").strip()
-          body = pull_request.get("body") or ""
-          errors = []
-
-          title_pattern = re.compile(r"^(feat|fix|docs|ci|chore|perf|refactor|test|build|hotfix)(\([a-z0-9._/-]+\))?!?: .+", re.IGNORECASE)
-          if not title_pattern.match(title):
-              errors.append("PR title must use Conventional Commits format, for example 'fix(scope): concise summary'.")
-
-          required_sections = [
-              "Summary",
-              "Changes",
-              "Testing",
-          ]
-
-          def section_match(section_name: str):
-              pattern = re.compile(rf"^##\s+{re.escape(section_name)}\s*$", re.IGNORECASE | re.MULTILINE)
-              return pattern.search(body)
-
-          def section_text(section_name: str) -> str:
-              match = section_match(section_name)
-              if match is None:
-                  return ""
-              next_heading = re.search(r"^##\s+", body[match.end():], re.MULTILINE)
-              end = match.end() + next_heading.start() if next_heading else len(body)
-              return body[match.end():end]
-
-          def has_substantive_content(section_name: str) -> bool:
-              text = re.sub(r"<!--.*?-->", "", section_text(section_name), flags=re.DOTALL)
-              for raw_line in text.splitlines():
-                  line = raw_line.strip()
-                  if not line or line == "-" or re.fullmatch(r"```.*", line):
-                      continue
-                  if line.startswith("# Example:") or "<Godot Editor Path>" in line:
-                      continue
-                  return True
-              return False
-
-          for section in required_sections:
-              if section_match(section) is None:
-                  errors.append(f"PR body must include '## {section}'.")
-
-          for section in ["Summary", "Testing"]:
-              if section_match(section) is not None and not has_substantive_content(section):
-                  errors.append(f"PR body section '## {section}' must include a concrete statement, not only template placeholders.")
-
-          if errors:
-              for error in errors:
-                  print(f"::error::{error}")
-              sys.exit(1)
-
-          print("PR standards validated.")
-          PY
+      - name: Run PR policy regression tests
+        run: python scripts/test_validate_pr_policy.py

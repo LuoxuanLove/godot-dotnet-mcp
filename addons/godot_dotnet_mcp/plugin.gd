@@ -7,16 +7,18 @@ const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const SettingsStoreScript = preload("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
 const ServerRuntimeControllerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
 const ToolCatalogServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
-const PluginReloadCoordinator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_reload_coordinator.gd")
 const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_runtime_coordinator.gd")
+const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
+const PluginLifecycleContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_context_service.gd")
+const PluginConfigReloadWiringServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_wiring_service.gd")
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_preview_service.gd")
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
 const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
-const ConfigTabActionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_tab_action_service.gd")
 const ClientInstallDetectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
-const UserToolWatchServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
+const PluginRuntimeReloadRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_request_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -56,7 +58,12 @@ var _tool_catalog = null
 var _config_service = null
 var _config_tab_action_service = null
 var _dock_model_service = null
+var _mcp_catalog_preview_service = null
 var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
+var _plugin_lifecycle_service := PluginLifecycleServiceScript.new()
+var _plugin_lifecycle_context_service := PluginLifecycleContextServiceScript.new()
+var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
+var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -93,60 +100,113 @@ func _get_localized_text(key: String) -> String:
 
 
 func _enter_tree() -> void:
-	PluginSelfDiagnosticStore.clear()
-	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_enter_tree", "_enter_tree")
-	PluginInstanceFreshness.capture_running_instance("plugin_enter_tree")
-	_refresh_service_instances()
-	_load_state()
+	if _plugin_lifecycle_service == null:
+		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
+	_plugin_lifecycle_service.enter_tree(_build_plugin_lifecycle_context())
+
+
+func _exit_tree() -> void:
+	if _plugin_lifecycle_service == null:
+		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
+	_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())
+
+
+func _disable_plugin() -> void:
+	if _plugin_lifecycle_service == null:
+		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
+	_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())
+
+
+func _process(delta: float) -> void:
+	if _plugin_lifecycle_service == null:
+		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
+	_status_poll_accumulator = _plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _build_plugin_lifecycle_context())
+
+
+func _build_plugin_lifecycle_context() -> Dictionary:
+	return _plugin_lifecycle_context_service.build_plugin_lifecycle_context(self, {
+		"runtime_bridge_autoload_name": RUNTIME_BRIDGE_AUTOLOAD_NAME,
+		"runtime_bridge_autoload_path": RUNTIME_BRIDGE_AUTOLOAD_PATH
+	})
+
+
+func _build_config_reload_wiring_context() -> Dictionary:
+	return {
+		"plugin_id": PLUGIN_ID,
+		"plugin_host": self,
+		"server_controller": _server_controller,
+		"state": _state,
+		"localization": _localization,
+		"config_service": _config_service,
+		"client_install_detection_service": _client_install_detection_service,
+		"user_tool_service": _user_tool_service,
+		"get_editor_interface": Callable(self, "get_editor_interface"),
+		"is_inside_tree": Callable(self, "is_inside_tree"),
+		"get_tree": Callable(self, "get_tree"),
+		"schedule_plugin_reenable": Callable(self, "_schedule_plugin_reenable"),
+		"complete_plugin_reenable_schedule": Callable(self, "_complete_plugin_reenable_schedule"),
+		"apply_external_user_tool_catalog_refresh": Callable(self, "_apply_external_user_tool_catalog_refresh"),
+		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
+		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
+		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
+		"refresh_dock": Callable(self, "_refresh_dock"),
+		"save_settings": Callable(self, "_save_settings"),
+		"show_message": Callable(self, "_show_message"),
+		"show_confirmation": Callable(self, "_show_confirmation"),
+		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
+		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
+	}
+
+
+func _configure_lifecycle_enter_state() -> void:
 	LocalizationService.reset_instance()
 	_localization = LocalizationService.get_instance()
 	_localization.set_language(str(_state.settings.get("language", "")))
 	MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
 	_state.settings["log_level"] = MCPDebugBuffer.get_minimum_level()
 
+
+func _ensure_action_router() -> void:
 	if _action_router == null:
 		_action_router = PluginActionRouterScript.new()
 	_action_router.configure(self, RUNTIME_BRIDGE_AUTOLOAD_NAME, RUNTIME_BRIDGE_AUTOLOAD_PATH)
+
+
+func _ensure_dock_coordinator() -> void:
 	if _dock_coordinator == null:
 		_dock_coordinator = PluginDockCoordinatorScript.new()
 
-	_attach_server_controller()
-	_configure_user_tool_watch_service()
-	_configure_config_tab_action_service()
-	_ensure_runtime_bridge_autoload()
-	_install_editor_debugger_bridge()
 
-	_create_dock()
-	_apply_initial_tool_profile_if_needed()
-	_refresh_dock()
-	set_process(true)
+func _set_plugin_process_enabled(enabled: bool) -> void:
+	set_process(enabled)
 
-	if bool(_state.settings.get("auto_start", true)):
+
+func _should_auto_start_server() -> bool:
+	return _state != null and bool(_state.settings.get("auto_start", true))
+
+
+func _start_server_for_lifecycle() -> void:
+	if _server_controller != null:
 		_server_controller.start(_state.settings, "auto_start")
-		_refresh_dock()
 
-	_restore_pending_focus_snapshot_if_needed()
+
+func _defer_saved_update_source_discovery_request() -> void:
 	call_deferred("_ensure_saved_update_source_discovery_requested")
-	_finish_self_operation(operation, true, "plugin", "_enter_tree")
-
-	MCPDebugBuffer.record("info", "plugin", "Plugin initialized")
 
 
-func _exit_tree() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_exit_tree", "_exit_tree")
-	set_process(false)
-	_save_settings()
+func _stop_user_tool_watch_service() -> void:
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.stop()
-	_remove_dock()
-	_remove_client_executable_dialog()
-	_uninstall_editor_debugger_bridge()
-	_remove_runtime_bridge_autoload()
+
+
+func _dispose_action_router() -> void:
 	if _action_router != null:
 		_action_router.dispose()
 		_action_router = null
 	_dock_coordinator = null
-	_dispose_server_controller()
+
+
+func _dispose_lifecycle_services() -> void:
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
@@ -158,34 +218,23 @@ func _exit_tree() -> void:
 	if _dock_model_service != null:
 		_dock_model_service.dispose()
 	_dock_model_service = null
+	if _mcp_catalog_preview_service != null:
+		_mcp_catalog_preview_service.dispose()
+	_mcp_catalog_preview_service = null
 	_runtime_coordinator = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
-	_finish_self_operation(operation, true, "plugin", "_exit_tree")
 
 
-func _disable_plugin() -> void:
-	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_disable", "_disable_plugin")
-	MCPRuntimeDebugStore.set_bridge_status(
-		_is_runtime_bridge_autoload_path(str(ProjectSettings.get_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, ""))),
-		RUNTIME_BRIDGE_AUTOLOAD_NAME,
-		RUNTIME_BRIDGE_AUTOLOAD_PATH,
-		"Plugin disabled without removing runtime bridge autoload"
-	)
-	_finish_self_operation(operation, true, "plugin", "_disable_plugin")
+func _is_runtime_bridge_currently_owned() -> bool:
+	return _is_runtime_bridge_autoload_path(str(ProjectSettings.get_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, "")))
 
 
-func _process(delta: float) -> void:
+func _tick_user_tool_watch_service() -> void:
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.tick()
-	if _update_refs_discovery_retry_pending and _ensure_update_refs_discovery_requested():
-		return
-	_status_poll_accumulator += delta
-	if _status_poll_accumulator >= 0.5:
-		_status_poll_accumulator = 0.0
-		_refresh_dock()
 
 
 func get_server() -> Node:
@@ -550,7 +599,7 @@ func _refresh_dock() -> void:
 	_sync_current_tab_from_dock()
 	if _ensure_saved_update_source_discovery_requested():
 		return
-	if _state != null and _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+	if _state != null and _state.current_tab == 5 and _ensure_update_refs_discovery_requested():
 		return
 	if _dock_model_service == null:
 		_dock_model_service = DockModelServiceScript.new()
@@ -610,9 +659,9 @@ func _configure_client_install_detection_service() -> void:
 
 func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
-	if _state.current_tab == 2:
+	if _state.current_tab == 4:
 		_invalidate_client_install_status_cache()
-	if _state.current_tab == 3 and _ensure_update_refs_discovery_requested():
+	if _state.current_tab == 5 and _ensure_update_refs_discovery_requested():
 		return
 	_refresh_dock()
 
@@ -1977,6 +2026,14 @@ func _on_copy_requested(text: String, source: String) -> void:
 	_show_message(_localization.get_text("msg_copied") % source)
 
 
+func _on_mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	if _mcp_catalog_preview_service == null:
+		_mcp_catalog_preview_service = DockMcpCatalogPreviewServiceScript.new()
+	_mcp_catalog_preview_service.configure(_server_controller)
+	_state.mcp_catalog_preview = _mcp_catalog_preview_service.build_preview(kind, id, arguments)
+	_refresh_dock()
+
+
 func _on_server_started() -> void:
 	_refresh_dock()
 
@@ -2089,12 +2146,11 @@ func _refresh_user_tool_registry() -> Array[Dictionary]:
 
 
 func _reload_user_tool_runtime(script_path: String, reason: String) -> Dictionary:
-	var coordinator = _create_reload_coordinator()
-	if coordinator == null:
-		return {"success": false, "error": "Reload coordinator is unavailable"}
+	if _runtime_reload_request_service == null:
+		_runtime_reload_request_service = PluginRuntimeReloadRequestServiceScript.new()
 	if not script_path.is_empty():
-		return coordinator.request_reload_by_script(script_path, reason)
-	return coordinator.request_reload("user", reason)
+		return _runtime_reload_request_service.request_reload_by_script(script_path, reason, _server_controller)
+	return _runtime_reload_request_service.request_reload("user", reason, _server_controller)
 
 
 func _rebuild_user_tool_ui_model() -> void:
@@ -2277,7 +2333,7 @@ func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
 		_dock.restore_focus_snapshot(snapshot)
 	if _dock.has_method("focus_active_panel"):
 		_dock.call_deferred("focus_active_panel")
-	if _state != null and _state.current_tab == 3:
+	if _state != null and _state.current_tab == 5:
 		_ensure_update_refs_discovery_requested()
 
 
@@ -2526,7 +2582,7 @@ func get_runtime_usage_guide_from_tools() -> Dictionary:
 				{"step": 3, "name": "Reload safely", "tools": ["plugin_runtime_reload"], "purpose": "Start with domain reloads, then reload all domains, and escalate to soft/full plugin reload only when necessary."},
 				{"step": 4, "name": "Read runtime bridge", "tools": ["debug_runtime_bridge"], "purpose": "Inspect the latest debugger session state and recent lifecycle events from the last editor-run project session."},
 				{"step": 5, "name": "Recover transport", "tools": ["plugin_runtime_server"], "purpose": "Restart the embedded MCP server if transport state is stale but plugin state is otherwise valid."},
-				{"step": 6, "name": "Verify", "tools": ["debug_log", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
+				{"step": 6, "name": "Verify", "tools": ["debug_log_write", "debug_log_buffer", "debug_performance"], "purpose": "Read recent errors and a lightweight runtime health snapshot after each change."}
 			],
 			"warnings": [
 				"Do not disable the godot_dotnet_mcp plugin through its own MCP connection when you still need the current transport.",
@@ -2751,39 +2807,15 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
-	if _state.current_tab == 3:
+	if _state.current_tab == 5:
 		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return false
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return false
-
-	var coordinator = PluginReloadCoordinator.new()
-	coordinator.name = "MCPPluginReloadCoordinator"
-	coordinator.configure(PLUGIN_ID, editor_interface, _server_controller)
-	base_control.add_child(coordinator)
-	return true
+	return _config_reload_wiring_service.schedule_plugin_reenable(_build_config_reload_wiring_context())
 
 
 func _schedule_plugin_reenable_deferred() -> bool:
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return false
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return false
-	if not is_inside_tree():
-		return _schedule_plugin_reenable()
-	var tree := get_tree()
-	if tree == null:
-		return _schedule_plugin_reenable()
-	var timer := tree.create_timer(0.05)
-	timer.timeout.connect(Callable(self, "_complete_plugin_reenable_schedule"), CONNECT_ONE_SHOT)
-	return true
+	return _config_reload_wiring_service.schedule_plugin_reenable_deferred(_build_config_reload_wiring_context())
 
 
 func _complete_plugin_reenable_schedule() -> void:
@@ -2792,37 +2824,21 @@ func _complete_plugin_reenable_schedule() -> void:
 
 
 func _create_reload_coordinator():
-	var coordinator = PluginReloadCoordinator.new()
-	coordinator.configure(PLUGIN_ID, get_editor_interface(), _server_controller)
-	return coordinator
+	return _config_reload_wiring_service.create_reload_coordinator(_build_config_reload_wiring_context())
 
 
 func _configure_user_tool_watch_service() -> void:
-	if _user_tool_watch_service == null:
-		_user_tool_watch_service = UserToolWatchServiceScript.new()
-	_user_tool_watch_service.stop()
-	_user_tool_watch_service.configure(self, _create_reload_coordinator(), _user_tool_service)
-	_user_tool_watch_service.start()
+	_user_tool_watch_service = _config_reload_wiring_service.configure_user_tool_watch_service(
+		_user_tool_watch_service,
+		_build_config_reload_wiring_context()
+	)
 
 
 func _configure_config_tab_action_service() -> void:
-	if _config_tab_action_service == null:
-		_config_tab_action_service = ConfigTabActionServiceScript.new()
-	_config_tab_action_service.configure({
-		"state": _state,
-		"localization": _localization,
-		"config_service": _config_service,
-		"client_install_detection_service": _client_install_detection_service,
-		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
-		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
-		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
-		"refresh_dock": Callable(self, "_refresh_dock"),
-		"save_settings": Callable(self, "_save_settings"),
-		"show_message": Callable(self, "_show_message"),
-		"show_confirmation": Callable(self, "_show_confirmation"),
-		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
-		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
-	})
+	_config_tab_action_service = _config_reload_wiring_service.configure_config_tab_action_service(
+		_config_tab_action_service,
+		_build_config_reload_wiring_context()
+	)
 
 
 func _get_user_tool_watch_status() -> Dictionary:
@@ -2855,7 +2871,6 @@ func _refresh_service_instances() -> void:
 		_dock_model_service = DockModelServiceScript.new()
 	_client_install_detection_service = ClientInstallDetectionServiceScript.new()
 	_user_tool_service = UserToolServiceScript.new()
-	_user_tool_watch_service = UserToolWatchServiceScript.new()
 
 
 func _ensure_runtime_state() -> void:

@@ -3,7 +3,6 @@ extends RefCounted
 # {"name": "system_help_contracts"}
 
 const SystemHelpImplScript = preload("res://addons/godot_dotnet_mcp/tools/system/impl_help.gd")
-const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
 class FakeToolLoader extends RefCounted:
@@ -11,8 +10,7 @@ class FakeToolLoader extends RefCounted:
 		return [
 			{"name": "system_editor_control"},
 			{"name": "system_editor_evidence"},
-			{"name": "system_project_state"},
-			{"name": "system_help"}
+			{"name": "system_project_state"}
 		]
 
 
@@ -27,118 +25,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("system help implementation should expose help as the local tool name.")
 
 	var result: Dictionary = impl.execute("help", {})
-	if not bool(result.get("success", false)):
-		return _failure("system help should return a success payload.")
+	if bool(result.get("success", true)):
+		return _failure("system help legacy call should return a removal error payload.")
 	var data = result.get("data", {})
 	if not (data is Dictionary):
-		return _failure("system help should return a dictionary payload.")
-	var help_data: Dictionary = data
-	var visual_guidance = help_data.get("visual_guidance", {})
-	if not (visual_guidance is Dictionary):
-		return _failure("system help should include visual guidance.")
-	if not bool((visual_guidance as Dictionary).get("prefer_editor_screenshot", false)):
-		return _failure("system help should explicitly recommend editor screenshots for UI judgment.")
-	if str((visual_guidance as Dictionary).get("screenshot_tool", "")) != "system_editor_evidence":
-		return _failure("system help should prefer system_editor_evidence as the self-describing screenshot tool.")
-	if not (((visual_guidance as Dictionary).get("capture_surfaces", []) as Array).has("active_dialog")):
-		return _failure("system help should expose editor evidence capture surfaces.")
-	if not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
-		return _failure("system help should explicitly state hidden controls can be enumerated.")
-	var preference_order = (visual_guidance as Dictionary).get("ui_automation_preference_order", [])
-	if not (preference_order is Array) or (preference_order as Array).size() != 3:
-		return _failure("system help should expose the three-level UI automation preference order.")
-	var expected_levels := ["semantic", "control", "mouse_fallback"]
-	for index in expected_levels.size():
-		var entry = (preference_order as Array)[index]
-		if not (entry is Dictionary):
-			return _failure("system help UI automation preference entry should be a dictionary.")
-		var entry_dict := entry as Dictionary
-		if str(entry_dict.get("level", "")) != expected_levels[index]:
-			return _failure("system help UI automation preference order should keep %s at index %d." % [expected_levels[index], index])
-	if not _preference_entry_has_tool((preference_order as Array)[0], "system_settings_dialog") or not _preference_entry_has_tool((preference_order as Array)[0], "system_inspector") or not _preference_entry_has_tool((preference_order as Array)[0], "system_editor_evidence") or not _preference_entry_has_action((preference_order as Array)[0], "capture") or not _preference_entry_has_action((preference_order as Array)[0], "activate_ui") or not _preference_entry_has_action((preference_order as Array)[0], "resolve_property"):
-		return _failure("system help semantic UI preference should mention settings_dialog, inspector, editor_evidence, capture, activate_ui, and resolve_property.")
-	if not _preference_entry_has_action((preference_order as Array)[1], "set_control_text") or not _preference_entry_has_action((preference_order as Array)[1], "press_popup_button"):
-		return _failure("system help control-level UI preference should mention text and popup control actions.")
-	if not _preference_entry_has_action((preference_order as Array)[2], "click_control") or not _preference_entry_has_action((preference_order as Array)[2], "hover_control"):
-		return _failure("system help mouse fallback UI preference should mention click and hover fallback actions.")
-
-	var schema = help_data.get("schema", {})
-	if not (schema is Dictionary):
-		return _failure("system help should include schema facts.")
-	if str((schema as Dictionary).get("tool_schema_version", "")) != MCPProtocolFacts.get_tool_schema_version():
-		return _failure("system help should expose the unified tool schema version.")
-	if MCPProtocolFacts.get_tool_schema_version() != "2026-06-08.32":
-		return _failure("system help contract should cover the current reload target metadata schema version.")
-
-	var exposed_tools: Array = help_data.get("exposed_system_tools", [])
-	if not exposed_tools.has("system_help") or not exposed_tools.has("system_editor_control"):
-		return _failure("system help should include exposed system tool names when requested.")
-	var prompt_guides = help_data.get("prompt_guides", {})
-	if not (prompt_guides is Dictionary):
-		return _failure("system help should include MCP prompt guide discovery details.")
-	var prompt_methods_text := JSON.stringify(prompt_guides)
-	for expected_text in ["prompts/list", "prompts/get", "godot.project_orientation", "godot.content_authoring", "godot.debug_triage", "godot.reference_integrity", "godot.runtime_validation", "godot.editor_ui_control"]:
-		if prompt_methods_text.find(expected_text) == -1:
-			return _failure("system help prompt guide details should mention: %s" % expected_text)
-	var resource_guides = help_data.get("resource_guides", {})
-	if not (resource_guides is Dictionary):
-		return _failure("system help should include MCP resource guide discovery details.")
-	var resource_methods_text := JSON.stringify(resource_guides)
-	for expected_resource_text in ["resources/list", "resources/templates/list", "resources/read", "godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://state/project/summary", "godot-dotnet-mcp://activity/status", "godot-dotnet-mcp://tools/catalog/visible"]:
-		if resource_methods_text.find(expected_resource_text) == -1:
-			return _failure("system help resource guide details should mention: %s" % expected_resource_text)
-	var capabilities = help_data.get("capabilities", {})
-	if not (capabilities is Dictionary) or not (capabilities as Dictionary).has("prompts") or not (((capabilities as Dictionary).get("prompts", []) is Array)):
-		return _failure("system help capabilities should include prompts as an explicit category.")
-	if not (capabilities as Dictionary).has("resources") or not (((capabilities as Dictionary).get("resources", []) is Array)):
-		return _failure("system help capabilities should include resources as an explicit category.")
-	var protocol_surface_guidance = help_data.get("protocol_surface_guidance", {})
-	if not (protocol_surface_guidance is Dictionary):
-		return _failure("system help should explain how to choose between MCP resources, prompts, and tools.")
-	var protocol_surface := protocol_surface_guidance as Dictionary
-	var resource_surface = protocol_surface.get("resources", {})
-	if not (resource_surface is Dictionary):
-		return _failure("system help protocol surface guidance should expose a resources object.")
-	var resource_role := str((resource_surface as Dictionary).get("role", ""))
-	if resource_role.find("Read") == -1 or resource_role.find("without executing editor actions") == -1:
-		return _failure("system help resources guidance should describe read-only context access.")
-	if not _surface_has_all_strings(resource_surface, "methods", ["resources/list", "resources/templates/list", "resources/read"]):
-		return _failure("system help resources guidance should list resource discovery methods.")
-	if not _surface_has_all_strings(resource_surface, "examples", ["godot-dotnet-mcp://tools/catalog", "godot-dotnet-mcp://project/info"]):
-		return _failure("system help resources guidance should include canonical resource examples.")
-	var prompt_surface = protocol_surface.get("prompts", {})
-	if not (prompt_surface is Dictionary):
-		return _failure("system help protocol surface guidance should expose a prompts object.")
-	if str((prompt_surface as Dictionary).get("role", "")).find("workflow guidance") == -1:
-		return _failure("system help prompts guidance should describe workflow guidance.")
-	if not _surface_has_all_strings(prompt_surface, "methods", ["prompts/list", "prompts/get"]):
-		return _failure("system help prompts guidance should list prompt discovery methods.")
-	if not _surface_has_all_strings(prompt_surface, "examples", ["godot.project_orientation", "godot.runtime_validation"]):
-		return _failure("system help prompts guidance should include canonical prompt examples.")
-	var tools_surface = protocol_surface.get("tools", {})
-	if not (tools_surface is Dictionary):
-		return _failure("system help protocol surface guidance should expose a tools object.")
-	if str((tools_surface as Dictionary).get("role", "")).find("actions") == -1:
-		return _failure("system help tools guidance should describe action-oriented tool calls.")
-	if str((tools_surface as Dictionary).get("selection_note", "")).find("resource reads") == -1 or str((tools_surface as Dictionary).get("selection_note", "")).find("prompt guides") == -1:
-		return _failure("system help tools guidance should compare tools with resource reads and prompt guides.")
-	var help_text := JSON.stringify(help_data)
-	if help_text.find("focus_result") == -1 or help_text.find("resolve_row") == -1 or help_text.find("resolve_property") == -1 or help_text.find("system_inspector") == -1 or help_text.find("run_task") == -1 or help_text.find("system_editor_evidence") == -1 or help_text.find("active_dialog") == -1:
-		return _failure("system help should mention current settings_dialog, inspector, and editor evidence workflow action names.")
-
-	var compact_result: Dictionary = impl.execute("help", {"include_tools": false})
-	if not bool(compact_result.get("success", false)):
-		return _failure("system help include_tools=false should still succeed.")
-	if (compact_result.get("data", {}) as Dictionary).has("exposed_system_tools"):
-		return _failure("system help include_tools=false should omit exposed_system_tools.")
+		return _failure("system help removal error should include a data dictionary.")
+	var removal_data := data as Dictionary
+	if str(removal_data.get("error_type", "")) != "removed_public_tool":
+		return _failure("system help removal error should include removed_public_tool error_type.")
+	if str(removal_data.get("removed_tool", "")) != "system_help":
+		return _failure("system help removal error should name system_help.")
+	var replacement_resources = removal_data.get("replacement_resources", [])
+	if not (replacement_resources is Array):
+		return _failure("system help removal error should include replacement resource URIs.")
+	for expected_resource in ["godot-dotnet-mcp://guides/index", "godot-dotnet-mcp://guides/capabilities", "godot-dotnet-mcp://guides/ui-automation"]:
+		if not (replacement_resources as Array).has(expected_resource):
+			return _failure("system help removal error should include replacement resource: %s" % expected_resource)
+	var replacement_methods = removal_data.get("replacement_methods", [])
+	for expected_method in ["resources/list", "resources/read", "prompts/list", "prompts/get"]:
+		if not (replacement_methods is Array) or not (replacement_methods as Array).has(expected_method):
+			return _failure("system help removal error should include replacement method: %s" % expected_method)
 
 	return {
 		"name": "system_help_contracts",
 		"success": true,
 		"error": "",
 		"details": {
-			"tool_schema_version": MCPProtocolFacts.get_tool_schema_version(),
-			"tool_count": exposed_tools.size()
+			"removed_tool": "system_help",
+			"replacement_resource_count": (replacement_resources as Array).size()
 		}
 	}
 
@@ -149,29 +63,3 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
-
-
-func _preference_entry_has_tool(entry, tool_name: String) -> bool:
-	if not (entry is Dictionary):
-		return false
-	var tools = (entry as Dictionary).get("tools", [])
-	return tools is Array and (tools as Array).has(tool_name)
-
-
-func _preference_entry_has_action(entry, action_name: String) -> bool:
-	if not (entry is Dictionary):
-		return false
-	var actions = (entry as Dictionary).get("actions", [])
-	return actions is Array and (actions as Array).has(action_name)
-
-
-func _surface_has_all_strings(surface, key: String, expected_values: Array[String]) -> bool:
-	if not (surface is Dictionary):
-		return false
-	var values = (surface as Dictionary).get(key, [])
-	if not (values is Array):
-		return false
-	for expected_value in expected_values:
-		if not (values as Array).has(expected_value):
-			return false
-	return true

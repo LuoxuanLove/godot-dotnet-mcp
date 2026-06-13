@@ -29,6 +29,7 @@ class FakeViewport extends RefCounted:
 var _service = RuntimeCommandServiceScript.new()
 var _tree: SceneTree
 var _viewport: FakeViewport
+var _input_events: Array[InputEvent] = []
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -43,7 +44,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		Callable(self, "_get_current_scene_path"),
 		Callable(self, "_build_runtime_state"),
 		CUSTOM_CAPTURE_DIR,
-		24
+		24,
+		Callable(self, "_record_input_event")
 	)
 	_service._get_capture_availability = Callable(self, "_capture_available")
 
@@ -76,7 +78,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		Callable(self, "_get_current_scene_path"),
 		Callable(self, "_build_runtime_state"),
 		CUSTOM_CAPTURE_DIR,
-		24
+		24,
+		Callable(self, "_record_input_event")
 	)
 	_service._get_capture_availability = Callable(self, "_capture_headless_unavailable")
 	var skipped_result: Dictionary = await _service.execute_action_async(5, "capture", {
@@ -96,6 +99,61 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(_viewport.texture.get_image_call_count) != 0:
 		return _failure("Runtime command service should skip before reading viewport images when capture is unavailable.")
 
+	_input_events.clear()
+	var mouse_input_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [
+			{"kind": "mouse", "op": "move", "position": {"x": 24, "y": 36}},
+			{"kind": "mouse", "button": "left", "op": "click", "x": 24, "y": 36, "duration_ms": 1}
+		]
+	})
+	if not bool(mouse_input_result.get("success", false)):
+		return _failure("Runtime command service mouse input request failed: %s" % str(mouse_input_result))
+	if _input_events.size() != 3:
+		return _failure("Runtime mouse input should dispatch one motion event and two button events.")
+	if not (_input_events[0] is InputEventMouseMotion) or Vector2((_input_events[0] as InputEventMouseMotion).position) != Vector2(24, 36):
+		return _failure("Runtime mouse move should dispatch a motion event at the requested position.")
+	if not (_input_events[1] is InputEventMouseButton) or not bool((_input_events[1] as InputEventMouseButton).pressed):
+		return _failure("Runtime mouse click should dispatch a pressed mouse button event.")
+	if not (_input_events[2] is InputEventMouseButton) or bool((_input_events[2] as InputEventMouseButton).pressed):
+		return _failure("Runtime mouse click should dispatch a released mouse button event.")
+	if int((_input_events[1] as InputEventMouseButton).button_index) != MOUSE_BUTTON_LEFT:
+		return _failure("Runtime mouse click should preserve the requested mouse button.")
+	if int((_input_events[1] as InputEventMouseButton).button_mask) != (1 << (MOUSE_BUTTON_LEFT - 1)):
+		return _failure("Runtime mouse click should set the press button_mask for Input.parse_input_event.")
+	if int((_input_events[2] as InputEventMouseButton).button_mask) != 0:
+		return _failure("Runtime mouse click should clear the release button_mask.")
+	if Vector2((_input_events[1] as InputEventMouseButton).position) != Vector2(24, 36):
+		return _failure("Runtime mouse click should preserve the requested position.")
+	var mouse_input_data = mouse_input_result.get("data", {})
+	if not (mouse_input_data is Dictionary) or int(((mouse_input_data as Dictionary).get("inputs", []) as Array).size()) != 2:
+		return _failure("Runtime mouse input should report both executed entries.")
+
+	var missing_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "target": "left", "op": "click"}]
+	})
+	if str(missing_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject missing positions.")
+	var invalid_button_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "unknown", "op": "click", "x": 1, "y": 2}]
+	})
+	if str(invalid_button_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject unknown mouse buttons.")
+	var partial_top_level_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": 1}]
+	})
+	if str(partial_top_level_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial top-level coordinates.")
+	var partial_dictionary_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "position": {"x": 1}}]
+	})
+	if str(partial_dictionary_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial position dictionaries.")
+	var non_numeric_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": "left", "y": 2}]
+	})
+	if str(non_numeric_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject non-numeric coordinates.")
+
 	return {
 		"name": "runtime_command_service_contracts",
 		"success": true,
@@ -104,6 +162,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"user_path": user_path,
 			"width": int(capture_data.get("width", 0)),
 			"height": int(capture_data.get("height", 0)),
+			"mouse_events": _input_events.size(),
 			"skip_reason": str((skipped_data as Dictionary).get("skip_reason", ""))
 		}
 	}
@@ -115,6 +174,7 @@ func cleanup_case(_tree_arg: SceneTree) -> void:
 	_cleanup_capture_dir()
 	_tree = null
 	_viewport = null
+	_input_events.clear()
 
 
 func _get_tree() -> SceneTree:
@@ -135,6 +195,10 @@ func _build_runtime_state(session_id: int) -> Dictionary:
 		"session_id": session_id,
 		"scene": _get_current_scene_path()
 	}
+
+
+func _record_input_event(event: InputEvent) -> void:
+	_input_events.append(event)
 
 
 func _capture_available() -> Dictionary:

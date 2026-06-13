@@ -1,6 +1,7 @@
 extends RefCounted
 
 const DebugExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/debug/executor.gd")
+const DebugCompatibilityScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const TEMP_ROOT := "res://tests_tmp/godot_dotnet_mcp_debug_contracts"
 const TEMP_USER_DOTNET_BRIDGE_CSPROJ := "res://tests_tmp/godot_dotnet_mcp_debug_contracts/UserDotnetBridge/DotnetBridge.csproj"
 const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/dotnet_bridge"
@@ -16,6 +17,12 @@ var _created_plugin_companion_fixture := false
 func run_case(_tree: SceneTree) -> Dictionary:
 	if not ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/debug_tools.gd"):
 		return _failure("debug_tools.gd compatibility entry should remain loadable for existing references.")
+	var executor_base_script = DebugExecutorScript.new().get_script().get_base_script()
+	if executor_base_script == null or str(executor_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/base_tools.gd":
+		return _failure("debug/executor.gd should own the debug implementation and extend base_tools.gd directly.")
+	var compatibility_base_script = DebugCompatibilityScript.new().get_script().get_base_script()
+	if compatibility_base_script == null or str(compatibility_base_script.resource_path) != "res://addons/godot_dotnet_mcp/tools/debug/executor.gd":
+		return _failure("debug_tools.gd should remain only as a compatibility wrapper around debug/executor.gd.")
 
 	var executor = DebugExecutorScript.new()
 	_prepare_temp_root()
@@ -45,16 +52,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	if tool_defs.size() != 9:
-		return _failure("Debug executor should expose 9 tool definitions after the split.")
+	if tool_defs.size() != 8:
+		return _failure("Debug executor should expose 8 canonical tool definitions without the compatibility log alias.")
 
 	var expected_names := ["log_write", "log_buffer", "runtime_bridge", "dotnet", "performance", "profiler", "editor_log", "class_db"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
+	if actual_names.has("log"):
+		return _failure("Debug executor should not expose the removed compatibility log alias.")
 	for expected_name in expected_names:
 		if not actual_names.has(expected_name):
 			return _failure("Debug executor is missing tool definition '%s'." % expected_name)
+	var removed_log_result: Dictionary = executor.execute("log", {"action": "print", "message": "removed debug_log"})
+	if bool(removed_log_result.get("success", true)):
+		return _failure("Debug executor should not execute the removed compatibility log alias.")
 
 	var clear_buffer_result: Dictionary = executor.execute("log_buffer", {"action": "clear_buffer"})
 	if not bool(clear_buffer_result.get("success", false)):

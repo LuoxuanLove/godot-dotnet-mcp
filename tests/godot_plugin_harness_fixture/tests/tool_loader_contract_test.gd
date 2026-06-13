@@ -2,6 +2,8 @@ extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
@@ -22,14 +24,18 @@ class FakeServerContext extends RefCounted:
 
 
 class FakeToolAccessProvider extends RefCounted:
-	func is_tool_category_visible(_category: String) -> bool:
-		return true
+	var hidden_categories: Dictionary = {}
+	var blocked_categories: Dictionary = {}
+	var denied_messages: Dictionary = {}
 
-	func is_tool_category_executable(_category: String) -> bool:
-		return true
+	func is_tool_category_visible(category: String):
+		return not bool(hidden_categories.get(category, false))
 
-	func get_tool_access_denied_message(_category: String) -> String:
-		return "Tool category disabled"
+	func is_tool_category_executable(category: String):
+		return not bool(blocked_categories.get(category, false))
+
+	func get_tool_access_denied_message(category: String) -> String:
+		return str(denied_messages.get(category, "Tool category disabled"))
 
 
 class FakeRuntimeControlService extends RefCounted:
@@ -67,6 +73,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader initialize() did not report any visible tools.")
 	if int(summary.get("exposed_tool_count", 0)) <= 0:
 		return _failure("Tool loader initialize() did not report any exposed tools.")
+	if int(summary.get("category_count", 0)) != _loader.get_all_domain_states().size():
+		return _failure("Tool loader category summary should match indexed domain states.")
 
 	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):
@@ -90,6 +98,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for required_internal_category in ["debug", "editor", "project", "scene", "script", "node", "filesystem"]:
 		if not tools_by_category.has(required_internal_category) or (tools_by_category[required_internal_category] as Array).is_empty():
 			return _failure("Tool loader should keep strongest internal category available: %s" % required_internal_category)
+	tool_access_provider.hidden_categories = {"debug": true}
+	var hidden_tools_by_category: Dictionary = _loader.get_tools_by_category()
+	if hidden_tools_by_category.has("debug"):
+		return _failure("Tool loader access service should hide categories denied by the tool access provider.")
+	tool_access_provider.hidden_categories.clear()
+
+	var replacement_activity_registry = ToolActivityRegistryScript.new()
+	_loader.set_tool_activity_registry(replacement_activity_registry)
+	var system_runtime: Dictionary = _loader._runtime_by_category.get("system", {})
+	var system_executor = system_runtime.get("instance", null)
+	if system_executor == null or not ("_runtime_context" in system_executor):
+		return _failure("Tool loader should keep the system executor runtime context observable after initialization.")
+	if (system_executor._runtime_context as Dictionary).get("tool_activity_registry", null) != replacement_activity_registry:
+		return _failure("Tool loader should refresh loaded executor runtime contexts when the activity registry changes.")
 
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
@@ -100,10 +122,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
 		if not exposed_name.begins_with("%s_" % exposed_category):
 			return _failure("Public MCP exposure should prefix public tools with their manifest category: %s" % exposed_name)
-	if not exposed_names.has("system_help"):
-		return _failure("Tool loader did not expose system_help under the default tool access provider.")
-	if not exposed_names.has("system_tool_catalog"):
-		return _failure("Tool loader did not expose system_tool_catalog under the default tool access provider.")
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(exposed_name):
+			return _failure("Public MCP tool name should follow MCP 2025-11-25 naming guidance: %s" % exposed_name)
+	var listed_tools := ToolPresentationService.build_mcp_tool_list(exposed_tools)
+	for listed_tool in listed_tools:
+		if not (listed_tool is Dictionary):
+			return _failure("MCP tools/list entries should be dictionaries.")
+		var listed_name := str((listed_tool as Dictionary).get("name", ""))
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(listed_name):
+			return _failure("MCP tools/list item name should follow MCP 2025-11-25 naming guidance: %s" % listed_name)
+	if exposed_names.has("system_help"):
+		return _failure("Tool loader should remove system_help from the public tools/list surface.")
+	if not _loader.is_tool_exposed("system_help"):
+		return _failure("Tool loader should keep system_help callable only for a legacy replacement error.")
+	if exposed_names.has("system_tool_catalog"):
+		return _failure("Tool loader should remove system_tool_catalog from the public tool surface.")
+	if not _loader.is_tool_exposed("system_tool_catalog"):
+		return _failure("Tool loader should keep system_tool_catalog legacy calls routable for removal guidance.")
 	if not exposed_names.has("system_project_state"):
 		return _failure("Tool loader did not expose system_project_state under the default tool access provider.")
 	if not exposed_names.has("system_editor_state"):
@@ -116,10 +151,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not expose system_settings_dialog under the default tool access provider.")
 	if not exposed_names.has("system_inspector"):
 		return _failure("Tool loader did not expose system_inspector under the default tool access provider.")
-	if not exposed_names.has("system_plugin_reload"):
-		return _failure("Tool loader did not expose the stable system_plugin_reload lifecycle entry.")
-	if not exposed_names.has("system_plugin_update"):
-		return _failure("Tool loader did not expose the high-level system_plugin_update entry.")
+	for removed_plugin_tool_name in ["system_plugin_reload", "system_plugin_update"]:
+		if exposed_names.has(removed_plugin_tool_name):
+			return _failure("Tool loader should remove %s from public MCP exposure." % removed_plugin_tool_name)
+		if not _loader.is_tool_exposed(removed_plugin_tool_name):
+			return _failure("Tool loader should keep legacy %s calls routable to removal guidance." % removed_plugin_tool_name)
 	if not exposed_names.has("system_plugin_maintenance"):
 		return _failure("Tool loader did not expose the high-level system_plugin_maintenance entry.")
 	if not exposed_names.has("system_dap_debugger"):
@@ -128,8 +164,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should remove system_tool_activity from public MCP exposure.")
 	if not _loader.is_tool_exposed("system_tool_activity"):
 		return _failure("Tool loader should keep legacy system_tool_activity calls routable to removal guidance.")
+	if exposed_names.has("system_editor_log"):
+		return _failure("Tool loader should remove system_editor_log from public MCP exposure.")
+	if not _loader.is_tool_exposed("system_editor_log"):
+		return _failure("Tool loader should keep legacy system_editor_log calls routable to removal guidance.")
 	if not exposed_names.has("system_scene_inspect"):
 		return _failure("Tool loader did not expose the high-level system_scene_inspect entry.")
+	for removed_scene_tool_name in ["system_scene_validate", "system_scene_analyze"]:
+		if exposed_names.has(removed_scene_tool_name):
+			return _failure("Tool loader should remove %s from public MCP exposure." % removed_scene_tool_name)
+		if not _loader.is_tool_exposed(removed_scene_tool_name):
+			return _failure("Tool loader should keep legacy %s calls routable to removal guidance." % removed_scene_tool_name)
 	for runtime_tool_name in ["system_runtime_control", "system_runtime_step"]:
 		if not exposed_names.has(runtime_tool_name):
 			return _failure("Tool loader did not expose runtime tool '%s'." % runtime_tool_name)
@@ -146,16 +191,65 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for deprecated_name in ["debug_log", "filesystem_file", "resource_manage"]:
 		if exposed_names.has(deprecated_name):
 			return _failure("Tool loader still exposed deprecated compatibility tool '%s'." % deprecated_name)
+	var all_tool_names: Array[String] = []
+	var all_full_tool_names: Array[String] = []
+	for tool_def in all_tools:
+		all_tool_names.append(str(tool_def.get("name", "")))
+		all_full_tool_names.append(str(tool_def.get("full_name", tool_def.get("name", ""))))
+	if all_tool_names.has("file") or all_full_tool_names.has("filesystem_file"):
+		return _failure("Tool loader should remove the legacy filesystem_file definition.")
+	if _loader.is_tool_exposed("filesystem_file"):
+		return _failure("Tool loader should not keep legacy filesystem_file callable through public exposure.")
+	for canonical_filesystem_tool_name in ["filesystem_directory", "filesystem_file_read", "filesystem_file_write", "filesystem_file_manage", "filesystem_json", "filesystem_search"]:
+		if not all_full_tool_names.has(canonical_filesystem_tool_name):
+			return _failure("Tool loader should keep canonical filesystem replacement tool '%s'." % canonical_filesystem_tool_name)
+	if all_tool_names.has("resource_manage"):
+		return _failure("Tool loader should remove the legacy resource_manage definition.")
+	for canonical_resource_tool_name in ["resource_query", "resource_create", "resource_file_ops"]:
+		if not all_tool_names.has(canonical_resource_tool_name):
+			return _failure("Tool loader should keep canonical resource replacement tool '%s'." % canonical_resource_tool_name)
+	if _loader.is_tool_exposed("resource_manage"):
+		return _failure("Tool loader should not keep legacy resource_manage callable through public exposure.")
+	var removed_resource_result: Dictionary = await _loader.execute_tool_async("resource", "manage", {"action": "create", "type": "Resource", "path": "res://Tmp/removed_resource_manage.tres"})
+	if bool(removed_resource_result.get("success", true)):
+		return _failure("Tool loader should not execute removed resource_manage through the resource domain.")
+	var replacement_resource_path := "res://Tmp/godot_dotnet_mcp_tool_loader_contracts/removed_resource_manage.tres"
+	var create_replacement_resource: Dictionary = await _loader.execute_tool_async("resource", "create", {"type": "Resource", "path": replacement_resource_path})
+	if not bool(create_replacement_resource.get("success", false)):
+		return _failure("Tool loader should create a resource fixture before executing resource_manage replacement guidance.")
+	for resource_file_action in ["reload", "delete"]:
+		var removed_resource_guidance: Dictionary = _loader.build_removed_public_tool_result("resource_manage", {"action": resource_file_action, "path": "res://Tmp/removed_resource_manage.tres"})
+		var removed_resource_arguments := _replacement_arguments(removed_resource_guidance)
+		if str(removed_resource_arguments.get("action", "")) != resource_file_action:
+			return _failure("Tool loader removed resource_manage %s guidance should preserve replacement action." % resource_file_action)
+		if str(removed_resource_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
+			return _failure("Tool loader removed resource_manage %s guidance should map path to resource_file_ops source." % resource_file_action)
+		if removed_resource_arguments.has("path"):
+			return _failure("Tool loader removed resource_manage %s guidance should not emit schema-invalid path argument." % resource_file_action)
+		var executable_replacement_args := removed_resource_arguments.duplicate(true)
+		executable_replacement_args["source"] = replacement_resource_path
+		var replacement_execution: Dictionary = await _loader.execute_tool_async("resource", "file_ops", executable_replacement_args)
+		if not bool(replacement_execution.get("success", false)):
+			return _failure("Tool loader resource_manage %s replacement guidance should execute successfully through resource_file_ops." % resource_file_action)
+	if all_tool_names.has("debug_log"):
+		return _failure("Tool loader should remove the legacy debug_log definition.")
+	for canonical_debug_tool_name in ["debug_log_write", "debug_log_buffer"]:
+		if not all_tool_names.has(canonical_debug_tool_name):
+			return _failure("Tool loader should keep canonical debug replacement tool '%s'." % canonical_debug_tool_name)
+	if _loader.is_tool_exposed("debug_log"):
+		return _failure("Tool loader should not keep legacy debug_log callable through public exposure.")
+	var removed_debug_result: Dictionary = await _loader.execute_tool_async("debug", "log", {"action": "print", "message": "removed debug_log"})
+	if bool(removed_debug_result.get("success", true)):
+		return _failure("Tool loader should not execute removed debug_log through the debug domain.")
 
-	_loader.set("_tool_definitions_by_category", {
-		"user": [
-			{
-				"name": "contract_probe",
-				"description": "Contract probe user tool",
-				"parameters": {}
-			}
-		]
-	})
+	_loader._state_store.tool_definitions_by_category.clear()
+	_loader._state_store.tool_definitions_by_category["user"] = [
+		{
+			"name": "contract_probe",
+			"description": "Contract probe user tool",
+			"parameters": {}
+		}
+	]
 	if not _loader.is_tool_exposed("user_contract_probe"):
 		return _failure("Tool loader should expose user tools when the manifest marks the user category public.")
 	var user_probe_found := false
@@ -184,6 +278,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_editor_state should include the editor section.")
 	if bool((editor_section as Dictionary).get("available", true)):
 		return _failure("Tool loader system_editor_state should report editor.available=false in headless mode.")
+	tool_access_provider.blocked_categories = {"system": true}
+	tool_access_provider.denied_messages = {"system": "System tools disabled by contract."}
+	var access_denied_result: Dictionary = await _loader.execute_tool_async("system", "editor_state", {})
+	if bool(access_denied_result.get("success", true)):
+		return _failure("Tool loader access service should block execution for non-executable categories.")
+	if str(access_denied_result.get("error", "")) != "System tools disabled by contract.":
+		return _failure("Tool loader access service should return provider denied messages for blocked execution.")
+	tool_access_provider.blocked_categories.clear()
+	tool_access_provider.denied_messages.clear()
 
 	var editor_evidence_result: Dictionary = await _loader.execute_tool_async("system", "editor_evidence", {"action": "status"})
 	if not bool(editor_evidence_result.get("success", false)):
@@ -250,8 +353,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var registry_context = (((registry_recent as Array)[0] as Dictionary).get("agent_context", {}) as Dictionary)
 	if str(registry_context.get("agent_id", "")) != "loader-contract-agent":
 		return _failure("Tool loader should retain sanitized _mcp_context in the activity registry.")
-	var plain_activity_record: Dictionary = _loader.call("_begin_tool_activity", "system", "project_state", {"summary": true}, {})
-	var plain_activity_result: Dictionary = _loader.call("_finish_tool_activity", {
+	var execution_context: Dictionary = _loader.call("_build_execution_context")
+	var begin_tool_activity: Callable = execution_context.get("begin_tool_activity", Callable())
+	var finish_tool_activity: Callable = execution_context.get("finish_tool_activity", Callable())
+	if not begin_tool_activity.is_valid() or not finish_tool_activity.is_valid():
+		return _failure("Tool loader execution context should expose activity callbacks.")
+	var plain_activity_record: Dictionary = begin_tool_activity.call("system", "project_state", {"summary": true}, {})
+	var plain_activity_result: Dictionary = finish_tool_activity.call({
 		"success": true,
 		"data": {"summary": true},
 		"activity": {
@@ -267,20 +375,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader should preserve non-protocol tool activity payloads inside data.")
 
 	var help_result: Dictionary = await _loader.execute_tool_async("system", "help", {"include_tools": true})
-	if not bool(help_result.get("success", false)):
-		return _failure("Tool loader should route system_help successfully.")
+	if bool(help_result.get("success", true)):
+		return _failure("Tool loader system_help legacy call should return a removal error.")
 	var help_data = help_result.get("data", {})
 	if not (help_data is Dictionary):
-		return _failure("Tool loader system_help should return a dictionary payload.")
-	var visual_guidance = (help_data as Dictionary).get("visual_guidance", {})
-	if not (visual_guidance is Dictionary) or not bool((visual_guidance as Dictionary).get("hidden_controls_supported", false)):
-		return _failure("Tool loader system_help should expose hidden-control guidance.")
+		return _failure("Tool loader system_help removal error should return a dictionary payload.")
+	if str((help_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_help removal error should include removed_public_tool.")
+	var replacement_resources = (help_data as Dictionary).get("replacement_resources", [])
+	if not (replacement_resources is Array) or not (replacement_resources as Array).has("godot-dotnet-mcp://guides/index"):
+		return _failure("Tool loader system_help removal error should include replacement guide resource URIs.")
 	var catalog_result: Dictionary = await _loader.execute_tool_async("system", "tool_catalog", {"query": "runtime", "limit": 5})
-	if not bool(catalog_result.get("success", false)):
-		return _failure("Tool loader should route system_tool_catalog successfully.")
+	if bool(catalog_result.get("success", false)):
+		return _failure("Tool loader should reject legacy system_tool_catalog calls with removal guidance.")
 	var catalog_data = catalog_result.get("data", {})
-	if not (catalog_data is Dictionary) or not ((catalog_data as Dictionary).get("matches", []) is Array):
-		return _failure("Tool loader system_tool_catalog should return a matches array.")
+	if not (catalog_data is Dictionary) or str((catalog_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_tool_catalog removal response should expose error_type=removed_public_tool.")
+	if not (((catalog_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
+		return _failure("Tool loader system_tool_catalog removal response should point to the visible catalog resource.")
 	var activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {"action": "status"})
 	if bool(activity_result.get("success", true)):
 		return _failure("Tool loader legacy system_tool_activity calls should return removal guidance.")
@@ -289,6 +401,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader system_tool_activity removal guidance should expose error_type=removed_public_tool.")
 	if not (((activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
 		return _failure("Tool loader system_tool_activity removal guidance should point to activity/status.")
+	var editor_log_result: Dictionary = await _loader.execute_tool_async("system", "editor_log", {"action": "get_errors"})
+	if bool(editor_log_result.get("success", true)):
+		return _failure("Tool loader legacy system_editor_log calls should return removal guidance.")
+	var editor_log_data = editor_log_result.get("data", {})
+	if not (editor_log_data is Dictionary) or str((editor_log_data as Dictionary).get("error_type", "")) != "removed_public_tool":
+		return _failure("Tool loader system_editor_log removal guidance should expose error_type=removed_public_tool.")
+	if not (((editor_log_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://logs/editor/errors")):
+		return _failure("Tool loader system_editor_log removal guidance should point to editor log resources.")
+	var clear_log_result: Dictionary = await _loader.execute_tool_async("system", "editor_log", {"action": "clear_output"})
+	var clear_log_data = clear_log_result.get("data", {})
+	var clear_replacements = (clear_log_data as Dictionary).get("replacement_tools", []) if clear_log_data is Dictionary else []
+	if not (clear_replacements is Array) or (clear_replacements as Array).is_empty() or str(((clear_replacements as Array)[0] as Dictionary).get("name", "")) != "system_editor_control":
+		return _failure("Tool loader system_editor_log clear_output guidance should point to system_editor_control.")
 	var filtered_activity_result: Dictionary = await _loader.execute_tool_async("system", "tool_activity", {
 		"action": "recent",
 		"state": "completed",
@@ -299,6 +424,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if bool(filtered_activity_result.get("success", true)):
 		return _failure("Tool loader filtered system_tool_activity legacy calls should also return removal guidance.")
+	for removed_plugin_case in [
+		{"tool": "plugin_reload", "removed": "system_plugin_reload", "replacement_action": "reload", "args": {"action": "full_reload_plugin"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "status", "args": {"action": "get_current"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "start_update", "args": {"action": "start_sync"}},
+		{"tool": "plugin_update", "removed": "system_plugin_update", "replacement_action": "refresh_update_refs", "args": {"action": "discover_refs", "force_refresh": false}}
+	]:
+		var removed_plugin_result: Dictionary = await _loader.execute_tool_async("system", str(removed_plugin_case.get("tool", "")), removed_plugin_case.get("args", {}))
+		if bool(removed_plugin_result.get("success", true)):
+			return _failure("Tool loader legacy %s calls should return removal guidance." % str(removed_plugin_case.get("removed", "")))
+		if not _is_removed_plugin_maintenance_tool(removed_plugin_result, str(removed_plugin_case.get("removed", "")), str(removed_plugin_case.get("replacement_action", ""))):
+			return _failure("Tool loader %s removal guidance should point to system_plugin_maintenance." % str(removed_plugin_case.get("removed", "")))
+		if str(removed_plugin_case.get("replacement_action", "")) == "refresh_update_refs":
+			var replacement_args := _replacement_arguments(removed_plugin_result)
+			if bool(replacement_args.get("force_refresh", true)):
+				return _failure("Tool loader system_plugin_update discover_refs guidance should preserve force_refresh=false.")
+	for removed_scene_case in [
+		{"tool": "scene_validate", "removed": "system_scene_validate", "action": "validate"},
+		{"tool": "scene_analyze", "removed": "system_scene_analyze", "action": "analyze"}
+	]:
+		var removed_scene_result: Dictionary = await _loader.execute_tool_async("system", str(removed_scene_case.get("tool", "")), {"scene": "res://Main.tscn"})
+		if bool(removed_scene_result.get("success", true)):
+			return _failure("Tool loader legacy %s calls should return removal guidance." % str(removed_scene_case.get("removed", "")))
+		if not _is_removed_scene_tool(removed_scene_result, str(removed_scene_case.get("removed", "")), str(removed_scene_case.get("action", ""))):
+			return _failure("Tool loader %s removal guidance should point to system_scene_inspect." % str(removed_scene_case.get("removed", "")))
 
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):
@@ -341,3 +490,59 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _is_removed_scene_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	if not ((data_dict.get("replacement_resources", []) as Array).has("godot-dotnet-mcp://scene/{path}")):
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_scene_inspect" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _is_removed_plugin_maintenance_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return false
+	var data_dict := data as Dictionary
+	if str(data_dict.get("error_type", "")) != "removed_public_tool":
+		return false
+	if str(data_dict.get("removed_tool", "")) != removed_tool:
+		return false
+	var replacement_tools = data_dict.get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return false
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return false
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	return str((replacement as Dictionary).get("name", "")) == "system_plugin_maintenance" and replacement_arguments is Dictionary and str((replacement_arguments as Dictionary).get("action", "")) == replacement_action
+
+
+func _replacement_arguments(result: Dictionary) -> Dictionary:
+	var data = result.get("data", {})
+	if not (data is Dictionary):
+		return {}
+	var replacement_tools = (data as Dictionary).get("replacement_tools", [])
+	if not (replacement_tools is Array) or (replacement_tools as Array).is_empty():
+		return {}
+	var replacement = (replacement_tools as Array)[0]
+	if not (replacement is Dictionary):
+		return {}
+	var replacement_arguments = (replacement as Dictionary).get("arguments", {})
+	if replacement_arguments is Dictionary:
+		return replacement_arguments
+	return {}

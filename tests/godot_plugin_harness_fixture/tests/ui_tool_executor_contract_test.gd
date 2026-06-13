@@ -15,6 +15,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/ui_tools.gd"):
 		return _failure("ui_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if FileAccess.file_exists("res://addons/godot_dotnet_mcp/tools/ui_tools.gd.uid"):
+		return _failure("ui_tools.gd.uid should be removed with the legacy UI monolith.")
 
 	_remove_tree(TEMP_ROOT)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))

@@ -2,13 +2,13 @@
   <a href="#godot-net-mcp"><img src="asset_library/hero.svg" alt="GODOT .NET MCP - Editor-native MCP bridge for Godot .NET" width="960"></a>
 </div>
 
-<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square&amp;labelColor=24292f"></a></p>
+<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-22c55e?style=flat-square&amp;labelColor=24292f"></a></p>
 
 <p align="center"><a href="README.md">English</a> | <a href="docs/zh-CN/说明.md">简体中文</a> | <a href="docs/ja/はじめに.md">日本語</a> | <a href="docs/ko/소개.md">한국어</a></p>
 
-| Home | Tools | Config |
-|---|---|---|
-| ![Home dashboard](asset_library/home-en.png) | ![Tool browser](asset_library/tools-en.png) | ![Client configuration](asset_library/config-en.png) |
+| Home | Tools | Resources | Prompts | Config | Settings |
+|---|---|---|---|---|---|
+| ![Home dashboard](asset_library/home-en.png) | ![Tool browser](asset_library/tools-en.png) | MCP resource catalog | MCP workflow prompts | ![Client configuration](asset_library/config-en.png) | Plugin settings |
 
 # Godot .NET MCP
 
@@ -48,15 +48,13 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 5. Go to `Project Settings > Plugins` and enable `Godot .NET MCP`.
 6. Open `MCPDock` and start the service from `Home`.
 
-### From Source
+### Direct Copy
 
-Copy only the installable addon directory into your Godot project:
+Copy the installable addon contents into your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects such as `dotnet_bridge/` that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle:
 
 ```text
 addons/godot_dotnet_mcp
 ```
-
-Do not copy repository-level development directories such as `companion/`, `tests/`, or `scripts/` into the Godot project.
 
 Then enable it from `Project Settings > Plugins`.
 
@@ -92,15 +90,6 @@ After reading all this, why not try Godot .NET MCP? I will keep studying the mar
 
 Does that sound arrogant? Maybe. If you have a more badass implementation idea, send a PR. You are very welcome!
 
-## Real Project Validation
-
-<table>
-  <tr>
-    <td width="38%" valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex"><img src="https://github.com/LuoxuanLove/CoGDSex/blob/main/resources/godex-workbench.png?raw=1" alt="CoGDSex Godex workbench screenshot" width="420"></a></td>
-    <td valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex">LuoxuanLove/CoGDSex</a> is a public Godot .NET game project that records its real development process. It also shows Godot .NET MCP being used against a substantial codebase and editor workflow, validating practical project capability and stability while feeding concrete improvement points back into future plugin features.</td>
-  </tr>
-</table>
-
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).

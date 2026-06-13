@@ -1281,6 +1281,10 @@ func _activate_semantic_ui_path(ei, semantic_path: String, args: Dictionary) -> 
 			tab_name = "ServerTab"
 		"tools", "tool", "工具":
 			tab_name = "ToolsTab"
+		"resources", "resource", "资源", "資源", "リソース", "리소스":
+			tab_name = "ResourcesTab"
+		"prompts", "prompt", "提示", "プロンプト", "프롬프트":
+			tab_name = "PromptsTab"
 		"config", "configuration", "配置":
 			tab_name = "ConfigTab"
 		_:

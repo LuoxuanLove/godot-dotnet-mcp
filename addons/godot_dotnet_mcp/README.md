@@ -11,7 +11,7 @@ An MCP service embedded in the Godot editor process. Call `system_project_state`
 
 The System layer is the intended starting point for agents. It provides project-level snapshots, project file-tree changes, editor-session snapshots, editor UI control, editor log access, runtime diagnostics, scene analysis, current scene-tree changes, script structure inspection, C# binding auditing, and symbol search —all reading from the live editor, not disk snapshots.
 
-After connecting, MCP clients can also use the built-in resources and prompts surface to read project info, diagnostics, selected scene/script/resource files, and guided workflow prompts. Call `system_help` for the current capability guide and schema version. For any Dock, popup, layout, focus, or button-visibility task, prefer semantic workflow tools first, then `system_editor_control(action=activate_ui)` and other control-level operations through Godot editor APIs. For visual checks, prefer `system_editor_evidence(action=capture, surface=auto/editor/control/popup/active_dialog)` so the screenshot metadata explains the captured surface, target, fallback, and degradation state; do not use OS mouse/window automation unless the user explicitly authorizes foreground automation. If visible control enumeration misses the target, retry `system_editor_control(action=list_controls, include_hidden=true)`. Dock-owned popup UI keeps coordinate spaces explicit: Control-local click positions must be converted through viewport or screen helpers as appropriate, and `PopupMenu.popup(Rect2i)` receives screen coordinates rather than local or canvas-global positions.
+After connecting, MCP clients can also use the built-in resources and prompts surface to read project info, diagnostics, selected scene/script/resource files, and guided workflow prompts. Read `godot-dotnet-mcp://guides/index` and `godot-dotnet-mcp://guides/capabilities` for the current resource-first capability guide, and use `prompts/list` or `prompts/get` for workflow planning. For any Dock, popup, layout, focus, or button-visibility task, prefer semantic workflow tools first, then `system_editor_control(action=activate_ui)` and other control-level operations through Godot editor APIs. For visual checks, prefer `system_editor_evidence(action=capture, surface=auto/editor/control/popup/active_dialog)` so the screenshot metadata explains the captured surface, target, fallback, and degradation state; do not use OS mouse/window automation unless the user explicitly authorizes foreground automation. If visible control enumeration misses the target, retry `system_editor_control(action=list_controls, include_hidden=true)`. Dock-owned popup UI keeps coordinate spaces explicit: Control-local click positions must be converted through viewport or screen helpers as appropriate, and `PopupMenu.popup(Rect2i)` receives screen coordinates rather than local or canvas-global positions.
 
 For plugin-side runtime introspection, use `plugin_runtime_state` instead of a separate self-check tool. `action=get_lsp_diagnostics_status` is the detailed LSP diagnostics status entry; System tools only expose lightweight health summaries, including `project_state(include_runtime_health=true)` for `self_diagnostics`, `lsp_diagnostics`, and `tool_loader` status.
 
@@ -68,15 +68,13 @@ Then:
 4. Open `MCPDock` from the right-side dock.
 5. Confirm the port and start the service.
 
-### Option 2: Copy installable source files directly
+### Option 2: Direct copy
 
-Place only the installable addon directory in your Godot project:
+Place the installable addon contents in your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects such as `dotnet_bridge/` that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle:
 
 ```text
 addons/godot_dotnet_mcp
 ```
-
-Repository-level development directories such as `companion/`, `tests/`, and `scripts/` are not part of the installed Godot addon.
 
 Then:
 

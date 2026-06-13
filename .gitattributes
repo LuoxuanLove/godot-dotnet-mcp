@@ -8,3 +8,4 @@
 /addons/godot_dotnet_mcp/dotnet_bridge/** export-ignore
 /addons/godot_dotnet_mcp/plugin/runtime/roslyn/** export-ignore
 /addons/godot_dotnet_mcp/companion/** export-ignore
+/addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/** !export-ignore

@@ -2,85 +2,20 @@
 extends RefCounted
 class_name MCPToolManifest
 
-const TOOL_DOMAIN_DEFS: Array[Dictionary] = [
-	{
-		"key": "core",
-		"label": "domain_core",
-		"categories": [
-			"system",
-			"project",
-			"scene",
-			"script",
-			"debug",
-			"dap",
-			"filesystem",
-			"node",
-			"resource",
-			"editor",
-			"runtime",
-			"group",
-			"signal",
-			"animation",
-			"material",
-			"shader",
-			"lighting",
-			"particle",
-			"tilemap",
-			"geometry",
-			"physics",
-			"navigation",
-			"audio",
-			"ui"
-		]
-	},
-	{
-		"key": "plugin",
-		"label": "domain_plugin",
-		"categories": [
-			"plugin_runtime",
-			"plugin_evolution",
-			"plugin_developer"
-		]
-	},
-	{
-		"key": "user",
-		"label": "domain_user",
-		"categories": ["user"]
-	}
-]
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
-const ALL_TOOL_CATEGORIES: Array[String] = [
-	"system",
-	"project",
-	"scene",
-	"script",
-	"debug",
-	"dap",
-	"filesystem",
-	"node",
-	"resource",
-	"editor",
-	"runtime",
-	"group",
-	"signal",
-	"animation",
-	"material",
-	"shader",
-	"lighting",
-	"particle",
-	"tilemap",
-	"geometry",
-	"physics",
-	"navigation",
-	"audio",
-	"ui",
-	"plugin_runtime",
-	"plugin_evolution",
-	"plugin_developer",
-	"user"
-]
+const TOOL_DOMAIN_DEFS: Array[Dictionary] = ToolCatalogManifest.TOOL_DOMAIN_DEFS
+const PUBLIC_MCP_TOOL_CATEGORIES: Array[String] = ToolCatalogManifest.PUBLIC_MCP_TOOL_CATEGORIES
+static var ALL_TOOL_CATEGORIES: Array[String] = ToolCatalogManifest.get_all_tool_categories()
 
-const PUBLIC_MCP_TOOL_CATEGORIES: Array[String] = [
-	"system",
-	"user"
-]
+
+static func get_domain_defs() -> Array[Dictionary]:
+	return ToolCatalogManifest.get_domain_defs()
+
+
+static func get_all_tool_categories() -> Array[String]:
+	return ToolCatalogManifest.get_all_tool_categories()
+
+
+static func get_public_mcp_tool_categories() -> Array[String]:
+	return ToolCatalogManifest.get_public_mcp_tool_categories()
