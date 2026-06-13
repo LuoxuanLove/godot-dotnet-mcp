@@ -94,6 +94,8 @@ func build_model(context: Dictionary) -> Dictionary:
 		"mcp_resources": context.get("mcp_resources", []),
 		"mcp_resource_templates": context.get("mcp_resource_templates", []),
 		"mcp_prompts": context.get("mcp_prompts", []),
+		"mcp_resource_presentation": context.get("mcp_resource_presentation", {}),
+		"mcp_prompt_presentation": context.get("mcp_prompt_presentation", {}),
 		"mcp_catalog_counts": context.get("mcp_catalog_counts", {}),
 		"mcp_catalog_preview": context.get("mcp_catalog_preview", {}),
 		"presentationVersion": int((active_tool_presentation as Dictionary).get("presentationVersion", 1)) if active_tool_presentation is Dictionary else 1,

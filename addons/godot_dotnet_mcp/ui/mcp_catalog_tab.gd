@@ -62,9 +62,8 @@ func apply_model(model: Dictionary) -> void:
 	if signature == _current_signature:
 		return
 	_current_signature = signature
-	_rebuild_entries(_resources_list, model.get("mcp_resources", []), "resource")
-	_rebuild_entries(_templates_list, model.get("mcp_resource_templates", []), "template")
-	_rebuild_entries(_prompts_list, model.get("mcp_prompts", []), "prompt")
+	_rebuild_resource_catalog(model)
+	_rebuild_prompt_catalog(model)
 
 
 func _apply_localized_copy(model: Dictionary) -> void:
@@ -99,6 +98,130 @@ func _rebuild_entries(container: VBoxContainer, entries, entry_kind: String) -> 
 	for entry in entries:
 		if entry is Dictionary:
 			container.add_child(_create_entry_card(entry as Dictionary, entry_kind))
+
+
+func _rebuild_resource_catalog(model: Dictionary) -> void:
+	var presentation = model.get("mcp_resource_presentation", {})
+	if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
+		_rebuild_entries(_resources_list, model.get("mcp_resources", []), "resource")
+		_rebuild_entries(_templates_list, model.get("mcp_resource_templates", []), "template")
+		return
+	var groups: Array = (presentation as Dictionary).get("resourceTree", [])
+	var resource_groups: Array[Dictionary] = []
+	var template_groups: Array[Dictionary] = []
+	for raw_group in groups:
+		if not (raw_group is Dictionary):
+			continue
+		var group := raw_group as Dictionary
+		if _group_contains_kind(group, "resource_template"):
+			template_groups.append(group)
+		else:
+			resource_groups.append(group)
+	_rebuild_grouped_entries(_resources_list, resource_groups, "resource")
+	_rebuild_grouped_entries(_templates_list, template_groups, "template")
+
+
+func _rebuild_prompt_catalog(model: Dictionary) -> void:
+	var presentation = model.get("mcp_prompt_presentation", {})
+	if not (presentation is Dictionary) or (presentation as Dictionary).is_empty():
+		_rebuild_entries(_prompts_list, model.get("mcp_prompts", []), "prompt")
+		return
+	var groups: Array = (presentation as Dictionary).get("promptTree", [])
+	var prompt_groups: Array[Dictionary] = []
+	for raw_group in groups:
+		if raw_group is Dictionary:
+			prompt_groups.append(raw_group as Dictionary)
+	_rebuild_grouped_entries(_prompts_list, prompt_groups, "prompt")
+
+
+func _rebuild_grouped_entries(container: VBoxContainer, groups: Array, fallback_entry_kind: String) -> void:
+	for child in container.get_children():
+		child.queue_free()
+	if groups.is_empty():
+		container.add_child(_create_empty_label(fallback_entry_kind))
+		return
+	for raw_group in groups:
+		if not (raw_group is Dictionary):
+			continue
+		var group := raw_group as Dictionary
+		var children: Array = group.get("children", [])
+		if children.is_empty():
+			continue
+		container.add_child(_create_group_section(group, fallback_entry_kind))
+
+
+func _create_group_section(group: Dictionary, fallback_entry_kind: String) -> Control:
+	var section := VBoxContainer.new()
+	section.name = "Group_%s" % str(group.get("id", "")).replace("-", "_")
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.add_theme_constant_override("separation", int(round(6 * _scale())))
+	section.set_meta("mcp_catalog_group_id", str(group.get("id", "")))
+	section.set_meta("mcp_catalog_group_kind", str(group.get("kind", "")))
+
+	var header := HBoxContainer.new()
+	header.name = "GroupHeader"
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_constant_override("separation", int(round(6 * _scale())))
+	section.add_child(header)
+
+	var title := Label.new()
+	title.name = "GroupTitle"
+	title.text = _group_label(group)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	header.add_child(title)
+
+	var count := Label.new()
+	count.name = "GroupCount"
+	count.text = str(int(group.get("count", (group.get("children", []) as Array).size())))
+	count.add_theme_color_override("font_color", _get_meta_text_color())
+	header.add_child(count)
+
+	for raw_child in group.get("children", []):
+		if not (raw_child is Dictionary):
+			continue
+		var node := raw_child as Dictionary
+		var entry := _entry_from_presentation_node(node)
+		if entry.is_empty():
+			continue
+		section.add_child(_create_entry_card(entry, _entry_kind_from_presentation_node(node, fallback_entry_kind)))
+	return section
+
+
+func _group_label(group: Dictionary) -> String:
+	var label_key := str(group.get("label_key", "")).strip_edges()
+	if _localization != null and not label_key.is_empty():
+		var localized := str(_localization.get_text(label_key))
+		if not localized.is_empty() and localized != label_key:
+			return localized
+	return str(group.get("label", group.get("id", "")))
+
+
+func _entry_from_presentation_node(node: Dictionary) -> Dictionary:
+	var entry = node.get("entry", {})
+	if entry is Dictionary:
+		return (entry as Dictionary).duplicate(true)
+	return {}
+
+
+func _entry_kind_from_presentation_node(node: Dictionary, fallback_entry_kind: String) -> String:
+	match str(node.get("kind", "")):
+		"resource_template":
+			return "template"
+		"resource_entry":
+			return "resource"
+		"prompt_entry":
+			return "prompt"
+		_:
+			return fallback_entry_kind
+
+
+func _group_contains_kind(group: Dictionary, node_kind: String) -> bool:
+	for raw_child in group.get("children", []):
+		if raw_child is Dictionary and str((raw_child as Dictionary).get("kind", "")) == node_kind:
+			return true
+	return false
 
 
 func _create_empty_label(entry_kind: String) -> Control:
@@ -513,6 +636,8 @@ func _build_signature(model: Dictionary) -> String:
 		"resources": model.get("mcp_resources", []),
 		"templates": model.get("mcp_resource_templates", []),
 		"prompts": model.get("mcp_prompts", []),
+		"resource_presentation": model.get("mcp_resource_presentation", {}),
+		"prompt_presentation": model.get("mcp_prompt_presentation", {}),
 		"counts": model.get("mcp_catalog_counts", {}),
 		"preview": model.get("mcp_catalog_preview", {}),
 		"argument_values": _argument_values

@@ -29,7 +29,20 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_preview_error": "Preview failed: %s",
 		"mcp_catalog_copy_preview": "Copy Preview",
 		"mcp_catalog_argument_placeholder": "Enter argument value",
-		"mcp_catalog_template_preview_unavailable": "Provide a concrete resource URI from this template before reading it."
+		"mcp_catalog_template_preview_unavailable": "Provide a concrete resource URI from this template before reading it.",
+		"mcp_resource_group_guides": "Guides",
+		"mcp_resource_group_project_state": "Project State",
+		"mcp_resource_group_editor_state": "Editor State",
+		"mcp_resource_group_activity_logs": "Activity & Logs",
+		"mcp_resource_group_tool_catalog": "Tool Catalog",
+		"mcp_resource_group_templates": "Resource Templates",
+		"mcp_resource_group_advanced": "Advanced Resources",
+		"mcp_prompt_group_project_understanding": "Project Understanding",
+		"mcp_prompt_group_editor_workflow": "Editor Workflow",
+		"mcp_prompt_group_runtime_validation": "Runtime Validation",
+		"mcp_prompt_group_script_csharp": "Script & C# Workflow",
+		"mcp_prompt_group_plugin_maintenance": "Plugin Maintenance",
+		"mcp_prompt_group_advanced": "Advanced Prompts"
 	}
 
 	func get_text(key: String) -> String:
@@ -84,6 +97,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should render resource templates by URI template.")
 	if _find_entry_card(prompts_tab, "prompt", "godot.project_orientation") == null:
 		return _failure("Prompts tab should render workflow prompts by name.")
+	if not _group_contains_entry_card(resources_tab, "guides", "resource", "godot-dotnet-mcp://guides/index"):
+		return _failure("Resources tab should render guide resources inside the Guides presentation group.")
+	if not _group_contains_entry_card(resources_tab, "editor_state", "resource", "godot-dotnet-mcp://state/editor"):
+		return _failure("Resources tab should render editor state resources inside the Editor State presentation group.")
+	if not _group_contains_entry_card(resources_tab, "advanced_resources", "resource", "godot-dotnet-mcp://diagnostics/summary"):
+		return _failure("Resources tab should render diagnostics resources inside the Advanced Resources presentation group.")
+	if not _group_contains_entry_card(resources_tab, "resource_templates", "template", "godot-dotnet-mcp://scene/{path}"):
+		return _failure("Resources tab should render templates inside the Resource Templates presentation group.")
+	if not _group_contains_entry_card(prompts_tab, "project_understanding", "prompt", "godot.project_orientation"):
+		return _failure("Prompts tab should render orientation prompts inside the Project Understanding presentation group.")
+	if not _group_contains_entry_card(prompts_tab, "runtime_validation", "prompt", "godot.runtime_validation"):
+		return _failure("Prompts tab should render runtime prompts inside the Runtime Validation presentation group.")
 	if _find_protocol_icon(resources_tab, "resource", "godot-dotnet-mcp://guides/index") == null:
 		return _failure("Resources tab should render MCP resource icons from protocol metadata.")
 	if _find_protocol_icon(resources_tab, "template", "godot-dotnet-mcp://scene/{path}") == null:
@@ -205,6 +230,18 @@ func _instantiate_tab(tree: SceneTree, mode: String):
 
 
 func _build_model() -> Dictionary:
+	var model := _build_model_without_presentations()
+	model["mcp_catalog_counts"] = {
+		"resources": 3,
+		"resource_templates": 1,
+		"prompts": 3
+	}
+	model["mcp_resource_presentation"] = _build_resource_presentation(model)
+	model["mcp_prompt_presentation"] = _build_prompt_presentation(model)
+	return model
+
+
+func _build_model_without_presentations() -> Dictionary:
 	return {
 		"localization": FakeLocalization.new(),
 		"current_language": "en",
@@ -222,6 +259,7 @@ func _build_model() -> Dictionary:
 			"description": "Current editor state.",
 			"mimeType": "application/json",
 			"resource_kind": "state",
+			"resource_group": "editor_state",
 			"icons": [{"src": "data:text/plain;base64,%s" % Marshalls.raw_to_base64("not svg".to_utf8_buffer()), "mimeType": "text/plain", "sizes": ["any"]}]
 		}, {
 			"uri": "godot-dotnet-mcp://diagnostics/summary",
@@ -263,11 +301,105 @@ func _build_model() -> Dictionary:
 			"arguments": [{"name": "scene"}],
 			"icons": [_icon_metadata("runtime")]
 		}],
-		"mcp_catalog_counts": {
-			"resources": 3,
-			"resource_templates": 1,
-			"prompts": 3
-		}
+		"mcp_catalog_counts": {}
+	}
+
+
+func _build_resource_presentation(model: Dictionary) -> Dictionary:
+	var resources := model.get("mcp_resources", []) as Array
+	var templates := model.get("mcp_resource_templates", []) as Array
+	return {
+		"presentationVersion": 1,
+		"view": "resource_catalog",
+		"resourceTree": [{
+			"id": "guides",
+			"label_key": "mcp_resource_group_guides",
+			"label": "Guides",
+			"kind": "resource_group",
+			"count": 1,
+			"children": [_resource_node(resources[0] as Dictionary, "resource_entry")]
+		}, {
+			"id": "editor_state",
+			"label_key": "mcp_resource_group_editor_state",
+			"label": "Editor State",
+			"kind": "resource_group",
+			"count": 1,
+			"children": [_resource_node(resources[1] as Dictionary, "resource_entry")]
+		}, {
+			"id": "advanced_resources",
+			"label_key": "mcp_resource_group_advanced",
+			"label": "Advanced Resources",
+			"kind": "resource_group",
+			"count": 1,
+			"children": [_resource_node(resources[2] as Dictionary, "resource_entry")]
+		}, {
+			"id": "resource_templates",
+			"label_key": "mcp_resource_group_templates",
+			"label": "Resource Templates",
+			"kind": "resource_group",
+			"count": 1,
+			"children": [_resource_node(templates[0] as Dictionary, "resource_template")]
+		}]
+	}
+
+
+func _build_prompt_presentation(model: Dictionary) -> Dictionary:
+	var prompts := model.get("mcp_prompts", []) as Array
+	return {
+		"presentationVersion": 1,
+		"view": "prompt_catalog",
+		"promptTree": [{
+			"id": "project_understanding",
+			"label_key": "mcp_prompt_group_project_understanding",
+			"label": "Project Understanding",
+			"kind": "prompt_group",
+			"count": 1,
+			"children": [_prompt_node(prompts[0] as Dictionary)]
+		}, {
+			"id": "editor_workflow",
+			"label_key": "mcp_prompt_group_editor_workflow",
+			"label": "Editor Workflow",
+			"kind": "prompt_group",
+			"count": 1,
+			"children": [_prompt_node(prompts[1] as Dictionary)]
+		}, {
+			"id": "runtime_validation",
+			"label_key": "mcp_prompt_group_runtime_validation",
+			"label": "Runtime Validation",
+			"kind": "prompt_group",
+			"count": 1,
+			"children": [_prompt_node(prompts[2] as Dictionary)]
+		}]
+	}
+
+
+func _resource_node(entry: Dictionary, kind: String) -> Dictionary:
+	var id := str(entry.get("uriTemplate", entry.get("uri", "")))
+	return {
+		"id": id,
+		"label": str(entry.get("title", id)),
+		"kind": kind,
+		"resource_uri": id,
+		"resource_kind": str(entry.get("resource_kind", "")),
+		"entry": entry.duplicate(true),
+		"children": []
+	}
+
+
+func _prompt_node(entry: Dictionary) -> Dictionary:
+	var name := str(entry.get("name", ""))
+	var children: Array[Dictionary] = []
+	for arg in entry.get("arguments", []):
+		if arg is Dictionary:
+			children.append({"id": "%s/%s" % [name, str((arg as Dictionary).get("name", ""))], "kind": "prompt_argument", "metadata": (arg as Dictionary).duplicate(true)})
+	return {
+		"id": name,
+		"label": str(entry.get("title", name)),
+		"kind": "prompt_entry",
+		"prompt_name": name,
+		"prompt_kind": str(entry.get("prompt_kind", "")),
+		"entry": entry.duplicate(true),
+		"children": children
 	}
 
 
@@ -315,6 +447,26 @@ func _find_protocol_icon(root: Node, kind: String, id: String) -> Control:
 	if str((icon as Control).get_meta("mcp_icon_src", "")).is_empty():
 		return null
 	return icon as Control
+
+
+func _group_contains_entry_card(root: Node, group_id: String, kind: String, id: String) -> bool:
+	var group := _find_group_section(root, group_id)
+	if group == null:
+		return false
+	for node in group.find_children("*", "PanelContainer", true, false):
+		if not (node is Control):
+			continue
+		var control := node as Control
+		if str(control.get_meta("mcp_catalog_kind", "")) == kind and str(control.get_meta("mcp_catalog_id", "")) == id:
+			return true
+	return false
+
+
+func _find_group_section(root: Node, group_id: String) -> Control:
+	for node in root.find_children("*", "VBoxContainer", true, false):
+		if node is Control and str((node as Control).get_meta("mcp_catalog_group_id", "")) == group_id:
+			return node as Control
+	return null
 
 
 func _find_label_containing(root: Node, text: String) -> Label:

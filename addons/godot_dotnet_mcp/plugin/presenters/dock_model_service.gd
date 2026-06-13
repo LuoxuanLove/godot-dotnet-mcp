@@ -162,6 +162,8 @@ func build_model() -> Dictionary:
 		"mcp_resources": mcp_catalog_projection.get("mcp_resources", []),
 		"mcp_resource_templates": mcp_catalog_projection.get("mcp_resource_templates", []),
 		"mcp_prompts": mcp_catalog_projection.get("mcp_prompts", []),
+		"mcp_resource_presentation": mcp_catalog_projection.get("mcp_resource_presentation", {}),
+		"mcp_prompt_presentation": mcp_catalog_projection.get("mcp_prompt_presentation", {}),
 		"mcp_catalog_counts": mcp_catalog_projection.get("mcp_catalog_counts", {}),
 		"mcp_catalog_preview": _get_state_value("mcp_catalog_preview", {}),
 		"client_install_statuses": client_install_statuses,
