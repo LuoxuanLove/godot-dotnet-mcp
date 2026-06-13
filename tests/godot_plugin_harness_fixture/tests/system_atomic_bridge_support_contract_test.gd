@@ -16,6 +16,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("AtomicBridgeSupport should not block custom_tools paths managed by UserToolService.")
 	if support.is_protected_path("res://game/scripts/Player.gd"):
 		return _failure("AtomicBridgeSupport should not protect normal project paths.")
+	if not support.is_protected_path("res://ADDONS/godot_dotnet_mcp/../godot_dotnet_mcp/plugin/plugin.gd"):
+		return _failure("AtomicBridgeSupport should normalize and protect plugin implementation paths.")
 
 	if not support.is_write_action({"action": " save "}):
 		return _failure("AtomicBridgeSupport should trim and classify mutating action names.")
@@ -32,6 +34,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 	if support.find_path_in_args(path_args) != "res://Preferred.gd":
 		return _failure("AtomicBridgeSupport should preserve AtomicBridge path lookup precedence.")
+	if support.find_path_in_args({"source": "res://Source.tres", "dest": "res://Dest.tres"}) != "res://Source.tres":
+		return _failure("AtomicBridgeSupport should inspect source/dest path arguments for write guards.")
+	if support.find_path_in_args({"paths": ["res://One.gd", "res://Two.gd"]}) != "res://One.gd":
+		return _failure("AtomicBridgeSupport should inspect path arrays for write guards.")
 
 	var issue := support.build_issue("warning", "dependency_mismatch", "Dependency differs", {"file": "res://A.tscn"})
 	if issue.get("file", "") != "res://A.tscn" or issue.get("type", "") != "dependency_mismatch":
@@ -56,6 +62,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("AtomicBridgeSupport should normalize declared fallback dependency paths.")
 	if support_reference.get("risk", "") != "error" or support_reference.get("consistency", "") != "missing_uid_and_path":
 		return _failure("AtomicBridgeSupport should report missing UID/path dependency references as errors.")
+	var invalid_reference: Dictionary = support.parse_dependency_reference("uid://missing_bridge_contract::Script::user://outside.cs", SOURCE_PATH)
+	if invalid_reference.get("risk", "") != "error" or invalid_reference.get("consistency", "") != "invalid_path":
+		return _failure("AtomicBridgeSupport should report invalid fallback dependency paths as invalid_path errors.")
 
 	return {"name": "system_atomic_bridge_support_contracts", "success": true, "error": ""}
 
