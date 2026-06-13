@@ -286,6 +286,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock snapshot metadata should preserve normalized output schemas for Tools UI consumers.")
 	if metadata_by_name.has("system_tool_activity"):
 		return _failure("Dock presentation should filter removed public tools through the snapshot service.")
+	var agent_presentation: Dictionary = model.get("agent_tool_presentation", {})
+	var active_presentation: Dictionary = model.get("active_tool_presentation", {})
+	if agent_presentation.is_empty() or active_presentation.is_empty():
+		return _failure("Dock model should expose Agent Tools as the default active presentation.")
+	if model.get("toolTree", []) != agent_presentation.get("toolTree", []):
+		return _failure("Dock model should feed the Tools tab from Agent Tools by default.")
+	if _contains_presentation_category(model.get("toolTree", []), "plugin_runtime"):
+		return _failure("Dock default Tools tab tree should not expose internal executor categories.")
+	if not _contains_kind_key(model.get("toolTree", []), "public_tool", "system_project_state"):
+		return _failure("Dock default Tools tab tree should include canonical public tools.")
+	if not (model.get("internal_executor_presentation", {}) is Dictionary) or (model.get("internal_executor_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should keep internal executor presentation available for advanced diagnostics.")
+	if not (model.get("tool_diagnostics_presentation", {}) is Dictionary) or (model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should keep diagnostics presentation available without mixing it into the default tree.")
 	var protocol_projection_result := _verify_mcp_protocol_projection(model)
 	if not bool(protocol_projection_result.get("success", false)):
 		return protocol_projection_result
@@ -440,5 +454,17 @@ func _contains_presentation_tool(nodes: Array, tool_name: String) -> bool:
 		if str(node_dict.get("kind", "")) == "tool" and str(node_dict.get("key", "")) == tool_name:
 			return true
 		if _contains_presentation_tool(node_dict.get("children", []), tool_name):
+			return true
+	return false
+
+
+func _contains_kind_key(nodes: Array, kind: String, key: String) -> bool:
+	for node in nodes:
+		if not (node is Dictionary):
+			continue
+		var node_dict := node as Dictionary
+		if str(node_dict.get("kind", "")) == kind and str(node_dict.get("key", "")) == key:
+			return true
+		if _contains_kind_key(node_dict.get("children", []), kind, key):
 			return true
 	return false

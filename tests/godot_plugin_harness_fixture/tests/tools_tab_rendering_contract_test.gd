@@ -5,6 +5,7 @@ extends RefCounted
 const ToolsTabScene = preload("res://addons/godot_dotnet_mcp/ui/tools_tab.tscn")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolTreePresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_tree_presentation_service.gd")
 const TEST_ICON_SRC := "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjNGFhM2ZmIi8+PC9zdmc+"
 
 var _instance: VBoxContainer = null
@@ -108,6 +109,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var tools_by_category := _build_tools_by_category()
 	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
+	var agent_presentation := ToolTreePresentationService.build_agent_tool_tree(_build_exposed_tools(tools_by_category))
 	_override_presentation_action_metadata(presentation, "system_dap_debugger.configuration_done", "tool_action_custom_node_label", "tool_action_custom_node_desc")
 	_poison_raw_tool_definitions_after_presentation(tools_by_category)
 	var base_model := {
@@ -124,18 +126,60 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"tool_presentation": presentation,
 		"tool_load_errors": []
 	}
-	_instance.apply_model(base_model)
+	var agent_model := base_model.duplicate(true)
+	agent_model["active_tool_presentation"] = agent_presentation
+	agent_model["agent_tool_presentation"] = agent_presentation
+	agent_model["toolTree"] = agent_presentation.get("toolTree", [])
+	agent_model["toolGroups"] = agent_presentation.get("toolGroups", [])
+	_instance.apply_model(agent_model)
 	await tree.process_frame
 
 	var tool_count_label = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel") as Label
-	var expected_visible_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 2
-	if tool_count_label == null or tool_count_label.text != "Enabled %d/%d" % [expected_visible_tool_count, expected_visible_tool_count]:
-		return _failure("Tools tab should count the current system, plugin, and user presentation tools exactly once.")
-
+	if tool_count_label == null or tool_count_label.text != "Enabled 26/26":
+		return _failure("Tools tab Agent Tools view should count only canonical public tools and user tools.")
 	var tool_tree = _instance.get_node("ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree") as Tree
 	if tool_tree == null:
 		return _failure("Tools tab rendering test could not resolve the tree control.")
 	var root = tool_tree.get_root()
+	if root == null:
+		return _failure("Tools tab should create a root tree item when applying the Agent Tools model.")
+	var project_group := _find_child_by_metadata(root, "category", "project_context")
+	var runtime_group := _find_child_by_metadata(root, "category", "runtime_debugging")
+	var plugin_group := _find_child_by_metadata(root, "category", "plugin_maintenance")
+	var user_group := _find_child_by_metadata(root, "category", "user_tools")
+	if project_group == null or runtime_group == null or plugin_group == null or user_group == null:
+		return _failure("Tools tab should default to Agent Tools groups instead of internal domain roots.")
+	if _find_child_by_metadata(root, "domain", "core") != null or _find_child_by_metadata(root, "category", "plugin_runtime") != null:
+		return _failure("Tools tab Agent Tools view should not mix internal domain/category roots into the default tree.")
+	if _find_child_by_metadata(runtime_group, "tool", "system_dap_debugger") == null or _find_child_by_metadata(runtime_group, "tool", "system_runtime_control") == null:
+		return _failure("Tools tab Agent Tools view should group canonical runtime/debugging tools.")
+	if _find_child_by_metadata(root, "tool", "runtime_step") != null or _find_child_by_metadata(root, "tool", "plugin_runtime_state") != null:
+		return _failure("Tools tab Agent Tools view should hide lower-level executor tools from the default call surface.")
+	var agent_project_state := _find_child_by_metadata(project_group, "tool", "system_project_state")
+	if agent_project_state == null:
+		return _failure("Tools tab Agent Tools view should render canonical public project tools.")
+	_instance.call("_apply_selection_metadata", agent_project_state.get_metadata(0))
+	await tree.process_frame
+	var preview_text = _instance.get_node("ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText") as TextEdit
+	if preview_text == null or not preview_text.text.contains("工具 ID: system_project_state"):
+		return _failure("Tools tab Agent Tools preview should keep tool metadata and schema preview behavior.")
+	_instance.call("_apply_selection_metadata", project_group.get_metadata(0))
+	await tree.process_frame
+	if preview_text.text.contains("agent_tools_group_project_context"):
+		return _failure("Tools tab Agent Tools group labels should fall back to human-readable text when locale keys are not present.")
+	if not preview_text.text.contains("7 tools") or not preview_text.text.contains("Project State"):
+		return _failure("Tools tab Agent Tools group preview should count and list public_tool children.")
+
+	_instance.apply_model(base_model)
+	await tree.process_frame
+
+	var expected_visible_tool_count := SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size() + 2
+	if tool_count_label == null or tool_count_label.text != "Enabled %d/%d" % [expected_visible_tool_count, expected_visible_tool_count]:
+		return _failure("Tools tab should count the current system, plugin, and user presentation tools exactly once.")
+
+	if tool_tree == null:
+		return _failure("Tools tab rendering test could not resolve the tree control.")
+	root = tool_tree.get_root()
 	if root == null:
 		return _failure("Tools tab should create a root tree item when applying the model.")
 
@@ -223,7 +267,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should localize runtime atomic tool rows.")
 	_instance.call("_apply_selection_metadata", runtime_step_atomic.get_metadata(0))
 	await tree.process_frame
-	var preview_text = _instance.get_node("ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText") as TextEdit
+	preview_text = _instance.get_node("ContentSplit/BottomPane/PreviewOuterMargin/ToolPreviewPanel/ToolPreviewMargin/ToolPreviewContent/ToolPreviewText") as TextEdit
 	if preview_text == null:
 		return _failure("Tools tab rendering test could not resolve the preview text control.")
 	if not preview_text.text.contains("工具: 步进") or not preview_text.text.contains("分类: 运行时") or not preview_text.text.contains("内部运行时步进"):
@@ -425,6 +469,13 @@ func _build_exposed_tools(tools_by_category: Dictionary) -> Array:
 		var tool := (tool_def as Dictionary).duplicate(true)
 		tool["name"] = "plugin_runtime_%s" % str(tool.get("name", ""))
 		tool["category"] = "plugin_runtime"
+		exposed.append(tool)
+	for tool_def in tools_by_category.get("user", []):
+		if not (tool_def is Dictionary):
+			continue
+		var tool := (tool_def as Dictionary).duplicate(true)
+		tool["name"] = "user_%s" % str(tool.get("name", ""))
+		tool["category"] = "user"
 		exposed.append(tool)
 	return exposed
 

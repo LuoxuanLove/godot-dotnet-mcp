@@ -19,6 +19,9 @@ func build_model(context: Dictionary) -> Dictionary:
 	var config_service = context.get("config_service")
 	var all_tools_by_category: Dictionary = context.get("all_tools_by_category", {})
 	var tools_by_category: Dictionary = context.get("tools_by_category", {})
+	var tool_presentation = context.get("tool_presentation", {})
+	var agent_tool_presentation = context.get("agent_tool_presentation", {})
+	var active_tool_presentation = agent_tool_presentation if agent_tool_presentation is Dictionary and not (agent_tool_presentation as Dictionary).is_empty() else tool_presentation
 	var profile_id = _resolve_tool_profile_id(
 		settings,
 		tool_catalog,
@@ -83,15 +86,19 @@ func build_model(context: Dictionary) -> Dictionary:
 		"performance": server_controller.get_performance_summary(),
 		"languages": localization.get_available_languages(),
 		"tools_by_category": tools_by_category,
-		"tool_presentation": context.get("tool_presentation", {}),
+		"tool_presentation": tool_presentation,
+		"active_tool_presentation": active_tool_presentation,
+		"agent_tool_presentation": agent_tool_presentation,
+		"internal_executor_presentation": context.get("internal_executor_presentation", {}),
+		"tool_diagnostics_presentation": context.get("tool_diagnostics_presentation", {}),
 		"mcp_resources": context.get("mcp_resources", []),
 		"mcp_resource_templates": context.get("mcp_resource_templates", []),
 		"mcp_prompts": context.get("mcp_prompts", []),
 		"mcp_catalog_counts": context.get("mcp_catalog_counts", {}),
 		"mcp_catalog_preview": context.get("mcp_catalog_preview", {}),
-		"presentationVersion": int(context.get("tool_presentation", {}).get("presentationVersion", 1)) if context.get("tool_presentation", {}) is Dictionary else 1,
-		"toolTree": context.get("tool_presentation", {}).get("toolTree", []) if context.get("tool_presentation", {}) is Dictionary else [],
-		"toolGroups": context.get("tool_presentation", {}).get("toolGroups", []) if context.get("tool_presentation", {}) is Dictionary else [],
+		"presentationVersion": int((active_tool_presentation as Dictionary).get("presentationVersion", 1)) if active_tool_presentation is Dictionary else 1,
+		"toolTree": (active_tool_presentation as Dictionary).get("toolTree", []) if active_tool_presentation is Dictionary else [],
+		"toolGroups": (active_tool_presentation as Dictionary).get("toolGroups", []) if active_tool_presentation is Dictionary else [],
 		"tool_load_errors": server_controller.get_tool_load_errors(),
 		"self_diagnostics": context.get("self_diagnostics", {}),
 		"self_diagnostic_copy_text": str(context.get("self_diagnostic_copy_text", "")),
