@@ -6,6 +6,7 @@ var tests = new (string Name, Action Run)[]
     ("keeps_capability_sets_immutable", CapabilityCatalogSetsCannotBeMutated),
     ("binds_only_godot_project_roots", ProjectDescriptorRequiresGodotProjectRoot),
     ("keeps_explicit_csproj_inside_project_root", ProjectDescriptorKeepsProjectFileInsideRoot),
+    ("disambiguates_same_root_csproj_scopes", ProjectDescriptorDisambiguatesSameRootProjectFiles),
     ("project_descriptor_has_no_public_constructor", ProjectDescriptorHasNoPublicConstructor),
     ("broker_registers_projects_through_descriptor_factory", BrokerRegistersProjectsThroughDescriptorFactory),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
@@ -73,6 +74,36 @@ static void ProjectDescriptorKeepsProjectFileInsideRoot()
     var externalProject = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csproj");
     AssertThrows<ArgumentException>(() => ProjectDescriptor.FromRoot(root, externalProject));
     AssertThrows<ArgumentException>(() => ProjectDescriptor.FromRoot(root, "not-a-project.txt"));
+}
+
+static void ProjectDescriptorDisambiguatesSameRootProjectFiles()
+{
+    var root = CreateTempProjectRoot();
+    var gameProject = Path.Combine(root, "Game.csproj");
+    var toolsDirectory = Path.Combine(root, "Tools");
+    Directory.CreateDirectory(toolsDirectory);
+    var toolsProject = Path.Combine(toolsDirectory, "Tools.csproj");
+    File.WriteAllText(gameProject, "<Project />");
+    File.WriteAllText(toolsProject, "<Project />");
+
+    var rootDescriptor = ProjectDescriptor.FromRoot(root);
+    var gameDescriptor = ProjectDescriptor.FromRoot(root, gameProject);
+    var toolsDescriptor = ProjectDescriptor.FromRoot(root, toolsProject);
+
+    AssertEqual(rootDescriptor.ProjectId, ProjectDescriptor.FromRoot(root).ProjectId);
+    AssertNotEqual(rootDescriptor.ProjectId, gameDescriptor.ProjectId);
+    AssertNotEqual(gameDescriptor.ProjectId, toolsDescriptor.ProjectId);
+    AssertNotEqual(rootDescriptor.ProjectId, toolsDescriptor.ProjectId);
+    AssertEqual(gameDescriptor.ProjectId, ProjectDescriptor.FromRoot(root, Path.Combine("Game.csproj")).ProjectId);
+    AssertEqual(toolsDescriptor.ProjectId, ProjectDescriptor.FromRoot(root, Path.Combine("Tools", "Tools.csproj")).ProjectId);
+
+    var broker = new CompanionBroker();
+    var registeredGame = broker.RegisterProject(gameDescriptor);
+    var registeredTools = broker.RegisterProject(toolsDescriptor);
+    var gameSession = broker.StartSession(registeredGame.ProjectId);
+
+    AssertThrows<InvalidOperationException>(() =>
+        broker.ResolveSession(new ToolRequestScope(registeredTools.ProjectId, gameSession.Identity.SessionId)));
 }
 
 static void ProjectDescriptorHasNoPublicConstructor()
@@ -462,6 +493,14 @@ static void AssertEqual<T>(T expected, T actual)
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
     {
         throw new InvalidOperationException($"Expected {expected}, got {actual}.");
+    }
+}
+
+static void AssertNotEqual<T>(T unexpected, T actual)
+{
+    if (EqualityComparer<T>.Default.Equals(unexpected, actual))
+    {
+        throw new InvalidOperationException($"Expected value other than {unexpected}.");
     }
 }
 

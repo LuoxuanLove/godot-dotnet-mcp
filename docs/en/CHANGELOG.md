@@ -36,6 +36,7 @@ Target version: 2.0.0.
 
 ### Internal
 
+- Scoped v2 Companion project identifiers by both Godot project root and explicit `.csproj` path so Broker registration can keep multiple C# projects under one Godot root isolated.
 - Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.
 - Added a v2 broker manifest, validator, negative policy tests, and CI coverage so broker lifecycle, transport, discovery, and session-scope defaults stay explicit and non-persistent.
