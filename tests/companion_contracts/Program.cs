@@ -22,6 +22,7 @@ var tests = new (string Name, Action Run)[]
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
+    ("reports_session_capabilities_without_renewing_leases", ReportsSessionCapabilitiesWithoutRenewingLeases),
     ("tool_scope_validation_does_not_renew_session_leases", ToolScopeValidationDoesNotRenewSessionLeases),
     ("tool_scope_validation_uses_one_clock_snapshot", ToolScopeValidationUsesOneClockSnapshot),
     ("rejects_cross_project_session_reuse", CrossProjectSessionReuseIsRejected),
@@ -659,6 +660,66 @@ static void ReportsMachineReadableToolScopeValidation()
     AssertFalse(expired.Accepted);
     AssertEqual(ToolScopeValidationReason.ExpiredSession, expired.Reason);
     AssertEqual(session.Identity.SessionId, expired.Session?.SessionId);
+}
+
+static void ReportsSessionCapabilitiesWithoutRenewingLeases()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+    var initialIdentity = session.Identity;
+
+    AssertThrows<ArgumentException>(() => broker.GetSessionCapabilities(new ToolRequestScope(string.Empty, session.Identity.SessionId)));
+    AssertThrows<ArgumentException>(() => broker.GetSessionCapabilities(new ToolRequestScope(project.ProjectId, string.Empty)));
+    AssertThrows<KeyNotFoundException>(() => broker.GetSessionCapabilities(new ToolRequestScope(project.ProjectId, "session_missing")));
+    AssertThrows<InvalidOperationException>(() =>
+        broker.GetSessionCapabilities(new ToolRequestScope(otherProject.ProjectId, session.Identity.SessionId)));
+
+    var staticSnapshot = broker.GetSessionCapabilities(scope);
+    AssertEqual(session.Identity.SessionId, staticSnapshot.Session.SessionId);
+    AssertEqual(CompanionMode.StaticHeadless, staticSnapshot.Session.Mode);
+    AssertTrue(staticSnapshot.Capabilities.Contains(CompanionCapability.StaticProjectAnalysis));
+    AssertTrue(staticSnapshot.Capabilities.Contains(CompanionCapability.DotnetWorkspaceAnalysis));
+    AssertTrue(staticSnapshot.Capabilities.Contains(CompanionCapability.ResourceGraphAnalysis));
+    AssertFalse(staticSnapshot.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+    AssertThrows<NotSupportedException>(() =>
+        ((IList<CompanionCapability>)staticSnapshot.Capabilities)[0] = CompanionCapability.EditorScreenshot);
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+    broker.UpgradeSessionToEditorLive(scope);
+    var liveSnapshot = broker.GetSessionCapabilities(scope);
+    AssertEqual(CompanionMode.EditorLive, liveSnapshot.Session.Mode);
+    AssertTrue(liveSnapshot.Capabilities.Contains(CompanionCapability.EditorSelection));
+    AssertTrue(liveSnapshot.Capabilities.Contains(CompanionCapability.InspectorState));
+    AssertTrue(liveSnapshot.Capabilities.Contains(CompanionCapability.DockState));
+    AssertTrue(liveSnapshot.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+    AssertTrue(liveSnapshot.Capabilities.Contains(CompanionCapability.RuntimeValidation));
+
+    broker.UpdateEditorBridgeStatus(EditorBridgeStatus.Disabled(project.ProjectId));
+    var downgradedSnapshot = broker.GetSessionCapabilities(scope);
+    AssertEqual(CompanionMode.StaticHeadless, downgradedSnapshot.Session.Mode);
+    AssertFalse(downgradedSnapshot.Capabilities.Contains(CompanionCapability.EditorScreenshot));
+
+    var stoppedProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var stoppedSession = broker.StartSession(stoppedProject.ProjectId);
+    var stoppedScope = new ToolRequestScope(stoppedProject.ProjectId, stoppedSession.Identity.SessionId);
+    AssertTrue(broker.StopSession(stoppedScope));
+    AssertThrows<KeyNotFoundException>(() => broker.GetSessionCapabilities(stoppedScope));
+
+    now = now.AddSeconds(11);
+    var expiredSnapshot = broker.GetSessionCapabilities(scope);
+    AssertEqual(0, expiredSnapshot.Capabilities.Count);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
 }
 
 static void ToolScopeValidationDoesNotRenewSessionLeases()

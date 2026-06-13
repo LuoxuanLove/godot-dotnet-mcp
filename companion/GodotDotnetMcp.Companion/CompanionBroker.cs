@@ -323,6 +323,15 @@ public sealed class CompanionBroker
         }
     }
 
+    public SessionCapabilitySnapshot GetSessionCapabilities(ToolRequestScope scope)
+    {
+        lock (_sessionLock)
+        {
+            var session = ResolveSessionForEvaluation(scope);
+            return session.CreateCapabilitySnapshot(_clock());
+        }
+    }
+
     public ProjectSession ResolveSession(ToolRequestScope scope)
     {
         return ResolveSession(scope, renewLease: true);
@@ -516,6 +525,10 @@ public sealed record BrokerProjectSummary(
     int ActiveSessionCount,
     int StaticHeadlessSessionCount,
     int EditorLiveSessionCount);
+
+public sealed record SessionCapabilitySnapshot(
+    ProjectSessionIdentity Session,
+    IReadOnlyCollection<CompanionCapability> Capabilities);
 
 public sealed record BrokerLifecycleOptions(
     bool EnabledByDefault = false,
