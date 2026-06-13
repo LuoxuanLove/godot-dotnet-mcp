@@ -98,7 +98,7 @@ function New-PolicyFixture {
     git -C $repo branch -M dev
 
     if (-not [string]::IsNullOrWhiteSpace($ComparisonBaseVersion)) {
-        git -C $repo switch -c refactor/v1.4.0 -q
+        git -C $repo switch -c refactor/v2.0.0 -q
         Write-MetadataFixture -RepositoryRoot $repo -Version $ComparisonBaseVersion -PluginDescription "Comparison base fixture"
         git -C $repo add addons
         git -C $repo commit -m "comparison base" -q
@@ -166,22 +166,19 @@ function Invoke-PolicyScenario {
 }
 
 Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "feature/tooling" -HeadVersion "1.0.0" -ShouldPass $true
-Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-tooling" -HeadVersion "1.0.0" -ShouldPass $true
-Invoke-PolicyScenario -Name "refactor base compares against refactor ref, not default branch checkout" -BaseBranch "refactor/v1.4.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "1.4.0" -HeadBranch "feature/v1.4-policy" -HeadVersion "1.4.0" -ShouldPass $true
-Invoke-PolicyScenario -Name "v2.0 refactor base unchanged metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "feature/v2.0-tooling" -HeadVersion "1.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "feature/v2.0-tooling" -HeadVersion "1.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "refactor base compares against refactor ref, not default branch checkout" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -HeadBranch "feature/v2.0-policy" -HeadVersion "2.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release changed metadata" -HeadBranch "fix/version-text" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'fix/version-text' changes public version metadata"
-Invoke-PolicyScenario -Name "refactor base changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "feature/v1.4-version" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v1.4-version' changes public version metadata"
-Invoke-PolicyScenario -Name "refactor base catches drift from comparison base" -BaseBranch "refactor/v1.4.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "1.4.0" -HeadBranch "feature/v1.4-version-drift" -HeadVersion "1.4.1" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v1.4-version-drift' changes public version metadata"
-Invoke-PolicyScenario -Name "v1.4 refactor baseline changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "chore/v1.4-version-baseline" -HeadVersion "1.4.0" -RequireTrustedReleaseBranch -ShouldPass $true
-Invoke-PolicyScenario -Name "fork v1.4 refactor baseline changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "chore/v1.4-version-baseline" -HeadVersion "1.4.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "v1.4 refactor baseline version changes must come from the base repository"
+Invoke-PolicyScenario -Name "refactor base changed metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "feature/v2.0-version" -HeadVersion "1.1.0" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v2.0-version' changes public version metadata"
+Invoke-PolicyScenario -Name "refactor base catches drift from comparison base" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -HeadBranch "feature/v2.0-version-drift" -HeadVersion "1.4.1" -ShouldPass $false -ExpectedErrorContains "Non-release branch 'feature/v2.0-version-drift' changes public version metadata"
 Invoke-PolicyScenario -Name "v2.0 migration from v1.4 refactor changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "refactor/v2.0.0" -HeadVersion "2.0.0" -RequireTrustedReleaseBranch -ShouldPass $true
 Invoke-PolicyScenario -Name "fork v2.0 migration from v1.4 refactor changed metadata" -BaseBranch "refactor/v1.4.0" -HeadBranch "refactor/v2.0.0" -HeadVersion "2.0.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "v2.0 refactor migration version changes must come from the base repository"
-Invoke-PolicyScenario -Name "v1.4 refactor integration to dev changed metadata" -BaseBranch "dev" -HeadBranch "refactor/v1.4.0" -HeadVersion "1.4.0" -RequireTrustedReleaseBranch -ShouldPass $true
-Invoke-PolicyScenario -Name "fork v1.4 refactor integration to dev changed metadata" -BaseBranch "dev" -HeadBranch "refactor/v1.4.0" -HeadVersion "1.4.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "v1.4 refactor integration version changes must come from the base repository"
+Invoke-PolicyScenario -Name "v2.0 refactor baseline changed metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "chore/v2.0-version-baseline" -HeadVersion "2.0.0" -RequireTrustedReleaseBranch -ShouldPass $true
+Invoke-PolicyScenario -Name "fork v2.0 refactor baseline changed metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "chore/v2.0-version-baseline" -HeadVersion "2.0.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "v2.0 refactor baseline version changes must come from the base repository"
 Invoke-PolicyScenario -Name "v2.0 refactor integration to dev changed metadata" -BaseBranch "dev" -HeadBranch "refactor/v2.0.0" -HeadVersion "2.0.0" -RequireTrustedReleaseBranch -ShouldPass $true
 Invoke-PolicyScenario -Name "fork v2.0 refactor integration to dev changed metadata" -BaseBranch "dev" -HeadBranch "refactor/v2.0.0" -HeadVersion "2.0.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "v2.0 refactor integration version changes must come from the base repository"
 Invoke-PolicyScenario -Name "release changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $true
-Invoke-PolicyScenario -Name "release branch cannot target refactor base" -BaseBranch "refactor/v1.4.0" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must target dev"
+Invoke-PolicyScenario -Name "release branch cannot target refactor base" -BaseBranch "refactor/v2.0.0" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must target dev"
 Invoke-PolicyScenario -Name "fork release branch changed metadata" -HeadBranch "release/v1.1.0" -HeadVersion "1.1.0" -HeadRepositoryOwner "external-user" -RequireTrustedReleaseBranch -ShouldPass $false -ExpectedErrorContains "Release version changes must come from a release/* branch in the base repository"
 Invoke-PolicyScenario -Name "non-release plugin cfg text change without version change" -HeadBranch "docs/plugin-metadata" -HeadVersion "1.0.0" -MutateHead { param($repo) Write-MetadataFixture -RepositoryRoot $repo -Version "1.0.0" -PluginDescription "Updated metadata" } -ShouldPass $true
 Invoke-PolicyScenario -Name "non-release protocol version only" -HeadBranch "feature/protocol-version" -HeadVersion "1.0.0" -MutateHead { param($repo) $path = Join-Path $repo "addons\godot_dotnet_mcp\plugin\runtime\mcp_protocol_facts.json"; $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8; $content = $content.Replace('"server_version": "1.0.0"', '"server_version": "1.1.0"'); Set-Content -LiteralPath $path -Value $content -Encoding UTF8 } -ShouldPass $false -ExpectedErrorContains "Protocol facts parity failed for head server_version"

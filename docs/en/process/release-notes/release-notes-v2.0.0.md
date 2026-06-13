@@ -1,14 +1,14 @@
-## 🧩 Godot .NET MCP v1.4.0: Protocol Refactor Draft
+## 🧩 Godot .NET MCP v2.0.0: Protocol Refactor Draft
 
-This is the draft release note source for the unreleased v1.4.0 protocol refactor line. It summarizes the user-visible changes currently staged under `Unreleased` in the changelog; it is not a release announcement until the version is formally published.
+This is the draft release note source for the unreleased v2.0.0 protocol refactor line. It summarizes the user-visible changes currently staged under `Unreleased` in the changelog; it is not a release announcement until the version is formally published.
 
-<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/en/process/release-notes/release-notes-v1.4.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/zh-CN/流程/发布说明/发布说明-v1.4.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/ja/プロセス/リリースノート/リリースノート-v1.4.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.4.0.md">한국어</a></p>
+<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/en/process/release-notes/release-notes-v2.0.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md">한국어</a></p>
 
-v1.4.0 is a large protocol and internal service refactor, not a cosmetic cleanup. The goal is to make Godot .NET MCP behave like a first-class MCP 2025-11-25 server: passive context moves to Resources, reusable planning workflows move to Prompts, Tools stay focused on actions and computed results, and the editor Dock previews the same metadata that MCP clients receive. This matters because clients can discover less by guessing, call fewer legacy helper tools, and rely on a smaller, better-tested public surface while the plugin keeps richer internals behind that surface.
+v2.0.0 is a large protocol and internal service refactor, not a cosmetic cleanup. The goal is to make Godot .NET MCP behave like a first-class MCP 2025-11-25 server: passive context moves to Resources, reusable planning workflows move to Prompts, Tools stay focused on actions and computed results, and the editor Dock previews the same metadata that MCP clients receive. This matters because clients can discover less by guessing, call fewer legacy helper tools, and rely on a smaller, better-tested public surface while the plugin keeps richer internals behind that surface.
 
 ### ✨ Protocol-First MCP Surface
 
-The default MCP protocol target moves to 2025-11-25. `initialize` now advertises the v1.4 server description and protocol baseline, tool names are guarded against invalid public names, and JSON Schema 2020-12 is the default schema dialect for public metadata.
+The default MCP protocol target moves to 2025-11-25. `initialize` now advertises the v2.0 server description and protocol baseline, tool names are guarded against invalid public names, and JSON Schema 2020-12 is the default schema dialect for public metadata.
 
 The public surface is reorganized around the MCP roles:
 
@@ -20,7 +20,7 @@ Legacy discovery-style public tools are no longer treated as the primary entry p
 
 ### 🌊 Streamable HTTP and Stdio
 
-The default endpoint remains `http://127.0.0.1:3000/mcp`, but the endpoint now follows the v1.4 Streamable HTTP shape: protocol and session headers, JSON/SSE `Accept` negotiation, Origin/CORS checks, GET SSE streams, resumable event history, finite POST SSE responses, heartbeat events, queued server-to-client delivery, and `DELETE /mcp` session termination.
+The default endpoint remains `http://127.0.0.1:3000/mcp`, but the endpoint now follows the v2.0 Streamable HTTP shape: protocol and session headers, JSON/SSE `Accept` negotiation, Origin/CORS checks, GET SSE streams, resumable event history, finite POST SSE responses, heartbeat events, queued server-to-client delivery, and `DELETE /mcp` session termination.
 
 Stdio now defaults to newline-delimited JSON-RPC for current MCP clients. Legacy `Content-Length` framing remains available only as an explicit compatibility mode, so older local launchers are not broken while the default transport moves forward.
 
@@ -48,7 +48,7 @@ Clean install validation now checks both sides of that contract: exported addon 
 
 Catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, Tools tab previews, search, and schema-copy paths use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path. This reduces drift between client discovery, HTTP diagnostics, and editor UI previews.
 
-The v1.4 line also splits many large root domain implementations into focused executors while keeping public facades where compatibility requires them. Audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains all move toward smaller implementation units.
+The v2.0 line also splits many large root domain implementations into focused executors while keeping public facades where compatibility requires them. Audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains all move toward smaller implementation units.
 
 ### ✅ Compatibility and Validation
 

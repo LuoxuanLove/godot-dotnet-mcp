@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.4.0])
+## [Unreleased] ([2.0.0])
 
-Target version: 1.4.0.
+Target version: 2.0.0.
 
 ### Added
 
@@ -28,7 +28,7 @@ Target version: 1.4.0.
 - Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
-- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4 line.
+- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
 
 ### Fixed
 
@@ -41,15 +41,15 @@ Target version: 1.4.0.
 
 ### Documentation
 
-- Updated the v1.4 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
+- Updated the v2.0 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
 - Updated release-facing README and localized entry pages so installation and migration guidance stays focused on plugin-owned install surfaces, Resources, Prompts, Tools, and reproducible validation.
-- Added draft v1.4 release-note sources and localized navigation for the protocol refactor line.
+- Added draft v2.0 release-note sources and localized navigation for the protocol refactor line.
 - Clarified legacy `system_help` guidance so clients start from MCP Resources for passive context, Prompts for planning, and Tools for actions or computed workflow results.
 
 ### Internal
 
-- Added aggregate v1.4 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
-- Added release-policy, PR-policy, and merge-queue validation coverage for v1.4 branch integration, trusted `refactor/v1.4.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
+- Added aggregate v2.0 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
+- Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
 
@@ -72,7 +72,7 @@ Target version: 1.4.0.
 - Added `system_plugin_maintenance`, the canonical high-level plugin maintenance entry for status, reload, update-status, update-reference refresh, update-source selection, and update-start workflows.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
-- Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
+- Added canonical v2.0 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
 - Added `structuredContent` to every `tools/call` result while preserving the text JSON content for existing clients.
 
@@ -96,15 +96,15 @@ Target version: 1.4.0.
 
 ### Documentation
 
-- Added a localized v1.4.0 protocol refactor plan and linked it from the four localized roadmaps.
+- Added a localized v2.0.0 protocol refactor plan and linked it from the four localized roadmaps.
 - Refreshed README Highlights to align the top-level feature story with the v1.2.0 and v1.3.0 release lines, grouping overlapping entries into consistent editor-native service, semantic automation, evidence, diagnostics, runtime, workflow discovery, and User-tool extension themes.
 - Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
 - Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
 
 ### Internal
 
-- Added documentation localization validation coverage for the localized v1.4.0 protocol plan page.
-- Added a v1.4.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
+- Added documentation localization validation coverage for the localized v2.0.0 protocol plan page.
+- Added a v2.0.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.

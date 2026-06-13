@@ -1,4 +1,4 @@
-param()
+﻿param()
 
 $ErrorActionPreference = "Stop"
 
@@ -45,7 +45,7 @@ function Invoke-ReleaseChangelogScenario {
         $passed = $true
         $failureMessage = ""
         try {
-            $output = & $validatorPath -Version "1.4.0" -ChangelogPaths $paths 2>&1
+            $output = & $validatorPath -Version "2.0.0" -ChangelogPaths $paths 2>&1
             $output | Out-Host
         } catch {
             $passed = $false
@@ -68,7 +68,7 @@ function Invoke-ReleaseChangelogScenario {
 $formalChangelog = @"
 # Changelog
 
-## [1.4.0] - 2026-06-13
+## [2.0.0] - 2026-06-13
 
 - Final release item.
 "@
@@ -76,9 +76,9 @@ $formalChangelog = @"
 $unreleasedTargetChangelog = @"
 # Changelog
 
-## [Unreleased] ([1.4.0])
+## [Unreleased] ([2.0.0])
 
-Target version: 1.4.0.
+Target version: 2.0.0.
 
 - Development item.
 "@
@@ -86,11 +86,11 @@ Target version: 1.4.0.
 $duplicateChangelog = @"
 # Changelog
 
-## [1.4.0]
+## [2.0.0]
 
 - First item.
 
-## 1.4.0 - 2026-06-13
+## 2.0.0 - 2026-06-13
 
 - Duplicate item.
 "@

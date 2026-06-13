@@ -22,12 +22,12 @@ $docMap = @(
     @{ Id = "interface-server-config"; Paths = @{ en = "interface/server-and-config-pages.md"; "zh-CN" = "界面/服务与配置页实现.md"; ja = "インターフェース/サーバーと設定ページ実装.md"; ko = "인터페이스/서버와-설정-페이지-구현.md" } },
     @{ Id = "interface-tools"; Paths = @{ en = "interface/tools-page.md"; "zh-CN" = "界面/工具页实现.md"; ja = "インターフェース/ツールページ実装.md"; ko = "인터페이스/도구-페이지-구현.md" } },
     @{ Id = "process-agent-bot"; Paths = @{ en = "process/agent-and-bot-workflow.md"; "zh-CN" = "流程/智能体与机器人流程.md"; ja = "プロセス/エージェントとボットの流れ.md"; ko = "프로세스/에이전트와-봇-흐름.md" } },
-    @{ Id = "process-v1.4.0-protocol-plan"; Paths = @{ en = "process/v1.4.0-protocol-refactor-plan.md"; "zh-CN" = "流程/v1.4.0-协议重构计划.md"; ja = "プロセス/v1.4.0-プロトコルリファクタ計画.md"; ko = "프로세스/v1.4.0-프로토콜-리팩터-계획.md" } },
-    @{ Id = "process-v1.4.0-progress-tracker"; Paths = @{ en = "process/v1.4.0-refactor-progress-tracker.md"; "zh-CN" = "流程/v1.4.0-重构进度跟踪.md"; ja = "プロセス/v1.4.0-リファクタ進捗トラッカー.md"; ko = "프로세스/v1.4.0-리팩터-진행-추적.md" } },
+    @{ Id = "process-v2.0.0-protocol-plan"; Paths = @{ en = "process/v2.0.0-protocol-refactor-plan.md"; "zh-CN" = "流程/v2.0.0-协议重构计划.md"; ja = "プロセス/v2.0.0-プロトコルリファクタ計画.md"; ko = "프로세스/v2.0.0-프로토콜-리팩터-계획.md" } },
+    @{ Id = "process-v2.0.0-progress-tracker"; Paths = @{ en = "process/v2.0.0-refactor-progress-tracker.md"; "zh-CN" = "流程/v2.0.0-重构进度跟踪.md"; ja = "プロセス/v2.0.0-リファクタ進捗トラッカー.md"; ko = "프로세스/v2.0.0-리팩터-진행-추적.md" } },
     @{ Id = "process-release-runbook"; Paths = @{ en = "process/release-runbook.md"; "zh-CN" = "流程/发布运行手册.md"; ja = "プロセス/リリース運用手順.md"; ko = "프로세스/릴리스-운영-절차.md" } },
     @{ Id = "process-release-notes-v1.2.0"; Paths = @{ en = "process/release-notes/release-notes-v1.2.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md" } },
     @{ Id = "process-release-notes-v1.3.0"; Paths = @{ en = "process/release-notes/release-notes-v1.3.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.3.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.3.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.3.0.md" } },
-    @{ Id = "process-release-notes-v1.4.0"; Paths = @{ en = "process/release-notes/release-notes-v1.4.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.4.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.4.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.4.0.md" } },
+    @{ Id = "process-release-notes-v2.0.0"; Paths = @{ en = "process/release-notes/release-notes-v2.0.0.md"; "zh-CN" = "流程/发布说明/发布说明-v2.0.0.md"; ja = "プロセス/リリースノート/リリースノート-v2.0.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v2.0.0.md" } },
     @{ Id = "testing-overview"; Paths = @{ en = "testing/overview.md"; "zh-CN" = "测试/总览.md"; ja = "テスト/概要.md"; ko = "테스트/개요.md" } },
     @{ Id = "testing-smoke-ci"; Paths = @{ en = "testing/smoke-and-ci.md"; "zh-CN" = "测试/冒烟测试与持续集成.md"; ja = "テスト/スモークテストと継続的インテグレーション.md"; ko = "테스트/스모크-테스트와-지속적-통합.md" } },
     @{ Id = "testing-headless"; Paths = @{ en = "testing/plugin-headless-testing.md"; "zh-CN" = "测试/插件无头测试.md"; ja = "テスト/プラグインヘッドレステスト.md"; ko = "테스트/플러그인-헤드리스-테스트.md" } },
@@ -182,8 +182,8 @@ function Test-MarkdownLinks {
 function Get-ReleaseNoteLanguageSwitchLine {
     param([string]$Version)
     $ref = "v$Version"
-    if ($Version -eq "1.4.0") {
-        $ref = "refactor/v1.4.0"
+    if ($Version -eq "2.0.0") {
+        $ref = "refactor/v2.0.0"
     }
     return "<p align=`"center`"><a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/en/process/release-notes/release-notes-v$Version.md`">English</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/zh-CN/流程/发布说明/发布说明-v$Version.md`">简体中文</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/ja/プロセス/リリースノート/リリースノート-v$Version.md`">日本語</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/ko/프로세스/릴리스-노트/릴리스-노트-v$Version.md`">한국어</a></p>"
 }

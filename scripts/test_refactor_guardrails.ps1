@@ -49,7 +49,7 @@ function Write-GuardrailFixture {
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.zh-CN.md") -Value $AddonReadmeText -Encoding UTF8
 
     $planText = @'
-# v1.4.0 Protocol Refactor Plan
+# v2.0.0 Protocol Refactor Plan
 
 MCP 2025-11-25
 protocolVersion = 2025-11-25
@@ -62,14 +62,14 @@ legacy compatibility surfaces
 '@
 
     $trackerText = @'
-# v1.4.0 Refactor Progress Tracker
+# v2.0.0 Refactor Progress Tracker
 
 MCP 2025-11-25 conformance by default
 2025-06-18 alignment retained as a compatibility foundation
 http://127.0.0.1:3000/mcp
 MCP Streamable HTTP
 legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio
-A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.
+A PR is not ready to merge into the v2.0 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.
 '@
 
     if ($MissingTrackerFact) {
@@ -88,8 +88,8 @@ MCP 2025-06-18 is the default target baseline.
 '@
     }
 
-    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md") -Text $planText
-    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md") -Text $trackerText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v2.0.0-protocol-refactor-plan.md") -Text $planText
+    Write-Utf8NoBom -Path (Join-Path $RepositoryRoot "docs\en\process\v2.0.0-refactor-progress-tracker.md") -Text $trackerText
     Write-Utf8NoBom -Path (Join-Path $RepositoryRoot ".github\workflows\pr-policy.yml") -Text @'
 name: pr-policy
 on:
@@ -107,7 +107,7 @@ on:
   merge_group:
 '@
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml docs/en/process/v1.4.0-protocol-refactor-plan.md docs/en/process/v1.4.0-refactor-progress-tracker.md | Out-Null
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md scripts/validate_refactor_guardrails.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml docs/en/process/v2.0.0-protocol-refactor-plan.md docs/en/process/v2.0.0-refactor-progress-tracker.md | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 
@@ -167,7 +167,7 @@ Use Godot Asset Library installation or prepared installable addon contents.
 "@
 
 Invoke-GuardrailScenario -Name "release-facing README install paths" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $true
-Invoke-GuardrailScenario -Name "missing v1.4 tracker MCP fact" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -MissingTrackerFact
+Invoke-GuardrailScenario -Name "missing v2.0 tracker MCP fact" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -MissingTrackerFact
 Invoke-GuardrailScenario -Name "contradictory legacy MCP target facts" -RootReadmeText $cleanRootReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false -ContradictoryLegacyFacts
 
 $zipReadme = @"
@@ -175,7 +175,7 @@ $zipReadme = @"
 
 ## Installation
 
-Download `godot-dotnet-mcp-1.4.0.zip` and extract it into the project.
+Download `godot-dotnet-mcp-2.0.0.zip` and extract it into the project.
 "@
 
 Invoke-GuardrailScenario -Name "forbidden zip install wording" -RootReadmeText $zipReadme -AddonReadmeText $cleanAddonReadme -ShouldPass $false

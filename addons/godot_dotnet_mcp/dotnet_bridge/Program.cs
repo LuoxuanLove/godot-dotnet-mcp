@@ -4,7 +4,7 @@ namespace GodotDotnetMcp.DotnetBridge;
 
 internal static class Program
 {
-    private const string Version = "1.4.0";
+    private const string Version = "2.0.0";
     private const int DefaultTimeoutMs = 15000;
     private const int MaxTimeoutMs = 120000;
 
