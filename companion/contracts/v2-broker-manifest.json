@@ -34,6 +34,16 @@
     "reports_bridge_status_counts": true,
     "reports_project_summaries": true
   },
+  "broker_shutdown": {
+    "explicit_shutdown_supported": true,
+    "shutdown_revokes_sessions": true,
+    "shutdown_clears_bridge_status": true,
+    "shutdown_removes_registered_projects": false,
+    "shutdown_scans_filesystem": false,
+    "shutdown_launches_godot_editor": false,
+    "reports_revoked_session_count": true,
+    "reports_cleared_bridge_status_count": true
+  },
   "transport": {
     "allowed_modes": [
       "stdio",

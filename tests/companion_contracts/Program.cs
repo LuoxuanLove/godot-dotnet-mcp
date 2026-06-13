@@ -21,6 +21,8 @@ var tests = new (string Name, Action Run)[]
     ("broker_evaluates_stored_editor_live_upgrade_without_mutating_sessions", BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions),
     ("broker_upgrades_sessions_to_editor_live_from_stored_bridge_status", BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus),
     ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
+    ("broker_shutdown_revokes_sessions_and_clears_bridge_state", BrokerShutdownRevokesSessionsAndClearsBridgeState),
+    ("broker_manifest_declares_shutdown_contract", BrokerManifestDeclaresShutdownContract),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
     ("requires_project_and_session_scope_for_tools", ToolCallsRequireProjectAndSessionScope),
     ("reports_machine_readable_tool_scope_validation", ReportsMachineReadableToolScopeValidation),
@@ -665,6 +667,66 @@ static void BrokerRemovesProjectsAndRevokesTheirSessions()
     AssertEqual(secondSession.Identity.SessionId, secondResolved.Identity.SessionId);
 
     AssertFalse(broker.RemoveProject(firstProject.ProjectId));
+}
+
+static void BrokerShutdownRevokesSessionsAndClearsBridgeState()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var firstProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var secondProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var firstSession = broker.StartSession(firstProject.ProjectId);
+    var secondSession = broker.StartSession(secondProject.ProjectId);
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        firstProject.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        secondProject.ProjectId,
+        "editor_session_2",
+        "2.0.0",
+        true));
+    now = now.AddSeconds(5);
+
+    var shutdown = broker.Shutdown();
+
+    AssertEqual(now, shutdown.CapturedAtUtc);
+    AssertEqual(2, shutdown.RegisteredProjectCount);
+    AssertEqual(2, shutdown.RevokedSessionCount);
+    AssertEqual(2, shutdown.ClearedBridgeStatusCount);
+    AssertTrue(firstSession.Identity.Revoked);
+    AssertTrue(secondSession.Identity.Revoked);
+    AssertEqual(0, broker.Sessions.Count);
+    AssertEqual(2, broker.Projects.Count);
+    AssertEqual(EditorBridgeState.Disabled, broker.GetEditorBridgeStatus(firstProject.ProjectId).State);
+    AssertEqual(EditorBridgeState.Disabled, broker.GetEditorBridgeStatus(secondProject.ProjectId).State);
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.ResolveSession(new ToolRequestScope(firstProject.ProjectId, firstSession.Identity.SessionId)));
+
+    var newSession = broker.StartSession(firstProject.ProjectId);
+    AssertFalse(newSession.Identity.Revoked);
+    var secondShutdown = broker.Shutdown();
+    AssertEqual(1, secondShutdown.RevokedSessionCount);
+    AssertEqual(0, secondShutdown.ClearedBridgeStatusCount);
+}
+
+static void BrokerManifestDeclaresShutdownContract()
+{
+    var manifestPath = FindRepositoryFile(Path.Combine("companion", "contracts", "v2-broker-manifest.json"));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var shutdown = manifest.RootElement.GetProperty("broker_shutdown");
+
+    AssertTrue(shutdown.GetProperty("explicit_shutdown_supported").GetBoolean());
+    AssertTrue(shutdown.GetProperty("shutdown_revokes_sessions").GetBoolean());
+    AssertTrue(shutdown.GetProperty("shutdown_clears_bridge_status").GetBoolean());
+    AssertFalse(shutdown.GetProperty("shutdown_removes_registered_projects").GetBoolean());
+    AssertFalse(shutdown.GetProperty("shutdown_scans_filesystem").GetBoolean());
+    AssertFalse(shutdown.GetProperty("shutdown_launches_godot_editor").GetBoolean());
+    AssertTrue(shutdown.GetProperty("reports_revoked_session_count").GetBoolean());
+    AssertTrue(shutdown.GetProperty("reports_cleared_bridge_status_count").GetBoolean());
 }
 
 static void SessionIdentityPreservesExplicitProjectFileScope()

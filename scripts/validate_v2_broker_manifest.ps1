@@ -115,6 +115,16 @@ Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_session_m
 Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_bridge_status_counts" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report bridge status counts."
 Assert-Bool -Actual (Require-Bool -Object $brokerStatus -Name "reports_project_summaries" -Context "broker_status") -Expected $true -Message "Broker status snapshots must report project summaries."
 
+$brokerShutdown = $manifest.broker_shutdown
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "explicit_shutdown_supported" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must be explicitly supported."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_revokes_sessions" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must revoke project sessions."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_clears_bridge_status" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must clear stored bridge status."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_removes_registered_projects" -Context "broker_shutdown") -Expected $false -Message "Broker shutdown must not remove registered projects."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_scans_filesystem" -Context "broker_shutdown") -Expected $false -Message "Broker shutdown must not scan the filesystem."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "shutdown_launches_godot_editor" -Context "broker_shutdown") -Expected $false -Message "Broker shutdown must not launch Godot."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "reports_revoked_session_count" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must report revoked session counts."
+Assert-Bool -Actual (Require-Bool -Object $brokerShutdown -Name "reports_cleared_bridge_status_count" -Context "broker_shutdown") -Expected $true -Message "Broker shutdown must report cleared bridge status counts."
+
 $transport = $manifest.transport
 $allowedModes = @($transport.allowed_modes)
 if ($allowedModes.Count -ne 2 -or $allowedModes -notcontains "stdio" -or $allowedModes -notcontains "http_loopback") {
