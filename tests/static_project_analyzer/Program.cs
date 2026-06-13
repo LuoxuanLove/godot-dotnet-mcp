@@ -4,6 +4,7 @@ using GodotDotnetMcp.Companion.StaticAnalysis;
 var tests = new (string Name, Action Run)[]
 {
     ("reports_static_inventory_for_godot_dotnet_project", ReportsStaticInventoryForGodotDotnetProject),
+    ("reports_static_project_scopes_for_each_csproj", ReportsStaticProjectScopesForEachCSharpProject),
     ("reports_static_dotnet_workspace_graph", ReportsStaticDotnetWorkspaceGraph),
     ("keeps_project_references_inside_project_boundary", KeepsProjectReferencesInsideProjectBoundary),
     ("reports_malformed_dotnet_projects_as_diagnostics", ReportsMalformedDotnetProjectsAsDiagnostics),
@@ -59,12 +60,37 @@ static void ReportsStaticInventoryForGodotDotnetProject()
     AssertTrue(inventory.HasPluginDirectory);
     AssertEqual(1, inventory.CSharpProjectFiles.Count);
     AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectFiles[0]);
+    AssertEqual(1, inventory.CSharpProjectScopes.Count);
+    AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectScopes[0].ProjectFilePath);
+    AssertEqual(ProjectDescriptor.FromRoot(root, csprojPath).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertTrue(inventory.DotnetWorkspace.HasProjects);
     AssertFalse(inventory.DotnetWorkspace.HasDiagnostics);
     AssertFalse(inventory.ResourceReferences.HasResources);
     AssertTrue(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));
     AssertTrue(inventory.HasCapability(CompanionCapability.ResourceGraphAnalysis));
+}
+
+static void ReportsStaticProjectScopesForEachCSharpProject()
+{
+    var root = CreateTempProjectRoot();
+    var gameProject = Path.Combine(root, "Game.csproj");
+    var toolsDirectory = Path.Combine(root, "Tools");
+    Directory.CreateDirectory(toolsDirectory);
+    var toolsProject = Path.Combine(toolsDirectory, "Tools.csproj");
+    File.WriteAllText(gameProject, "<Project />");
+    File.WriteAllText(toolsProject, "<Project />");
+
+    var inventory = new ProjectInventoryAnalyzer().Analyze(root);
+
+    AssertEqual(ProjectDescriptor.FromRoot(root).ProjectId, inventory.ProjectId);
+    AssertEqual(2, inventory.CSharpProjectScopes.Count);
+    AssertEqual(Path.GetFullPath(gameProject), inventory.CSharpProjectScopes[0].ProjectFilePath);
+    AssertEqual(Path.GetFullPath(toolsProject), inventory.CSharpProjectScopes[1].ProjectFilePath);
+    AssertEqual(ProjectDescriptor.FromRoot(root, gameProject).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
+    AssertEqual(ProjectDescriptor.FromRoot(root, toolsProject).ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
+    AssertNotEqual(inventory.ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
+    AssertNotEqual(inventory.CSharpProjectScopes[0].ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
 }
 
 static void ReportsStaticDotnetWorkspaceGraph()
@@ -642,6 +668,14 @@ static void AssertEqual<T>(T expected, T actual)
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
     {
         throw new InvalidOperationException($"Expected {expected}, got {actual}.");
+    }
+}
+
+static void AssertNotEqual<T>(T unexpected, T actual)
+{
+    if (EqualityComparer<T>.Default.Equals(unexpected, actual))
+    {
+        throw new InvalidOperationException($"Expected value other than {unexpected}.");
     }
 }
 

@@ -33,6 +33,9 @@ public sealed class ProjectInventoryAnalyzer
             : EmptyResourceGraph();
 
         var descriptor = TryCreateDescriptor(normalizedRoot, isGodotProject);
+        var projectScopes = isGodotProject
+            ? BuildProjectScopes(normalizedRoot, csprojFiles)
+            : [];
         var capabilities = BuildCapabilities(isGodotProject, dotnetWorkspace);
 
         return new ProjectInventory(
@@ -41,6 +44,7 @@ public sealed class ProjectInventoryAnalyzer
             IsGodotProject: isGodotProject,
             ProjectFilePath: projectFilePath,
             CSharpProjectFiles: csprojFiles,
+            CSharpProjectScopes: projectScopes,
             DotnetWorkspace: dotnetWorkspace,
             ResourceReferences: resourceReferences,
             HasPluginDirectory: hasPluginDirectory,
@@ -61,6 +65,17 @@ public sealed class ProjectInventoryAnalyzer
         }
 
         return ProjectDescriptor.FromRoot(projectRoot);
+    }
+
+    private static IReadOnlyList<CSharpProjectScope> BuildProjectScopes(string projectRoot, IReadOnlyList<string> projectFiles)
+    {
+        return projectFiles
+            .Select(projectFile =>
+            {
+                var descriptor = ProjectDescriptor.FromRoot(projectRoot, projectFile);
+                return new CSharpProjectScope(projectFile, descriptor.ProjectId);
+            })
+            .ToArray();
     }
 
     private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, DotnetWorkspaceGraph dotnetWorkspace)
