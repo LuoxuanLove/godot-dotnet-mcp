@@ -266,6 +266,9 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 	var envelope_check := await _assert_stdio_envelope_guards(stdio_server)
 	if not bool(envelope_check.get("success", false)):
 		return envelope_check
+	var shared_dispatch_check := await _assert_stdio_shared_json_rpc_dispatch(stdio_server)
+	if not bool(shared_dispatch_check.get("success", false)):
+		return shared_dispatch_check
 
 	var pending_overflow := PackedByteArray()
 	pending_overflow.resize(MAX_STDIN_PENDING_BYTES + 1)
@@ -314,6 +317,40 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 		return _failure("Stdio parser should drain valid pipelined frames exactly.")
 
 	stdio_server.stop()
+	return {"success": true, "error": ""}
+
+
+func _assert_stdio_shared_json_rpc_dispatch(stdio_server) -> Dictionary:
+	var tools_list_body := JSON.stringify({"jsonrpc": "2.0", "id": 71, "method": "tools/list", "params": {}})
+	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [tools_list_body.to_utf8_buffer().size(), tools_list_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed_tools_list: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed_tools_list):
+		return _failure("Stdio shared JSON-RPC dispatch should consume tools/list frames.")
+	var tools_list_response: Dictionary = stdio_server.get("_last_written_response")
+	var tools_list_result = tools_list_response.get("result", {})
+	if int(tools_list_response.get("id", 0)) != 71 or not (tools_list_result is Dictionary) or not ((tools_list_result as Dictionary).get("tools", []) is Array):
+		return _failure("Stdio tools/list should route through the shared JSON-RPC router and return a tool list result.")
+
+	var invalid_params_body := JSON.stringify({"jsonrpc": "2.0", "id": 72, "method": "resources/read", "params": []})
+	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [invalid_params_body.to_utf8_buffer().size(), invalid_params_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed_invalid_params: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed_invalid_params):
+		return _failure("Stdio shared JSON-RPC dispatch should consume invalid resources/read params frames.")
+	var invalid_params_response: Dictionary = stdio_server.get("_last_written_response")
+	var invalid_params_error: Dictionary = invalid_params_response.get("error", {})
+	if int(invalid_params_error.get("code", 0)) != -32602 or str(invalid_params_error.get("message", "")).find("Invalid params") == -1:
+		return _failure("Stdio resources/read non-object params should use the shared JSON-RPC request service -32602 error.")
+
+	var response_envelope_body := JSON.stringify({"jsonrpc": "2.0", "id": 73, "result": {"ignored": true}})
+	stdio_server.set("_buffer", ("Content-Length: %d\r\n\r\n%s" % [response_envelope_body.to_utf8_buffer().size(), response_envelope_body]).to_utf8_buffer())
+	stdio_server.set("_last_written_response", {})
+	var parsed_response_envelope: bool = bool(await stdio_server.call("_try_parse_frame", int(stdio_server.get("_transport_generation"))))
+	if not bool(parsed_response_envelope):
+		return _failure("Stdio shared JSON-RPC dispatch should consume response envelopes.")
+	if not (stdio_server.get("_last_written_response") as Dictionary).is_empty():
+		return _failure("Stdio shared JSON-RPC dispatch should ignore response envelopes without emitting a reply.")
 	return {"success": true, "error": ""}
 
 
