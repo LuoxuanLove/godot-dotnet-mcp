@@ -137,6 +137,33 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if bool(invalid_assign_result.get("success", false)):
 		return _failure("Texture assign_to_node should fail for an invalid property.")
 
+	var unsafe_create_result: Dictionary = executor.execute("create", {
+		"type": "Resource",
+		"path": "user://outside.tres"
+	})
+	if bool(unsafe_create_result.get("success", false)):
+		return _failure("Resource create should reject paths outside res://.")
+	if str(unsafe_create_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource create unsafe path rejection should include project_path_outside_project.")
+
+	var unsafe_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "/tmp/godot_dotnet_mcp_resource_escape.tres"
+	})
+	if bool(unsafe_copy_result.get("success", false)):
+		return _failure("Resource copy should reject absolute destination paths.")
+	if str(unsafe_copy_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource copy unsafe path rejection should include project_path_outside_project.")
+
+	var protected_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "res://addons/godot_dotnet_mcp/unsafe_resource_copy.tres"
+	})
+	if bool(protected_copy_result.get("success", false)):
+		return _failure("Resource copy should reject writes into the plugin implementation directory.")
+
 	return {
 		"name": "resource_tool_executor_contracts",
 		"success": true,

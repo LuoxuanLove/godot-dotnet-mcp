@@ -129,6 +129,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(replaced_read_result.get("data", {}).get("content", "")) != "current architecture only":
 		return _failure("Search find_and_replace returned success without updating file content.")
 
+	var binary_write_result: Dictionary = executor.execute("file_write", {
+		"action": "write",
+		"path": TEMP_ROOT.path_join("data").path_join("image.png"),
+		"content": "not really a png"
+	})
+	if bool(binary_write_result.get("success", false)):
+		return _failure("File write should reject binary/image extensions for text writes.")
+	if str(binary_write_result.get("error_code", "")) != "project_text_file_required":
+		return _failure("File write binary-extension rejection should include project_text_file_required.")
+
+	var binary_fixture_path := TEMP_ROOT.path_join("data").path_join("asset.png")
+	var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)
+	image.fill(Color(1.0, 0.0, 0.0, 1.0))
+	image.save_png(ProjectSettings.globalize_path(binary_fixture_path))
+	var binary_replace_result: Dictionary = executor.execute("search", {
+		"action": "find_and_replace",
+		"find": "PNG",
+		"replace": "TXT",
+		"path": TEMP_ROOT.path_join("data"),
+		"filter": "*.png",
+		"recursive": false
+	})
+	if not bool(binary_replace_result.get("success", false)):
+		return _failure("Search find_and_replace should succeed while skipping binary candidates.")
+	if int(binary_replace_result.get("data", {}).get("files_modified", -1)) != 0:
+		return _failure("Search find_and_replace should not modify binary candidates.")
+	if int(binary_replace_result.get("data", {}).get("skipped_file_count", -1)) < 1:
+		return _failure("Search find_and_replace should report skipped binary candidates.")
+
 	var plugin_cfg_content := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.cfg")
 	var protected_replace_result: Dictionary = executor.execute("search", {
 		"action": "find_and_replace",

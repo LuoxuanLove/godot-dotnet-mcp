@@ -405,6 +405,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var traversal_response: Dictionary = await _json_rpc("resources/read", {"uri": TRAVERSAL_URI}, 9)
 	if not (traversal_response.get("error", null) is Dictionary):
 		return _failure("resources/read should reject traversal attempts with a JSON-RPC error.")
+	var external_scheme_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://script/user://outside.gd"}, 38)
+	if not (external_scheme_response.get("error", null) is Dictionary):
+		return _failure("resources/read should reject user:// template paths with a JSON-RPC error.")
+	var absolute_path_response: Dictionary = await _json_rpc("resources/read", {"uri": "godot-dotnet-mcp://script/C:/outside.gd"}, 39)
+	if not (absolute_path_response.get("error", null) is Dictionary):
+		return _failure("resources/read should reject absolute template paths with a JSON-RPC error.")
 
 	var prompts_response: Dictionary = await _json_rpc("prompts/list", {}, 10)
 	var prompts_result = prompts_response.get("result", {})
