@@ -331,6 +331,78 @@ public sealed record BrokerProjectSummary(
     int StaticHeadlessSessionCount,
     int EditorLiveSessionCount);
 
+public enum BrokerTransportMode
+{
+    Stdio,
+    HttpLoopback,
+}
+
+public sealed record BrokerTransportOptions(
+    BrokerTransportMode Mode = BrokerTransportMode.Stdio,
+    bool HttpLoopbackEnabled = false,
+    string HttpLoopbackHost = "127.0.0.1",
+    int? HttpLoopbackPort = null)
+{
+    public static BrokerTransportOptions Default { get; } = new();
+
+    public static BrokerTransportOptions CreateStdio()
+    {
+        return Default;
+    }
+
+    public static BrokerTransportOptions CreateHttpLoopback(int port, string host = "127.0.0.1")
+    {
+        return new BrokerTransportOptions(
+            BrokerTransportMode.HttpLoopback,
+            HttpLoopbackEnabled: true,
+            HttpLoopbackHost: host,
+            HttpLoopbackPort: port);
+    }
+
+    public void Validate()
+    {
+        if (!Enum.IsDefined(Mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(Mode), "Broker transport mode is not supported.");
+        }
+
+        if (string.IsNullOrWhiteSpace(HttpLoopbackHost))
+        {
+            throw new ArgumentException("HTTP loopback host is required.", nameof(HttpLoopbackHost));
+        }
+
+        if (Mode is BrokerTransportMode.Stdio)
+        {
+            if (HttpLoopbackEnabled)
+            {
+                throw new InvalidOperationException("HTTP loopback transport must be disabled for stdio mode.");
+            }
+
+            if (HttpLoopbackPort is not null)
+            {
+                throw new InvalidOperationException("HTTP loopback port must not be set for stdio mode.");
+            }
+
+            return;
+        }
+
+        if (!HttpLoopbackEnabled)
+        {
+            throw new InvalidOperationException("HTTP loopback transport requires explicit enablement.");
+        }
+
+        if (!string.Equals(HttpLoopbackHost, "127.0.0.1", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("HTTP loopback transport must bind to 127.0.0.1.");
+        }
+
+        if (HttpLoopbackPort is null or < 1 or > 65535)
+        {
+            throw new InvalidOperationException("HTTP loopback transport requires an explicit TCP port from 1 through 65535.");
+        }
+    }
+}
+
 public sealed record ToolRequestScope(string ProjectId, string SessionId);
 
 public enum ToolScopeValidationReason

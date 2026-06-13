@@ -178,6 +178,22 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "http_loopback_requires_valid_port_minimum" {
+        $path = Join-Path $tempRoot "http-port-min.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.transport.http_loopback.port_min = 0
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "http_loopback_requires_valid_port_maximum" {
+        $path = Join-Path $tempRoot "http-port-max.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.transport.http_loopback.port_max = 65536
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "broker_tools_require_project_scope" {
         $path = Join-Path $tempRoot "missing-project.json"
         $manifest = Copy-Manifest -Path $path

@@ -4,6 +4,7 @@ var tests = new (string Name, Action Run)[]
 {
     ("starts_static_headless_without_live_editor_capabilities", StaticSessionDoesNotExposeLiveCapabilities),
     ("keeps_capability_sets_immutable", CapabilityCatalogSetsCannotBeMutated),
+    ("validates_explicit_broker_transport_options", ValidatesExplicitBrokerTransportOptions),
     ("binds_only_godot_project_roots", ProjectDescriptorRequiresGodotProjectRoot),
     ("keeps_explicit_csproj_inside_project_root", ProjectDescriptorKeepsProjectFileInsideRoot),
     ("disambiguates_same_root_csproj_scopes", ProjectDescriptorDisambiguatesSameRootProjectFiles),
@@ -57,6 +58,35 @@ static void CapabilityCatalogSetsCannotBeMutated()
     AssertThrows<NotSupportedException>(() =>
         ((ISet<CompanionCapability>)staticCapabilities).Add(CompanionCapability.EditorScreenshot));
     AssertFalse(staticCapabilities.Contains(CompanionCapability.EditorScreenshot));
+}
+
+static void ValidatesExplicitBrokerTransportOptions()
+{
+    BrokerTransportOptions.Default.Validate();
+    BrokerTransportOptions.CreateStdio().Validate();
+    BrokerTransportOptions.CreateHttpLoopback(8765).Validate();
+
+    AssertEqual(BrokerTransportMode.Stdio, BrokerTransportOptions.Default.Mode);
+    AssertFalse(BrokerTransportOptions.Default.HttpLoopbackEnabled);
+    AssertEqual("127.0.0.1", BrokerTransportOptions.Default.HttpLoopbackHost);
+    AssertEqual<int?>(null, BrokerTransportOptions.Default.HttpLoopbackPort);
+
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerTransportOptions(BrokerTransportMode.Stdio, HttpLoopbackEnabled: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerTransportOptions(BrokerTransportMode.Stdio, HttpLoopbackPort: 8765).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerTransportOptions(BrokerTransportMode.HttpLoopback).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        new BrokerTransportOptions(BrokerTransportMode.HttpLoopback, HttpLoopbackEnabled: true).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        BrokerTransportOptions.CreateHttpLoopback(8765, "0.0.0.0").Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        BrokerTransportOptions.CreateHttpLoopback(0).Validate());
+    AssertThrows<InvalidOperationException>(() =>
+        BrokerTransportOptions.CreateHttpLoopback(65536).Validate());
+    AssertThrows<ArgumentException>(() =>
+        new BrokerTransportOptions(BrokerTransportMode.HttpLoopback, HttpLoopbackEnabled: true, HttpLoopbackHost: " ").Validate());
 }
 
 static void ProjectDescriptorRequiresGodotProjectRoot()
