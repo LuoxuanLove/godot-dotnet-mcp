@@ -161,6 +161,16 @@ if ($capabilities.Count -eq 0) {
     throw "manifest must declare at least one capability."
 }
 
+$requiredCapabilitiesByMode = [ordered]@{
+    "static_project_analysis" = "static_headless"
+    "dotnet_workspace_analysis" = "static_headless"
+    "resource_graph_analysis" = "static_headless"
+    "editor_selection" = "editor_live"
+    "inspector_state" = "editor_live"
+    "dock_state" = "editor_live"
+    "editor_screenshot" = "editor_live"
+    "runtime_validation" = "editor_live"
+}
 $capabilityIds = @{}
 $liveCapabilityNamePattern = "(^editor_|inspector|dock|screenshot|runtime_validation|runtime-validation)"
 
@@ -172,6 +182,14 @@ foreach ($capability in $capabilities) {
 
     $capabilityIds[$capabilityId] = $true
     $modeId = Get-RequiredString -Object $capability -Name "mode" -Context "capability '$capabilityId'"
+    if (-not $requiredCapabilitiesByMode.Contains($capabilityId)) {
+        throw "Unknown capability id '$capabilityId'. Add an explicit validator policy before declaring a new v2 capability."
+    }
+
+    if ($modeId -ne $requiredCapabilitiesByMode[$capabilityId]) {
+        throw "Capability '$capabilityId' must use mode '$($requiredCapabilitiesByMode[$capabilityId])'."
+    }
+
     if (-not $modeById.ContainsKey($modeId)) {
         throw "Capability '$capabilityId' references unknown mode '$modeId'."
     }
@@ -197,6 +215,12 @@ foreach ($capability in $capabilities) {
         Assert-Bool -Actual $requiresEditorBridge -Expected $true -Message "Editor-live capability '$capabilityId' must require the editor bridge."
         Assert-Bool -Actual $requiresExplicitUpgrade -Expected $true -Message "Editor-live capability '$capabilityId' must require explicit upgrade."
         Assert-Bool -Actual $providesLiveEditorState -Expected $true -Message "Editor-live capability '$capabilityId' must provide live editor state."
+    }
+}
+
+foreach ($requiredCapabilityId in $requiredCapabilitiesByMode.Keys) {
+    if (-not $capabilityIds.ContainsKey($requiredCapabilityId)) {
+        throw "manifest must declare runtime capability '$requiredCapabilityId'."
     }
 }
 

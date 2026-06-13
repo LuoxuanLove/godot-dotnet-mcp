@@ -116,6 +116,14 @@ try {
         ConvertTo-JsonFile -Object $manifest -Path $path
         Invoke-Validator -Path $path
     }
+
+    Assert-Fails "manifest_must_cover_runtime_capability_catalog" {
+        $path = Join-Path $tempRoot "missing-runtime-capability.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.capabilities = @($manifest.capabilities | Where-Object { $_.id -ne "editor_screenshot" })
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {
