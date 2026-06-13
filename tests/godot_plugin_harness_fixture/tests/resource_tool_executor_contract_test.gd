@@ -9,6 +9,7 @@ const MATERIAL_MOVED_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/mate
 const TEXTURE_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/textures/contract_texture.png"
 const SYMLINK_ENTRY_NAME := "linked_external_resources"
 const SYMLINK_ESCAPE_FILE := "linked_resource_escape.tres"
+const SYMLINK_FILE_NAME := "linked_external_resource.tres"
 
 var _scene_root: Node2D = null
 
@@ -216,15 +217,23 @@ func _create_test_texture(path: String) -> bool:
 func _assert_linked_directory_is_not_scanned(executor) -> Dictionary:
 	var target_absolute_path := _get_link_target_absolute_path()
 	var link_absolute_path := ProjectSettings.globalize_path(TEMP_ROOT.path_join(SYMLINK_ENTRY_NAME))
+	var linked_file_absolute_path := ProjectSettings.globalize_path(TEMP_ROOT.path_join(SYMLINK_FILE_NAME))
 	_remove_tree_absolute(target_absolute_path)
 	_remove_tree_absolute(link_absolute_path)
+	_remove_tree_absolute(linked_file_absolute_path)
 	DirAccess.make_dir_recursive_absolute(target_absolute_path)
-	FileAccess.open(target_absolute_path.path_join(SYMLINK_ESCAPE_FILE), FileAccess.WRITE).store_string("extends Resource\n")
+	var escape_file_absolute_path := target_absolute_path.path_join(SYMLINK_ESCAPE_FILE)
+	FileAccess.open(escape_file_absolute_path, FileAccess.WRITE).store_string("extends Resource\n")
 	var link_result := _try_create_directory_link(link_absolute_path, target_absolute_path)
 	if not bool(link_result.get("success", false)):
 		if OS.get_name() == "Windows":
 			return {"success": true}
 		return _failure("Failed to create a directory symlink fixture: %s" % str(link_result.get("error", "")))
+	var linked_file_result := _try_create_file_link(linked_file_absolute_path, escape_file_absolute_path)
+	var linked_file_created := bool(linked_file_result.get("success", false))
+	if not bool(linked_file_result.get("success", false)):
+		if OS.get_name() != "Windows":
+			return _failure("Failed to create a file symlink fixture: %s" % str(linked_file_result.get("error", "")))
 
 	var linked_list_result: Dictionary = executor.execute("query", {
 		"action": "list",
@@ -235,16 +244,20 @@ func _assert_linked_directory_is_not_scanned(executor) -> Dictionary:
 		return _failure("Resource recursive list failed while validating linked directory guards.")
 	if _result_contains_path_fragment(linked_list_result, SYMLINK_ESCAPE_FILE):
 		return _failure("Resource recursive list should not traverse linked directories.")
+	if linked_file_created and _result_contains_path_fragment(linked_list_result, SYMLINK_FILE_NAME):
+		return _failure("Resource recursive list should not report linked files.")
 
 	var linked_search_result: Dictionary = executor.execute("query", {
 		"action": "search",
-		"pattern": "*%s*" % SYMLINK_ESCAPE_FILE.get_basename(),
+		"pattern": "*linked_*",
 		"recursive": true
 	})
 	if not bool(linked_search_result.get("success", false)):
 		return _failure("Resource recursive search failed while validating linked directory guards.")
 	if _result_contains_path_fragment(linked_search_result, SYMLINK_ESCAPE_FILE):
 		return _failure("Resource recursive search should not traverse linked directories.")
+	if linked_file_created and _result_contains_path_fragment(linked_search_result, SYMLINK_FILE_NAME):
+		return _failure("Resource recursive search should not report linked files.")
 
 	return {"success": true}
 
@@ -254,6 +267,21 @@ func _try_create_directory_link(link_absolute_path: String, target_absolute_path
 	var exit_code := 1
 	if OS.get_name() == "Windows":
 		exit_code = OS.execute("cmd", PackedStringArray(["/c", "mklink", "/J", link_absolute_path, target_absolute_path]), output, true)
+	else:
+		exit_code = OS.execute("ln", PackedStringArray(["-s", target_absolute_path, link_absolute_path]), output, true)
+	if exit_code != 0:
+		return {
+			"success": false,
+			"error": "\n".join(output)
+		}
+	return {"success": true}
+
+
+func _try_create_file_link(link_absolute_path: String, target_absolute_path: String) -> Dictionary:
+	var output: Array = []
+	var exit_code := 1
+	if OS.get_name() == "Windows":
+		exit_code = OS.execute("cmd", PackedStringArray(["/c", "mklink", link_absolute_path, target_absolute_path]), output, true)
 	else:
 		exit_code = OS.execute("ln", PackedStringArray(["-s", target_absolute_path, link_absolute_path]), output, true)
 	if exit_code != 0:
