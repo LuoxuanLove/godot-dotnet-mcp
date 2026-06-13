@@ -121,6 +121,47 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(invalid_data.get("source_hash", "")).is_empty():
 		return _failure("Roslyn service should preserve source_hash even when the façade response is invalid.")
 
+	var structured_exit_failure: Dictionary = _service._parse_runtime_process_response(JSON.stringify({
+		"success": false,
+		"isError": true,
+		"error": "Bridge reported a structured tool failure.",
+		"structuredContent": {
+			"errorCode": "cs_file_read_failed"
+		},
+		"content": "Bridge reported a structured tool failure."
+	}), 2)
+	if not bool(structured_exit_failure.get("success", false)):
+		return _failure("Roslyn service should parse structured runtime JSON before treating non-zero exit codes as process failures.")
+	if int(structured_exit_failure.get("exit_code", 0)) != 2:
+		return _failure("Roslyn service should preserve the runtime process exit code with structured responses.")
+	var structured_payload: Dictionary = structured_exit_failure.get("payload", {})
+	if bool(structured_payload.get("success", true)):
+		return _failure("Roslyn service should preserve structured tool failure payloads.")
+
+	var converted_exit_failure: Dictionary = _service._convert_bridge_read_response(structured_exit_failure, "res://tests_tmp/plugin_roslyn_service_contracts/BridgeFailure.cs")
+	if bool(converted_exit_failure.get("success", true)):
+		return _failure("Roslyn service should convert structured runtime tool failures to parse failures.")
+	var converted_data: Dictionary = converted_exit_failure.get("data", {})
+	if str(converted_data.get("error_type", "")) != "roslyn_failure":
+		return _failure("Structured runtime tool failures should map to error_type=roslyn_failure, not runtime_unavailable.")
+	if str(converted_data.get("error_code", "")) != "roslyn_parse_failed":
+		return _failure("Structured runtime read failures should keep the parse failure error code.")
+
+	var bridge_process_failure: Dictionary = _service._parse_runtime_process_response(JSON.stringify({
+		"success": false,
+		"error": "Usage: DotnetBridge --capabilities | --call <tool_name> <json_arguments> | --call-json-file <tool_name> <json_file>"
+	}), 64)
+	if bool(bridge_process_failure.get("success", true)):
+		return _failure("Bridge-level JSON failures without tool response shape should remain process failures.")
+	if str(bridge_process_failure.get("error_code", "")) != "roslyn_runtime_process_failed":
+		return _failure("Bridge-level JSON failures should keep error_code=roslyn_runtime_process_failed.")
+
+	var unstructured_exit_failure: Dictionary = _service._parse_runtime_process_response("fatal bridge crash", 2)
+	if bool(unstructured_exit_failure.get("success", true)):
+		return _failure("Roslyn service should still report non-JSON non-zero exits as process failures.")
+	if str(unstructured_exit_failure.get("error_code", "")) != "roslyn_runtime_process_failed":
+		return _failure("Unstructured non-zero runtime exits should keep error_code=roslyn_runtime_process_failed.")
+
 	return {
 		"name": "plugin_roslyn_service_contracts",
 		"success": true,
@@ -182,7 +223,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"OS.kill(pid)",
 		"--timeout-ms",
 		"--response-json-file",
-		"roslyn_runtime_timeout"
+		"roslyn_runtime_timeout",
+		"_parse_runtime_process_response"
 	]:
 		if service_source.find(required_text) == -1:
 			return _failure("PluginRoslynService isolated process guard is missing '%s'." % required_text)

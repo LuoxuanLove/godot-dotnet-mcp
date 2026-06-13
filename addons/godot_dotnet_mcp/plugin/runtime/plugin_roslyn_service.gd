@@ -350,27 +350,38 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 			stdout = response_file.get_as_text().strip_edges()
 			response_file.close()
 		_remove_file_if_exists(response_path)
+	return _parse_runtime_process_response(stdout, exit_code)
+
+
+func _parse_runtime_process_response(stdout: String, exit_code: int) -> Dictionary:
+	var json := JSON.new()
+	var parse_error := json.parse(stdout)
+	if parse_error == OK and json.data is Dictionary and (exit_code == 0 or _is_runtime_tool_response_payload(json.data)):
+		return {
+			"success": true,
+			"payload": json.data,
+			"exit_code": exit_code,
+			"stdout": stdout
+		}
 	if exit_code != 0:
 		return {
 			"success": false,
 			"error": "Isolated Roslyn runtime exited with code %d: %s" % [exit_code, stdout],
 			"exit_code": exit_code,
-			"stdout": stdout
-		}
-	var parsed = JSON.parse_string(stdout)
-	if not (parsed is Dictionary):
-		return {
-			"success": false,
-			"error": "Isolated Roslyn runtime returned invalid JSON.",
-			"exit_code": exit_code,
-			"stdout": stdout
+			"stdout": stdout,
+			"error_code": "roslyn_runtime_process_failed"
 		}
 	return {
-		"success": true,
-		"payload": parsed,
+		"success": false,
+		"error": "Isolated Roslyn runtime returned invalid JSON.",
 		"exit_code": exit_code,
-		"stdout": stdout
+		"stdout": stdout,
+		"error_code": "roslyn_runtime_invalid_json"
 	}
+
+
+func _is_runtime_tool_response_payload(payload: Dictionary) -> bool:
+	return payload.has("isError") or payload.has("structuredContent") or payload.has("content")
 
 
 func _make_runtime_request_path(tool_name: String) -> String:
