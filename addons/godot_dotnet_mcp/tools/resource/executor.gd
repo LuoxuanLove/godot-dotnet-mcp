@@ -277,7 +277,7 @@ func _collect_resources_from_disk(path: String, type_filter: String, recursive: 
 			continue
 		var child_path := path.path_join(entry)
 		if dir.current_is_dir():
-			if recursive:
+			if recursive and not dir.is_link(entry):
 				_collect_resources_from_disk(child_path, type_filter, recursive, results)
 			continue
 		if _resource_matches_type_filter(_infer_resource_type(child_path), child_path, type_filter):
@@ -348,7 +348,7 @@ func _search_resources_from_disk(path: String, pattern: String, type_filter: Str
 			continue
 		var child_path := path.path_join(entry)
 		if dir.current_is_dir():
-			if recursive:
+			if recursive and not dir.is_link(entry):
 				_search_resources_from_disk(child_path, pattern, type_filter, recursive, results)
 			continue
 		var file_type := _infer_resource_type(child_path)
