@@ -72,6 +72,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var loader = FakeToolLoader.new()
 	var stdio_server = StdioServerScript.new()
 	stdio_server.initialize(loader, false)
+	stdio_server.call("set_stdout_writes_suppressed_for_testing", true)
 
 	var router = ToolRpcRouterScript.new()
 	var callbacks = RouterCallbacks.new(loader)
@@ -434,7 +435,9 @@ func _assert_newline_stdio_frames(stdio_server) -> Dictionary:
 		return _failure("Default stdio should write newline-delimited JSON-RPC responses, not Content-Length frames.")
 	if first_written_frame.find("\r\n\r\n") != -1:
 		return _failure("Default stdio newline response should not include legacy Content-Length separators.")
-	var parsed_first_response = JSON.parse_string(first_written_frame)
+	if not first_written_frame.ends_with("\n"):
+		return _failure("Default stdio newline response should end with a newline delimiter.")
+	var parsed_first_response = JSON.parse_string(first_written_frame.strip_edges())
 	if not (parsed_first_response is Dictionary):
 		return _failure("Default stdio newline response should be a JSON object string.")
 	if (stdio_server.get("_buffer") as PackedByteArray).is_empty():
@@ -474,6 +477,11 @@ func _assert_max_content_length_stdio_frame(stdio_server) -> Dictionary:
 		return _failure("Maximum stdio Content-Length should preserve the response id.")
 	if response.has("error"):
 		return _failure("Maximum stdio Content-Length should not emit a framing error.")
+	var written_frame := str(stdio_server.get("_last_written_frame"))
+	if not written_frame.begins_with("Content-Length: "):
+		return _failure("Legacy stdio response should write a Content-Length frame.")
+	if written_frame.ends_with("\n") or written_frame.ends_with("\r"):
+		return _failure("Legacy stdio Content-Length response should not add an extra line delimiter.")
 	return {"success": true, "error": ""}
 
 
