@@ -58,11 +58,7 @@ var _performance: Dictionary = {}
 
 
 func _init() -> void:
-	_bind_state_refs()
-	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
-	_lsp_diagnostics_service.configure(self)
-	_execution_context_service.configure(_execution_observer)
-	_context_service.configure(_state_store)
+	_ensure_services_ready()
 
 
 func _bind_state_refs() -> void:
@@ -73,7 +69,61 @@ func _bind_state_refs() -> void:
 	_performance = _state_store.performance
 
 
+func _ensure_services_ready() -> void:
+	if _registry == null:
+		_registry = MCPToolRegistry.new()
+	if _state_store == null:
+		_state_store = ToolLoaderStateStoreScript.new()
+	if _public_surface_policy == null:
+		_public_surface_policy = ToolPublicSurfacePolicyScript.new()
+	if _execution_observer == null:
+		_execution_observer = ToolExecutionObserverScript.new()
+	if _runtime_manager == null:
+		_runtime_manager = ToolRuntimeManagerScript.new()
+	if _status_service == null:
+		_status_service = ToolLoaderStatusServiceScript.new()
+	if _diagnostics_service == null:
+		_diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
+	if _entry_service == null:
+		_entry_service = ToolRegistryEntryServiceScript.new()
+	if _runtime_context_service == null:
+		_runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
+	if _catalog_projection_service == null:
+		_catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
+	if _execution_service == null:
+		_execution_service = ToolExecutionServiceScript.new()
+	if _tick_service == null:
+		_tick_service = ToolLoaderTickServiceScript.new()
+	if _enablement_service == null:
+		_enablement_service = ToolLoaderEnablementServiceScript.new()
+	if _reload_service == null:
+		_reload_service = ToolLoaderReloadServiceScript.new()
+	if _user_reload_service == null:
+		_user_reload_service = ToolLoaderUserReloadServiceScript.new()
+	if _runtime_state_service == null:
+		_runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
+	if _lifecycle_service == null:
+		_lifecycle_service = ToolLoaderLifecycleServiceScript.new()
+	if _access_service == null:
+		_access_service = ToolLoaderAccessServiceScript.new()
+	if _lsp_diagnostics_service == null:
+		_lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
+	if _execution_context_service == null:
+		_execution_context_service = ToolLoaderExecutionContextServiceScript.new()
+	if _context_service == null:
+		_context_service = ToolLoaderContextServiceScript.new()
+	if _query_service == null:
+		_query_service = ToolLoaderQueryServiceScript.new()
+	_bind_state_refs()
+	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
+	_execution_observer.set_activity_registry(_tool_activity_registry)
+	_lsp_diagnostics_service.configure(self)
+	_execution_context_service.configure(_execution_observer)
+	_context_service.configure(_state_store)
+
+
 func configure(server_context: Object) -> void:
+	_ensure_services_ready()
 	_server_context = server_context
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	if Engine.has_singleton("MCPRuntimeBridge"):
@@ -85,10 +135,12 @@ func configure(server_context: Object) -> void:
 
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
+	_ensure_services_ready()
 	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
 
 
 func set_tool_activity_registry(registry) -> void:
+	_ensure_services_ready()
 	if _tool_activity_registry == registry:
 		return
 	_tool_activity_registry = registry
@@ -105,18 +157,22 @@ func reload_registry(disabled_tools: Array = []) -> Dictionary:
 
 
 func shutdown() -> void:
+	_ensure_services_ready()
 	_lifecycle_service.shutdown(_build_lifecycle_context())
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
+	_ensure_services_ready()
 	_lifecycle_service.set_disabled_tools(disabled_tools, _build_lifecycle_context())
 
 
 func get_tools_by_category() -> Dictionary:
+	_ensure_services_ready()
 	return _build_tools_by_category_internal(true)
 
 
 func get_all_tools_by_category() -> Dictionary:
+	_ensure_services_ready()
 	return _build_tools_by_category_internal(false)
 
 
@@ -131,18 +187,22 @@ func _build_tools_by_category_internal(visible_only: bool) -> Dictionary:
 
 
 func get_tool_definitions() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _build_tool_definitions_internal(true)
 
 
 func get_all_tool_definitions() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _build_tool_definitions_internal(false)
 
 
 func get_exposed_tool_definitions() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _query_service.build_exposed_tool_definitions(_catalog_projection_service, _build_catalog_projection_context(), get_tool_definitions())
 
 
 func is_tool_exposed(tool_name: String) -> bool:
+	_ensure_services_ready()
 	return _query_service.is_tool_exposed(
 		tool_name,
 		get_exposed_tool_definitions(),
@@ -153,10 +213,12 @@ func is_tool_exposed(tool_name: String) -> bool:
 
 
 func is_public_removed_tool(tool_name: String) -> bool:
+	_ensure_services_ready()
 	return _public_surface_policy.is_public_removed_tool(tool_name)
 
 
 func build_removed_public_tool_result(tool_name: String, arguments: Dictionary = {}) -> Dictionary:
+	_ensure_services_ready()
 	return _public_surface_policy.build_removed_public_tool_result(tool_name, arguments)
 
 
@@ -171,14 +233,17 @@ func _build_tool_definitions_internal(visible_only: bool) -> Array[Dictionary]:
 
 
 func get_tool_load_errors() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _diagnostics_service.get_tool_load_errors()
 
 
 func get_domain_states() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _build_domain_states_internal(true)
 
 
 func get_all_domain_states() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _build_domain_states_internal(false)
 
 
@@ -193,10 +258,12 @@ func _build_domain_states_internal(visible_only: bool) -> Array[Dictionary]:
 
 
 func get_reload_status() -> Dictionary:
+	_ensure_services_ready()
 	return _diagnostics_service.get_reload_status()
 
 
 func get_tool_loader_status() -> Dictionary:
+	_ensure_services_ready()
 	return _query_service.build_tool_loader_status(
 		_status_service,
 		get_tool_definitions(),
@@ -207,30 +274,37 @@ func get_tool_loader_status() -> Dictionary:
 
 
 func get_performance_summary() -> Dictionary:
+	_ensure_services_ready()
 	return _status_service.build_performance_summary(_performance, _execution_observer.get_tool_call_metrics())
 
 
 func get_tool_usage_stats() -> Array[Dictionary]:
+	_ensure_services_ready()
 	return _execution_observer.get_tool_usage_stats()
 
 
 func execute_tool(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	_ensure_services_ready()
 	return _execution_service.execute_tool(category, tool_name, args, _build_execution_context())
 
 
 func execute_tool_async(category: String, tool_name: String, args: Dictionary) -> Dictionary:
+	_ensure_services_ready()
 	return await _execution_service.execute_tool_async(category, tool_name, args, _build_execution_context())
 
 
 func tick(delta: float) -> void:
+	_ensure_services_ready()
 	_lifecycle_service.tick(delta, _build_lifecycle_context())
 
 
 func get_gdscript_lsp_diagnostics_service():
+	_ensure_services_ready()
 	return _lsp_diagnostics_service.get_service()
 
 
 func get_lsp_diagnostics_debug_snapshot() -> Dictionary:
+	_ensure_services_ready()
 	return _lsp_diagnostics_service.get_debug_snapshot(get_tool_loader_status())
 
 
@@ -249,18 +323,22 @@ func _refresh_runtime_context() -> void:
 
 
 func reload_domain(category: String) -> Dictionary:
+	_ensure_services_ready()
 	return _reload_service.reload_domain(category, _build_reload_context())
 
 
 func reload_all_domains() -> Dictionary:
+	_ensure_services_ready()
 	return _reload_service.reload_all_domains(_build_reload_context())
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
+	_ensure_services_ready()
 	return _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
 
 
 func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
+	_ensure_services_ready()
 	var snapshot: Array = _user_reload_service.get_user_tool_runtime_snapshot(_build_user_reload_context())
 	var typed_snapshot: Array[Dictionary] = []
 	for entry in snapshot:
@@ -270,10 +348,12 @@ func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
 
 
 func get_disabled_tools() -> Array:
+	_ensure_services_ready()
 	return _enablement_service.get_disabled_tools()
 
 
 func is_tool_enabled(tool_name: String) -> bool:
+	_ensure_services_ready()
 	return _enablement_service.is_tool_enabled(tool_name)
 
 

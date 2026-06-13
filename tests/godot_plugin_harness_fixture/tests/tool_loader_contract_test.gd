@@ -449,6 +449,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not _is_removed_scene_tool(removed_scene_result, str(removed_scene_case.get("removed", "")), str(removed_scene_case.get("action", ""))):
 			return _failure("Tool loader %s removal guidance should point to system_scene_inspect." % str(removed_scene_case.get("removed", "")))
 
+	var hot_reload_result: Dictionary = await _assert_loader_recovers_services_after_hot_reload()
+	if not bool(hot_reload_result.get("success", false)):
+		return hot_reload_result
+
 	_loader.set_disabled_tools(["system_project_state"])
 	if _loader.is_tool_exposed("system_project_state"):
 		return _failure("Disabled tool system_project_state should no longer be exposed.")
@@ -490,6 +494,65 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _assert_loader_recovers_services_after_hot_reload() -> Dictionary:
+	var registry_before = _loader.get_tool_activity_registry()
+	var latest_sequence_before := -1
+	if registry_before != null and registry_before.has_method("get_status"):
+		var status_before: Dictionary = registry_before.get_status()
+		var recent_value = status_before.get("recent", [])
+		latest_sequence_before = _latest_activity_sequence(recent_value)
+	_loader._execution_observer = null
+	_loader._status_service = null
+	_loader._diagnostics_service = null
+	_loader._entry_service = null
+	_loader._runtime_context_service = null
+	_loader._catalog_projection_service = null
+	_loader._execution_service = null
+	_loader._tick_service = null
+	_loader._enablement_service = null
+	_loader._reload_service = null
+	_loader._user_reload_service = null
+	_loader._runtime_state_service = null
+	_loader._lifecycle_service = null
+	_loader._access_service = null
+	_loader._lsp_diagnostics_service = null
+	_loader._execution_context_service = null
+	_loader._context_service = null
+	_loader._query_service = null
+
+	var status_after_rehydrate: Dictionary = _loader.get_tool_loader_status()
+	if not bool(status_after_rehydrate.get("healthy", false)):
+		return _failure("Tool loader should rebuild service dependencies for status calls after script hot reload.")
+	if _loader.get_exposed_tool_definitions().is_empty():
+		return _failure("Tool loader should rebuild the query service for exposed definitions after script hot reload.")
+	if _loader.get_domain_states().is_empty():
+		return _failure("Tool loader should rebuild the query/context services for domain states after script hot reload.")
+	if _loader.get_tool_load_errors().size() != 0:
+		return _failure("Tool loader diagnostics service should recover without inventing load errors after script hot reload.")
+	var runtime_control_result: Dictionary = await _loader.execute_tool_async("system", "runtime_control", {"action": "status"})
+	if not bool(runtime_control_result.get("success", false)):
+		return _failure("Tool loader should rebuild execution services and route runtime_control after script hot reload.")
+	var registry_after = _loader.get_tool_activity_registry()
+	if registry_after != registry_before:
+		return _failure("Tool loader should preserve the activity registry object after service rehydration.")
+	if registry_after != null and registry_after.has_method("get_status"):
+		var status_after: Dictionary = registry_after.get_status()
+		var recent_after_value = status_after.get("recent", [])
+		var latest_sequence_after := _latest_activity_sequence(recent_after_value)
+		if latest_sequence_after <= latest_sequence_before:
+			return _failure("Tool loader should reattach the existing activity registry to a rebuilt execution observer.")
+	return {"success": true}
+
+
+func _latest_activity_sequence(recent_value) -> int:
+	if not (recent_value is Array) or (recent_value as Array).is_empty():
+		return -1
+	var latest = (recent_value as Array)[0]
+	if latest is Dictionary:
+		return int((latest as Dictionary).get("sequence", -1))
+	return -1
 
 
 func _is_removed_scene_tool(result: Dictionary, removed_tool: String, replacement_action: String) -> bool:
