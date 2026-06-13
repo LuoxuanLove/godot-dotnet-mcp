@@ -313,6 +313,16 @@ public sealed class CompanionBroker
         }
     }
 
+    public EditorLiveUpgradeEligibility EvaluateStoredEditorLiveUpgrade(ToolRequestScope scope)
+    {
+        lock (_sessionLock)
+        {
+            var session = ResolveSessionForEvaluation(scope);
+            var bridgeStatus = GetEditorBridgeStatus(scope.ProjectId);
+            return session.EvaluateEditorLiveUpgrade(bridgeStatus);
+        }
+    }
+
     public ProjectSession ResolveSession(ToolRequestScope scope)
     {
         return ResolveSession(scope, renewLease: true);
@@ -412,6 +422,31 @@ public sealed class CompanionBroker
         if (renewLease)
         {
             session.Touch(nowUtc, _sessionLeaseDuration);
+        }
+
+        return session;
+    }
+
+    private ProjectSession ResolveSessionForEvaluation(ToolRequestScope scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope.ProjectId))
+        {
+            throw new ArgumentException("Tool calls must include project_id.", nameof(scope));
+        }
+
+        if (string.IsNullOrWhiteSpace(scope.SessionId))
+        {
+            throw new ArgumentException("Tool calls must include session_id.", nameof(scope));
+        }
+
+        if (!_sessions.TryGetValue(scope.SessionId, out var session))
+        {
+            throw new KeyNotFoundException($"Unknown session_id: {scope.SessionId}");
+        }
+
+        if (!string.Equals(session.Identity.ProjectId, scope.ProjectId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Tool call project_id does not match the resolved session.");
         }
 
         return session;

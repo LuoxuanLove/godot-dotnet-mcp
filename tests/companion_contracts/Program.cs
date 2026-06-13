@@ -16,6 +16,7 @@ var tests = new (string Name, Action Run)[]
     ("broker_lists_registered_projects_without_renewing_sessions", BrokerListsRegisteredProjectsWithoutRenewingSessions),
     ("broker_lists_project_sessions_without_crossing_project_boundaries", BrokerListsProjectSessionsWithoutCrossingProjectBoundaries),
     ("broker_tracks_editor_bridge_status_without_upgrading_sessions", BrokerTracksEditorBridgeStatusWithoutUpgradingSessions),
+    ("broker_evaluates_stored_editor_live_upgrade_without_mutating_sessions", BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions),
     ("broker_upgrades_sessions_to_editor_live_from_stored_bridge_status", BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus),
     ("broker_removes_projects_and_revokes_their_sessions", BrokerRemovesProjectsAndRevokesTheirSessions),
     ("session_identity_preserves_explicit_project_file_scope", SessionIdentityPreservesExplicitProjectFileScope),
@@ -387,6 +388,66 @@ static void BrokerTracksEditorBridgeStatusWithoutUpgradingSessions()
         AssertEqual(EditorBridgeState.Disabled, statusAfterReRegister.State);
         AssertEqual<string?>(null, statusAfterReRegister.EditorSessionId);
     }
+}
+
+static void BrokerEvaluatesStoredEditorLiveUpgradeWithoutMutatingSessions()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var scope = new ToolRequestScope(project.ProjectId, session.Identity.SessionId);
+    var initialIdentity = session.Identity;
+
+    AssertThrows<InvalidOperationException>(() =>
+        broker.EvaluateStoredEditorLiveUpgrade(new ToolRequestScope(otherProject.ProjectId, session.Identity.SessionId)));
+    AssertThrows<KeyNotFoundException>(() =>
+        broker.EvaluateStoredEditorLiveUpgrade(new ToolRequestScope(project.ProjectId, "session_missing")));
+
+    var offline = broker.EvaluateStoredEditorLiveUpgrade(scope);
+    AssertFalse(offline.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.BridgeNotOnline, offline.Reason);
+    AssertEqual(EditorBridgeState.Disabled, offline.BridgeStatus.State);
+    AssertEqual(project.ProjectId, offline.BridgeStatus.ProjectId);
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true));
+
+    now = now.AddSeconds(1);
+    var eligible = broker.EvaluateStoredEditorLiveUpgrade(scope);
+    AssertTrue(eligible.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.Eligible, eligible.Reason);
+    AssertEqual("editor_session_1", eligible.BridgeStatus.EditorSessionId);
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+    AssertThrows<InvalidOperationException>(() =>
+        broker.RequireCapability(scope, CompanionCapability.EditorScreenshot));
+
+    broker.UpdateEditorBridgeStatus(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_2",
+        "1.4.0",
+        true));
+    var incompatible = broker.EvaluateStoredEditorLiveUpgrade(scope);
+    AssertFalse(incompatible.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.IncompatiblePluginVersion, incompatible.Reason);
+
+    now = now.AddSeconds(10);
+    var expired = broker.EvaluateStoredEditorLiveUpgrade(scope);
+    AssertFalse(expired.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.SessionExpired, expired.Reason);
 }
 
 static void BrokerUpgradesSessionsToEditorLiveFromStoredBridgeStatus()
