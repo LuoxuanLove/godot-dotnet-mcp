@@ -187,6 +187,15 @@ public sealed class CompanionBroker
             }
 
             _editorBridgeStatuses[bridgeStatus.ProjectId] = bridgeStatus;
+            if (!CanProvideEditorLive(bridgeStatus))
+            {
+                DowngradeProjectSessionsToStaticHeadless(bridgeStatus.ProjectId, _clock());
+            }
+            else
+            {
+                RefreshProjectEditorSessions(bridgeStatus, _clock());
+            }
+
             return bridgeStatus;
         }
     }
@@ -291,6 +300,17 @@ public sealed class CompanionBroker
     public ProjectSession RenewSession(ToolRequestScope scope)
     {
         return ResolveSession(scope);
+    }
+
+    public ProjectSession UpgradeSessionToEditorLive(ToolRequestScope scope)
+    {
+        lock (_sessionLock)
+        {
+            var session = ResolveSession(scope);
+            var bridgeStatus = GetEditorBridgeStatus(scope.ProjectId);
+            session.UpgradeToEditorLive(bridgeStatus);
+            return session;
+        }
     }
 
     public ProjectSession ResolveSession(ToolRequestScope scope)
@@ -413,6 +433,34 @@ public sealed class CompanionBroker
     {
         counts.TryGetValue(projectId, out var currentCount);
         counts[projectId] = currentCount + 1;
+    }
+
+    private void DowngradeProjectSessionsToStaticHeadless(string projectId, DateTimeOffset nowUtc)
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (string.Equals(session.Identity.ProjectId, projectId, StringComparison.Ordinal))
+            {
+                session.DowngradeToStaticHeadless(nowUtc);
+            }
+        }
+    }
+
+    private void RefreshProjectEditorSessions(EditorBridgeStatus bridgeStatus, DateTimeOffset nowUtc)
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (string.Equals(session.Identity.ProjectId, bridgeStatus.ProjectId, StringComparison.Ordinal))
+            {
+                session.RefreshEditorSession(bridgeStatus, nowUtc);
+            }
+        }
+    }
+
+    private static bool CanProvideEditorLive(EditorBridgeStatus bridgeStatus)
+    {
+        return bridgeStatus.ProvidesLiveEditorState &&
+            EditorBridgeCompatibility.IsPluginVersionCompatible(bridgeStatus.PluginVersion);
     }
 
     public void RequireCapability(ToolRequestScope scope, CompanionCapability capability)

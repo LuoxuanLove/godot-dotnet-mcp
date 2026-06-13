@@ -24,6 +24,7 @@ Target version: 2.0.0.
 - Added a non-mutating editor-live upgrade eligibility contract so clients can report upgrade blockers before explicitly switching a project session to editor-live mode.
 - Added a project-scoped Broker session listing contract so clients can inspect active sessions for one `project_id` without crossing project boundaries or renewing leases.
 - Added a Broker editor bridge status snapshot contract so project-scoped bridge state can be recorded without implicitly upgrading project sessions.
+- Added a Broker-owned editor-live upgrade contract so project/session-scoped tool calls can switch sessions only from the stored bridge status for the same project.
 
 ### Fixed
 
