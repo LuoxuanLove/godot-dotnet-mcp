@@ -361,6 +361,7 @@ func _apply_localized_copy(localization, model: Dictionary) -> void:
 	_agent_tools_button.text = localization.get_text("tools_view_agent_tools")
 	_internal_executors_button.text = localization.get_text("tools_view_internal_executors")
 	_diagnostics_button.text = localization.get_text("tools_view_diagnostics")
+	_refresh_view_button_tooltips()
 	_update_tool_view_buttons()
 
 
@@ -1136,6 +1137,30 @@ func _apply_responsive_layout() -> void:
 	var text_width: float = min(max(tree_width - check_width, TREE_TEXT_MIN_WIDTH * scale), TREE_TEXT_MAX_WIDTH * scale)
 	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
 	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(check_width)))
+	var narrow := available_width > 0.0 and available_width < 360.0 * scale
+	_view_mode_row.add_theme_constant_override("separation", int(round((4.0 if narrow else 6.0) * scale)))
+	_configure_view_mode_button(_agent_tools_button, VIEW_AGENT_TOOLS, 76.0 if narrow else 96.0, scale)
+	_configure_view_mode_button(_internal_executors_button, VIEW_INTERNAL_EXECUTORS, 70.0 if narrow else 92.0, scale)
+	_configure_view_mode_button(_diagnostics_button, VIEW_DIAGNOSTICS, 78.0 if narrow else 96.0, scale)
+
+
+func _configure_view_mode_button(button: Button, view: String, min_width: float, scale: float) -> void:
+	if button == null:
+		return
+	button.custom_minimum_size.x = min_width * scale
+	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
+
+
+func _refresh_view_button_tooltips() -> void:
+	_configure_view_button_tooltip(_agent_tools_button, VIEW_AGENT_TOOLS)
+	_configure_view_button_tooltip(_internal_executors_button, VIEW_INTERNAL_EXECUTORS)
+	_configure_view_button_tooltip(_diagnostics_button, VIEW_DIAGNOSTICS)
+
+
+func _configure_view_button_tooltip(button: Button, view: String) -> void:
+	if button == null:
+		return
+	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 
 func _on_resized() -> void:
@@ -1167,6 +1192,7 @@ func _apply_visual_style(scale: float) -> void:
 	_search_edit.add_theme_stylebox_override("normal", _make_theme_style("normal", "LineEdit", 10, 6))
 	_search_edit.add_theme_stylebox_override("focus", _make_theme_style("focus", "LineEdit", 10, 6))
 	_tool_count_label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_tool_count_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_search_edit.add_theme_color_override("font_color", get_theme_color("font_color", "LineEdit"))
 	_search_edit.add_theme_color_override("font_placeholder_color", _get_muted_text_color())
 	_tool_tree.add_theme_color_override("font_color", get_theme_color("font_color", "Tree"))
