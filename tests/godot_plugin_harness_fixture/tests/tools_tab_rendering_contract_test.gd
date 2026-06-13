@@ -167,6 +167,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if preview_text.text.contains("agent_tools_group_project_context"):
 		return _failure("Tools tab Agent Tools group labels should fall back to human-readable text when locale keys are not present.")
+	if not preview_text.text.contains("7 tools") or not preview_text.text.contains("Project State"):
+		return _failure("Tools tab Agent Tools group preview should count and list public_tool children.")
 
 	_instance.apply_model(base_model)
 	await tree.process_frame

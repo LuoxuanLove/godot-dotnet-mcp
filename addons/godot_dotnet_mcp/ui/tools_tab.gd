@@ -1436,7 +1436,7 @@ func _get_presentation_domain_category_keys(domain_key: String) -> Array:
 		if not (child is Dictionary):
 			continue
 		var child_dict := child as Dictionary
-		if str(child_dict.get("kind", "")) != "category":
+		if _normalize_presentation_kind(str(child_dict.get("kind", ""))) != "category":
 			continue
 		var category_key := str(child_dict.get("category", child_dict.get("key", "")))
 		if not category_key.is_empty():
@@ -1455,7 +1455,7 @@ func _get_presentation_category_tool_metadata(category: String) -> Array:
 		if not (child is Dictionary):
 			continue
 		var child_dict := child as Dictionary
-		if str(child_dict.get("kind", "")) != "tool":
+		if not _is_tool_like_presentation_kind(str(child_dict.get("kind", ""))):
 			continue
 		var full_name := str(child_dict.get("fullName", child_dict.get("key", "")))
 		var metadata := _get_tool_metadata(full_name, child_dict)
