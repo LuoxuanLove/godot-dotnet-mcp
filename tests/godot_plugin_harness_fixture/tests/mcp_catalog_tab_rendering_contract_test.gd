@@ -108,8 +108,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if catalog_button.custom_minimum_size.x <= 0.0 or diagnostics_button.custom_minimum_size.x <= 0.0:
 		return _failure("MCP catalog view buttons should keep stable minimum widths in narrow Dock layouts.")
-	if catalog_button.tooltip_text.is_empty() or diagnostics_button.tooltip_text.is_empty():
-		return _failure("MCP catalog view buttons should expose tooltips for clipped narrow labels.")
+	if catalog_button.tooltip_text != "Catalog" or diagnostics_button.tooltip_text != "Diagnostics":
+		return _failure("MCP catalog view buttons should expose localized tooltips for clipped narrow labels.")
 	if _find_entry_card(resources_tab, "resource", "godot-dotnet-mcp://guides/index") == null:
 		return _failure("Resources tab should render canonical guide resources by URI.")
 	if _find_entry_card(resources_tab, "template", "godot-dotnet-mcp://scene/{path}") == null:

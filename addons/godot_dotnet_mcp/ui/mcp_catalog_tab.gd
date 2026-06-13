@@ -107,6 +107,7 @@ func _apply_localized_copy(model: Dictionary) -> void:
 	_prompts_title.text = _localization.get_text("mcp_catalog_prompts")
 	_catalog_view_button.text = _localization.get_text("mcp_catalog_view_catalog")
 	_diagnostics_view_button.text = _localization.get_text("mcp_catalog_view_diagnostics")
+	_refresh_view_button_tooltips()
 	_sync_view_buttons()
 	_resources_card.visible = _catalog_mode == "resources"
 	_templates_card.visible = _catalog_mode == "resources"
@@ -755,6 +756,17 @@ func _configure_view_mode_button(button: Button, view: String, min_width: float,
 	if button == null:
 		return
 	button.custom_minimum_size.x = min_width * scale
+	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
+
+
+func _refresh_view_button_tooltips() -> void:
+	_configure_view_button_tooltip(_catalog_view_button, VIEW_CATALOG)
+	_configure_view_button_tooltip(_diagnostics_view_button, VIEW_DIAGNOSTICS)
+
+
+func _configure_view_button_tooltip(button: Button, view: String) -> void:
+	if button == null:
+		return
 	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 

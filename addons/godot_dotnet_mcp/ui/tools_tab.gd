@@ -361,6 +361,7 @@ func _apply_localized_copy(localization, model: Dictionary) -> void:
 	_agent_tools_button.text = localization.get_text("tools_view_agent_tools")
 	_internal_executors_button.text = localization.get_text("tools_view_internal_executors")
 	_diagnostics_button.text = localization.get_text("tools_view_diagnostics")
+	_refresh_view_button_tooltips()
 	_update_tool_view_buttons()
 
 
@@ -1147,6 +1148,18 @@ func _configure_view_mode_button(button: Button, view: String, min_width: float,
 	if button == null:
 		return
 	button.custom_minimum_size.x = min_width * scale
+	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
+
+
+func _refresh_view_button_tooltips() -> void:
+	_configure_view_button_tooltip(_agent_tools_button, VIEW_AGENT_TOOLS)
+	_configure_view_button_tooltip(_internal_executors_button, VIEW_INTERNAL_EXECUTORS)
+	_configure_view_button_tooltip(_diagnostics_button, VIEW_DIAGNOSTICS)
+
+
+func _configure_view_button_tooltip(button: Button, view: String) -> void:
+	if button == null:
+		return
 	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 

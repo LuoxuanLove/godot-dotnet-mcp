@@ -156,8 +156,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if agent_button.custom_minimum_size.x <= 0.0 or internal_button.custom_minimum_size.x <= 0.0 or diagnostics_button.custom_minimum_size.x <= 0.0:
 		return _failure("Tools tab view mode buttons should keep stable minimum widths in narrow Dock layouts.")
-	if agent_button.tooltip_text.is_empty() or internal_button.tooltip_text.is_empty() or diagnostics_button.tooltip_text.is_empty():
-		return _failure("Tools tab view mode buttons should expose tooltips for clipped narrow labels.")
+	if agent_button.tooltip_text != "Agent Tools" or internal_button.tooltip_text != "Internal" or diagnostics_button.tooltip_text != "Diagnostics":
+		return _failure("Tools tab view mode buttons should expose localized tooltips for clipped narrow labels.")
 	var tool_tree = _instance.get_node("ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree") as Tree
 	if tool_tree == null:
 		return _failure("Tools tab rendering test could not resolve the tree control.")
