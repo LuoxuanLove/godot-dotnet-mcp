@@ -234,6 +234,70 @@ try {
         Invoke-Validator -Path $path
     }
 
+    Assert-Fails "broker_shutdown_must_be_explicitly_supported" {
+        $path = Join-Path $tempRoot "broker-shutdown-supported.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.explicit_shutdown_supported = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_revokes_sessions" {
+        $path = Join-Path $tempRoot "broker-shutdown-revoke.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.shutdown_revokes_sessions = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_clears_bridge_status" {
+        $path = Join-Path $tempRoot "broker-shutdown-bridge.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.shutdown_clears_bridge_status = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_does_not_remove_registered_projects" {
+        $path = Join-Path $tempRoot "broker-shutdown-remove-projects.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.shutdown_removes_registered_projects = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_does_not_scan_filesystem" {
+        $path = Join-Path $tempRoot "broker-shutdown-scan.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.shutdown_scans_filesystem = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_does_not_launch_godot" {
+        $path = Join-Path $tempRoot "broker-shutdown-launch.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.shutdown_launches_godot_editor = $true
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_reports_revoked_session_count" {
+        $path = Join-Path $tempRoot "broker-shutdown-revoked-count.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.reports_revoked_session_count = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
+    Assert-Fails "broker_shutdown_reports_cleared_bridge_status_count" {
+        $path = Join-Path $tempRoot "broker-shutdown-bridge-count.json"
+        $manifest = Copy-Manifest -Path $path
+        $manifest.broker_shutdown.reports_cleared_bridge_status_count = $false
+        ConvertTo-JsonFile -Object $manifest -Path $path
+        Invoke-Validator -Path $path
+    }
+
     Assert-Fails "http_loopback_cannot_be_default" {
         $path = Join-Path $tempRoot "http-default.json"
         $manifest = Copy-Manifest -Path $path

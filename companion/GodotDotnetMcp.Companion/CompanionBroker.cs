@@ -233,6 +233,34 @@ public sealed class CompanionBroker
         }
     }
 
+    public BrokerShutdownSnapshot Shutdown()
+    {
+        lock (_sessionLock)
+        {
+            var nowUtc = _clock();
+            var revokedSessionCount = 0;
+            foreach (var (sessionId, session) in _sessions)
+            {
+                if (session.IsActive(nowUtc))
+                {
+                    revokedSessionCount++;
+                }
+
+                session.Revoke(nowUtc);
+                _sessions.TryRemove(sessionId, out _);
+            }
+
+            var clearedBridgeStatusCount = _editorBridgeStatuses.Count;
+            _editorBridgeStatuses.Clear();
+
+            return new BrokerShutdownSnapshot(
+                CapturedAtUtc: nowUtc,
+                RegisteredProjectCount: _projects.Count,
+                RevokedSessionCount: revokedSessionCount,
+                ClearedBridgeStatusCount: clearedBridgeStatusCount);
+        }
+    }
+
     public ProjectDescriptor RegisterProject(ProjectDescriptor project)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -753,6 +781,12 @@ public sealed record BrokerStatusSnapshot(
     int LiveCapableBridgeStatusCount,
     int DisabledBridgeStatusCount,
     IReadOnlyCollection<BrokerProjectSummary> Projects);
+
+public sealed record BrokerShutdownSnapshot(
+    DateTimeOffset CapturedAtUtc,
+    int RegisteredProjectCount,
+    int RevokedSessionCount,
+    int ClearedBridgeStatusCount);
 
 public sealed record SessionCapabilitySnapshot(
     ProjectSessionIdentity Session,
