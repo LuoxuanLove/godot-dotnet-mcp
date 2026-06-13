@@ -10,10 +10,12 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 const MCPEditorSessionIdentity = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_session_identity.gd")
+const MCPFileUtils = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
 
 var bridge
 var bridge_helpers
 var _runtime_context: Dictionary = {}
+var _project_path_utils = MCPFileUtils.new()
 
 const _EXPORT_PRESETS_PATH := "res://export_presets.cfg"
 const _EXPORT_PRESET_SENSITIVE_KEY_PARTS: Array[String] = [
@@ -291,8 +293,10 @@ func _execute_resource_reference_audit(args: Dictionary) -> Dictionary:
 	if not target_path.is_empty():
 		if not (target_path.ends_with(".tscn") or target_path.ends_with(".tres")):
 			return bridge.error("resource_reference_audit path must be a .tscn or .tres file")
-		if not FileAccess.file_exists(target_path):
-			return bridge.error("Resource file not found: %s" % target_path)
+		var path_guard: Dictionary = _project_path_utils.validate_text_file_path(target_path, false, "resource reference audit path")
+		if not bool(path_guard.get("success", false)):
+			return bridge.error(str(path_guard.get("error", "Invalid resource reference audit path")))
+		target_path = str(path_guard.get("path", target_path))
 		paths.append(target_path)
 		scan_status = "explicit_path"
 	else:
@@ -1813,9 +1817,14 @@ func _execute_project_files(args: Dictionary) -> Dictionary:
 		"read_file":
 			return bridge.call_atomic("filesystem_file_read", {"action": "read", "path": str(args.get("path", ""))})
 		"write_file":
+			var path_guard: Dictionary = _project_path_utils.validate_text_file_path(str(args.get("path", "")), true, "project_files write_file")
+			if not bool(path_guard.get("success", false)):
+				var error_data: Dictionary = path_guard.get("data", {}).duplicate(true) if path_guard.get("data", {}) is Dictionary else {}
+				error_data["error_code"] = str(path_guard.get("error_code", error_data.get("code", "")))
+				return bridge.error(str(path_guard.get("error", "Invalid project file write path")), error_data)
 			return bridge.call_atomic("filesystem_file_write", {
 				"action": "write",
-				"path": str(args.get("path", "")),
+				"path": str(path_guard.get("path", args.get("path", ""))),
 				"content": str(args.get("content", ""))
 			})
 		"delete_file":

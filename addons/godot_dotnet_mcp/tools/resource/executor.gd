@@ -4,6 +4,11 @@ extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
 ## Resource and asset management tools for Godot MCP
 ## Provides resource loading, querying, and management
 
+const MCPFileUtils = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
+const _PLUGIN_ROOT := "res://addons/godot_dotnet_mcp"
+
+var _resource_path_utils = MCPFileUtils.new()
+
 
 func get_tools() -> Array[Dictionary]:
 	return [
@@ -201,15 +206,33 @@ func _execute_query(args: Dictionary) -> Dictionary:
 
 
 func _list_resources(path: String, type_filter: String, recursive: bool) -> Dictionary:
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, true)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
 
 	var fs = _get_filesystem()
 	if not fs:
+		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(path)):
+			var disk_resources_without_fs: Array[Dictionary] = []
+			_collect_resources_from_disk(path, type_filter, recursive, disk_resources_without_fs)
+			return _success({
+				"path": path,
+				"count": disk_resources_without_fs.size(),
+				"resources": disk_resources_without_fs
+			})
 		return _error("File system not available")
 
 	var dir = fs.get_filesystem_path(path)
 	if not dir:
+		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(path)):
+			var disk_resources: Array[Dictionary] = []
+			_collect_resources_from_disk(path, type_filter, recursive, disk_resources)
+			return _success({
+				"path": path,
+				"count": disk_resources.size(),
+				"resources": disk_resources
+			})
 		return _error("Directory not found: %s" % path)
 
 	var resources: Array[Dictionary] = []
@@ -241,13 +264,46 @@ func _collect_resources(dir: EditorFileSystemDirectory, type_filter: String, rec
 			_collect_resources(dir.get_subdir(i), type_filter, recursive, results)
 
 
+func _collect_resources_from_disk(path: String, type_filter: String, recursive: bool, results: Array[Dictionary]) -> void:
+	var dir = DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	while true:
+		var entry := dir.get_next()
+		if entry.is_empty():
+			break
+		if entry.begins_with("."):
+			continue
+		var child_path := path.path_join(entry)
+		if dir.current_is_dir():
+			if recursive and not dir.is_link(entry):
+				_collect_resources_from_disk(child_path, type_filter, recursive, results)
+			continue
+		if dir.is_link(entry):
+			continue
+		if _resource_matches_type_filter(_infer_resource_type(child_path), child_path, type_filter):
+			results.append({
+				"path": child_path,
+				"type": _infer_resource_type(child_path),
+				"name": entry
+			})
+	dir.list_dir_end()
+
+
 func _search_resources(pattern: String, type_filter: String, recursive: bool) -> Dictionary:
 	if pattern.is_empty():
 		return _error("Pattern is required")
 
 	var fs = _get_filesystem()
 	if not fs:
-		return _error("File system not available")
+		var disk_resources_without_fs: Array[Dictionary] = []
+		_search_resources_from_disk("res://", pattern, type_filter, recursive, disk_resources_without_fs)
+		return _success({
+			"pattern": pattern,
+			"count": disk_resources_without_fs.size(),
+			"resources": disk_resources_without_fs
+		})
 
 	var root = fs.get_filesystem()
 	var resources: Array[Dictionary] = []
@@ -281,12 +337,43 @@ func _search_resources_recursive(dir: EditorFileSystemDirectory, pattern: String
 			_search_resources_recursive(dir.get_subdir(i), pattern, type_filter, recursive, results)
 
 
+func _search_resources_from_disk(path: String, pattern: String, type_filter: String, recursive: bool, results: Array[Dictionary]) -> void:
+	var dir = DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	while true:
+		var entry := dir.get_next()
+		if entry.is_empty():
+			break
+		if entry.begins_with("."):
+			continue
+		var child_path := path.path_join(entry)
+		if dir.current_is_dir():
+			if recursive and not dir.is_link(entry):
+				_search_resources_from_disk(child_path, pattern, type_filter, recursive, results)
+			continue
+		if dir.is_link(entry):
+			continue
+		var file_type := _infer_resource_type(child_path)
+		var matches_pattern = entry.match(pattern) or entry.contains(pattern.replace("*", ""))
+		if matches_pattern and _resource_matches_type_filter(file_type, child_path, type_filter):
+			results.append({
+				"path": child_path,
+				"type": file_type,
+				"name": entry
+			})
+	dir.list_dir_end()
+
+
 func _get_resource_info(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
 
 	if not ResourceLoader.exists(path):
 		return _error("Resource not found: %s" % path)
@@ -328,8 +415,10 @@ func _get_dependencies(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
 
 	var dependencies = ResourceLoader.get_dependencies(path)
 	var deps: Array[String] = []
@@ -369,8 +458,13 @@ func _create_resource(type_name: String, path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
+	var protected_error := _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
 
 	var resource: Resource
 
@@ -404,8 +498,8 @@ func _create_resource(type_name: String, path: String) -> Dictionary:
 
 	# Ensure directory exists
 	var dir_path = path.get_base_dir()
-	if not DirAccess.dir_exists_absolute(dir_path):
-		DirAccess.make_dir_recursive_absolute(dir_path)
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
 
 	var error = ResourceSaver.save(resource, path)
 	if error != OK:
@@ -428,10 +522,17 @@ func _copy_resource(source: String, dest: String) -> Dictionary:
 	if dest.is_empty():
 		return _error("Destination path is required")
 
-	if not source.begins_with("res://"):
-		source = "res://" + source
-	if not dest.begins_with("res://"):
-		dest = "res://" + dest
+	var source_result := _normalize_resource_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_resource_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", source))
+	dest = str(dest_result.get("path", dest))
+	var protected_error := _guard_protected_plugin_write(dest)
+	if not protected_error.is_empty():
+		return protected_error
 
 	var source_abs = ProjectSettings.globalize_path(source)
 	var dest_abs = ProjectSettings.globalize_path(dest)
@@ -465,10 +566,20 @@ func _move_resource(source: String, dest: String) -> Dictionary:
 	if dest.is_empty():
 		return _error("Destination path is required")
 
-	if not source.begins_with("res://"):
-		source = "res://" + source
-	if not dest.begins_with("res://"):
-		dest = "res://" + dest
+	var source_result := _normalize_resource_path_result(source, false)
+	if not bool(source_result.get("success", false)):
+		return source_result
+	var dest_result := _normalize_resource_path_result(dest, false)
+	if not bool(dest_result.get("success", false)):
+		return dest_result
+	source = str(source_result.get("path", source))
+	dest = str(dest_result.get("path", dest))
+	var source_protected_error := _guard_protected_plugin_write(source)
+	if not source_protected_error.is_empty():
+		return source_protected_error
+	var dest_protected_error := _guard_protected_plugin_write(dest)
+	if not dest_protected_error.is_empty():
+		return dest_protected_error
 
 	var source_abs = ProjectSettings.globalize_path(source)
 	var dest_abs = ProjectSettings.globalize_path(dest)
@@ -500,8 +611,13 @@ func _delete_resource(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
+	var protected_error := _guard_protected_plugin_write(path)
+	if not protected_error.is_empty():
+		return protected_error
 
 	var abs_path = ProjectSettings.globalize_path(path)
 
@@ -529,8 +645,10 @@ func _reload_resource(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
 
 	if not ResourceLoader.exists(path):
 		return _error("Resource not found: %s" % path)
@@ -544,6 +662,21 @@ func _reload_resource(path: String) -> Dictionary:
 		"path": path,
 		"type": str(resource.get_class())
 	}, "Resource reloaded")
+
+
+func _normalize_resource_path_result(path: String, allow_root: bool = false) -> Dictionary:
+	return _resource_path_utils.validate_project_path(path, allow_root)
+
+
+func _guard_protected_plugin_write(path: String) -> Dictionary:
+	var normalized_path := path.replace("\\", "/").simplify_path().trim_suffix("/")
+	var normalized_plugin_root := _PLUGIN_ROOT
+	if OS.get_name() == "Windows":
+		normalized_path = normalized_path.to_lower()
+		normalized_plugin_root = normalized_plugin_root.to_lower()
+	if normalized_path == normalized_plugin_root or normalized_path.begins_with(normalized_plugin_root + "/"):
+		return _error("Writes to plugin files are blocked: %s" % path)
+	return {}
 
 
 # ==================== TEXTURE ====================
@@ -566,10 +699,15 @@ func _get_texture_info(path: String) -> Dictionary:
 	if path.is_empty():
 		return _error("Path is required")
 
-	if not path.begins_with("res://"):
-		path = "res://" + path
+	var path_result := _normalize_resource_path_result(path, false)
+	if not bool(path_result.get("success", false)):
+		return path_result
+	path = str(path_result.get("path", path))
 
 	if not ResourceLoader.exists(path):
+		var image_info := _get_image_file_info(path)
+		if not image_info.is_empty():
+			return _success(image_info)
 		return _error("Texture not found: %s" % path)
 
 	var texture = load(path) as Texture2D
@@ -592,6 +730,22 @@ func _get_texture_info(path: String) -> Dictionary:
 	})
 
 
+func _get_image_file_info(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var image := Image.new()
+	var error := image.load(path)
+	if error != OK:
+		return {}
+	return {
+		"path": path,
+		"width": image.get_width(),
+		"height": image.get_height(),
+		"format": image.get_format(),
+		"has_alpha": image.detect_alpha() != Image.ALPHA_NONE
+	}
+
+
 func _list_all_textures() -> Dictionary:
 	return _list_resources("res://", "Texture2D", true)
 
@@ -603,6 +757,8 @@ func _resource_matches_type_filter(file_type: String, file_path: String, type_fi
 		return true
 	if ClassDB.class_exists(file_type) and ClassDB.class_exists(type_filter) and ClassDB.is_parent_class(file_type, type_filter):
 		return true
+	if not file_type.is_empty():
+		return false
 	if not ResourceLoader.exists(file_path):
 		return false
 
@@ -612,16 +768,35 @@ func _resource_matches_type_filter(file_type: String, file_path: String, type_fi
 	return resource.is_class(type_filter)
 
 
+func _infer_resource_type(file_path: String) -> String:
+	var ext := file_path.get_extension().to_lower()
+	match ext:
+		"tscn", "scn":
+			return "PackedScene"
+		"gd", "cs":
+			return "Script"
+		"png", "jpg", "jpeg", "webp", "svg":
+			return "Texture2D"
+		"wav", "ogg", "mp3":
+			return "AudioStream"
+		"gdshader", "shader":
+			return "Shader"
+		_:
+			return "Resource"
+
+
 func _assign_texture_to_node(texture_path: String, node_path: String, property: String) -> Dictionary:
 	if texture_path.is_empty():
 		return _error("Texture path is required")
 	if node_path.is_empty():
 		return _error("Node path is required")
 
-	if not texture_path.begins_with("res://"):
-		texture_path = "res://" + texture_path
+	var texture_path_result := _normalize_resource_path_result(texture_path, false)
+	if not bool(texture_path_result.get("success", false)):
+		return texture_path_result
+	texture_path = str(texture_path_result.get("path", texture_path))
 
-	var texture = load(texture_path) as Texture2D
+	var texture := _load_texture(texture_path)
 	if not texture:
 		return _error("Failed to load texture: %s" % texture_path)
 
@@ -639,3 +814,16 @@ func _assign_texture_to_node(texture_path: String, node_path: String, property: 
 		"property": property,
 		"texture": texture_path
 	}, "Texture assigned")
+
+
+func _load_texture(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var loaded = load(path) as Texture2D
+		if loaded != null:
+			return loaded
+	if not FileAccess.file_exists(path):
+		return null
+	var image := Image.new()
+	if image.load(path) != OK:
+		return null
+	return ImageTexture.create_from_image(image)

@@ -7,9 +7,11 @@ extends RefCounted
 const PLUGIN_PROTECTED_PATHS: Array = [
 	"res://addons/godot_dotnet_mcp/",
 ]
+const MCPFileUtils = preload("res://addons/godot_dotnet_mcp/tools/mcp_file_utils.gd")
 
 ## Custom tools are managed via UserToolService, not blocked by atomic writes.
 const PLUGIN_CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools/"
+var _resource_path_utils = MCPFileUtils.new()
 
 const WRITE_ACTIONS := {
 	"add": true,
@@ -76,10 +78,18 @@ const WRITE_ACTIONS := {
 func is_protected_path(path: String) -> bool:
 	if path.is_empty():
 		return false
-	if path.begins_with(PLUGIN_CUSTOM_TOOLS_DIR):
+	var normalized := path.replace("\\", "/").simplify_path()
+	var normalized_custom_tools := PLUGIN_CUSTOM_TOOLS_DIR.trim_suffix("/").simplify_path() + "/"
+	if OS.get_name() == "Windows":
+		normalized = normalized.to_lower()
+		normalized_custom_tools = normalized_custom_tools.to_lower()
+	if normalized.begins_with(normalized_custom_tools):
 		return false
 	for protected in PLUGIN_PROTECTED_PATHS:
-		if path.begins_with(str(protected)):
+		var normalized_protected := str(protected).trim_suffix("/").simplify_path()
+		if OS.get_name() == "Windows":
+			normalized_protected = normalized_protected.to_lower()
+		if normalized == normalized_protected or normalized.begins_with(normalized_protected + "/"):
 			return true
 	return false
 
@@ -106,10 +116,15 @@ func infer_write_action_from_atomic_name(full_name: String) -> String:
 
 
 func find_path_in_args(args: Dictionary) -> String:
-	for key in ["path", "file_path", "scene_path", "script_path", "target"]:
+	for key in ["path", "file_path", "scene_path", "script_path", "resource_path", "source", "dest", "target", "new_parent"]:
 		var val = args.get(key, "")
 		if val is String and not str(val).is_empty():
 			return str(val)
+	var paths = args.get("paths", [])
+	if paths is Array:
+		for val in paths:
+			if val is String and not str(val).is_empty():
+				return str(val)
 	return ""
 
 
@@ -194,6 +209,18 @@ func parse_dependency_reference(raw_path: String, source_path: String = "") -> D
 	var normalized_declared := normalize_resource_path(declared, source_path)
 	result["declared_path"] = normalized_declared
 	result["type_hint"] = type_hint
+	if not normalized_declared.is_empty() and not normalized_declared.begins_with("uid://"):
+		var path_guard: Dictionary = _resource_path_utils.validate_project_path(normalized_declared, false)
+		if not bool(path_guard.get("success", false)):
+			result["normalized_path"] = normalized_declared
+			result["path_exists"] = false
+			result["consistency"] = "invalid_path"
+			result["risk"] = "error"
+			result["hint"] = "Referenced fallback path must stay inside res:// and must not traverse symlink, junction, or reparse-point segments."
+			result["error_code"] = str(path_guard.get("error_code", path_guard.get("data", {}).get("code", "")))
+			return result
+		normalized_declared = str(path_guard.get("path", normalized_declared))
+		result["declared_path"] = normalized_declared
 	var resolved_uid := str(result.get("resolved_uid_path", ""))
 	result["normalized_path"] = resolved_uid if not resolved_uid.is_empty() else normalized_declared
 	result["path_exists"] = resource_path_exists(normalized_declared)

@@ -7,6 +7,9 @@ const MATERIAL_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/materials/
 const MATERIAL_COPY_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/materials/contract_material_copy.tres"
 const MATERIAL_MOVED_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/materials/contract_material_moved.tres"
 const TEXTURE_PATH := "res://Tmp/godot_dotnet_mcp_resource_contracts/textures/contract_texture.png"
+const SYMLINK_ENTRY_NAME := "linked_external_resources"
+const SYMLINK_ESCAPE_FILE := "linked_resource_escape.tres"
+const SYMLINK_FILE_NAME := "linked_external_resource.tres"
 
 var _scene_root: Node2D = null
 
@@ -137,6 +140,37 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if bool(invalid_assign_result.get("success", false)):
 		return _failure("Texture assign_to_node should fail for an invalid property.")
 
+	var unsafe_create_result: Dictionary = executor.execute("create", {
+		"type": "Resource",
+		"path": "user://outside.tres"
+	})
+	if bool(unsafe_create_result.get("success", false)):
+		return _failure("Resource create should reject paths outside res://.")
+	if str(unsafe_create_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource create unsafe path rejection should include project_path_outside_project.")
+
+	var unsafe_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "/tmp/godot_dotnet_mcp_resource_escape.tres"
+	})
+	if bool(unsafe_copy_result.get("success", false)):
+		return _failure("Resource copy should reject absolute destination paths.")
+	if str(unsafe_copy_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource copy unsafe path rejection should include project_path_outside_project.")
+
+	var linked_directory_check := _assert_linked_directory_is_not_scanned(executor)
+	if not bool(linked_directory_check.get("success", false)):
+		return linked_directory_check
+
+	var protected_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "res://addons/godot_dotnet_mcp/unsafe_resource_copy.tres"
+	})
+	if bool(protected_copy_result.get("success", false)):
+		return _failure("Resource copy should reject writes into the plugin implementation directory.")
+
 	return {
 		"name": "resource_tool_executor_contracts",
 		"success": true,
@@ -153,6 +187,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 func cleanup_case(tree: SceneTree) -> void:
 	_remove_tree(TEMP_ROOT)
+	_remove_tree_absolute(_get_link_target_absolute_path())
 	if _scene_root != null:
 		if _scene_root.get_parent() != null:
 			_scene_root.get_parent().remove_child(_scene_root)
@@ -179,6 +214,95 @@ func _create_test_texture(path: String) -> bool:
 	return image.save_png(ProjectSettings.globalize_path(path)) == OK
 
 
+func _assert_linked_directory_is_not_scanned(executor) -> Dictionary:
+	var target_absolute_path := _get_link_target_absolute_path()
+	var link_absolute_path := ProjectSettings.globalize_path(TEMP_ROOT.path_join(SYMLINK_ENTRY_NAME))
+	var linked_file_absolute_path := ProjectSettings.globalize_path(TEMP_ROOT.path_join(SYMLINK_FILE_NAME))
+	_remove_tree_absolute(target_absolute_path)
+	_remove_tree_absolute(link_absolute_path)
+	_remove_tree_absolute(linked_file_absolute_path)
+	DirAccess.make_dir_recursive_absolute(target_absolute_path)
+	var escape_file_absolute_path := target_absolute_path.path_join(SYMLINK_ESCAPE_FILE)
+	FileAccess.open(escape_file_absolute_path, FileAccess.WRITE).store_string("extends Resource\n")
+	var link_result := _try_create_directory_link(link_absolute_path, target_absolute_path)
+	if not bool(link_result.get("success", false)):
+		if OS.get_name() == "Windows":
+			return {"success": true}
+		return _failure("Failed to create a directory symlink fixture: %s" % str(link_result.get("error", "")))
+	var linked_file_result := _try_create_file_link(linked_file_absolute_path, escape_file_absolute_path)
+	var linked_file_created := bool(linked_file_result.get("success", false))
+	if not bool(linked_file_result.get("success", false)):
+		if OS.get_name() != "Windows":
+			return _failure("Failed to create a file symlink fixture: %s" % str(linked_file_result.get("error", "")))
+
+	var linked_list_result: Dictionary = executor.execute("query", {
+		"action": "list",
+		"path": TEMP_ROOT,
+		"recursive": true
+	})
+	if not bool(linked_list_result.get("success", false)):
+		return _failure("Resource recursive list failed while validating linked directory guards.")
+	if _result_contains_path_fragment(linked_list_result, SYMLINK_ESCAPE_FILE):
+		return _failure("Resource recursive list should not traverse linked directories.")
+	if linked_file_created and _result_contains_path_fragment(linked_list_result, SYMLINK_FILE_NAME):
+		return _failure("Resource recursive list should not report linked files.")
+
+	var linked_search_result: Dictionary = executor.execute("query", {
+		"action": "search",
+		"pattern": "*linked_*",
+		"recursive": true
+	})
+	if not bool(linked_search_result.get("success", false)):
+		return _failure("Resource recursive search failed while validating linked directory guards.")
+	if _result_contains_path_fragment(linked_search_result, SYMLINK_ESCAPE_FILE):
+		return _failure("Resource recursive search should not traverse linked directories.")
+	if linked_file_created and _result_contains_path_fragment(linked_search_result, SYMLINK_FILE_NAME):
+		return _failure("Resource recursive search should not report linked files.")
+
+	return {"success": true}
+
+
+func _try_create_directory_link(link_absolute_path: String, target_absolute_path: String) -> Dictionary:
+	var output: Array = []
+	var exit_code := 1
+	if OS.get_name() == "Windows":
+		exit_code = OS.execute("cmd", PackedStringArray(["/c", "mklink", "/J", link_absolute_path, target_absolute_path]), output, true)
+	else:
+		exit_code = OS.execute("ln", PackedStringArray(["-s", target_absolute_path, link_absolute_path]), output, true)
+	if exit_code != 0:
+		return {
+			"success": false,
+			"error": "\n".join(output)
+		}
+	return {"success": true}
+
+
+func _try_create_file_link(link_absolute_path: String, target_absolute_path: String) -> Dictionary:
+	var output: Array = []
+	var exit_code := 1
+	if OS.get_name() == "Windows":
+		exit_code = OS.execute("cmd", PackedStringArray(["/c", "mklink", link_absolute_path, target_absolute_path]), output, true)
+	else:
+		exit_code = OS.execute("ln", PackedStringArray(["-s", target_absolute_path, link_absolute_path]), output, true)
+	if exit_code != 0:
+		return {
+			"success": false,
+			"error": "\n".join(output)
+		}
+	return {"success": true}
+
+
+func _result_contains_path_fragment(result: Dictionary, fragment: String) -> bool:
+	for resource in result.get("data", {}).get("resources", []):
+		if str(resource.get("path", "")).contains(fragment):
+			return true
+	return false
+
+
+func _get_link_target_absolute_path() -> String:
+	return ProjectSettings.globalize_path("user://godot_dotnet_mcp_resource_link_target")
+
+
 func _remove_tree(path: String) -> void:
 	var absolute_path := ProjectSettings.globalize_path(path)
 	if not DirAccess.dir_exists_absolute(absolute_path):
@@ -187,6 +311,9 @@ func _remove_tree(path: String) -> void:
 
 
 func _remove_tree_absolute(absolute_path: String) -> void:
+	if _is_link_path(absolute_path):
+		DirAccess.remove_absolute(absolute_path)
+		return
 	var dir = DirAccess.open(absolute_path)
 	if dir == null:
 		DirAccess.remove_absolute(absolute_path)
@@ -197,13 +324,24 @@ func _remove_tree_absolute(absolute_path: String) -> void:
 	while entry != "":
 		if entry != "." and entry != "..":
 			var child_path := absolute_path.path_join(entry)
-			if dir.current_is_dir():
+			if dir.current_is_dir() and not dir.is_link(entry):
 				_remove_tree_absolute(child_path)
 			else:
 				DirAccess.remove_absolute(child_path)
 		entry = dir.get_next()
 	dir.list_dir_end()
 	DirAccess.remove_absolute(absolute_path)
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
 
 
 func _failure(message: String) -> Dictionary:

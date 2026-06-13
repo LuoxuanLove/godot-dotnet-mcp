@@ -557,6 +557,10 @@ func _write_file(path: String, content: String) -> Dictionary:
 	if not bool(path_result.get("success", false)):
 		return path_result
 	path = str(path_result.get("path", ""))
+	var text_path_result := _filesystem_path_utils.validate_text_file_path(path, true, "write_file")
+	if not bool(text_path_result.get("success", false)):
+		return text_path_result
+	path = str(text_path_result.get("path", path))
 
 	var protected_error = _guard_protected_plugin_write(path)
 	if not protected_error.is_empty():
@@ -593,6 +597,10 @@ func _append_file(path: String, content: String) -> Dictionary:
 	if not bool(path_result.get("success", false)):
 		return path_result
 	path = str(path_result.get("path", ""))
+	var text_path_result := _filesystem_path_utils.validate_text_file_path(path, true, "append_file")
+	if not bool(text_path_result.get("success", false)):
+		return text_path_result
+	path = str(text_path_result.get("path", path))
 
 	# Read existing content if file exists
 	var existing = ""
@@ -977,6 +985,7 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 	_collect_files(path, filter, recursive, files)
 
 	var pending_writes: Array[Dictionary] = []
+	var skipped_files: Array[Dictionary] = []
 	var total_replacements = 0
 
 	for file_path in files:
@@ -984,6 +993,15 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 		if not bool(file_path_result.get("success", false)):
 			return file_path_result
 		file_path = str(file_path_result.get("path", file_path))
+		var text_path_result := _filesystem_path_utils.validate_text_file_path(file_path, false, "find_and_replace file")
+		if not bool(text_path_result.get("success", false)):
+			skipped_files.append({
+				"path": file_path,
+				"reason": str(text_path_result.get("error", "Not a text file")),
+				"error_code": str(text_path_result.get("error_code", text_path_result.get("data", {}).get("code", "")))
+			})
+			continue
+		file_path = str(text_path_result.get("path", file_path))
 
 		var file = FileAccess.open(file_path, FileAccess.READ)
 		if not file:
@@ -1037,5 +1055,7 @@ func _find_and_replace(find: String, replace: String, path: String, filter: Stri
 		"path": path,
 		"files_modified": modified_files.size(),
 		"total_replacements": total_replacements,
-		"modified_files": modified_files
+		"modified_files": modified_files,
+		"skipped_files": skipped_files,
+		"skipped_file_count": skipped_files.size()
 	})
