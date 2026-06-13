@@ -1,6 +1,6 @@
-# v2 Bridge Upgrade Contract
+# v3 Bridge Upgrade Contract
 
-The v2 Companion bridge contract keeps editor-live state authoritative inside the Godot editor plugin. A project session can remain useful for static/headless analysis without an open editor, but it cannot expose selected nodes, Inspector state, Dock state, screenshots, or runtime validation until a matching editor bridge reports an online state.
+The v3 Companion bridge contract keeps editor-live state authoritative inside the Godot editor plugin. A project session can remain useful for static/headless analysis without an open editor, but it cannot expose selected nodes, Inspector state, Dock state, screenshots, or runtime validation until a matching editor bridge reports an online state.
 
 ## Bridge States
 

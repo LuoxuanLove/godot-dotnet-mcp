@@ -35,10 +35,10 @@ jobs:
 
           base_ref=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
           case "$base_ref" in
-            dev|refactor/v1.4.0|v2.0|release/v2.0.0-baseline|feature/v2-*|docs/v2-*|ci/v2-*)
+            dev|refactor/v1.4.0|v2.0|v3.0|release/v3.0.0-baseline|feature/v3-*|docs/v3-*|ci/v3-*)
               ;;
             *)
-              echo "::error::Pull requests must target dev, refactor/v1.4.0, v2.0, or an explicit v2 stacked base branch. Change the PR base branch before merging."
+              echo "::error::Pull requests must target dev, refactor/v1.4.0, v2.0, v3.0, or an explicit v3 stacked base branch. Change the PR base branch before merging."
               exit 1
               ;;
           esac

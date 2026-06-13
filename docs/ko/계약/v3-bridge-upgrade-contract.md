@@ -1,6 +1,6 @@
-# v2 Bridge Upgrade Contract
+# v3 Bridge Upgrade Contract
 
-v2 Companion bridge contract는 editor-live state의 authority를 Godot editor plugin에 둡니다. Project session은 editor가 열려 있지 않을 때도 static/headless analysis를 제공할 수 있지만, matching editor bridge가 online state를 보고하기 전에는 selected nodes, Inspector state, Dock state, screenshots, runtime validation을 제공할 수 없습니다.
+v3 Companion bridge contract는 editor-live state의 authority를 Godot editor plugin에 둡니다. Project session은 editor가 열려 있지 않을 때도 static/headless analysis를 제공할 수 있지만, matching editor bridge가 online state를 보고하기 전에는 selected nodes, Inspector state, Dock state, screenshots, runtime validation을 제공할 수 없습니다.
 
 ## Bridge States
 

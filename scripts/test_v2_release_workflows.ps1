@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepositoryRoot = ""
 )
 
@@ -88,7 +88,8 @@ foreach ($workflow in @(
     @{ Name = "v2-broker-manifest"; Content = $v2Broker },
     @{ Name = "v2-capability-manifest"; Content = $v2Capabilities }
 )) {
-    Assert-Contains $workflow.Name $workflow.Content "release/v2.0.0-baseline"
+    Assert-Contains $workflow.Name $workflow.Content "v3.0"
+    Assert-Contains $workflow.Name $workflow.Content "release/v3.0.0-baseline"
 }
 
 Write-Host "v2 release workflow validation passed."

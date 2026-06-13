@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "component": "godot-dotnet-mcp-roslyn-runtime",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "contract": "asset-library-install-semantic-csharp-runtime",
   "distribution": "isolated-runtime-bundle",
   "source_surface": "excluded",
