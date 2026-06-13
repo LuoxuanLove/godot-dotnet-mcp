@@ -40,10 +40,10 @@ function Write-DocFixture {
     }
 
     $localizedChangelogLines = @{
-        en = @{ Intro = "Fixture changelog content."; Target = "Target version: 1.4.0."; Documentation = "Documentation item."; Internal = "Internal item." }
-        "zh-CN" = @{ Intro = "中文变更日志内容。"; Target = "目标版本：1.4.0。"; Documentation = "文档条目。"; Internal = "内部条目。" }
-        ja = @{ Intro = "日本語の変更履歴です。"; Target = "対象バージョン: 1.4.0。"; Documentation = "ドキュメント項目。"; Internal = "内部項目。" }
-        ko = @{ Intro = "한국어 변경 로그입니다."; Target = "대상 버전은 1.4.0입니다."; Documentation = "문서 항목입니다."; Internal = "내부 항목입니다." }
+        en = @{ Intro = "Fixture changelog content."; Target = "Target version: 2.0.0."; Documentation = "Documentation item."; Internal = "Internal item." }
+        "zh-CN" = @{ Intro = "中文变更日志内容。"; Target = "目标版本：2.0.0。"; Documentation = "文档条目。"; Internal = "内部条目。" }
+        ja = @{ Intro = "日本語の変更履歴です。"; Target = "対象バージョン: 2.0.0。"; Documentation = "ドキュメント項目。"; Internal = "内部項目。" }
+        ko = @{ Intro = "한국어 변경 로그입니다."; Target = "대상 버전은 2.0.0입니다."; Documentation = "문서 항목입니다."; Internal = "내부 항목입니다." }
     }
     $changelogPaths = @{ en = "CHANGELOG.md"; "zh-CN" = "变更日志.md"; ja = "変更履歴.md"; ko = "변경-로그.md" }
     foreach ($locale in $localizedChangelogLines.Keys) {
@@ -60,7 +60,7 @@ function Write-DocFixture {
             "",
             $text.Intro,
             "",
-            "## [Unreleased] ([1.4.0])",
+            "## [Unreleased] ([2.0.0])",
             "",
             $text.Target,
             ""
@@ -68,12 +68,12 @@ function Write-DocFixture {
         $paths[$locale][$changelogPaths[$locale]] = ($changelogText -join "`n") + "`n"
     }
 
-    $releaseNoteSwitch = '<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/en/process/release-notes/release-notes-v1.4.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/zh-CN/流程/发布说明/发布说明-v1.4.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/ja/プロセス/リリースノート/リリースノート-v1.4.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v1.4.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v1.4.0.md">한국어</a></p>'
+    $releaseNoteSwitch = '<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/en/process/release-notes/release-notes-v2.0.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md">한국어</a></p>'
     $releaseNoteBodies = @{
         en = @(
-            "## Fixture v1.4.0 Release Notes",
+            "## Fixture v2.0.0 Release Notes",
             "",
-            "Godot .NET MCP v1.4.0 fixture notes cover resource-first context, prompt guidance, and public tool cleanup.",
+            "Godot .NET MCP v2.0.0 fixture notes cover resource-first context, prompt guidance, and public tool cleanup.",
             "",
             $releaseNoteSwitch,
             "",
@@ -86,9 +86,9 @@ function Write-DocFixture {
             "Clients should prefer Resources and Prompts for passive context and planning."
         )
         "zh-CN" = @(
-            "## Fixture v1.4.0 发布说明",
+            "## Fixture v2.0.0 发布说明",
             "",
-            "Godot .NET MCP v1.4.0 fixture 发布说明覆盖 resource-first 上下文、Prompt 指引和公开工具清理。",
+            "Godot .NET MCP v2.0.0 fixture 发布说明覆盖 resource-first 上下文、Prompt 指引和公开工具清理。",
             "",
             $releaseNoteSwitch,
             "",
@@ -101,9 +101,9 @@ function Write-DocFixture {
             "客户端应优先使用 Resources 与 Prompts 获取被动上下文和规划入口。"
         )
         ja = @(
-            "## Fixture v1.4.0 リリースノート",
+            "## Fixture v2.0.0 リリースノート",
             "",
-            "Godot .NET MCP v1.4.0 fixture notes は resource-first context、Prompt guidance、public tool cleanup を扱います。",
+            "Godot .NET MCP v2.0.0 fixture notes は resource-first context、Prompt guidance、public tool cleanup を扱います。",
             "",
             $releaseNoteSwitch,
             "",
@@ -116,9 +116,9 @@ function Write-DocFixture {
             "client は passive context と planning に Resources と Prompts を優先します。"
         )
         ko = @(
-            "## Fixture v1.4.0 릴리스 노트",
+            "## Fixture v2.0.0 릴리스 노트",
             "",
-            "Godot .NET MCP v1.4.0 fixture notes는 resource-first context, Prompt guidance, public tool cleanup을 다룹니다.",
+            "Godot .NET MCP v2.0.0 fixture notes는 resource-first context, Prompt guidance, public tool cleanup을 다룹니다.",
             "",
             $releaseNoteSwitch,
             "",
@@ -134,7 +134,7 @@ function Write-DocFixture {
     if ($UnfinishedReleaseNoteWording) {
         $releaseNoteBodies.en[8] = "The final highlights will be written from the actual release contents."
     }
-    $releaseNotePaths = @{ en = "process/release-notes/release-notes-v1.4.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.4.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.4.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.4.0.md" }
+    $releaseNotePaths = @{ en = "process/release-notes/release-notes-v2.0.0.md"; "zh-CN" = "流程/发布说明/发布说明-v2.0.0.md"; ja = "プロセス/リリースノート/リリースノート-v2.0.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v2.0.0.md" }
     foreach ($locale in $releaseNoteBodies.Keys) {
         $paths[$locale][$releaseNotePaths[$locale]] = ($releaseNoteBodies[$locale] -join "`n") + "`n"
     }

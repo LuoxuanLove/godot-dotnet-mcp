@@ -138,7 +138,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		TOOLS_CATALOG_VISIBLE_URI
 	]:
 		if not _has_resource(resources, expected_resource):
-			return _failure("resources/list should expose canonical v1.4 resource: %s" % expected_resource)
+			return _failure("resources/list should expose canonical MCP resource: %s" % expected_resource)
 	for resource in resources as Array:
 		if not _has_display_metadata(resource):
 			return _failure("resources/list should expose 2025-11-25 title/icons metadata for every resource.")

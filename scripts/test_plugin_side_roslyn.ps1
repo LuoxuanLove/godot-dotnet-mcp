@@ -84,9 +84,9 @@ function Get-ContractCaseManifest {
         Assert-ManifestValue -Case $case -FieldName "conformance" -AllowedValues @("required", "compat", "optional")
         Assert-ManifestValue -Case $case -FieldName "speed" -AllowedValues @("fast", "headless", "editor", "release")
         Assert-ManifestValue -Case $case -FieldName "isolation" -AllowedValues @("pure", "user_fs", "stage_root", "editor")
-        Assert-ManifestValue -Case $case -FieldName "v1_4_disposition" -AllowedValues @("keep", "rewrite", "delete", "expires")
+        Assert-ManifestValue -Case $case -FieldName "v2_0_disposition" -AllowedValues @("keep", "rewrite", "delete", "expires")
 
-        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v2_0_disposition -in @("delete", "expires")
         if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
             throw "Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'."
         }
@@ -102,7 +102,7 @@ function Get-ContractCaseManifest {
     return $manifest
 }
 
-# Historical runnable contract cases that predate the v1.4 manifest gate. New
+# Historical runnable contract cases that predate the v2.0 manifest gate. New
 # runnable contract cases must be added to scripts\contract_case_manifest.json.
 $LegacyUnmanifestedContractCases = @(
     "client_config_file_detector_contracts|res://tests/client_config_file_detector_contract_test.gd",
@@ -621,7 +621,7 @@ function Invoke-HarnessProcessCleanup {
 $GodotExe = Resolve-GodotPath -GodotPath $GodotPath
 $ContractCaseManifest = Get-ContractCaseManifest -ManifestPath (Join-Path $repoRoot "scripts\contract_case_manifest.json")
 $ManifestCaseNames = @($ContractCaseManifest | ForEach-Object { [string]$_.name })
-$RequiredCases = @($ContractCaseManifest | Where-Object { [string]$_.v1_4_disposition -ne "expires" } | ForEach-Object { [string]$_.name })
+$RequiredCases = @($ContractCaseManifest | Where-Object { [string]$_.v2_0_disposition -ne "expires" } | ForEach-Object { [string]$_.name })
 $IsolatedHeadlessCases = @($ContractCaseManifest | Where-Object { [string]$_.name -eq "tools_tab_rendering_contracts" } | ForEach-Object { [string]$_.name })
 $EditorProbeCases = @($ContractCaseManifest | Where-Object { [string]$_.speed -eq "editor" -or [string]$_.isolation -eq "editor" } | ForEach-Object { [string]$_.name })
 

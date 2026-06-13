@@ -188,7 +188,7 @@ func _assert_required_entry(case_name: String, entry: Dictionary, expected: Dict
 		return _failure("Required conformance case %s should stay in the headless gate." % case_name)
 	if not ["pure", "stage_root"].has(str(entry.get("isolation", ""))):
 		return _failure("Required conformance case %s should declare pure or stage_root isolation." % case_name)
-	if not ["keep", "rewrite"].has(str(entry.get("v1_4_disposition", ""))):
+	if not ["keep", "rewrite"].has(str(entry.get("v2_0_disposition", ""))):
 		return _failure("Required conformance case %s should not be legacy/delete/remove disposition." % case_name)
 	if str(entry.get("layer", "")) != str(expected.get("layer", "")):
 		return _failure("Required conformance case %s should remain in layer=%s." % [case_name, expected.get("layer", "")])

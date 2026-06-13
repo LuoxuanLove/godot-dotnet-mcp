@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.4.0])
+## [Unreleased] ([2.0.0])
 
-Target version: 1.4.0.
+Target version: 2.0.0.
 
 ### Added
 
@@ -28,7 +28,7 @@ Target version: 1.4.0.
 - Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
-- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v1.4 line.
+- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
 
 ### Fixed
 
@@ -41,15 +41,15 @@ Target version: 1.4.0.
 
 ### Documentation
 
-- Updated the v1.4 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
+- Updated the v2.0 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
 - Updated release-facing README and localized entry pages so installation and migration guidance stays focused on plugin-owned install surfaces, Resources, Prompts, Tools, and reproducible validation.
-- Added draft v1.4 release-note sources and localized navigation for the protocol refactor line.
+- Added draft v2.0 release-note sources and localized navigation for the protocol refactor line.
 - Clarified legacy `system_help` guidance so clients start from MCP Resources for passive context, Prompts for planning, and Tools for actions or computed workflow results.
 
 ### Internal
 
-- Added aggregate v1.4 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
-- Added release-policy, PR-policy, and merge-queue validation coverage for v1.4 branch integration, trusted `refactor/v1.4.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
+- Added aggregate v2.0 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
+- Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
 

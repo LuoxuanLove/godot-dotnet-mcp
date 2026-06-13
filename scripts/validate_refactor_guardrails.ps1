@@ -155,10 +155,10 @@ function Assert-V14PlanConsistency {
         [string]$RepositoryRoot
     )
 
-    $planPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-protocol-refactor-plan.md"
-    $trackerPath = Join-Path $RepositoryRoot "docs\en\process\v1.4.0-refactor-progress-tracker.md"
+    $planPath = Join-Path $RepositoryRoot "docs\en\process\v2.0.0-protocol-refactor-plan.md"
+    $trackerPath = Join-Path $RepositoryRoot "docs\en\process\v2.0.0-refactor-progress-tracker.md"
 
-    Assert-FileContainsText -Path $planPath -Label "v1.4 protocol refactor plan" -RequiredText @(
+    Assert-FileContainsText -Path $planPath -Label "v2.0 protocol refactor plan" -RequiredText @(
         "MCP 2025-11-25",
         "protocolVersion = 2025-11-25",
         "http://127.0.0.1:3000/mcp",
@@ -169,7 +169,7 @@ function Assert-V14PlanConsistency {
         "legacy compatibility surfaces"
     )
 
-    Assert-FileDoesNotMatch -Path $planPath -Label "v1.4 protocol refactor plan" -BannedPatterns @(
+    Assert-FileDoesNotMatch -Path $planPath -Label "v2.0 protocol refactor plan" -BannedPatterns @(
         @{
             Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
             Description = 'protocolVersion = 2025-06-18'
@@ -184,16 +184,16 @@ function Assert-V14PlanConsistency {
         }
     )
 
-    Assert-FileContainsText -Path $trackerPath -Label "v1.4 refactor progress tracker" -RequiredText @(
+    Assert-FileContainsText -Path $trackerPath -Label "v2.0 refactor progress tracker" -RequiredText @(
         'MCP 2025-11-25 conformance by default',
         '2025-06-18 alignment retained as a compatibility foundation',
         'http://127.0.0.1:3000/mcp',
         'MCP Streamable HTTP',
         'legacy `/api/tools`, `/health`, JSON-only POST behavior, and `Content-Length` stdio',
-        'A PR is not ready to merge into the v1.4 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
+        'A PR is not ready to merge into the v2.0 refactor branch until local validation, relevant GitHub checks, all conversations, and the Codex review gate are complete.'
     )
 
-    Assert-FileDoesNotMatch -Path $trackerPath -Label "v1.4 refactor progress tracker" -BannedPatterns @(
+    Assert-FileDoesNotMatch -Path $trackerPath -Label "v2.0 refactor progress tracker" -BannedPatterns @(
         @{
             Pattern = '(?im)\bprotocolVersion\s*=\s*2025-06-18\b'
             Description = 'protocolVersion = 2025-06-18'
@@ -266,12 +266,12 @@ $versionPolicyPath = Join-Path $repoRoot "scripts\validate_pr_version_policy.ps1
 if (Test-Path -LiteralPath $versionPolicyPath) {
     $versionPolicyText = Get-Content -LiteralPath $versionPolicyPath -Raw -Encoding UTF8
     foreach ($requiredText in @(
-        '$BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v1.4.0"',
-        "v1.4 refactor integration version changes must come from the base repository",
-        "Version policy validated: v1.4 refactor integration branch changes public version metadata"
+        '$BaseBranch -eq "dev" -and $HeadBranch -eq "refactor/v2.0.0"',
+        "v2.0 refactor integration version changes must come from the base repository",
+        "Version policy validated: v2.0 refactor integration branch changes public version metadata"
     )) {
         if (-not $versionPolicyText.Contains($requiredText)) {
-            $errors.Add("Version policy must preserve the trusted refactor/v1.4.0 -> dev integration exception: missing '$requiredText'.")
+            $errors.Add("Version policy must preserve the trusted refactor/v2.0.0 -> dev integration exception: missing '$requiredText'.")
         }
     }
 }
@@ -387,7 +387,7 @@ if (Test-Path -LiteralPath $manifestPath) {
             }
         }
 
-        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v1_4_disposition -in @("delete", "expires")
+        $isLegacyOrRemoval = $case.behavior -in @("deprecation", "removal_guard") -or $case.v2_0_disposition -in @("delete", "expires")
         if ($isLegacyOrRemoval -and [string]$case.conformance -ne "compat") {
             $errors.Add("Contract case manifest entry '$($case.name)' covers legacy/removal behavior and must use conformance='compat'.")
         }
