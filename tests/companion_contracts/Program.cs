@@ -28,6 +28,7 @@ var tests = new (string Name, Action Run)[]
     ("renews_session_leases_on_valid_use", RenewsSessionLeasesOnValidUse),
     ("keeps_revoked_sessions_terminal_under_concurrency", RevokedSessionsStayTerminalUnderConcurrency),
     ("keeps_session_snapshots_active_under_concurrency", SessionSnapshotsStayActiveUnderConcurrency),
+    ("evaluates_editor_live_upgrade_without_changing_session_state", EditorLiveUpgradeEligibilityDoesNotMutateSession),
     ("upgrades_to_editor_live_only_with_matching_online_bridge", ExplicitBridgeUpgradeEnablesLiveCapabilities),
     ("requires_bridge_live_state_support_for_editor_live_upgrade", BridgeLiveStateSupportIsRequired),
     ("rejects_incompatible_editor_bridge_versions", IncompatibleEditorBridgeVersionsAreRejected),
@@ -624,6 +625,87 @@ static void SessionSnapshotsStayActiveUnderConcurrency()
 
         AssertFalse(broker.Sessions.Any(current => current.SessionId == session.Identity.SessionId));
     }
+}
+
+static void EditorLiveUpgradeEligibilityDoesNotMutateSession()
+{
+    var now = DateTimeOffset.Parse("2026-06-09T00:00:00Z");
+    var broker = new CompanionBroker(TimeSpan.FromSeconds(10), () => now);
+    var project = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var otherProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var session = broker.StartSession(project.ProjectId);
+    var initialIdentity = session.Identity;
+
+    var eligibleBridge = new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_1",
+        "2.0.0",
+        true);
+    var eligible = session.EvaluateEditorLiveUpgrade(eligibleBridge);
+
+    AssertTrue(eligible.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.Eligible, eligible.Reason);
+    AssertEqual(initialIdentity.SessionId, eligible.Session.SessionId);
+    AssertEqual(eligibleBridge, eligible.BridgeStatus);
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+    AssertEqual<string?>(null, session.Identity.EditorSessionId);
+    AssertEqual(initialIdentity.LastUsedAtUtc, session.Identity.LastUsedAtUtc);
+    AssertEqual(initialIdentity.ExpiresAtUtc, session.Identity.ExpiresAtUtc);
+    AssertThrows<InvalidOperationException>(() =>
+        broker.RequireCapability(
+            new ToolRequestScope(project.ProjectId, session.Identity.SessionId),
+            CompanionCapability.EditorScreenshot));
+
+    var offline = session.EvaluateEditorLiveUpgrade(EditorBridgeStatus.Disabled(project.ProjectId));
+    AssertFalse(offline.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.BridgeNotOnline, offline.Reason);
+    AssertEqual(CompanionMode.StaticHeadless, session.Identity.Mode);
+
+    var mismatch = session.EvaluateEditorLiveUpgrade(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        otherProject.ProjectId,
+        "editor_session_2",
+        "2.0.0",
+        true));
+    AssertFalse(mismatch.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.ProjectMismatch, mismatch.Reason);
+
+    var missingLiveState = session.EvaluateEditorLiveUpgrade(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_3",
+        "2.0.0",
+        false));
+    AssertFalse(missingLiveState.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.LiveEditorStateUnavailable, missingLiveState.Reason);
+
+    var badVersion = session.EvaluateEditorLiveUpgrade(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        project.ProjectId,
+        "editor_session_4",
+        "1.4.0",
+        true));
+    AssertFalse(badVersion.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.IncompatiblePluginVersion, badVersion.Reason);
+
+    now = now.AddSeconds(11);
+    var expired = session.EvaluateEditorLiveUpgrade(eligibleBridge);
+    AssertFalse(expired.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.SessionExpired, expired.Reason);
+
+    var revokedProject = broker.RegisterProject(ProjectDescriptor.FromRoot(CreateTempProjectRoot()));
+    var revokedSession = broker.StartSession(revokedProject.ProjectId);
+    broker.StopSession(new ToolRequestScope(revokedProject.ProjectId, revokedSession.Identity.SessionId));
+    var stopped = revokedSession.EvaluateEditorLiveUpgrade(new EditorBridgeStatus(
+        EditorBridgeState.Online,
+        revokedProject.ProjectId,
+        "editor_session_5",
+        "2.0.0",
+        true));
+    AssertFalse(stopped.Eligible);
+    AssertEqual(EditorLiveUpgradeEligibilityReason.SessionStopped, stopped.Reason);
+    AssertEqual(CompanionMode.StaticHeadless, revokedSession.Identity.Mode);
 }
 
 static void ExplicitBridgeUpgradeEnablesLiveCapabilities()

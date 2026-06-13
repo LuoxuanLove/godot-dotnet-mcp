@@ -21,6 +21,7 @@ Target version: 2.0.0.
 - Added a static resource reference graph for text `.tscn` and `.tres` files, covering external resources, sub-resources, `uid://` markers, `res://` usages, missing references, and unsupported binary `.res` files without opening the editor.
 - Added a v2 capability manifest and validator so static/headless capabilities cannot claim editor-live state, default background processes, listening ports, or unscoped tool calls.
 - Added an explicit Broker project removal contract that drops registered projects and revokes their active project sessions without affecting other projects.
+- Added a non-mutating editor-live upgrade eligibility contract so clients can report upgrade blockers before explicitly switching a project session to editor-live mode.
 
 ### Fixed
 
