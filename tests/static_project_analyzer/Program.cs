@@ -64,6 +64,9 @@ static void ReportsStaticInventoryForGodotDotnetProject()
     AssertEqual(Path.GetFullPath(csprojPath), inventory.CSharpProjectScopes[0].ProjectFilePath);
     AssertEqual(ProjectDescriptor.FromRoot(root, csprojPath).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertEqual(inventory.CSharpProjectScopes[0], inventory.DefaultCSharpProjectScope);
+    AssertFalse(inventory.ProjectScopeSelection.RequiresExplicitSelection);
+    AssertEqual(1, inventory.ProjectScopeSelection.CandidateCount);
+    AssertContains("Exactly one .csproj scope", inventory.ProjectScopeSelection.Reason);
     AssertTrue(inventory.DotnetWorkspace.HasProjects);
     AssertFalse(inventory.DotnetWorkspace.HasDiagnostics);
     AssertFalse(inventory.ResourceReferences.HasResources);
@@ -91,6 +94,9 @@ static void ReportsStaticProjectScopesForEachCSharpProject()
     AssertEqual(ProjectDescriptor.FromRoot(root, gameProject).ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertEqual(ProjectDescriptor.FromRoot(root, toolsProject).ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
     AssertEqual<CSharpProjectScope?>(null, inventory.DefaultCSharpProjectScope);
+    AssertTrue(inventory.ProjectScopeSelection.RequiresExplicitSelection);
+    AssertEqual(2, inventory.ProjectScopeSelection.CandidateCount);
+    AssertContains("Multiple .csproj scopes", inventory.ProjectScopeSelection.Reason);
     AssertNotEqual(inventory.ProjectId, inventory.CSharpProjectScopes[0].ProjectId);
     AssertNotEqual(inventory.CSharpProjectScopes[0].ProjectId, inventory.CSharpProjectScopes[1].ProjectId);
 }
@@ -601,6 +607,9 @@ static void DoesNotRegisterNonGodotDirectoriesAsProjects()
     AssertEqual<string?>(null, inventory.ProjectId);
     AssertEqual(0, inventory.CSharpProjectScopes.Count);
     AssertEqual<CSharpProjectScope?>(null, inventory.DefaultCSharpProjectScope);
+    AssertFalse(inventory.ProjectScopeSelection.RequiresExplicitSelection);
+    AssertEqual(0, inventory.ProjectScopeSelection.CandidateCount);
+    AssertContains("project.godot", inventory.ProjectScopeSelection.Reason);
     AssertFalse(inventory.ResourceReferences.HasResources);
     AssertFalse(inventory.HasCapability(CompanionCapability.StaticProjectAnalysis));
     AssertFalse(inventory.HasCapability(CompanionCapability.DotnetWorkspaceAnalysis));

@@ -10,6 +10,7 @@ public sealed record ProjectInventory(
     IReadOnlyList<string> CSharpProjectFiles,
     IReadOnlyList<CSharpProjectScope> CSharpProjectScopes,
     CSharpProjectScope? DefaultCSharpProjectScope,
+    ProjectScopeSelection ProjectScopeSelection,
     DotnetWorkspaceGraph DotnetWorkspace,
     ResourceReferenceGraph ResourceReferences,
     bool HasPluginDirectory,
@@ -38,3 +39,8 @@ public sealed record ProjectCapabilityStatus(
 public sealed record CSharpProjectScope(
     string ProjectFilePath,
     string ProjectId);
+
+public sealed record ProjectScopeSelection(
+    bool RequiresExplicitSelection,
+    int CandidateCount,
+    string Reason);

@@ -39,6 +39,7 @@ Target version: 2.0.0.
 - Scoped v2 Companion project identifiers by both Godot project root and explicit `.csproj` path so Broker registration can keep multiple C# projects under one Godot root isolated.
 - Added static/headless inventory project scopes that expose each discovered `.csproj` with its scoped v2 `project_id` while keeping the inventory root `project_id` stable.
 - Added a static/headless default project-scope marker that is populated only for single-`.csproj` Godot roots so multi-project roots must be selected explicitly.
+- Added static/headless project-scope selection status so multi-`.csproj` roots report when clients must select an explicit scoped `project_id`.
 - Added explicit `.csproj` scope metadata to v2 project session identities so Broker clients can audit which C# project a scoped session is bound to.
 - Moved the v2 Companion .NET implementation out of the Godot addon install surface and extended clean Asset Library install plus project-discovery coverage so plugin-owned Companion projects are not compiled or discovered as user .NET projects.
 - Added docs i18n validation coverage to require each overview page to link the current `plugin.cfg` version's release-note source.

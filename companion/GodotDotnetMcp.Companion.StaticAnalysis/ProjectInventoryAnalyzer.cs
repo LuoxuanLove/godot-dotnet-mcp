@@ -36,6 +36,7 @@ public sealed class ProjectInventoryAnalyzer
         var projectScopes = isGodotProject
             ? BuildProjectScopes(normalizedRoot, csprojFiles)
             : [];
+        var defaultProjectScope = SelectDefaultProjectScope(projectScopes);
         var capabilities = BuildCapabilities(isGodotProject, dotnetWorkspace);
 
         return new ProjectInventory(
@@ -45,7 +46,8 @@ public sealed class ProjectInventoryAnalyzer
             ProjectFilePath: projectFilePath,
             CSharpProjectFiles: csprojFiles,
             CSharpProjectScopes: projectScopes,
-            DefaultCSharpProjectScope: SelectDefaultProjectScope(projectScopes),
+            DefaultCSharpProjectScope: defaultProjectScope,
+            ProjectScopeSelection: BuildProjectScopeSelection(isGodotProject, projectScopes, defaultProjectScope),
             DotnetWorkspace: dotnetWorkspace,
             ResourceReferences: resourceReferences,
             HasPluginDirectory: hasPluginDirectory,
@@ -82,6 +84,41 @@ public sealed class ProjectInventoryAnalyzer
     private static CSharpProjectScope? SelectDefaultProjectScope(IReadOnlyList<CSharpProjectScope> projectScopes)
     {
         return projectScopes.Count == 1 ? projectScopes[0] : null;
+    }
+
+    private static ProjectScopeSelection BuildProjectScopeSelection(
+        bool isGodotProject,
+        IReadOnlyList<CSharpProjectScope> projectScopes,
+        CSharpProjectScope? defaultProjectScope)
+    {
+        if (!isGodotProject)
+        {
+            return new ProjectScopeSelection(
+                RequiresExplicitSelection: false,
+                CandidateCount: 0,
+                Reason: "Requires a project.godot file before C# project scope selection is available.");
+        }
+
+        if (projectScopes.Count == 0)
+        {
+            return new ProjectScopeSelection(
+                RequiresExplicitSelection: false,
+                CandidateCount: 0,
+                Reason: "No .csproj files were discovered inside the project root.");
+        }
+
+        if (defaultProjectScope is not null)
+        {
+            return new ProjectScopeSelection(
+                RequiresExplicitSelection: false,
+                CandidateCount: projectScopes.Count,
+                Reason: "Exactly one .csproj scope was discovered and selected as the default.");
+        }
+
+        return new ProjectScopeSelection(
+            RequiresExplicitSelection: true,
+            CandidateCount: projectScopes.Count,
+            Reason: "Multiple .csproj scopes were discovered; clients must select an explicit project_id before starting a scoped session.");
     }
 
     private static IReadOnlyList<ProjectCapabilityStatus> BuildCapabilities(bool isGodotProject, DotnetWorkspaceGraph dotnetWorkspace)
