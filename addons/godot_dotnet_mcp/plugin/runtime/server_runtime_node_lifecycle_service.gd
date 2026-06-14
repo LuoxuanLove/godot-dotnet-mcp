@@ -65,9 +65,10 @@ func ensure_server_node(
 		)
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.initialize", initialize_started)
 
-	if server.has_method("set_disabled_tools"):
+	var disabled_tools = settings.get("disabled_tools", [])
+	if server.has_method("set_disabled_tools") and disabled_tools is Array and not (disabled_tools as Array).is_empty():
 		var disabled_tools_started = PluginSelfDiagnosticStore.begin_phase()
-		server.set_disabled_tools(settings.get("disabled_tools", []))
+		server.set_disabled_tools(disabled_tools)
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "server_node.set_disabled_tools", disabled_tools_started)
 
 	var signals_started = PluginSelfDiagnosticStore.begin_phase()

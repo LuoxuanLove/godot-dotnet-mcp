@@ -16,6 +16,8 @@ var _plugin: EditorPlugin
 var _server: Node
 var _stdio_server: Node
 var _active_transport_mode := ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE
+var _pending_runtime_settings: Dictionary = {}
+var _pending_disabled_tools: Array = []
 var _lsp_snapshot_service := ServerRuntimeLspDiagnosticsSnapshotService.new()
 var _node_lifecycle := ServerRuntimeNodeLifecycleService.new()
 var _settings_projection := ServerRuntimeSettingsProjectionService.new()
@@ -25,16 +27,10 @@ func attach(plugin: EditorPlugin, settings: Dictionary) -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("server_attach", "attach")
 	_plugin = plugin
 	var runtime_settings := _settings_projection.project(settings)
-	_server = _node_lifecycle.ensure_server_node(
-		_plugin,
-		_server,
-		runtime_settings,
-		false,
-		Callable(self, "_on_server_started"),
-		Callable(self, "_on_server_stopped"),
-		Callable(self, "_on_request_received")
-	)
-	_finish_operation(operation, _server != null, "server_runtime_controller", "attach")
+	_active_transport_mode = str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
+	_pending_runtime_settings = runtime_settings.duplicate(true)
+	_pending_disabled_tools = (runtime_settings.get("disabled_tools", []) as Array).duplicate()
+	_finish_operation(operation, _plugin != null, "server_runtime_controller", "attach")
 
 
 func detach() -> void:
@@ -46,6 +42,8 @@ func detach() -> void:
 	_stdio_server = null
 	_plugin = null
 	_active_transport_mode = ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE
+	_pending_runtime_settings = {}
+	_pending_disabled_tools = []
 	_finish_operation(operation, true, "server_runtime_controller", "detach")
 
 
@@ -55,6 +53,8 @@ func reinitialize(settings: Dictionary, reason: String = "manual") -> bool:
 	var phase_started = PluginSelfDiagnosticStore.begin_phase()
 	var runtime_settings := _settings_projection.project(settings)
 	_active_transport_mode = str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
+	_pending_runtime_settings = runtime_settings.duplicate(true)
+	_pending_disabled_tools = (runtime_settings.get("disabled_tools", []) as Array).duplicate()
 	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
 	return _reinitialize_runtime_settings(runtime_settings, reason, true, operation)
 
@@ -66,6 +66,8 @@ func start(settings: Dictionary, reason: String = "manual") -> bool:
 	var runtime_settings := _settings_projection.project(settings)
 	var transport_mode := str(runtime_settings.get("transport_mode", ServerRuntimeSettingsProjectionService.DEFAULT_TRANSPORT_MODE))
 	_active_transport_mode = transport_mode
+	_pending_runtime_settings = runtime_settings.duplicate(true)
+	_pending_disabled_tools = (runtime_settings.get("disabled_tools", []) as Array).duplicate()
 	PluginSelfDiagnosticStore.record_operation_phase(operation_id, "settings_projection", phase_started, {"reason": reason})
 	if not _reinitialize_runtime_settings(runtime_settings, reason, false, operation):
 		_finish_operation(operation, false, "server_runtime_controller", reason)
@@ -111,6 +113,8 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 		operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
 	var operation_id := str(operation.get("operation_id", ""))
 	var effective_reason := reason
+	_pending_runtime_settings = runtime_settings.duplicate(true)
+	_pending_disabled_tools = (runtime_settings.get("disabled_tools", []) as Array).duplicate()
 	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload"
 	if force_reload_server:
 		var dispose_started = PluginSelfDiagnosticStore.begin_phase()
@@ -324,6 +328,9 @@ func set_debug_mode(enabled: bool) -> void:
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
+	_pending_disabled_tools = disabled_tools.duplicate()
+	if not _pending_runtime_settings.is_empty():
+		_pending_runtime_settings["disabled_tools"] = _pending_disabled_tools.duplicate()
 	if _has_server_method("set_disabled_tools"):
 		_server.set_disabled_tools(disabled_tools)
 

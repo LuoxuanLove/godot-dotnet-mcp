@@ -34,8 +34,7 @@ func enter_tree(context: Dictionary) -> void:
 
 	_call_void(context.get("set_process_enabled", Callable()), [true])
 	if _call_bool(context.get("should_auto_start_server", Callable()), false):
-		_call_void(context.get("start_server_for_lifecycle", Callable()))
-		_call_void(context.get("refresh_dock_if_status_changed", Callable()))
+		_call_void(context.get("defer_start_server_for_lifecycle", Callable()))
 
 	_call_void(context.get("restore_pending_focus_snapshot_if_needed", Callable()))
 	_call_void(context.get("ensure_saved_update_source_discovery_requested", Callable()))

@@ -24,6 +24,7 @@ func build_plugin_lifecycle_context(plugin, constants: Dictionary) -> Dictionary
 		"set_process_enabled": _plugin_callable(plugin, "_set_plugin_process_enabled"),
 		"should_auto_start_server": _plugin_callable(plugin, "_should_auto_start_server"),
 		"start_server_for_lifecycle": _plugin_callable(plugin, "_start_server_for_lifecycle"),
+		"defer_start_server_for_lifecycle": _plugin_callable(plugin, "_defer_start_server_for_lifecycle"),
 		"restore_pending_focus_snapshot_if_needed": _plugin_callable(plugin, "_restore_pending_focus_snapshot_if_needed"),
 		"ensure_saved_update_source_discovery_requested": _plugin_callable(plugin, "_defer_saved_update_source_discovery_request"),
 		"save_settings": _plugin_callable(plugin, "_save_settings"),

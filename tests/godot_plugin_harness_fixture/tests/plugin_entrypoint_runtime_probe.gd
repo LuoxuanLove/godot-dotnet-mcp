@@ -24,14 +24,10 @@ class FakeEditorInterface extends RefCounted:
 
 class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd":
 
-	var _fake_server: Node = Node.new()
+	var _fake_server: Node = null
 	var _attached_plugin = null
 	var _attached_settings: Dictionary = {}
 	var _running := false
-
-
-	func _init() -> void:
-		_fake_server.name = "FakeServerControllerServer"
 
 
 	func attach(plugin, settings: Dictionary) -> void:
@@ -50,6 +46,9 @@ class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime
 
 	func start(_settings: Dictionary, _reason: String = "manual") -> bool:
 		_running = true
+		if _fake_server == null:
+			_fake_server = Node.new()
+			_fake_server.name = "FakeServerControllerServer"
 		return true
 
 

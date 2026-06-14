@@ -215,6 +215,11 @@ func _should_auto_start_server() -> bool:
 func _start_server_for_lifecycle() -> void:
 	if _server_controller != null:
 		_server_controller.start(_state.settings, "auto_start")
+		_refresh_dock_if_status_changed()
+
+
+func _defer_start_server_for_lifecycle() -> void:
+	call_deferred("_start_server_for_lifecycle")
 
 
 func _defer_saved_update_source_discovery_request() -> void:
@@ -727,12 +732,19 @@ func _apply_initial_tool_profile_if_needed() -> void:
 	if not _state.needs_initial_tool_profile_apply:
 		return
 
+	var profile_id := str(_state.settings.get("tool_profile_id", "default"))
+	if profile_id == "default" or profile_id == "full":
+		_state.needs_initial_tool_profile_apply = false
+		_state.settings["disabled_tools"] = []
+		_save_settings()
+		return
+
 	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
 	if tool_names.is_empty():
 		return
 
 	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-		str(_state.settings.get("tool_profile_id", "default")),
+		profile_id,
 		PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
 		_state.custom_tool_profiles,
 		tool_names,
