@@ -41,6 +41,7 @@ Target version: 2.0.0.
 - Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
 - Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
+- Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
 
 ### Documentation
 
