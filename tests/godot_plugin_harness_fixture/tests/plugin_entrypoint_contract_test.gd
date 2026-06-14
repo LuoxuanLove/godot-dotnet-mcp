@@ -44,8 +44,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _return_failure(tree, "runtime bridge autoload path should be registered during _enter_tree().")
 	if _probe_plugin.debugger_add_calls.size() != 1:
 		return _return_failure(tree, "plugin.gd should install the editor debugger bridge during _enter_tree().")
-	if _probe_plugin.get_server() == null:
-		return _return_failure(tree, "plugin.gd should attach a server controller during _enter_tree().")
+	if _probe_plugin._server_controller == null:
+		return _return_failure(tree, "plugin.gd should attach a server controller facade during _enter_tree().")
+	if _probe_plugin.get_server() != null:
+		return _return_failure(tree, "plugin.gd should defer HTTP server node creation during _enter_tree().")
 	for method_name in ["runtime_restart_server", "runtime_soft_reload", "runtime_full_reload"]:
 		if not _probe_plugin.has_method(method_name):
 			return _return_failure(tree, "plugin.gd should expose %s as a stable runtime reload entrypoint." % method_name)
@@ -92,6 +94,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if _probe_plugin.plugin_reenable_schedule_count != 1:
 		return _return_failure(tree, "plugin.gd should schedule only one full reload while a plugin re-enable is pending.")
 
+	var controller_attached_before_exit: bool = _probe_plugin._server_controller != null
 	_probe_plugin._exit_tree()
 	await tree.process_frame
 	await tree.process_frame
@@ -116,8 +119,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var autoload_install_count: int = _probe_plugin.autoload_install_calls.size()
 	var debugger_add_count: int = _probe_plugin.debugger_add_calls.size()
 	var dock_add_count: int = _probe_plugin.dock_add_calls.size()
-	var server_attached: bool = _probe_plugin.get_server() != null
 	_teardown_probe(tree)
+
+	var deferred_autostart_result := await _verify_auto_start_is_deferred(tree)
+	if not bool(deferred_autostart_result.get("success", false)):
+		return deferred_autostart_result
+	var full_profile_result := _verify_initial_full_profile_excludes_user_tools(tree)
+	if not bool(full_profile_result.get("success", false)):
+		return full_profile_result
 
 	return {
 		"name": "plugin_entrypoint_contracts",
@@ -127,11 +136,73 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"autoload_install_count": autoload_install_count,
 			"debugger_add_count": debugger_add_count,
 			"dock_add_count": dock_add_count,
-			"server_attached": server_attached,
+			"controller_attached_before_exit": controller_attached_before_exit,
+			"server_node_deferred": true,
 			"auto_start": persisted_auto_start,
 			"debug_mode": persisted_debug_mode
 		}
 	}
+
+
+func _verify_auto_start_is_deferred(tree: SceneTree) -> Dictionary:
+	_seed_saved_settings({
+		"auto_start": true,
+		"debug_mode": false
+	})
+	ProjectSettings.set_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, "")
+
+	_probe_base_control = Control.new()
+	_probe_base_control.name = "EntrypointAutoStartProbeRoot"
+	tree.root.add_child(_probe_base_control)
+
+	var probe_script = load(RUNTIME_PROBE_PLUGIN_PATH)
+	if probe_script == null or not probe_script.has_method("new"):
+		return _return_failure(tree, "plugin entrypoint runtime probe script should load for deferred auto-start verification.")
+	_probe_plugin = probe_script.new(_probe_base_control)
+	_probe_plugin._enter_tree()
+	_probe_entered = true
+	if _probe_plugin._server_controller == null:
+		return _return_failure(tree, "plugin.gd should attach a server controller facade before deferred auto-start.")
+	if bool(_probe_plugin._server_controller._running) or _probe_plugin.get_server() != null:
+		return _return_failure(tree, "plugin.gd should not start the server synchronously during _enter_tree() when auto_start=true.")
+	await tree.process_frame
+	if not bool(_probe_plugin._server_controller._running) or _probe_plugin.get_server() == null:
+		return _return_failure(tree, "plugin.gd should run deferred auto-start after _enter_tree() yields.")
+	_teardown_probe(tree)
+	return {"success": true, "error": ""}
+
+
+func _verify_initial_full_profile_excludes_user_tools(tree: SceneTree) -> Dictionary:
+	_seed_saved_settings({
+		"auto_start": false,
+		"debug_mode": false,
+		"tool_profile_id": "full",
+		"disabled_tools": []
+	})
+	ProjectSettings.set_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, "")
+
+	_probe_base_control = Control.new()
+	_probe_base_control.name = "EntrypointFullProfileProbeRoot"
+	tree.root.add_child(_probe_base_control)
+
+	var probe_script = load(RUNTIME_PROBE_PLUGIN_PATH)
+	if probe_script == null or not probe_script.has_method("new"):
+		return _return_failure(tree, "plugin entrypoint runtime probe script should load for full profile verification.")
+	_probe_plugin = probe_script.new(_probe_base_control)
+	_probe_plugin._enter_tree()
+	_probe_entered = true
+	_probe_plugin._state.needs_initial_tool_profile_apply = true
+	_probe_plugin._apply_initial_tool_profile_if_needed()
+	var disabled_tools: Array = _probe_plugin._state.settings.get("disabled_tools", [])
+	if not disabled_tools.has("user_sample_tool"):
+		return _return_failure(tree, "Initial full profile application should continue excluding user tools.")
+	if disabled_tools.has("system_project_state") or disabled_tools.has("system_runtime_control"):
+		return _return_failure(tree, "Initial full profile application should not disable system tools.")
+	var snapshots: Array = _probe_plugin._server_controller.disabled_tool_snapshots
+	if snapshots.is_empty() or not (snapshots.back() as Array).has("user_sample_tool"):
+		return _return_failure(tree, "Initial full profile application should propagate excluded user tools to the server controller.")
+	_teardown_probe(tree)
+	return {"success": true, "error": ""}
 
 
 func cleanup_case(_tree: SceneTree) -> void:

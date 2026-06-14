@@ -16,14 +16,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	_server = HttpServerScript.new()
 	_server.initialize(0, "127.0.0.1", false)
+	if _server.get("_service_bundle") != null:
+		return _failure("HTTP server initialize should not create the service bundle before runtime work is requested.")
 
 	var loader_status: Dictionary = _server.get_tool_loader_status()
+	if _server.get("_service_bundle") != null:
+		return _failure("HTTP server status reads should not create the service bundle before runtime work is requested.")
 	var loader_required_keys := ["initialized", "healthy", "status", "tool_count", "exposed_tool_count", "category_count", "tool_load_error_count", "last_summary"]
-	for key in loader_required_keys:
-		if not loader_status.has(key):
-			return _failure("Tool loader status is missing key '%s'." % key)
-	if str(loader_status.get("status", "")).is_empty():
-		return _failure("Tool loader status did not expose a status label.")
+	if not loader_status.is_empty():
+		for key in loader_required_keys:
+			if not loader_status.has(key):
+				return _failure("Tool loader status is missing key '%s'." % key)
+		if str(loader_status.get("status", "")).is_empty():
+			return _failure("Tool loader status did not expose a status label.")
 	if bool(loader_status.get("initialized", false)):
 		return _failure("HTTP server initialize should remain lightweight and not register tools before the first tool request.")
 	if int(loader_status.get("tool_count", 0)) != 0:
@@ -75,12 +80,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(loader_status.get("tool_count", 0)) != 0:
 		return _failure("JSON-RPC prompts/list should not scan tool definitions.")
 
-	var auto_start_summary: Dictionary = _server.reinitialize(0, "127.0.0.1", false, [], "auto_start")
+	var fresh_auto_start_server = HttpServerScript.new()
+	fresh_auto_start_server.initialize(0, "127.0.0.1", false)
+	var auto_start_summary: Dictionary = fresh_auto_start_server.reinitialize(0, "127.0.0.1", false, [], "auto_start")
 	if int(auto_start_summary.get("tool_count", 0)) != 0:
 		return _failure("HTTP server auto_start reinitialize should remain lightweight and not scan tools.")
-	loader_status = _server.get_tool_loader_status()
+	if fresh_auto_start_server.get("_service_bundle") != null:
+		return _failure("HTTP server auto_start reinitialize with no disabled tools should not create the service bundle.")
+	loader_status = fresh_auto_start_server.get_tool_loader_status()
+	if fresh_auto_start_server.get("_service_bundle") != null:
+		return _failure("HTTP server post-auto-start status reads should remain lightweight.")
 	if bool(loader_status.get("initialized", false)):
 		return _failure("HTTP server auto_start reinitialize should not register tools.")
+	fresh_auto_start_server.dispose()
+	fresh_auto_start_server.free()
 
 	var tools_list: Dictionary = _server.build_tools_api_snapshot()
 	loader_status = _server.get_tool_loader_status()

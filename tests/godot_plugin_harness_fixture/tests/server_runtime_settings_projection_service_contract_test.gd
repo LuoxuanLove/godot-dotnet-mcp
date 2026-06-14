@@ -117,6 +117,17 @@ func _assert_stdio_transport_controller_guard() -> Dictionary:
 		return _failure("ServerRuntimeController should not tie stdio-only startup to the HTTP listener result.")
 	if source.find('if _active_transport_mode == "stdio":') == -1 or source.find("return is_stdio_running()") == -1:
 		return _failure("ServerRuntimeController.is_running should report stdio server state in stdio-only mode.")
+	var attach_pos := source.find("func attach(")
+	var reinitialize_pos := source.find("func reinitialize(")
+	if attach_pos == -1 or reinitialize_pos == -1 or attach_pos > reinitialize_pos:
+		return _failure("ServerRuntimeController source should expose attach before reinitialize for startup guard checks.")
+	var attach_body := source.substr(attach_pos, reinitialize_pos - attach_pos)
+	if attach_body.find("ensure_server_node(") != -1:
+		return _failure("ServerRuntimeController.attach should stay lightweight and defer HTTP server node creation until start/reinitialize.")
+	if attach_body.find("_pending_runtime_settings = runtime_settings.duplicate(true)") == -1:
+		return _failure("ServerRuntimeController.attach should cache projected runtime settings for deferred startup.")
+	if source.find("func set_disabled_tools(disabled_tools: Array) -> void:\n\t_pending_disabled_tools = disabled_tools.duplicate()") == -1:
+		return _failure("ServerRuntimeController.set_disabled_tools should preserve pending settings before the server node exists.")
 	return {"success": true, "error": ""}
 
 

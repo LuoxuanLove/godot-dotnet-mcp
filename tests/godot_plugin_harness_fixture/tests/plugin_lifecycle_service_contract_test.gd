@@ -37,6 +37,7 @@ class FakeLifecycleContext:
 			"set_process_enabled": Callable(self, "set_process_enabled"),
 			"should_auto_start_server": Callable(self, "should_auto_start_server"),
 			"start_server_for_lifecycle": Callable(self, "start_server_for_lifecycle"),
+			"defer_start_server_for_lifecycle": Callable(self, "defer_start_server_for_lifecycle"),
 			"restore_pending_focus_snapshot_if_needed": Callable(self, "restore_pending_focus_snapshot_if_needed"),
 			"ensure_saved_update_source_discovery_requested": Callable(self, "ensure_saved_update_source_discovery_requested"),
 			"save_settings": Callable(self, "save_settings"),
@@ -69,6 +70,7 @@ class FakeLifecycleContext:
 	func refresh_dock() -> void: calls.append("refresh_dock")
 	func refresh_dock_if_status_changed() -> void: calls.append("refresh_dock_if_status_changed")
 	func start_server_for_lifecycle() -> void: calls.append("start_server_for_lifecycle")
+	func defer_start_server_for_lifecycle() -> void: calls.append("defer_start_server_for_lifecycle")
 	func restore_pending_focus_snapshot_if_needed() -> void: calls.append("restore_pending_focus_snapshot_if_needed")
 	func ensure_saved_update_source_discovery_requested() -> void: calls.append("ensure_saved_update_source_discovery_requested")
 	func save_settings() -> void: calls.append("save_settings")
@@ -124,6 +126,7 @@ class FakeLifecycleContext:
 	func _set_plugin_process_enabled(enabled: bool) -> void: set_process_enabled(enabled)
 	func _should_auto_start_server() -> bool: return should_auto_start_server()
 	func _start_server_for_lifecycle() -> void: start_server_for_lifecycle()
+	func _defer_start_server_for_lifecycle() -> void: defer_start_server_for_lifecycle()
 	func _restore_pending_focus_snapshot_if_needed() -> void: restore_pending_focus_snapshot_if_needed()
 	func _defer_saved_update_source_discovery_request() -> void: ensure_saved_update_source_discovery_requested()
 	func _save_settings() -> void: save_settings()
@@ -170,8 +173,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"refresh_dock",
 		"set_process_enabled:true",
 		"should_auto_start_server",
-		"start_server_for_lifecycle",
-		"refresh_dock_if_status_changed",
+		"defer_start_server_for_lifecycle",
 		"restore_pending_focus_snapshot_if_needed",
 		"ensure_saved_update_source_discovery_requested"
 	]
@@ -183,7 +185,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var no_autostart_context := FakeLifecycleContext.new()
 	no_autostart_context.auto_start = false
 	service.enter_tree(no_autostart_context.build())
-	if no_autostart_context.calls.has("start_server_for_lifecycle"):
+	if no_autostart_context.calls.has("start_server_for_lifecycle") or no_autostart_context.calls.has("defer_start_server_for_lifecycle"):
 		return _failure("Plugin lifecycle service should not start the server when auto_start is disabled.")
 
 	var exit_context := FakeLifecycleContext.new()
@@ -250,6 +252,8 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())",
+		"func _defer_start_server_for_lifecycle()",
+		"call_deferred(\"_start_server_for_lifecycle\")",
 		"_user_tool_watch_tick_accumulator += maxf(delta, 0.0)",
 		"const USER_TOOL_WATCH_TICK_INTERVAL := 0.25",
 		"func _get_plugin_lifecycle_context()",
@@ -261,7 +265,8 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 	for forbidden in [
 		"\"refresh_service_instances\": Callable(self",
 		"\"load_state\": Callable(self",
-		"\"finish_self_operation\": Callable(self"
+		"\"finish_self_operation\": Callable(self",
+		"_plugin_lifecycle_service.enter_tree(_get_plugin_lifecycle_context())"
 	]:
 		if source.find(forbidden) != -1:
 			return "Plugin entrypoint should not rebuild lifecycle context callback maps: %s" % forbidden
