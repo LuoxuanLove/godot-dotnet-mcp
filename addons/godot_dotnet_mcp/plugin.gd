@@ -1090,7 +1090,7 @@ func _build_update_archive_request_attempts(target: Dictionary) -> Array:
 	var target_commit := str(target.get("commit", "")).strip_edges()
 	var encoded_ref := _encode_update_archive_ref_path(target_ref)
 	var attempts: Array = []
-	if not target_commit.is_empty():
+	if target_kind == "branch" and not target_commit.is_empty():
 		attempts.append({
 			"label": "codeload commit archive",
 			"url": "%s%s" % [UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX, target_commit.uri_encode()]
@@ -1109,7 +1109,7 @@ func _build_update_archive_request_attempts(target: Dictionary) -> Array:
 				"label": "github tag archive",
 				"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX, encoded_ref]
 			})
-		else:
+		elif target_commit.is_empty():
 			attempts.append({
 				"label": "codeload branch archive",
 				"url": "%s%s" % [UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX, encoded_ref]

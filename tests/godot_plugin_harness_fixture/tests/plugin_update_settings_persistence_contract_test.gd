@@ -226,15 +226,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		target_probe.free()
 		return _failure("plugin.gd should not resolve tag archive targets through the branch API.")
 	var archive_attempts := target_probe._build_update_archive_request_attempts({"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha"})
-	if archive_attempts.size() < 4:
+	if archive_attempts.size() != 2:
 		target_probe.free()
-		return _failure("plugin.gd should build commit-first archive fallback attempts for branch sync.")
+		return _failure("plugin.gd should only use immutable commit archive attempts after resolving branch sync commits.")
 	if not str((archive_attempts[0] as Dictionary).get("url", "")).ends_with("/zip/target-sha"):
 		target_probe.free()
 		return _failure("plugin.gd should prefer codeload commit archive downloads when target commit metadata is known.")
-	if str((archive_attempts[2] as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") == -1:
+	for archive_attempt in archive_attempts:
+		if str((archive_attempt as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") != -1:
+			target_probe.free()
+			return _failure("plugin.gd should not fallback to mutable branch archives after resolving a branch commit.")
+	var unresolved_branch_attempts := target_probe._build_update_archive_request_attempts({"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""})
+	if unresolved_branch_attempts.size() != 2 or str((unresolved_branch_attempts[0] as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") == -1:
 		target_probe.free()
-		return _failure("plugin.gd should keep slash-containing branch refs usable for codeload archive fallback.")
+		return _failure("plugin.gd should keep slash-containing branch refs usable only when branch commit metadata is unavailable.")
+	var tag_attempts := target_probe._build_update_archive_request_attempts({"kind": "tag", "ref": "v2.0.0", "commit": "dev"})
+	if tag_attempts.size() != 2:
+		target_probe.free()
+		return _failure("plugin.gd should ignore release target_commitish values and sync tags by tag archive.")
+	for tag_attempt in tag_attempts:
+		var tag_url := str((tag_attempt as Dictionary).get("url", ""))
+		if tag_url.find("/zip/dev") != -1 or tag_url.find("/archive/dev.zip") != -1:
+			target_probe.free()
+			return _failure("plugin.gd should not use mutable release target_commitish values as tag sync archives.")
 	target_probe._state.settings["update_source"] = "latest_stable"
 	if not target_probe._should_discover_update_target_before_sync():
 		target_probe.free()
