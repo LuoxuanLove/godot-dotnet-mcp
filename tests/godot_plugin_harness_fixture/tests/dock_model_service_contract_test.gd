@@ -78,6 +78,8 @@ class FakeServerController extends ServerRuntimeController:
 
 
 class FakeServer extends Node:
+	var project_state_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+
 	func get_tool_loader():
 		return self
 
@@ -93,7 +95,7 @@ class FakeServer extends Node:
 			"category": "system",
 			"source": "builtin",
 			"load_state": "loaded",
-			"script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+			"script_path": project_state_script_path
 		}, {
 			"name": "system_tool_activity",
 			"category": "system",
@@ -128,7 +130,7 @@ class FakeServer extends Node:
 	func get_all_tools_by_category() -> Dictionary:
 		return {
 			"system": [
-				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"},
+				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": project_state_script_path},
 				{"name": "tool_activity", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"},
 				{"name": "runtime_diagnose"}
 			],
@@ -320,6 +322,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should keep diagnostics presentation available without mixing it into the default tree.")
 	if not (model.get("mcp_resources", []) as Array).is_empty() or not (model.get("mcp_prompts", []) as Array).is_empty():
 		return _failure("Dock Tools tab should not build the Resources/Prompts protocol projection.")
+
+	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
+	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
+	var refreshed_model: Dictionary = service.build_model()
+	var refreshed_presentation: Dictionary = refreshed_model.get("tool_presentation", {})
+	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
+	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
+	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
+		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
 
 	state.current_tab = 2
 	var resources_model: Dictionary = service.build_model()

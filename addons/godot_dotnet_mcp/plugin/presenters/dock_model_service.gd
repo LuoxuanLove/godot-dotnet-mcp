@@ -402,13 +402,17 @@ func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settin
 		var raw_status = loader.get_tool_loader_status()
 		if raw_status is Dictionary:
 			loader_status = raw_status
-	var categories := []
+	var tool_entries := []
 	for category in tools_by_category.keys():
 		var tools = tools_by_category.get(category, [])
-		categories.append("%s:%d" % [str(category), (tools as Array).size() if tools is Array else 0])
-	categories.sort()
+		if not (tools is Array):
+			tool_entries.append({"category": str(category), "invalid": true})
+			continue
+		for tool in tools:
+			tool_entries.append(_build_tool_signature_entry(str(category), tool))
+	tool_entries.sort_custom(Callable(self, "_sort_tool_signature_entries"))
 	return JSON.stringify({
-		"categories": categories,
+		"tools": tool_entries,
 		"disabled": settings.get("disabled_tools", []),
 		"loader_initialized": bool(loader_status.get("initialized", false)),
 		"loader_status": str(loader_status.get("status", "")),
@@ -417,6 +421,28 @@ func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settin
 		"category_count": int(loader_status.get("category_count", 0)),
 		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0))
 	})
+
+
+func _build_tool_signature_entry(category: String, tool) -> Dictionary:
+	if not (tool is Dictionary):
+		return {"category": category, "invalid": true}
+	var tool_def := tool as Dictionary
+	return {
+		"category": category,
+		"name": str(tool_def.get("name", "")),
+		"description": str(tool_def.get("description", "")),
+		"source": str(tool_def.get("source", "")),
+		"load_state": str(tool_def.get("load_state", "")),
+		"script_path": str(tool_def.get("script_path", "")),
+		"input_schema": tool_def.get("inputSchema", tool_def.get("parameters", {})),
+		"output_schema": tool_def.get("outputSchema", {}),
+		"annotations": tool_def.get("annotations", {}),
+		"presentation": tool_def.get("presentation", {})
+	}
+
+
+func _sort_tool_signature_entries(left, right) -> bool:
+	return JSON.stringify(left) < JSON.stringify(right)
 
 
 func _build_mcp_projection_signature() -> String:

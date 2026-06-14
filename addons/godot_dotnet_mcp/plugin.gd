@@ -723,6 +723,13 @@ func _build_dock_refresh_status_signature_data_from_model(model: Dictionary) -> 
 	}
 
 
+func _get_state_value(property_name: String, default_value = null):
+	if _state == null:
+		return default_value
+	var value = _state.get(property_name)
+	return default_value if value == null else value
+
+
 func _apply_initial_tool_profile_if_needed() -> void:
 	if not _state.needs_initial_tool_profile_apply:
 		return
