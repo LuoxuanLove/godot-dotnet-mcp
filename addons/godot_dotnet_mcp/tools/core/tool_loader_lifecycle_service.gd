@@ -5,6 +5,7 @@ class_name ToolLoaderLifecycleService
 
 func initialize(disabled_tools: Array, force_reload_scripts: bool, context: Dictionary) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
+	var preload_enabled := _call_bool(context.get("should_preload_runtimes", Callable()), [], false)
 	_call_void(context.get("set_force_reload_script_load", Callable()), [force_reload_scripts])
 	_call_void(context.get("set_disabled_tools", Callable()), [disabled_tools])
 	_call_void(context.get("reset_state", Callable()))
@@ -17,11 +18,13 @@ func initialize(disabled_tools: Array, force_reload_scripts: bool, context: Dict
 	_performance(context)["definition_scan_ms"] = _elapsed_ms(definition_started)
 
 	var preload_started := Time.get_ticks_usec()
-	for category in _ordered_categories(context):
-		var category_name := str(category)
-		if _call_bool(context.get("category_has_enabled_tools", Callable()), [category_name], false):
-			_call_dictionary(context.get("ensure_runtime_loaded", Callable()), [category_name, "preload"])
-	_performance(context)["preload_ms"] = _elapsed_ms(preload_started)
+	if preload_enabled:
+		for category in _ordered_categories(context):
+			var category_name := str(category)
+			if _call_bool(context.get("category_has_enabled_tools", Callable()), [category_name], false):
+				_call_dictionary(context.get("ensure_runtime_loaded", Callable()), [category_name, "preload"])
+	_performance(context)["preload_ms"] = _elapsed_ms(preload_started) if preload_enabled else 0.0
+	_performance(context)["preload_skipped"] = not preload_enabled
 	_performance(context)["startup_ms"] = _elapsed_ms(started_usec)
 	_call_status(context, _make_reload_status(context, "initialize"))
 	_call_void(context.get("sync_load_error_incidents", Callable()), ["initialize"])
@@ -37,7 +40,8 @@ func initialize(disabled_tools: Array, force_reload_scripts: bool, context: Dict
 
 
 func shutdown(context: Dictionary) -> void:
-	for category in _runtime_by_category(context).keys():
+	var categories := _runtime_by_category(context).keys()
+	for category in categories:
 		_call_void(context.get("unload_runtime", Callable()), [str(category), "shutdown"])
 	_call_void(context.get("dispose_gdscript_lsp_diagnostics_adapter", Callable()))
 	_call_void(context.get("set_force_reload_script_load", Callable()), [false])

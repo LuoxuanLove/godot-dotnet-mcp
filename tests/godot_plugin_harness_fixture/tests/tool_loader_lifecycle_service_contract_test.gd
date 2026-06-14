@@ -34,6 +34,7 @@ class FakeLifecycleContext:
 	var tick_result: Dictionary = {}
 	var tick_deltas: Array = []
 	var lsp_tick_deltas: Array = []
+	var preload_runtimes := false
 
 	func build() -> Dictionary:
 		return {
@@ -53,6 +54,7 @@ class FakeLifecycleContext:
 			"refresh_entries": Callable(self, "refresh_entries"),
 			"ensure_tool_definitions": Callable(self, "ensure_tool_definitions"),
 			"category_has_enabled_tools": Callable(self, "category_has_enabled_tools"),
+			"should_preload_runtimes": Callable(self, "should_preload_runtimes"),
 			"ensure_runtime_loaded": Callable(self, "ensure_runtime_loaded"),
 			"unload_runtime": Callable(self, "unload_runtime"),
 			"tick_loaded_runtimes": Callable(self, "tick_loaded_runtimes"),
@@ -102,6 +104,9 @@ class FakeLifecycleContext:
 
 	func category_has_enabled_tools(category: String) -> bool:
 		return not bool(disabled_categories.get(category, false))
+
+	func should_preload_runtimes() -> bool:
+		return preload_runtimes
 
 	func ensure_runtime_loaded(category: String, reason: String) -> Dictionary:
 		ensured_runtimes.append({
@@ -173,10 +178,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle service should reset state, LSP diagnostics, and entries during initialize.")
 	if init_context.ensured_definitions != ["system", "project", "debug"]:
 		return _failure("Lifecycle service should scan definitions for all ordered categories.")
-	if init_context.ensured_runtimes.size() != 2:
-		return _failure("Lifecycle service should preload only enabled categories.")
-	if str((init_context.ensured_runtimes[0] as Dictionary).get("reason", "")) != "preload":
-		return _failure("Lifecycle service should preserve preload runtime reasons.")
+	if not init_context.ensured_runtimes.is_empty():
+		return _failure("Lifecycle service should skip runtime preload by default.")
+	if float(init_context.performance.get("preload_ms", 1.0)) != 0.0 or not bool(init_context.performance.get("preload_skipped", false)):
+		return _failure("Lifecycle service should report skipped preload without recording startup preload time.")
 	if init_context.reload_statuses.is_empty() or str((init_context.reload_statuses[0] as Dictionary).get("action", "")) != "initialize":
 		return _failure("Lifecycle service should publish initialize reload status.")
 	if init_context.sync_actions != ["initialize"] or init_context.runtime_refresh_count != 1:
@@ -185,6 +190,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle service should return loader summary counts from callbacks.")
 	if float(init_context.performance.get("startup_ms", 0.0)) <= 0.0:
 		return _failure("Lifecycle service should update startup performance metrics.")
+
+	var preload_context := FakeLifecycleContext.new()
+	preload_context.preload_runtimes = true
+	preload_context.ordered_categories = ["system", "project", "debug"]
+	preload_context.disabled_categories = {"debug": true}
+	service.initialize([], false, preload_context.build())
+	if preload_context.ensured_runtimes.size() != 2:
+		return _failure("Lifecycle service should preload only enabled categories when explicit preload is requested.")
+	if str((preload_context.ensured_runtimes[0] as Dictionary).get("reason", "")) != "preload":
+		return _failure("Lifecycle service should preserve preload runtime reasons when preloading is enabled.")
+	if bool(preload_context.performance.get("preload_skipped", true)):
+		return _failure("Lifecycle service should mark preload_skipped=false when explicit preload runs.")
 
 	var disabled_context := FakeLifecycleContext.new()
 	disabled_context.ordered_categories = ["system", "debug"]

@@ -87,6 +87,7 @@ var _update_compare_request_serial := 0
 var _update_ref_version_request_serial := 0
 var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
+var _last_dock_refresh_status_signature := ""
 
 
 func _init() -> void:
@@ -615,7 +616,79 @@ func _refresh_dock() -> void:
 		_user_tool_watch_service,
 		Callable(self, "_get_editor_scale")
 	)
-	_dock.call("apply_model", _dock_model_service.build_model())
+	var model: Dictionary = _dock_model_service.build_model()
+	_last_dock_refresh_status_signature = _build_dock_refresh_status_signature()
+	_dock.call("apply_model", model)
+
+
+func _refresh_dock_if_status_changed() -> void:
+	var signature := _build_dock_refresh_status_signature()
+	if signature == _last_dock_refresh_status_signature:
+		return
+	_refresh_dock()
+
+
+func _build_dock_refresh_status_signature() -> String:
+	if _state == null:
+		return ""
+	return JSON.stringify(_build_dock_refresh_status_signature_data())
+
+
+func _build_dock_refresh_status_signature_data() -> Dictionary:
+	var server_running := false
+	var connection_count := 0
+	var tool_loader_status := {}
+	var user_watch_status := {}
+	var connection_stats := {}
+	if _server_controller != null:
+		if _server_controller.has_method("is_running"):
+			server_running = bool(_server_controller.is_running())
+		if _server_controller.has_method("get_connection_count"):
+			connection_count = int(_server_controller.get_connection_count())
+		var status = {}
+		if _server_controller.has_method("peek_tool_loader_status"):
+			status = _server_controller.peek_tool_loader_status()
+		elif _server_controller.has_method("get_tool_loader_status"):
+			status = _server_controller.get_tool_loader_status()
+		if status is Dictionary:
+			tool_loader_status = status
+		if _server_controller.has_method("get_connection_stats"):
+			var stats = _server_controller.get_connection_stats()
+			if stats is Dictionary:
+				connection_stats = stats
+	if _user_tool_watch_service != null:
+		var watch_status = _user_tool_watch_service.get_status()
+		if watch_status is Dictionary:
+			user_watch_status = watch_status
+	return {
+		"tab": int(_state.current_tab),
+		"running": server_running,
+		"connections": connection_count,
+		"total_requests": int(connection_stats.get("total_requests", 0)),
+		"rejected_requests": int(connection_stats.get("rejected_requests", 0)),
+		"last_request_id": str(connection_stats.get("last_request_id", "")),
+		"loader_initialized": bool(tool_loader_status.get("initialized", false)),
+		"loader_status": str(tool_loader_status.get("status", "")),
+		"tool_count": int(tool_loader_status.get("tool_count", 0)),
+		"exposed_tool_count": int(tool_loader_status.get("exposed_tool_count", 0)),
+		"category_count": int(tool_loader_status.get("category_count", 0)),
+		"tool_load_error_count": int(tool_loader_status.get("tool_load_error_count", 0)),
+		"user_watch_enabled": bool(user_watch_status.get("enabled", false)),
+		"user_watch_watching": bool(user_watch_status.get("watching", false)),
+		"user_watch_count": int(user_watch_status.get("known_script_count", 0)),
+		"user_watch_change": str(user_watch_status.get("last_change_reason", "")),
+		"user_watch_error": str(user_watch_status.get("last_error", "")),
+		"update_refs_state": str(_get_state_value("update_refs_state", "idle")),
+		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
+		"update_sync_state": str(_get_state_value("update_sync_state", "idle"))
+	}
+
+
+func _get_state_value(property_name: String, default_value = null):
+	if _state == null:
+		return default_value
+	var value = _state.get(property_name)
+	return default_value if value == null else value
 
 
 func _apply_initial_tool_profile_if_needed() -> void:

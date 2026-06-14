@@ -55,6 +55,7 @@ var _context_service = ToolLoaderContextServiceScript.new()
 var _query_service = ToolLoaderQueryServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
+var _preload_runtimes_on_initialize := false
 
 
 func _init() -> void:
@@ -139,6 +140,10 @@ func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) 
 	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
 
 
+func set_preload_runtimes_on_initialize(enabled: bool) -> void:
+	_preload_runtimes_on_initialize = enabled
+
+
 func set_tool_activity_registry(registry) -> void:
 	_ensure_services_ready()
 	if _tool_activity_registry == registry:
@@ -159,6 +164,9 @@ func reload_registry(disabled_tools: Array = []) -> Dictionary:
 func shutdown() -> void:
 	_ensure_services_ready()
 	_lifecycle_service.shutdown(_build_lifecycle_context())
+	_execution_observer.set_activity_registry(null)
+	_tool_activity_registry = null
+	_refresh_runtime_context()
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
@@ -371,6 +379,10 @@ func _set_disabled_tools(disabled_tools: Array) -> void:
 
 func _ensure_tool_definitions(category: String) -> Array:
 	return _runtime_state_service.ensure_tool_definitions(category, _build_runtime_state_context())
+
+
+func _should_preload_runtimes() -> bool:
+	return _preload_runtimes_on_initialize
 
 
 func _ensure_runtime_loaded(category: String, reason: String) -> Dictionary:

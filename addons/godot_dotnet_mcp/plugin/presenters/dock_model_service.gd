@@ -26,6 +26,10 @@ var _self_diagnostic_feature
 var _get_editor_scale := Callable()
 var _plugin_version_cache := ""
 var _plugin_version_loaded := false
+var _last_catalog_signature := ""
+var _last_catalog_snapshot: Dictionary = {}
+var _last_mcp_projection_signature := ""
+var _last_mcp_catalog_projection: Dictionary = {}
 
 
 func configure(
@@ -113,6 +117,10 @@ func dispose() -> void:
 	_get_editor_scale = Callable()
 	_plugin_version_cache = ""
 	_plugin_version_loaded = false
+	_last_catalog_signature = ""
+	_last_catalog_snapshot = {}
+	_last_mcp_projection_signature = ""
+	_last_mcp_catalog_projection = {}
 
 
 func build_model() -> Dictionary:
@@ -120,19 +128,27 @@ func build_model() -> Dictionary:
 		return {}
 
 	var settings = _get_settings()
-	var all_tools_by_category = _get_all_tools_by_category()
-	var tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
-	var catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
-	var tool_presentation = catalog_snapshot.get("presentation", {})
+	var current_tab := int(_state.current_tab)
+	var needs_tool_catalog := _tab_needs_tool_catalog(current_tab)
+	var needs_mcp_catalog := _tab_needs_mcp_catalog(current_tab)
+	var all_tools_by_category := {}
+	var tools_by_category := {}
+	var catalog_snapshot := {}
+	var tool_presentation := {}
+	if needs_tool_catalog:
+		all_tools_by_category = _get_all_tools_by_category()
+		tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
+		catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
+		tool_presentation = catalog_snapshot.get("presentation", {})
 	var self_diagnostics = _build_self_diagnostic_health_snapshot()
 	var client_install_statuses := {}
 	var plugin_freshness := {}
 	var plugin_version := ""
-	var mcp_catalog_projection := _build_mcp_catalog_projection()
+	var mcp_catalog_projection := _build_mcp_catalog_projection() if needs_mcp_catalog else {}
 
-	if int(_state.current_tab) == 4:
+	if current_tab == 4:
 		client_install_statuses = _get_client_install_statuses(settings)
-	if int(_state.current_tab) == 5:
+	if current_tab == 5:
 		plugin_freshness = _get_plugin_freshness_snapshot()
 		plugin_version = _read_plugin_version()
 
@@ -154,7 +170,7 @@ func build_model() -> Dictionary:
 		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
-		"domain_defs": (catalog_snapshot.get("catalog_manifest", {}) as Dictionary).get("domain_defs", MCPToolManifest.TOOL_DOMAIN_DEFS),
+		"domain_defs": _get_domain_defs(catalog_snapshot),
 		"tool_presentation": tool_presentation,
 		"agent_tool_presentation": catalog_snapshot.get("agent_tool_presentation", {}),
 		"internal_executor_presentation": catalog_snapshot.get("internal_executor_presentation", {}),
@@ -238,12 +254,17 @@ func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dicti
 	var loader = _get_tool_loader()
 	if loader == null:
 		return {}
+	var signature := _build_tool_catalog_signature(loader, tools_by_category, settings)
+	if signature == _last_catalog_signature:
+		return _last_catalog_snapshot.duplicate(true)
 	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
 		"all_tools_by_category": tools_by_category,
 		"exposed_tools": _build_exposed_tool_definitions(tools_by_category),
 		"disabled_tools": settings.get("disabled_tools", [])
 	})
 	if bool(snapshot.get("success", false)):
+		_last_catalog_signature = signature
+		_last_catalog_snapshot = snapshot.duplicate(true)
 		return snapshot
 	return {}
 
@@ -251,7 +272,15 @@ func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dicti
 func _build_mcp_catalog_projection() -> Dictionary:
 	if _mcp_catalog_projection_service == null:
 		return {}
-	return _mcp_catalog_projection_service.build_projection()
+	var signature := _build_mcp_projection_signature()
+	if signature == _last_mcp_projection_signature:
+		return _last_mcp_catalog_projection.duplicate(true)
+	var projection = _mcp_catalog_projection_service.build_projection()
+	if projection is Dictionary:
+		_last_mcp_projection_signature = signature
+		_last_mcp_catalog_projection = (projection as Dictionary).duplicate(true)
+		return projection
+	return {}
 
 
 func _configure_mcp_catalog_projection_service() -> void:
@@ -348,6 +377,84 @@ func _get_all_tools_by_category() -> Dictionary:
 	if tools is Dictionary:
 		return (tools as Dictionary).duplicate(true)
 	return {}
+
+
+func _tab_needs_tool_catalog(current_tab: int) -> bool:
+	return current_tab == 1
+
+
+func _tab_needs_mcp_catalog(current_tab: int) -> bool:
+	return current_tab == 2 or current_tab == 3
+
+
+func _get_domain_defs(catalog_snapshot: Dictionary) -> Array:
+	var manifest = catalog_snapshot.get("catalog_manifest", {})
+	if manifest is Dictionary:
+		var defs = (manifest as Dictionary).get("domain_defs", [])
+		if defs is Array:
+			return defs
+	return MCPToolManifest.TOOL_DOMAIN_DEFS
+
+
+func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settings: Dictionary) -> String:
+	var loader_status := {}
+	if loader != null and loader.has_method("get_tool_loader_status"):
+		var raw_status = loader.get_tool_loader_status()
+		if raw_status is Dictionary:
+			loader_status = raw_status
+	var tool_entries := []
+	for category in tools_by_category.keys():
+		var tools = tools_by_category.get(category, [])
+		if not (tools is Array):
+			tool_entries.append({"category": str(category), "invalid": true})
+			continue
+		for tool in tools:
+			tool_entries.append(_build_tool_signature_entry(str(category), tool))
+	tool_entries.sort_custom(Callable(self, "_sort_tool_signature_entries"))
+	return JSON.stringify({
+		"tools": tool_entries,
+		"disabled": settings.get("disabled_tools", []),
+		"loader_initialized": bool(loader_status.get("initialized", false)),
+		"loader_status": str(loader_status.get("status", "")),
+		"tool_count": int(loader_status.get("tool_count", 0)),
+		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
+		"category_count": int(loader_status.get("category_count", 0)),
+		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0))
+	})
+
+
+func _build_tool_signature_entry(category: String, tool) -> Dictionary:
+	if not (tool is Dictionary):
+		return {"category": category, "invalid": true}
+	var tool_def := tool as Dictionary
+	return {
+		"category": category,
+		"name": str(tool_def.get("name", "")),
+		"description": str(tool_def.get("description", "")),
+		"source": str(tool_def.get("source", "")),
+		"load_state": str(tool_def.get("load_state", "")),
+		"script_path": str(tool_def.get("script_path", "")),
+		"input_schema": tool_def.get("inputSchema", tool_def.get("parameters", {})),
+		"output_schema": tool_def.get("outputSchema", {}),
+		"annotations": tool_def.get("annotations", {}),
+		"presentation": tool_def.get("presentation", {})
+	}
+
+
+func _sort_tool_signature_entries(left, right) -> bool:
+	return JSON.stringify(left) < JSON.stringify(right)
+
+
+func _build_mcp_projection_signature() -> String:
+	var loader_status = _get_tool_loader_status_for_mcp_catalog()
+	return JSON.stringify({
+		"loader_initialized": bool(loader_status.get("initialized", false)),
+		"loader_status": str(loader_status.get("status", "")),
+		"tool_count": int(loader_status.get("tool_count", 0)),
+		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
+		"category_count": int(loader_status.get("category_count", 0)),
+		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0))
+	})
 
 
 func _filter_visible_tools_by_category(all_tools_by_category: Dictionary) -> Dictionary:

@@ -54,13 +54,17 @@ func configure(server, connection_state) -> void:
 
 
 func ensure_initialized() -> void:
-	_ensure_tool_loader_supervisor()
-	_ensure_http_response_service()
+	ensure_shell_initialized()
 	_ensure_http_request_router()
 	_ensure_http_request_decoder()
 	_ensure_tools_api_service()
 	_ensure_editor_lifecycle_endpoint()
 	_ensure_runtime_control_service()
+
+
+func ensure_shell_initialized() -> void:
+	_ensure_tool_loader_supervisor()
+	_ensure_http_response_service()
 
 
 func get_tool_loader_supervisor():

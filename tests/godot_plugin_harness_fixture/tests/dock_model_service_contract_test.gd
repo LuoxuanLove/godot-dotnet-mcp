@@ -40,6 +40,8 @@ class FakeState extends RefCounted:
 
 
 class FakeServerController extends ServerRuntimeController:
+	var all_tools_request_count := 0
+
 	func _init() -> void:
 		_server = FakeServer.new()
 
@@ -50,6 +52,7 @@ class FakeServerController extends ServerRuntimeController:
 		return (_server as FakeServer).get_tool_definitions()
 
 	func get_all_tools_by_category() -> Dictionary:
+		all_tools_request_count += 1
 		return (_server as FakeServer).get_all_tools_by_category()
 
 	func is_running() -> bool:
@@ -75,6 +78,8 @@ class FakeServerController extends ServerRuntimeController:
 
 
 class FakeServer extends Node:
+	var project_state_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+
 	func get_tool_loader():
 		return self
 
@@ -90,7 +95,7 @@ class FakeServer extends Node:
 			"category": "system",
 			"source": "builtin",
 			"load_state": "loaded",
-			"script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+			"script_path": project_state_script_path
 		}, {
 			"name": "system_tool_activity",
 			"category": "system",
@@ -125,7 +130,7 @@ class FakeServer extends Node:
 	func get_all_tools_by_category() -> Dictionary:
 		return {
 			"system": [
-				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"},
+				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": project_state_script_path},
 				{"name": "tool_activity", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"},
 				{"name": "runtime_diagnose"}
 			],
@@ -184,6 +189,11 @@ class FakeActivityRegistry extends RefCounted:
 		return {"recent": [{"id": "call-1", "tool": "system_project_state"}], "recent_count": 1}
 
 
+class FakeUserToolService extends RefCounted:
+	func list_user_tools() -> Array:
+		return []
+
+
 class FakeToolCatalog extends RefCounted:
 	func build_tool_name_index(_all_tools_by_category: Dictionary) -> Array:
 		return []
@@ -240,7 +250,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.tool_catalog = FakeToolCatalog.new()
 	context.config_service = RefCounted.new()
 	context.dock_presenter = null
-	context.user_tool_service = RefCounted.new()
+	context.user_tool_service = FakeUserToolService.new()
 	context.client_install_detection_service = null
 	context.central_server_attach_service = null
 	context.runtime_process_service = null
@@ -250,7 +260,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.get_editor_scale = Callable()
 	service.configure(context)
 
+	state.current_tab = 0
+	var home_model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count != 0:
+		return _failure("Dock home model should not request the full tool catalog.")
+	if not (home_model.get("toolTree", []) as Array).is_empty():
+		return _failure("Dock home model should not build the heavy tools tree.")
+
+	state.current_tab = 1
 	var model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count <= 0:
+		return _failure("Dock Tools tab model should request the tool catalog on demand.")
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
 	if not tools_by_category.has("scene"):
 		return _failure("Dock model should keep non-root atomic categories available for system tool tree lookup.")
@@ -300,10 +320,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should keep internal executor presentation available for advanced diagnostics.")
 	if not (model.get("tool_diagnostics_presentation", {}) is Dictionary) or (model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
 		return _failure("Dock model should keep diagnostics presentation available without mixing it into the default tree.")
-	var protocol_projection_result := _verify_mcp_protocol_projection(model)
+	if not (model.get("mcp_resources", []) as Array).is_empty() or not (model.get("mcp_prompts", []) as Array).is_empty():
+		return _failure("Dock Tools tab should not build the Resources/Prompts protocol projection.")
+
+	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
+	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
+	var refreshed_model: Dictionary = service.build_model()
+	var refreshed_presentation: Dictionary = refreshed_model.get("tool_presentation", {})
+	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
+	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
+	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
+		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
+
+	state.current_tab = 2
+	var resources_model: Dictionary = service.build_model()
+	var protocol_projection_result := _verify_mcp_protocol_projection(resources_model)
 	if not bool(protocol_projection_result.get("success", false)):
 		return protocol_projection_result
-	if str((model.get("mcp_catalog_preview", {}) as Dictionary).get("text", "")) != "Preview text":
+	if str((resources_model.get("mcp_catalog_preview", {}) as Dictionary).get("text", "")) != "Preview text":
 		return _failure("Dock model should expose the current MCP catalog preview result to Resources/Prompts tabs.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
