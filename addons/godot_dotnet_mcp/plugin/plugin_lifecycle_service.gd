@@ -27,12 +27,12 @@ func enter_tree(context: Dictionary) -> void:
 		"ensure_runtime_bridge_autoload",
 		"install_editor_debugger_bridge",
 		"create_dock",
-		"apply_initial_tool_profile_if_needed",
-		"refresh_dock"
+		"apply_initial_tool_profile_if_needed"
 	]:
 		_call_void(context.get(step, Callable()))
 
 	_call_void(context.get("set_process_enabled", Callable()), [true])
+	_call_void(context.get("defer_initial_dock_refresh", Callable()))
 	if _call_bool(context.get("should_auto_start_server", Callable()), false):
 		_call_void(context.get("defer_start_server_for_lifecycle", Callable()))
 

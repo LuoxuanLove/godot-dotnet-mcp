@@ -29,6 +29,7 @@ var _scan_snapshot_data: Dictionary = {}
 var _scan_entries_processed := 0
 var _last_scan_duration_ms := 0.0
 var _last_scan_slices := 0
+var _runtime_loading_enabled_cache := false
 
 
 func configure(plugin: Object, reload_coordinator, user_tool_service, apply_external_user_tool_catalog_refresh: Callable = Callable()) -> void:
@@ -42,6 +43,7 @@ func start() -> void:
 	_watching = true
 	_last_poll_msec = 0
 	_last_scan_unix = int(Time.get_unix_time_from_system())
+	_runtime_loading_enabled_cache = _is_runtime_loading_enabled()
 	_pending_snapshot.clear()
 	_pending_changes.clear()
 	_pending_since_msec = 0
@@ -49,7 +51,7 @@ func start() -> void:
 	_initial_scan_pending = true
 	_last_change_reason = ""
 	_last_error = ""
-	if not _is_runtime_loading_enabled():
+	if not _runtime_loading_enabled_cache:
 		_initial_scan_pending = false
 		_known_snapshot.clear()
 		return
@@ -68,7 +70,8 @@ func stop() -> void:
 func tick() -> void:
 	if not _watching:
 		return
-	if not _is_runtime_loading_enabled():
+	_runtime_loading_enabled_cache = _is_runtime_loading_enabled()
+	if not _runtime_loading_enabled_cache:
 		_pending_snapshot.clear()
 		_pending_changes.clear()
 		_pending_since_msec = 0
@@ -137,9 +140,13 @@ func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 
 
 func get_status() -> Dictionary:
+	return get_status_snapshot()
+
+
+func get_status_snapshot() -> Dictionary:
 	return {
-		"enabled": _is_runtime_loading_enabled(),
-		"watching": _watching and _is_runtime_loading_enabled(),
+		"enabled": _runtime_loading_enabled_cache,
+		"watching": _watching and _runtime_loading_enabled_cache,
 		"baseline_scan_pending": _initial_scan_pending,
 		"known_script_count": _known_snapshot.size(),
 		"last_scan_unix": _last_scan_unix,

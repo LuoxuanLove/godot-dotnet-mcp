@@ -23,6 +23,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("User tool watcher should keep a per-tick scan budget to avoid periodic editor stalls.")
 	if source.find("func start() -> void:") == -1 or source.find("_initial_scan_pending = true") == -1:
 		return _failure("User tool watcher should schedule initial scans instead of doing synchronous startup scans.")
+	if source.find("func get_status_snapshot() -> Dictionary:") == -1:
+		return _failure("User tool watcher should expose a cached status snapshot for idle Dock polling.")
 
 	var service = UserToolWatchService.new()
 	var recorder = Recorder.new()
@@ -32,6 +34,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		null,
 		Callable(recorder, "record")
 	)
+	var idle_status: Dictionary = service.get_status_snapshot()
+	if bool(idle_status.get("enabled", true)) or bool(idle_status.get("watching", true)):
+		return _failure("User tool watcher status snapshot should avoid ProjectSettings reads before watch start.")
 
 	var changed_path := "res://addons/godot_dotnet_mcp/custom_tools/sample_watch_target.gd"
 	var result: Dictionary = service._apply_pending_changes({

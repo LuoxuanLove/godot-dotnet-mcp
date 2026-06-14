@@ -227,6 +227,10 @@ func _defer_start_server_for_lifecycle() -> void:
 	call_deferred("_start_server_for_lifecycle")
 
 
+func _defer_initial_dock_refresh() -> void:
+	call_deferred("_refresh_dock")
+
+
 func _defer_saved_update_source_discovery_request() -> void:
 	call_deferred("_ensure_saved_update_source_discovery_requested")
 
@@ -699,7 +703,7 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 			if stats is Dictionary:
 				connection_stats = stats
 	if _user_tool_watch_service != null:
-		var watch_status = _user_tool_watch_service.get_status()
+		var watch_status = _user_tool_watch_service.get_status_snapshot() if _user_tool_watch_service.has_method("get_status_snapshot") else _user_tool_watch_service.get_status()
 		if watch_status is Dictionary:
 			user_watch_status = watch_status
 	return {

@@ -33,6 +33,7 @@ class FakeLifecycleContext:
 			"create_dock": Callable(self, "create_dock"),
 			"apply_initial_tool_profile_if_needed": Callable(self, "apply_initial_tool_profile_if_needed"),
 			"refresh_dock": Callable(self, "refresh_dock"),
+			"defer_initial_dock_refresh": Callable(self, "defer_initial_dock_refresh"),
 			"refresh_dock_if_status_changed": Callable(self, "refresh_dock_if_status_changed"),
 			"set_process_enabled": Callable(self, "set_process_enabled"),
 			"should_auto_start_server": Callable(self, "should_auto_start_server"),
@@ -68,6 +69,7 @@ class FakeLifecycleContext:
 	func create_dock() -> void: calls.append("create_dock")
 	func apply_initial_tool_profile_if_needed() -> void: calls.append("apply_initial_tool_profile_if_needed")
 	func refresh_dock() -> void: calls.append("refresh_dock")
+	func defer_initial_dock_refresh() -> void: calls.append("defer_initial_dock_refresh")
 	func refresh_dock_if_status_changed() -> void: calls.append("refresh_dock_if_status_changed")
 	func start_server_for_lifecycle() -> void: calls.append("start_server_for_lifecycle")
 	func defer_start_server_for_lifecycle() -> void: calls.append("defer_start_server_for_lifecycle")
@@ -122,6 +124,7 @@ class FakeLifecycleContext:
 	func _create_dock() -> void: create_dock()
 	func _apply_initial_tool_profile_if_needed() -> void: apply_initial_tool_profile_if_needed()
 	func _refresh_dock() -> void: refresh_dock()
+	func _defer_initial_dock_refresh() -> void: defer_initial_dock_refresh()
 	func _refresh_dock_if_status_changed() -> void: refresh_dock_if_status_changed()
 	func _set_plugin_process_enabled(enabled: bool) -> void: set_process_enabled(enabled)
 	func _should_auto_start_server() -> bool: return should_auto_start_server()
@@ -170,8 +173,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"install_editor_debugger_bridge",
 		"create_dock",
 		"apply_initial_tool_profile_if_needed",
-		"refresh_dock",
 		"set_process_enabled:true",
+		"defer_initial_dock_refresh",
 		"should_auto_start_server",
 		"defer_start_server_for_lifecycle",
 		"restore_pending_focus_snapshot_if_needed",
@@ -179,6 +182,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]
 	if not _array_starts_with(enter_calls, expected_enter):
 		return _failure("Plugin lifecycle service should preserve enter_tree wiring order.", {"calls": enter_calls})
+	if enter_calls.has("refresh_dock"):
+		return _failure("Plugin lifecycle service should defer the initial Dock model refresh instead of blocking enter_tree.", {"calls": enter_calls})
 	if enter_context.finished_operations.is_empty() or str((enter_context.finished_operations[0] as Dictionary).get("phase", "")) != "_enter_tree":
 		return _failure("Plugin lifecycle service should finish the enter_tree diagnostic operation.")
 
@@ -252,6 +257,8 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())",
+		"func _defer_initial_dock_refresh()",
+		"call_deferred(\"_refresh_dock\")",
 		"func _defer_start_server_for_lifecycle()",
 		"call_deferred(\"_start_server_for_lifecycle\")",
 		"_user_tool_watch_tick_accumulator += maxf(delta, 0.0)",
