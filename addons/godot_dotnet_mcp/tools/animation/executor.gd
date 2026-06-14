@@ -1,6 +1,5 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
-class_name MCPAnimationTools
 
 ## Animation tools for Godot MCP
 ## Provides animation creation, playback control, and track management

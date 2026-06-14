@@ -1,6 +1,5 @@
 @tool
 extends "res://addons/godot_dotnet_mcp/tools/base_tools.gd"
-class_name MCPNodeTools
 
 ## Node operation tools for Godot MCP
 ## Comprehensive node management including signals, groups, transforms, properties, and more

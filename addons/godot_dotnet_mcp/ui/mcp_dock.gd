@@ -6,16 +6,6 @@ const TOOLS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/tools_tab.tscn"
 const MCP_CATALOG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.tscn"
 const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.tscn"
 const SETTINGS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/settings_panel.tscn"
-const TAB_SCENE_SCRIPT_PATHS := {
-	SERVER_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/server_tab.gd",
-	TOOLS_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/tools_tab.gd",
-	MCP_CATALOG_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd",
-	CONFIG_TAB_SCENE_PATH: "res://addons/godot_dotnet_mcp/ui/config_tab.gd",
-	SETTINGS_TAB_SCENE_PATH: [
-		"res://addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd",
-		"res://addons/godot_dotnet_mcp/ui/settings_tab.gd"
-	]
-}
 const DOCK_TAB_ACTIVATION_RETRY_COUNT := 6
 
 signal current_tab_changed(index: int)
@@ -459,36 +449,8 @@ func _get_status_color(is_running: bool) -> Color:
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	_reload_scene_script(path)
 	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
 	return scene as PackedScene
-
-
-func _reload_scene_script(scene_path: String) -> void:
-	if not Engine.is_editor_hint() or OS.has_feature("headless"):
-		return
-	var raw_script_paths = TAB_SCENE_SCRIPT_PATHS.get(scene_path, "")
-	var script_paths := _normalize_reload_script_paths(raw_script_paths)
-	if script_paths.is_empty():
-		return
-	for script_path in script_paths:
-		var script = ResourceLoader.load(script_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
-		if script is Script:
-			(script as Script).reload(false)
-
-
-func _normalize_reload_script_paths(raw_script_paths) -> Array[String]:
-	var script_paths: Array[String] = []
-	if raw_script_paths is Array:
-		for raw_script_path in raw_script_paths:
-			var script_path := str(raw_script_path).strip_edges()
-			if not script_path.is_empty():
-				script_paths.append(script_path)
-	else:
-		var script_path := str(raw_script_paths).strip_edges()
-		if not script_path.is_empty():
-			script_paths.append(script_path)
-	return script_paths
 
 
 func _find_focusable_descendant(root: Control) -> Control:
