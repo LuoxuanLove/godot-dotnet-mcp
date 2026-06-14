@@ -42,6 +42,7 @@ Target version: 2.0.0.
 - Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
 - Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
+- Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
 
 ### Documentation
 
