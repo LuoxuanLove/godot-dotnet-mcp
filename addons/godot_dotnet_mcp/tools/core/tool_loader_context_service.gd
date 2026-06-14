@@ -90,6 +90,7 @@ func build_loader_runtime_state_context(loader, execution_context_service = null
 func build_loader_lifecycle_context(loader) -> Dictionary:
 	return build_lifecycle_context({
 		"reset_state": _loader_callable(loader, "_reset_state"),
+		"should_preload_runtimes": _loader_callable(loader, "_should_preload_runtimes"),
 		"set_disabled_tools": _loader_callable(loader, "_set_disabled_tools"),
 		"reset_gdscript_lsp_diagnostics_service": _loader_callable(loader, "_reset_gdscript_lsp_diagnostics_service"),
 		"dispose_gdscript_lsp_diagnostics_adapter": _loader_callable(loader, "_dispose_gdscript_lsp_diagnostics_adapter"),

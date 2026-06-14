@@ -20,6 +20,7 @@ func build_plugin_lifecycle_context(plugin, constants: Dictionary) -> Dictionary
 		"create_dock": _plugin_callable(plugin, "_create_dock"),
 		"apply_initial_tool_profile_if_needed": _plugin_callable(plugin, "_apply_initial_tool_profile_if_needed"),
 		"refresh_dock": _plugin_callable(plugin, "_refresh_dock"),
+		"refresh_dock_if_status_changed": _plugin_callable(plugin, "_refresh_dock_if_status_changed"),
 		"set_process_enabled": _plugin_callable(plugin, "_set_plugin_process_enabled"),
 		"should_auto_start_server": _plugin_callable(plugin, "_should_auto_start_server"),
 		"start_server_for_lifecycle": _plugin_callable(plugin, "_start_server_for_lifecycle"),

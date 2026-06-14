@@ -5,7 +5,7 @@ class_name UserToolWatchService
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const ENABLE_RUNTIME_LOADING_SETTING := "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const ENABLE_RUNTIME_LOADING_SETTING_LEGACY := "user_tools/enable_runtime_loading"
-const POLL_INTERVAL_MSEC := 500
+const POLL_INTERVAL_MSEC := 2500
 const SETTLE_DELAY_MSEC := 300
 
 var _plugin: Object
@@ -176,9 +176,16 @@ func _scan_snapshot() -> Dictionary:
 			continue
 		snapshot[script_path] = {
 			"modified_unix": int(FileAccess.get_modified_time(script_path)),
-			"size_bytes": int(FileAccess.get_file_as_bytes(global_path).size())
+			"size_bytes": _get_file_size_bytes(script_path)
 		}
 	return {"success": true, "snapshot": snapshot}
+
+
+func _get_file_size_bytes(path: String) -> int:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return -1
+	return int(file.get_length())
 
 
 func _collect_script_paths(dir_path: String, output: Array[String]) -> void:

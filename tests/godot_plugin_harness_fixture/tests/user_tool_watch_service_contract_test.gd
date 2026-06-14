@@ -14,6 +14,12 @@ class Recorder extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_watch_service.gd")
+	if source.find("get_file_as_bytes") != -1:
+		return _failure("User tool watcher should not read entire script contents during polling.")
+	if source.find("const POLL_INTERVAL_MSEC := 2500") == -1:
+		return _failure("User tool watcher should keep a conservative polling interval to avoid idle editor stalls.")
+
 	var service = UserToolWatchService.new()
 	var recorder = Recorder.new()
 	service.configure(

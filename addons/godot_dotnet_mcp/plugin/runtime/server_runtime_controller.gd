@@ -110,8 +110,8 @@ func _reinitialize_runtime_settings(runtime_settings: Dictionary, reason: String
 	if track_operation and operation.is_empty():
 		operation = PluginSelfDiagnosticStore.begin_operation("server_reinitialize", reason, {"reason": reason})
 	var operation_id := str(operation.get("operation_id", ""))
-	var effective_reason := "plugin_lifecycle_reload" if reason == "auto_start" else reason
-	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "auto_start"
+	var effective_reason := reason
+	var force_reload_server = reason == "tool_soft_reload" or reason == "tool_full_reload"
 	if force_reload_server:
 		var dispose_started = PluginSelfDiagnosticStore.begin_phase()
 		stop()
@@ -300,6 +300,12 @@ func get_tool_loader_status() -> Dictionary:
 	if _has_server_method("get_tool_loader_status"):
 		return _server.get_tool_loader_status()
 	return {}
+
+
+func peek_tool_loader_status() -> Dictionary:
+	if _has_server_method("peek_tool_loader_status"):
+		return _server.peek_tool_loader_status()
+	return get_tool_loader_status()
 
 
 func get_tool_loader():

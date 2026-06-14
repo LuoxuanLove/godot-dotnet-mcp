@@ -33,6 +33,7 @@ class FakeLifecycleContext:
 			"create_dock": Callable(self, "create_dock"),
 			"apply_initial_tool_profile_if_needed": Callable(self, "apply_initial_tool_profile_if_needed"),
 			"refresh_dock": Callable(self, "refresh_dock"),
+			"refresh_dock_if_status_changed": Callable(self, "refresh_dock_if_status_changed"),
 			"set_process_enabled": Callable(self, "set_process_enabled"),
 			"should_auto_start_server": Callable(self, "should_auto_start_server"),
 			"start_server_for_lifecycle": Callable(self, "start_server_for_lifecycle"),
@@ -66,6 +67,7 @@ class FakeLifecycleContext:
 	func create_dock() -> void: calls.append("create_dock")
 	func apply_initial_tool_profile_if_needed() -> void: calls.append("apply_initial_tool_profile_if_needed")
 	func refresh_dock() -> void: calls.append("refresh_dock")
+	func refresh_dock_if_status_changed() -> void: calls.append("refresh_dock_if_status_changed")
 	func start_server_for_lifecycle() -> void: calls.append("start_server_for_lifecycle")
 	func restore_pending_focus_snapshot_if_needed() -> void: calls.append("restore_pending_focus_snapshot_if_needed")
 	func ensure_saved_update_source_discovery_requested() -> void: calls.append("ensure_saved_update_source_discovery_requested")
@@ -118,6 +120,7 @@ class FakeLifecycleContext:
 	func _create_dock() -> void: create_dock()
 	func _apply_initial_tool_profile_if_needed() -> void: apply_initial_tool_profile_if_needed()
 	func _refresh_dock() -> void: refresh_dock()
+	func _refresh_dock_if_status_changed() -> void: refresh_dock_if_status_changed()
 	func _set_plugin_process_enabled(enabled: bool) -> void: set_process_enabled(enabled)
 	func _should_auto_start_server() -> bool: return should_auto_start_server()
 	func _start_server_for_lifecycle() -> void: start_server_for_lifecycle()
@@ -168,7 +171,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"set_process_enabled:true",
 		"should_auto_start_server",
 		"start_server_for_lifecycle",
-		"refresh_dock",
+		"refresh_dock_if_status_changed",
 		"restore_pending_focus_snapshot_if_needed",
 		"ensure_saved_update_source_discovery_requested"
 	]
@@ -207,9 +210,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not is_equal_approx(accumulator, 0.45) or process_context.calls != ["tick_user_tool_watch_service"]:
 		return _failure("Plugin lifecycle service should tick watchers and accumulate status polling below threshold.", {"calls": process_context.calls, "accumulator": accumulator})
 	process_context.calls.clear()
-	accumulator = service.process(0.1, 0.45, false, process_context.build())
-	if not is_zero_approx(accumulator) or process_context.calls != ["tick_user_tool_watch_service", "refresh_dock"]:
-		return _failure("Plugin lifecycle service should refresh the dock when the status poll interval elapses.", {"calls": process_context.calls, "accumulator": accumulator})
+	accumulator = service.process(0.1, 1.95, false, process_context.build())
+	if not is_zero_approx(accumulator) or process_context.calls != ["tick_user_tool_watch_service", "refresh_dock_if_status_changed"]:
+		return _failure("Plugin lifecycle service should request a lightweight dock refresh only when the status poll interval elapses.", {"calls": process_context.calls, "accumulator": accumulator})
 	process_context.calls.clear()
 	process_context.ensure_update_result = true
 	accumulator = service.process(0.5, 0.1, true, process_context.build())

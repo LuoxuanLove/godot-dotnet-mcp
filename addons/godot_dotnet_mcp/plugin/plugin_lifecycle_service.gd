@@ -7,7 +7,7 @@ const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
-const STATUS_POLL_INTERVAL_SECONDS := 0.5
+const STATUS_POLL_INTERVAL_SECONDS := 2.0
 
 
 func enter_tree(context: Dictionary) -> void:
@@ -35,7 +35,7 @@ func enter_tree(context: Dictionary) -> void:
 	_call_void(context.get("set_process_enabled", Callable()), [true])
 	if _call_bool(context.get("should_auto_start_server", Callable()), false):
 		_call_void(context.get("start_server_for_lifecycle", Callable()))
-		_call_void(context.get("refresh_dock", Callable()))
+		_call_void(context.get("refresh_dock_if_status_changed", Callable()))
 
 	_call_void(context.get("restore_pending_focus_snapshot_if_needed", Callable()))
 	_call_void(context.get("ensure_saved_update_source_discovery_requested", Callable()))
@@ -79,7 +79,7 @@ func process(delta: float, status_poll_accumulator: float, update_refs_retry_pen
 	status_poll_accumulator += delta
 	if status_poll_accumulator >= STATUS_POLL_INTERVAL_SECONDS:
 		status_poll_accumulator = 0.0
-		_call_void(context.get("refresh_dock", Callable()))
+		_call_void(context.get("refresh_dock_if_status_changed", Callable()))
 	return status_poll_accumulator
 
 

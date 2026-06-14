@@ -24,14 +24,76 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Tool loader status is missing key '%s'." % key)
 	if str(loader_status.get("status", "")).is_empty():
 		return _failure("Tool loader status did not expose a status label.")
+	if bool(loader_status.get("initialized", false)):
+		return _failure("HTTP server initialize should remain lightweight and not register tools before the first tool request.")
+	if int(loader_status.get("tool_count", 0)) != 0:
+		return _failure("Lightweight HTTP server initialize should not scan tool definitions.")
+
+	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
+	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 10,
+		"method": "initialize",
+		"params": {}
+	}))
+	var rpc_initialize_result = rpc_initialize.get("result", {})
+	if not (rpc_initialize_result is Dictionary):
+		return _failure("JSON-RPC initialize did not return a result object.")
+	if str((rpc_initialize_result as Dictionary).get("toolSchemaVersion", "")) != expected_schema_version:
+		return _failure("JSON-RPC initialize did not expose the current tool schema version.")
+	loader_status = _server.get_tool_loader_status()
+	if bool(loader_status.get("initialized", false)):
+		return _failure("JSON-RPC initialize should not register tools before a tool/resource request.")
+	if int(loader_status.get("tool_count", 0)) != 0:
+		return _failure("JSON-RPC initialize should not scan tool definitions.")
+
+	var rpc_resources_list: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 11,
+		"method": "resources/list",
+		"params": {}
+	}))
+	if not (rpc_resources_list.get("result", {}) is Dictionary):
+		return _failure("JSON-RPC resources/list did not return a result object.")
+	loader_status = _server.get_tool_loader_status()
+	if bool(loader_status.get("initialized", false)):
+		return _failure("JSON-RPC resources/list should not register tools before a tool request.")
+	if int(loader_status.get("tool_count", 0)) != 0:
+		return _failure("JSON-RPC resources/list should not scan tool definitions.")
+
+	var rpc_prompts_list: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 12,
+		"method": "prompts/list",
+		"params": {}
+	}))
+	if not (rpc_prompts_list.get("result", {}) is Dictionary):
+		return _failure("JSON-RPC prompts/list did not return a result object.")
+	loader_status = _server.get_tool_loader_status()
+	if bool(loader_status.get("initialized", false)):
+		return _failure("JSON-RPC prompts/list should not register tools before a tool request.")
+	if int(loader_status.get("tool_count", 0)) != 0:
+		return _failure("JSON-RPC prompts/list should not scan tool definitions.")
+
+	var auto_start_summary: Dictionary = _server.reinitialize(0, "127.0.0.1", false, [], "auto_start")
+	if int(auto_start_summary.get("tool_count", 0)) != 0:
+		return _failure("HTTP server auto_start reinitialize should remain lightweight and not scan tools.")
+	loader_status = _server.get_tool_loader_status()
+	if bool(loader_status.get("initialized", false)):
+		return _failure("HTTP server auto_start reinitialize should not register tools.")
+
+	var tools_list: Dictionary = _server.build_tools_api_snapshot()
+	loader_status = _server.get_tool_loader_status()
 	if not bool(loader_status.get("initialized", false)):
-		return _failure("Tool loader did not initialize during http server setup.")
+		return _failure("Tools API access should initialize the tool loader on demand.")
 	if int(loader_status.get("tool_count", 0)) <= 0:
-		return _failure("Tool loader did not report any visible tools.")
+		return _failure("Tool loader did not report any visible tools after on-demand setup.")
 	if int(loader_status.get("exposed_tool_count", 0)) <= 0:
-		return _failure("Tool loader did not report any exposed tools.")
+		return _failure("Tool loader did not report any exposed tools after on-demand setup.")
 	if not bool(loader_status.get("healthy", false)):
 		return _failure("Tool loader should be healthy when the default tool access provider is active.")
+	if float(_server.get_performance_summary().get("preload_ms", 1.0)) != 0.0:
+		return _failure("On-demand tool registration should not preload every executor runtime during startup.")
 	var lsp_service = _server.get_gdscript_lsp_diagnostics_service()
 	var loader = _server.get_tool_loader()
 	if lsp_service == null:
@@ -58,8 +120,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(close_confirmation.get("error", "")) != "editor_confirmation_required":
 		return _failure("Lifecycle close did not require save=true confirmation.")
 
-	var tools_list: Dictionary = _server.build_tools_api_snapshot()
-	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
 	var required_keys := ["tools", "domain_states", "tool_count", "exposed_tool_count", "tool_loader_status", "performance", "toolTree", "toolGroups"]
 	for key in required_keys:
 		if not tools_list.has(key):
@@ -77,18 +137,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for removed_tool_name in ["system_help", "system_plugin_reload", "system_plugin_update", "system_editor_log", "system_tool_catalog", "system_tool_activity", "system_scene_validate", "system_scene_analyze", "resource_manage", "debug_log"]:
 		if _contains_tool_name_recursive(tools_list, removed_tool_name):
 			return _failure("Tools list response should not expose removed tool %s." % removed_tool_name)
-
-	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
-		"jsonrpc": "2.0",
-		"id": 10,
-		"method": "initialize",
-		"params": {}
-	}))
-	var rpc_initialize_result = rpc_initialize.get("result", {})
-	if not (rpc_initialize_result is Dictionary):
-		return _failure("JSON-RPC initialize did not return a result object.")
-	if str((rpc_initialize_result as Dictionary).get("toolSchemaVersion", "")) != expected_schema_version:
-		return _failure("JSON-RPC initialize did not expose the current tool schema version.")
 
 	var full_reload_summary: Dictionary = _server.reinitialize(0, "127.0.0.1", false, [], "tool_full_reload")
 	if int(full_reload_summary.get("tool_count", 0)) <= 0:
@@ -514,8 +562,10 @@ func _verify_ready_initialize_phase_timing(tree: SceneTree) -> Dictionary:
 	var phase_timings = finished.get("phase_timings", [])
 	if not (phase_timings is Array):
 		return _failure("Ready/initialize diagnostic operation did not expose phase timings.")
-	if not _has_phase(phase_timings as Array, "tool_loader.register_tools"):
-		return _failure("Ready/initialize diagnostic operation should retain first tool loader registration timing.")
+	if _has_phase(phase_timings as Array, "tool_loader.register_tools"):
+		return _failure("Ready/initialize should not register tools before the first tool request.")
+	if not _has_phase(phase_timings as Array, "http_server.create_tcp_server"):
+		return _failure("Ready/initialize diagnostic operation should retain lightweight TCP server creation timing.")
 	return {"success": true, "error": ""}
 
 

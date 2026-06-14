@@ -10,6 +10,7 @@ func ensure_tool_definitions(category: String, context: Dictionary) -> Array:
 
 	var runtime: Dictionary = _dictionary(_runtime_by_category(context).get(category, {}))
 	var executor = runtime.get("instance", null)
+	var created_for_definitions := false
 	if executor == null:
 		var instantiate_result: Dictionary = _call_dictionary(context.get("instantiate_executor", Callable()), [category, _force_reload_script_load(context), "definitions"])
 		if not _as_bool(instantiate_result.get("success", false)):
@@ -22,9 +23,22 @@ func ensure_tool_definitions(category: String, context: Dictionary) -> Array:
 			definitions_by_category[category] = []
 			return []
 		executor = instantiate_result.get("executor")
+		created_for_definitions = true
 
 	var definitions: Array = _call_array(context.get("extract_tool_definitions", Callable()), [category, executor])
 	definitions_by_category[category] = definitions
+	if created_for_definitions:
+		_call_void(context.get("dispose_executor", Callable()), [executor])
+		var runtime_by_category: Dictionary = _runtime_by_category(context)
+		if not runtime_by_category.has(category):
+			runtime_by_category[category] = {
+				"instance": null,
+				"state": "definitions_only",
+				"version": 0,
+				"load_count": 0,
+				"last_loaded_at_unix": 0,
+				"last_error": null
+			}
 	return definitions
 
 
@@ -71,6 +85,9 @@ func unload_runtime(category: String, reason: String, context: Dictionary) -> vo
 		return
 	var runtime: Dictionary = _dictionary(runtime_by_category.get(category, {}))
 	_call_void(context.get("dispose_executor", Callable()), [runtime.get("instance", null)])
+	if reason == "shutdown":
+		runtime_by_category.erase(category)
+		return
 	runtime["instance"] = null
 	runtime["state"] = "definitions_only"
 	runtime["last_unloaded_reason"] = reason

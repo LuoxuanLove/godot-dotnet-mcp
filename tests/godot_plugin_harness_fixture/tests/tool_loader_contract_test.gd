@@ -108,10 +108,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_loader.set_tool_activity_registry(replacement_activity_registry)
 	var system_runtime: Dictionary = _loader._runtime_by_category.get("system", {})
 	var system_executor = system_runtime.get("instance", null)
-	if system_executor == null or not ("_runtime_context" in system_executor):
-		return _failure("Tool loader should keep the system executor runtime context observable after initialization.")
-	if (system_executor._runtime_context as Dictionary).get("tool_activity_registry", null) != replacement_activity_registry:
-		return _failure("Tool loader should refresh loaded executor runtime contexts when the activity registry changes.")
+	if system_executor != null:
+		return _failure("Tool loader initialize() should keep executor runtimes unloaded until first execution.")
+	if str(system_runtime.get("state", "definitions_only")) != "definitions_only" and not system_runtime.is_empty():
+		return _failure("Tool loader initialize() should leave system runtime in definitions_only state.")
 
 	var exposed_names: Array[String] = []
 	for tool_def in exposed_tools:
@@ -263,6 +263,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_control_result: Dictionary = await _loader.execute_tool_async("system", "runtime_control", {"action": "status"})
 	if not bool(runtime_control_result.get("success", false)):
 		return _failure("Tool loader execute_tool_async should route system_runtime_control successfully.")
+	system_runtime = _loader._runtime_by_category.get("system", {})
+	system_executor = system_runtime.get("instance", null)
+	if system_executor == null or not ("_runtime_context" in system_executor):
+		return _failure("Tool loader should materialize the system executor runtime context on first execution.")
+	if (system_executor._runtime_context as Dictionary).get("tool_activity_registry", null) != replacement_activity_registry:
+		return _failure("Tool loader should pass the current activity registry to on-demand executor runtime contexts.")
 	var runtime_control_data = runtime_control_result.get("data", {})
 	if not (runtime_control_data is Dictionary) or bool((runtime_control_data as Dictionary).get("armed", true)):
 		return _failure("Tool loader runtime control status did not return the expected armed flag.")
