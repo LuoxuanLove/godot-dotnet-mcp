@@ -1203,6 +1203,9 @@ func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
 		reader.close()
 		return {"success": false, "error": "Branch archive does not contain addons/godot_dotnet_mcp."}
 	var addon_root := _get_update_sync_addon_root().simplify_path()
+	if _is_update_sync_link_path(addon_root):
+		reader.close()
+		return {"success": false, "error": "Update sync addon root must not be a symlink, junction, or reparse point: %s" % addon_root}
 	var addon_root_prefix := "%s/" % addon_root
 	var expected_files: Dictionary = {}
 	for file_path in files:
@@ -1251,7 +1254,8 @@ func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
 		"written": written,
 		"deleted": int(mirror_result.get("deleted", 0)),
 		"deleted_files": int(mirror_result.get("deleted_files", 0)),
-		"deleted_dirs": int(mirror_result.get("deleted_dirs", 0))
+		"deleted_dirs": int(mirror_result.get("deleted_dirs", 0)),
+		"skipped_links": int(mirror_result.get("skipped_links", 0))
 	}
 
 
@@ -1309,7 +1313,7 @@ func _delete_update_sync_stale_paths(addon_root: String, expected_files: Diction
 		return {"success": false, "error": "Update sync addon root is invalid: %s" % addon_root}
 	var absolute_root := ProjectSettings.globalize_path(normalized_root)
 	if not DirAccess.dir_exists_absolute(absolute_root):
-		return {"success": true, "deleted": 0, "deleted_files": 0, "deleted_dirs": 0}
+		return {"success": true, "deleted": 0, "deleted_files": 0, "deleted_dirs": 0, "skipped_links": 0}
 	return _delete_update_sync_stale_paths_recursive(normalized_root, "", expected_files)
 
 
@@ -1317,11 +1321,14 @@ func _delete_update_sync_stale_paths_recursive(addon_root: String, relative_dir:
 	var current_path := addon_root.path_join(relative_dir).simplify_path() if not relative_dir.is_empty() else addon_root
 	if not _is_update_sync_path_inside_root(addon_root, current_path):
 		return {"success": false, "error": "Update sync delete path escapes the plugin directory: %s" % current_path}
+	if _is_update_sync_link_path(current_path):
+		return {"success": true, "deleted": 0, "deleted_files": 0, "deleted_dirs": 0, "skipped_links": 1}
 	var dir := DirAccess.open(current_path)
 	if dir == null:
-		return {"success": true, "deleted": 0, "deleted_files": 0, "deleted_dirs": 0}
+		return {"success": true, "deleted": 0, "deleted_files": 0, "deleted_dirs": 0, "skipped_links": 0}
 	var child_dirs: Array[String] = []
 	var stale_files: Array[String] = []
+	var skipped_links := 0
 	dir.list_dir_begin()
 	var entry := dir.get_next()
 	while not entry.is_empty():
@@ -1330,6 +1337,10 @@ func _delete_update_sync_stale_paths_recursive(addon_root: String, relative_dir:
 			continue
 		var child_relative := _normalize_update_sync_relative_path(relative_dir.path_join(entry) if not relative_dir.is_empty() else entry)
 		if _should_skip_update_sync_path(child_relative):
+			entry = dir.get_next()
+			continue
+		if dir.is_link(entry):
+			skipped_links += 1
 			entry = dir.get_next()
 			continue
 		if dir.current_is_dir():
@@ -1345,6 +1356,9 @@ func _delete_update_sync_stale_paths_recursive(addon_root: String, relative_dir:
 		var stale_path := addon_root.path_join(stale_file).simplify_path()
 		if not _is_update_sync_path_inside_root(addon_root, stale_path):
 			return {"success": false, "error": "Update sync delete path escapes the plugin directory: %s" % stale_file}
+		if _is_update_sync_link_path(stale_path):
+			skipped_links += 1
+			continue
 		var remove_file_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(stale_path))
 		if remove_file_error != OK and remove_file_error != ERR_FILE_NOT_FOUND:
 			return {"success": false, "error": "Failed to remove stale update file %s: %s" % [stale_file, remove_file_error]}
@@ -1356,7 +1370,11 @@ func _delete_update_sync_stale_paths_recursive(addon_root: String, relative_dir:
 			return child_result
 		deleted_files += int(child_result.get("deleted_files", 0))
 		deleted_dirs += int(child_result.get("deleted_dirs", 0))
+		skipped_links += int(child_result.get("skipped_links", 0))
 		var child_path := addon_root.path_join(child_dir).simplify_path()
+		if _is_update_sync_link_path(child_path):
+			skipped_links += 1
+			continue
 		if _is_update_sync_directory_empty(child_path):
 			var remove_dir_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(child_path))
 			if remove_dir_error != OK and remove_dir_error != ERR_FILE_NOT_FOUND:
@@ -1367,11 +1385,14 @@ func _delete_update_sync_stale_paths_recursive(addon_root: String, relative_dir:
 		"success": true,
 		"deleted": deleted_files + deleted_dirs,
 		"deleted_files": deleted_files,
-		"deleted_dirs": deleted_dirs
+		"deleted_dirs": deleted_dirs,
+		"skipped_links": skipped_links
 	}
 
 
 func _is_update_sync_directory_empty(path: String) -> bool:
+	if _is_update_sync_link_path(path):
+		return false
 	var dir := DirAccess.open(path)
 	if dir == null:
 		return false
@@ -1392,6 +1413,17 @@ func _is_update_sync_path_inside_root(addon_root: String, path: String) -> bool:
 		root = root.substr(0, root.length() - 1)
 	var normalized := path.simplify_path()
 	return normalized == root or normalized.begins_with("%s/" % root)
+
+
+func _is_update_sync_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
 
 
 func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
