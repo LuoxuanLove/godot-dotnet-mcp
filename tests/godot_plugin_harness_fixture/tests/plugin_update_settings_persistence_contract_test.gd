@@ -92,6 +92,13 @@ class SyncStartProbePlugin extends PluginScript:
 		archive_requests.append({"target": target.duplicate(true), "serial": serial})
 
 
+class MirrorSyncProbePlugin extends PluginScript:
+	var addon_root := "res://tests_tmp/plugin_update_mirror_contract/addons/godot_dotnet_mcp"
+
+	func _get_update_sync_addon_root() -> String:
+		return addon_root
+
+
 class CurrentTabProbeDock extends Control:
 	var current_tab := 5
 	var apply_model_count := 0
@@ -391,6 +398,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should retry pending saved-source update refs discovery after the Dock enters the tree.")
 	pending_retry_probe.free()
 	pending_retry_dock.queue_free()
+
+	var mirror_result := _run_update_sync_mirror_contract()
+	if not bool(mirror_result.get("success", false)):
+		return mirror_result
 	return {"name": "plugin_update_settings_persistence_contracts", "success": true, "error": ""}
 
 
@@ -416,6 +427,136 @@ func _remove_saved_settings() -> void:
 	var settings_path := ProjectSettings.globalize_path(PluginRuntimeStateScript.SETTINGS_PATH)
 	if FileAccess.file_exists(PluginRuntimeStateScript.SETTINGS_PATH):
 		DirAccess.remove_absolute(settings_path)
+
+
+func _run_update_sync_mirror_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	var root := probe._get_update_sync_addon_root()
+	var archive_path := "user://godot_dotnet_mcp/plugin_update_mirror_contract.zip"
+	var incomplete_archive_path := "user://godot_dotnet_mcp/plugin_update_mirror_incomplete_contract.zip"
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old")
+	_write_text(root.path_join("plugin.gd"), "old")
+	_write_text(root.path_join("tools/node_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/animation_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/old_domain/orphan.gd"), "legacy")
+	_write_text(root.path_join("custom_tools/user_tool.gd"), "keep")
+	_write_text(root.path_join("dotnet_bridge/bin/bridge.dll"), "keep")
+	_write_text(root.path_join("ui/generated.png.import"), "keep")
+	var incomplete_archive_error := _write_update_sync_fixture_archive(incomplete_archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "[plugin]\nversion=\"2.0.0\"\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "extends EditorPlugin\n"
+	})
+	if incomplete_archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync mirror contract could not create incomplete fixture archive: %s" % incomplete_archive_error)
+	var incomplete_sync_result: Dictionary = probe._sync_update_archive_to_addon(incomplete_archive_path)
+	if bool(incomplete_sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should reject incomplete archives before mirroring.")
+	if not FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or not FileAccess.file_exists(root.path_join("tools/old_domain/orphan.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should not delete stale files when archive completeness validation fails.")
+	var archive_error := _write_update_sync_fixture_archive(archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "[plugin]\nversion=\"2.0.0\"\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "extends EditorPlugin\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "[gd_scene format=3]\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/node/executor.gd": "extends RefCounted\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/animation/executor.gd": "extends RefCounted\n"
+	})
+	if archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync mirror contract could not create fixture archive: %s" % archive_error)
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if not bool(sync_result.get("success", false)):
+		var error := str(sync_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should mirror archive into addon root: %s" % error)
+	if FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or FileAccess.file_exists(root.path_join("tools/animation_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should remove stale root tool monolith files that are absent from the archive.")
+	if FileAccess.file_exists(root.path_join("tools/old_domain/orphan.gd")) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("tools/old_domain"))):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should remove stale addon subdirectories after deleting orphan files.")
+	if not FileAccess.file_exists(root.path_join("tools/node/executor.gd")) or not FileAccess.file_exists(root.path_join("tools/animation/executor.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should write files from the branch archive.")
+	if not FileAccess.file_exists(root.path_join("custom_tools/user_tool.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should preserve custom_tools during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("dotnet_bridge/bin/bridge.dll")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should preserve dotnet_bridge/bin during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("ui/generated.png.import")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should preserve .import sidecar files during mirror cleanup.")
+	if int(sync_result.get("deleted_files", 0)) < 3:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should report stale files removed during mirror cleanup.")
+	probe.free()
+	_remove_tree(root)
+	return {"success": true}
+
+
+func _write_update_sync_fixture_archive(archive_path: String, entries: Dictionary) -> int:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(archive_path.get_base_dir()))
+	if FileAccess.file_exists(archive_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(archive_path))
+	var packer := ZIPPacker.new()
+	var open_error := packer.open(archive_path)
+	if open_error != OK:
+		return open_error
+	for path in entries.keys():
+		var start_error := packer.start_file(str(path))
+		if start_error != OK:
+			packer.close()
+			return start_error
+		packer.write_file(str(entries[path]).to_utf8_buffer())
+		packer.close_file()
+	return packer.close()
+
+
+func _write_text(path: String, content: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(content)
+		file.close()
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(absolute_path)
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry != "." and entry != "..":
+			var child := absolute_path.path_join(entry)
+			if dir.current_is_dir():
+				_remove_tree(ProjectSettings.localize_path(child))
+			else:
+				DirAccess.remove_absolute(child)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
 
 
 func _failure(message: String) -> Dictionary:
