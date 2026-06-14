@@ -105,6 +105,9 @@ class Recorder extends RefCounted:
 
 
 func run_case(tree: SceneTree) -> Dictionary:
+	var source_guard := _assert_dock_applies_visible_tabs_only()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
 	_instance = MCPDockScene.instantiate() as VBoxContainer
 	if _instance == null:
 		return _failure("MCP Dock scene should instantiate for Settings tab contract.")
@@ -261,3 +264,18 @@ func _has_option_value(option_button: OptionButton, value: String) -> bool:
 		if str(option_button.get_item_metadata(item_index)) == value:
 			return true
 	return false
+
+
+func _assert_dock_applies_visible_tabs_only() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/ui/mcp_dock.gd")
+	if source.find("func _apply_visible_tab_models(model: Dictionary) -> void:") == -1:
+		return "MCP Dock should route model updates through visible-tab application."
+	if source.find("_apply_tab_model(_server_tab, model)") == -1:
+		return "MCP Dock should keep the lightweight Server tab updated during status refreshes."
+	if source.find("var current_tab := _get_tab_for_index(current_index)") == -1 or source.find("_apply_tab_model(current_tab, model)") == -1:
+		return "MCP Dock should update only the active tab besides the Server tab."
+	if source.find("_apply_all_tab_models(model)") != -1:
+		return "MCP Dock should not apply every model update to all heavy tabs."
+	if source.find("_apply_tab_model(_get_tab_for_index(index), _last_model)") == -1:
+		return "MCP Dock should apply the cached model when a tab becomes visible."
+	return ""

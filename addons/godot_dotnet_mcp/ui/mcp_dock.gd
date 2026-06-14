@@ -137,14 +137,40 @@ func apply_model(model: Dictionary) -> void:
 	var current_tab = int(model.get("current_tab", 0))
 	if current_tab >= 0 and current_tab < _tab_container.get_tab_count():
 		_tab_container.current_tab = current_tab
-	_apply_all_tab_models(model)
+	_apply_visible_tab_models(model)
 
 
-func _apply_all_tab_models(model: Dictionary) -> void:
-	for tab in [_server_tab, _tools_tab, _resources_tab, _prompts_tab, _config_tab, _settings_tab]:
-		if tab and tab.has_method("apply_model"):
-			tab.apply_model(model)
-	_normalize_settings_update_buttons()
+func _apply_visible_tab_models(model: Dictionary) -> void:
+	_apply_tab_model(_server_tab, model)
+	var current_index := _tab_container.current_tab if _tab_container != null else int(model.get("current_tab", 0))
+	var current_tab := _get_tab_for_index(current_index)
+	if current_tab != _server_tab:
+		_apply_tab_model(current_tab, model)
+	if current_index == 5:
+		_normalize_settings_update_buttons()
+
+
+func _apply_tab_model(tab: Control, model: Dictionary) -> void:
+	if tab != null and tab.has_method("apply_model"):
+		tab.apply_model(model)
+
+
+func _get_tab_for_index(index: int) -> Control:
+	match index:
+		0:
+			return _server_tab
+		1:
+			return _tools_tab
+		2:
+			return _resources_tab
+		3:
+			return _prompts_tab
+		4:
+			return _config_tab
+		5:
+			return _settings_tab
+		_:
+			return null
 
 
 func _normalize_settings_update_buttons() -> void:
@@ -274,7 +300,9 @@ func focus_active_panel() -> void:
 func _on_tab_changed(index: int) -> void:
 	current_tab_changed.emit(index)
 	if not _last_model.is_empty():
-		_apply_all_tab_models(_last_model)
+		_apply_tab_model(_get_tab_for_index(index), _last_model)
+		if index == 5:
+			_normalize_settings_update_buttons()
 
 
 func _on_server_tab_start_requested() -> void:
