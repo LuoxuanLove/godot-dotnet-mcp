@@ -124,6 +124,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var deferred_autostart_result := await _verify_auto_start_is_deferred(tree)
 	if not bool(deferred_autostart_result.get("success", false)):
 		return deferred_autostart_result
+	var full_profile_result := _verify_initial_full_profile_excludes_user_tools(tree)
+	if not bool(full_profile_result.get("success", false)):
+		return full_profile_result
 
 	return {
 		"name": "plugin_entrypoint_contracts",
@@ -165,6 +168,39 @@ func _verify_auto_start_is_deferred(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if not bool(_probe_plugin._server_controller._running) or _probe_plugin.get_server() == null:
 		return _return_failure(tree, "plugin.gd should run deferred auto-start after _enter_tree() yields.")
+	_teardown_probe(tree)
+	return {"success": true, "error": ""}
+
+
+func _verify_initial_full_profile_excludes_user_tools(tree: SceneTree) -> Dictionary:
+	_seed_saved_settings({
+		"auto_start": false,
+		"debug_mode": false,
+		"tool_profile_id": "full",
+		"disabled_tools": []
+	})
+	ProjectSettings.set_setting("autoload/%s" % RUNTIME_BRIDGE_AUTOLOAD_NAME, "")
+
+	_probe_base_control = Control.new()
+	_probe_base_control.name = "EntrypointFullProfileProbeRoot"
+	tree.root.add_child(_probe_base_control)
+
+	var probe_script = load(RUNTIME_PROBE_PLUGIN_PATH)
+	if probe_script == null or not probe_script.has_method("new"):
+		return _return_failure(tree, "plugin entrypoint runtime probe script should load for full profile verification.")
+	_probe_plugin = probe_script.new(_probe_base_control)
+	_probe_plugin._enter_tree()
+	_probe_entered = true
+	_probe_plugin._state.needs_initial_tool_profile_apply = true
+	_probe_plugin._apply_initial_tool_profile_if_needed()
+	var disabled_tools: Array = _probe_plugin._state.settings.get("disabled_tools", [])
+	if not disabled_tools.has("user_sample_tool"):
+		return _return_failure(tree, "Initial full profile application should continue excluding user tools.")
+	if disabled_tools.has("system_project_state") or disabled_tools.has("system_runtime_control"):
+		return _return_failure(tree, "Initial full profile application should not disable system tools.")
+	var snapshots: Array = _probe_plugin._server_controller.disabled_tool_snapshots
+	if snapshots.is_empty() or not (snapshots.back() as Array).has("user_sample_tool"):
+		return _return_failure(tree, "Initial full profile application should propagate excluded user tools to the server controller.")
 	_teardown_probe(tree)
 	return {"success": true, "error": ""}
 

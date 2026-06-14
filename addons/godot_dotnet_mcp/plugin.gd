@@ -733,7 +733,7 @@ func _apply_initial_tool_profile_if_needed() -> void:
 		return
 
 	var profile_id := str(_state.settings.get("tool_profile_id", "default"))
-	if profile_id == "default" or profile_id == "full":
+	if profile_id == "default":
 		_state.needs_initial_tool_profile_apply = false
 		_state.settings["disabled_tools"] = []
 		_save_settings()

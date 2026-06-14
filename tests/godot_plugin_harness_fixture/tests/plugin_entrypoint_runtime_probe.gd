@@ -27,6 +27,7 @@ class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime
 	var _fake_server: Node = null
 	var _attached_plugin = null
 	var _attached_settings: Dictionary = {}
+	var disabled_tool_snapshots: Array = []
 	var _running := false
 
 
@@ -54,6 +55,22 @@ class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime
 
 	func get_server() -> Node:
 		return _fake_server
+
+
+	func get_all_tools_by_category() -> Dictionary:
+		return {
+			"system": [
+				{"name": "project_state"},
+				{"name": "runtime_control"}
+			],
+			"user": [
+				{"name": "sample_tool"}
+			]
+		}
+
+
+	func set_disabled_tools(disabled_tools: Array) -> void:
+		disabled_tool_snapshots.append(disabled_tools.duplicate())
 
 
 var base_control: Control
