@@ -481,6 +481,12 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 		_remove_tree(root)
 		_remove_tree(external_root)
 		return _failure("plugin.gd update sync mirror contract could not create fixture archive: %s" % archive_error)
+	var linked_write_result := _run_update_sync_linked_write_guard_contract(archive_path)
+	if not bool(linked_write_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return linked_write_result
 	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
 	if not bool(sync_result.get("success", false)):
 		var error := str(sync_result.get("error", ""))
@@ -534,6 +540,47 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 			_remove_tree(root)
 			_remove_tree(external_root)
 			return _failure("plugin.gd update sync should report skipped linked directories during mirror cleanup.")
+	probe.free()
+	_remove_tree(root)
+	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_linked_write_guard_contract(archive_path: String) -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_linked_write_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var external_root := "res://tests_tmp/plugin_update_linked_write_external"
+	_remove_tree(root)
+	_remove_tree(external_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old")
+	_write_text(root.path_join("plugin.gd"), "old")
+	_write_text(root.path_join("ui/mcp_dock.tscn"), "old")
+	_write_text(external_root.path_join("sentinel.txt"), "outside")
+	var linked_tools_path := root.path_join("tools")
+	var link_created := _create_directory_link(linked_tools_path, external_root)
+	if not link_created:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return {"success": true}
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if bool(sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should reject archives whose write target traverses a linked directory.")
+	if FileAccess.file_exists(external_root.path_join("node/executor.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should not write archive entries through linked target directories.")
+	if not FileAccess.file_exists(external_root.path_join("sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve linked external target contents when rejecting a linked write target.")
 	probe.free()
 	_remove_tree(root)
 	_remove_tree(external_root)

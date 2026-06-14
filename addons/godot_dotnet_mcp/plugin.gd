@@ -1231,11 +1231,17 @@ func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
 		if _should_skip_update_sync_path(relative_path):
 			continue
 		var target_path := addon_root.path_join(relative_path).simplify_path()
+		if _is_update_sync_path_or_ancestor_link(addon_root, relative_path):
+			reader.close()
+			return {"success": false, "error": "Update archive target traverses a symlink, junction, or reparse point: %s" % relative_path}
 		var target_dir := target_path.get_base_dir()
 		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target_dir))
 		if dir_error != OK:
 			reader.close()
 			return {"success": false, "error": "Failed to create directory %s: %s" % [target_dir, dir_error]}
+		if _is_update_sync_path_or_ancestor_link(addon_root, relative_path):
+			reader.close()
+			return {"success": false, "error": "Update archive target traverses a symlink, junction, or reparse point: %s" % relative_path}
 		var output := FileAccess.open(target_path, FileAccess.WRITE)
 		if output == null:
 			reader.close()
@@ -1413,6 +1419,22 @@ func _is_update_sync_path_inside_root(addon_root: String, path: String) -> bool:
 		root = root.substr(0, root.length() - 1)
 	var normalized := path.simplify_path()
 	return normalized == root or normalized.begins_with("%s/" % root)
+
+
+func _is_update_sync_path_or_ancestor_link(addon_root: String, relative_path: String) -> bool:
+	var normalized_root := addon_root.simplify_path()
+	if _is_update_sync_link_path(normalized_root):
+		return true
+	var normalized_relative := _normalize_update_sync_relative_path(relative_path)
+	if normalized_relative.is_empty():
+		return false
+	var parts := normalized_relative.split("/", false)
+	var current := normalized_root
+	for part in parts:
+		current = current.path_join(str(part)).simplify_path()
+		if _is_update_sync_link_path(current):
+			return true
+	return false
 
 
 func _is_update_sync_link_path(path: String) -> bool:
