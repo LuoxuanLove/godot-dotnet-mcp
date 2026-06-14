@@ -46,6 +46,7 @@ Target version: 2.0.0.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
 - Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
 - Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
+- Fixed plugin update sync from MCP tools so custom branches with slash-separated names resolve their commit before archive download, retry through commit/ref archive fallbacks, and trigger ref discovery for release-derived targets instead of failing while the Dock path can still recover.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 
 ### Documentation

@@ -20,6 +20,13 @@ class FocusRestoreProbePlugin extends PluginScript:
 		return request_parent
 
 
+class LoadingDiscoveryProbePlugin extends FocusRestoreProbePlugin:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false) -> bool:
+		discovery_request_count += 1
+		_state.update_refs_state = "loading"
+		return true
+
+
 class RefreshProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var compare_requests: Array = []
@@ -90,6 +97,19 @@ class SyncStartProbePlugin extends PluginScript:
 
 	func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
 		archive_requests.append({"target": target.duplicate(true), "serial": serial})
+
+
+class ArchiveAttemptProbePlugin extends PluginScript:
+	var attempt_requests: Array[Dictionary] = []
+
+	func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
+		attempt_requests.append({
+			"target": target.duplicate(true),
+			"serial": serial,
+			"attempts": attempts.duplicate(true),
+			"attempt_index": attempt_index,
+			"failures": failures.duplicate(true)
+		})
 
 
 class MirrorSyncProbePlugin extends PluginScript:
@@ -195,6 +215,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(explicit_release_target.get("kind", "")) != "tag" or str(explicit_release_target.get("ref", "")) != "01" or str(explicit_release_target.get("commit", "")) != "tag-commit":
 		target_probe.free()
 		return _failure("plugin.gd should resolve an explicit release/tag selection as the sync target.")
+	var branch_ref_url := target_probe._get_update_branch_ref_url("refactor/v2.0.0")
+	if not branch_ref_url.ends_with("/branches/refactor%2Fv2.0.0"):
+		target_probe.free()
+		return _failure("plugin.gd should encode slash-containing branch refs for the GitHub branch API.")
+	if not target_probe._should_resolve_update_branch_commit_before_archive({"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}):
+		target_probe.free()
+		return _failure("plugin.gd should resolve branch commit metadata before starting a branch archive sync without discovered refs.")
+	if target_probe._should_resolve_update_branch_commit_before_archive({"kind": "tag", "ref": "v2.0.0", "commit": ""}):
+		target_probe.free()
+		return _failure("plugin.gd should not resolve tag archive targets through the branch API.")
+	var archive_attempts := target_probe._build_update_archive_request_attempts({"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha"})
+	if archive_attempts.size() < 4:
+		target_probe.free()
+		return _failure("plugin.gd should build commit-first archive fallback attempts for branch sync.")
+	if not str((archive_attempts[0] as Dictionary).get("url", "")).ends_with("/zip/target-sha"):
+		target_probe.free()
+		return _failure("plugin.gd should prefer codeload commit archive downloads when target commit metadata is known.")
+	if str((archive_attempts[2] as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") == -1:
+		target_probe.free()
+		return _failure("plugin.gd should keep slash-containing branch refs usable for codeload archive fallback.")
+	target_probe._state.settings["update_source"] = "latest_stable"
+	if not target_probe._should_discover_update_target_before_sync():
+		target_probe.free()
+		return _failure("plugin.gd should require update ref discovery before syncing release-derived targets.")
+	target_probe._state.settings["update_source"] = "custom_branch"
+	if target_probe._should_discover_update_target_before_sync():
+		target_probe.free()
+		return _failure("plugin.gd should not require update ref discovery before syncing custom branch targets.")
 	target_probe.free()
 
 	var tool_facade_probe := PluginScript.new()
@@ -245,6 +293,77 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		sync_start_probe.free()
 		return _failure("plugin.gd update tool facade should return idempotent loading status for duplicate sync starts.")
 	sync_start_probe.free()
+	var release_discovery_probe := LoadingDiscoveryProbePlugin.new()
+	release_discovery_probe._state.settings["update_source"] = "latest_stable"
+	release_discovery_probe._state.update_ref_latest_stable_release = ""
+	_tree.root.add_child(release_discovery_probe.request_parent)
+	var release_start_result: Dictionary = release_discovery_probe.start_plugin_update_sync_from_tools()
+	if bool(release_start_result.get("accepted", true)) or not bool(release_start_result.get("loading", false)) or release_discovery_probe.discovery_request_count != 1:
+		release_discovery_probe.request_parent.queue_free()
+		release_discovery_probe.free()
+		return _failure("plugin.gd tool update sync should request ref discovery instead of failing release-derived targets before refs are loaded.")
+	release_discovery_probe.request_parent.queue_free()
+	release_discovery_probe.free()
+	var dock_sync_probe := SyncStartProbePlugin.new()
+	dock_sync_probe._state.settings["update_source"] = "custom_branch"
+	dock_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	dock_sync_probe._state.update_ref_commits = {"refactor/v2.0.0": "target-sha"}
+	dock_sync_probe._on_update_sync_requested()
+	var tool_sync_probe := SyncStartProbePlugin.new()
+	tool_sync_probe._state.settings["update_source"] = "custom_branch"
+	tool_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	tool_sync_probe._state.update_ref_commits = {"refactor/v2.0.0": "target-sha"}
+	var tool_start_result: Dictionary = tool_sync_probe.start_plugin_update_sync_from_tools()
+	if dock_sync_probe.archive_requests.size() != 1 or tool_sync_probe.archive_requests.size() != 1:
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd should start one update archive request from both Dock and tool entry points.")
+	if not bool(tool_start_result.get("accepted", false)):
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd tool update sync should be accepted when the equivalent Dock update sync would start.")
+	var dock_target: Dictionary = (dock_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	var tool_target: Dictionary = (tool_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	if JSON.stringify(dock_target) != JSON.stringify(tool_target):
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd should route Dock and tool update sync through the same resolved target.")
+	dock_sync_probe.free()
+	tool_sync_probe.free()
+
+	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
+	archive_attempt_probe._update_sync_request_serial = 21
+	var branch_body := JSON.stringify({"commit": {"sha": "resolved-sha"}}).to_utf8_buffer()
+	await archive_attempt_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), branch_body, {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 21, null)
+	if archive_attempt_probe.attempt_requests.size() != 1:
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should start archive attempts after resolving branch commit metadata.")
+	var resolved_attempt: Dictionary = archive_attempt_probe.attempt_requests[0]
+	var resolved_target: Dictionary = resolved_attempt.get("target", {})
+	if str(resolved_target.get("commit", "")) != "resolved-sha" or str(archive_attempt_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "resolved-sha":
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should propagate resolved branch commit metadata into archive sync target and ref cache.")
+	var resolved_attempts: Array = resolved_attempt.get("attempts", [])
+	if resolved_attempts.is_empty() or not str((resolved_attempts[0] as Dictionary).get("url", "")).ends_with("/zip/resolved-sha"):
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should retry branch sync through a commit archive after branch ref resolution.")
+	archive_attempt_probe.free()
+
+	var archive_ref_failure_probe := ArchiveAttemptProbePlugin.new()
+	archive_ref_failure_probe._update_sync_request_serial = 22
+	await archive_ref_failure_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 22, null)
+	if archive_ref_failure_probe.attempt_requests.size() != 1:
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should still try ref archive fallback when branch ref metadata lookup fails.")
+	var ref_failure_request: Dictionary = archive_ref_failure_probe.attempt_requests[0]
+	if (ref_failure_request.get("failures", []) as Array).is_empty():
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should preserve branch ref lookup failure details for update sync diagnostics.")
+	var ref_failure_attempts: Array = ref_failure_request.get("attempts", [])
+	if ref_failure_attempts.is_empty() or str((ref_failure_attempts[0] as Dictionary).get("label", "")).find("branch") == -1:
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should fallback to branch archive attempts when commit metadata cannot be resolved.")
+	archive_ref_failure_probe.free()
 
 	var refresh_probe := RefreshProbePlugin.new()
 	_tree.root.add_child(refresh_probe.request_parent)

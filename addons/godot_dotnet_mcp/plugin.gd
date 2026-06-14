@@ -35,13 +35,18 @@ const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godo
 const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
 const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
 const UPDATE_COMPARE_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/compare/%s...%s"
+const UPDATE_BRANCH_REF_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches/%s"
 const UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/heads/%s/addons/godot_dotnet_mcp/plugin.cfg"
 const UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/tags/%s/addons/godot_dotnet_mcp/plugin.cfg"
 const UPDATE_REFS_HTTP_TIMEOUT := 10.0
 const UPDATE_REFS_BODY_SIZE_LIMIT := 16777216
 const UPDATE_REFS_MAX_PAGES := 20
+const UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/"
 const UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/heads/"
 const UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/tags/"
+const UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/refs/heads/"
+const UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/refs/tags/"
+const UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/"
 const UPDATE_SYNC_ARCHIVE_PATH := "user://godot_dotnet_mcp/update_branch.zip"
 const UPDATE_SYNC_MARKER_PATH := "res://addons/godot_dotnet_mcp/.mcp_sync.json"
 const UPDATE_SYNC_REPO_URL := "https://github.com/LuoxuanLove/godot-dotnet-mcp"
@@ -1003,18 +1008,149 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 		return
 	var target_kind := str(target.get("kind", "branch"))
 	var target_ref := str(target.get("ref", "")).strip_edges()
-	var archive_prefix := UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX if target_kind == "tag" else UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX
+	if _should_resolve_update_branch_commit_before_archive(target):
+		_start_update_archive_branch_ref_request(target, serial)
+		return
+	var attempts := _build_update_archive_request_attempts(target)
+	if attempts.is_empty():
+		_mark_update_sync_failed("Update sync target has no usable archive URL: %s" % target_ref, serial)
+		return
+	_start_update_archive_sync_request_attempt(target, serial, attempts, 0, [])
+
+
+func _should_resolve_update_branch_commit_before_archive(target: Dictionary) -> bool:
+	if str(target.get("kind", "branch")) != "branch":
+		return false
+	return str(target.get("ref", "")).strip_edges() != "" and str(target.get("commit", "")).strip_edges() == ""
+
+
+func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -> void:
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_sync_failed("No active update sync request host.", serial)
+		return
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var request_node := HTTPRequest.new()
+	request_node.name = "UpdateArchiveBranchRefRequest"
+	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.body_size_limit = 65536
+	request_parent.add_child(request_node)
+	request_node.request_completed.connect(Callable(self, "_on_update_archive_branch_ref_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
+	var error := request_node.request(_get_update_branch_ref_url(target_ref), _get_update_refs_headers())
+	if error != OK:
+		request_node.queue_free()
+		_start_update_archive_sync_request_attempt(target, serial, _build_update_archive_request_attempts(target), 0, ["branch ref request start failed: %s" % error])
+
+
+func _get_update_branch_ref_url(target_ref: String) -> String:
+	return UPDATE_BRANCH_REF_URL_TEMPLATE % target_ref.strip_edges().uri_encode()
+
+
+func _on_update_archive_branch_ref_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	var failures: Array[String] = []
+	var resolved_target := target.duplicate(true)
+	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
+		var parse_result := _parse_update_branch_ref_response(body)
+		if bool(parse_result.get("success", false)):
+			resolved_target["commit"] = str(parse_result.get("commit", "")).strip_edges()
+			var commits: Dictionary = _state.update_ref_commits
+			if not str(resolved_target.get("commit", "")).is_empty():
+				commits[str(resolved_target.get("ref", ""))] = str(resolved_target.get("commit", ""))
+				_state.update_ref_commits = commits
+		else:
+			failures.append("branch ref response parse failed: %s" % str(parse_result.get("error", "Invalid JSON response")))
+	else:
+		failures.append("branch ref request failed with result %s and HTTP %s" % [result, response_code])
+	_start_update_archive_sync_request_attempt(resolved_target, serial, _build_update_archive_request_attempts(resolved_target), 0, failures)
+
+
+func _parse_update_branch_ref_response(body: PackedByteArray) -> Dictionary:
+	var json := JSON.new()
+	var parse_error := json.parse(body.get_string_from_utf8())
+	if parse_error != OK:
+		return {"success": false, "error": json.get_error_message()}
+	if not (json.data is Dictionary):
+		return {"success": false, "error": "Expected a JSON object"}
+	var data: Dictionary = json.data
+	var commit_value = data.get("commit", {})
+	if commit_value is Dictionary:
+		var sha := str((commit_value as Dictionary).get("sha", "")).strip_edges()
+		if not sha.is_empty():
+			return {"success": true, "commit": sha}
+	return {"success": false, "error": "Branch response did not include commit.sha"}
+
+
+func _build_update_archive_request_attempts(target: Dictionary) -> Array:
+	var target_kind := str(target.get("kind", "branch"))
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	var encoded_ref := _encode_update_archive_ref_path(target_ref)
+	var attempts: Array = []
+	if not target_commit.is_empty():
+		attempts.append({
+			"label": "codeload commit archive",
+			"url": "%s%s" % [UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX, target_commit.uri_encode()]
+		})
+		attempts.append({
+			"label": "github commit archive",
+			"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX, target_commit.uri_encode()]
+		})
+	if not encoded_ref.is_empty():
+		if target_kind == "tag":
+			attempts.append({
+				"label": "codeload tag archive",
+				"url": "%s%s" % [UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX, encoded_ref]
+			})
+			attempts.append({
+				"label": "github tag archive",
+				"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX, encoded_ref]
+			})
+		else:
+			attempts.append({
+				"label": "codeload branch archive",
+				"url": "%s%s" % [UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX, encoded_ref]
+			})
+			attempts.append({
+				"label": "github branch archive",
+				"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX, encoded_ref]
+			})
+	return attempts
+
+
+func _encode_update_archive_ref_path(target_ref: String) -> String:
+	return target_ref.strip_edges().uri_encode().replace("%2F", "/")
+
+
+func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	if attempt_index < 0 or attempt_index >= attempts.size():
+		_mark_update_sync_failed(_format_update_archive_failures(failures), serial)
+		return
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_sync_failed("No active update sync request host.", serial)
+		return
+	var attempt: Dictionary = attempts[attempt_index]
+	if FileAccess.file_exists(UPDATE_SYNC_ARCHIVE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(UPDATE_SYNC_ARCHIVE_PATH))
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateArchiveSyncRequest"
 	request_node.timeout = UPDATE_SYNC_HTTP_TIMEOUT
 	request_node.body_size_limit = UPDATE_SYNC_BODY_SIZE_LIMIT
 	request_node.download_file = UPDATE_SYNC_ARCHIVE_PATH
 	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
-	var error := request_node.request("%s%s" % [archive_prefix, target_ref], _get_update_archive_headers())
+	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_attempt_completed").bind(target, serial, request_node, attempts, attempt_index, failures), CONNECT_ONE_SHOT)
+	var error := request_node.request(str(attempt.get("url", "")), _get_update_archive_headers())
 	if error != OK:
 		request_node.queue_free()
-		_mark_update_sync_failed("Failed to start update sync request: %s" % error, serial)
+		var next_failures := failures.duplicate()
+		next_failures.append("%s start failed: %s" % [str(attempt.get("label", "archive request")), error])
+		_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
 
 
 func _get_update_archive_headers() -> PackedStringArray:
@@ -1224,17 +1360,43 @@ func _mark_update_sync_failed(message: String, serial: int) -> void:
 	_refresh_dock()
 
 
+func _on_update_archive_sync_request_attempt_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest, attempts: Array, attempt_index: int, failures: Array) -> void:
+	if request_node != null and is_instance_valid(request_node):
+		request_node.queue_free()
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	var attempt: Dictionary = attempts[attempt_index] if attempt_index >= 0 and attempt_index < attempts.size() else {}
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		var next_failures := failures.duplicate()
+		next_failures.append("%s failed with result %s and HTTP %s" % [str(attempt.get("label", "archive request")), result, response_code])
+		_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
+		return
+	await _complete_update_archive_sync_download(target, serial, attempts, attempt_index, failures)
+
+
 func _on_update_archive_sync_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
 	if request_node != null and is_instance_valid(request_node):
 		request_node.queue_free()
 	if _state == null or serial != _update_sync_request_serial:
 		return
-	var target_ref := str(target.get("ref", ""))
 	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
 		_mark_update_sync_failed("Update archive request failed with result %s and HTTP %s" % [result, response_code], serial)
 		return
+	await _complete_update_archive_sync_download(target, serial)
+
+
+func _complete_update_archive_sync_download(target: Dictionary, serial: int, attempts: Array = [], attempt_index: int = -1, failures: Array = []) -> void:
+	if _state == null or serial != _update_sync_request_serial:
+		return
+	var target_ref := str(target.get("ref", ""))
 	var sync_result := _sync_update_archive_to_addon(UPDATE_SYNC_ARCHIVE_PATH)
 	if not bool(sync_result.get("success", false)):
+		if _should_try_next_update_archive_attempt(str(sync_result.get("error", "")), attempts, attempt_index):
+			var next_failures := failures.duplicate()
+			var attempt: Dictionary = attempts[attempt_index] if attempt_index >= 0 and attempt_index < attempts.size() else {}
+			next_failures.append("%s downloaded an unusable archive: %s" % [str(attempt.get("label", "archive request")), str(sync_result.get("error", "archive sync failed"))])
+			_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
+			return
 		_mark_update_sync_failed(str(sync_result.get("error", "Update sync failed.")), serial)
 		return
 	var marker_error := _write_update_sync_marker(target, int(sync_result.get("written", 0)))
@@ -1244,6 +1406,21 @@ func _on_update_archive_sync_request_completed(result: int, response_code: int, 
 	_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_editor")
 	_refresh_dock()
 	await _complete_update_sync_after_editor_refresh(target_ref, sync_result, serial)
+
+
+func _should_try_next_update_archive_attempt(error: String, attempts: Array, attempt_index: int) -> bool:
+	if attempt_index < 0 or attempt_index + 1 >= attempts.size():
+		return false
+	return error.begins_with("Failed to open branch archive") or error.begins_with("Branch archive does not contain")
+
+
+func _format_update_archive_failures(failures: Array) -> String:
+	if failures.is_empty():
+		return "Update archive request failed before a download could start."
+	var details: Array[String] = []
+	for failure in failures:
+		details.append(str(failure))
+	return "Update archive request failed after %s attempt(s): %s" % [details.size(), "; ".join(details)]
 
 
 func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result: Dictionary, serial: int) -> void:
@@ -1873,6 +2050,20 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
+		if _should_discover_update_target_before_sync():
+			var discovery_accepted := _ensure_update_refs_discovery_requested(true)
+			var discovery_data := _build_plugin_update_status_snapshot()
+			discovery_data["accepted"] = false
+			discovery_data["discovery_accepted"] = discovery_accepted
+			discovery_data["action_status"] = _resolve_plugin_update_request_status("refs", discovery_accepted)
+			return _build_plugin_update_tool_response({
+				"success": true,
+				"accepted": false,
+				"loading": str(_state.update_refs_state) == "loading",
+				"status": str(discovery_data.get("action_status", "")),
+				"data": discovery_data,
+				"message": "Plugin update target discovery is required before sync"
+			})
 		_on_update_sync_requested()
 		var missing_target_data := _build_plugin_update_status_snapshot()
 		missing_target_data["accepted"] = false
@@ -1909,6 +2100,11 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 		"data": data,
 		"message": "Plugin update sync requested"
 	})
+
+
+func _should_discover_update_target_before_sync() -> bool:
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
+	return source == "latest_stable" or source == "latest_release"
 
 
 func _build_plugin_update_current_snapshot() -> Dictionary:
