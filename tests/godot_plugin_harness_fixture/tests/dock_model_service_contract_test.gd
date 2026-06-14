@@ -41,6 +41,7 @@ class FakeState extends RefCounted:
 
 class FakeServerController extends ServerRuntimeController:
 	var all_tools_request_count := 0
+	var heavy_status_request_count := 0
 
 	func _init() -> void:
 		_server = FakeServer.new()
@@ -62,15 +63,19 @@ class FakeServerController extends ServerRuntimeController:
 		return {"connections": 1}
 
 	func get_domain_states() -> Array:
+		heavy_status_request_count += 1
 		return (_server as FakeServer).get_domain_states()
 
 	func get_reload_status() -> Dictionary:
+		heavy_status_request_count += 1
 		return {}
 
 	func get_performance_summary() -> Dictionary:
+		heavy_status_request_count += 1
 		return (_server as FakeServer).get_performance_summary()
 
 	func get_tool_load_errors() -> Array:
+		heavy_status_request_count += 1
 		return []
 
 	func is_public_removed_tool(tool_name: String) -> bool:
@@ -264,6 +269,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var home_model: Dictionary = service.build_model()
 	if server_controller.all_tools_request_count != 0:
 		return _failure("Dock home model should not request the full tool catalog.")
+	if server_controller.heavy_status_request_count != 0:
+		return _failure("Dock home model should not request heavy runtime diagnostics.")
 	if not (home_model.get("toolTree", []) as Array).is_empty():
 		return _failure("Dock home model should not build the heavy tools tree.")
 
@@ -271,6 +278,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var model: Dictionary = service.build_model()
 	if server_controller.all_tools_request_count <= 0:
 		return _failure("Dock Tools tab model should request the tool catalog on demand.")
+	if server_controller.heavy_status_request_count <= 0:
+		return _failure("Dock Tools tab model should request runtime diagnostics only when the Tools view needs them.")
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
 	if not tools_by_category.has("scene"):
 		return _failure("Dock model should keep non-root atomic categories available for system tool tree lookup.")
@@ -333,7 +342,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
 
 	state.current_tab = 2
+	server_controller.heavy_status_request_count = 0
 	var resources_model: Dictionary = service.build_model()
+	if server_controller.heavy_status_request_count != 0:
+		return _failure("Dock Resources tab model should not request heavy runtime diagnostics.")
 	var protocol_projection_result := _verify_mcp_protocol_projection(resources_model)
 	if not bool(protocol_projection_result.get("success", false)):
 		return protocol_projection_result

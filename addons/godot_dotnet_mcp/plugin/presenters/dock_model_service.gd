@@ -131,6 +131,7 @@ func build_model() -> Dictionary:
 	var current_tab := int(_state.current_tab)
 	var needs_tool_catalog := _tab_needs_tool_catalog(current_tab)
 	var needs_mcp_catalog := _tab_needs_mcp_catalog(current_tab)
+	var needs_runtime_diagnostics := _tab_needs_runtime_diagnostics(current_tab)
 	var all_tools_by_category := {}
 	var tools_by_category := {}
 	var catalog_snapshot := {}
@@ -140,7 +141,8 @@ func build_model() -> Dictionary:
 		tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
 		catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
 		tool_presentation = catalog_snapshot.get("presentation", {})
-	var self_diagnostics = _build_self_diagnostic_health_snapshot()
+	var server_status := _build_server_status_snapshot(needs_runtime_diagnostics)
+	var self_diagnostics = _build_self_diagnostic_health_snapshot(needs_runtime_diagnostics)
 	var client_install_statuses := {}
 	var plugin_freshness := {}
 	var plugin_version := ""
@@ -160,6 +162,12 @@ func build_model() -> Dictionary:
 		"tool_catalog": _tool_catalog,
 		"user_tool_service": _user_tool_service,
 		"config_service": _config_service,
+		"is_running": bool(server_status.get("is_running", false)),
+		"stats": server_status.get("stats", {}),
+		"domain_states": server_status.get("domain_states", []),
+		"reload_status": server_status.get("reload_status", {}),
+		"performance": server_status.get("performance", {}),
+		"tool_load_errors": server_status.get("tool_load_errors", []),
 		"all_tools_by_category": all_tools_by_category,
 		"tools_by_category": tools_by_category,
 		"self_diagnostics": self_diagnostics,
@@ -387,6 +395,10 @@ func _tab_needs_mcp_catalog(current_tab: int) -> bool:
 	return current_tab == 2 or current_tab == 3
 
 
+func _tab_needs_runtime_diagnostics(current_tab: int) -> bool:
+	return current_tab == 1 or current_tab == 5
+
+
 func _get_domain_defs(catalog_snapshot: Dictionary) -> Array:
 	var manifest = catalog_snapshot.get("catalog_manifest", {})
 	if manifest is Dictionary:
@@ -473,9 +485,58 @@ func _is_tool_category_visible(category: String) -> bool:
 	return true
 
 
-func _build_self_diagnostic_health_snapshot() -> Dictionary:
+func _build_server_status_snapshot(include_runtime_diagnostics: bool = false) -> Dictionary:
+	if _server_controller == null:
+		return {
+			"is_running": false,
+			"stats": {},
+			"domain_states": [],
+			"reload_status": {},
+			"performance": {},
+			"tool_load_errors": []
+		}
+	var stats := {}
+	if _server_controller.has_method("get_connection_stats"):
+		var raw_stats = _server_controller.get_connection_stats()
+		if raw_stats is Dictionary:
+			stats = (raw_stats as Dictionary).duplicate(true)
+	var is_running := false
+	if _server_controller.has_method("is_running"):
+		is_running = bool(_server_controller.is_running())
+	var snapshot := {
+		"is_running": is_running,
+		"stats": stats,
+		"domain_states": [],
+		"reload_status": {},
+		"performance": {},
+		"tool_load_errors": []
+	}
+	if not include_runtime_diagnostics:
+		return snapshot
+	if _server_controller.has_method("get_domain_states"):
+		var domain_states = _server_controller.get_domain_states()
+		if domain_states is Array:
+			snapshot["domain_states"] = (domain_states as Array).duplicate(true)
+	if _server_controller.has_method("get_reload_status"):
+		var reload_status = _server_controller.get_reload_status()
+		if reload_status is Dictionary:
+			snapshot["reload_status"] = (reload_status as Dictionary).duplicate(true)
+	if _server_controller.has_method("get_performance_summary"):
+		var performance = _server_controller.get_performance_summary()
+		if performance is Dictionary:
+			snapshot["performance"] = (performance as Dictionary).duplicate(true)
+	if _server_controller.has_method("get_tool_load_errors"):
+		var load_errors = _server_controller.get_tool_load_errors()
+		if load_errors is Array:
+			snapshot["tool_load_errors"] = (load_errors as Array).duplicate(true)
+	return snapshot
+
+
+func _build_self_diagnostic_health_snapshot(include_runtime_diagnostics: bool = false) -> Dictionary:
 	if _self_diagnostic_feature != null and _self_diagnostic_feature.has_method("build_self_diagnostic_health_snapshot"):
-		return _self_diagnostic_feature.build_self_diagnostic_health_snapshot()
+		if include_runtime_diagnostics:
+			return _self_diagnostic_feature.build_self_diagnostic_health_snapshot()
+		return PluginSelfDiagnosticStore.get_health_snapshot({})
 	return PluginSelfDiagnosticStore.get_health_snapshot({})
 
 

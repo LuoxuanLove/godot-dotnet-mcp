@@ -14,7 +14,6 @@ func build_model(context: Dictionary) -> Dictionary:
 	var settings: Dictionary = context.get("settings", {})
 	var localization = context.get("localization")
 	var tool_catalog = context.get("tool_catalog")
-	var server_controller = context.get("server_controller")
 	var user_tool_service = context.get("user_tool_service")
 	var config_service = context.get("config_service")
 	var all_tools_by_category: Dictionary = context.get("all_tools_by_category", {})
@@ -79,11 +78,11 @@ func build_model(context: Dictionary) -> Dictionary:
 		"current_config_platform": state.current_config_platform,
 		"tool_profile_id": profile_id,
 		"editor_scale": float(context.get("editor_scale", 1.0)),
-		"is_running": server_controller.is_running(),
-		"stats": server_controller.get_connection_stats(),
-		"domain_states": server_controller.get_domain_states(),
-		"reload_status": server_controller.get_reload_status(),
-		"performance": server_controller.get_performance_summary(),
+		"is_running": bool(context.get("is_running", false)),
+		"stats": context.get("stats", {}),
+		"domain_states": context.get("domain_states", []),
+		"reload_status": context.get("reload_status", {}),
+		"performance": context.get("performance", {}),
 		"languages": localization.get_available_languages(),
 		"tools_by_category": tools_by_category,
 		"tool_presentation": tool_presentation,
@@ -101,7 +100,7 @@ func build_model(context: Dictionary) -> Dictionary:
 		"presentationVersion": int((active_tool_presentation as Dictionary).get("presentationVersion", 1)) if active_tool_presentation is Dictionary else 1,
 		"toolTree": (active_tool_presentation as Dictionary).get("toolTree", []) if active_tool_presentation is Dictionary else [],
 		"toolGroups": (active_tool_presentation as Dictionary).get("toolGroups", []) if active_tool_presentation is Dictionary else [],
-		"tool_load_errors": server_controller.get_tool_load_errors(),
+		"tool_load_errors": context.get("tool_load_errors", []),
 		"self_diagnostics": context.get("self_diagnostics", {}),
 		"self_diagnostic_copy_text": str(context.get("self_diagnostic_copy_text", "")),
 		"builtin_profiles": context.get("builtin_profiles", []),

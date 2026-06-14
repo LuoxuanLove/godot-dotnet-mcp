@@ -249,7 +249,12 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"_plugin_lifecycle_service.enter_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())",
-		"_plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _build_plugin_lifecycle_context())"
+		"_plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())",
+		"_user_tool_watch_tick_accumulator += maxf(delta, 0.0)",
+		"const USER_TOOL_WATCH_TICK_INTERVAL := 0.25",
+		"func _get_plugin_lifecycle_context()",
+		"_cached_lifecycle_context = _build_plugin_lifecycle_context()",
+		"func _invalidate_plugin_lifecycle_context()"
 	]:
 		if source.find(required) == -1:
 			return "Plugin entrypoint should delegate lifecycle wiring through PluginLifecycleService: %s" % required

@@ -74,6 +74,7 @@ var _dock: Control
 var _client_executable_dialog: FileDialog
 var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
+var _user_tool_watch_tick_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
 var _plugin_reenable_pending := false
@@ -88,6 +89,18 @@ var _update_ref_version_request_serial := 0
 var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
 var _last_dock_refresh_status_signature := ""
+var _cached_lifecycle_context: Dictionary = {}
+var _process_perf := {
+	"frame_count": 0,
+	"total_ms": 0.0,
+	"max_ms": 0.0,
+	"last_ms": 0.0,
+	"slow_frame_count": 0,
+	"last_slow_frame_ms": 0.0
+}
+
+const PROCESS_SLOW_FRAME_THRESHOLD_MS := 8.0
+const USER_TOOL_WATCH_TICK_INTERVAL := 0.25
 
 
 func _init() -> void:
@@ -121,7 +134,10 @@ func _disable_plugin() -> void:
 func _process(delta: float) -> void:
 	if _plugin_lifecycle_service == null:
 		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
-	_status_poll_accumulator = _plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _build_plugin_lifecycle_context())
+	var started_usec := Time.get_ticks_usec()
+	_user_tool_watch_tick_accumulator += maxf(delta, 0.0)
+	_status_poll_accumulator = _plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())
+	_record_process_perf(started_usec)
 
 
 func _build_plugin_lifecycle_context() -> Dictionary:
@@ -129,6 +145,16 @@ func _build_plugin_lifecycle_context() -> Dictionary:
 		"runtime_bridge_autoload_name": RUNTIME_BRIDGE_AUTOLOAD_NAME,
 		"runtime_bridge_autoload_path": RUNTIME_BRIDGE_AUTOLOAD_PATH
 	})
+
+
+func _get_plugin_lifecycle_context() -> Dictionary:
+	if _cached_lifecycle_context.is_empty():
+		_cached_lifecycle_context = _build_plugin_lifecycle_context()
+	return _cached_lifecycle_context
+
+
+func _invalidate_plugin_lifecycle_context() -> void:
+	_cached_lifecycle_context = {}
 
 
 func _build_config_reload_wiring_context() -> Dictionary:
@@ -196,6 +222,7 @@ func _defer_saved_update_source_discovery_request() -> void:
 
 
 func _stop_user_tool_watch_service() -> void:
+	_user_tool_watch_tick_accumulator = 0.0
 	if _user_tool_watch_service != null:
 		_user_tool_watch_service.stop()
 
@@ -208,6 +235,7 @@ func _dispose_action_router() -> void:
 
 
 func _dispose_lifecycle_services() -> void:
+	_invalidate_plugin_lifecycle_context()
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
@@ -234,8 +262,12 @@ func _is_runtime_bridge_currently_owned() -> bool:
 
 
 func _tick_user_tool_watch_service() -> void:
-	if _user_tool_watch_service != null:
-		_user_tool_watch_service.tick()
+	if _user_tool_watch_service == null:
+		return
+	if _user_tool_watch_tick_accumulator < USER_TOOL_WATCH_TICK_INTERVAL:
+		return
+	_user_tool_watch_tick_accumulator = 0.0
+	_user_tool_watch_service.tick()
 
 
 func get_server() -> Node:
@@ -2938,6 +2970,8 @@ func _build_self_diagnostic_health_snapshot() -> Dictionary:
 			"dock_count": dock_count,
 			"stale_dock_count": maxi(dock_count - 1, 0)
 		},
+		"idle_process": _get_process_performance_status(),
+		"user_tool_watch": _get_user_tool_watch_status(),
 		"tool_loader": {
 			"tool_load_error_count": tool_load_errors.size(),
 			"tool_load_errors": tool_load_errors,
@@ -3095,6 +3129,7 @@ func _configure_user_tool_watch_service() -> void:
 		_user_tool_watch_service,
 		_build_config_reload_wiring_context()
 	)
+	_invalidate_plugin_lifecycle_context()
 
 
 func _configure_config_tab_action_service() -> void:
@@ -3108,6 +3143,31 @@ func _get_user_tool_watch_status() -> Dictionary:
 	if _user_tool_watch_service == null:
 		return {}
 	return _user_tool_watch_service.get_status()
+
+
+func _record_process_perf(started_usec: int) -> void:
+	var elapsed_ms := maxf(float(Time.get_ticks_usec() - started_usec) / 1000.0, 0.0)
+	_process_perf["frame_count"] = int(_process_perf.get("frame_count", 0)) + 1
+	_process_perf["total_ms"] = float(_process_perf.get("total_ms", 0.0)) + elapsed_ms
+	_process_perf["last_ms"] = elapsed_ms
+	_process_perf["max_ms"] = maxf(float(_process_perf.get("max_ms", 0.0)), elapsed_ms)
+	if elapsed_ms > PROCESS_SLOW_FRAME_THRESHOLD_MS:
+		_process_perf["slow_frame_count"] = int(_process_perf.get("slow_frame_count", 0)) + 1
+		_process_perf["last_slow_frame_ms"] = elapsed_ms
+
+
+func _get_process_performance_status() -> Dictionary:
+	var frame_count := int(_process_perf.get("frame_count", 0))
+	var total_ms := float(_process_perf.get("total_ms", 0.0))
+	return {
+		"frame_count": frame_count,
+		"last_ms": float(_process_perf.get("last_ms", 0.0)),
+		"max_ms": float(_process_perf.get("max_ms", 0.0)),
+		"average_ms": total_ms / float(frame_count) if frame_count > 0 else 0.0,
+		"slow_frame_count": int(_process_perf.get("slow_frame_count", 0)),
+		"last_slow_frame_ms": float(_process_perf.get("last_slow_frame_ms", 0.0)),
+		"slow_frame_threshold_ms": PROCESS_SLOW_FRAME_THRESHOLD_MS
+	}
 
 
 func _cleanup_disabled_tools() -> void:
