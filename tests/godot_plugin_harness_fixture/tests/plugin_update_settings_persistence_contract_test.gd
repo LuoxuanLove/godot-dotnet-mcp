@@ -110,6 +110,20 @@ class CurrentTabProbeDock extends Control:
 		apply_model_count += 1
 
 
+class StableDockProbe extends CurrentTabProbeDock:
+	var tool_loader_status := {
+		"initialized": true,
+		"status": "ready",
+		"tool_count": 152,
+		"exposed_tool_count": 26,
+		"category_count": 6,
+		"tool_load_error_count": 0
+	}
+
+	func get_current_tab() -> int:
+		return 1
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	_remove_saved_settings()
 	var settings_store = SettingsStoreScript.new()
@@ -398,6 +412,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should retry pending saved-source update refs discovery after the Dock enters the tree.")
 	pending_retry_probe.free()
 	pending_retry_dock.queue_free()
+
+	var stable_refresh_probe := FocusRestoreProbePlugin.new()
+	var stable_refresh_dock := StableDockProbe.new()
+	stable_refresh_probe._dock = stable_refresh_dock
+	stable_refresh_probe._state.current_tab = 1
+	stable_refresh_probe._refresh_service_instances()
+	stable_refresh_probe._state.settings["update_source"] = "latest_stable"
+	stable_refresh_probe._state.update_refs_state = "success"
+	stable_refresh_probe._update_refs_discovery_loaded = true
+	stable_refresh_probe._refresh_dock()
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	if stable_refresh_dock.apply_model_count != 1:
+		stable_refresh_probe.free()
+		stable_refresh_dock.free()
+		return _failure("plugin.gd should skip a second dock rebuild when the lightweight status signature stays unchanged.")
+	stable_refresh_probe.free()
+	stable_refresh_dock.free()
+
+	var plugin_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.gd")
+	if plugin_source.find("_build_dock_refresh_status_signature(model)") != -1 or plugin_source.find("_build_dock_refresh_status_signature_data_from_model") != -1:
+		return _failure("plugin.gd should derive Dock refresh status signatures from one lightweight source instead of comparing model-derived loader data.")
 
 	var mirror_result := _run_update_sync_mirror_contract()
 	if not bool(mirror_result.get("success", false)):

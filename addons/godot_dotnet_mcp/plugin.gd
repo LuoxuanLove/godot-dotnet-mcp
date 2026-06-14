@@ -617,7 +617,7 @@ func _refresh_dock() -> void:
 		Callable(self, "_get_editor_scale")
 	)
 	var model: Dictionary = _dock_model_service.build_model()
-	_last_dock_refresh_status_signature = _build_dock_refresh_status_signature(model)
+	_last_dock_refresh_status_signature = _build_dock_refresh_status_signature()
 	_dock.call("apply_model", model)
 
 
@@ -628,11 +628,9 @@ func _refresh_dock_if_status_changed() -> void:
 	_refresh_dock()
 
 
-func _build_dock_refresh_status_signature(model: Dictionary = {}) -> String:
+func _build_dock_refresh_status_signature() -> String:
 	if _state == null:
 		return ""
-	if not model.is_empty():
-		return JSON.stringify(_build_dock_refresh_status_signature_data_from_model(model))
 	return JSON.stringify(_build_dock_refresh_status_signature_data())
 
 
@@ -683,43 +681,6 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		"update_refs_state": str(_get_state_value("update_refs_state", "idle")),
 		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle"))
-	}
-
-
-func _build_dock_refresh_status_signature_data_from_model(model: Dictionary) -> Dictionary:
-	var tool_loader_status := {}
-	var self_diagnostics = model.get("self_diagnostics", {})
-	if self_diagnostics is Dictionary:
-		var raw_status = (self_diagnostics as Dictionary).get("tool_loader", {})
-		if raw_status is Dictionary:
-			tool_loader_status = raw_status
-	var stats := {}
-	if model.get("stats", {}) is Dictionary:
-		stats = model.get("stats", {})
-	var user_watch_status := {}
-	if model.get("user_tool_watch", {}) is Dictionary:
-		user_watch_status = model.get("user_tool_watch", {})
-	return {
-		"tab": int(model.get("current_tab", -1)),
-		"running": bool(model.get("is_running", false)),
-		"connections": int(stats.get("connections", stats.get("active_connections", 0))),
-		"total_requests": int(stats.get("total_requests", 0)),
-		"rejected_requests": int(stats.get("rejected_requests", 0)),
-		"last_request_id": str(stats.get("last_request_id", "")),
-		"loader_initialized": bool(tool_loader_status.get("initialized", false)),
-		"loader_status": str(tool_loader_status.get("status", "")),
-		"tool_count": int(tool_loader_status.get("tool_count", 0)),
-		"exposed_tool_count": int(tool_loader_status.get("exposed_tool_count", 0)),
-		"category_count": int(tool_loader_status.get("category_count", 0)),
-		"tool_load_error_count": int(tool_loader_status.get("tool_load_error_count", 0)),
-		"user_watch_enabled": bool(user_watch_status.get("enabled", false)),
-		"user_watch_watching": bool(user_watch_status.get("watching", false)),
-		"user_watch_count": int(user_watch_status.get("known_script_count", 0)),
-		"user_watch_change": str(user_watch_status.get("last_change_reason", "")),
-		"user_watch_error": str(user_watch_status.get("last_error", "")),
-		"update_refs_state": str(model.get("update_refs_state", "idle")),
-		"update_compare_state": str(model.get("update_compare_state", "idle")),
-		"update_sync_state": str(model.get("update_sync_state", "idle"))
 	}
 
 
