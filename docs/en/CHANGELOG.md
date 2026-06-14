@@ -16,6 +16,7 @@ Target version: 2.0.0.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
 - Added mouse move and click support to `runtime_step(action=input)` with viewport coordinate fields in the tool schema.
 - Added structured User-tool recovery diagnostics with diagnostic codes, recommended actions, and follow-up tool hints.
+- Added idle-process and User-tool watch diagnostics so self diagnostics can report frame budgets, scan slices, and watcher progress without forcing heavy runtime queries on every Dock refresh.
 
 ### Changed
 
@@ -30,6 +31,7 @@ Target version: 2.0.0.
 - Changed Dock Resources and Prompts tabs to consume explicit presentation trees, grouping resource URIs, resource templates, workflow prompts, and prompt arguments by shared protocol metadata instead of Dock-side URI or name guesses.
 - Changed Dock Resources and Prompts tabs to expose separate Catalog and Diagnostics views so users can switch between readable protocol entries and source/visibility/callability/group metadata.
 - Changed editor startup and idle refresh to keep MCP server startup lightweight, load tool runtimes on demand, build Dock catalog projections only for the active tab, and poll User-tool files less aggressively to reduce editor stalls in large projects.
+- Changed User-tool polling to skip synchronous scans when runtime loading is disabled and to split large directory walks into budgeted slices so idle refresh stays responsive.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
@@ -44,6 +46,7 @@ Target version: 2.0.0.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
 - Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
 - Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
+- Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 
 ### Documentation
 

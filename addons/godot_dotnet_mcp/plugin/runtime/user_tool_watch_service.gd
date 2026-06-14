@@ -7,6 +7,7 @@ const ENABLE_RUNTIME_LOADING_SETTING := "godot_dotnet_mcp/user_tools/enable_runt
 const ENABLE_RUNTIME_LOADING_SETTING_LEGACY := "user_tools/enable_runtime_loading"
 const POLL_INTERVAL_MSEC := 2500
 const SETTLE_DELAY_MSEC := 300
+const SCAN_ENTRY_BUDGET_PER_TICK := 32
 
 var _plugin: Object
 var _reload_coordinator = null
@@ -21,6 +22,13 @@ var _pending_changes: Dictionary = {}
 var _pending_since_msec := 0
 var _last_change_reason := ""
 var _last_error := ""
+var _scan_in_progress := false
+var _initial_scan_pending := false
+var _scan_stack: Array = []
+var _scan_snapshot_data: Dictionary = {}
+var _scan_entries_processed := 0
+var _last_scan_duration_ms := 0.0
+var _last_scan_slices := 0
 
 
 func configure(plugin: Object, reload_coordinator, user_tool_service, apply_external_user_tool_catalog_refresh: Callable = Callable()) -> void:
@@ -37,14 +45,15 @@ func start() -> void:
 	_pending_snapshot.clear()
 	_pending_changes.clear()
 	_pending_since_msec = 0
+	_reset_scan_state()
+	_initial_scan_pending = true
 	_last_change_reason = ""
 	_last_error = ""
-	var scan_result = _scan_snapshot()
-	if _as_bool(scan_result.get("success", false)):
-		_known_snapshot = (scan_result.get("snapshot", {}) as Dictionary).duplicate(true)
-	else:
+	if not _is_runtime_loading_enabled():
+		_initial_scan_pending = false
 		_known_snapshot.clear()
-		_last_error = str(scan_result.get("error", "watch_start_failed"))
+		return
+	_known_snapshot.clear()
 
 
 func stop() -> void:
@@ -52,6 +61,8 @@ func stop() -> void:
 	_pending_snapshot.clear()
 	_pending_changes.clear()
 	_pending_since_msec = 0
+	_reset_scan_state()
+	_initial_scan_pending = false
 
 
 func tick() -> void:
@@ -61,19 +72,44 @@ func tick() -> void:
 		_pending_snapshot.clear()
 		_pending_changes.clear()
 		_pending_since_msec = 0
+		_reset_scan_state()
+		_initial_scan_pending = false
 		return
 	var now_msec := Time.get_ticks_msec()
+	if _scan_in_progress:
+		var sliced_result := _continue_scan_snapshot()
+		if bool(sliced_result.get("complete", false)):
+			_handle_scan_result(sliced_result, now_msec)
+		return
+	if _initial_scan_pending:
+		var baseline_result := _begin_incremental_scan()
+		if bool(baseline_result.get("complete", false)):
+			_handle_scan_result(baseline_result, now_msec)
+		return
 	if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
 		return
 	_last_poll_msec = now_msec
+	var scan_result := _begin_incremental_scan()
+	if bool(scan_result.get("complete", false)):
+		_handle_scan_result(scan_result, now_msec)
 
-	var scan_result = _scan_snapshot()
+
+func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 	_last_scan_unix = int(Time.get_unix_time_from_system())
 	if not _as_bool(scan_result.get("success", false)):
 		_last_error = str(scan_result.get("error", "watch_scan_failed"))
 		return
 
-	var snapshot := (scan_result.get("snapshot", {}) as Dictionary).duplicate(true)
+	var snapshot: Dictionary = {}
+	var raw_snapshot = scan_result.get("snapshot", {})
+	if raw_snapshot is Dictionary:
+		snapshot = (raw_snapshot as Dictionary).duplicate(true)
+	if _initial_scan_pending:
+		_known_snapshot = snapshot.duplicate(true)
+		_initial_scan_pending = false
+		_last_error = ""
+		_last_change_reason = "watch_baseline_ready"
+		return
 	var changes = _compute_changes(_known_snapshot, snapshot)
 	if _changes_are_empty(changes):
 		return
@@ -104,8 +140,14 @@ func get_status() -> Dictionary:
 	return {
 		"enabled": _is_runtime_loading_enabled(),
 		"watching": _watching and _is_runtime_loading_enabled(),
+		"baseline_scan_pending": _initial_scan_pending,
 		"known_script_count": _known_snapshot.size(),
 		"last_scan_unix": _last_scan_unix,
+		"scan_in_progress": _scan_in_progress,
+		"scan_entries_processed": _scan_entries_processed,
+		"scan_pending_directories": _scan_stack.size(),
+		"last_scan_duration_ms": _last_scan_duration_ms,
+		"last_scan_slices": _last_scan_slices,
 		"last_change_reason": _last_change_reason,
 		"last_error": _last_error
 	}
@@ -171,7 +213,6 @@ func _scan_snapshot() -> Dictionary:
 	var script_paths: Array[String] = []
 	_collect_script_paths(CUSTOM_TOOLS_DIR, script_paths)
 	for script_path in script_paths:
-		var global_path = ProjectSettings.globalize_path(script_path)
 		if not FileAccess.file_exists(script_path):
 			continue
 		snapshot[script_path] = {
@@ -179,6 +220,111 @@ func _scan_snapshot() -> Dictionary:
 			"size_bytes": _get_file_size_bytes(script_path)
 		}
 	return {"success": true, "snapshot": snapshot}
+
+
+func _begin_incremental_scan() -> Dictionary:
+	_scan_in_progress = true
+	_scan_stack = [_make_scan_directory_job(CUSTOM_TOOLS_DIR)]
+	_scan_snapshot_data = {}
+	_scan_entries_processed = 0
+	_last_scan_duration_ms = 0.0
+	_last_scan_slices = 0
+	return _continue_scan_snapshot()
+
+
+func _continue_scan_snapshot() -> Dictionary:
+	if not _scan_in_progress:
+		return {"success": true, "complete": true, "snapshot": _scan_snapshot_data.duplicate(true)}
+	var started_usec := Time.get_ticks_usec()
+	var processed_this_slice := 0
+	_last_scan_slices += 1
+	while processed_this_slice < SCAN_ENTRY_BUDGET_PER_TICK and not _scan_stack.is_empty():
+		var stack_index := _scan_stack.size() - 1
+		var job = _scan_stack[stack_index]
+		if not (job is Dictionary):
+			_scan_stack.pop_back()
+			continue
+		var dir_job := job as Dictionary
+		var entries: Array = dir_job.get("entries", [])
+		var index := int(dir_job.get("index", 0))
+		if index >= entries.size():
+			_scan_stack.pop_back()
+			continue
+		var entry = entries[index]
+		dir_job["index"] = index + 1
+		_scan_stack[stack_index] = dir_job
+		if not (entry is Dictionary):
+			processed_this_slice += 1
+			_scan_entries_processed += 1
+			continue
+		var entry_dict := entry as Dictionary
+		processed_this_slice += 1
+		_scan_entries_processed += 1
+		var child_path := str(entry_dict.get("path", ""))
+		if bool(entry_dict.get("is_dir", false)):
+			_scan_stack.append(_make_scan_directory_job(child_path))
+		elif child_path.ends_with(".gd") and FileAccess.file_exists(child_path):
+			_scan_snapshot_data[child_path.replace("\\", "/")] = {
+				"modified_unix": int(FileAccess.get_modified_time(child_path)),
+				"size_bytes": _get_file_size_bytes(child_path)
+			}
+	_last_scan_duration_ms = maxf(float(Time.get_ticks_usec() - started_usec) / 1000.0, 0.0)
+	if _scan_stack.is_empty():
+		var result: Dictionary = {}
+		result["success"] = true
+		result["complete"] = true
+		result["snapshot"] = _scan_snapshot_data.duplicate(true)
+		result["entries_processed"] = _scan_entries_processed
+		result["slices"] = _last_scan_slices
+		_reset_scan_state(false)
+		return result
+	return {
+		"success": true,
+		"complete": false,
+		"snapshot": {},
+		"entries_processed": _scan_entries_processed,
+		"slices": _last_scan_slices
+	}
+
+
+func _make_scan_directory_job(dir_path: String) -> Dictionary:
+	var entries: Array = []
+	var global_path = ProjectSettings.globalize_path(dir_path)
+	if not DirAccess.dir_exists_absolute(global_path):
+		return {"path": dir_path, "entries": entries, "index": 0}
+	var dir = DirAccess.open(dir_path)
+	if dir == null:
+		_last_error = "watch_scan_open_failed:%s" % dir_path
+		return {"path": dir_path, "entries": entries, "index": 0}
+	dir.list_dir_begin()
+	while true:
+		var entry = dir.get_next()
+		if entry.is_empty():
+			break
+		if entry.begins_with("."):
+			continue
+		var entry_data: Dictionary = {}
+		entry_data["name"] = entry
+		entry_data["path"] = "%s/%s" % [dir_path, entry]
+		entry_data["is_dir"] = dir.current_is_dir()
+		entries.append(entry_data)
+	dir.list_dir_end()
+	entries.sort_custom(Callable(self, "_sort_scan_entries"))
+	return {"path": dir_path, "entries": entries, "index": 0}
+
+
+func _sort_scan_entries(left: Dictionary, right: Dictionary) -> bool:
+	return str(left.get("path", "")) < str(right.get("path", ""))
+
+
+func _reset_scan_state(reset_last_metrics: bool = true) -> void:
+	_scan_in_progress = false
+	_scan_stack.clear()
+	_scan_snapshot_data.clear()
+	if reset_last_metrics:
+		_scan_entries_processed = 0
+		_last_scan_duration_ms = 0.0
+		_last_scan_slices = 0
 
 
 func _get_file_size_bytes(path: String) -> int:
