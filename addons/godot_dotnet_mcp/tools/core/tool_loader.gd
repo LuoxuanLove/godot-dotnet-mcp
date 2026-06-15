@@ -56,6 +56,7 @@ var _query_service = ToolLoaderQueryServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 var _preload_runtimes_on_initialize := false
+var _catalog_revision := 0
 var _lifecycle_tick_accumulator := 0.0
 
 const IDLE_LIFECYCLE_TICK_INTERVAL_SECONDS := 0.5
@@ -142,7 +143,10 @@ func configure(server_context: Object) -> void:
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
 	_ensure_services_ready()
-	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
+	var summary: Dictionary = _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
+	_bump_catalog_revision()
+	summary["catalog_revision"] = _catalog_revision
+	return summary
 
 
 func set_preload_runtimes_on_initialize(enabled: bool) -> void:
@@ -172,11 +176,13 @@ func shutdown() -> void:
 	_execution_observer.set_activity_registry(null)
 	_tool_activity_registry = null
 	_refresh_runtime_context()
+	_bump_catalog_revision()
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
 	_ensure_services_ready()
 	_lifecycle_service.set_disabled_tools(disabled_tools, _build_lifecycle_context())
+	_bump_catalog_revision()
 
 
 func get_tools_by_category() -> Dictionary:
@@ -277,13 +283,19 @@ func get_reload_status() -> Dictionary:
 
 func get_tool_loader_status() -> Dictionary:
 	_ensure_services_ready()
-	return _query_service.build_tool_loader_status(
+	var status: Dictionary = _query_service.build_tool_loader_status(
 		_status_service,
 		get_tool_definitions(),
 		get_exposed_tool_definitions(),
 		_ordered_categories,
 		_diagnostics_service.get_tool_load_error_count()
 	)
+	status["catalog_revision"] = _catalog_revision
+	return status
+
+
+func get_catalog_revision() -> int:
+	return _catalog_revision
 
 
 func get_performance_summary() -> Dictionary:
@@ -348,17 +360,27 @@ func _refresh_runtime_context() -> void:
 
 func reload_domain(category: String) -> Dictionary:
 	_ensure_services_ready()
-	return _reload_service.reload_domain(category, _build_reload_context())
+	var status: Dictionary = _reload_service.reload_domain(category, _build_reload_context())
+	if not (status.get("reloaded_domains", []) as Array).is_empty():
+		_bump_catalog_revision()
+		status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func reload_all_domains() -> Dictionary:
 	_ensure_services_ready()
-	return _reload_service.reload_all_domains(_build_reload_context())
+	var status: Dictionary = _reload_service.reload_all_domains(_build_reload_context())
+	if not (status.get("reloaded_domains", []) as Array).is_empty():
+		_bump_catalog_revision()
+		status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
 	_ensure_services_ready()
-	return _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
+	var status: Dictionary = _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
+	status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
@@ -503,6 +525,24 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 		delta,
 		Callable(self, "_extract_tool_definitions")
 	)
+
+
+func _apply_tick_result(tick_result: Dictionary) -> bool:
+	var refresh_context := false
+	if bool(tick_result.get("user_definitions_changed", false)):
+		_tool_definitions_by_category["user"] = tick_result.get("user_definitions", [])
+		refresh_context = true
+	if bool(tick_result.get("user_should_unload", false)) and _runtime_by_category.has("user"):
+		_runtime_by_category.erase("user")
+		_tool_definitions_by_category.erase("user")
+		refresh_context = true
+	if refresh_context:
+		_bump_catalog_revision()
+	return refresh_context
+
+
+func _bump_catalog_revision() -> void:
+	_catalog_revision += 1
 
 
 func _build_runtime_state_context() -> Dictionary:

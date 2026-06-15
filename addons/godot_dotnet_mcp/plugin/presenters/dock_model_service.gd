@@ -28,6 +28,8 @@ var _plugin_version_cache := ""
 var _plugin_version_loaded := false
 var _last_catalog_signature := ""
 var _last_catalog_snapshot: Dictionary = {}
+var _last_tool_catalog_model_signature := ""
+var _last_tool_catalog_model: Dictionary = {}
 var _last_mcp_projection_signature := ""
 var _last_mcp_catalog_projection: Dictionary = {}
 
@@ -119,6 +121,8 @@ func dispose() -> void:
 	_plugin_version_loaded = false
 	_last_catalog_signature = ""
 	_last_catalog_snapshot = {}
+	_last_tool_catalog_model_signature = ""
+	_last_tool_catalog_model = {}
 	_last_mcp_projection_signature = ""
 	_last_mcp_catalog_projection = {}
 
@@ -137,9 +141,10 @@ func build_model() -> Dictionary:
 	var catalog_snapshot := {}
 	var tool_presentation := {}
 	if needs_tool_catalog:
-		all_tools_by_category = _get_all_tools_by_category()
-		tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
-		catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings, _resolve_tool_presentation_views())
+		var tool_catalog_model := _build_tool_catalog_model(settings, _resolve_tool_presentation_views())
+		all_tools_by_category = tool_catalog_model.get("all_tools_by_category", {})
+		tools_by_category = tool_catalog_model.get("tools_by_category", {})
+		catalog_snapshot = tool_catalog_model.get("catalog_snapshot", {})
 		tool_presentation = catalog_snapshot.get("presentation", {})
 	var server_status := _build_server_status_snapshot(needs_runtime_diagnostics)
 	var self_diagnostics = _build_self_diagnostic_health_snapshot(needs_runtime_diagnostics)
@@ -290,6 +295,53 @@ func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dicti
 	return {}
 
 
+func _build_tool_catalog_model(settings: Dictionary, presentation_views: Array[String]) -> Dictionary:
+	var signature := _build_tool_catalog_model_signature(settings, presentation_views)
+	if not signature.is_empty() and signature == _last_tool_catalog_model_signature and not _last_tool_catalog_model.is_empty():
+		return _last_tool_catalog_model
+	var all_tools_by_category := _get_all_tools_by_category()
+	var tools_by_category := _filter_visible_tools_by_category(all_tools_by_category)
+	var catalog_snapshot := _build_tool_catalog_snapshot(tools_by_category, settings, presentation_views)
+	var model := {
+		"all_tools_by_category": all_tools_by_category,
+		"tools_by_category": tools_by_category,
+		"catalog_snapshot": catalog_snapshot
+	}
+	if signature.is_empty():
+		_last_tool_catalog_model_signature = ""
+		_last_tool_catalog_model = {}
+	else:
+		_last_tool_catalog_model_signature = signature
+		_last_tool_catalog_model = model
+	return model
+
+
+func _build_tool_catalog_model_signature(settings: Dictionary, presentation_views: Array[String]) -> String:
+	var loader_status := _get_light_tool_loader_status()
+	if not loader_status.has("catalog_revision"):
+		return ""
+	var disabled_tools: Array[String] = []
+	for tool_name in settings.get("disabled_tools", []):
+		disabled_tools.append(str(tool_name))
+	disabled_tools.sort()
+	var views: Array[String] = []
+	for view in presentation_views:
+		views.append(view)
+	views.sort()
+	return JSON.stringify({
+		"catalog_revision": int(loader_status.get("catalog_revision", 0)),
+		"initialized": bool(loader_status.get("initialized", false)),
+		"status": str(loader_status.get("status", "")),
+		"tool_count": int(loader_status.get("tool_count", 0)),
+		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
+		"category_count": int(loader_status.get("category_count", 0)),
+		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0)),
+		"disabled_tools": disabled_tools,
+		"presentation_views": views,
+		"show_user_tools": bool(settings.get("show_user_tools", true))
+	})
+
+
 func _resolve_tool_presentation_views() -> Array[String]:
 	var view := str(_get_state_value("current_tools_view", "agent_tools"))
 	match view:
@@ -385,6 +437,24 @@ func _get_all_tools_by_category() -> Dictionary:
 	var tools = _server_controller.get_all_tools_by_category()
 	if tools is Dictionary:
 		return (tools as Dictionary).duplicate(true)
+	return {}
+
+
+func _get_light_tool_loader_status() -> Dictionary:
+	if _server_controller == null:
+		return {}
+	if _server_controller.has_method("peek_light_tool_loader_status"):
+		var light_status = _server_controller.peek_light_tool_loader_status()
+		if light_status is Dictionary:
+			return (light_status as Dictionary).duplicate(true)
+	if _server_controller.has_method("peek_tool_loader_status"):
+		var peek_status = _server_controller.peek_tool_loader_status()
+		if peek_status is Dictionary:
+			return (peek_status as Dictionary).duplicate(true)
+	if _server_controller.has_method("get_tool_loader_status"):
+		var status = _server_controller.get_tool_loader_status()
+		if status is Dictionary:
+			return (status as Dictionary).duplicate(true)
 	return {}
 
 

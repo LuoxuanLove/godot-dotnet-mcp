@@ -63,6 +63,7 @@ func tick(delta: float, context: Dictionary) -> void:
 	var tick_result: Dictionary = _call_dictionary(context.get("tick_loaded_runtimes", Callable()), [delta])
 	var refresh_context := _apply_tick_result(tick_result, context)
 	if refresh_context:
+		_call_void(context.get("bump_catalog_revision", Callable()))
 		_call_void(context.get("refresh_runtime_context", Callable()))
 	_call_void(context.get("tick_gdscript_lsp_diagnostics", Callable()), [delta])
 

@@ -66,16 +66,25 @@ class FakeCallbacks:
 
 	var loader = FakeToolLoader.new()
 	var loader_status := {
-		"initialized": true,
-		"healthy": true,
-		"status": "ready"
+		"initialized": false,
+		"healthy": false,
+		"status": "uninitialized"
 	}
+	var ensure_called := false
 
 	func get_tool_loader():
 		return loader
 
 	func get_tool_loader_status() -> Dictionary:
 		return loader_status.duplicate(true)
+
+	func ensure_initialized() -> void:
+		ensure_called = true
+		loader_status = {
+			"initialized": true,
+			"healthy": true,
+			"status": "ready"
+		}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -84,9 +93,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var context = ToolsApiServiceContextScript.new()
 	context.get_tool_loader = Callable(callbacks, "get_tool_loader")
 	context.get_tool_loader_status = Callable(callbacks, "get_tool_loader_status")
+	context.ensure_initialized = Callable(callbacks, "ensure_initialized")
 	service.configure(context)
 
 	var response: Dictionary = service.build_tools_list_response()
+	if not callbacks.ensure_called:
+		return _failure("Tools API service should initialize the lazy tool runtime before reading the loader.")
 	var tools = response.get("tools", [])
 	if not (tools is Array) or (tools as Array).size() != 2:
 		return _failure("Tools API service did not preserve the exposed tool definitions.")
