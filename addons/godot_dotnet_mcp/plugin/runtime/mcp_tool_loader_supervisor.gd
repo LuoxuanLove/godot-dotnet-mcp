@@ -32,7 +32,9 @@ func ensure_initialized() -> void:
 	if _tool_loader == null:
 		_replace_tool_loader()
 	if not _tool_loader_initialized:
-		register_tools()
+		register_tools("lazy_initialize")
+	elif _tool_loader_status == "empty_registry":
+		register_tools("lazy_recover", true)
 
 
 func register_tools(reason: String = "initialize", force_reload_scripts: bool = false) -> Dictionary:

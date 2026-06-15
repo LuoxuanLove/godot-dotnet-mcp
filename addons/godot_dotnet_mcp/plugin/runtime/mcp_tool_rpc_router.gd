@@ -6,11 +6,25 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
+const SERIAL_EDITOR_AUTOMATION_TOOLS := [
+	"system_editor_state",
+	"system_editor_control",
+	"system_editor_evidence",
+	"system_inspector",
+	"system_settings_dialog"
+]
+const EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 10000
+
 var _get_tool_loader := Callable()
 var _is_tool_enabled := Callable()
 var _is_tool_exposed := Callable()
 var _log := Callable()
 var _sanitize_for_json := Callable()
+var _ensure_initialized := Callable()
+var _active_editor_automation_tool := ""
+var _active_editor_automation_started_msec := 0
+var _active_editor_automation_token := 0
+var _editor_automation_generation := 0
 
 
 func configure(context = null) -> void:
@@ -22,6 +36,7 @@ func configure(context = null) -> void:
 	_is_tool_exposed = context.is_tool_exposed
 	_log = context.log
 	_sanitize_for_json = context.sanitize_for_json
+	_ensure_initialized = context.ensure_initialized
 
 
 func dispose() -> void:
@@ -30,9 +45,15 @@ func dispose() -> void:
 	_is_tool_exposed = Callable()
 	_log = Callable()
 	_sanitize_for_json = Callable()
+	_ensure_initialized = Callable()
+	_active_editor_automation_tool = ""
+	_active_editor_automation_started_msec = 0
+	_active_editor_automation_token = 0
+	_editor_automation_generation = 0
 
 
 func build_tools_list_result() -> Dictionary:
+	_ensure_tool_runtime_initialized()
 	var loader = _get_loader()
 	if loader == null:
 		return {"tools": []}
@@ -64,6 +85,7 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	if tool_name.is_empty():
 		return _create_tool_result_payload({"success": false, "error": "Missing tool name"})
 
+	_ensure_tool_runtime_initialized()
 	var loader = _get_loader()
 	if loader == null:
 		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
@@ -86,8 +108,13 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var actual_tool_name = str(resolved.get("tool", ""))
 	_log_message("Category: %s, Tool: %s" % [category, actual_tool_name], "debug")
 
-	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
-	result = _normalize_tool_result(result)
+	var automation_guard := _begin_editor_automation_call(tool_name)
+	if not bool(automation_guard.get("success", false)):
+		return _create_tool_result_payload(automation_guard)
+
+	var raw_result = await loader.execute_tool_async(category, actual_tool_name, arguments)
+	_end_editor_automation_call(automation_guard)
+	var result: Dictionary = _normalize_tool_result(raw_result)
 	if not result.get("success", false):
 		var logged_arguments: Dictionary = arguments.duplicate(true)
 		logged_arguments.erase("_mcp_context")
@@ -107,6 +134,91 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 		)
 
 	return _create_tool_result_payload(result)
+
+
+func _begin_editor_automation_call(tool_name: String) -> Dictionary:
+	if not SERIAL_EDITOR_AUTOMATION_TOOLS.has(tool_name):
+		return {"success": true, "acquired": false}
+
+	_clear_stale_editor_automation_if_needed()
+	if not _active_editor_automation_tool.is_empty():
+		var elapsed_ms := Time.get_ticks_msec() - _active_editor_automation_started_msec
+		return {
+			"success": false,
+			"error": "Editor automation is already processing %s; retry after it completes." % _active_editor_automation_tool,
+			"data": {
+				"error_type": "editor_automation_busy",
+				"active_tool": _active_editor_automation_tool,
+				"requested_tool": tool_name,
+				"elapsed_ms": elapsed_ms,
+				"retry_after_ms": 250,
+				"stale_timeout_ms": EDITOR_AUTOMATION_STALE_TIMEOUT_MS
+			},
+			"hints": [
+				"Editor UI automation is serialized to keep the Godot editor responsive.",
+				"Retry the request after the active editor automation call finishes."
+			]
+		}
+
+	_editor_automation_generation += 1
+	_active_editor_automation_tool = tool_name
+	_active_editor_automation_started_msec = Time.get_ticks_msec()
+	_active_editor_automation_token = _editor_automation_generation
+	call_deferred("_watch_editor_automation_guard", _active_editor_automation_token, tool_name)
+	return {
+		"success": true,
+		"acquired": true,
+		"tool": tool_name,
+		"token": _active_editor_automation_token
+	}
+
+
+func _end_editor_automation_call(guard: Dictionary) -> void:
+	if not bool(guard.get("acquired", false)):
+		return
+	var token := int(guard.get("token", 0))
+	if token != _active_editor_automation_token:
+		return
+	_clear_editor_automation_guard()
+
+
+func _watch_editor_automation_guard(token: int, tool_name: String) -> void:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return
+	await (tree as SceneTree).create_timer(float(EDITOR_AUTOMATION_STALE_TIMEOUT_MS) / 1000.0).timeout
+	if token != _active_editor_automation_token:
+		return
+	if _active_editor_automation_tool != tool_name:
+		return
+	MCPDebugBuffer.record(
+		"warning",
+		"server",
+		"Cleared stale editor automation guard for %s after watchdog timeout %dms" % [tool_name, EDITOR_AUTOMATION_STALE_TIMEOUT_MS],
+		tool_name
+	)
+	_clear_editor_automation_guard()
+
+
+func _clear_stale_editor_automation_if_needed() -> void:
+	if _active_editor_automation_tool.is_empty():
+		return
+	var elapsed_ms := Time.get_ticks_msec() - _active_editor_automation_started_msec
+	if elapsed_ms < EDITOR_AUTOMATION_STALE_TIMEOUT_MS:
+		return
+	MCPDebugBuffer.record(
+		"warning",
+		"server",
+		"Cleared stale editor automation guard for %s after %dms" % [_active_editor_automation_tool, elapsed_ms],
+		_active_editor_automation_tool
+	)
+	_clear_editor_automation_guard()
+
+
+func _clear_editor_automation_guard() -> void:
+	_active_editor_automation_tool = ""
+	_active_editor_automation_started_msec = 0
+	_active_editor_automation_token = 0
 
 
 func _merge_agent_context(params: Dictionary, arguments: Dictionary) -> void:
@@ -232,6 +344,11 @@ func _get_loader():
 	if _get_tool_loader.is_valid():
 		return _get_tool_loader.call()
 	return null
+
+
+func _ensure_tool_runtime_initialized() -> void:
+	if _ensure_initialized.is_valid():
+		_ensure_initialized.call()
 
 
 func _sanitize(value):

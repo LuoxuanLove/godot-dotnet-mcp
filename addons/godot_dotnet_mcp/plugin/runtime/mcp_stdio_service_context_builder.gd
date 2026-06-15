@@ -20,6 +20,7 @@ func build_tool_rpc_router_context(server, tool_activity_registry = null):
 	context.is_tool_exposed = Callable(server._service_bundle, "is_tool_exposed")
 	context.log = Callable(server, "_log")
 	context.sanitize_for_json = Callable(server, "_sanitize_for_json")
+	context.ensure_initialized = Callable(server._service_bundle, "ensure_initialized")
 	context.tool_activity_registry = tool_activity_registry
 	return context
 
