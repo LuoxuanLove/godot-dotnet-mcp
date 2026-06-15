@@ -19,6 +19,7 @@ class FakeDock extends Control:
 	signal full_reload_requested
 	signal copy_requested(text: String, source: String)
 	signal mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary)
+	signal tool_view_changed(view_id: String)
 
 
 class FakeServerController extends RefCounted:
@@ -36,6 +37,7 @@ class FakePlugin extends RefCounted:
 	var update_check_count := 0
 	var update_apply_count := 0
 	var full_reload_count := 0
+	var tool_view_changes: Array[String] = []
 	var copy_events: Array[Dictionary] = []
 	var preview_events: Array[Dictionary] = []
 	var show_message_count := 0
@@ -60,6 +62,9 @@ class FakePlugin extends RefCounted:
 
 	func _on_full_reload_requested() -> void:
 		full_reload_count += 1
+
+	func _on_tool_view_changed(view_id: String) -> void:
+		tool_view_changes.append(view_id)
 
 	func _on_copy_requested(text: String, source: String) -> void:
 		copy_events.append({"text": text, "source": source})
@@ -121,10 +126,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_router.configure(_plugin, "RuntimeBridge", "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
 
 	var bindings = _coordinator.build_dock_signal_bindings(_router)
-	if bindings.size() != 30:
+	if bindings.size() != 31:
 		return _failure("PluginActionRouter should expose the full dock binding set.")
 	var binding_map := _map_bindings_by_signal(bindings)
-	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "mcp_catalog_preview_requested", "config_write_requested"]:
+	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "mcp_catalog_preview_requested", "tool_view_changed", "config_write_requested"]:
 		var binding: Dictionary = binding_map.get(signal_name, {})
 		var callable: Callable = binding.get("callable", Callable())
 		if not callable.is_valid():
@@ -138,6 +143,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		binding_map["update_check_requested"],
 		binding_map["update_apply_requested"],
 		binding_map["full_reload_requested"],
+		binding_map["tool_view_changed"],
 		binding_map["copy_requested"],
 		binding_map["mcp_catalog_preview_requested"]
 	]
@@ -166,6 +172,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_dock.emit_signal("update_check_requested")
 	_dock.emit_signal("update_apply_requested")
 	_dock.emit_signal("full_reload_requested")
+	_dock.emit_signal("tool_view_changed", "tool_diagnostics")
 	_dock.emit_signal("copy_requested", "copy text", "clipboard")
 	_dock.emit_signal("mcp_catalog_preview_requested", "prompt", "godot.project_orientation", {"goal": "inspect"})
 
@@ -177,6 +184,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
 	if _plugin.full_reload_count != 1:
 		return _failure("PluginActionRouter should route full_reload_requested to the plugin UI reload handler.")
+	if _plugin.tool_view_changes != ["tool_diagnostics"]:
+		return _failure("PluginActionRouter should route tool_view_changed through the dock binding.")
 	if _plugin.copy_events.size() != 1 or str(_plugin.copy_events[0].get("text", "")) != "copy text":
 		return _failure("PluginActionRouter should route copy_requested through the dock binding.")
 	if _plugin.preview_events.size() != 1 or str(_plugin.preview_events[0].get("kind", "")) != "prompt" or str((_plugin.preview_events[0].get("arguments", {}) as Dictionary).get("goal", "")) != "inspect":
