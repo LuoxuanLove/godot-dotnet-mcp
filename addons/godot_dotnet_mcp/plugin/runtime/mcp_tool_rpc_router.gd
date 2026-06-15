@@ -13,7 +13,7 @@ const SERIAL_EDITOR_AUTOMATION_TOOLS := [
 	"system_inspector",
 	"system_settings_dialog"
 ]
-const EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 30000
+const EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 10000
 
 var _get_tool_loader := Callable()
 var _is_tool_enabled := Callable()
@@ -112,9 +112,9 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	if not bool(automation_guard.get("success", false)):
 		return _create_tool_result_payload(automation_guard)
 
-	var result: Dictionary = await loader.execute_tool_async(category, actual_tool_name, arguments)
+	var raw_result = await loader.execute_tool_async(category, actual_tool_name, arguments)
 	_end_editor_automation_call(automation_guard)
-	result = _normalize_tool_result(result)
+	var result: Dictionary = _normalize_tool_result(raw_result)
 	if not result.get("success", false):
 		var logged_arguments: Dictionary = arguments.duplicate(true)
 		logged_arguments.erase("_mcp_context")
@@ -164,6 +164,7 @@ func _begin_editor_automation_call(tool_name: String) -> Dictionary:
 	_active_editor_automation_tool = tool_name
 	_active_editor_automation_started_msec = Time.get_ticks_msec()
 	_active_editor_automation_token = _editor_automation_generation
+	call_deferred("_watch_editor_automation_guard", _active_editor_automation_token, tool_name)
 	return {
 		"success": true,
 		"acquired": true,
@@ -178,9 +179,25 @@ func _end_editor_automation_call(guard: Dictionary) -> void:
 	var token := int(guard.get("token", 0))
 	if token != _active_editor_automation_token:
 		return
-	_active_editor_automation_tool = ""
-	_active_editor_automation_started_msec = 0
-	_active_editor_automation_token = 0
+	_clear_editor_automation_guard()
+
+
+func _watch_editor_automation_guard(token: int, tool_name: String) -> void:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return
+	await (tree as SceneTree).create_timer(float(EDITOR_AUTOMATION_STALE_TIMEOUT_MS) / 1000.0).timeout
+	if token != _active_editor_automation_token:
+		return
+	if _active_editor_automation_tool != tool_name:
+		return
+	MCPDebugBuffer.record(
+		"warning",
+		"server",
+		"Cleared stale editor automation guard for %s after watchdog timeout %dms" % [tool_name, EDITOR_AUTOMATION_STALE_TIMEOUT_MS],
+		tool_name
+	)
+	_clear_editor_automation_guard()
 
 
 func _clear_stale_editor_automation_if_needed() -> void:
@@ -195,6 +212,10 @@ func _clear_stale_editor_automation_if_needed() -> void:
 		"Cleared stale editor automation guard for %s after %dms" % [_active_editor_automation_tool, elapsed_ms],
 		_active_editor_automation_tool
 	)
+	_clear_editor_automation_guard()
+
+
+func _clear_editor_automation_guard() -> void:
 	_active_editor_automation_tool = ""
 	_active_editor_automation_started_msec = 0
 	_active_editor_automation_token = 0

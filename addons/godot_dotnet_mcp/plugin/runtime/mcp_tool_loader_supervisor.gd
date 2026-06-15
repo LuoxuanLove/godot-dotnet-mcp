@@ -33,7 +33,7 @@ func ensure_initialized() -> void:
 		_replace_tool_loader()
 	if not _tool_loader_initialized:
 		register_tools("lazy_initialize")
-	elif _tool_loader_status in ["empty_registry", "no_visible_tools"]:
+	elif _tool_loader_status == "empty_registry":
 		register_tools("lazy_recover", true)
 
 

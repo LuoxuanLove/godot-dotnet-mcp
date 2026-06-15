@@ -418,6 +418,49 @@ class PlainActivityToolLoader:
 		}
 
 
+class NonDictionaryEditorToolLoader:
+	extends RefCounted
+
+	func get_tool_definitions() -> Array:
+		return [{
+			"name": "system_editor_state",
+			"description": "Inspect editor state",
+			"category": "system",
+			"domain_key": "system",
+			"load_state": "ready",
+			"source": "builtin",
+			"enabled": true,
+			"inputSchema": {"type": "object", "properties": {}}
+		}]
+
+	func get_exposed_tool_definitions() -> Array:
+		return get_tool_definitions()
+
+	func get_domain_states() -> Array:
+		return [{"category": "system", "status": "ready"}]
+
+	func is_public_removed_tool(_tool_name: String) -> bool:
+		return false
+
+	func execute_tool_async(_category: String, _tool_name: String, _arguments: Dictionary):
+		return "non-dictionary-editor-result"
+
+
+class FailingEditorToolLoader:
+	extends NonDictionaryEditorToolLoader
+
+	func execute_tool_async(category: String, tool_name: String, arguments: Dictionary) -> Dictionary:
+		return {
+			"success": false,
+			"error": "editor automation contract failure",
+			"data": {
+				"category": category,
+				"tool": tool_name,
+				"arguments_seen": arguments
+			}
+		}
+
+
 class FakeCallbacks:
 	extends RefCounted
 
@@ -847,6 +890,55 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if bool(released_editor_call.get("isError", true)):
 		return _failure("Tool RPC router should allow editor automation after the guard is released.")
+
+	var non_dictionary_callbacks = FakeCallbacks.new()
+	non_dictionary_callbacks.loader = NonDictionaryEditorToolLoader.new()
+	var non_dictionary_context = ToolRpcRouterContextScript.new()
+	non_dictionary_context.get_tool_loader = Callable(non_dictionary_callbacks, "get_tool_loader")
+	non_dictionary_context.is_tool_enabled = Callable(non_dictionary_callbacks, "is_tool_enabled")
+	non_dictionary_context.is_tool_exposed = Callable(non_dictionary_callbacks, "is_tool_exposed")
+	non_dictionary_context.log = Callable(non_dictionary_callbacks, "log")
+	non_dictionary_context.sanitize_for_json = Callable(non_dictionary_callbacks, "sanitize_for_json")
+	var non_dictionary_router = ToolRpcRouterScript.new()
+	non_dictionary_router.configure(non_dictionary_context)
+	var non_dictionary_result: Dictionary = await non_dictionary_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if bool(non_dictionary_result.get("isError", true)):
+		return _failure("Tool RPC router should normalize non-dictionary editor tool results.")
+	var non_dictionary_released: Dictionary = await non_dictionary_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if bool(non_dictionary_released.get("isError", true)):
+		return _failure("Tool RPC router should release editor automation guard after non-dictionary tool results.")
+
+	var failing_editor_callbacks = FakeCallbacks.new()
+	failing_editor_callbacks.loader = FailingEditorToolLoader.new()
+	var failing_editor_context = ToolRpcRouterContextScript.new()
+	failing_editor_context.get_tool_loader = Callable(failing_editor_callbacks, "get_tool_loader")
+	failing_editor_context.is_tool_enabled = Callable(failing_editor_callbacks, "is_tool_enabled")
+	failing_editor_context.is_tool_exposed = Callable(failing_editor_callbacks, "is_tool_exposed")
+	failing_editor_context.log = Callable(failing_editor_callbacks, "log")
+	failing_editor_context.sanitize_for_json = Callable(failing_editor_callbacks, "sanitize_for_json")
+	var failing_editor_router = ToolRpcRouterScript.new()
+	failing_editor_router.configure(failing_editor_context)
+	var failing_editor_result: Dictionary = await failing_editor_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if not bool(failing_editor_result.get("isError", false)):
+		return _failure("Tool RPC router should expose failing editor tool results as tool errors.")
+	var failing_editor_released: Dictionary = await failing_editor_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if not bool(failing_editor_released.get("isError", false)):
+		return _failure("Tool RPC router should preserve the failing editor tool error on repeat calls.")
+	var failing_editor_structured = failing_editor_released.get("structuredContent", {})
+	if not (failing_editor_structured is Dictionary) or str((failing_editor_structured as Dictionary).get("error", "")) != "editor automation contract failure":
+		return _failure("Tool RPC router should release editor automation guard immediately after failing editor tool results.")
 
 	return {
 		"name": "tool_rpc_router_contracts",
