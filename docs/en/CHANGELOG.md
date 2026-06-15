@@ -17,6 +17,7 @@ Target version: 2.0.0.
 - Added mouse move and click support to `runtime_step(action=input)` with viewport coordinate fields in the tool schema.
 - Added structured User-tool recovery diagnostics with diagnostic codes, recommended actions, and follow-up tool hints.
 - Added idle-process and User-tool watch diagnostics so self diagnostics can report frame budgets, scan slices, and watcher progress without forcing heavy runtime queries on every Dock refresh.
+- Added Antigravity client guidance in the Config tab, including app detection, app launch, copied MCP configuration, and manual setup directory hints without assuming a documented writable config file contract.
 
 ### Changed
 

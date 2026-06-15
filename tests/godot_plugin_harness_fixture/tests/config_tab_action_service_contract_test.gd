@@ -10,6 +10,7 @@ class FakeLocalization extends RefCounted:
 			"config_client_codex": "Codex CLI",
 			"config_client_gemini": "Gemini CLI",
 			"config_client_qwen": "Qwen Code CLI",
+			"config_client_antigravity": "Antigravity",
 			"config_client_claude_desktop": "Claude Desktop",
 			"msg_client_action_missing_executable": "Missing executable for %s",
 			"msg_client_action_success": "%s connected successfully.",
@@ -232,6 +233,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Desktop launch should preserve the detected executable path.")
 	if claude_launch["arguments"].size() != 0:
 		return _failure("Claude Desktop launch should not inject unsupported extra command-line arguments.")
+
+	recorder.statuses["antigravity"] = {
+		"status": "ready",
+		"executable_path": "C:/Apps/Antigravity/Antigravity.exe"
+	}
+	action_service.handle_config_client_launch_requested("antigravity")
+	var antigravity_launch = config_service.desktop_launches[1]
+	if antigravity_launch["executable_path"] != "C:/Apps/Antigravity/Antigravity.exe":
+		return _failure("Antigravity launch should preserve the detected executable path.")
+	if not antigravity_launch["arguments"].is_empty():
+		return _failure("Antigravity launch should not inject a project path into the standalone agent app.")
 
 	action_service.handle_config_client_launch_requested("gemini")
 	if config_service.cli_launches.is_empty():

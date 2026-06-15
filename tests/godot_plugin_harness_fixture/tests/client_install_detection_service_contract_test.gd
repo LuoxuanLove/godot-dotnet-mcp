@@ -122,6 +122,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"has_manual_path": false,
 			"manual_path_invalid": false,
 			"manual_path": ""
+		},
+		"antigravity": {
+			"path": "C:/Programs/Antigravity/Antigravity.exe",
+			"detected_via": "common_path",
+			"using_manual_path": false,
+			"has_manual_path": false,
+			"manual_path_invalid": false,
+			"manual_path": ""
 		}
 	}
 	service.cli_results[service._cli_key("C:/Tools/claude.exe", PackedStringArray(["mcp", "get", "godot-mcp"]))] = {
@@ -164,6 +172,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Claude Desktop detection should expose desktop launch support when an executable path is known.")
 	if not bool(statuses.get("gemini", {}).get("launch_supported", false)):
 		return _failure("Gemini CLI detection should expose launch support when a CLI entry is known.")
+	if bool(statuses.get("antigravity", {}).get("write_supported", false)):
+		return _failure("Antigravity detection should not expose one-click writes without a documented config file contract.")
+	if not str(statuses.get("antigravity", {}).get("config_path", "")).is_empty():
+		return _failure("Antigravity detection should not expose a config_path until a documented config file contract exists.")
+	if str(statuses.get("antigravity", {}).get("guidance_path", "")) != ConfigPathsScript.get_antigravity_config_hint_path():
+		return _failure("Antigravity detection should expose the user-data path only as guidance.")
+	if not bool(statuses.get("antigravity", {}).get("launch_supported", false)):
+		return _failure("Antigravity detection should expose app launch support when an executable path is known.")
+	var antigravity_actions: Array = statuses.get("antigravity", {}).get("capability", {}).get("actions", [])
+	if antigravity_actions.has("open_config_dir") or antigravity_actions.has("open_config_file"):
+		return _failure("Antigravity detection should not expose config-file actions without a documented config file contract.")
 	if str(statuses.get("gemini", {}).get("config_entry_status", {}).get("status", "")) != service.ENTRY_PRESENT:
 		return _failure("Gemini detection should reuse config entry inspection so the config page can show install status.")
 	var expected_support_levels := {
@@ -171,6 +190,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
+		"antigravity": "manual_guidance",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",
@@ -200,6 +220,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Forced client install detection should execute the expected deep CLI queries exactly once each.")
 	if bool(service._allow_slow_checks):
 		return _failure("Forced client detection should restore the slow-check guard after detection.")
+
+	var missing_antigravity_service = FakeDetectionService.new()
+	missing_antigravity_service.configure({
+		"client_manual_paths": {},
+		"current_cli_scope": "project"
+	})
+	var missing_antigravity_statuses = missing_antigravity_service.detect_all(true)
+	if str(missing_antigravity_statuses.get("antigravity", {}).get("status", "")) != service.STATUS_MISSING:
+		return _failure("Antigravity should be marked missing when no executable path is detected.")
 
 	var slow_guard = SlowGuardDetectionService.new()
 	slow_guard.configure({

@@ -62,6 +62,7 @@ func detect_all(force_refresh: bool = false, include_slow_checks: bool = false) 
 		"claude_code": _detect_claude_code(running_processes),
 		"cursor": _detect_cursor(running_processes),
 		"trae": _detect_trae(running_processes),
+		"antigravity": _detect_antigravity(running_processes),
 		"gemini": _detect_gemini(running_processes),
 		"codex_desktop": _detect_codex_desktop(running_processes),
 		"codex": _detect_codex(running_processes),
@@ -199,6 +200,38 @@ func _detect_trae(running_processes: PackedStringArray = PackedStringArray()) ->
 		result["status"] = STATUS_CONFIG_ONLY
 	else:
 		result["status"] = STATUS_MISSING
+	return result
+
+
+func _detect_antigravity(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = ConfigPathsScript.get_antigravity_config_hint_path()
+	var resolved = _resolve_executable_path(
+		"antigravity",
+		[
+			"%s/Programs/antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Programs/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_program_files_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_program_files_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_secondary_program_files_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_secondary_program_files_root()
+		],
+		["antigravity", "google-antigravity"]
+	)
+	var result = _build_common_result(
+		"antigravity",
+		resolved,
+		_build_runtime_state(str(resolved.get("path", "")), ["antigravity.exe"], running_processes),
+		{"status": ENTRY_DEFERRED, "has_server_entry": false, "deferred": true}
+	)
+	result["guidance_path"] = config_path
+	result["write_supported"] = false
+	result["auto_add_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["path_pick_supported"] = true
+	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
+	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_MISSING
 	return result
 
 
