@@ -93,6 +93,12 @@ func handle_config_client_launch_requested(client_id: String) -> void:
 				_get_client_display_name("trae"),
 				client_statuses.get("trae", {})
 			)
+		"antigravity":
+			_launch_desktop_agent(
+				_get_client_display_name("antigravity"),
+				client_statuses.get("antigravity", {}),
+				PackedStringArray()
+			)
 		"codex_desktop":
 			_launch_desktop_agent(_get_client_display_name("codex_desktop"), client_statuses.get("codex_desktop", {}), PackedStringArray())
 		"claude_code":
@@ -459,6 +465,8 @@ func _build_client_runtime_followup_message(client_id: String) -> String:
 				return _localization.get_text("msg_config_restart_cursor")
 			"trae":
 				return _localization.get_text("msg_config_restart_trae")
+			"antigravity":
+				return _localization.get_text("msg_config_restart_antigravity")
 			"opencode", "opencode_desktop":
 				return _localization.get_text("msg_config_restart_opencode")
 			_:

@@ -122,6 +122,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"has_manual_path": false,
 			"manual_path_invalid": false,
 			"manual_path": ""
+		},
+		"antigravity": {
+			"path": "C:/Programs/Antigravity/Antigravity.exe",
+			"detected_via": "common_path",
+			"using_manual_path": false,
+			"has_manual_path": false,
+			"manual_path_invalid": false,
+			"manual_path": ""
 		}
 	}
 	service.cli_results[service._cli_key("C:/Tools/claude.exe", PackedStringArray(["mcp", "get", "godot-mcp"]))] = {
@@ -164,6 +172,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Claude Desktop detection should expose desktop launch support when an executable path is known.")
 	if not bool(statuses.get("gemini", {}).get("launch_supported", false)):
 		return _failure("Gemini CLI detection should expose launch support when a CLI entry is known.")
+	if bool(statuses.get("antigravity", {}).get("write_supported", false)):
+		return _failure("Antigravity detection should not expose one-click writes without a documented config file contract.")
+	if not bool(statuses.get("antigravity", {}).get("launch_supported", false)):
+		return _failure("Antigravity detection should expose app launch support when an executable path is known.")
 	if str(statuses.get("gemini", {}).get("config_entry_status", {}).get("status", "")) != service.ENTRY_PRESENT:
 		return _failure("Gemini detection should reuse config entry inspection so the config page can show install status.")
 	var expected_support_levels := {
@@ -171,6 +183,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
+		"antigravity": "manual_guidance",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",

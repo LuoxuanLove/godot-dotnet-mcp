@@ -35,6 +35,14 @@ func build_desktop_client_models(
 			"content": _build_desktop_client_config_content(transport, config_service),
 			"writeable": true
 		}, client_install_statuses, localization),
+		_build_client_ui_model("antigravity", {
+			"id": "antigravity",
+			"name_key": "config_client_antigravity",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("antigravity", transport), transport, localization),
+			"path": config_service.get_antigravity_config_hint_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": false
+		}, client_install_statuses, localization),
 		_build_client_ui_model("codex_desktop", {
 			"id": "codex_desktop",
 			"name_key": "config_client_codex_desktop",
@@ -346,6 +354,8 @@ func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> Strin
 				return "config_client_cursor_stdio_desc"
 			"trae":
 				return "config_client_trae_stdio_desc"
+			"antigravity":
+				return "config_client_antigravity_stdio_desc"
 			"windsurf":
 				return "config_client_windsurf_stdio_desc"
 			"cline":
@@ -420,7 +430,7 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		model["launch_action_label_key"] = "config_client_action_open_project"
 	elif client_id == "claude_code" or client_id == "codex" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen":
 		model["launch_action_label_key"] = "config_client_action_open_terminal"
-	elif client_id == "claude_desktop" or client_id == "codex_desktop" or client_id == "opencode_desktop" or client_id == "cherry_studio":
+	elif client_id == "claude_desktop" or client_id == "antigravity" or client_id == "codex_desktop" or client_id == "opencode_desktop" or client_id == "cherry_studio":
 		model["launch_action_label_key"] = "config_client_action_open_app"
 
 	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))

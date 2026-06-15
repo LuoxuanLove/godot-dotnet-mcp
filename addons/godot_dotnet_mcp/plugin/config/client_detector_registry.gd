@@ -27,6 +27,7 @@ func detect_all(running_processes: PackedStringArray) -> Dictionary:
 		"claude_code": _detect_executable_client("claude_code", running_processes, true),
 		"cursor": _detect_config_client("cursor", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, true),
 		"trae": _detect_config_client("trae", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
+		"antigravity": _detect_manual_guidance_client("antigravity", running_processes, true),
 		"codex_desktop": _detect_executable_client("codex_desktop", running_processes, false),
 		"codex": _detect_executable_client("codex", running_processes, true),
 		"gemini": _detect_executable_client("gemini", running_processes, true),
@@ -58,6 +59,37 @@ func _detect_config_client(client_id: String, config_type: String, running_proce
 		}
 	)
 	return detector.detect(running_processes)
+
+
+func _detect_manual_guidance_client(client_id: String, running_processes: PackedStringArray, launch_supported: bool) -> Dictionary:
+	var detector = ClientExecutableDetectorScript.new()
+	var config_path := _resolve_config_path(client_id)
+	detector.configure_detector(
+		client_id,
+		_path_resolver,
+		_runtime_inspector,
+		_config_entry_inspector,
+		{
+			"config_path": config_path,
+			"where_aliases": [client_id],
+			"image_names": ["%s.exe" % client_id],
+			"launch_supported": launch_supported,
+			"auto_add_supported": false,
+			"write_supported": false,
+			"inspect_config_entry": false,
+			"capability": ClientCapabilityMatrixScript.build_for_client(client_id, launch_supported, true, false, true)
+		}
+	)
+	var result: Dictionary = detector.detect(running_processes)
+	result["config_path"] = config_path
+	result["config_entry_status"] = {
+		"status": "deferred",
+		"has_server_entry": false,
+		"deferred": true
+	}
+	result["write_supported"] = false
+	result["auto_add_supported"] = false
+	return result
 
 
 func _detect_executable_client(client_id: String, running_processes: PackedStringArray, auto_add_supported: bool) -> Dictionary:
@@ -92,6 +124,8 @@ func _resolve_config_path(client_id: String) -> String:
 			return "C:/Users/Test/Claude/claude_desktop.json"
 		"trae":
 			return "C:/Users/Test/Trae/config.json"
+		"antigravity":
+			return "C:/Users/Test/AppData/Roaming/Antigravity"
 		"codex_desktop":
 			return "C:/Users/Test/Codex/config.json"
 		"gemini":

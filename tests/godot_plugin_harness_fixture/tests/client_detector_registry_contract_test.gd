@@ -28,6 +28,8 @@ class FakePathResolver extends RefCounted:
 			executable_path = "C:/Tools/codex.exe"
 		elif client_id == "cursor":
 			executable_path = "C:/Programs/Cursor/Cursor.exe"
+		elif client_id == "antigravity":
+			executable_path = "C:/Programs/Antigravity/Antigravity.exe"
 		return {
 			"path": executable_path,
 			"detected_via": "fake",
@@ -63,9 +65,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var results = registry.detect_all(PackedStringArray())
 	var supported_ids = registry.get_supported_client_ids()
-	if supported_ids.size() != 14:
+	if supported_ids.size() != 15:
 		return _failure("Client detector registry should register the full supported client set.")
-	if not results.has("cursor") or not results.has("codex") or not results.has("opencode") or not results.has("windsurf") or not results.has("qwen") or not results.has("cherry_studio"):
+	if not results.has("cursor") or not results.has("antigravity") or not results.has("codex") or not results.has("opencode") or not results.has("windsurf") or not results.has("qwen") or not results.has("cherry_studio"):
 		return _failure("Client detector registry should expose all client ids through detect_all.")
 	if str(results.get("cursor", {}).get("status", "")) != "ready":
 		return _failure("Client detector registry should delegate config-file clients to the config detector path.")
@@ -73,11 +75,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client detector registry should delegate CLI-managed clients to the executable detector path.")
 	if not bool(results.get("opencode", {}).get("write_supported", false)):
 		return _failure("Client detector registry should expose config-write support for OpenCode CLI.")
+	if bool(results.get("antigravity", {}).get("write_supported", false)):
+		return _failure("Antigravity registry detection should stay manual guidance until a documented config file contract exists.")
+	if bool(results.get("antigravity", {}).get("auto_add_supported", false)):
+		return _failure("Antigravity registry detection should not expose CLI-style auto add.")
+	if str(results.get("antigravity", {}).get("config_entry_status", {}).get("status", "")) != "deferred":
+		return _failure("Antigravity registry detection should mark config entry inspection as deferred.")
 	var expected_support_levels := {
 		"claude_desktop": "full_write",
 		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
+		"antigravity": "manual_guidance",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",
