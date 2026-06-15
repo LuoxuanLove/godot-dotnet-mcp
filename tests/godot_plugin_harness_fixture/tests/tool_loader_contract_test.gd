@@ -83,10 +83,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader initialize() did not report any exposed tools.")
 	if int(summary.get("category_count", 0)) != _loader.get_all_domain_states().size():
 		return _failure("Tool loader category summary should match indexed domain states.")
+	if int(summary.get("catalog_revision", 0)) <= 0:
+		return _failure("Tool loader initialize() should publish a positive catalog revision for cached UI consumers.")
 
 	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):
 		return _failure("Tool loader status should be healthy after initialization.")
+	if int(status.get("catalog_revision", 0)) != int(summary.get("catalog_revision", 0)):
+		return _failure("Tool loader status should preserve the current catalog revision.")
 	var lsp_service = _loader.get_gdscript_lsp_diagnostics_service()
 	if lsp_service == null:
 		return _failure("Tool loader should expose a GDScript LSP diagnostics service through the adapter path.")
@@ -474,6 +478,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_status: Dictionary = _loader.get_tool_loader_status()
 	if int(disabled_status.get("exposed_tool_count", 0)) >= int(status.get("exposed_tool_count", 0)):
 		return _failure("Disabling system_project_state did not reduce the exposed tool count.")
+	if int(disabled_status.get("catalog_revision", 0)) <= int(status.get("catalog_revision", 0)):
+		return _failure("Disabling a tool should advance the catalog revision for Dock cache invalidation.")
 
 	_loader.set_disabled_tools(["system_project_lifecycle"])
 	if _loader.is_tool_exposed("system_project_lifecycle"):

@@ -109,7 +109,8 @@ func get_light_status() -> Dictionary:
 		"tool_count": int(_tool_loader_last_summary.get("tool_count", 0)),
 		"exposed_tool_count": int(_tool_loader_last_summary.get("exposed_tool_count", 0)),
 		"category_count": int(_tool_loader_last_summary.get("category_count", 0)),
-		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0))
+		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0)),
+		"catalog_revision": _get_tool_loader_catalog_revision()
 	}
 
 
@@ -120,7 +121,8 @@ func refresh_status_from_loader() -> void:
 		"tool_count": _tool_loader.get_tool_definitions().size(),
 		"exposed_tool_count": _tool_loader.get_exposed_tool_definitions().size(),
 		"category_count": _tool_loader.get_domain_states().size(),
-		"tool_load_error_count": _tool_loader.get_tool_load_errors().size()
+		"tool_load_error_count": _tool_loader.get_tool_load_errors().size(),
+		"catalog_revision": _get_tool_loader_catalog_revision()
 	}
 	var status := _classify_tool_loader_health(summary)
 	_apply_status(status, summary)
@@ -146,6 +148,7 @@ func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Diction
 	var summary = _tool_loader.initialize(get_disabled_tools(), force_reload_scripts)
 	if _tool_loader != null and _tool_loader.has_method("get_performance_summary"):
 		summary["performance"] = _tool_loader.get_performance_summary()
+	summary["catalog_revision"] = _get_tool_loader_catalog_revision()
 	var category_count = int(summary.get("category_count", 0))
 	var tool_count = int(summary.get("tool_count", 0))
 	_log_message("Tool loader summary after %s: %d tools / %d categories" % [reason, tool_count, category_count], "debug")
@@ -195,6 +198,12 @@ func _apply_status(status: Dictionary, summary: Dictionary) -> void:
 	_tool_loader_healthy = bool(status.get("healthy", false))
 	_tool_loader_status = str(status.get("status", "unknown"))
 	_tool_loader_last_summary = summary.duplicate(true)
+
+
+func _get_tool_loader_catalog_revision() -> int:
+	if _tool_loader != null and _tool_loader.has_method("get_catalog_revision"):
+		return int(_tool_loader.get_catalog_revision())
+	return 0
 
 
 func _maybe_record_registration_issue(reason: String, status: Dictionary, summary: Dictionary) -> void:

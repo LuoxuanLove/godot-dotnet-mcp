@@ -101,6 +101,7 @@ func build_loader_lifecycle_context(loader) -> Dictionary:
 		"ensure_runtime_loaded": _loader_callable(loader, "_ensure_runtime_loaded"),
 		"unload_runtime": _loader_callable(loader, "_unload_runtime"),
 		"tick_loaded_runtimes": _loader_callable(loader, "_tick_loaded_runtimes_for_lifecycle"),
+		"bump_catalog_revision": _loader_callable(loader, "_bump_catalog_revision"),
 		"make_reload_status": _loader_callable(loader, "_make_reload_status"),
 		"update_reload_status": _loader_callable(loader, "_update_reload_status"),
 		"sync_load_error_incidents": _loader_callable(loader, "_sync_load_error_incidents"),
