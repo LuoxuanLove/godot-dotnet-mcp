@@ -79,6 +79,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Antigravity registry detection should stay manual guidance until a documented config file contract exists.")
 	if bool(results.get("antigravity", {}).get("auto_add_supported", false)):
 		return _failure("Antigravity registry detection should not expose CLI-style auto add.")
+	if not str(results.get("antigravity", {}).get("config_path", "")).is_empty():
+		return _failure("Antigravity registry detection should not expose a config_path until a documented config file contract exists.")
+	if str(results.get("antigravity", {}).get("guidance_path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
+		return _failure("Antigravity registry detection should expose its user-data path only as guidance.")
 	if str(results.get("antigravity", {}).get("config_entry_status", {}).get("status", "")) != "deferred":
 		return _failure("Antigravity registry detection should mark config entry inspection as deferred.")
 	var expected_support_levels := {
@@ -101,7 +105,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var expected_core_actions := {
 		"full_write": ["write_config", "remove_config", "copy_config", "pick_path"],
 		"auto_add": ["auto_add", "remove_config", "copy_config", "open_terminal", "pick_path"],
-		"manual_guidance": ["open_config_dir", "copy_config", "pick_path"],
+		"manual_guidance": ["copy_config", "pick_path"],
 		"launch_path": ["copy_config", "pick_path"]
 	}
 	for client_id in supported_ids:
@@ -116,9 +120,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var actions: Variant = capability.get("actions", [])
 		if not (actions is Array) or actions.is_empty():
 			return _failure("Client detector registry should expose supported actions for %s." % client_id)
-		for expected_action in expected_core_actions.get(support_level, []):
+		var expected_actions: Array = expected_core_actions.get(support_level, []).duplicate()
+		if support_level == "manual_guidance" and client_id != "antigravity":
+			expected_actions.append("open_config_dir")
+		for expected_action in expected_actions:
 			if not actions.has(expected_action):
 				return _failure("Client detector registry should expose %s for %s." % [expected_action, client_id])
+		if client_id == "antigravity" and (actions.has("open_config_dir") or actions.has("open_config_file")):
+			return _failure("Antigravity registry capability should not expose config-file actions without a documented config file contract.")
 		if actions.has("clear_path"):
 			return _failure("Client detector registry should not expose clear_path before runtime manual-path detection for %s." % client_id)
 		var notes: Variant = capability.get("notes", [])

@@ -63,25 +63,25 @@ func _detect_config_client(client_id: String, config_type: String, running_proce
 
 func _detect_manual_guidance_client(client_id: String, running_processes: PackedStringArray, launch_supported: bool) -> Dictionary:
 	var detector = ClientExecutableDetectorScript.new()
-	var config_path := _resolve_config_path(client_id)
+	var guidance_path := _resolve_config_path(client_id)
 	detector.configure_detector(
 		client_id,
 		_path_resolver,
 		_runtime_inspector,
 		_config_entry_inspector,
 		{
-			"config_path": config_path,
+			"config_path": "",
 			"where_aliases": [client_id],
 			"image_names": ["%s.exe" % client_id],
 			"launch_supported": launch_supported,
 			"auto_add_supported": false,
 			"write_supported": false,
 			"inspect_config_entry": false,
-			"capability": ClientCapabilityMatrixScript.build_for_client(client_id, launch_supported, true, false, true)
+			"capability": ClientCapabilityMatrixScript.build_for_client(client_id, launch_supported, true, false, false)
 		}
 	)
 	var result: Dictionary = detector.detect(running_processes)
-	result["config_path"] = config_path
+	result["guidance_path"] = guidance_path
 	result["config_entry_status"] = {
 		"status": "deferred",
 		"has_server_entry": false,

@@ -225,13 +225,13 @@ func _detect_antigravity(running_processes: PackedStringArray = PackedStringArra
 		_build_runtime_state(str(resolved.get("path", "")), ["antigravity.exe"], running_processes),
 		{"status": ENTRY_DEFERRED, "has_server_entry": false, "deferred": true}
 	)
-	result["config_path"] = config_path
+	result["guidance_path"] = config_path
 	result["write_supported"] = false
 	result["auto_add_supported"] = false
 	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
 	result["path_pick_supported"] = true
 	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
-	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_CONFIG_ONLY
+	result["status"] = STATUS_READY if not str(resolved.get("path", "")).is_empty() else STATUS_MISSING
 	return result
 
 

@@ -664,6 +664,7 @@ const TRANSLATIONS: Dictionary = {
 	"config_client_antigravity_missing_msg": "未偵測到 Antigravity。你仍可複製配置，或手動選擇程式路徑後再回來。",
 	"config_client_antigravity_desc": "偵測 Antigravity agent 應用，並提供可複製配置、應用入口和配置目錄指引，用於其 MCP 接入流程。",
 	"config_client_antigravity_stdio_desc": "當外掛提供本機 stdio MCP 程序且 Antigravity 設定流程支援時，也可以使用 stdio 方式接入。",
+	"config_client_antigravity_user_data_dir_hint": "Antigravity 使用者資料目錄：%s",
 	"msg_config_restart_antigravity": "如果 Antigravity 已在執行，請重啟或重新載入應用程式以套用新配置。",
 	"config_client_codex_desktop": "Codex Desktop",
 	"config_client_opencode_desktop": "OpenCode Desktop",

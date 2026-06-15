@@ -62,6 +62,7 @@ class FakeLocalization extends RefCounted:
 			"config_client_qwen_desc": "Qwen description",
 			"config_client_windsurf_desc": "Windsurf description",
 			"config_client_antigravity_desc": "Antigravity description",
+			"config_client_antigravity_user_data_dir_hint": "Antigravity user data directory: %s",
 			"config_client_cline_desc": "Cline description",
 			"config_client_roo_code_desc": "Roo Code description",
 			"config_client_cherry_studio_desc": "Cherry Studio description",
@@ -184,7 +185,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			},
 			"antigravity": {
 				"status": "ready",
-				"config_path": "C:/Users/Test/AppData/Roaming/Antigravity",
+				"guidance_path": "C:/Users/Test/AppData/Roaming/Antigravity",
 				"config_entry_status": {"status": "deferred"},
 				"write_supported": false,
 				"launch_supported": true,
@@ -194,7 +195,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"executable_path": "C:/Apps/Antigravity/Antigravity.exe",
 				"capability": {
 					"support_level": "manual_guidance",
-					"actions": ["copy_config", "open_config_dir"],
+					"actions": ["copy_config", "pick_path", "open_app"],
 					"notes": ["config_client_capability_manual_guidance"]
 				}
 			},
@@ -234,8 +235,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var antigravity_model: Dictionary = desktop_models[3]
 	if str(antigravity_model.get("name_key", "")) != "config_client_antigravity":
 		return _failure("Presenter should include Antigravity in the desktop client list.")
-	if str(antigravity_model.get("path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
-		return _failure("Presenter should surface the Antigravity user-data config guidance path.")
+	if not str(antigravity_model.get("path", "")).is_empty():
+		return _failure("Presenter should not treat Antigravity user-data guidance as a config file path.")
+	if str(antigravity_model.get("guidance_path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
+		return _failure("Presenter should surface the Antigravity user-data path only as guidance.")
+	if bool(antigravity_model.get("open_config_dir_supported", false)) or bool(antigravity_model.get("open_config_file_supported", false)):
+		return _failure("Antigravity should not expose config file buttons until a documented config file contract exists.")
+	if antigravity_model.get("capability", {}).get("actions", []).has("open_config_dir") or antigravity_model.get("capability", {}).get("actions", []).has("open_config_file"):
+		return _failure("Antigravity capability should not expose config-file actions until a documented config file contract exists.")
+	if str(antigravity_model.get("guidance_text", "")).find("C:/Users/Test/AppData/Roaming/Antigravity") == -1:
+		return _failure("Presenter should include Antigravity user-data guidance in visible guidance text.")
 	if str(antigravity_model.get("capability", {}).get("kind", "")) != "manual_guidance":
 		return _failure("Antigravity should expose manual guidance until a documented config file contract exists.")
 	if str(antigravity_model.get("launch_action_label_key", "")) != "config_client_action_open_app":

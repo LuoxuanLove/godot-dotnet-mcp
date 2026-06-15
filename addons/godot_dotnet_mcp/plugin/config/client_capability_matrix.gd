@@ -84,7 +84,8 @@ static func build_client_capability(
 			actions.append("auto_add")
 			actions.append("remove_config")
 		"manual_guidance":
-			actions.append("open_config_dir")
+			if config_path_available:
+				actions.append("open_config_dir")
 	if launch_supported:
 		actions.append("open_terminal" if _is_cli_client(client_id) else "open_app")
 	if path_pick_supported:
