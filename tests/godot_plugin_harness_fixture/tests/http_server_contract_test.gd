@@ -103,6 +103,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	fresh_auto_start_server.dispose()
 	fresh_auto_start_server.free()
 
+	var disabled_auto_start_server = HttpServerScript.new()
+	disabled_auto_start_server.initialize(0, "127.0.0.1", false)
+	var disabled_auto_start_summary: Dictionary = disabled_auto_start_server.reinitialize(0, "127.0.0.1", false, [" system_project_state ", "", "system_project_state"], "auto_start")
+	if int(disabled_auto_start_summary.get("tool_count", 0)) != 0:
+		disabled_auto_start_server.dispose()
+		disabled_auto_start_server.free()
+		return _failure("HTTP server auto_start reinitialize with disabled tools should remain lightweight and not scan tools.")
+	if disabled_auto_start_server.get("_service_bundle") != null:
+		disabled_auto_start_server.dispose()
+		disabled_auto_start_server.free()
+		return _failure("HTTP server auto_start reinitialize with disabled tools should not create the service bundle.")
+	var pending_disabled_tools: Array = disabled_auto_start_server.get_disabled_tools()
+	if pending_disabled_tools != ["system_project_state"]:
+		disabled_auto_start_server.dispose()
+		disabled_auto_start_server.free()
+		return _failure("HTTP server should preserve normalized pending disabled tools before service bundle creation.")
+	if disabled_auto_start_server.get("_service_bundle") != null:
+		disabled_auto_start_server.dispose()
+		disabled_auto_start_server.free()
+		return _failure("Reading pending disabled tools should not create the service bundle.")
+	disabled_auto_start_server.build_tools_api_snapshot()
+	if disabled_auto_start_server.is_tool_enabled("system_project_state"):
+		disabled_auto_start_server.dispose()
+		disabled_auto_start_server.free()
+		return _failure("HTTP server should apply pending disabled tools when the runtime initializes on demand.")
+	disabled_auto_start_server.dispose()
+	disabled_auto_start_server.free()
+
 	var tools_list: Dictionary = _server.build_tools_api_snapshot()
 	loader_status = _server.get_tool_loader_status()
 	if not bool(loader_status.get("initialized", false)):
