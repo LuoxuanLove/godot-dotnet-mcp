@@ -93,9 +93,6 @@ func tick() -> void:
 		if bool(baseline_result.get("complete", false)):
 			_handle_scan_result(baseline_result, now_msec)
 		return
-	if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
-		return
-	_last_poll_msec = now_msec
 	var scan_result := _begin_incremental_scan()
 	if bool(scan_result.get("complete", false)):
 		_handle_scan_result(scan_result, now_msec)

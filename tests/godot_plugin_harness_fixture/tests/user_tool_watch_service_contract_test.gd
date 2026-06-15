@@ -113,6 +113,11 @@ func _verify_scan_budget() -> Dictionary:
 		_restore_runtime_loading_setting(had_setting, previous_setting)
 		_cleanup_paths(created_paths)
 		return _failure("User tool watcher should complete the deferred baseline scan after several ticks.")
+	var steady_state_result := _verify_steady_state_poll_starts_next_scan(service, created_paths)
+	if not bool(steady_state_result.get("success", false)):
+		_restore_runtime_loading_setting(had_setting, previous_setting)
+		_cleanup_paths(created_paths)
+		return steady_state_result
 	var slice_result := _verify_incremental_slice_budget(service, created_paths)
 	if not bool(slice_result.get("success", false)):
 		_restore_runtime_loading_setting(had_setting, previous_setting)
@@ -129,6 +134,24 @@ func _verify_scan_budget() -> Dictionary:
 		return _failure("User tool watcher should complete the budgeted scan after several ticks.")
 	if int(final_status.get("last_scan_slices", 0)) <= 1:
 		return _failure("User tool watcher should report that a large scan was split across multiple slices.")
+	return {"success": true}
+
+
+func _verify_steady_state_poll_starts_next_scan(service, created_paths: Array[String]) -> Dictionary:
+	for path in created_paths:
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file != null:
+			file.store_string("extends Node\n")
+			file.close()
+	service._last_poll_msec = 0
+	service.tick()
+	var status: Dictionary = service.get_status()
+	if not bool(status.get("scan_in_progress", false)) and int(status.get("last_scan_slices", 0)) <= 1:
+		return _failure("User tool watcher should start the next steady-state scan once the poll window opens.")
+	for _attempt in range(20):
+		service.tick()
+		if not bool(service.get_status().get("scan_in_progress", false)):
+			break
 	return {"success": true}
 
 
