@@ -1,6 +1,7 @@
 extends RefCounted
 
 const DiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/shared/gdscript_lsp_diagnostics_service.gd")
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 
 class FakeDiagnosticsClient extends RefCounted:
@@ -72,6 +73,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_single_client = FakeDiagnosticsClient.new()
 	_created_clients.clear()
 	_service.set_client_factory_for_testing(Callable(self, "_create_client"))
+
+	MCPDebugBuffer.clear()
+	_service.tick(0.0)
+	if MCPDebugBuffer.size() != 0:
+		return _failure("Diagnostics service idle tick should not emit debug-buffer entries.")
 
 	var first: Dictionary = _service.request_diagnostics("res://scripts/alpha.gd", "extends Node\n")
 	if not bool(first.get("pending", false)):

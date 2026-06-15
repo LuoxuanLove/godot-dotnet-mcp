@@ -68,6 +68,7 @@ func build_tool_rpc_router_context(server, tool_loader_supervisor, http_response
 		if bool(server.get("_debug_mode")):
 			print("[MCP] " + message)
 	context.sanitize_for_json = Callable(http_response_service, "sanitize_for_json")
+	context.ensure_initialized = Callable(tool_loader_supervisor, "ensure_initialized")
 	context.tool_activity_registry = tool_activity_registry
 	return context
 
@@ -125,6 +126,7 @@ func build_tools_api_service_context(tool_loader_supervisor):
 	var context = MCPToolsApiServiceContextScript.new()
 	context.get_tool_loader = Callable(tool_loader_supervisor, "get_tool_loader")
 	context.get_tool_loader_status = Callable(tool_loader_supervisor, "get_status")
+	context.ensure_initialized = Callable(tool_loader_supervisor, "ensure_initialized")
 	return context
 
 func build_http_response_context(server, tool_loader_supervisor):
