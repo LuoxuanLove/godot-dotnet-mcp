@@ -23,6 +23,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if _server.get("_service_bundle") != null:
 		return _failure("HTTP server initialize should not create the service bundle before runtime work is requested.")
 
+	var stable_failure_result := await _verify_service_bundle_load_failure_is_stable()
+	if not bool(stable_failure_result.get("success", false)):
+		return stable_failure_result
+
 	var loader_status: Dictionary = _server.get_tool_loader_status()
 	if _server.get("_service_bundle") != null:
 		return _failure("HTTP server status reads should not create the service bundle before runtime work is requested.")
@@ -457,6 +461,36 @@ func _verify_http_server_shell_has_no_eager_runtime_preloads() -> Dictionary:
 			return _failure("HTTP server shell should not eagerly reference runtime dependency: %s" % forbidden)
 	if source.find("SERVICE_BUNDLE_SCRIPT_PATH") == -1:
 		return _failure("HTTP server shell should retain an explicit lazy service bundle path.")
+	return {"success": true, "error": ""}
+
+
+func _verify_service_bundle_load_failure_is_stable() -> Dictionary:
+	var failure_server = HttpServerScript.new()
+	failure_server.initialize(0, "127.0.0.1", false)
+	failure_server.set("_service_bundle_script_path", "res://tests/invalid_http_service_bundle_stub.gd")
+
+	var lifecycle_response: Dictionary = failure_server.handle_editor_lifecycle_request("status", {})
+	if str(lifecycle_response.get("error", "")) != "service_unavailable":
+		failure_server.dispose()
+		failure_server.free()
+		return _failure("Missing service bundle should return a stable lifecycle service_unavailable error.")
+
+	var rpc_response: Dictionary = await failure_server.handle_jsonrpc_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 991,
+		"method": "initialize",
+		"params": {}
+	}))
+	failure_server.dispose()
+	failure_server.free()
+
+	var rpc_error = rpc_response.get("error", {})
+	if not (rpc_error is Dictionary):
+		return _failure("Missing service bundle should return a JSON-RPC error envelope.")
+	if int((rpc_error as Dictionary).get("code", 0)) != -32603:
+		return _failure("Missing service bundle should report JSON-RPC -32603 instead of falling through to Nil calls.")
+	if rpc_response.get("id", null) != 991:
+		return _failure("Missing service bundle JSON-RPC error should preserve request id.")
 	return {"success": true, "error": ""}
 
 
