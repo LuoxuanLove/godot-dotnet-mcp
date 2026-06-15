@@ -99,6 +99,40 @@ class SyncStartProbePlugin extends PluginScript:
 		archive_requests.append({"target": target.duplicate(true), "serial": serial})
 
 
+class ToolPreparedSyncProbePlugin extends SyncStartProbePlugin:
+	var discovery_request_count := 0
+	var version_requests: Array[Dictionary] = []
+
+	func _on_update_check_requested() -> void:
+		discovery_request_count += 1
+		_update_refs_request_serial += 1
+		_update_refs_discovery_loaded = false
+		_update_refs_pending = {
+			"serial": _update_refs_request_serial,
+			"branch_done": false,
+			"release_done": false,
+			"tag_done": false,
+			"errors": [],
+			"branches": [],
+			"releases": [],
+			"stable_releases": [],
+			"tags": [],
+			"commits": {}
+		}
+		_state.update_refs_state = "loading"
+		_state.update_refs_status = "Loading update refs."
+		_state.update_refs_error = ""
+		_state.update_ref_latest_stable_release = ""
+		_state.update_ref_latest_release = ""
+		_state.update_ref_commits = {}
+
+	func _start_update_ref_version_request(target_ref: String, target_kind: String = "branch") -> void:
+		version_requests.append({
+			"target_ref": target_ref,
+			"target_kind": target_kind
+		})
+
+
 class ArchiveAttemptProbePlugin extends PluginScript:
 	var attempt_requests: Array[Dictionary] = []
 
@@ -312,12 +346,44 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	release_discovery_probe._state.update_ref_latest_stable_release = ""
 	_tree.root.add_child(release_discovery_probe.request_parent)
 	var release_start_result: Dictionary = release_discovery_probe.start_plugin_update_sync_from_tools()
-	if bool(release_start_result.get("accepted", true)) or not bool(release_start_result.get("loading", false)) or release_discovery_probe.discovery_request_count != 1:
+	if not bool(release_start_result.get("accepted", false)) or not bool(release_start_result.get("loading", false)) or str(release_start_result.get("status", "")) != "preparing_sync" or release_discovery_probe.discovery_request_count != 1:
 		release_discovery_probe.request_parent.queue_free()
 		release_discovery_probe.free()
-		return _failure("plugin.gd tool update sync should request ref discovery instead of failing release-derived targets before refs are loaded.")
+		return _failure("plugin.gd tool update sync should accept and prepare ref discovery instead of failing release-derived targets before refs are loaded.")
+	var release_start_data: Dictionary = release_start_result.get("data", {})
+	if not bool(release_start_data.get("pending_sync_after_refs_discovery", false)) or str(release_start_data.get("next_action", "")) != "poll_update_status":
+		release_discovery_probe.request_parent.queue_free()
+		release_discovery_probe.free()
+		return _failure("plugin.gd tool update sync should expose a pollable pending-sync state while refs are discovered.")
 	release_discovery_probe.request_parent.queue_free()
 	release_discovery_probe.free()
+	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
+	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
+	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
+	if not bool(prepared_start_result.get("accepted", false)) or str(prepared_start_result.get("status", "")) != "preparing_sync" or prepared_sync_probe.discovery_request_count != 1:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should start release target discovery from the same sync action.")
+	prepared_sync_probe._update_refs_pending["branch_done"] = true
+	prepared_sync_probe._update_refs_pending["release_done"] = true
+	prepared_sync_probe._update_refs_pending["tag_done"] = true
+	prepared_sync_probe._update_refs_pending["releases"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["stable_releases"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["tags"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["commits"] = {"v2.0.0": "tag-sha"}
+	prepared_sync_probe._finalize_update_refs_discovery_if_ready(prepared_sync_probe._update_refs_request_serial)
+	if prepared_sync_probe.archive_requests.size() != 1:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should continue into archive sync after release refs are discovered.")
+	var prepared_target: Dictionary = (prepared_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	if str(prepared_target.get("kind", "")) != "tag" or str(prepared_target.get("ref", "")) != "v2.0.0" or str(prepared_target.get("commit", "")) != "tag-sha":
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should reuse the discovered release target when continuing sync.")
+	var prepared_status: Dictionary = prepared_sync_probe.get_plugin_update_status_from_tools()
+	var prepared_data: Dictionary = prepared_status.get("data", {})
+	if bool(prepared_data.get("pending_sync_after_refs_discovery", true)) or str(prepared_data.get("status", "")) != "syncing":
+		prepared_sync_probe.free()
+		return _failure("plugin.gd update status should clear pending-sync once archive sync starts.")
+	prepared_sync_probe.free()
 	var dock_sync_probe := SyncStartProbePlugin.new()
 	dock_sync_probe._state.settings["update_source"] = "custom_branch"
 	dock_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
