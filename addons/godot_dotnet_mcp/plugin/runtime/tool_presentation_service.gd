@@ -103,12 +103,14 @@ static func build_tool_presentation(
 			"totalCount": domain_total
 		})
 
-	return {
+	var presentation := {
 		"presentationVersion": PRESENTATION_VERSION,
 		"toolTree": roots,
 		"toolGroups": groups,
 		"toolMetadataByName": metadata_by_name
 	}
+	presentation["signature"] = build_presentation_signature("domain_catalog", roots, groups, metadata_by_name)
+	return presentation
 
 
 static func enrich_tools_for_presentation(tools: Array, presentation: Dictionary) -> Array[Dictionary]:
@@ -149,6 +151,84 @@ static func build_mcp_tool_list(tools: Array, _presentation: Dictionary = {}) ->
 
 static func get_json_schema_dialect() -> String:
 	return JSON_SCHEMA_2020_12_URI
+
+
+static func build_presentation_signature(view: String, roots: Array, groups: Array = [], metadata_by_name: Dictionary = {}) -> String:
+	var entries: Array[String] = [
+		"presentation_version=%d" % PRESENTATION_VERSION,
+		"view=%s" % view
+	]
+	_append_node_signature_entries(entries, roots)
+	_append_group_signature_entries(entries, groups)
+	_append_metadata_signature_entries(entries, metadata_by_name)
+	return "\n".join(entries)
+
+
+static func _append_node_signature_entries(entries: Array[String], nodes: Array) -> void:
+	entries.append("nodes=%d" % nodes.size())
+	for node_value in nodes:
+		if not (node_value is Dictionary):
+			entries.append("node|invalid")
+			continue
+		var node := node_value as Dictionary
+		entries.append("node|%s" % JSON.stringify([
+			str(node.get("kind", "")),
+			str(node.get("id", "")),
+			str(node.get("key", "")),
+			str(node.get("label", "")),
+			str(node.get("labelKey", "")),
+			str(node.get("category", "")),
+			str(node.get("domain", "")),
+			str(node.get("fullName", node.get("full_name", ""))),
+			str(node.get("tool_name", node.get("toolName", ""))),
+			str(node.get("actionName", node.get("action", ""))),
+			str(node.get("parentTool", node.get("parent_tool", ""))),
+			str(node.get("visibility", "")),
+			str(node.get("callability", "")),
+			str(node.get("source", "")),
+			str(node.get("script_path", node.get("scriptPath", ""))),
+			str(node.get("domain_script_path", node.get("domainScriptPath", ""))),
+			str(node.get("loadState", node.get("load_state", ""))),
+			str(node.get("title", "")),
+			str(node.get("description", "")),
+			str(node.get("replacement", "")),
+			str(node.get("reason", "")),
+			bool(node.get("enabled", true)),
+			int(node.get("enabledCount", node.get("enabledToolCount", 0))),
+			int(node.get("totalCount", node.get("toolCount", 0))),
+			int(node.get("loadErrorCount", 0)),
+			node.get("icons", []),
+			node.get("annotations", {}),
+			node.get("inputSchema", {}),
+			node.get("outputSchema", {}),
+			node.get("metadata", {}),
+			node.get("treeChildren", [])
+		]))
+		var children = node.get("children", [])
+		if children is Array:
+			_append_node_signature_entries(entries, children as Array)
+
+
+static func _append_group_signature_entries(entries: Array[String], groups: Array) -> void:
+	entries.append("groups=%d" % groups.size())
+	for group_value in groups:
+		if group_value is Dictionary:
+			entries.append("group|%s" % JSON.stringify(group_value))
+		else:
+			entries.append("group|invalid")
+
+
+static func _append_metadata_signature_entries(entries: Array[String], metadata_by_name: Dictionary) -> void:
+	var names: Array = metadata_by_name.keys()
+	names.sort()
+	entries.append("metadata=%d" % names.size())
+	for name_value in names:
+		var name := str(name_value)
+		var metadata = metadata_by_name.get(name_value, {})
+		if metadata is Dictionary:
+			entries.append("metadata|%s|%s" % [name, JSON.stringify(metadata)])
+		else:
+			entries.append("metadata|%s|invalid" % name)
 
 
 static func get_atomic_child_specs(parent_full_name: String) -> Array[Dictionary]:

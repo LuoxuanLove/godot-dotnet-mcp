@@ -107,6 +107,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var presentation := ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category)
 	if int(presentation.get("presentationVersion", 0)) != 1:
 		return _failure("Presentation service should expose a stable presentation version.")
+	var presentation_signature := str(presentation.get("signature", ""))
+	if presentation_signature.is_empty():
+		return _failure("Presentation service should expose a reusable presentation signature for UI refresh checks.")
 	var tool_tree: Array = presentation.get("toolTree", [])
 	var core_domain := _find_node(tool_tree, "domain", "core")
 	if core_domain.is_empty():
@@ -126,6 +129,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if project_index_build.is_empty() or _find_node(project_index_build.get("children", []), "atomic", "script_inspect").is_empty():
 		return _failure("Presentation service should expose project index build through its real filesystem/script/resource atomic chain.")
 	var disabled_presentation := ToolPresentationService.build_tool_presentation(exposed_tools, all_tools_by_category, [], ["system_project_state", "system_runtime_control", "system_editor_evidence", "system_project_index_build"])
+	if str(disabled_presentation.get("signature", "")) == presentation_signature:
+		return _failure("Presentation signature should change when disabled tool state changes.")
 	var disabled_project_state := _find_node((_find_node((_find_node(disabled_presentation.get("toolTree", []), "domain", "core")).get("children", []), "category", "system")).get("children", []), "tool", "system_project_state")
 	if disabled_project_state.is_empty() or bool(disabled_project_state.get("enabled", true)):
 		return _failure("Presentation service should let disabled_tools override tool enabled metadata.")

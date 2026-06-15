@@ -241,6 +241,9 @@ class FakeContext extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _assert_dock_model_signature_avoids_json_sort_comparators()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
 	var service = DockModelService.new()
 	var state = FakeState.new()
 	state.mcp_catalog_preview = {"kind": "prompt", "id": "godot.project_orientation", "success": true, "text": "Preview text"}
@@ -415,6 +418,18 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _assert_dock_model_signature_avoids_json_sort_comparators() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Dock model service source should exist for signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	if source.find("_sort_tool_signature_entries") != -1 or source.find("JSON.stringify(left) < JSON.stringify(right)") != -1:
+		return "Dock model catalog signature should not stringify tool entries inside the sort comparator."
+	if source.find("tool_entries.sort()") == -1:
+		return "Dock model catalog signature should sort precomputed lightweight entry keys."
+	return ""
 
 
 func _verify_mcp_protocol_projection(model: Dictionary) -> Dictionary:

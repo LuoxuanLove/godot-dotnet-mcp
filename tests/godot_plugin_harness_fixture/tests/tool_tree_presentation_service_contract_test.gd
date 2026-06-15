@@ -72,6 +72,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	if str(agent_tree.get("view", "")) != "agent_tools":
 		return _failure("Agent tool tree should identify the default Agent Tools view.")
+	if str(agent_tree.get("signature", "")).is_empty() or str(internal_tree.get("signature", "")).is_empty() or str(diagnostics_tree.get("signature", "")).is_empty():
+		return _failure("Tool tree presentation layers should expose reusable signatures for UI refresh checks.")
+	if str(agent_tree.get("signature", "")) == str(internal_tree.get("signature", "")):
+		return _failure("Tool tree presentation signatures should distinguish the active view.")
 	if _find_node(agent_tree.get("toolTree", []), "public_tool", "system_project_state").is_empty():
 		return _failure("Agent tool tree should include canonical system tools.")
 	if _find_node(agent_tree.get("toolTree", []), "public_tool", "user_sample_tool").is_empty():
