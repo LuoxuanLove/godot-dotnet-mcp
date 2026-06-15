@@ -108,7 +108,7 @@ func get_light_status() -> Dictionary:
 		"exposed_tool_count": int(_tool_loader_last_summary.get("exposed_tool_count", 0)),
 		"category_count": int(_tool_loader_last_summary.get("category_count", 0)),
 		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0)),
-		"catalog_revision": int(_tool_loader_last_summary.get("catalog_revision", _get_tool_loader_catalog_revision()))
+		"catalog_revision": _get_tool_loader_catalog_revision()
 	}
 
 
