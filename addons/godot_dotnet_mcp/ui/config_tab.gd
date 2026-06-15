@@ -217,6 +217,14 @@ func _create_client_card(client: Dictionary, supports_write: bool, localization,
 		guidance.add_theme_color_override("font_color", _get_description_text_color())
 		body.add_child(guidance)
 
+	var action_status_text = str(client.get("action_status_text", "")).strip_edges()
+	if not action_status_text.is_empty():
+		var action_status = Label.new()
+		action_status.text = action_status_text
+		action_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		action_status.add_theme_color_override("font_color", _get_action_status_text_color())
+		body.add_child(action_status)
+
 	var content_text = str(client.get("content", ""))
 	if not content_text.is_empty():
 		var content_panel = PanelContainer.new()
@@ -509,9 +517,11 @@ func _make_client_card_signature(client: Dictionary, localization) -> Dictionary
 		"detail_value",
 		"explanation_text",
 		"guidance_text",
+		"action_status_text",
 		"content",
 		"primary_action_label_key",
 		"primary_action_enabled",
+		"primary_action_busy",
 		"launch_supported",
 		"launch_action_label_key",
 		"launch_enabled",
@@ -795,6 +805,10 @@ func _get_meta_label_text_color() -> Color:
 	var base := get_theme_color("font_color", "Label")
 	var disabled := get_theme_color("font_disabled_color", "Editor")
 	return base.lerp(disabled, 0.48)
+
+
+func _get_action_status_text_color() -> Color:
+	return get_theme_color("accent_color", "Editor")
 
 
 func _rebuild_platform_options(platforms: Array, selected_platform: String, localization) -> void:

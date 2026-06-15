@@ -140,6 +140,13 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 autowrap_mode = 3
 
+[node name="UpdatesProgress" type="ProgressBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+visible = false
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
 [node name="UpdateButtonsRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3

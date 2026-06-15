@@ -643,6 +643,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stale_cleanup_result := _run_update_sync_stale_cleanup_contract()
 	if not bool(stale_cleanup_result.get("success", false)):
 		return stale_cleanup_result
+	var stale_cleanup_link_result := _run_update_sync_stale_cleanup_link_guard_contract()
+	if not bool(stale_cleanup_link_result.get("success", false)):
+		return stale_cleanup_link_result
 	return {"name": "plugin_update_settings_persistence_contracts", "success": true, "error": ""}
 
 
@@ -871,6 +874,51 @@ func _run_update_sync_stale_cleanup_contract() -> Dictionary:
 		return _failure("plugin.gd stale update cleanup should report removed legacy files.")
 	probe.free()
 	_remove_tree(root)
+	return {"success": true}
+
+
+func _run_update_sync_stale_cleanup_link_guard_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_stale_cleanup_link_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var external_root := "res://tests_tmp/plugin_update_stale_cleanup_link_external"
+	_remove_tree(root)
+	_remove_tree(external_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(external_root.path_join("node_tools.gd"), "external")
+	_write_text(external_root.path_join("sentinel.txt"), "external")
+	var linked_tools_path := root.path_join("tools")
+	var link_created := _create_directory_link(linked_tools_path, external_root)
+	if not link_created:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return {"success": true}
+	var cleanup_result: Dictionary = probe._cleanup_stale_update_sync_addon_files()
+	if not bool(cleanup_result.get("success", false)):
+		var error := str(cleanup_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should skip linked ancestors instead of failing: %s" % error)
+	if not FileAccess.file_exists(external_root.path_join("node_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should not remove stale filenames through linked ancestor directories.")
+	if not FileAccess.file_exists(external_root.path_join("sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should preserve linked external target contents.")
+	if int(cleanup_result.get("skipped_links", 0)) <= 0:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should report skipped linked ancestor paths.")
+	probe.free()
+	_remove_tree(root)
+	_remove_tree(external_root)
 	return {"success": true}
 
 

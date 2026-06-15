@@ -11,6 +11,7 @@ var _controllers: Array = []
 class FakeState extends RefCounted:
 	var settings: Dictionary = {}
 	var current_tab := 0
+	var current_tools_view := "agent_tools"
 	var current_cli_scope := ""
 	var current_config_platform := ""
 	var custom_tool_profiles: Dictionary = {}
@@ -299,15 +300,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should still keep the full tool set for profile and filtering logic.")
 	if model.get("all_tools_by_category", {}).has("user") == false:
 		return _failure("Dock model should still keep hidden categories in all_tools_by_category for profile logic.")
-	var presentation: Dictionary = model.get("tool_presentation", {})
+	var presentation: Dictionary = model.get("active_tool_presentation", {})
 	if presentation.is_empty() or not (presentation.get("toolTree", []) is Array):
-		return _failure("Dock model should include the unified tool presentation model.")
+		return _failure("Dock model should include the active tool presentation model.")
 	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})
 	var project_metadata: Dictionary = metadata_by_name.get("system_project_state", {})
 	if project_metadata.is_empty():
 		return _failure("Dock model should reuse snapshot presentation metadata for visible tools.")
-	if (project_metadata.get("groupPath", []) as Array).is_empty() or str(project_metadata.get("loadState", "")) != "loaded" or str(project_metadata.get("source", "")) != "builtin":
-		return _failure("Dock snapshot metadata should preserve groupPath, loadState, and source.")
+	if str(project_metadata.get("group", "")).is_empty() or str(project_metadata.get("source", "")) != "builtin":
+		return _failure("Dock snapshot metadata should preserve Agent Tools grouping and source.")
 	if str(project_metadata.get("scriptPath", "")).is_empty():
 		return _failure("Dock snapshot metadata should preserve scriptPath.")
 	if str(project_metadata.get("title", "")) != "System Project State":
@@ -333,17 +334,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock default Tools tab tree should not expose internal executor categories.")
 	if not _contains_kind_key(model.get("toolTree", []), "public_tool", "system_project_state"):
 		return _failure("Dock default Tools tab tree should include canonical public tools.")
-	if not (model.get("internal_executor_presentation", {}) is Dictionary) or (model.get("internal_executor_presentation", {}) as Dictionary).is_empty():
-		return _failure("Dock model should keep internal executor presentation available for advanced diagnostics.")
-	if not (model.get("tool_diagnostics_presentation", {}) is Dictionary) or (model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
-		return _failure("Dock model should keep diagnostics presentation available without mixing it into the default tree.")
+	if model.get("internal_executor_presentation", {}) is Dictionary and not (model.get("internal_executor_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should defer internal executor presentation until that Tools view is selected.")
+	if model.get("tool_diagnostics_presentation", {}) is Dictionary and not (model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should defer diagnostics presentation until that Tools view is selected.")
 	if not (model.get("mcp_resources", []) as Array).is_empty() or not (model.get("mcp_prompts", []) as Array).is_empty():
 		return _failure("Dock Tools tab should not build the Resources/Prompts protocol projection.")
+
+	state.current_tools_view = "internal_executors"
+	var internal_model: Dictionary = service.build_model()
+	if not (internal_model.get("internal_executor_presentation", {}) is Dictionary) or (internal_model.get("internal_executor_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should build internal executor presentation only after the Internal Tools view is selected.")
+	if internal_model.get("agent_tool_presentation", {}) is Dictionary and not (internal_model.get("agent_tool_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should not rebuild Agent Tools presentation while only the Internal Tools view is selected.")
+	state.current_tools_view = "tool_diagnostics"
+	var diagnostics_model: Dictionary = service.build_model()
+	if not (diagnostics_model.get("tool_diagnostics_presentation", {}) is Dictionary) or (diagnostics_model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
+		return _failure("Dock model should build diagnostics presentation only after the Diagnostics Tools view is selected.")
+	state.current_tools_view = "agent_tools"
 
 	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
 	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
 	var refreshed_model: Dictionary = service.build_model()
-	var refreshed_presentation: Dictionary = refreshed_model.get("tool_presentation", {})
+	var refreshed_presentation: Dictionary = refreshed_model.get("active_tool_presentation", {})
 	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
 	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
 	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
@@ -369,19 +382,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock Prompts tab model should not request the tool loader for protocol list projection.")
 	if (prompts_model.get("mcp_prompts", []) as Array).is_empty():
 		return _failure("Dock Prompts tab model should project MCP prompts without loading the tool runtime.")
-	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
-		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):
+	var internal_presentation: Dictionary = internal_model.get("internal_executor_presentation", {})
+	if _contains_presentation_category(internal_presentation.get("toolTree", []), "user"):
+		return _failure("Dock internal presentation should not expose categories filtered by tool access visibility.")
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "plugin_runtime_state"):
 		return _failure("Dock presentation should expose visible plugin runtime top-level tools.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_evolution_update_status"):
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "plugin_evolution_update_status"):
 		return _failure("Dock presentation should expose visible plugin evolution top-level tools.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_developer_self_test"):
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "plugin_developer_self_test"):
 		return _failure("Dock presentation should expose visible plugin developer top-level tools.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "material_inspect"):
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "material_inspect"):
 		return _failure("Dock presentation should expose visible visual-domain top-level tools.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "physics_inspect"):
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "physics_inspect"):
 		return _failure("Dock presentation should expose visible gameplay-domain top-level tools.")
-	if not _contains_presentation_tool(presentation.get("toolTree", []), "ui_control"):
+	if not _contains_presentation_tool(internal_presentation.get("toolTree", []), "ui_control"):
 		return _failure("Dock presentation should expose visible interface-domain top-level tools.")
 	if not model.has("plugin_freshness") or not (model.get("plugin_freshness", {}) is Dictionary):
 		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
@@ -515,7 +529,7 @@ func _contains_presentation_category(nodes: Array, category: String) -> bool:
 		if not (node is Dictionary):
 			continue
 		var node_dict := node as Dictionary
-		if str(node_dict.get("kind", "")) == "category" and str(node_dict.get("key", "")) == category:
+		if ["category", "executor_category"].has(str(node_dict.get("kind", ""))) and str(node_dict.get("key", "")) == category:
 			return true
 		if _contains_presentation_category(node_dict.get("children", []), category):
 			return true
@@ -527,7 +541,7 @@ func _contains_presentation_tool(nodes: Array, tool_name: String) -> bool:
 		if not (node is Dictionary):
 			continue
 		var node_dict := node as Dictionary
-		if str(node_dict.get("kind", "")) == "tool" and str(node_dict.get("key", "")) == tool_name:
+		if ["tool", "public_tool", "executor_tool"].has(str(node_dict.get("kind", ""))) and str(node_dict.get("key", "")) == tool_name:
 			return true
 		if _contains_presentation_tool(node_dict.get("children", []), tool_name):
 			return true

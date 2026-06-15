@@ -39,6 +39,7 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "category_toggled", "callable": Callable(self, "category_toggled")},
 		{"signal": "domain_toggled", "callable": Callable(self, "domain_toggled")},
 		{"signal": "tree_collapse_changed", "callable": Callable(self, "tree_collapse_changed")},
+		{"signal": "tool_view_changed", "callable": Callable(self, "tool_view_changed")},
 		{"signal": "cli_scope_changed", "callable": Callable(self, "cli_scope_changed")},
 		{"signal": "config_platform_changed", "callable": Callable(self, "config_platform_changed")},
 		{"signal": "config_client_action_requested", "callable": Callable(self, "config_client_action_requested")},
@@ -125,6 +126,10 @@ func domain_toggled(domain_key: String, enabled: bool) -> void:
 
 func tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
 	_call_plugin_method("_on_tree_collapse_changed", [kind, key, collapsed])
+
+
+func tool_view_changed(view_id: String) -> void:
+	_call_plugin_method("_on_tool_view_changed", [view_id])
 
 
 func cli_scope_changed(scope: String) -> void:

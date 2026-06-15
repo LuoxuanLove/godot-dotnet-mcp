@@ -6,6 +6,7 @@ signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
+signal tool_view_changed(view_id: String)
 
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
@@ -143,6 +144,11 @@ func apply_model(model: Dictionary) -> void:
 		_apply_responsive_layout()
 
 	_apply_localized_copy(localization, model)
+
+	var model_view := _resolve_tool_view_id(str(model.get("current_tools_view", _active_tools_view)))
+	if model_view != _active_tools_view:
+		_active_tools_view = model_view
+		_update_tool_view_buttons()
 
 	var tree_signature = _build_tree_signature(model)
 	_refresh_tree_state(model, tree_signature)
@@ -740,6 +746,7 @@ func _on_tool_view_button_pressed(view_id: String) -> void:
 	_clear_selection_metadata()
 	_last_tree_signature = ""
 	_update_tool_view_buttons()
+	tool_view_changed.emit(resolved_view)
 	if not _current_model.is_empty():
 		_apply_localized_copy(_localization, _current_model)
 		_refresh_tree_state(_current_model, _build_tree_signature(_current_model))

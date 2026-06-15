@@ -59,6 +59,8 @@ func build_model(context: Dictionary) -> Dictionary:
 			localization,
 			config_service
 		)
+		_apply_client_action_state(desktop_clients, state)
+		_apply_client_action_state(cli_clients, state)
 		config_platforms = _client_config_presenter.build_config_platform_models(desktop_clients, cli_clients)
 		state.current_config_platform = _client_config_presenter.resolve_current_config_platform(
 			str(state.current_config_platform),
@@ -72,6 +74,7 @@ func build_model(context: Dictionary) -> Dictionary:
 		"settings": settings,
 		"current_language": _resolve_current_language(state, localization),
 		"current_tab": state.current_tab,
+		"current_tools_view": str(context.get("current_tools_view", "agent_tools")),
 		"log_levels": context.get("log_levels", []),
 		"current_log_level": str(context.get("current_log_level", "")),
 		"current_cli_scope": state.current_cli_scope,
@@ -144,8 +147,25 @@ func build_model(context: Dictionary) -> Dictionary:
 		"update_sync_status": str(context.get("update_sync_status", "")),
 		"update_sync_error": str(context.get("update_sync_error", "")),
 		"update_sync_target_ref": str(context.get("update_sync_target_ref", "")),
-		"update_sync_target_kind": str(context.get("update_sync_target_kind", ""))
+		"update_sync_target_kind": str(context.get("update_sync_target_kind", "")),
+		"update_sync_progress": float(context.get("update_sync_progress", 0.0))
 	}
+
+
+func _apply_client_action_state(clients: Array[Dictionary], state) -> void:
+	if state == null or str(state.client_action_state) != "loading":
+		return
+	var active_client_id := str(state.client_action_client_id)
+	for client in clients:
+		if not (client is Dictionary):
+			continue
+		var client_id := str(client.get("id", ""))
+		if client.has("primary_action_label_key"):
+			client["primary_action_enabled"] = false
+		if client_id == active_client_id:
+			client["primary_action_busy"] = true
+			client["primary_action_label_key"] = "config_client_action_running"
+			client["action_status_text"] = str(state.client_action_status)
 
 
 func _resolve_current_language(state, localization) -> String:

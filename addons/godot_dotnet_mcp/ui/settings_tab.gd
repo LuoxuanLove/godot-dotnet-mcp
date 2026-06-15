@@ -45,6 +45,7 @@ const UPDATE_SELECTOR_POPUP_VERTICAL_PADDING := 12.0
 @onready var _custom_branch_label: Label = %CustomBranchLabel
 @onready var _custom_branch_value: OptionButton = %CustomBranchValue
 @onready var _updates_status: Label = %UpdatesStatus
+@onready var _updates_progress: ProgressBar = %UpdatesProgress
 @onready var _check_button: Button = %CheckButton
 @onready var _prepare_button: Button = %PrepareButton
 @onready var _apply_button: Button = %ApplyButton
@@ -126,6 +127,8 @@ func apply_model(model: Dictionary) -> void:
 	_apply_update_selector_popup_limits()
 
 	_updates_status.text = str(updates.get("status_text", ""))
+	_updates_progress.visible = bool(updates.get("progress_visible", false))
+	_updates_progress.value = clampf(float(updates.get("progress", 0.0)), 0.0, 1.0) * 100.0
 	var update_source := str(updates.get("source", "latest_stable"))
 	_apply_update_source_rows(update_source)
 	_check_button.disabled = true
@@ -155,6 +158,7 @@ func _has_required_controls() -> bool:
 		_custom_branch_label,
 		_custom_branch_value,
 		_updates_status,
+		_updates_progress,
 		_check_button,
 		_prepare_button,
 		_apply_button,
@@ -174,6 +178,7 @@ func _apply_fill_width_flags() -> void:
 		_language_option,
 		_source_option,
 		_custom_branch_value,
+		_updates_progress,
 		_check_button,
 		_prepare_button,
 		_apply_button,

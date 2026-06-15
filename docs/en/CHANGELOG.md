@@ -48,7 +48,10 @@ Target version: 2.0.0.
 - Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
 - Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
 - Fixed upgraded addon self-update recovery so new plugin instances remove known stale root tool monolith leftovers left by older overwrite-only updaters, and aligned Dock and MCP plugin update requests on the same archive-sync entry path while preserving `.import` and `dotnet_bridge/obj` cache files.
+- Fixed plugin update sync feedback so the Settings tab shows staged progress while resolving, downloading, writing, and refreshing plugin files instead of appearing idle during longer sync operations.
 - Fixed plugin update sync from MCP tools so custom branches with slash-separated names resolve their commit before archive download, retry through commit/ref archive fallbacks, and trigger ref discovery for release-derived targets instead of failing while the Dock path can still recover.
+- Fixed Config tab one-click CLI setup actions so they run through a non-blocking process path with immediate in-panel status instead of freezing the editor until the client command exits.
+- Fixed first-open responsiveness of the Dock Tools tab by building only the active tool presentation view up front and deferring Internal Executors / Diagnostics trees until those views are selected.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 
 ### Documentation

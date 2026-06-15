@@ -835,6 +835,18 @@ func _on_current_tab_changed(index: int) -> void:
 	_refresh_dock()
 
 
+func _on_tool_view_changed(view_id: String) -> void:
+	if _state == null:
+		return
+	var normalized := view_id.strip_edges()
+	if not ["agent_tools", "internal_executors", "tool_diagnostics"].has(normalized):
+		normalized = "agent_tools"
+	if str(_state.current_tools_view) == normalized:
+		return
+	_state.current_tools_view = normalized
+	_refresh_dock()
+
+
 func _on_port_changed(value: int) -> void:
 	_state.settings["port"] = value
 	_save_settings()
@@ -979,6 +991,7 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_state = "error"
 		_state.update_sync_error = _localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
 		_state.update_sync_status = ""
+		_state.update_sync_progress = 0.0
 		_refresh_dock()
 		return
 	_request_update_sync(target, "dock")
@@ -1001,6 +1014,7 @@ func _request_update_sync(target: Dictionary, source: String = "unknown") -> boo
 	_state.update_sync_target_kind = str(target.get("kind", "branch"))
 	_state.update_sync_error = ""
 	_state.update_sync_status = (_localization.get_text("settings_update_sync_loading") % target_ref) if _localization != null else "Syncing %s..." % target_ref
+	_state.update_sync_progress = 0.08
 	_refresh_dock()
 	MCPDebugBuffer.record("info", "plugin", "Plugin update sync requested from %s for %s" % [source, target_ref])
 	_start_update_archive_sync_request(target, serial)
@@ -1070,6 +1084,9 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 	var target_kind := str(target.get("kind", "branch"))
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if _should_resolve_update_branch_commit_before_archive(target):
+		_state.update_sync_status = _get_localized_text("settings_update_sync_resolving_target")
+		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.18)
+		_refresh_dock()
 		_start_update_archive_branch_ref_request(target, serial)
 		return
 	var attempts := _build_update_archive_request_attempts(target)
@@ -1197,6 +1214,9 @@ func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int,
 		_mark_update_sync_failed("No active update sync request host.", serial)
 		return
 	var attempt: Dictionary = attempts[attempt_index]
+	_state.update_sync_status = _get_localized_text("settings_update_sync_downloading_archive")
+	_state.update_sync_progress = max(float(_state.update_sync_progress), min(0.55, 0.28 + float(attempt_index) * 0.08))
+	_refresh_dock()
 	if FileAccess.file_exists(UPDATE_SYNC_ARCHIVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(UPDATE_SYNC_ARCHIVE_PATH))
 	var request_node := HTTPRequest.new()
@@ -1419,6 +1439,7 @@ func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:
 	_state.update_sync_state = "error"
 	_state.update_sync_error = message
 	_state.update_sync_status = ""
+	_state.update_sync_progress = 0.0
 
 
 func _mark_update_sync_failed(message: String, serial: int) -> void:
@@ -1427,6 +1448,7 @@ func _mark_update_sync_failed(message: String, serial: int) -> void:
 	_state.update_sync_state = "error"
 	_state.update_sync_error = message
 	_state.update_sync_status = ""
+	_state.update_sync_progress = 0.0
 	_refresh_dock()
 
 
@@ -1459,6 +1481,12 @@ func _complete_update_archive_sync_download(target: Dictionary, serial: int, att
 	if _state == null or serial != _update_sync_request_serial:
 		return
 	var target_ref := str(target.get("ref", ""))
+	_state.update_sync_status = _get_localized_text("settings_update_sync_writing_files")
+	_state.update_sync_progress = max(float(_state.update_sync_progress), 0.68)
+	_refresh_dock()
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null:
+		await tree.process_frame
 	var sync_result := _sync_update_archive_to_addon(UPDATE_SYNC_ARCHIVE_PATH)
 	if not bool(sync_result.get("success", false)):
 		if _should_try_next_update_archive_attempt(str(sync_result.get("error", "")), attempts, attempt_index):
@@ -1474,6 +1502,7 @@ func _complete_update_archive_sync_download(target: Dictionary, serial: int, att
 		_mark_update_sync_failed("Update files were written, but sync marker write failed: %s" % marker_error, serial)
 		return
 	_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_editor")
+	_state.update_sync_progress = 0.88
 	_refresh_dock()
 	await _complete_update_sync_after_editor_refresh(target_ref, sync_result, serial)
 
@@ -1503,6 +1532,7 @@ func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result:
 	_state.update_sync_state = "success"
 	_state.update_sync_error = ""
 	_state.update_sync_status = _get_localized_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]
+	_state.update_sync_progress = 1.0
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 	_request_update_sync_lifecycle_reload()
@@ -1646,7 +1676,7 @@ func _cleanup_stale_update_sync_addon_files() -> Dictionary:
 		var stale_path := addon_root.path_join(normalized).simplify_path()
 		if not _is_update_sync_path_inside_root(addon_root, stale_path):
 			return {"success": false, "deleted": deleted, "error": "Stale update cleanup path escapes the plugin directory: %s" % normalized}
-		if _is_update_sync_link_path(stale_path):
+		if _is_update_sync_path_or_ancestor_link(addon_root, normalized):
 			skipped_links += 1
 			continue
 		if FileAccess.file_exists(stale_path):

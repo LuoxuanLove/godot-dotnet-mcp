@@ -32,6 +32,8 @@ func project(model: Dictionary) -> Dictionary:
 			"release_tag": str(update_settings.get("release_tag", "")),
 			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch",
 			"status_text": _build_update_status_text(model, update_settings, localization),
+			"progress": _project_update_sync_progress(model),
+			"progress_visible": str(model.get("update_sync_state", "idle")) == "loading",
 			"check_enabled": _is_update_check_enabled(model),
 			"prepare_enabled": false,
 			"apply_enabled": _is_update_sync_enabled(model, update_settings),
@@ -98,6 +100,15 @@ func _build_update_status_text(model: Dictionary, update_settings: Dictionary, l
 	if sync_state != "idle":
 		return _build_update_sync_status_text(model, update_settings, localization)
 	return _build_update_refs_status_text(model, update_settings, localization)
+
+
+func _project_update_sync_progress(model: Dictionary) -> float:
+	var state := str(model.get("update_sync_state", "idle"))
+	if state == "success":
+		return 1.0
+	if state != "loading":
+		return 0.0
+	return clampf(float(model.get("update_sync_progress", 0.0)), 0.0, 1.0)
 
 
 func _build_update_refs_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
