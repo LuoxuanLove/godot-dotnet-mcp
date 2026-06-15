@@ -10,6 +10,10 @@ var _server
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var shell_source_result := _verify_http_server_shell_has_no_eager_runtime_preloads()
+	if not bool(shell_source_result.get("success", false)):
+		return shell_source_result
+
 	var ready_timing_result := await _verify_ready_initialize_phase_timing(_tree)
 	if not bool(ready_timing_result.get("success", false)):
 		return ready_timing_result
@@ -438,6 +442,22 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_http_server_shell_has_no_eager_runtime_preloads() -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd")
+	if source.is_empty():
+		return _failure("HTTP server source should be readable for startup preload guard.")
+	for forbidden in [
+		"preload(\"res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd\")",
+		"preload(\"res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd\")",
+		"-> MCPToolLoader"
+	]:
+		if source.find(forbidden) != -1:
+			return _failure("HTTP server shell should not eagerly reference runtime dependency: %s" % forbidden)
+	if source.find("SERVICE_BUNDLE_SCRIPT_PATH") == -1:
+		return _failure("HTTP server shell should retain an explicit lazy service bundle path.")
+	return {"success": true, "error": ""}
 
 
 func _has_json_schema_2020_12(tool_entry, key: String) -> bool:

@@ -2,12 +2,12 @@
 extends Node
 class_name MCPHttpServer
 
-const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPHttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
-const MCPHttpServiceBundleScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPDefaultToolAccessProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_access_provider.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+
+const SERVICE_BUNDLE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd"
 
 signal server_started
 signal server_stopped
@@ -174,7 +174,7 @@ func get_disabled_tools() -> Array: _ensure_service_bundle_shell(); return _serv
 func is_tool_enabled(tool_name: String) -> bool: _ensure_runtime_ready_for_requests(); return _service_bundle.get_tool_loader_supervisor().is_tool_enabled(tool_name)
 func is_tool_exposed(tool_name: String) -> bool: _ensure_runtime_ready_for_requests(); return _service_bundle.get_tool_loader_supervisor().is_tool_exposed(tool_name)
 func get_tools_by_category() -> Dictionary: _ensure_runtime_ready_for_requests(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.get_tools_by_category()
-func get_tool_loader() -> MCPToolLoader: _ensure_service_bundle_shell(); return _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+func get_tool_loader(): _ensure_service_bundle_shell(); return _service_bundle.get_tool_loader_supervisor().get_tool_loader()
 func peek_tool_loader():
 	if _service_bundle == null:
 		return null
@@ -301,8 +301,26 @@ func _jsonrpc_entry_requires_tool_runtime(entry) -> bool:
 
 func _ensure_service_bundle_shell(diagnostic_operation_id: String = "") -> void:
 	if _service_bundle == null:
+		var load_started = PluginSelfDiagnosticStore.begin_phase()
+		var bundle_script = ResourceLoader.load(SERVICE_BUNDLE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.load_script", load_started)
+		if bundle_script == null or not (bundle_script is Script) or not (bundle_script as Script).can_instantiate():
+			PluginSelfDiagnosticStore.record_incident(
+				"error",
+				"server_error",
+				"service_bundle_load_failed",
+				"HTTP service bundle could not be loaded on demand",
+				"mcp_http_server",
+				"service_bundle.load",
+				SERVICE_BUNDLE_SCRIPT_PATH,
+				"",
+				diagnostic_operation_id,
+				true,
+				"Inspect the HTTP service bundle script for parse errors or missing files."
+			)
+			return
 		var create_started = PluginSelfDiagnosticStore.begin_phase()
-		_service_bundle = MCPHttpServiceBundleScript.new()
+		_service_bundle = (bundle_script as Script).new()
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.create", create_started)
 	var configure_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.configure(self, _connection_state)
