@@ -7,6 +7,13 @@ const MCP_CATALOG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_catalo
 const CONFIG_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/config_panel.tscn"
 const SETTINGS_TAB_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/settings_panel.tscn"
 const DOCK_TAB_ACTIVATION_RETRY_COUNT := 6
+const TAB_SERVER := 0
+const TAB_TOOLS := 1
+const TAB_RESOURCES := 2
+const TAB_PROMPTS := 3
+const TAB_CONFIG := 4
+const TAB_SETTINGS := 5
+const TAB_COUNT := 6
 
 signal current_tab_changed(index: int)
 signal port_changed(value: int)
@@ -52,61 +59,14 @@ var _config_tab: Control
 var _settings_tab: Control
 var _is_running := false
 var _last_model: Dictionary = {}
+var _suppress_tab_changed := false
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_ensure_tabs()
 	_tab_container.tab_changed.connect(_on_tab_changed)
-
-	if _server_tab:
-		_server_tab.start_requested.connect(_on_server_tab_start_requested)
-		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
-		_server_tab.stop_requested.connect(_on_server_tab_stop_requested)
-		_server_tab.full_reload_requested.connect(_on_server_tab_full_reload_requested)
-		if _server_tab.has_signal("clear_self_diagnostics_requested"):
-			_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
-		if _server_tab.has_signal("copy_requested"):
-			_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
-
-	if _tools_tab:
-		if _tools_tab.has_signal("delete_user_tool_requested"):
-			_tools_tab.connect("delete_user_tool_requested", _on_tools_tab_delete_user_tool_requested)
-		_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
-		_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
-		_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
-		_tools_tab.tree_collapse_changed.connect(_on_tools_tab_tree_collapse_changed)
-
-	if _resources_tab and _resources_tab.has_signal("copy_requested"):
-		_resources_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
-	if _resources_tab and _resources_tab.has_signal("preview_requested"):
-		_resources_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
-	if _prompts_tab and _prompts_tab.has_signal("copy_requested"):
-		_prompts_tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
-	if _prompts_tab and _prompts_tab.has_signal("preview_requested"):
-		_prompts_tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
-
-	if _config_tab:
-		_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
-		_config_tab.config_platform_changed.connect(_on_config_tab_platform_changed)
-		_config_tab.config_client_action_requested.connect(_on_config_tab_client_action_requested)
-		_config_tab.config_client_launch_requested.connect(_on_config_tab_client_launch_requested)
-		_config_tab.config_client_path_pick_requested.connect(_on_config_tab_client_path_pick_requested)
-		_config_tab.config_client_path_clear_requested.connect(_on_config_tab_client_path_clear_requested)
-		_config_tab.config_client_open_config_dir_requested.connect(_on_config_tab_client_open_config_dir_requested)
-		_config_tab.config_client_open_config_file_requested.connect(_on_config_tab_client_open_config_file_requested)
-		_config_tab.config_write_requested.connect(_on_config_tab_config_write_requested)
-		_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
-		_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
-
-	if _settings_tab:
-		_settings_tab.port_changed.connect(_on_settings_tab_port_changed)
-		_settings_tab.log_level_changed.connect(_on_settings_tab_log_level_changed)
-		_settings_tab.language_changed.connect(_on_settings_tab_language_changed)
-		_settings_tab.update_source_changed.connect(_on_settings_tab_update_source_changed)
-		_settings_tab.update_custom_branch_changed.connect(_on_settings_tab_update_custom_branch_changed)
-		_settings_tab.update_check_requested.connect(_on_settings_tab_update_check_requested)
-		_settings_tab.update_apply_requested.connect(_on_settings_tab_update_apply_requested)
+	_connect_server_tab()
 
 func apply_model(model: Dictionary) -> void:
 	if _status_indicator == null or _tab_container == null:
@@ -126,16 +86,11 @@ func apply_model(model: Dictionary) -> void:
 	_status_label.text = localization.get_text("status_running") if is_running else localization.get_text("status_stopped")
 	_refresh_theme_colors()
 
-	if _tab_container.get_tab_count() >= 6:
-		_tab_container.set_tab_title(0, localization.get_text("tab_server"))
-		_tab_container.set_tab_title(1, localization.get_text("tab_tools"))
-		_tab_container.set_tab_title(2, localization.get_text("tab_resources"))
-		_tab_container.set_tab_title(3, localization.get_text("tab_prompts"))
-		_tab_container.set_tab_title(4, localization.get_text("tab_config"))
-		_tab_container.set_tab_title(5, localization.get_text("tab_settings"))
+	_apply_tab_titles(model)
 
 	var current_tab = int(model.get("current_tab", 0))
 	if current_tab >= 0 and current_tab < _tab_container.get_tab_count():
+		_ensure_tab_instance(current_tab)
 		_tab_container.current_tab = current_tab
 	_apply_visible_tab_models(model)
 
@@ -143,10 +98,10 @@ func apply_model(model: Dictionary) -> void:
 func _apply_visible_tab_models(model: Dictionary) -> void:
 	_apply_tab_model(_server_tab, model)
 	var current_index := _tab_container.current_tab if _tab_container != null else int(model.get("current_tab", 0))
-	var current_tab := _get_tab_for_index(current_index)
+	var current_tab := _get_tab_for_index(current_index, true)
 	if current_tab != _server_tab:
 		_apply_tab_model(current_tab, model)
-	if current_index == 5:
+	if current_index == TAB_SETTINGS:
 		_normalize_settings_update_buttons()
 
 
@@ -155,19 +110,21 @@ func _apply_tab_model(tab: Control, model: Dictionary) -> void:
 		tab.apply_model(model)
 
 
-func _get_tab_for_index(index: int) -> Control:
+func _get_tab_for_index(index: int, instantiate: bool = false) -> Control:
+	if instantiate:
+		return _ensure_tab_instance(index)
 	match index:
-		0:
+		TAB_SERVER:
 			return _server_tab
-		1:
+		TAB_TOOLS:
 			return _tools_tab
-		2:
+		TAB_RESOURCES:
 			return _resources_tab
-		3:
+		TAB_PROMPTS:
 			return _prompts_tab
-		4:
+		TAB_CONFIG:
 			return _config_tab
-		5:
+		TAB_SETTINGS:
 			return _settings_tab
 		_:
 			return null
@@ -261,35 +218,227 @@ func _ensure_tabs() -> void:
 	for child in _tab_container.get_children():
 		child.queue_free()
 
-	_server_tab = _instantiate_tab(_load_packed_scene(SERVER_TAB_SCENE_PATH), "ServerTab")
-	_tools_tab = _instantiate_tab(_load_packed_scene(TOOLS_TAB_SCENE_PATH), "ToolsTab")
-	_resources_tab = _instantiate_tab(_load_packed_scene(MCP_CATALOG_TAB_SCENE_PATH), "ResourcesTab")
-	if _resources_tab != null and _resources_tab.has_method("set_catalog_mode"):
-		_resources_tab.set_catalog_mode("resources")
-	_prompts_tab = _instantiate_tab(_load_packed_scene(MCP_CATALOG_TAB_SCENE_PATH), "PromptsTab")
-	if _prompts_tab != null and _prompts_tab.has_method("set_catalog_mode"):
-		_prompts_tab.set_catalog_mode("prompts")
-	_config_tab = _instantiate_tab(_load_packed_scene(CONFIG_TAB_SCENE_PATH), "ConfigTab")
-	_settings_tab = _instantiate_tab(_load_packed_scene(SETTINGS_TAB_SCENE_PATH), "SettingsTab")
+	_server_tab = null
+	_tools_tab = null
+	_resources_tab = null
+	_prompts_tab = null
+	_config_tab = null
+	_settings_tab = null
+	_server_tab = _instantiate_tab(_load_packed_scene(SERVER_TAB_SCENE_PATH), "ServerTab", TAB_SERVER)
+	for index in range(TAB_TOOLS, TAB_COUNT):
+		_create_tab_placeholder(index)
 
 
-func _instantiate_tab(scene: PackedScene, fallback_name: String) -> Control:
+func _create_tab_placeholder(index: int) -> Control:
+	var placeholder := Control.new()
+	placeholder.name = _get_tab_name(index)
+	placeholder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	placeholder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tab_container.add_child(placeholder)
+	_tab_container.move_child(placeholder, index)
+	return placeholder
+
+
+func _ensure_tab_instance(index: int) -> Control:
+	var current := _get_tab_for_index(index)
+	if current != null and is_instance_valid(current):
+		return current
+	var scene_path := _get_tab_scene_path(index)
+	if scene_path.is_empty():
+		return null
+	var tab := _instantiate_tab(_load_packed_scene(scene_path), _get_tab_name(index), index)
+	if tab == null:
+		return null
+	if index == TAB_RESOURCES and tab.has_method("set_catalog_mode"):
+		tab.set_catalog_mode("resources")
+	elif index == TAB_PROMPTS and tab.has_method("set_catalog_mode"):
+		tab.set_catalog_mode("prompts")
+	_connect_tab_signals(index)
+	if not _last_model.is_empty():
+		_apply_tab_titles(_last_model)
+	return tab
+
+
+func _instantiate_tab(scene: PackedScene, fallback_name: String, index: int) -> Control:
 	if scene == null:
 		push_error("[Godot MCP] Failed to load tab scene: %s" % fallback_name)
 		return null
+	var previous_suppress := _suppress_tab_changed
+	_suppress_tab_changed = true
+	var existing_title := ""
+	var replacing_current := false
+	if index >= 0 and index < _tab_container.get_tab_count():
+		existing_title = _tab_container.get_tab_title(index)
+		replacing_current = _tab_container.current_tab == index
+		var existing := _tab_container.get_tab_control(index)
+		if existing != null:
+			_tab_container.remove_child(existing)
+			existing.queue_free()
 	var control = scene.instantiate() as Control
 	if control == null:
 		push_error("[Godot MCP] Failed to instantiate tab scene: %s" % fallback_name)
+		_suppress_tab_changed = previous_suppress
 		return null
 	control.name = fallback_name
 	_tab_container.add_child(control)
+	_tab_container.move_child(control, index)
+	if not existing_title.is_empty():
+		_tab_container.set_tab_title(index, existing_title)
+	if replacing_current:
+		_tab_container.current_tab = index
+	_suppress_tab_changed = previous_suppress
+	_set_tab_reference(index, control)
 	if not control.has_method("apply_model"):
 		push_error("[Godot MCP] Tab controller %s does not implement apply_model()" % fallback_name)
 	return control
 
 
+func _set_tab_reference(index: int, control: Control) -> void:
+	match index:
+		TAB_SERVER:
+			_server_tab = control
+		TAB_TOOLS:
+			_tools_tab = control
+		TAB_RESOURCES:
+			_resources_tab = control
+		TAB_PROMPTS:
+			_prompts_tab = control
+		TAB_CONFIG:
+			_config_tab = control
+		TAB_SETTINGS:
+			_settings_tab = control
+
+
+func _connect_tab_signals(index: int) -> void:
+	match index:
+		TAB_SERVER:
+			_connect_server_tab()
+		TAB_TOOLS:
+			_connect_tools_tab()
+		TAB_RESOURCES:
+			_connect_mcp_catalog_tab(_resources_tab)
+		TAB_PROMPTS:
+			_connect_mcp_catalog_tab(_prompts_tab)
+		TAB_CONFIG:
+			_connect_config_tab()
+		TAB_SETTINGS:
+			_connect_settings_tab()
+
+
+func _connect_server_tab() -> void:
+	if _server_tab == null:
+		return
+	if not _server_tab.start_requested.is_connected(_on_server_tab_start_requested):
+		_server_tab.start_requested.connect(_on_server_tab_start_requested)
+	if not _server_tab.restart_requested.is_connected(_on_server_tab_restart_requested):
+		_server_tab.restart_requested.connect(_on_server_tab_restart_requested)
+	if not _server_tab.stop_requested.is_connected(_on_server_tab_stop_requested):
+		_server_tab.stop_requested.connect(_on_server_tab_stop_requested)
+	if not _server_tab.full_reload_requested.is_connected(_on_server_tab_full_reload_requested):
+		_server_tab.full_reload_requested.connect(_on_server_tab_full_reload_requested)
+	if _server_tab.has_signal("clear_self_diagnostics_requested") and not _server_tab.clear_self_diagnostics_requested.is_connected(_on_server_tab_clear_self_diagnostics_requested):
+		_server_tab.clear_self_diagnostics_requested.connect(_on_server_tab_clear_self_diagnostics_requested)
+	if _server_tab.has_signal("copy_requested") and not _server_tab.copy_requested.is_connected(_on_server_tab_copy_requested):
+		_server_tab.copy_requested.connect(_on_server_tab_copy_requested)
+
+
+func _connect_tools_tab() -> void:
+	if _tools_tab == null:
+		return
+	if _tools_tab.has_signal("delete_user_tool_requested"):
+		_tools_tab.connect("delete_user_tool_requested", _on_tools_tab_delete_user_tool_requested)
+	_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
+	_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
+	_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
+	_tools_tab.tree_collapse_changed.connect(_on_tools_tab_tree_collapse_changed)
+
+
+func _connect_mcp_catalog_tab(tab: Control) -> void:
+	if tab == null:
+		return
+	if tab.has_signal("copy_requested") and not tab.copy_requested.is_connected(_on_mcp_catalog_tab_copy_requested):
+		tab.copy_requested.connect(_on_mcp_catalog_tab_copy_requested)
+	if tab.has_signal("preview_requested") and not tab.preview_requested.is_connected(_on_mcp_catalog_tab_preview_requested):
+		tab.preview_requested.connect(_on_mcp_catalog_tab_preview_requested)
+
+
+func _connect_config_tab() -> void:
+	if _config_tab == null:
+		return
+	_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
+	_config_tab.config_platform_changed.connect(_on_config_tab_platform_changed)
+	_config_tab.config_client_action_requested.connect(_on_config_tab_client_action_requested)
+	_config_tab.config_client_launch_requested.connect(_on_config_tab_client_launch_requested)
+	_config_tab.config_client_path_pick_requested.connect(_on_config_tab_client_path_pick_requested)
+	_config_tab.config_client_path_clear_requested.connect(_on_config_tab_client_path_clear_requested)
+	_config_tab.config_client_open_config_dir_requested.connect(_on_config_tab_client_open_config_dir_requested)
+	_config_tab.config_client_open_config_file_requested.connect(_on_config_tab_client_open_config_file_requested)
+	_config_tab.config_write_requested.connect(_on_config_tab_config_write_requested)
+	_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
+	_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
+
+
+func _connect_settings_tab() -> void:
+	if _settings_tab == null:
+		return
+	_settings_tab.port_changed.connect(_on_settings_tab_port_changed)
+	_settings_tab.log_level_changed.connect(_on_settings_tab_log_level_changed)
+	_settings_tab.language_changed.connect(_on_settings_tab_language_changed)
+	_settings_tab.update_source_changed.connect(_on_settings_tab_update_source_changed)
+	_settings_tab.update_custom_branch_changed.connect(_on_settings_tab_update_custom_branch_changed)
+	_settings_tab.update_check_requested.connect(_on_settings_tab_update_check_requested)
+	_settings_tab.update_apply_requested.connect(_on_settings_tab_update_apply_requested)
+
+
+func _get_tab_scene_path(index: int) -> String:
+	match index:
+		TAB_SERVER:
+			return SERVER_TAB_SCENE_PATH
+		TAB_TOOLS:
+			return TOOLS_TAB_SCENE_PATH
+		TAB_RESOURCES, TAB_PROMPTS:
+			return MCP_CATALOG_TAB_SCENE_PATH
+		TAB_CONFIG:
+			return CONFIG_TAB_SCENE_PATH
+		TAB_SETTINGS:
+			return SETTINGS_TAB_SCENE_PATH
+		_:
+			return ""
+
+
+func _get_tab_name(index: int) -> String:
+	match index:
+		TAB_SERVER:
+			return "ServerTab"
+		TAB_TOOLS:
+			return "ToolsTab"
+		TAB_RESOURCES:
+			return "ResourcesTab"
+		TAB_PROMPTS:
+			return "PromptsTab"
+		TAB_CONFIG:
+			return "ConfigTab"
+		TAB_SETTINGS:
+			return "SettingsTab"
+		_:
+			return "Tab"
+
+
+func _apply_tab_titles(model: Dictionary) -> void:
+	var localization = model.get("localization")
+	if localization == null or _tab_container == null or _tab_container.get_tab_count() < TAB_COUNT:
+		return
+	_tab_container.set_tab_title(TAB_SERVER, localization.get_text("tab_server"))
+	_tab_container.set_tab_title(TAB_TOOLS, localization.get_text("tab_tools"))
+	_tab_container.set_tab_title(TAB_RESOURCES, localization.get_text("tab_resources"))
+	_tab_container.set_tab_title(TAB_PROMPTS, localization.get_text("tab_prompts"))
+	_tab_container.set_tab_title(TAB_CONFIG, localization.get_text("tab_config"))
+	_tab_container.set_tab_title(TAB_SETTINGS, localization.get_text("tab_settings"))
+
+
 func focus_active_panel() -> void:
 	if _tab_container:
+		_ensure_tab_instance(_tab_container.current_tab)
 		var current = _tab_container.get_current_tab_control()
 		if current and current is Control:
 			var target = _find_focusable_descendant(current as Control)
@@ -298,10 +447,13 @@ func focus_active_panel() -> void:
 
 
 func _on_tab_changed(index: int) -> void:
+	if _suppress_tab_changed:
+		return
+	_ensure_tab_instance(index)
 	current_tab_changed.emit(index)
 	if not _last_model.is_empty():
 		_apply_tab_model(_get_tab_for_index(index), _last_model)
-		if index == 5:
+		if index == TAB_SETTINGS:
 			_normalize_settings_update_buttons()
 
 
