@@ -13,14 +13,14 @@ var _resources_service = MCPResourcesServiceScript.new()
 var _prompts_service = MCPPromptsServiceScript.new()
 var _resource_tree_presentation_service = ResourceTreePresentationServiceScript.new()
 var _prompt_tree_presentation_service = PromptTreePresentationServiceScript.new()
+var _sanitize_for_json := Callable()
 
 
 func configure(context = null) -> void:
-	if context == null or not _has_runtime_context_methods(context):
-		dispose()
-		return
-	_resources_service.configure(context)
-	_prompts_service.configure(context)
+	_sanitize_for_json = _context_callable(context, "sanitize_for_json")
+	var list_context := _build_loaderless_list_context()
+	_resources_service.configure(list_context)
+	_prompts_service.configure(list_context)
 
 
 func dispose() -> void:
@@ -28,6 +28,7 @@ func dispose() -> void:
 	_prompts_service.dispose()
 	_resource_tree_presentation_service = ResourceTreePresentationServiceScript.new()
 	_prompt_tree_presentation_service = PromptTreePresentationServiceScript.new()
+	_sanitize_for_json = Callable()
 
 
 func build_projection() -> Dictionary:
@@ -137,9 +138,40 @@ func _duplicate_array(values) -> Array:
 	return []
 
 
-func _has_runtime_context_methods(context) -> bool:
-	return context != null \
-		and context.get("get_tool_loader") is Callable \
-		and context.get("get_tool_loader_status") is Callable \
-		and context.get("get_tool_activity_registry") is Callable \
-		and context.get("sanitize_for_json") is Callable
+func _build_loaderless_list_context() -> Dictionary:
+	return {
+		"get_tool_loader": Callable(self, "_null_tool_loader"),
+		"get_tool_loader_status": Callable(self, "_empty_tool_loader_status"),
+		"get_tool_activity_registry": Callable(self, "_null_tool_activity_registry"),
+		"sanitize_for_json": Callable(self, "_sanitize_projection_value")
+	}
+
+
+func _null_tool_loader():
+	return null
+
+
+func _empty_tool_loader_status() -> Dictionary:
+	return {}
+
+
+func _null_tool_activity_registry():
+	return null
+
+
+func _sanitize_projection_value(value):
+	if _sanitize_for_json.is_valid():
+		return _sanitize_for_json.call(value)
+	return value
+
+
+func _context_callable(context, key: String) -> Callable:
+	if context == null:
+		return Callable()
+	if context is Dictionary:
+		var value = (context as Dictionary).get(key, Callable())
+		return value if value is Callable else Callable()
+	if context.has_method("get"):
+		var value = context.get(key)
+		return value if value is Callable else Callable()
+	return Callable()

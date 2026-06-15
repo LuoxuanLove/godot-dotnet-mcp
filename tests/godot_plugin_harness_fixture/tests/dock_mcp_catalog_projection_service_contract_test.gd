@@ -8,14 +8,20 @@ const ProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/pr
 class FakeContext extends RefCounted:
 	var loader_status := {"state": "ready", "loaded_tools": 7}
 	var activity_registry = FakeActivityRegistry.new()
+	var tool_loader_request_count := 0
+	var loader_status_request_count := 0
+	var activity_registry_request_count := 0
 
 	func get_tool_loader():
+		tool_loader_request_count += 1
 		return null
 
 	func get_tool_loader_status() -> Dictionary:
+		loader_status_request_count += 1
 		return loader_status.duplicate(true)
 
 	func get_tool_activity_registry():
+		activity_registry_request_count += 1
 		return activity_registry
 
 	func sanitize_for_json(value):
@@ -47,6 +53,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var resource_presentation: Dictionary = projection.get("mcp_resource_presentation", {})
 	var prompt_presentation: Dictionary = projection.get("mcp_prompt_presentation", {})
 	var counts: Dictionary = projection.get("mcp_catalog_counts", {})
+	if context.tool_loader_request_count != 0 or context.loader_status_request_count != 0 or context.activity_registry_request_count != 0:
+		return _failure("Projection list building should not touch tool loader, loader status, or activity registry callbacks.")
 	if resources.is_empty() or templates.is_empty() or prompts.is_empty():
 		return _failure("Projection should expose resources, resource templates, and prompts for Dock tabs.")
 	if int(counts.get("resources", -1)) != resources.size() or int(counts.get("resource_templates", -1)) != templates.size() or int(counts.get("prompts", -1)) != prompts.size():

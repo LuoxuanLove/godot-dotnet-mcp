@@ -42,9 +42,14 @@ class FakeState extends RefCounted:
 class FakeServerController extends ServerRuntimeController:
 	var all_tools_request_count := 0
 	var heavy_status_request_count := 0
+	var tool_loader_request_count := 0
 
 	func _init() -> void:
 		_server = FakeServer.new()
+
+	func get_tool_loader():
+		tool_loader_request_count += 1
+		return (_server as FakeServer).get_tool_loader()
 
 	func get_exposed_tool_definitions() -> Array:
 		return (_server as FakeServer).get_exposed_tool_definitions()
@@ -343,14 +348,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	state.current_tab = 2
 	server_controller.heavy_status_request_count = 0
+	var tool_loader_requests_before_protocol_catalog: int = server_controller.tool_loader_request_count
 	var resources_model: Dictionary = service.build_model()
 	if server_controller.heavy_status_request_count != 0:
 		return _failure("Dock Resources tab model should not request heavy runtime diagnostics.")
+	if server_controller.tool_loader_request_count != tool_loader_requests_before_protocol_catalog:
+		return _failure("Dock Resources tab model should not request the tool loader for protocol list projection.")
 	var protocol_projection_result := _verify_mcp_protocol_projection(resources_model)
 	if not bool(protocol_projection_result.get("success", false)):
 		return protocol_projection_result
 	if str((resources_model.get("mcp_catalog_preview", {}) as Dictionary).get("text", "")) != "Preview text":
 		return _failure("Dock model should expose the current MCP catalog preview result to Resources/Prompts tabs.")
+	state.current_tab = 3
+	var prompt_loader_requests_before_protocol_catalog: int = server_controller.tool_loader_request_count
+	var prompts_model: Dictionary = service.build_model()
+	if server_controller.tool_loader_request_count != prompt_loader_requests_before_protocol_catalog:
+		return _failure("Dock Prompts tab model should not request the tool loader for protocol list projection.")
+	if (prompts_model.get("mcp_prompts", []) as Array).is_empty():
+		return _failure("Dock Prompts tab model should project MCP prompts without loading the tool runtime.")
 	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
 		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
 	if not _contains_presentation_tool(presentation.get("toolTree", []), "plugin_runtime_state"):

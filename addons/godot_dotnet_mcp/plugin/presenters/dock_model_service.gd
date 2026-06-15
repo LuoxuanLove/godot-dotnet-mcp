@@ -295,9 +295,6 @@ func _configure_mcp_catalog_projection_service() -> void:
 	if _mcp_catalog_projection_service == null:
 		return
 	_mcp_catalog_projection_service.configure({
-		"get_tool_loader": Callable(self, "_get_tool_loader"),
-		"get_tool_loader_status": Callable(self, "_get_tool_loader_status_for_mcp_catalog"),
-		"get_tool_activity_registry": Callable(self, "_get_tool_activity_registry_for_mcp_catalog"),
 		"sanitize_for_json": Callable(self, "_sanitize_for_mcp_catalog")
 	})
 
@@ -306,26 +303,6 @@ func _get_tool_loader():
 	if _server_controller != null and _server_controller.has_method("get_tool_loader"):
 		return _server_controller.get_tool_loader()
 	return _server_controller
-
-
-func _get_tool_loader_status_for_mcp_catalog() -> Dictionary:
-	if _server_controller != null and _server_controller.has_method("get_tool_loader_status"):
-		var status = _server_controller.get_tool_loader_status()
-		if status is Dictionary:
-			return (status as Dictionary).duplicate(true)
-	var loader = _get_tool_loader()
-	if loader != null and loader.has_method("get_tool_loader_status"):
-		var loader_status = loader.get_tool_loader_status()
-		if loader_status is Dictionary:
-			return (loader_status as Dictionary).duplicate(true)
-	return {}
-
-
-func _get_tool_activity_registry_for_mcp_catalog():
-	var loader = _get_tool_loader()
-	if loader != null and loader.has_method("get_tool_activity_registry"):
-		return loader.get_tool_activity_registry()
-	return null
 
 
 func _sanitize_for_mcp_catalog(value):
@@ -458,14 +435,9 @@ func _sort_tool_signature_entries(left, right) -> bool:
 
 
 func _build_mcp_projection_signature() -> String:
-	var loader_status = _get_tool_loader_status_for_mcp_catalog()
 	return JSON.stringify({
-		"loader_initialized": bool(loader_status.get("initialized", false)),
-		"loader_status": str(loader_status.get("status", "")),
-		"tool_count": int(loader_status.get("tool_count", 0)),
-		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
-		"category_count": int(loader_status.get("category_count", 0)),
-		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0))
+		"protocol_catalog": "resources_prompts_list",
+		"language": str(_get_settings().get("language", ""))
 	})
 
 
