@@ -7,6 +7,7 @@ const ToolCatalogSnapshotService = preload("res://addons/godot_dotnet_mcp/plugin
 
 var _get_tool_loader := Callable()
 var _get_tool_loader_status := Callable()
+var _ensure_initialized := Callable()
 
 
 func configure(context = null) -> void:
@@ -15,14 +16,17 @@ func configure(context = null) -> void:
 		return
 	_get_tool_loader = context.get_tool_loader
 	_get_tool_loader_status = context.get_tool_loader_status
+	_ensure_initialized = context.ensure_initialized
 
 
 func dispose() -> void:
 	_get_tool_loader = Callable()
 	_get_tool_loader_status = Callable()
+	_ensure_initialized = Callable()
 
 
 func build_tools_list_response() -> Dictionary:
+	_ensure_tool_runtime_initialized()
 	var loader = _get_loader()
 	if loader == null:
 		return {
@@ -69,6 +73,11 @@ func _get_loader():
 	if _get_tool_loader.is_valid():
 		return _get_tool_loader.call()
 	return null
+
+
+func _ensure_tool_runtime_initialized() -> void:
+	if _ensure_initialized.is_valid():
+		_ensure_initialized.call()
 
 
 func _get_loader_status_safe() -> Dictionary:

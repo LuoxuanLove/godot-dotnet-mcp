@@ -425,6 +425,7 @@ class FakeCallbacks:
 	var activity_registry = ToolActivityRegistryScript.new()
 	var last_log: Dictionary = {}
 	var disabled_tools: Dictionary = {}
+	var ensure_called_count := 0
 
 	func _init() -> void:
 		loader.activity_registry = activity_registry
@@ -432,12 +433,20 @@ class FakeCallbacks:
 	func get_tool_loader():
 		return loader
 
+	func ensure_initialized() -> void:
+		ensure_called_count += 1
+
 	func is_tool_enabled(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
 			return false
 		return (
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
+			or tool_name == "system_editor_state"
+			or tool_name == "system_editor_control"
+			or tool_name == "system_editor_evidence"
+			or tool_name == "system_inspector"
+			or tool_name == "system_settings_dialog"
 			or tool_name == "system_help"
 			or tool_name == "system_plugin_reload"
 			or tool_name == "system_plugin_update"
@@ -452,6 +461,11 @@ class FakeCallbacks:
 		return is_tool_enabled(tool_name) and (
 			tool_name == "system_project_state"
 			or tool_name == "system_project_lifecycle"
+			or tool_name == "system_editor_state"
+			or tool_name == "system_editor_control"
+			or tool_name == "system_editor_evidence"
+			or tool_name == "system_inspector"
+			or tool_name == "system_settings_dialog"
 			or tool_name == "system_help"
 			or tool_name == "system_plugin_reload"
 			or tool_name == "system_plugin_update"
@@ -481,10 +495,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.is_tool_exposed = Callable(callbacks, "is_tool_exposed")
 	context.log = Callable(callbacks, "log")
 	context.sanitize_for_json = Callable(callbacks, "sanitize_for_json")
+	context.ensure_initialized = Callable(callbacks, "ensure_initialized")
 	context.tool_activity_registry = callbacks.activity_registry
 	router.configure(context)
 
 	var tools_list: Dictionary = router.build_tools_list_result()
+	if callbacks.ensure_called_count <= 0:
+		return _failure("Tool RPC router tools/list should initialize the lazy tool runtime before reading tools.")
 	var tools = tools_list.get("tools", [])
 	if not (tools is Array) or (tools as Array).is_empty():
 		return _failure("Tool RPC router did not surface exposed tool definitions.")
@@ -798,6 +815,38 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plain_data = (plain_payload as Dictionary).get("data", {})
 	if not (plain_data is Dictionary) or not (((plain_data as Dictionary).get("activity", {}) as Dictionary).get("user_supplied", false)):
 		return _failure("Tool RPC router should move non-protocol tool activity fields into data.")
+
+	var blocking_callbacks = FakeCallbacks.new()
+	var blocking_context = ToolRpcRouterContextScript.new()
+	blocking_context.get_tool_loader = Callable(blocking_callbacks, "get_tool_loader")
+	blocking_context.is_tool_enabled = Callable(blocking_callbacks, "is_tool_enabled")
+	blocking_context.is_tool_exposed = Callable(blocking_callbacks, "is_tool_exposed")
+	blocking_context.log = Callable(blocking_callbacks, "log")
+	blocking_context.sanitize_for_json = Callable(blocking_callbacks, "sanitize_for_json")
+	var blocking_router = ToolRpcRouterScript.new()
+	blocking_router.configure(blocking_context)
+	var editor_guard: Dictionary = blocking_router.call("_begin_editor_automation_call", "system_editor_control")
+	if not bool(editor_guard.get("success", false)) or not bool(editor_guard.get("acquired", false)):
+		return _failure("Tool RPC router editor automation guard setup should acquire the first editor slot.")
+	var blocked_editor_call: Dictionary = await blocking_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if not bool(blocked_editor_call.get("isError", false)):
+		return _failure("Tool RPC router should reject overlapping editor automation calls quickly.")
+	var blocked_structured = blocked_editor_call.get("structuredContent", {})
+	if not (blocked_structured is Dictionary):
+		return _failure("Tool RPC router overlapping editor automation error should expose structuredContent.")
+	var blocked_data = (blocked_structured as Dictionary).get("data", {})
+	if not (blocked_data is Dictionary) or str((blocked_data as Dictionary).get("error_type", "")) != "editor_automation_busy":
+		return _failure("Tool RPC router overlapping editor automation should use editor_automation_busy.")
+	blocking_router.call("_end_editor_automation_call", editor_guard)
+	var released_editor_call: Dictionary = await blocking_router.build_tool_call_result_async({
+		"name": "system_editor_state",
+		"arguments": {}
+	})
+	if bool(released_editor_call.get("isError", true)):
+		return _failure("Tool RPC router should allow editor automation after the guard is released.")
 
 	return {
 		"name": "tool_rpc_router_contracts",
