@@ -59,6 +59,7 @@ var custom_tool_profiles: Dictionary = {}
 var current_cli_scope := "user"
 var current_config_platform := "claude_desktop"
 var current_tab := 0
+var current_tools_view := "agent_tools"
 var restore_focus := false
 var needs_initial_tool_profile_apply := false
 var update_refs_state := "idle"
@@ -83,6 +84,10 @@ var update_sync_status := ""
 var update_sync_error := ""
 var update_sync_target_ref := ""
 var update_sync_target_kind := ""
+var update_sync_progress := 0.0
+var client_action_state := "idle"
+var client_action_client_id := ""
+var client_action_status := ""
 var mcp_catalog_preview: Dictionary = {}
 
 

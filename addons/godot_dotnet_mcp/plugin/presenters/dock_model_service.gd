@@ -139,7 +139,7 @@ func build_model() -> Dictionary:
 	if needs_tool_catalog:
 		all_tools_by_category = _get_all_tools_by_category()
 		tools_by_category = _filter_visible_tools_by_category(all_tools_by_category)
-		catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings)
+		catalog_snapshot = _build_tool_catalog_snapshot(tools_by_category, settings, _resolve_tool_presentation_views())
 		tool_presentation = catalog_snapshot.get("presentation", {})
 	var server_status := _build_server_status_snapshot(needs_runtime_diagnostics)
 	var self_diagnostics = _build_self_diagnostic_health_snapshot(needs_runtime_diagnostics)
@@ -176,6 +176,7 @@ func build_model() -> Dictionary:
 		"editor_scale": _resolve_editor_scale(),
 		"log_levels": MCPDebugBuffer.get_available_levels(),
 		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
+		"current_tools_view": str(_get_state_value("current_tools_view", "agent_tools")),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": _get_domain_defs(catalog_snapshot),
@@ -214,7 +215,11 @@ func build_model() -> Dictionary:
 		"update_sync_status": str(_get_state_value("update_sync_status", "")),
 		"update_sync_error": str(_get_state_value("update_sync_error", "")),
 		"update_sync_target_ref": str(_get_state_value("update_sync_target_ref", "")),
-		"update_sync_target_kind": str(_get_state_value("update_sync_target_kind", ""))
+		"update_sync_target_kind": str(_get_state_value("update_sync_target_kind", "")),
+		"update_sync_progress": float(_get_state_value("update_sync_progress", 0.0)),
+		"client_action_state": str(_get_state_value("client_action_state", "idle")),
+		"client_action_client_id": str(_get_state_value("client_action_client_id", "")),
+		"client_action_status": str(_get_state_value("client_action_status", ""))
 	})
 	model["update_refs_state"] = str(_get_state_value("update_refs_state", "idle"))
 	model["update_refs_status"] = str(_get_state_value("update_refs_status", ""))
@@ -238,6 +243,10 @@ func build_model() -> Dictionary:
 	model["update_sync_error"] = str(_get_state_value("update_sync_error", ""))
 	model["update_sync_target_ref"] = str(_get_state_value("update_sync_target_ref", ""))
 	model["update_sync_target_kind"] = str(_get_state_value("update_sync_target_kind", ""))
+	model["update_sync_progress"] = float(_get_state_value("update_sync_progress", 0.0))
+	model["client_action_state"] = str(_get_state_value("client_action_state", "idle"))
+	model["client_action_client_id"] = str(_get_state_value("client_action_client_id", ""))
+	model["client_action_status"] = str(_get_state_value("client_action_status", ""))
 	model["all_tools_by_category"] = all_tools_by_category
 	return model
 
@@ -258,23 +267,38 @@ func _build_exposed_tool_definitions(all_tools_by_category: Dictionary) -> Array
 	return exposed
 
 
-func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dictionary) -> Dictionary:
+func _build_tool_catalog_snapshot(tools_by_category: Dictionary, settings: Dictionary, presentation_views: Array[String]) -> Dictionary:
 	var loader = _get_tool_loader()
 	if loader == null:
 		return {}
-	var signature := _build_tool_catalog_signature(loader, tools_by_category, settings)
+	var view_parts := PackedStringArray()
+	for view in presentation_views:
+		view_parts.append(view)
+	var signature := "%s\nviews:%s" % [_build_tool_catalog_signature(loader, tools_by_category, settings), ",".join(view_parts)]
 	if signature == _last_catalog_signature:
 		return _last_catalog_snapshot.duplicate(true)
 	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
 		"all_tools_by_category": tools_by_category,
 		"exposed_tools": _build_exposed_tool_definitions(tools_by_category),
-		"disabled_tools": settings.get("disabled_tools", [])
+		"disabled_tools": settings.get("disabled_tools", []),
+		"presentation_views": presentation_views
 	})
 	if bool(snapshot.get("success", false)):
 		_last_catalog_signature = signature
 		_last_catalog_snapshot = snapshot.duplicate(true)
 		return snapshot
 	return {}
+
+
+func _resolve_tool_presentation_views() -> Array[String]:
+	var view := str(_get_state_value("current_tools_view", "agent_tools"))
+	match view:
+		"internal_executors":
+			return ["internal_executors"]
+		"tool_diagnostics":
+			return ["tool_diagnostics"]
+		_:
+			return ["agent_tools"]
 
 
 func _build_mcp_catalog_projection() -> Dictionary:

@@ -28,17 +28,26 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 	var category_states := _duplicate_dictionary_array(category_state_source if category_state_source is Array else [])
 	var domain_states := _aggregate_domain_states(category_states, catalog_manifest.get("domain_defs", []))
 	var disabled_source = overrides.get("disabled_tools", [])
-	var presentation := ToolPresentationServiceScript.build_tool_presentation(
-		exposed_tools,
-		all_tools_by_category,
-		domain_states,
-		disabled_source if disabled_source is Array else [],
-		catalog_manifest.get("domain_defs", [])
-	)
+	var presentation_views := _normalize_presentation_views(overrides.get("presentation_views", []))
+	var build_all_views := presentation_views.is_empty()
+	var needs_legacy := build_all_views or presentation_views.has("legacy")
+	var needs_agent := build_all_views or presentation_views.has("agent_tools")
+	var needs_internal := build_all_views or presentation_views.has("internal_executors")
+	var needs_diagnostics := build_all_views or presentation_views.has("tool_diagnostics")
+	var presentation := {}
+	if needs_legacy:
+		presentation = ToolPresentationServiceScript.build_tool_presentation(
+			exposed_tools,
+			all_tools_by_category,
+			domain_states,
+			disabled_source if disabled_source is Array else [],
+			catalog_manifest.get("domain_defs", [])
+		)
 	var disabled_tools: Array = disabled_source if disabled_source is Array else []
-	var agent_tool_presentation := ToolTreePresentationServiceScript.build_agent_tool_tree(exposed_tools, disabled_tools)
-	var internal_executor_presentation := ToolTreePresentationServiceScript.build_internal_executor_tree(all_tools_by_category, exposed_tools, category_states, catalog_manifest)
-	var tool_diagnostics_presentation := ToolTreePresentationServiceScript.build_diagnostics_tree(exposed_tools, all_tools_by_category, _get_loader_status(loader))
+	var agent_tool_presentation := ToolTreePresentationServiceScript.build_agent_tool_tree(exposed_tools, disabled_tools) if needs_agent else {}
+	var internal_executor_presentation := ToolTreePresentationServiceScript.build_internal_executor_tree(all_tools_by_category, exposed_tools, category_states, catalog_manifest) if needs_internal else {}
+	var loader_status := _get_loader_status(loader) if needs_diagnostics else {}
+	var tool_diagnostics_presentation := ToolTreePresentationServiceScript.build_diagnostics_tree(exposed_tools, all_tools_by_category, loader_status) if needs_diagnostics else {}
 
 	return {
 		"success": true,
@@ -52,8 +61,21 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 		"agent_tool_presentation": agent_tool_presentation.duplicate(true),
 		"internal_executor_presentation": internal_executor_presentation.duplicate(true),
 		"tool_diagnostics_presentation": tool_diagnostics_presentation.duplicate(true),
-		"tool_loader_status": _get_loader_status(loader)
+		"tool_loader_status": loader_status
 	}
+
+
+static func _normalize_presentation_views(raw_views) -> Array[String]:
+	var views: Array[String] = []
+	if not (raw_views is Array):
+		return views
+	for raw_view in raw_views:
+		var view := str(raw_view).strip_edges()
+		match view:
+			"legacy", "agent_tools", "internal_executors", "tool_diagnostics":
+				if not views.has(view):
+					views.append(view)
+	return views
 
 
 static func _filter_removed_tools(loader, tools: Array) -> Array[Dictionary]:

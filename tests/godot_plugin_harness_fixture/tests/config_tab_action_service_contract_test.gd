@@ -21,6 +21,8 @@ class FakeLocalization extends RefCounted:
 			"msg_client_launch_workdir": "Workspace: %s",
 			"msg_client_launch_terminal_hint": "Terminal kept open.",
 			"msg_client_launch_unsupported": "Unsupported launch.",
+			"config_client_action_already_running": "A client setup command is already running.",
+			"config_client_action_running_status": "Running %s setup command...",
 			"scope_user": "User (Global)",
 			"scope_project": "Project (Current Only)"
 		}
@@ -29,10 +31,21 @@ class FakeLocalization extends RefCounted:
 
 class FakeConfigService extends RefCounted:
 	var cli_calls: Array[Dictionary] = []
+	var sync_cli_calls: Array[Dictionary] = []
 	var desktop_launches: Array[Dictionary] = []
 	var cli_launches: Array[Dictionary] = []
 
 	func execute_cli_command(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+		sync_cli_calls.append({
+			"executable_path": executable_path,
+			"arguments": Array(arguments)
+		})
+		return {"success": false, "message": "sync command path should not be used"}
+
+	func execute_cli_command_async(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null:
+			await tree.process_frame
 		cli_calls.append({
 			"executable_path": executable_path,
 			"arguments": Array(arguments)
@@ -86,6 +99,9 @@ class FakeState extends RefCounted:
 		"client_manual_paths": {}
 	}
 	var current_cli_scope := "user"
+	var client_action_state := "idle"
+	var client_action_client_id := ""
+	var client_action_status := ""
 
 
 class FakeContext extends RefCounted:
@@ -104,7 +120,7 @@ class FakeContext extends RefCounted:
 	var get_client_executable_dialog := Callable()
 
 
-func run_case(_tree: SceneTree) -> Dictionary:
+func run_case(tree: SceneTree) -> Dictionary:
 	var action_service = ConfigTabActionServiceScript.new()
 	var state = FakeState.new()
 	var config_service = FakeConfigService.new()
@@ -130,6 +146,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		}
 	}
 	action_service.handle_config_client_action_requested("claude_code")
+	if state.client_action_state != "loading" or state.client_action_client_id != "claude_code":
+		return _failure("Config tab action service should enter a running state immediately before deferred CLI setup.")
+	await _drain_async_action(tree)
 	if config_service.cli_calls.is_empty():
 		return _failure("Config tab action service should execute Claude Code CLI commands for one-click install.")
 	var claude_add = config_service.cli_calls[0]
@@ -138,6 +157,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	recorder.statuses["claude_code"]["config_entry_status"] = {"status": "present"}
 	action_service.handle_config_client_action_requested("claude_code")
+	await _drain_async_action(tree)
 	var claude_remove = config_service.cli_calls[1]
 	if claude_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
 		return _failure("Claude Code one-click removal should use `claude mcp remove godot-mcp`.")
@@ -148,12 +168,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"config_entry_status": {"status": "missing_server"}
 	}
 	action_service.handle_config_client_action_requested("codex")
+	await _drain_async_action(tree)
 	var codex_add = config_service.cli_calls[2]
 	if codex_add["arguments"] != ["mcp", "add", "godot-mcp", "--url", "http://127.0.0.1:3000/mcp"]:
 		return _failure("Codex one-click install should use the documented `codex mcp add godot-mcp --url ...` arguments.")
 
 	recorder.statuses["codex"]["config_entry_status"] = {"status": "present"}
 	action_service.handle_config_client_action_requested("codex")
+	await _drain_async_action(tree)
 	var codex_remove = config_service.cli_calls[3]
 	if codex_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
 		return _failure("Codex one-click removal should use `codex mcp remove godot-mcp`.")
@@ -164,12 +186,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"config_entry_status": {"status": "missing_server"}
 	}
 	action_service.handle_config_client_action_requested("gemini")
+	await _drain_async_action(tree)
 	var gemini_add = config_service.cli_calls[4]
 	if gemini_add["arguments"] != ["mcp", "add", "--transport", "http", "--scope", "user", "godot-mcp", "http://127.0.0.1:3000/mcp"]:
 		return _failure("Gemini one-click install should use the documented `gemini mcp add --transport http --scope ...` arguments.")
 
 	recorder.statuses["gemini"]["config_entry_status"] = {"status": "present"}
 	action_service.handle_config_client_action_requested("gemini")
+	await _drain_async_action(tree)
 	var gemini_remove = config_service.cli_calls[5]
 	if gemini_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
 		return _failure("Gemini one-click removal should use `gemini mcp remove godot-mcp`.")
@@ -180,15 +204,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"config_entry_status": {"status": "missing_server"}
 	}
 	action_service.handle_config_client_action_requested("qwen")
+	await _drain_async_action(tree)
 	var qwen_add = config_service.cli_calls[6]
 	if qwen_add["arguments"] != ["mcp", "add", "--transport", "http", "--scope", "user", "godot-mcp", "http://127.0.0.1:3000/mcp"]:
 		return _failure("Qwen Code one-click install should use the documented `qwen mcp add --transport http --scope ...` arguments.")
 
 	recorder.statuses["qwen"]["config_entry_status"] = {"status": "present"}
 	action_service.handle_config_client_action_requested("qwen")
+	await _drain_async_action(tree)
 	var qwen_remove = config_service.cli_calls[7]
 	if qwen_remove["arguments"] != ["mcp", "remove", "godot-mcp"]:
 		return _failure("Qwen Code one-click removal should use `qwen mcp remove godot-mcp`.")
+	if not config_service.sync_cli_calls.is_empty():
+		return _failure("Config tab one-click setup should use the async CLI execution path instead of blocking execute_cli_command.")
+	if state.client_action_state != "idle" or not state.client_action_client_id.is_empty() or not state.client_action_status.is_empty():
+		return _failure("Config tab action service should clear the running state after async CLI setup completes.")
 
 	recorder.statuses["claude_desktop"] = {
 		"status": "ready",
@@ -228,3 +258,8 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _drain_async_action(tree: SceneTree) -> void:
+	for _index in range(5):
+		await tree.process_frame

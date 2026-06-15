@@ -431,6 +431,7 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"outputSchema": _duplicate_dictionary(node.get("outputSchema", {})),
 		"source": str(node.get("source", "")),
 		"script_path": str(node.get("script_path", "")),
+		"scriptPath": str(node.get("script_path", "")),
 		"metadata": _duplicate_dictionary(node.get("metadata", {}))
 	}
 

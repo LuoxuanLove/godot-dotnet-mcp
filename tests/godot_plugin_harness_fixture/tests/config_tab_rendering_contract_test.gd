@@ -25,6 +25,7 @@ class FakeLocalization extends RefCounted:
 		"config_client_path_source_label": "Path Source",
 		"config_file_path": "Config File",
 		"config_client_action_apply": "Apply",
+		"config_client_action_running": "Running...",
 		"config_client_action_open_project": "Open Project",
 		"config_client_action_choose_program_path": "Choose Program",
 		"config_client_action_clear_custom_path": "Clear Path",
@@ -241,6 +242,29 @@ func run_case(tree: SceneTree) -> Dictionary:
 	layout_action_grid = _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.columns != 1:
 		return _failure("Config tab should refresh client action grids to one column after a narrow resize without changing selection.")
+
+	var busy_model: Dictionary = base_model.duplicate(true)
+	busy_model["desktop_clients"] = [
+		{
+			"id": "cursor",
+			"name_key": "config_client_cursor",
+			"summary_text": "Desktop busy summary",
+			"primary_action_label_key": "config_client_action_running",
+			"primary_action_enabled": false,
+			"primary_action_busy": true,
+			"action_status_text": "Running Cursor setup command..."
+		}
+	]
+	_instance.apply_model(busy_model)
+	await tree.process_frame
+	await tree.process_frame
+	var busy_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var busy_labels = busy_desktop_clients.get_child(0).find_children("*", "Label", true, false)
+	if _find_label_containing(busy_labels, "Running Cursor setup command...") == null:
+		return _failure("Config tab should show in-progress action status while one-click CLI setup runs asynchronously.")
+	var busy_button = _find_button(busy_desktop_clients.get_child(0).find_children("*", "Button", true, false), "Running...")
+	if busy_button == null or not busy_button.disabled:
+		return _failure("Config tab should disable the primary action button while one-click CLI setup is running.")
 
 	return {
 		"name": "config_tab_rendering_contracts",

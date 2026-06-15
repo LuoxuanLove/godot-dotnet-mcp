@@ -4,6 +4,7 @@ class_name ClientConfigService
 
 const ConfigPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_paths.gd")
 const MCP_SERVER_KEY := "godot-mcp"
+const CLI_COMMAND_OUTPUT_DIR := "user://godot_dotnet_mcp/client_cli"
 
 
 func get_claude_config_path() -> String:
@@ -509,6 +510,22 @@ func execute_cli_command(executable_path: String, arguments: PackedStringArray) 
 	}
 
 
+func execute_cli_command_async(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	var command = executable_path.strip_edges()
+	if command.is_empty():
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "CLI executable path is empty."
+		}
+
+	var invocation = _build_cli_invocation(command, arguments)
+	if OS.get_name() == "Windows":
+		return await _execute_windows_cli_command_async(invocation)
+	return await _execute_process_cli_command_async(invocation)
+
+
 func launch_desktop_client(executable_path: String, arguments: PackedStringArray, working_directory: String) -> Dictionary:
 	if executable_path.strip_edges().is_empty():
 		return {
@@ -593,6 +610,93 @@ func _build_cli_invocation(executable_path: String, arguments: PackedStringArray
 		"command": executable_path,
 		"arguments": arguments
 	}
+
+
+func _execute_windows_cli_command_async(invocation: Dictionary) -> Dictionary:
+	var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CLI_COMMAND_OUTPUT_DIR))
+	if dir_error != OK:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to create CLI output directory: %s" % dir_error
+		}
+	var output_path := CLI_COMMAND_OUTPUT_DIR.path_join("client-command-%d.log" % Time.get_ticks_usec())
+	var output_absolute_path := ProjectSettings.globalize_path(output_path)
+	var command_line := "& %s" % _to_powershell_literal(str(invocation.get("command", "")))
+	for argument in invocation.get("arguments", PackedStringArray()):
+		command_line += " %s" % _to_powershell_literal(str(argument))
+	var script := "try { %s *>&1 | Out-File -LiteralPath %s -Encoding UTF8; if ($null -eq $LASTEXITCODE) { exit 0 }; exit $LASTEXITCODE } catch { $_ | Out-File -LiteralPath %s -Encoding UTF8; exit 1 }" % [
+		command_line,
+		_to_powershell_literal(output_absolute_path),
+		_to_powershell_literal(output_absolute_path)
+	]
+	var pid := OS.create_process(
+		"powershell.exe",
+		PackedStringArray([
+			"-NoProfile",
+			"-ExecutionPolicy",
+			"Bypass",
+			"-Command",
+			script
+		]),
+		false
+	)
+	if pid <= 0:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to start CLI command process."
+		}
+	var exit_code := await _wait_for_process_exit_async(pid)
+	var output_text := ""
+	if FileAccess.file_exists(output_absolute_path):
+		var read_result := _read_text_file(output_absolute_path)
+		if bool(read_result.get("success", false)):
+			output_text = str(read_result.get("text", ""))
+		DirAccess.remove_absolute(output_absolute_path)
+	var output := []
+	if not output_text.is_empty():
+		output.append(output_text.strip_edges())
+	return {
+		"success": exit_code == 0,
+		"exit_code": exit_code,
+		"output": output,
+		"message": "\n".join(output)
+	}
+
+
+func _execute_process_cli_command_async(invocation: Dictionary) -> Dictionary:
+	var pid := OS.create_process(
+		str(invocation.get("command", "")),
+		invocation.get("arguments", PackedStringArray()),
+		false
+	)
+	if pid <= 0:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to start CLI command process."
+		}
+	var exit_code := await _wait_for_process_exit_async(pid)
+	return {
+		"success": exit_code == 0,
+		"exit_code": exit_code,
+		"output": [],
+		"message": "CLI command exited with code %d." % exit_code
+	}
+
+
+func _wait_for_process_exit_async(pid: int) -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	while OS.is_process_running(pid):
+		if tree != null:
+			await tree.process_frame
+		else:
+			OS.delay_msec(50)
+	return OS.get_process_exit_code(pid)
 
 
 func _launch_powershell_background(script: String) -> Dictionary:
